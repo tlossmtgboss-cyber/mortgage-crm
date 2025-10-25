@@ -1,1 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MortgageCRM</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        header h1 {
+            margin: 0 0 15px 0;
+            font-size: 28px;
+        }
+        nav {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        nav button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        nav button:hover {
+            background-color: #2980b9;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+        }
+        .modules {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .sidebar {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .assistant-button {
+            background-color: #9b59b6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        .assistant-button:hover {
+            background-color: #8e44ad;
+        }
+        .ai-tips {
+            background-color: #fff3cd;
+            padding: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #ffc107;
+        }
+        .ai-tips h3 {
+            margin: 0 0 10px 0;
+            color: #856404;
+        }
+        .ai-tips p {
+            margin: 0;
+            color: #856404;
+            line-height: 1.6;
+        }
+        .module {
+            background-color: #ecf0f1;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-radius: 5px;
+            border-left: 4px solid #3498db;
+        }
+        .module h2 {
+            margin: 0 0 10px 0;
+            color: #2c3e50;
+            font-size: 18px;
+        }
+        .module p {
+            margin: 0;
+            color: #7f8c8d;
+            line-height: 1.6;
+        }
+        .dashboard-header {
+            font-size: 24px;
+            margin-bottom: 20px;
+            color: #2c3e50;
+        }
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>MortgageCRM</h1>
+        <nav>
+            <button>Dashboard</button>
+            <button>Leads</button>
+            <button>Active Loans</button>
+            <button>Portfolio</button>
+            <button>Tasks</button>
+            <button>Calendar</button>
+            <button>Scorecard</button>
+        </nav>
+    </header>
 
+    <div class="container">
+        <div class="modules">
+            <h2 class="dashboard-header">Dashboard</h2>
+            
+            <div class="module">
+                <h2>📋 Leads</h2>
+                <p>Manage new leads and track contact attempts</p>
+            </div>
+
+            <div class="module">
+                <h2>💼 Active Loans</h2>
+                <p>Monitor loans in process from application to approval</p>
+            </div>
+
+            <div class="module">
+                <h2>🏆 Portfolio</h2>
+                <p>View your closed borrowers and client relationships</p>
+            </div>
+
+            <div class="module">
+                <h2>✅ Tasks</h2>
+                <p>AI-powered task completion and management</p>
+            </div>
+
+            <div class="module">
+                <h2>📅 Calendar</h2>
+                <p>Schedule and manage appointments</p>
+            </div>
+
+            <div class="module">
+                <h2>📊 Scorecard</h2>
+                <p>Business metrics and performance analytics</p>
+            </div>
+        </div>
+
+        <div class="sidebar">
+            <button class="assistant-button">🤖 Assistant</button>
+            
+            <div class="ai-tips">
+                <h3>💡 AI Assistant Tips</h3>
+                <p>Welcome to your AI-Powered Mortgage CRM! I can help you navigate all features, complete tasks automatically, and provide insights to grow your business. Click on any module below to get started, or ask me for help using the Assistant button.</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
