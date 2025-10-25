@@ -1,1 +1,8 @@
+fastapi
+uvicorn
+sqlalchemy
+requests
+twilio
+python-dotenv
+psycopg2-binary
 
