@@ -84,6 +84,12 @@ class User(BaseModel):
 class UserInDB(User):
     hashed_password: str
 
+class RegisterRequest(BaseModel):
+    username: str
+    email: str
+    password: str
+    role: Optional[str] = "user"
+
 # Authentication helper functions
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
@@ -180,6 +186,45 @@ async def register(username: str = Form(...), password: str = Form(...), email: 
         email=email,
         hashed_password=hashed_password,
         full_name=username  # Default full_name to username
+    )
+    
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
+    return {
+        "message": "User registered successfully",
+        "username": new_user.username,
+        "email": new_user.email
+    }
+
+# New JSON-based registration endpoint for frontend
+@app.post("/api/users/register")
+async def register_json(request: RegisterRequest, db: Session = Depends(get_db)):
+    # Check if user already exists
+    existing_user = get_user_from_db(db, request.username)
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already registered"
+        )
+    
+    # Check if email already exists
+    existing_email = db.query(DBUser).filter(DBUser.email == request.email).first()
+    if existing_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
+    
+    # Create new user in database
+    hashed_password = get_password_hash(request.password)
+    new_user = DBUser(
+        username=request.username,
+        email=request.email,
+        hashed_password=hashed_password,
+        full_name=request.username,  # Default full_name to username
+        role=request.role
     )
     
     db.add(new_user)
