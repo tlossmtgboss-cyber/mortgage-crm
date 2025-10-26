@@ -1,257 +1,270 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MortgageCRM</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-        }
-        
-        header {
-            background: white;
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 30px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        h1 {
-            color: #667eea;
-            font-size: 28px;
-        }
-        
-        nav {
-            display: flex;
-            gap: 10px;
-        }
-        
-        nav button {
-            padding: 10px 20px;
-            border: none;
-            background: #f0f0f0;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        
-        nav button:hover, nav button.active {
-            background: #667eea;
-            color: white;
-        }
-        
-        .ai-assistant-btn {
-            padding: 10px 20px;
-            background: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        
-        .ai-tips {
-            background: #fff3cd;
-            border-left: 4px solid #ffc107;
-            padding: 15px;
-            margin-bottom: 30px;
-            border-radius: 5px;
-        }
-        
-        .ai-tips strong {
-            color: #856404;
-        }
-        
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        
-        .card {
-            background: white;
-            border-radius: 10px;
-            padding: 25px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            transition: transform 0.3s, box-shadow 0.3s;
-            cursor: pointer;
-        }
-        
-        .card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 8px 12px rgba(0,0,0,0.15);
-        }
-        
-        .card h2 {
-            color: #333;
-            margin-bottom: 10px;
-            font-size: 20px;
-        }
-        
-        .card p {
-            color: #666;
-            line-height: 1.6;
-        }
-        
-        .module-content {
-            display: none;
-            background: white;
-            border-radius: 10px;
-            padding: 30px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-        
-        .module-content.active {
-            display: block;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MortgageCRM</title>
+  <style>
+    :root {
+      --primary: #667eea;
+      --primary-dark: #4c51bf;
+      --accent: #764ba2;
+      --bg: #f6f7fb;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --card: #ffffff;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --info: #3b82f6;
+      --radius: 12px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+      min-height: 100vh;
+      padding: 24px;
+      color: var(--text);
+    }
+    .container { max-width: 1400px; margin: 0 auto; }
+
+    header {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.08);
+      display: flex; gap: 16px; align-items: center; justify-content: space-between;
+      position: sticky; top: 12px; z-index: 2;
+    }
+    .brand {
+      display: flex; align-items: center; gap: 12px; font-weight: 800; font-size: 22px; color: var(--primary);
+    }
+    .brand-badge { background: rgba(102,126,234,.12); color: var(--primary); padding: 6px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+
+    nav { display: flex; gap: 8px; flex-wrap: wrap; }
+    .nav-btn {
+      padding: 10px 14px; border: 1px solid #e5e7eb; background: #f9fafb; border-radius: 10px; cursor: pointer; transition: all .2s; font-weight: 600; color: #374151;
+    }
+    .nav-btn:hover { background: #eef2ff; border-color: #c7d2fe; color: var(--primary-dark); }
+    .nav-btn.active { background: var(--primary); color: white; border-color: var(--primary); box-shadow: 0 4px 14px rgba(102,126,234,.35); }
+
+    .ai-assistant-btn {
+      padding: 10px 14px; background: var(--success); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 700; display: inline-flex; align-items: center; gap: 8px;
+    }
+    .ai-assistant-btn:hover { background: #0ea371; }
+
+    .ai-tips {
+      background: #fffbea; border-left: 4px solid var(--warning); padding: 14px 16px; margin-bottom: 18px; border-radius: 10px; box-shadow: 0 6px 18px rgba(0,0,0,.06);
+    }
+    .ai-tips strong { color: #92400e; }
+
+    .dashboard-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 18px;
+    }
+
+    .card { background: var(--card); border-radius: var(--radius); padding: 18px; box-shadow: 0 10px 22px rgba(0,0,0,0.08); transition: transform .2s, box-shadow .2s; cursor: pointer; border: 1px solid #eef2f7; }
+    .card:hover { transform: translateY(-4px); box-shadow: 0 16px 30px rgba(0,0,0,0.10); }
+    .card-title { font-size: 16px; font-weight: 800; color: #111827; display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .card-sub { color: var(--muted); font-size: 13px; }
+
+    .module-content { display: none; background: var(--card); border-radius: var(--radius); padding: 22px; box-shadow: 0 10px 22px rgba(0,0,0,0.08); }
+    .module-content.active { display: block; }
+
+    .section-header { display:flex; align-items:center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+    .section-title { font-size: 18px; font-weight: 800; color: #111827; display:flex; align-items:center; gap:10px; }
+    .actions { display:flex; flex-wrap: wrap; gap: 8px; }
+
+    .btn { padding: 8px 12px; border-radius: 10px; border: 1px solid #e5e7eb; background: #ffffff; color:#111827; cursor: pointer; font-weight: 600; }
+    .btn.primary { background: var(--primary); color: white; border-color: var(--primary); }
+    .btn.success { background: var(--success); color: white; border-color: var(--success); }
+    .btn.warn { background: var(--warning); color: #111827; border-color: var(--warning); }
+    .btn.danger { background: var(--danger); color: white; border-color: var(--danger); }
+    .btn.ghost { background: #f3f4f6; }
+
+    .table-wrap { overflow:auto; border: 1px solid #eef2f7; border-radius: 12px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 10px 12px; text-align: left; }
+    thead th { background:#f9fafb; color:#374151; position: sticky; top:0; z-index:1; }
+    tbody tr { border-top: 1px solid #f0f3f7; }
+    tbody tr:hover { background: #fafbff; }
+    .tag { padding: 4px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; display:inline-block; }
+    .tag.green { background: #ecfdf5; color: #065f46; }
+    .tag.yellow { background: #fffbeb; color: #92400e; }
+    .tag.red { background: #fef2f2; color: #991b1b; }
+    .tag.blue { background: #eff6ff; color:#1e40af; }
+
+    .grid-2 { display:grid; grid-template-columns: repeat(auto-fit, minmax(260px,1fr)); gap: 16px; }
+    .field { display:flex; flex-direction: column; gap: 6px; }
+    .field label { font-weight: 700; font-size: 13px; color:#374151; }
+    .field input, .field select, .field textarea { padding: 10px 12px; border: 1px solid #e5e7eb; border-radius: 10px; background:#fff; }
+
+    footer { color:#e5e7eb; text-align:center; padding: 16px; font-size: 12px; }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>MortgageCRM</h1>
-            <nav>
-                <button class="nav-btn active" data-module="dashboard">Dashboard</button>
-                <button class="nav-btn" data-module="leads">Leads</button>
-                <button class="nav-btn" data-module="loans">Active Loans</button>
-                <button class="nav-btn" data-module="portfolio">Portfolio</button>
-                <button class="nav-btn" data-module="tasks">Tasks</button>
-                <button class="nav-btn" data-module="calendar">Calendar</button>
-                <button class="nav-btn" data-module="scorecard">Scorecard</button>
-            </nav>
-            <button class="ai-assistant-btn">🤖 Assistant</button>
-        </header>
-        
-        <div class="ai-tips">
-            <strong>💡 AI Assistant Tips</strong><br>
-            Welcome to your AI-Powered Mortgage CRM! I can help you navigate all features, complete tasks automatically, and provide insights to grow your business. Click on any module below to get started, or ask me for help using the Assistant button.
-        </div>
-        
-        <div id="dashboard" class="module-content active">
-            <h2 style="margin-bottom: 20px;">Dashboard</h2>
-            <div class="dashboard-grid">
-                <div class="card" data-navigate="leads">
-                    <h2>📋 Leads</h2>
-                    <p>Manage new leads and track contact attempts</p>
-                </div>
-                
-                <div class="card" data-navigate="loans">
-                    <h2>💼 Active Loans</h2>
-                    <p>Monitor loans in process from application to approval</p>
-                </div>
-                
-                <div class="card" data-navigate="portfolio">
-                    <h2>🏆 Portfolio</h2>
-                    <p>View your closed borrowers and client relationships</p>
-                </div>
-                
-                <div class="card" data-navigate="tasks">
-                    <h2>✅ Tasks</h2>
-                    <p>AI-powered task completion and management</p>
-                </div>
-                
-                <div class="card" data-navigate="calendar">
-                    <h2>📅 Calendar</h2>
-                    <p>Schedule and manage appointments</p>
-                </div>
-                
-                <div class="card" data-navigate="scorecard">
-                    <h2>📊 Scorecard</h2>
-                    <p>Business metrics and performance analytics</p>
-                </div>
-            </div>
-        </div>
-        
-        <div id="leads" class="module-content">
-            <h2>📋 Leads Management</h2>
-            <p>Lead management interface coming soon...</p>
-        </div>
-        
-        <div id="loans" class="module-content">
-            <h2>💼 Active Loans</h2>
-            <p>Active loans tracking interface coming soon...</p>
-        </div>
-        
-        <div id="portfolio" class="module-content">
-            <h2>🏆 Portfolio</h2>
-            <p>Portfolio management interface coming soon...</p>
-        </div>
-        
-        <div id="tasks" class="module-content">
-            <h2>✅ Tasks</h2>
-            <p>Task management interface coming soon...</p>
-        </div>
-        
-        <div id="calendar" class="module-content">
-            <h2>📅 Calendar</h2>
-            <p>Calendar interface coming soon...</p>
-        </div>
-        
-        <div id="scorecard" class="module-content">
-            <h2>📊 Scorecard</h2>
-            <p>Scorecard analytics coming soon...</p>
-        </div>
+  <div class="container">
+    <header>
+      <div class="brand">
+        <span style="font-size:22px">🏦</span>
+        <span>MortgageCRM</span>
+        <span class="brand-badge">Demo UI</span>
+      </div>
+      <nav>
+        <button class="nav-btn active" data-module="dashboard">Dashboard</button>
+        <button class="nav-btn" data-module="leads">Leads</button>
+        <button class="nav-btn" data-module="loans">Active Loans</button>
+        <button class="nav-btn" data-module="portfolio">Portfolio</button>
+        <button class="nav-btn" data-module="tasks">Tasks</button>
+        <button class="nav-btn" data-module="calendar">Calendar</button>
+        <button class="nav-btn" data-module="scorecard">Scorecard</button>
+      </nav>
+      <button class="ai-assistant-btn" id="assistantBtn">🤖 Assistant</button>
+    </header>
+
+    <div class="ai-tips">
+      💡 <strong>Tip:</strong> This demo uses mock data and client-side rendering. Click a card to navigate.
     </div>
-    
-    <script>
-        // Navigation functionality
-        const navButtons = document.querySelectorAll('.nav-btn');
-        const moduleContents = document.querySelectorAll('.module-content');
-        const cards = document.querySelectorAll('.card[data-navigate]');
-        
-        function showModule(moduleName) {
-            moduleContents.forEach(content => {
-                content.classList.remove('active');
-            });
-            
-            const targetModule = document.getElementById(moduleName);
-            if (targetModule) {
-                targetModule.classList.add('active');
-            }
-            
-            navButtons.forEach(btn => {
-                btn.classList.remove('active');
-                if (btn.dataset.module === moduleName) {
-                    btn.classList.add('active');
-                }
-            });
-        }
-        
-        navButtons.forEach(button => {
-            button.addEventListener('click', () => {
-                showModule(button.dataset.module);
-            });
-        });
-        
-        cards.forEach(card => {
-            card.addEventListener('click', () => {
-                showModule(card.dataset.navigate);
-            });
-        });
-        
-        // AI Assistant functionality
-        document.querySelector('.ai-assistant-btn').addEventListener('click', () => {
-            alert('AI Assistant feature coming soon! This will provide intelligent help and automation for your mortgage CRM tasks.');
-        });
-    </script>
-</body>
-</html>
+
+    <div id="dashboard" class="module-content active">
+      <div class="dashboard-grid">
+        <div class="card" data-navigate="leads">
+          <div class="card-title">📋 Leads</div>
+          <div class="card-sub">Manage new leads and first contact</div>
+        </div>
+        <div class="card" data-navigate="loans">
+          <div class="card-title">💼 Active Loans</div>
+          <div class="card-sub">Monitor applications to approval</div>
+        </div>
+        <div class="card" data-navigate="portfolio">
+          <div class="card-title">🏆 Portfolio</div>
+          <div class="card-sub">Closed borrowers and relationships</div>
+        </div>
+        <div class="card" data-navigate="tasks">
+          <div class="card-title">✅ Tasks</div>
+          <div class="card-sub">AI-powered task workflows</div>
+        </div>
+        <div class="card" data-navigate="calendar">
+          <div class="card-title">📅 Calendar</div>
+          <div class="card-sub">Appointments and reminders</div>
+        </div>
+        <div class="card" data-navigate="scorecard">
+          <div class="card-title">📊 Scorecard</div>
+          <div class="card-sub">KPIs and performance analytics</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="leads" class="module-content">
+      <div class="section-header">
+        <div class="section-title">📋 Leads</div>
+        <div class="actions">
+          <button class="btn primary" id="addLeadBtn">➕ New Lead</button>
+          <button class="btn ghost" id="importLeadsBtn">⬆️ Import</button>
+          <button class="btn ghost" id="exportLeadsBtn">⬇️ Export</button>
+        </div>
+      </div>
+      <div class="grid-2" style="margin-bottom:12px">
+        <div class="field"><label>Search</label><input id="leadSearch" placeholder="Search name, email, phone"/></div>
+        <div class="field"><label>Status</label>
+          <select id="leadStatusFilter">
+            <option value="">All</option>
+            <option>New</option>
+            <option>Contacted</option>
+            <option>Qualified</option>
+            <option>Nurture</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="leadsTable">
+          <thead><tr>
+            <th>Lead</th><th>Contact</th><th>Source</th><th>Loan Type</th><th>Status</th><th>Last Activity</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="loans" class="module-content">
+      <div class="section-header">
+        <div class="section-title">💼 Active Loans</div>
+        <div class="actions">
+          <button class="btn primary" id="addLoanBtn">📝 New Application</button>
+          <button class="btn ghost" id="pipelineViewBtn">🔀 Pipeline View</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="loansTable">
+          <thead><tr>
+            <th>Borrower</th><th>Property</th><th>Loan</th><th>Rate</th><th>Stage</th><th>Lock Exp.</th><th>Coordinator</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="portfolio" class="module-content">
+      <div class="section-header">
+        <div class="section-title">🏆 Portfolio</div>
+        <div class="actions">
+          <button class="btn ghost" id="emailBlastBtn">📧 Email Campaign</button>
+          <button class="btn ghost" id="segmentBtn">🏷️ Segment</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="portfolioTable">
+          <thead><tr>
+            <th>Client</th><th>Closed</th><th>Loan</th><th>Rate</th><th>Refi Opp</th><th>CSAT</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="tasks" class="module-content">
+      <div class="section-header">
+        <div class="section-title">✅ Tasks</div>
+        <div class="actions">
+          <button class="btn success" id="autoAssignBtn">⚡ Auto-Assign</button>
+          <button class="btn ghost" id="completeSelectedBtn">✔️ Complete Selected</button>
+        </div>
+      </div>
+      <div class="grid-2" style="margin-bottom:12px">
+        <div class="field"><label>New Task</label><input id="taskTitle" placeholder="e.g., Call new lead"/></div>
+        <div class="field"><label>Assignee</label><select id="taskAssignee"></select></div>
+        <div class="field" style="grid-column:1/-1"><label>Notes</label><textarea id="taskNotes" rows="2" placeholder="Optional notes"></textarea></div>
+        <div><button class="btn primary" id="addTaskBtn">Add Task</button></div>
+      </div>
+      <div class="table-wrap">
+        <table id="tasksTable">
+          <thead><tr>
+            <th></th><th>Task</th><th>Due</th><th>Priority</th><th>Owner</th><th>Status</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="calendar" class="module-content">
+      <div class="section-header">
+        <div class="section-title">📅 Calendar</div>
+        <div class="actions">
+          <button class="btn primary" id="addEventBtn">➕ New Event</button>
+          <button class="btn ghost" id="todayBtn">📍 Today</button>
+        </div>
+      </div>
+      <div class="grid-2" style="margin-bottom:12px">
+        <div class="field"><label>Title</label><input id="eventTitle" placeholder="Appointment title"/></div>
+        <div class="field"><label>Date</label><input id="eventDate" type="date"/></div>
+        <div class="field"><label>Time</label><input id="eventTime" type="time"/></div>
+        <div class="field"><label>With</label><input id="eventWith" placeholder="Client/Partner"/></div>
+        <div class="field" style="grid-column:1/-1"><label>Notes</label><textarea id="eventNotes" rows="2" placeholder="Optional"></textarea></div>
+        <div><button class="btn primary" id="saveEventBtn">Save Event</button></div>
+      </div>
+      <div class="table-wrap">
+        <table id="calendarTable">
+          <thead><tr>
+            <th>When</th><th>Title</th><th>With</th><th>Type
