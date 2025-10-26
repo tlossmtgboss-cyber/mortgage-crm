@@ -13,6 +13,7 @@ import base64
 
 # Import new API routers
 from app.app import leads, active_loans, portfolio, tasks, calendar
+from app import assistant
 
 app = FastAPI(
     title="Mortgage CRM API",
@@ -29,6 +30,7 @@ app.include_router(active_loans.router)
 app.include_router(portfolio.router)
 app.include_router(tasks.router)
 app.include_router(calendar.router)
+app.include_router(assistant.router)
 
 @app.on_event("startup")
 def on_startup():
