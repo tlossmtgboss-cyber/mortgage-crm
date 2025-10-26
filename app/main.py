@@ -5,7 +5,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
-from app.models import EventLog
+from app.models import EventLog, User as DBUser
 from app.db import SessionLocal, create_db, get_db
 from app import zapier
 from twilio.rest import Client as TwilioClient
@@ -91,6 +91,10 @@ def verify_password(plain_password, hashed_password):
 def get_password_hash(password):
     return pwd_context.hash(password)
 
+def get_user_from_db(db: Session, username: str):
+    """Fetch user from database by username"""
+    return db.query(DBUser).filter(DBUser.username == username).first()
+
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     if expires_delta:
@@ -101,7 +105,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-async def get_current_user(token: str = Depends(oauth2_scheme)):
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -115,11 +119,18 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         token_data = TokenData(username=username)
     except JWTError:
         raise credentials_exception
-    # In production, fetch user from database
-    user = {"username": username, "email": f"{username}@example.com", "disabled": False}
-    if user is None:
+    
+    # Fetch user from database
+    db_user = get_user_from_db(db, username=username)
+    if db_user is None:
         raise credentials_exception
-    return User(**user)
+    
+    return User(
+        username=db_user.username,
+        email=db_user.email,
+        full_name=db_user.full_name,
+        disabled=False
+    )
 
 async def get_current_active_user(current_user: User = Depends(get_current_user)):
     if current_user.disabled:
@@ -128,29 +139,57 @@ async def get_current_active_user(current_user: User = Depends(get_current_user)
 
 # Authentication endpoints
 @app.post("/token", response_model=Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    # In production, verify against database
-    # For demo purposes, using hardcoded credentials
-    if form_data.username != "demo" or form_data.password != "demo123":
+async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    # Authenticate user from database
+    db_user = get_user_from_db(db, form_data.username)
+    if not db_user or not verify_password(form_data.password, db_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": form_data.username}, expires_delta=access_token_expires
+        data={"sub": db_user.username}, expires_delta=access_token_expires
     )
     return {"access_token": access_token, "token_type": "bearer"}
 
 @app.post("/register")
-async def register(username: str = Form(...), password: str = Form(...), email: str = Form(...)):
-    # In production, save to database
+async def register(username: str = Form(...), password: str = Form(...), email: str = Form(...), db: Session = Depends(get_db)):
+    # Check if user already exists
+    existing_user = get_user_from_db(db, username)
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already registered"
+        )
+    
+    # Check if email already exists
+    existing_email = db.query(DBUser).filter(DBUser.email == email).first()
+    if existing_email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
+    
+    # Create new user in database
     hashed_password = get_password_hash(password)
+    new_user = DBUser(
+        username=username,
+        email=email,
+        hashed_password=hashed_password,
+        full_name=username  # Default full_name to username
+    )
+    
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
     return {
         "message": "User registered successfully",
-        "username": username,
-        "email": email
+        "username": new_user.username,
+        "email": new_user.email
     }
 
 @app.get("/users/me", response_model=User)
