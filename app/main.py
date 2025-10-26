@@ -4,7 +4,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 from app.models import EventLog
-from app.db import SessionLocal, create_db
+from app.db import SessionLocal, create_db, get_db
 from app import zapier
 from twilio.rest import Client as TwilioClient
 import requests
@@ -20,13 +20,6 @@ app.include_router(zapier.router)
 @app.on_event("startup")
 def on_startup():
     create_db()
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 @app.get("/", response_class=HTMLResponse)
 def index():
