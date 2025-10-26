@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Request, Form, Depends, UploadFile, 
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 from app.models import EventLog
@@ -32,6 +33,14 @@ app = FastAPI(
     title="Mortgage CRM API",
     description="Complete CRM system for mortgage lead and loan management",
     version="1.0.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://mortgage-crm-frontend.vercel.app"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -200,6 +209,7 @@ async def send_email(
 TWILIO_SID = os.getenv("TWILIO_SID")
 TWILIO_TOKEN = os.getenv("TWILIO_TOKEN")
 TWILIO_NUMBER = os.getenv("TWILIO_NUMBER")
+
 twilio_client = TwilioClient(TWILIO_SID, TWILIO_TOKEN)
 
 class SmsReq(BaseModel):
