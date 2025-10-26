@@ -5,14 +5,17 @@ from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 from app.models import EventLog
 from app.db import SessionLocal, create_db
+from app import zapier
 from twilio.rest import Client as TwilioClient
 import requests
 import os
 import base64
 
 app = FastAPI()
-
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Register Zapier router
+app.include_router(zapier.router)
 
 @app.on_event("startup")
 def on_startup():
@@ -71,7 +74,6 @@ async def send_email(
                 "filename": upload.filename,
                 "content": b64content
             })
-
     response = requests.post(url, json=payload)
     resp_json = response.json()
     if response.status_code == 200 and resp_json.get("data", {}).get("succeeded"):
