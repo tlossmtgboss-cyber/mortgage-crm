@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MortgageCRM</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        header {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        h1 {
+            color: #667eea;
+            font-size: 28px;
+        }
+        
+        nav {
+            display: flex;
+            gap: 10px;
+        }
+        
+        nav button {
+            padding: 10px 20px;
+            border: none;
+            background: #f0f0f0;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        nav button:hover, nav button.active {
+            background: #667eea;
+            color: white;
+        }
+        
+        .ai-assistant-btn {
+            padding: 10px 20px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        
+        .ai-tips {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin-bottom: 30px;
+            border-radius: 5px;
+        }
+        
+        .ai-tips strong {
+            color: #856404;
+        }
+        
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+            cursor: pointer;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 12px rgba(0,0,0,0.15);
+        }
+        
+        .card h2 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 20px;
+        }
+        
+        .card p {
+            color: #666;
+            line-height: 1.6;
+        }
+        
+        .module-content {
+            display: none;
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        
+        .module-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>MortgageCRM</h1>
+            <nav>
+                <button class="nav-btn active" data-module="dashboard">Dashboard</button>
+                <button class="nav-btn" data-module="leads">Leads</button>
+                <button class="nav-btn" data-module="loans">Active Loans</button>
+                <button class="nav-btn" data-module="portfolio">Portfolio</button>
+                <button class="nav-btn" data-module="tasks">Tasks</button>
+                <button class="nav-btn" data-module="calendar">Calendar</button>
+                <button class="nav-btn" data-module="scorecard">Scorecard</button>
+            </nav>
+            <button class="ai-assistant-btn">🤖 Assistant</button>
+        </header>
+        
+        <div class="ai-tips">
+            <strong>💡 AI Assistant Tips</strong><br>
+            Welcome to your AI-Powered Mortgage CRM! I can help you navigate all features, complete tasks automatically, and provide insights to grow your business. Click on any module below to get started, or ask me for help using the Assistant button.
+        </div>
+        
+        <div id="dashboard" class="module-content active">
+            <h2 style="margin-bottom: 20px;">Dashboard</h2>
+            <div class="dashboard-grid">
+                <div class="card" data-navigate="leads">
+                    <h2>📋 Leads</h2>
+                    <p>Manage new leads and track contact attempts</p>
+                </div>
+                
+                <div class="card" data-navigate="loans">
+                    <h2>💼 Active Loans</h2>
+                    <p>Monitor loans in process from application to approval</p>
+                </div>
+                
+                <div class="card" data-navigate="portfolio">
+                    <h2>🏆 Portfolio</h2>
+                    <p>View your closed borrowers and client relationships</p>
+                </div>
+                
+                <div class="card" data-navigate="tasks">
+                    <h2>✅ Tasks</h2>
+                    <p>AI-powered task completion and management</p>
+                </div>
+                
+                <div class="card" data-navigate="calendar">
+                    <h2>📅 Calendar</h2>
+                    <p>Schedule and manage appointments</p>
+                </div>
+                
+                <div class="card" data-navigate="scorecard">
+                    <h2>📊 Scorecard</h2>
+                    <p>Business metrics and performance analytics</p>
+                </div>
+            </div>
+        </div>
+        
+        <div id="leads" class="module-content">
+            <h2>📋 Leads Management</h2>
+            <p>Lead management interface coming soon...</p>
+        </div>
+        
+        <div id="loans" class="module-content">
+            <h2>💼 Active Loans</h2>
+            <p>Active loans tracking interface coming soon...</p>
+        </div>
+        
+        <div id="portfolio" class="module-content">
+            <h2>🏆 Portfolio</h2>
+            <p>Portfolio management interface coming soon...</p>
+        </div>
+        
+        <div id="tasks" class="module-content">
+            <h2>✅ Tasks</h2>
+            <p>Task management interface coming soon...</p>
+        </div>
+        
+        <div id="calendar" class="module-content">
+            <h2>📅 Calendar</h2>
+            <p>Calendar interface coming soon...</p>
+        </div>
+        
+        <div id="scorecard" class="module-content">
+            <h2>📊 Scorecard</h2>
+            <p>Scorecard analytics coming soon...</p>
+        </div>
+    </div>
+    
+    <script>
+        // Navigation functionality
+        const navButtons = document.querySelectorAll('.nav-btn');
+        const moduleContents = document.querySelectorAll('.module-content');
+        const cards = document.querySelectorAll('.card[data-navigate]');
+        
+        function showModule(moduleName) {
+            moduleContents.forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            const targetModule = document.getElementById(moduleName);
+            if (targetModule) {
+                targetModule.classList.add('active');
+            }
+            
+            navButtons.forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.dataset.module === moduleName) {
+                    btn.classList.add('active');
+                }
+            });
+        }
+        
+        navButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                showModule(button.dataset.module);
+            });
+        });
+        
+        cards.forEach(card => {
+            card.addEventListener('click', () => {
+                showModule(card.dataset.navigate);
+            });
+        });
+        
+        // AI Assistant functionality
+        document.querySelector('.ai-assistant-btn').addEventListener('click', () => {
+            alert('AI Assistant feature coming soon! This will provide intelligent help and automation for your mortgage CRM tasks.');
+        });
+    </script>
+</body>
+</html>
