@@ -11,11 +11,24 @@ import requests
 import os
 import base64
 
-app = FastAPI()
+# Import new API routers
+from app.app import leads, active_loans, portfolio, tasks, calendar
+
+app = FastAPI(
+    title="Mortgage CRM API",
+    description="Complete CRM system for mortgage lead and loan management",
+    version="1.0.0"
+)
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Register Zapier router
+# Register all API routers
 app.include_router(zapier.router)
+app.include_router(leads.router)
+app.include_router(active_loans.router)
+app.include_router(portfolio.router)
+app.include_router(tasks.router)
+app.include_router(calendar.router)
 
 @app.on_event("startup")
 def on_startup():
