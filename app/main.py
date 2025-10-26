@@ -16,25 +16,20 @@ from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from typing import Optional
-
 # Import new API routers
 from app.app import leads, active_loans, portfolio, tasks, calendar
 from app import assistant
-
 # Authentication configuration
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here-change-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
-
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
 app = FastAPI(
     title="Mortgage CRM API",
     description="Complete CRM system for mortgage lead and loan management",
     version="1.0.0"
 )
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://mortgage-crm-frontend.vercel.app"],
@@ -42,9 +37,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
 # Register all API routers
 app.include_router(zapier.router)
 app.include_router(leads.router)
@@ -53,11 +46,9 @@ app.include_router(portfolio.router)
 app.include_router(tasks.router)
 app.include_router(calendar.router)
 app.include_router(assistant.router)
-
 @app.on_event("startup")
 def on_startup():
     create_db()
-
 @app.get("/", response_class=HTMLResponse)
 def index():
     return FileResponse("static/crm.html")
@@ -66,30 +57,24 @@ def log_event(db: Session, event_type, from_number, body_or_status):
     entry = EventLog(event_type=event_type, from_number=from_number, body_or_status=body_or_status)
     db.add(entry)
     db.commit()
-
 # Authentication Models
 class Token(BaseModel):
     access_token: str
     token_type: str
-
 class TokenData(BaseModel):
     username: Optional[str] = None
-
 class User(BaseModel):
     username: str
     email: Optional[str] = None
     full_name: Optional[str] = None
     disabled: Optional[bool] = None
-
 class UserInDB(User):
     hashed_password: str
-
 class RegisterRequest(BaseModel):
     username: str
     email: str
     password: str
     role: Optional[str] = "user"
-
 # Authentication helper functions
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
@@ -100,6 +85,9 @@ def get_password_hash(password):
 def get_user_from_db(db: Session, username: str):
     """Fetch user from database by username"""
     return db.query(DBUser).filter(DBUser.username == username).first()
+
+def get_user_by_email(db: Session, email: str):
+    return db.query(DBUser).filter(DBUser.email == email).first()
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
@@ -236,6 +224,29 @@ async def register_json(request: RegisterRequest, db: Session = Depends(get_db))
         "username": new_user.username,
         "email": new_user.email
     }
+
+# New JSON-based login endpoint for frontend (email or username + password)
+class LoginRequest(BaseModel):
+    identifier: str  # can be username or email
+    password: str
+
+@app.post("/api/users/login", response_model=Token)
+async def login_json(request: LoginRequest, db: Session = Depends(get_db)):
+    # Try to find user by username first, then by email
+    db_user = get_user_from_db(db, request.identifier)
+    if not db_user:
+        db_user = get_user_by_email(db, request.identifier)
+    if not db_user or not verify_password(request.password, db_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username/email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": db_user.username}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
 
 @app.get("/users/me", response_model=User)
 async def read_users_me(current_user: User = Depends(get_current_active_user)):
