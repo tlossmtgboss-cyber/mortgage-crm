@@ -103,7 +103,6 @@ def read_root():
     return {"message": "Mortgage CRM Backend is running"}
 
 # ---------------------- AUTH ENDPOINTS WITH DETAILED LOGGING ----------------------
-
 @app.post("/api/users/register")
 async def register_user(request: Request, db: Session = Depends(get_db)):
     raw_body = await request.body()
@@ -188,5 +187,37 @@ app.include_router(active_loans.router, prefix="/api")
 app.include_router(portfolio.router, prefix="/api")
 app.include_router(tasks.router, prefix="/api")
 app.include_router(calendar.router, prefix="/api")
+app.include_router(assistant.router, prefix="/api")
 
-# You may have additional endpoints below such as email/SMS/call; leaving them as-is.
+# Twilio SMS utility function
+class SMSRequest(BaseModel):
+    to: str
+    message: str
+
+@app.post("/api/send-sms")
+async def send_sms(sms_data: SMSRequest, db: Session = Depends(get_db)):
+    """
+    Send an SMS via Twilio.
+    Expects TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER in environment.
+    """
+    try:
+        account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+        auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+        from_number = os.getenv("TWILIO_PHONE_NUMBER")
+        
+        if not all([account_sid, auth_token, from_number]):
+            log_event(db, "sms_config_error", "Missing Twilio configuration", severity="ERROR")
+            raise HTTPException(status_code=500, detail="Twilio not configured")
+        
+        client = TwilioClient(account_sid, auth_token)
+        message = client.messages.create(
+            body=sms_data.message,
+            from_=from_number,
+            to=sms_data.to
+        )
+        
+        log_event(db, "sms_sent", f"SMS sent successfully to {sms_data.to}", details={"message_sid": message.sid})
+        return {"success": True, "message_sid": message.sid}
+    except Exception as e:
+        log_event(db, "sms_error", "Failed to send SMS", severity="ERROR", details={"error": str(e)})
+        raise HTTPException(status_code=500, detail=f"Failed to send SMS: {str(e)}")
