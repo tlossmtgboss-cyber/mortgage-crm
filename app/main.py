@@ -27,6 +27,7 @@ from app import assistant
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here-change-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
@@ -73,14 +74,11 @@ def log_event(db: Session, event_type: str, message: str, severity: str = "INFO"
         print("[LOG][FALLBACK-ERROR]", e)
 
 # Password utilities
-
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
-
 def get_password_hash(password):
     return pwd_context.hash(password)
-
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
@@ -93,9 +91,10 @@ class UserRegister(BaseModel):
     email: EmailStr
     password: str
     full_name: Optional[str] = None
+    username: Optional[str] = None
 
 class UserLogin(BaseModel):
-    email: EmailStr
+    identifier: str
     password: str
 
 # Root
@@ -104,6 +103,7 @@ def read_root():
     return {"message": "Mortgage CRM Backend is running"}
 
 # ---------------------- AUTH ENDPOINTS WITH DETAILED LOGGING ----------------------
+
 @app.post("/api/users/register")
 async def register_user(request: Request, db: Session = Depends(get_db)):
     raw_body = await request.body()
@@ -116,19 +116,20 @@ async def register_user(request: Request, db: Session = Depends(get_db)):
         except ValidationError as ve:
             log_event(db, "register_validation_error", "Pydantic validation failed", severity="ERROR", details={"errors": ve.errors(), "data": data})
             return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"detail": "Validation error", "errors": ve.errors()})
-
+        
         existing = db.query(DBUser).filter(DBUser.email == user_in.email).first()
         if existing:
             log_event(db, "register_conflict", "Email already registered", severity="WARNING", details={"email": user_in.email})
             raise HTTPException(status_code=400, detail="Email already registered")
-
+        
         hashed = get_password_hash(user_in.password)
-        user = DBUser(email=user_in.email, hashed_password=hashed, full_name=user_in.full_name)
+        # Set username from payload, fallback to email if not provided
+        username = user_in.username if user_in.username else user_in.email
+        user = DBUser(email=user_in.email, hashed_password=hashed, full_name=user_in.full_name, username=username)
         db.add(user)
         db.commit()
         db.refresh(user)
-
-        log_event(db, "register_success", "User registered successfully", details={"user_id": user.id, "email": user.email})
+        log_event(db, "register_success", "User registered successfully", details={"user_id": user.id, "email": user.email, "username": username})
         return {"message": "User registered successfully", "user_id": user.id}
     except HTTPException as he:
         log_event(db, "register_http_exception", "HTTPException during register", severity="ERROR", details={"status_code": he.status_code, "detail": he.detail})
@@ -150,16 +151,20 @@ async def login_user(request: Request, db: Session = Depends(get_db)):
         except ValidationError as ve:
             log_event(db, "login_validation_error", "Pydantic validation failed", severity="ERROR", details={"errors": ve.errors(), "data": data})
             return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"detail": "Validation error", "errors": ve.errors()})
-
-        user = db.query(DBUser).filter(DBUser.email == creds.email).first()
+        
+        # Find user by identifier (first by email, then by username)
+        user = db.query(DBUser).filter(DBUser.email == creds.identifier).first()
         if not user:
-            log_event(db, "login_user_not_found", "No user found for email", severity="WARNING", details={"email": creds.email})
+            user = db.query(DBUser).filter(DBUser.username == creds.identifier).first()
+        
+        if not user:
+            log_event(db, "login_user_not_found", "No user found for identifier", severity="WARNING", details={"identifier": creds.identifier})
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-
+        
         if not verify_password(creds.password, user.hashed_password):
             log_event(db, "login_bad_password", "Password verification failed", severity="WARNING", details={"user_id": user.id, "email": user.email})
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
-
+        
         access_token = create_access_token({"sub": str(user.id)})
         log_event(db, "login_success", "User logged in successfully", details={"user_id": user.id})
         return {"access_token": access_token, "token_type": "bearer"}
