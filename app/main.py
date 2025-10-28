@@ -147,7 +147,7 @@ async def read_root():
         "version": "1.0.0"
     }
 
-@app.post("/api/register", response_model=UserResponse)
+@app.post("/api/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register_user(user_data: UserCreate, db: Session = Depends(get_db)):
     # Check if user exists by email
     existing_user = get_user_by_email(db, user_data.email)
