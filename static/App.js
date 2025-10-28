@@ -11,6 +11,7 @@ import Calendar from './components/Calendar';
 import Scorecard from './components/Scorecard';
 import AssistantButton from './components/AssistantButton';
 import SettingsPage from './pages/SettingsPage';
+import RealtorPortal from './pages/RealtorPortal';
 
 function App() {
   const [currentView, setCurrentView] = useState('dashboard');
@@ -34,6 +35,8 @@ function App() {
         return <Scorecard />;
       case 'settings':
         return <SettingsPage />;
+      case 'realtor-portal':
+        return <RealtorPortal />;
       default:
         return <Dashboard />;
     }
@@ -41,14 +44,17 @@ function App() {
 
   return (
     <div className="app-container">
-      <Sidebar 
-        currentView={currentView} 
-        onNavigate={setCurrentView} 
+      <Sidebar
+        currentView={currentView}
+        onNavigate={setCurrentView}
       />
       <main className="main-content">
-        <Toolbar onSettingsClick={() => setCurrentView('settings')} />
-        <AssistantButton 
-          onClick={() => setShowAssistant(!showAssistant)} 
+        <Toolbar 
+          onSettingsClick={() => setCurrentView('settings')}
+          onNavigate={setCurrentView}
+        />
+        <AssistantButton
+          onClick={() => setShowAssistant(!showAssistant)}
         />
         {renderView()}
       </main>
