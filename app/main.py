@@ -9,7 +9,7 @@ from passlib.context import CryptContext
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 from app.db import get_db, Base, engine
-from app.models import Lead as LeadModel, User as UserModel, UserRole, Appointment as AppointmentModel
+from app.models import Lead as LeadModel, User as UserModel, Appointment as AppointmentModel
 import logging
 from app.zapier import zapier_router
 
@@ -169,7 +169,7 @@ async def register(user: UserCreate, db: Session = Depends(get_db)):
         email=user.email,
         full_name=user.full_name,
         hashed_password=hashed_password,
-        role=UserRole.USER
+        role="user"  # Use string instead of UserRole.USER
     )
     
     db.add(new_user)
