@@ -33,7 +33,7 @@ class TestAssistant:
         """Set up test user and obtain access token."""
         # Register user
         register_response = client.post(
-            "/api/register",
+            "/api/users/register",
             json={
                 "email": TEST_USER_EMAIL,
                 "password": TEST_USER_PASSWORD,
@@ -44,7 +44,7 @@ class TestAssistant:
         
         # Login to get token
         login_response = client.post(
-            "/api/login",
+            "/api/users/login",
             json={
                 "email": TEST_USER_EMAIL,
                 "password": TEST_USER_PASSWORD
