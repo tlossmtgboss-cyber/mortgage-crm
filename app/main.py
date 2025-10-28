@@ -29,7 +29,6 @@ except ImportError:
     import assistant
 
 import logging
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -147,6 +146,43 @@ async def read_root():
         "version": "1.0.0"
     }
 
+# ═══════════════════════════════════════════════════════════════════════════
+# HEALTH CHECK ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.get("/health", status_code=status.HTTP_200_OK, tags=["health"])
+async def health_check():
+    """Basic health check endpoint to verify API is running."""
+    return {
+        "status": "healthy",
+        "service": "Mortgage CRM API",
+        "version": "1.0.0",
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+@app.get("/health/db", status_code=status.HTTP_200_OK, tags=["health"])
+async def health_check_db(db: Session = Depends(get_db)):
+    """Health check endpoint that verifies database connectivity."""
+    try:
+        # Simple query to check database connection
+        db.execute("SELECT 1")
+        return {
+            "status": "healthy",
+            "database": "connected",
+            "service": "Mortgage CRM API",
+            "timestamp": datetime.utcnow().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Database health check failed: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Database connection failed: {str(e)}"
+        )
+
+# ═══════════════════════════════════════════════════════════════════════════
+# AUTHENTICATION ENDPOINTS
+# ═══════════════════════════════════════════════════════════════════════════
+
 @app.post("/api/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register_user(user_data: UserCreate, db: Session = Depends(get_db)):
     # Check if user exists by email
@@ -203,6 +239,26 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 @app.get("/api/users/me", response_model=UserResponse)
 async def read_users_me(current_user: DBUser = Depends(get_current_active_user)):
     return current_user
+
+# ═══════════════════════════════════════════════════════════════════════════
+# REALTOR PORTAL ENDPOINT
+# ═══════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/realtor/portal", status_code=status.HTTP_200_OK, tags=["realtor"])
+async def realtor_portal(current_user: DBUser = Depends(get_current_active_user)):
+    """Realtor portal endpoint to access partner information and tools."""
+    return {
+        "message": "Welcome to the Realtor Portal",
+        "user": current_user.username,
+        "features": [
+            "Lead Management",
+            "Client Tracking",
+            "Document Sharing",
+            "Commission Calculator",
+            "Market Analytics"
+        ],
+        "timestamp": datetime.utcnow().isoformat()
+    }
 
 # Include sub-app routers
 app.include_router(leads.router, prefix="/api", tags=["leads"])
