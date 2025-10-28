@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import './App.css';
 import Sidebar from './components/Sidebar';
+import Toolbar from './components/Toolbar';
 import Dashboard from './components/Dashboard';
 import Leads from './components/Leads';
 import ActiveLoans from './components/ActiveLoans';
@@ -9,6 +10,7 @@ import Tasks from './components/Tasks';
 import Calendar from './components/Calendar';
 import Scorecard from './components/Scorecard';
 import AssistantButton from './components/AssistantButton';
+import SettingsPage from './pages/SettingsPage';
 
 function App() {
   const [currentView, setCurrentView] = useState('dashboard');
@@ -30,6 +32,8 @@ function App() {
         return <Calendar />;
       case 'scorecard':
         return <Scorecard />;
+      case 'settings':
+        return <SettingsPage />;
       default:
         return <Dashboard />;
     }
@@ -42,6 +46,7 @@ function App() {
         onNavigate={setCurrentView} 
       />
       <main className="main-content">
+        <Toolbar onSettingsClick={() => setCurrentView('settings')} />
         <AssistantButton 
           onClick={() => setShowAssistant(!showAssistant)} 
         />
