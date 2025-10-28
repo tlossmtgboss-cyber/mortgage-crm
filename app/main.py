@@ -1,72 +1,24 @@
-from fastapi import FastAPI, HTTPException, Request, Form, Depends, UploadFile, File, status
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr, ValidationError, ConfigDict
-from sqlalchemy.orm import Session
-
-# Use absolute imports that work in CI environment
-try:
-    from app.models import EventLog, User as DBUser
-except ImportError:
-    # Fallback for different directory structures
-    from models import EventLog, User as DBUser
-
-try:
-    from app.db import SessionLocal, create_db, get_db
-except ImportError:
-    # Fallback for different directory structures  
-    from db import SessionLocal, create_db, get_db
-
-try:
-    from app import zapier
-except ImportError:
-    try:
-        import zapier
-    except ImportError:
-        zapier = None
-
-from twilio.rest import Client as TwilioClient
-import requests
-import os
-import base64
+from pydantic import BaseModel, Field, validator
+from typing import Optional, List
 from datetime import datetime, timedelta
-from jose import JWTError, jwt
+import os
 from passlib.context import CryptContext
-from typing import Optional
-import traceback
-import json
+from jose import JWTError, jwt
+from sqlalchemy.orm import Session
+from app.db import get_db, Base, engine
+from app.models import Lead as LeadModel, User as UserModel, UserRole, Appointment as AppointmentModel
+import logging
+from app.zapier import zapier_router
 
-# Import new API routers
-try:
-    from app.app import leads, active_loans, portfolio, tasks, calendar
-except ImportError:
-    leads = active_loans = portfolio = tasks = calendar = None
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-try:
-    from app import assistant
-except ImportError:
-    try:
-        import assistant
-    except ImportError:
-        assistant = None
+app = FastAPI(title="Mortgage CRM API")
 
-# Authentication configuration
-SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here-change-in-production")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
-app = FastAPI(
-    title="Mortgage CRM API",
-    description="Complete CRM system for mortgage lead and loan management",
-    version="1.0.0"
-)
-
-# Add CORS middleware
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -75,203 +27,329 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Pydantic models with modern ConfigDict
+# Include Zapier router
+app.include_router(zapier_router, prefix="/api")
+
+# Create tables
+Base.metadata.create_all(bind=engine)
+
+# Password hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+# JWT settings
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-this-in-production")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
+# Pydantic models
 class UserCreate(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    
-    username: str
-    email: EmailStr
+    email: str
+    full_name: str
     password: str
-    full_name: Optional[str] = None
+    
+    class Config:
+        # Allow using 'username' as an alias for 'email' for backward compatibility
+        fields = {'email': {'alias': 'username'}}
 
 class UserResponse(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-    
     id: int
     username: str
-    email: str
     full_name: Optional[str] = None
+    email: str
     role: str
-    is_active: bool
-
-class UserLogin(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
     
-    identifier: str  # Can be username or email
-    password: str
+    class Config:
+        from_attributes = True
 
 class Token(BaseModel):
     access_token: str
     token_type: str
 
-class SMSRequest(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+class TokenData(BaseModel):
+    username: Optional[str] = None
+
+class Lead(BaseModel):
+    name: str
+    email: str
+    phone: str
+    loan_amount: Optional[float] = None
+    status: Optional[str] = "new"
     
-    to: str
-    message: str
+class LeadResponse(BaseModel):
+    id: int
+    name: str
+    email: str
+    phone: str
+    loan_amount: Optional[float]
+    status: str
+    created_at: datetime
+    user_id: int
+    
+    class Config:
+        from_attributes = True
 
-# Utility functions
-def log_event(db: Session, event_type: str, message: str, severity: str = "INFO", details: dict = None):
-    """Log events to the database"""
-    try:
-        event_log = EventLog(
-            event_type=event_type,
-            from_number="system",
-            body_or_status=message
-        )
-        db.add(event_log)
-        db.commit()
-    except Exception as e:
-        print(f"Failed to log event: {e}")
+class AppointmentCreate(BaseModel):
+    lead_id: int
+    appointment_date: datetime
+    notes: Optional[str] = None
 
-def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+class AppointmentResponse(BaseModel):
+    id: int
+    lead_id: int
+    appointment_date: datetime
+    notes: Optional[str]
+    created_at: datetime
+    user_id: int
+    
+    class Config:
+        from_attributes = True
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
+# Helper functions
+def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
+
+def get_password_hash(password):
+    return pwd_context.hash(password)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.utcnow() + timedelta(minutes=15)
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
-def get_user_by_username(db: Session, username: str):
-    return db.query(DBUser).filter(DBUser.username == username).first()
-
-def get_user_by_email(db: Session, email: str):
-    return db.query(DBUser).filter(DBUser.email == email).first()
-
-def authenticate_user(db: Session, identifier: str, password: str):
-    # Try to find user by username or email
-    user = get_user_by_username(db, identifier)
-    if not user:
-        user = get_user_by_email(db, identifier)
-    if not user:
-        return False
-    if not verify_password(password, user.hashed_password):
-        return False
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+        token_data = TokenData(username=username)
+    except JWTError:
+        raise credentials_exception
+    
+    user = db.query(UserModel).filter(UserModel.username == token_data.username).first()
+    if user is None:
+        raise credentials_exception
     return user
+
+async def get_current_active_user(current_user: UserModel = Depends(get_current_user)):
+    return current_user
 
 # Routes
 @app.get("/")
 async def root():
-    """Health check endpoint that returns JSON"""
-    return {"status": "ok", "message": "Mortgage CRM API is running"}
+    return {"message": "Mortgage CRM API", "status": "running"}
 
-@app.post("/api/register", response_model=UserResponse)
-async def register_user(user_data: UserCreate, db: Session = Depends(get_db)):
-    """Register a new user"""
-    try:
-        # Check if user already exists
-        existing_user = get_user_by_username(db, user_data.username)
-        if existing_user:
-            log_event(db, "register_failed", "Username already exists", "WARNING", {"username": user_data.username})
-            raise HTTPException(status_code=400, detail="Username already registered")
-        
-        existing_email = get_user_by_email(db, user_data.email)
-        if existing_email:
-            log_event(db, "register_failed", "Email already exists", "WARNING", {"email": user_data.email})
-            raise HTTPException(status_code=400, detail="Email already registered")
-        
-        # Create new user
-        hashed_password = get_password_hash(user_data.password)
-        db_user = DBUser(
-            username=user_data.username,
-            email=user_data.email,
-            hashed_password=hashed_password,
-            full_name=user_data.full_name or "",
-            role="user"
+@app.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def register(user: UserCreate, db: Session = Depends(get_db)):
+    # Check if user already exists by email
+    db_user = db.query(UserModel).filter(UserModel.email == user.email).first()
+    if db_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # Check if username (email) already exists
+    db_user_by_username = db.query(UserModel).filter(UserModel.username == user.email).first()
+    if db_user_by_username:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # Create new user with email as username
+    hashed_password = get_password_hash(user.password)
+    new_user = UserModel(
+        username=user.email,  # Use email as username
+        email=user.email,
+        full_name=user.full_name,
+        hashed_password=hashed_password,
+        role=UserRole.USER
+    )
+    
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
+    return new_user
+
+@app.post("/token", response_model=Token)
+async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    user = db.query(UserModel).filter(UserModel.username == form_data.username).first()
+    if not user or not verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
         )
-        db.add(db_user)
-        db.commit()
-        db.refresh(db_user)
-        
-        log_event(db, "register_success", "User registered successfully", details={"user_id": db_user.id})
-        return db_user
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        log_event(db, "register_exception", "Unhandled exception during registration", "ERROR", {"error": str(e)})
-        raise HTTPException(status_code=500, detail="Internal server error")
+    
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
 
-@app.post("/api/login", response_model=Token)
-async def login_user(user_data: UserLogin, db: Session = Depends(get_db)):
-    """Login user and return access token"""
-    try:
-        user = authenticate_user(db, user_data.identifier, user_data.password)
-        if not user:
-            log_event(db, "login_failed", "Invalid credentials", "WARNING", {"identifier": user_data.identifier})
-            raise HTTPException(status_code=401, detail="Incorrect username/email or password")
-        
-        if not user.is_active:
-            log_event(db, "login_failed", "Inactive user attempted login", "WARNING", {"user_id": user.id})
-            raise HTTPException(status_code=400, detail="Inactive user")
-        
-        access_token = create_access_token({"sub": str(user.id)})
-        log_event(db, "login_success", "User logged in successfully", details={"user_id": user.id})
-        return {"access_token": access_token, "token_type": "bearer"}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        log_event(db, "login_exception", "Unhandled exception during login", "ERROR", {"error": str(e)})
-        raise HTTPException(status_code=500, detail="Internal server error")
+@app.get("/users/me", response_model=UserResponse)
+async def read_users_me(current_user: UserModel = Depends(get_current_active_user)):
+    return current_user
 
-@app.post("/api/send-sms")
-async def send_sms(sms_data: SMSRequest, db: Session = Depends(get_db)):
-    """
-    Send an SMS via Twilio.
-    Expects TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER in environment.
-    """
-    try:
-        account_sid = os.getenv("TWILIO_ACCOUNT_SID")
-        auth_token = os.getenv("TWILIO_AUTH_TOKEN")
-        from_number = os.getenv("TWILIO_PHONE_NUMBER")
-        
-        if not all([account_sid, auth_token, from_number]):
-            log_event(db, "sms_config_error", "Missing Twilio configuration", severity="ERROR")
-            raise HTTPException(status_code=500, detail="Twilio not configured")
-        
-        client = TwilioClient(account_sid, auth_token)
-        message = client.messages.create(
-            body=sms_data.message,
-            from_=from_number,
-            to=sms_data.to
-        )
-        
-        log_event(db, "sms_sent", f"SMS sent successfully to {sms_data.to}", details={"message_sid": message.sid})
-        return {"success": True, "message_sid": message.sid}
-        
-    except Exception as e:
-        log_event(db, "sms_error", "Failed to send SMS", severity="ERROR", details={"error": str(e)})
-        raise HTTPException(status_code=500, detail=f"Failed to send SMS: {str(e)}")
+@app.post("/leads", response_model=LeadResponse, status_code=status.HTTP_201_CREATED)
+async def create_lead(
+    lead: Lead,
+    current_user: UserModel = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    db_lead = LeadModel(
+        name=lead.name,
+        email=lead.email,
+        phone=lead.phone,
+        loan_amount=lead.loan_amount,
+        status=lead.status,
+        user_id=current_user.id
+    )
+    db.add(db_lead)
+    db.commit()
+    db.refresh(db_lead)
+    return db_lead
 
-# Include routers if they exist
-if leads:
-    app.include_router(leads.router, prefix="/api")
-if active_loans:
-    app.include_router(active_loans.router, prefix="/api")
-if portfolio:
-    app.include_router(portfolio.router, prefix="/api")
-if tasks:
-    app.include_router(tasks.router, prefix="/api")
-if calendar:
-    app.include_router(calendar.router, prefix="/api")
-if assistant:
-    app.include_router(assistant.router, prefix="/api")
+@app.get("/leads", response_model=List[LeadResponse])
+async def get_leads(
+    current_user: UserModel = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    leads = db.query(LeadModel).filter(LeadModel.user_id == current_user.id).all()
+    return leads
 
-# Create database tables on startup
-@app.on_event("startup")
-async def startup_event():
-    create_db()
+@app.get("/leads/{lead_id}", response_model=LeadResponse)
+async def get_lead(
+    lead_id: int,
+    current_user: UserModel = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    lead = db.query(LeadModel).filter(
+        LeadModel.id == lead_id,
+        LeadModel.user_id == current_user.id
+    ).first()
+    
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    return lead
 
-# Main entry point for running the server
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+@app.put("/leads/{lead_id}", response_model=LeadResponse)
+async def update_lead(
+    lead_id: int,
+    lead: Lead,
+    current_user: UserModel = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    db_lead = db.query(LeadModel).filter(
+        LeadModel.id == lead_id,
+        LeadModel.user_id == current_user.id
+    ).first()
+    
+    if not db_lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    db_lead.name = lead.name
+    db_lead.email = lead.email
+    db_lead.phone = lead.phone
+    db_lead.loan_amount = lead.loan_amount
+    db_lead.status = lead.status
+    
+    db.commit()
+    db.refresh(db_lead)
+    return db_lead
+
+@app.delete("/leads/{lead_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_lead(
+    lead_id: int,
+    current_user: UserModel = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    db_lead = db.query(LeadModel).filter(
+        LeadModel.id == lead_id,
+        LeadModel.user_id == current_user.id
+    ).first()
+    
+    if not db_lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    db.delete(db_lead)
+    db.commit()
+    return None
+
+@app.post("/appointments", response_model=AppointmentResponse, status_code=status.HTTP_201_CREATED)
+async def create_appointment(
+    appointment: AppointmentCreate,
+    current_user: UserModel = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    # Verify lead exists and belongs to user
+    lead = db.query(LeadModel).filter(
+        LeadModel.id == appointment.lead_id,
+        LeadModel.user_id == current_user.id
+    ).first()
+    
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    db_appointment = AppointmentModel(
+        lead_id=appointment.lead_id,
+        appointment_date=appointment.appointment_date,
+        notes=appointment.notes,
+        user_id=current_user.id
+    )
+    db.add(db_appointment)
+    db.commit()
+    db.refresh(db_appointment)
+    return db_appointment
+
+@app.get("/appointments", response_model=List[AppointmentResponse])
+async def get_appointments(
+    current_user: UserModel = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    appointments = db.query(AppointmentModel).filter(
+        AppointmentModel.user_id == current_user.id
+    ).all()
+    return appointments
+
+@app.get("/appointments/{appointment_id}", response_model=AppointmentResponse)
+async def get_appointment(
+    appointment_id: int,
+    current_user: UserModel = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    appointment = db.query(AppointmentModel).filter(
+        AppointmentModel.id == appointment_id,
+        AppointmentModel.user_id == current_user.id
+    ).first()
+    
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    
+    return appointment
+
+@app.delete("/appointments/{appointment_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_appointment(
+    appointment_id: int,
+    current_user: UserModel = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    db_appointment = db.query(AppointmentModel).filter(
+        AppointmentModel.id == appointment_id,
+        AppointmentModel.user_id == current_user.id
+    ).first()
+    
+    if not db_appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    
+    db.delete(db_appointment)
+    db.commit()
+    return None
