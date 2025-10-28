@@ -5,12 +5,28 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, ValidationError, ConfigDict
 from sqlalchemy.orm import Session
-from models import EventLog, User as DBUser
-from db import SessionLocal, create_db, get_db
+
+# Use absolute imports that work in CI environment
 try:
-    import zapier
+    from app.models import EventLog, User as DBUser
 except ImportError:
-    zapier = None
+    # Fallback for different directory structures
+    from models import EventLog, User as DBUser
+
+try:
+    from app.db import SessionLocal, create_db, get_db
+except ImportError:
+    # Fallback for different directory structures  
+    from db import SessionLocal, create_db, get_db
+
+try:
+    from app import zapier
+except ImportError:
+    try:
+        import zapier
+    except ImportError:
+        zapier = None
+
 from twilio.rest import Client as TwilioClient
 import requests
 import os
@@ -24,14 +40,17 @@ import json
 
 # Import new API routers
 try:
-    from app import leads, active_loans, portfolio, tasks, calendar
+    from app.app import leads, active_loans, portfolio, tasks, calendar
 except ImportError:
     leads = active_loans = portfolio = tasks = calendar = None
 
 try:
-    import assistant
+    from app import assistant
 except ImportError:
-    assistant = None
+    try:
+        import assistant
+    except ImportError:
+        assistant = None
 
 # Authentication configuration
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here-change-in-production")
