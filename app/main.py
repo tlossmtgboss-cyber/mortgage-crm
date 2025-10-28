@@ -13,12 +13,12 @@ from sqlalchemy.orm import Session
 try:
     from app.db import get_db, Base, engine
     from app.models import EventLog, User as DBUser
-    from app.zapier import zapier_router
+    from app.zapier import router as zapier_router
     from app import leads, active_loans, portfolio, tasks, calendar, assistant
 except ImportError:
     from db import get_db, Base, engine
     from models import EventLog, User as DBUser
-    from zapier import zapier_router
+    from zapier import router as zapier_router
     import leads
     import active_loans
     import portfolio
@@ -59,9 +59,9 @@ SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-here-change-in-production"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
-# ─────────────────────────────────────────────────────────────────────────────
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # PYDANTIC MODELS
-# ─────────────────────────────────────────────────────────────────────────────
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 class Token(BaseModel):
     access_token: str
@@ -86,9 +86,9 @@ class UserResponse(BaseModel):
     email: str
     full_name: Optional[str] = None
 
-# ─────────────────────────────────────────────────────────────────────────────
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # HELPER FUNCTIONS
-# ─────────────────────────────────────────────────────────────────────────────
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)
@@ -134,9 +134,9 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 async def get_current_active_user(current_user: DBUser = Depends(get_current_user)):
     return current_user
 
-# ─────────────────────────────────────────────────────────────────────────────
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # CORE ROUTES
-# ─────────────────────────────────────────────────────────────────────────────
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 @app.get("/")
 async def read_root():
