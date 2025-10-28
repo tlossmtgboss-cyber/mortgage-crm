@@ -16,6 +16,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app.main import app
+from app.db import create_db
 
 # Configuration
 client = TestClient(app)
@@ -31,6 +32,9 @@ class TestAssistant:
     @pytest.fixture(scope="class", autouse=True)
     def setup_class(cls):
         """Set up test user and obtain access token."""
+        # Initialize database
+        create_db()
+        
         # Register user
         register_response = client.post(
             "/api/users/register",
