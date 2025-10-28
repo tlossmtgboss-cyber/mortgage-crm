@@ -5,9 +5,12 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, ValidationError, ConfigDict
 from sqlalchemy.orm import Session
-from app.models import EventLog, User as DBUser
-from app.db import SessionLocal, create_db, get_db
-from app import zapier
+from models import EventLog, User as DBUser
+from db import SessionLocal, create_db, get_db
+try:
+    import zapier
+except ImportError:
+    zapier = None
 from twilio.rest import Client as TwilioClient
 import requests
 import os
@@ -21,12 +24,12 @@ import json
 
 # Import new API routers
 try:
-    from app.app import leads, active_loans, portfolio, tasks, calendar
+    from app import leads, active_loans, portfolio, tasks, calendar
 except ImportError:
     leads = active_loans = portfolio = tasks = calendar = None
 
 try:
-    from app import assistant
+    import assistant
 except ImportError:
     assistant = None
 
