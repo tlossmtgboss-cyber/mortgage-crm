@@ -50,7 +50,7 @@ class TestAssistant:
         login_response = client.post(
             "/api/users/login",
             json={
-                "email": TEST_USER_EMAIL,
+                "identifier": TEST_USER_EMAIL,
                 "password": TEST_USER_PASSWORD
             }
         )
