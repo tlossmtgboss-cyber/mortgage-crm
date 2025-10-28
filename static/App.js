@@ -17,8 +17,19 @@ function App() {
   const [currentView, setCurrentView] = useState('dashboard');
   const [showAssistant, setShowAssistant] = useState(false);
 
+  const handleViewChange = (view) => {
+    switch (view) {
+      case 'realtor-portal':
+        // If using react-router, navigate('/realtor-portal'); here
+        setCurrentView('realtor-portal');
+        break;
+      default:
+        setCurrentView(view);
+    }
+  };
+
   const renderView = () => {
-    switch(currentView) {
+    switch (currentView) {
       case 'dashboard':
         return <Dashboard />;
       case 'leads':
@@ -46,12 +57,12 @@ function App() {
     <div className="app-container">
       <Sidebar
         currentView={currentView}
-        onNavigate={setCurrentView}
+        onNavigate={handleViewChange}
       />
       <main className="main-content">
-        <Toolbar 
-          onSettingsClick={() => setCurrentView('settings')}
-          onNavigate={setCurrentView}
+        <Toolbar
+          onSettingsClick={() => handleViewChange('settings')}
+          onNavigate={handleViewChange}
         />
         <AssistantButton
           onClick={() => setShowAssistant(!showAssistant)}
@@ -61,5 +72,4 @@ function App() {
     </div>
   );
 }
-
 export default App;
