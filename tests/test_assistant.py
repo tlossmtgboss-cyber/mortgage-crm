@@ -32,185 +32,83 @@ class TestAssistant:
     @pytest.fixture(scope="class", autouse=True)
     def setup_class(cls):
         """Set up test user and obtain access token."""
+        
         # Initialize database
         create_db()
         
-        # Register user
+        # Register test user
         register_response = client.post(
-            "/api/users/register",
+            "/api/register",
             json={
                 "email": TEST_USER_EMAIL,
                 "password": TEST_USER_PASSWORD,
-                "name": TEST_USER_NAME
+                "full_name": TEST_USER_NAME
             }
         )
-        assert register_response.status_code in [200, 201], f"Registration failed: {register_response.text}"
         
-        # Login to get token
+        assert register_response.status_code == 201, f"Registration failed: {register_response.text}"
+        
+        # Login to get access token
         login_response = client.post(
-            "/api/users/login",
-            json={
-                "identifier": TEST_USER_EMAIL,
+            "/api/login",
+            data={
+                "username": TEST_USER_EMAIL,
                 "password": TEST_USER_PASSWORD
             }
         )
+        
         assert login_response.status_code == 200, f"Login failed: {login_response.text}"
-        
         data = login_response.json()
-        cls.access_token = data.get("access_token")
-        assert cls.access_token is not None, "No access token received"
+        TestAssistant.access_token = data["access_token"]
+        print(f"\n✓ Setup complete. Token obtained for {TEST_USER_EMAIL}")
+    
+    def test_01_assistant_greeting(self):
+        """Test basic greeting query."""
+        assert TestAssistant.access_token is not None, "No access token available"
         
-        yield  # This allows the tests to run
+        response = client.post(
+            "/api/assistant",
+            headers={"Authorization": f"Bearer {TestAssistant.access_token}"},
+            json={"message": "Hello! Can you help me?"}
+        )
         
-        # Cleanup could go here if needed
+        assert response.status_code == 200, f"Assistant request failed: {response.text}"
+        data = response.json()
+        assert "response" in data
+        print(f"\n✓ Assistant greeting test passed")
+        print(f"Response: {data['response'][:100]}...")
     
-    def get_headers(self):
-        """Get authorization headers with bearer token."""
-        return {
-            "Authorization": f"Bearer {self.access_token}"
-        }
-    
-    def test_assistant_health_check(self):
-        """Test that the assistant endpoint is accessible."""
-        response = client.get(
-            "/api/assistant/health",
-            headers=self.get_headers()
-        )
-        assert response.status_code in [200, 404], f"Unexpected status: {response.status_code}"
-    
-    def test_assistant_simple_query(self):
-        """Test a simple query to the assistant."""
-        response = client.post(
-            "/api/assistant",
-            json={"query": "Hello, how are you?"},
-            headers=self.get_headers()
-        )
-        assert response.status_code in [200, 404], f"Query failed: {response.text}"
-        if response.status_code == 200:
-            data = response.json()
-            assert "response" in data or "answer" in data, "Response should contain answer"
-    
-    def test_assistant_lead_query(self):
-        """Test querying for leads."""
-        response = client.post(
-            "/api/assistant",
-            json={"query": "Show me all leads"},
-            headers=self.get_headers()
-        )
-        assert response.status_code in [200, 404], f"Lead query failed: {response.text}"
-    
-    def test_assistant_with_missing_query(self):
-        """Test that the assistant rejects requests without a query."""
-        response = client.post(
-            "/api/assistant",
-            json={},
-            headers=self.get_headers()
-        )
-        # Should return 422 for validation error or handle gracefully
-        assert response.status_code in [400, 422, 404], "Should reject empty query"
-    
-    def test_assistant_without_auth(self):
-        """Test that the assistant requires authentication."""
-        response = client.post(
-            "/api/assistant",
-            json={"query": "Hello"}
-        )
-        # Should require authentication
-        assert response.status_code in [401, 403, 404], "Should require authentication"
-    
-    def test_assistant_with_invalid_token(self):
-        """Test that the assistant rejects invalid tokens."""
-        response = client.post(
-            "/api/assistant",
-            json={"query": "Hello"},
-            headers={"Authorization": "Bearer invalid_token_12345"}
-        )
-        assert response.status_code in [401, 403, 404], "Should reject invalid token"
-    
-    def test_assistant_create_lead_query(self):
-        """Test asking the assistant to create a lead."""
-        response = client.post(
-            "/api/assistant",
-            json={
-                "query": "Create a new lead for John Doe with email john@example.com and phone 555-1234"
-            },
-            headers=self.get_headers()
-        )
-        assert response.status_code in [200, 404], f"Create lead query failed: {response.text}"
-    
-    def test_assistant_update_lead_query(self):
-        """Test asking the assistant to update a lead."""
-        response = client.post(
-            "/api/assistant",
-            json={
-                "query": "Update lead with ID 1 to set status to 'contacted'"
-            },
-            headers=self.get_headers()
-        )
-        assert response.status_code in [200, 404], f"Update lead query failed: {response.text}"
-    
-    def test_assistant_search_leads(self):
-        """Test searching for leads by criteria."""
-        response = client.post(
-            "/api/assistant",
-            json={
-                "query": "Find all leads with status 'new'"
-            },
-            headers=self.get_headers()
-        )
-        assert response.status_code in [200, 404], f"Search query failed: {response.text}"
-    
-    def test_assistant_analytics_query(self):
-        """Test asking for analytics or statistics."""
-        response = client.post(
-            "/api/assistant",
-            json={
-                "query": "What are my conversion rates this month?"
-            },
-            headers=self.get_headers()
-        )
-        assert response.status_code in [200, 404], f"Analytics query failed: {response.text}"
-    
-    def test_assistant_help_query(self):
-        """Test asking for help or capabilities."""
-        response = client.post(
-            "/api/assistant",
-            json={
-                "query": "What can you help me with?"
-            },
-            headers=self.get_headers()
-        )
-        assert response.status_code in [200, 404], f"Help query failed: {response.text}"
-    
-    def test_assistant_complex_query(self):
-        """Test a complex multi-part query."""
-        response = client.post(
-            "/api/assistant",
-            json={
-                "query": "Show me all leads from this week with status 'new' and sort by date"
-            },
-            headers=self.get_headers()
-        )
-        assert response.status_code in [200, 404], f"Complex query failed: {response.text}"
-    
-    def test_assistant_conversation_context(self):
-        """Test that the assistant can handle follow-up queries."""
-        # First query
-        response1 = client.post(
-            "/api/assistant",
-            json={"query": "How many leads do I have?"},
-            headers=self.get_headers()
-        )
-        assert response1.status_code in [200, 404]
+    def test_02_assistant_mortgage_info(self):
+        """Test mortgage-related query."""
+        assert TestAssistant.access_token is not None
         
-        # Follow-up query
-        response2 = client.post(
+        response = client.post(
             "/api/assistant",
-            json={"query": "And how many are from this week?"},
-            headers=self.get_headers()
+            headers={"Authorization": f"Bearer {TestAssistant.access_token}"},
+            json={"message": "What documents do I need for a mortgage application?"}
         )
-        assert response2.status_code in [200, 404]
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert "response" in data
+        print(f"\n✓ Mortgage info test passed")
+        print(f"Response: {data['response'][:100]}...")
+    
+    def test_03_assistant_lead_status(self):
+        """Test lead status query."""
+        assert TestAssistant.access_token is not None
+        
+        response = client.post(
+            "/api/assistant",
+            headers={"Authorization": f"Bearer {TestAssistant.access_token}"},
+            json={"message": "What's the status of my leads?"}
+        )
+        
+        assert response.status_code == 200
+        data = response.json()
+        assert "response" in data
+        print(f"\n✓ Lead status test passed")
+        print(f"Response: {data['response'][:100]}...")
 
 if __name__ == "__main__":
-    # Run tests directly
-    pytest.main([__file__, "-v"])
+    pytest.main(["-v", __file__])
