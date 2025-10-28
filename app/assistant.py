@@ -8,7 +8,7 @@ from .auth import get_current_user, require_admin
 from .db import get_db
 from .models import User
 
-router = APIRouter(prefix="/api/assistant", tags=["assistant"])
+router = APIRouter(prefix="/assistant", tags=["assistant"])
 
 # Configure OpenAI API
 openai.api_key = os.getenv("OPENAI_API_KEY")
