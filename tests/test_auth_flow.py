@@ -8,7 +8,6 @@ This script tests the complete authentication flow:
 Usage:
     pytest tests/test_auth_flow.py -v
 """
-
 import pytest
 import requests
 from datetime import datetime
@@ -18,7 +17,6 @@ BASE_URL = "http://localhost:8000"  # Change to your deployed URL if testing pro
 TEST_USER_EMAIL = f"test_user_{datetime.now().strftime('%Y%m%d_%H%M%S')}@example.com"
 TEST_USER_PASSWORD = "TestPassword123!"
 TEST_USER_NAME = "Test User"
-
 
 class TestAuthFlow:
     """Test suite for authentication flow."""
@@ -47,7 +45,7 @@ class TestAuthFlow:
         response = requests.post(
             f"{BASE_URL}/api/login",
             json={
-                "email": TEST_USER_EMAIL,
+                "identifier": TEST_USER_EMAIL,
                 "password": TEST_USER_PASSWORD
             }
         )
@@ -125,7 +123,6 @@ class TestAuthFlow:
         
         assert response.status_code == 401, "Invalid token should return 401"
         print("✓ Invalid tokens are correctly rejected")
-
 
 if __name__ == "__main__":
     pytest.main(["-v", __file__])
