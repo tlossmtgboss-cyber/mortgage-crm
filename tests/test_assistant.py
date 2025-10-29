@@ -36,30 +36,19 @@ class TestAssistant:
         # Initialize database
         create_db()
         
-        # Register test user
-        register_response = client.post(
-            "/api/register",
-            json={
-                "email": TEST_USER_EMAIL,
-                "password": TEST_USER_PASSWORD,
-                "full_name": TEST_USER_NAME
-            }
-        )
-        
-        assert register_response.status_code == 201, f"Registration failed: {register_response.text}"
-        
-        # Login to get access token
+        # Try to login with demo user (should already exist from seed data)
         login_response = client.post(
-            "/api/login",
+            "/api/token",
             data={
-                "username": TEST_USER_EMAIL,
-                "password": TEST_USER_PASSWORD
+                "username": "demo",
+                "password": "demo123"
             }
         )
         
         assert login_response.status_code == 200, f"Login failed: {login_response.text}"
         data = login_response.json()
         TestAssistant.access_token = data["access_token"]
+        
         print(f"\n✓ Setup complete. Token obtained for {TEST_USER_EMAIL}")
     
     def test_01_assistant_greeting(self):
@@ -69,7 +58,7 @@ class TestAssistant:
         response = client.post(
             "/api/assistant",
             headers={"Authorization": f"Bearer {TestAssistant.access_token}"},
-            json={"message": "Hello! Can you help me?"}
+            json={"prompt": "Hello! Can you help me?"}
         )
         
         assert response.status_code == 200, f"Assistant request failed: {response.text}"
@@ -85,7 +74,7 @@ class TestAssistant:
         response = client.post(
             "/api/assistant",
             headers={"Authorization": f"Bearer {TestAssistant.access_token}"},
-            json={"message": "What documents do I need for a mortgage application?"}
+            json={"prompt": "What documents do I need for a mortgage application?"}
         )
         
         assert response.status_code == 200
@@ -101,7 +90,7 @@ class TestAssistant:
         response = client.post(
             "/api/assistant",
             headers={"Authorization": f"Bearer {TestAssistant.access_token}"},
-            json={"message": "What's the status of my leads?"}
+            json={"prompt": "What's the status of my leads?"}
         )
         
         assert response.status_code == 200
