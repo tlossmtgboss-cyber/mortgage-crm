@@ -7,9 +7,18 @@ import logging
 
 # OpenAI SDK (version 1.x)
 from openai import OpenAI
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
+
+def get_openai_client():
+    """Get OpenAI client instance lazily to avoid initialization errors during test collection."""
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=500,
+            detail="OpenAI API key not configured"
+        )
+    return OpenAI(api_key=api_key)
 
 class AssistantRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=8000)
@@ -29,6 +38,9 @@ async def assistant(req: AssistantRequest):
         # Hard cap input size to avoid 413/long prompts exploding
         if len(req.message) > 8000:
             raise HTTPException(status_code=413, detail="Message too long")
+
+        # Get OpenAI client
+        client = get_openai_client()
 
         # Build a concise system prompt and messages payload
         system = (
