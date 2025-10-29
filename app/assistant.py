@@ -1,98 +1,75 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from pydantic import BaseModel
-from typing import Optional
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field
+from typing import Optional, Dict, Any
+import time
 import os
+import logging
+
+# OpenAI SDK (version 1.x)
 from openai import OpenAI
-from .auth import get_current_user, require_admin
-from .db import get_db
-from .models import User
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
 
-# Configure OpenAI client lazily to avoid initialization errors during test collection
-def get_openai_client():
-    """Get OpenAI client instance."""
-    api_key = os.getenv("OPENAI_API_KEY")
-    if not api_key:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="OpenAI API key not configured"
-        )
-    return OpenAI(api_key=api_key)
-
 class AssistantRequest(BaseModel):
-    prompt: str
-    context: Optional[str] = None
+    message: str = Field(..., min_length=1, max_length=8000)
+    sessionId: Optional[str] = None
+    context: Optional[Dict[str, Any]] = None
 
 class AssistantResponse(BaseModel):
-    response: str
-    success: bool
-    message: Optional[str] = None
+    reply: str
+    usage: Optional[Dict[str, int]] = None
+    model: str
+    latency_ms: int
 
 @router.post("", response_model=AssistantResponse)
-async def assistant_endpoint(
-    request: AssistantRequest,
-    current_user: User = Depends(require_admin),
-    db: Session = Depends(get_db)
-):
-    """
-    AI Assistant endpoint with admin RBAC.
-    Only admin users can access this endpoint.
-    """
+async def assistant(req: AssistantRequest):
+    t0 = time.time()
     try:
-        # Validate input
-        if not request.prompt or not request.prompt.strip():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Prompt cannot be empty"
-            )
-        
-        # Get OpenAI client
-        client = get_openai_client()
-        
-        # Prepare the messages for the chat completion
+        # Hard cap input size to avoid 413/long prompts exploding
+        if len(req.message) > 8000:
+            raise HTTPException(status_code=413, detail="Message too long")
+
+        # Build a concise system prompt and messages payload
+        system = (
+            "You are the Mortgage CRM Assistant. Be concise, accurate, and practical. "
+            "If asked for calculations, show steps briefly."
+        )
+
         messages = [
-            {
-                "role": "system",
-                "content": "You are a helpful mortgage CRM assistant. Provide clear, concise, and professional advice."
-            }
+            {"role": "system", "content": system},
+            {"role": "user", "content": req.message}
         ]
-        
-        # Add context if provided
-        if request.context:
-            messages.append({
+
+        # Optionally incorporate context
+        if req.context:
+            messages.insert(1, {
                 "role": "system",
-                "content": f"Context: {request.context}"
+                "content": f"Context JSON: {req.context}"
             })
-        
-        # Add user's prompt
-        messages.append({
-            "role": "user",
-            "content": request.prompt
-        })
-        
-        # Call OpenAI API
-        response = client.chat.completions.create(
-            model="gpt-4",
+
+        # Call the model (choose your deployed model)
+        completion = client.chat.completions.create(
+            model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
             messages=messages,
-            temperature=0.7,
-            max_tokens=500
+            temperature=0.2,
+            timeout=25_000  # ms; prevent hung requests
         )
-        
-        # Extract the response text
-        assistant_response = response.choices[0].message.content
-        
+
+        reply = completion.choices[0].message.content or ""
+        usage = getattr(completion, "usage", None)
+        t1 = time.time()
+
         return AssistantResponse(
-            response=assistant_response,
-            success=True,
-            message="Response generated successfully"
+            reply=reply.strip(),
+            usage={"prompt_tokens": usage.prompt_tokens, "completion_tokens": usage.completion_tokens,
+                   "total_tokens": usage.total_tokens} if usage else None,
+            model=completion.model,
+            latency_ms=int((t1 - t0) * 1000),
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate response: {str(e)}"
-        )
+        logging.exception("Assistant error")
+        raise HTTPException(status_code=500, detail="Assistant failed unexpectedly")
