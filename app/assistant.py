@@ -10,8 +10,16 @@ from .models import User
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
 
-# Configure OpenAI client
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+# Configure OpenAI client lazily to avoid initialization errors during test collection
+def get_openai_client():
+    """Get OpenAI client instance."""
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="OpenAI API key not configured"
+        )
+    return OpenAI(api_key=api_key)
 
 class AssistantRequest(BaseModel):
     prompt: str
@@ -34,35 +42,51 @@ async def assistant_endpoint(
     """
     try:
         # Validate input
-        if not request.prompt or len(request.prompt.strip()) == 0:
+        if not request.prompt or not request.prompt.strip():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Prompt cannot be empty"
             )
         
-        # Prepare context for AI
-        system_message = "You are a helpful mortgage CRM assistant. Provide professional and accurate information about mortgage processes, lead management, and CRM operations."
+        # Get OpenAI client
+        client = get_openai_client()
         
+        # Prepare the messages for the chat completion
+        messages = [
+            {
+                "role": "system",
+                "content": "You are a helpful mortgage CRM assistant. Provide clear, concise, and professional advice."
+            }
+        ]
+        
+        # Add context if provided
         if request.context:
-            system_message += f" Additional context: {request.context}"
+            messages.append({
+                "role": "system",
+                "content": f"Context: {request.context}"
+            })
         
-        # Call OpenAI API using new SDK
+        # Add user's prompt
+        messages.append({
+            "role": "user",
+            "content": request.prompt
+        })
+        
+        # Call OpenAI API
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": request.prompt}
-            ],
-            max_tokens=500,
-            temperature=0.7
+            model="gpt-4",
+            messages=messages,
+            temperature=0.7,
+            max_tokens=500
         )
         
-        ai_response = response.choices[0].message.content
+        # Extract the response text
+        assistant_response = response.choices[0].message.content
         
         return AssistantResponse(
-            response=ai_response,
+            response=assistant_response,
             success=True,
-            message="AI response generated successfully"
+            message="Response generated successfully"
         )
         
     except HTTPException:
@@ -70,21 +94,5 @@ async def assistant_endpoint(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An unexpected error occurred: {str(e)}"
+            detail=f"Failed to generate response: {str(e)}"
         )
-
-@router.get("/health")
-async def assistant_health(
-    current_user: User = Depends(require_admin)
-):
-    """
-    Health check endpoint for the assistant service.
-    Verifies OpenAI API key is configured.
-    """
-    api_key_configured = bool(os.getenv("OPENAI_API_KEY"))
-    
-    return {
-        "status": "healthy" if api_key_configured else "degraded",
-        "api_key_configured": api_key_configured,
-        "message": "Assistant service is operational" if api_key_configured else "OpenAI API key not configured"
-    }
