@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+sqlalchemy
+requests
+twilio
+python-dotenv
+psycopg2-binary
+python-multipart
+email-validator
+openai
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt==3.2.2
