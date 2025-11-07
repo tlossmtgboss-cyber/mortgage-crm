@@ -142,7 +142,6 @@ async def register_user(registration: UserRegistration, db: Session = Depends(ge
             # Save subscription to database
             db_subscription = Subscription(
                 user_id=db_user.id,
-                plan_name=registration.plan,
                 stripe_customer_id=stripe_customer.id,
                 stripe_subscription_id=stripe_subscription.id,
                 status="trialing",
@@ -160,7 +159,6 @@ async def register_user(registration: UserRegistration, db: Session = Depends(ge
             # Dev mode - create mock subscription
             db_subscription = Subscription(
                 user_id=db_user.id,
-                plan_name=registration.plan,
                 stripe_customer_id="dev_customer_" + str(db_user.id),
                 stripe_subscription_id="dev_sub_" + str(db_user.id),
                 status="active",
