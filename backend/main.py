@@ -699,11 +699,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include public routes
-from public_routes import router as public_router
-app.include_router(public_router, tags=["Public"])
-
-# Auth
+# Auth - Define BEFORE importing routes that use these functions
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -718,6 +714,10 @@ def create_access_token(data: dict):
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+# Include public routes - Import AFTER defining functions it needs
+from public_routes import router as public_router
+app.include_router(public_router, tags=["Public"])
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
     credentials_exception = HTTPException(
