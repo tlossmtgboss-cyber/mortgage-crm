@@ -26,6 +26,7 @@ import json
 import enum
 import logging
 import random
+from openai import OpenAI
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -40,6 +41,9 @@ SECRET_KEY = os.getenv("SECRET_KEY", "09d25e094faa6ca2556c818166b7a9563b93f7099f
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+
+# Initialize OpenAI client
+openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
 # Database
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
@@ -256,6 +260,187 @@ class Activity(Base):
     lead = relationship("Lead", back_populates="activities")
     loan = relationship("Loan", back_populates="activities")
 
+class Conversation(Base):
+    __tablename__ = "conversations"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    lead_id = Column(Integer, ForeignKey("leads.id"))
+    loan_id = Column(Integer, ForeignKey("loans.id"))
+    message = Column(Text, nullable=False)
+    response = Column(Text)
+    role = Column(String, nullable=False)  # 'user' or 'assistant'
+    metadata = Column(JSON)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class CalendarEvent(Base):
+    __tablename__ = "calendar_events"
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    description = Column(Text)
+    start_time = Column(DateTime, nullable=False)
+    end_time = Column(DateTime, nullable=False)
+    all_day = Column(Boolean, default=False)
+    location = Column(String)
+    event_type = Column(String)  # meeting, call, appraisal, closing, etc
+    lead_id = Column(Integer, ForeignKey("leads.id"))
+    loan_id = Column(Integer, ForeignKey("loans.id"))
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    attendees = Column(JSON)
+    reminder_minutes = Column(Integer)
+    status = Column(String, default="scheduled")  # scheduled, completed, cancelled
+    metadata = Column(JSON)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class SMSMessage(Base):
+    __tablename__ = "sms_messages"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    lead_id = Column(Integer, ForeignKey("leads.id"))
+    loan_id = Column(Integer, ForeignKey("loans.id"))
+    to_number = Column(String, nullable=False)
+    from_number = Column(String, nullable=False)
+    message = Column(Text, nullable=False)
+    direction = Column(String)  # inbound, outbound
+    status = Column(String)  # queued, sent, delivered, failed, received
+    twilio_sid = Column(String)
+    template_used = Column(String)
+    error_message = Column(Text)
+    metadata = Column(JSON)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class EmailMessage(Base):
+    __tablename__ = "email_messages"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    lead_id = Column(Integer, ForeignKey("leads.id"))
+    loan_id = Column(Integer, ForeignKey("loans.id"))
+    to_email = Column(String, nullable=False)
+    from_email = Column(String, nullable=False)
+    subject = Column(String)
+    body = Column(Text)
+    html_body = Column(Text)
+    direction = Column(String)  # inbound, outbound
+    status = Column(String)  # sent, delivered, bounced, received
+    microsoft_message_id = Column(String)
+    has_attachments = Column(Boolean, default=False)
+    attachments = Column(JSON)
+    in_reply_to = Column(String)
+    metadata = Column(JSON)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    received_at = Column(DateTime)
+
+class TeamsMessage(Base):
+    __tablename__ = "teams_messages"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    lead_id = Column(Integer, ForeignKey("leads.id"))
+    loan_id = Column(Integer, ForeignKey("loans.id"))
+    to_user = Column(String)  # Email or Teams user ID
+    from_user = Column(String)
+    message = Column(Text, nullable=False)
+    channel_id = Column(String)
+    message_type = Column(String, default="direct")  # direct, channel
+    status = Column(String)  # sent, delivered, failed
+    microsoft_message_id = Column(String)
+    metadata = Column(JSON)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class IntegrationLog(Base):
+    __tablename__ = "integration_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    integration_type = Column(String, nullable=False)  # sms, email, teams, calendar
+    action = Column(String, nullable=False)  # send, receive, sync, webhook
+    status = Column(String, nullable=False)  # success, failed, pending
+    request_data = Column(JSON)
+    response_data = Column(JSON)
+    error_message = Column(Text)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    lead_id = Column(Integer, ForeignKey("leads.id"))
+    loan_id = Column(Integer, ForeignKey("loans.id"))
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class SubscriptionPlan(Base):
+    __tablename__ = "subscription_plans"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    description = Column(Text)
+    price_monthly = Column(Float, nullable=False)
+    price_yearly = Column(Float)
+    stripe_price_id = Column(String)
+    features = Column(JSON)  # List of features
+    user_limit = Column(Integer, default=5)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class Subscription(Base):
+    __tablename__ = "subscriptions"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True)
+    plan_id = Column(Integer, ForeignKey("subscription_plans.id"))
+    stripe_customer_id = Column(String)
+    stripe_subscription_id = Column(String)
+    status = Column(String, default="trialing")  # trialing, active, past_due, canceled
+    current_period_start = Column(DateTime)
+    current_period_end = Column(DateTime)
+    cancel_at_period_end = Column(Boolean, default=False)
+    trial_end = Column(DateTime)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class TeamMember(Base):
+    __tablename__ = "team_members"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))  # Account owner
+    name = Column(String, nullable=False)
+    email = Column(String, nullable=False)
+    role = Column(String, nullable=False)  # loan_officer, processor, underwriter, etc
+    responsibilities = Column(Text)  # Parsed from upload
+    status = Column(String, default="pending")  # pending, invited, active
+    invited_at = Column(DateTime)
+    joined_at = Column(DateTime)
+    metadata = Column(JSON)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class Workflow(Base):
+    __tablename__ = "workflows"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))  # Account owner
+    name = Column(String, nullable=False)
+    description = Column(Text)
+    workflow_type = Column(String)  # lead_intake, application_processing, underwriting, etc
+    steps = Column(JSON)  # Array of workflow steps
+    assigned_roles = Column(JSON)  # Which team member roles handle this
+    triggers = Column(JSON)  # What triggers this workflow
+    automation_rules = Column(JSON)  # AI automation rules
+    is_active = Column(Boolean, default=True)
+    created_by_ai = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class OnboardingProgress(Base):
+    __tablename__ = "onboarding_progress"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True)
+    current_step = Column(Integer, default=1)  # 1-5
+    steps_completed = Column(JSON, default=list)  # Array of completed step numbers
+    uploaded_documents = Column(JSON)  # Files uploaded
+    team_members_added = Column(Integer, default=0)
+    workflows_generated = Column(Integer, default=0)
+    is_complete = Column(Boolean, default=False)
+    completed_at = Column(DateTime)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class EmailVerificationToken(Base):
+    __tablename__ = "email_verification_tokens"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    token = Column(String, unique=True, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    verified_at = Column(DateTime)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 # ============================================================================
 # PYDANTIC SCHEMAS
 # ============================================================================
@@ -423,6 +608,59 @@ class ActivityResponse(BaseModel):
     type: ActivityType
     content: str
     sentiment: Optional[str]
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
+class ConversationCreate(BaseModel):
+    message: str
+    lead_id: Optional[int] = None
+    loan_id: Optional[int] = None
+    context: Optional[Dict[str, Any]] = None
+
+class ConversationResponse(BaseModel):
+    id: int
+    message: str
+    response: Optional[str]
+    role: str
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
+class CalendarEventCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    start_time: datetime
+    end_time: datetime
+    all_day: bool = False
+    location: Optional[str] = None
+    event_type: Optional[str] = None
+    lead_id: Optional[int] = None
+    loan_id: Optional[int] = None
+    attendees: Optional[List[str]] = None
+    reminder_minutes: Optional[int] = None
+
+class CalendarEventUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    location: Optional[str] = None
+    status: Optional[str] = None
+    attendees: Optional[List[str]] = None
+
+class CalendarEventResponse(BaseModel):
+    id: int
+    title: str
+    description: Optional[str]
+    start_time: datetime
+    end_time: datetime
+    all_day: bool
+    location: Optional[str]
+    event_type: Optional[str]
+    status: str
+    lead_id: Optional[int]
+    loan_id: Optional[int]
     created_at: datetime
     class Config:
         from_attributes = True
@@ -1106,6 +1344,296 @@ async def get_pipeline_analytics(db: Session = Depends(get_db), current_user: Us
         "total_volume": sum([l.amount for l in loans if l.amount]),
         "stage_breakdown": stage_breakdown
     }
+
+# ============================================================================
+# AI ASSISTANT & CONVERSATIONS
+# ============================================================================
+
+@app.post("/api/v1/ai/chat", response_model=ConversationResponse)
+async def ai_chat(
+    conversation: ConversationCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """AI Assistant chat endpoint with context awareness"""
+
+    if not openai_client:
+        raise HTTPException(status_code=503, detail="OpenAI API key not configured")
+
+    # Build context from lead or loan if provided
+    context_info = ""
+    if conversation.lead_id:
+        lead = db.query(Lead).filter(Lead.id == conversation.lead_id).first()
+        if lead:
+            context_info = f"Lead: {lead.name}, Stage: {lead.stage.value}, Score: {lead.ai_score}, Credit: {lead.credit_score}"
+
+    if conversation.loan_id:
+        loan = db.query(Loan).filter(Loan.id == conversation.loan_id).first()
+        if loan:
+            context_info = f"Loan: {loan.loan_number}, Borrower: {loan.borrower_name}, Stage: {loan.stage.value}, Amount: ${loan.amount:,.0f}"
+
+    # Get conversation history for context
+    history = db.query(Conversation).filter(
+        Conversation.user_id == current_user.id
+    ).order_by(Conversation.created_at.desc()).limit(5).all()
+
+    # Build messages for OpenAI
+    messages = [
+        {
+            "role": "system",
+            "content": f"""You are an AI assistant for a mortgage CRM system. You help loan officers manage leads, loans, tasks, and client relationships.
+
+Current user: {current_user.full_name or current_user.email}
+{f'Context: {context_info}' if context_info else ''}
+
+You can help with:
+- Lead prioritization and follow-up strategies
+- Loan status updates and timeline management
+- Task automation and completion
+- Client communication suggestions
+- Analytics and performance insights
+- Calendar and appointment scheduling
+
+Be concise, professional, and action-oriented."""
+        }
+    ]
+
+    # Add recent history
+    for msg in reversed(history):
+        messages.append({"role": "user", "content": msg.message})
+        if msg.response:
+            messages.append({"role": "assistant", "content": msg.response})
+
+    # Add current message
+    messages.append({"role": "user", "content": conversation.message})
+
+    try:
+        # Call OpenAI
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            temperature=0.7,
+            max_tokens=500
+        )
+
+        ai_response = response.choices[0].message.content
+
+        # Save conversation
+        db_conversation = Conversation(
+            user_id=current_user.id,
+            lead_id=conversation.lead_id,
+            loan_id=conversation.loan_id,
+            message=conversation.message,
+            response=ai_response,
+            role="user",
+            metadata=conversation.context
+        )
+        db.add(db_conversation)
+
+        # Also save assistant response
+        db_assistant = Conversation(
+            user_id=current_user.id,
+            lead_id=conversation.lead_id,
+            loan_id=conversation.loan_id,
+            message=ai_response,
+            role="assistant"
+        )
+        db.add(db_assistant)
+
+        db.commit()
+        db.refresh(db_conversation)
+
+        logger.info(f"AI chat completed for user {current_user.email}")
+        return db_conversation
+
+    except Exception as e:
+        logger.error(f"OpenAI API error: {e}")
+        raise HTTPException(status_code=500, detail=f"AI service error: {str(e)}")
+
+@app.get("/api/v1/conversations", response_model=List[ConversationResponse])
+async def get_conversations(
+    skip: int = 0,
+    limit: int = 50,
+    lead_id: Optional[int] = None,
+    loan_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get conversation history"""
+    query = db.query(Conversation).filter(Conversation.user_id == current_user.id)
+
+    if lead_id:
+        query = query.filter(Conversation.lead_id == lead_id)
+    if loan_id:
+        query = query.filter(Conversation.loan_id == loan_id)
+
+    conversations = query.order_by(Conversation.created_at.desc()).offset(skip).limit(limit).all()
+    return conversations
+
+@app.post("/api/v1/ai/complete-task")
+async def ai_complete_task(
+    task_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Use AI to suggest task completion"""
+
+    if not openai_client:
+        raise HTTPException(status_code=503, detail="OpenAI API key not configured")
+
+    task = db.query(AITask).filter(
+        AITask.id == task_id,
+        AITask.assigned_to_id == current_user.id
+    ).first()
+
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    try:
+        # Get context
+        context = f"Task: {task.title}\nDescription: {task.description or 'N/A'}\nPriority: {task.priority}"
+
+        if task.loan_id:
+            loan = db.query(Loan).filter(Loan.id == task.loan_id).first()
+            if loan:
+                context += f"\nLoan: {loan.loan_number}, Stage: {loan.stage.value}"
+
+        # Ask AI for completion suggestion
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a helpful assistant for mortgage loan officers. Suggest a brief completion action for the given task."
+                },
+                {
+                    "role": "user",
+                    "content": f"Suggest how to complete this task:\n{context}"
+                }
+            ],
+            temperature=0.7,
+            max_tokens=200
+        )
+
+        suggestion = response.choices[0].message.content
+
+        return {
+            "task_id": task_id,
+            "suggestion": suggestion,
+            "confidence": 85
+        }
+
+    except Exception as e:
+        logger.error(f"AI task completion error: {e}")
+        raise HTTPException(status_code=500, detail=f"AI service error: {str(e)}")
+
+# ============================================================================
+# CALENDAR EVENTS CRUD
+# ============================================================================
+
+@app.post("/api/v1/calendar/events", response_model=CalendarEventResponse, status_code=201)
+async def create_event(
+    event: CalendarEventCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Create a new calendar event"""
+    db_event = CalendarEvent(
+        **event.dict(exclude={'attendees'}),
+        user_id=current_user.id,
+        attendees=event.attendees if event.attendees else []
+    )
+
+    db.add(db_event)
+    db.commit()
+    db.refresh(db_event)
+
+    logger.info(f"Calendar event created: {db_event.title}")
+    return db_event
+
+@app.get("/api/v1/calendar/events", response_model=List[CalendarEventResponse])
+async def get_events(
+    skip: int = 0,
+    limit: int = 100,
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get calendar events with optional date filtering"""
+    query = db.query(CalendarEvent).filter(CalendarEvent.user_id == current_user.id)
+
+    if start_date:
+        query = query.filter(CalendarEvent.start_time >= start_date)
+    if end_date:
+        query = query.filter(CalendarEvent.start_time <= end_date)
+
+    events = query.order_by(CalendarEvent.start_time).offset(skip).limit(limit).all()
+    return events
+
+@app.get("/api/v1/calendar/events/{event_id}", response_model=CalendarEventResponse)
+async def get_event(
+    event_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get a specific calendar event"""
+    event = db.query(CalendarEvent).filter(
+        CalendarEvent.id == event_id,
+        CalendarEvent.user_id == current_user.id
+    ).first()
+
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    return event
+
+@app.patch("/api/v1/calendar/events/{event_id}", response_model=CalendarEventResponse)
+async def update_event(
+    event_id: int,
+    event_update: CalendarEventUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update a calendar event"""
+    event = db.query(CalendarEvent).filter(
+        CalendarEvent.id == event_id,
+        CalendarEvent.user_id == current_user.id
+    ).first()
+
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    for key, value in event_update.dict(exclude_unset=True).items():
+        setattr(event, key, value)
+
+    event.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(event)
+
+    logger.info(f"Calendar event updated: {event.title}")
+    return event
+
+@app.delete("/api/v1/calendar/events/{event_id}", status_code=204)
+async def delete_event(
+    event_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete a calendar event"""
+    event = db.query(CalendarEvent).filter(
+        CalendarEvent.id == event_id,
+        CalendarEvent.user_id == current_user.id
+    ).first()
+
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    db.delete(event)
+    db.commit()
+
+    logger.info(f"Calendar event deleted: {event.title}")
+    return None
 
 # ============================================================================
 # DATABASE INITIALIZATION

@@ -6,6 +6,7 @@ function Loans() {
   const [loans, setLoans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [activeFilter, setActiveFilter] = useState('All');
   const [formData, setFormData] = useState({
     loan_number: '',
     borrower_name: '',
@@ -14,6 +15,16 @@ function Loans() {
     rate: '',
     closing_date: '',
   });
+
+  const filters = [
+    'All',
+    'Contract Received',
+    'In Processing',
+    'Approved',
+    'Suspended',
+    'Denied',
+    'Withdrawn',
+  ];
 
   useEffect(() => {
     loadLoans();
@@ -65,23 +76,87 @@ function Loans() {
     });
   };
 
+  const handleExport = () => {
+    alert('Export functionality coming soon');
+  };
+
+  const filteredLoans = activeFilter === 'All'
+    ? loans
+    : loans.filter(loan => loan.stage === activeFilter);
+
   if (loading) return <div className="loading">Loading loans...</div>;
 
   return (
     <div className="loans-page">
       <div className="page-header">
         <div>
-          <h1>Loan Pipeline</h1>
+          <h1>Active Loans</h1>
           <p>{loans.length} active loans</p>
         </div>
-        <button className="btn-primary" onClick={() => setShowModal(true)}>
-          + New Loan
-        </button>
+        <div className="header-actions">
+          <button className="btn-secondary" onClick={handleExport}>
+            Export
+          </button>
+          <button className="btn-primary" onClick={() => setShowModal(true)}>
+            + New Loan
+          </button>
+        </div>
       </div>
 
-      <div className="loans-grid">
-        {loans.map((loan) => (
-          <div key={loan.id} className="loan-card">
+      <div className="filter-tabs">
+        {filters.map((filter) => (
+          <button
+            key={filter}
+            className={`filter-tab ${activeFilter === filter ? 'active' : ''}`}
+            onClick={() => setActiveFilter(filter)}
+          >
+            {filter}
+          </button>
+        ))}
+      </div>
+
+      <div className="table-container">
+        <table className="loans-table">
+          <thead>
+            <tr>
+              <th>Borrower</th>
+              <th>Loan Amount</th>
+              <th>Property Address</th>
+              <th>Status</th>
+              <th>Days in Process</th>
+              <th>Loan Officer</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredLoans.map((loan) => (
+              <tr key={loan.id}>
+                <td className="borrower-name">{loan.borrower || loan.borrower_name}</td>
+                <td className="loan-amount">${(loan.amount || 0).toLocaleString()}</td>
+                <td>{loan.property_address || 'N/A'}</td>
+                <td>
+                  <span className={`status-badge status-${getStatusClass(loan.stage)}`}>
+                    {loan.stage}
+                  </span>
+                </td>
+                <td>{loan.days_in_process || calculateDays(loan.created_at)}</td>
+                <td>{loan.loan_officer || 'Unassigned'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {filteredLoans.length === 0 && (
+        <div className="empty-state">
+          <h3>No loans found</h3>
+          <p>Try adjusting your filters or add a new loan</p>
+        </div>
+      )}
+
+      <div className="legacy-loans-grid" style={{ display: 'none' }}>
+        <div className="loans-grid">
+          {loans.map((loan) => (
+            <div key={loan.id} className="loan-card">
             <div className="loan-header">
               <div>
                 <h3>{loan.borrower_name}</h3>
@@ -126,16 +201,10 @@ function Loans() {
                 Delete
               </button>
             </div>
-          </div>
-        ))}
-      </div>
-
-      {loans.length === 0 && (
-        <div className="empty-state">
-          <h3>No loans yet</h3>
-          <p>Start your pipeline by adding a loan</p>
+            </div>
+          ))}
         </div>
-      )}
+      </div>
 
       {showModal && (
         <div className="modal-overlay" onClick={() => setShowModal(false)}>
@@ -217,6 +286,26 @@ function Loans() {
       )}
     </div>
   );
+}
+
+function getStatusClass(status) {
+  const statusMap = {
+    'Contract Received': 'received',
+    'In Processing': 'processing',
+    'Approved': 'approved',
+    'Suspended': 'suspended',
+    'Denied': 'denied',
+    'Withdrawn': 'withdrawn',
+  };
+  return statusMap[status] || 'default';
+}
+
+function calculateDays(createdAt) {
+  if (!createdAt) return 0;
+  const created = new Date(createdAt);
+  const today = new Date();
+  const diff = Math.floor((today - created) / (1000 * 60 * 60 * 24));
+  return diff;
 }
 
 export default Loans;

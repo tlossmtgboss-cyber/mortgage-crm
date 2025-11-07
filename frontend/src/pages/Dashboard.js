@@ -8,58 +8,60 @@ function Dashboard() {
   const modules = [
     {
       id: 'leads',
-      emoji: '📋',
       title: 'Leads',
-      description: 'Manage and track your mortgage leads',
-      path: '/leads'
+      description: 'Manage and track new prospects',
+      icon: '👥',
+      path: '/leads',
     },
     {
-      id: 'active-loans',
-      emoji: '💼',
+      id: 'loans',
       title: 'Active Loans',
-      description: 'Monitor loans in progress',
-      path: '/active-loans'
+      description: 'Monitor in-process loans',
+      icon: '💼',
+      path: '/loans',
     },
     {
       id: 'portfolio',
-      emoji: '🏆',
       title: 'Portfolio',
-      description: 'View your complete loan portfolio',
-      path: '/portfolio'
+      description: 'View closed client relationships',
+      icon: '📊',
+      path: '/portfolio',
     },
     {
       id: 'tasks',
-      emoji: '✅',
       title: 'Tasks',
-      description: 'Manage your daily tasks and follow-ups',
-      path: '/tasks'
+      description: 'Automated task management',
+      icon: '✓',
+      path: '/tasks',
     },
     {
       id: 'calendar',
-      emoji: '📅',
       title: 'Calendar',
-      description: 'Schedule and view appointments',
-      path: '/calendar'
+      description: 'Schedule appointments and events',
+      icon: '📅',
+      path: '/calendar',
     },
     {
       id: 'scorecard',
-      emoji: '📊',
       title: 'Scorecard',
-      description: 'Track your performance metrics',
-      path: '/scorecard'
-    }
+      description: 'Performance metrics and analytics',
+      icon: '📈',
+      path: '/scorecard',
+    },
+    {
+      id: 'assistant',
+      title: 'AI Assistant',
+      description: 'Your intelligent CRM copilot',
+      icon: '🤖',
+      path: '/assistant',
+    },
   ];
 
   return (
-    <div className="dashboard-container">
-      <div className="ai-tips-section">
-        <h2>💡 AI Assistant Tips</h2>
-        <p>
-          Welcome to your Mortgage CRM! Use the AI Assistant to help you with tasks like:
-          lead qualification, document processing, follow-up reminders, and generating
-          personalized email templates. Click the 🤖 Assistant button in the navigation
-          to get started.
-        </p>
+    <div className="dashboard">
+      <div className="dashboard-header">
+        <h1>Dashboard</h1>
+        <p className="subtitle">Welcome to your AI-Powered Mortgage CRM</p>
       </div>
 
       <div className="modules-grid">
@@ -69,11 +71,24 @@ function Dashboard() {
             className="module-card"
             onClick={() => navigate(module.path)}
           >
-            <div className="module-emoji">{module.emoji}</div>
-            <h3 className="module-title">{module.title}</h3>
-            <p className="module-description">{module.description}</p>
+            <div className="module-icon">{module.icon}</div>
+            <div className="module-content">
+              <h3>{module.title}</h3>
+              <p>{module.description}</p>
+            </div>
           </div>
         ))}
+      </div>
+
+      <div className="ai-tips">
+        <div className="tip-box">
+          <h4>AI Assistant Tips</h4>
+          <ul>
+            <li>Click the "AI Assistant" button in the navigation to get help with any task</li>
+            <li>The AI can help you schedule appointments, manage leads, and automate follow-ups</li>
+            <li>Ask the AI to analyze your performance metrics and provide insights</li>
+          </ul>
+        </div>
       </div>
     </div>
   );

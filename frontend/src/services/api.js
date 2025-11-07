@@ -202,4 +202,51 @@ export const analyticsAPI = {
   },
 };
 
+// AI Assistant & Conversations
+export const aiAPI = {
+  chat: async (message, context = {}) => {
+    const response = await api.post('/api/v1/ai/chat', {
+      message,
+      lead_id: context.lead_id,
+      loan_id: context.loan_id,
+      context: context.metadata,
+    });
+    return response.data;
+  },
+  completeTask: async (taskId) => {
+    const response = await api.post(`/api/v1/ai/complete-task?task_id=${taskId}`);
+    return response.data;
+  },
+};
+
+export const conversationsAPI = {
+  getAll: async (params = {}) => {
+    const response = await api.get('/api/v1/conversations', { params });
+    return response.data;
+  },
+};
+
+// Calendar Events
+export const calendarAPI = {
+  getAll: async (params = {}) => {
+    const response = await api.get('/api/v1/calendar/events', { params });
+    return response.data;
+  },
+  getById: async (id) => {
+    const response = await api.get(`/api/v1/calendar/events/${id}`);
+    return response.data;
+  },
+  create: async (data) => {
+    const response = await api.post('/api/v1/calendar/events', data);
+    return response.data;
+  },
+  update: async (id, data) => {
+    const response = await api.patch(`/api/v1/calendar/events/${id}`, data);
+    return response.data;
+  },
+  delete: async (id) => {
+    await api.delete(`/api/v1/calendar/events/${id}`);
+  },
+};
+
 export default api;

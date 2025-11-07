@@ -5,38 +5,20 @@ echo "Agentic AI Mortgage CRM - Quick Start"
 echo "=========================================="
 echo ""
 
-# Check if virtual environment exists
-if [ ! -d "venv" ]; then
-    echo "🔧 Creating Python virtual environment..."
-    python3 -m venv venv
-fi
-
-# Activate virtual environment
-echo "📦 Activating virtual environment..."
-source venv/bin/activate
-
-# Install dependencies
-echo "📚 Installing Python dependencies..."
+# Navigate to backend directory
 cd backend
-pip install -q -r requirements.txt
 
-# Create .env if it doesn't exist
-if [ ! -f ".env" ]; then
-    echo "🔧 Creating .env file..."
-    cp .env.example .env
-fi
-
-# Start the server
-echo ""
+# Start the FastAPI application
 echo "=========================================="
 echo "✅ Starting CRM Backend Server..."
 echo "=========================================="
 echo ""
-echo "📍 API: http://localhost:8000"
-echo "📚 Docs: http://localhost:8000/docs"
+echo "📍 API: http://0.0.0.0:${PORT:-8000}"
+echo "📚 Docs: http://0.0.0.0:${PORT:-8000}/docs"
 echo "🔐 Demo Login: demo@example.com / demo123"
 echo ""
-echo "Press Ctrl+C to stop the server"
-echo ""
 
-python -m uvicorn main:app --host 0.0.0.0 --port 8000
+# Start uvicorn server (Railway provides PORT environment variable)
+python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
+python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
+>>>>>>> d774359 (✨ Add comprehensive profile fields, AI Assistant page, and Railway deployment updates)

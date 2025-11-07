@@ -32,60 +32,87 @@ function Tasks() {
 
   if (loading) return <div className="loading">Loading tasks...</div>;
 
-  const groupedTasks = {
-    'Human Needed': tasks.filter((t) => t.type === 'Human Needed'),
-    'In Progress': tasks.filter((t) => t.type === 'In Progress'),
-    'Awaiting Review': tasks.filter((t) => t.type === 'Awaiting Review'),
-    'Completed': tasks.filter((t) => t.type === 'Completed'),
-  };
+  const outstandingTasks = tasks.filter((t) => t.type !== 'Completed');
+  const completedTasks = tasks.filter((t) => t.type === 'Completed');
 
   return (
     <div className="tasks-page">
       <div className="page-header">
-        <h1>AI Tasks</h1>
+        <h1>Tasks</h1>
         <p>{tasks.length} total tasks</p>
       </div>
 
-      <div className="tasks-board">
-        {Object.entries(groupedTasks).map(([status, statusTasks]) => (
-          <div key={status} className="task-column">
-            <div className="column-header">
-              <h3>{status}</h3>
-              <span className="task-count">{statusTasks.length}</span>
-            </div>
-            <div className="task-list">
-              {statusTasks.map((task) => (
-                <div key={task.id} className="task-card">
+      <div className="tasks-sections">
+        <div className="task-section">
+          <div className="section-header">
+            <h2>Outstanding Tasks</h2>
+            <span className="task-count">{outstandingTasks.length}</span>
+          </div>
+          <div className="task-list">
+            {outstandingTasks.map((task) => (
+              <div key={task.id} className="task-item">
+                <div className="task-main">
                   <h4>{task.title}</h4>
                   {task.borrower_name && (
-                    <p className="borrower">{task.borrower_name}</p>
+                    <p className="task-client">Client: {task.borrower_name}</p>
                   )}
-                  {task.ai_confidence && (
-                    <div className="confidence">
-                      <span>AI Confidence: {task.ai_confidence}%</span>
-                    </div>
-                  )}
-                  <div className="task-footer">
-                    <span className={`priority priority-${task.priority}`}>
-                      {task.priority}
-                    </span>
-                    {status !== 'Completed' && (
-                      <button
-                        className="btn-complete"
-                        onClick={() => handleComplete(task)}
-                      >
-                        Complete
-                      </button>
+                  <div className="task-meta">
+                    {task.due_date && (
+                      <span className="due-date">Due: {new Date(task.due_date).toLocaleDateString()}</span>
+                    )}
+                    {task.ai_can_complete && (
+                      <span className="ai-badge">AI Can Complete</span>
                     )}
                   </div>
                 </div>
-              ))}
-              {statusTasks.length === 0 && (
-                <div className="empty-column">No tasks</div>
-              )}
-            </div>
+                <div className="task-actions">
+                  <button
+                    className="btn-complete"
+                    onClick={() => handleComplete(task)}
+                  >
+                    Complete
+                  </button>
+                </div>
+              </div>
+            ))}
+            {outstandingTasks.length === 0 && (
+              <div className="empty-state">
+                <p>No outstanding tasks</p>
+              </div>
+            )}
           </div>
-        ))}
+        </div>
+
+        <div className="task-section">
+          <div className="section-header">
+            <h2>Completed Tasks</h2>
+            <span className="task-count">{completedTasks.length}</span>
+          </div>
+          <div className="task-list">
+            {completedTasks.map((task) => (
+              <div key={task.id} className="task-item completed">
+                <div className="task-main">
+                  <h4>{task.title}</h4>
+                  {task.borrower_name && (
+                    <p className="task-client">Client: {task.borrower_name}</p>
+                  )}
+                  <div className="task-meta">
+                    {task.completed_at && (
+                      <span className="completed-date">
+                        Completed: {new Date(task.completed_at).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+            {completedTasks.length === 0 && (
+              <div className="empty-state">
+                <p>No completed tasks</p>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

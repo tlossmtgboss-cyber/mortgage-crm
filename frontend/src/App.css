@@ -1,15 +1,27 @@
 .app {
   min-height: 100vh;
-  background: #f8f9fa;
+  background: var(--color-bg-base);
 }
 
 .app-layout {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .app-main {
   flex: 1;
-  background: #f8f9fa;
+  background: var(--color-bg-base);
+  transition: margin-right 250ms ease;
+}
+
+.app-main.with-assistant {
+  margin-right: 400px;
+}
+
+@media (max-width: 768px) {
+  .app-main.with-assistant {
+    margin-right: 0;
+  }
 }

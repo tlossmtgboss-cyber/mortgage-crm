@@ -1,3 +1,90 @@
+:root {
+  /* Color Palette */
+  --color-primary: #217F8D;
+  --color-primary-hover: #1a6670;
+  --color-success: #217F8D;
+  --color-error: #C0152F;
+  --color-warning: #A84B2F;
+  --color-info: #64748b;
+
+  /* Background Colors */
+  --color-bg-base: #FCFCF9;
+  --color-bg-surface: #FFFFFF;
+  --color-bg-secondary: rgba(139, 92, 68, 0.05);
+  --color-bg-hover: rgba(139, 92, 68, 0.08);
+
+  /* Text Colors */
+  --color-text-primary: #1a1a1a;
+  --color-text-secondary: #666666;
+  --color-text-tertiary: #999999;
+
+  /* Border Colors */
+  --color-border: rgba(139, 92, 68, 0.15);
+  --color-border-light: rgba(139, 92, 68, 0.08);
+
+  /* Spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+
+  /* Border Radius */
+  --radius-sm: 6px;
+  --radius-base: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.02);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
+  --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+
+  /* Typography */
+  --font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Inter', sans-serif;
+  --font-mono: 'Berkeley Mono', 'Courier New', monospace;
+
+  /* Font Sizes */
+  --font-xs: 11px;
+  --font-sm: 13px;
+  --font-base: 14px;
+  --font-md: 16px;
+  --font-lg: 18px;
+  --font-xl: 20px;
+  --font-2xl: 24px;
+  --font-3xl: 28px;
+  --font-4xl: 30px;
+
+  /* Line Heights */
+  --line-tight: 1.2;
+  --line-normal: 1.5;
+
+  /* Font Weights */
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 550;
+  --weight-bold: 600;
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-bg-base: #1a1a1a;
+    --color-bg-surface: #2a2a2a;
+    --color-bg-secondary: rgba(255, 255, 255, 0.05);
+    --color-bg-hover: rgba(255, 255, 255, 0.08);
+
+    --color-text-primary: #f5f5f5;
+    --color-text-secondary: #a3a3a3;
+    --color-text-tertiary: #737373;
+
+    --color-border: rgba(255, 255, 255, 0.15);
+    --color-border-light: rgba(255, 255, 255, 0.08);
+  }
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -6,33 +93,129 @@
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: var(--font-family);
+  font-size: var(--font-base);
+  line-height: var(--line-normal);
+  color: var(--color-text-primary);
+  background: var(--color-bg-base);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: #f8f9fa;
 }
 
 code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+  font-family: var(--font-mono);
 }
 
+/* Utility Classes */
 .loading {
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 400px;
-  font-size: 18px;
-  color: #666;
+  font-size: var(--font-lg);
+  color: var(--color-text-secondary);
 }
 
 .error {
-  background: #ffebee;
-  color: #c62828;
-  padding: 16px;
-  border-radius: 8px;
-  margin: 20px;
+  background: rgba(192, 21, 47, 0.1);
+  color: var(--color-error);
+  padding: var(--space-md);
+  border-radius: var(--radius-base);
+  margin: var(--space-lg);
   text-align: center;
+  border: 1px solid var(--color-error);
+}
+
+/* Button Base Styles */
+button {
+  font-family: var(--font-family);
+  font-size: var(--font-base);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition: all 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-primary {
+  background: var(--color-primary);
+  color: var(--color-bg-base);
+  border: none;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-base);
+  font-weight: var(--weight-medium);
+}
+
+.btn-primary:hover {
+  background: var(--color-primary-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-secondary {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-base);
+}
+
+.btn-secondary:hover {
+  background: var(--color-bg-hover);
+}
+
+/* Card Styles */
+.card {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  padding: var(--space-lg);
+  box-shadow: var(--shadow-sm);
+  transition: all 250ms ease;
+}
+
+.card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+/* Input Styles */
+input, select, textarea {
+  font-family: var(--font-family);
+  font-size: var(--font-base);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  transition: all 150ms ease;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(33, 127, 141, 0.1);
+}
+
+/* Badge Styles */
+.badge {
+  display: inline-block;
+  padding: 2px var(--space-sm);
+  border-radius: var(--radius-full);
+  font-size: var(--font-xs);
+  font-weight: var(--weight-semibold);
+  line-height: var(--line-tight);
+}
+
+.badge-success {
+  background: rgba(33, 127, 141, 0.1);
+  color: var(--color-success);
+}
+
+.badge-warning {
+  background: rgba(168, 75, 47, 0.1);
+  color: var(--color-warning);
+}
+
+.badge-error {
+  background: rgba(192, 21, 47, 0.1);
+  color: var(--color-error);
 }

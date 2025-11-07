@@ -7,6 +7,7 @@ function Leads() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingLead, setEditingLead] = useState(null);
+  const [activeFilter, setActiveFilter] = useState('All');
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -15,7 +16,32 @@ function Leads() {
     preapproval_amount: '',
     loan_type: '',
     source: '',
+    address: '',
+    city: '',
+    state: '',
+    zip_code: '',
+    property_type: '',
+    property_value: '',
+    down_payment: '',
+    employment_status: '',
+    annual_income: '',
+    monthly_debts: '',
+    first_time_buyer: false,
+    notes: '',
   });
+
+  const filters = [
+    'All',
+    'New',
+    'Attempted Contact',
+    'Prospect',
+    'Application',
+    'Completed',
+    'Pre-Qualified',
+    'Pre-Approved',
+    'Withdrawn',
+    'Does Not Qualify',
+  ];
 
   useEffect(() => {
     loadLeads();
@@ -31,6 +57,10 @@ function Leads() {
       setLoading(false);
     }
   };
+
+  const filteredLeads = activeFilter === 'All'
+    ? leads
+    : leads.filter(lead => lead.stage === activeFilter);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -60,6 +90,18 @@ function Leads() {
       preapproval_amount: lead.preapproval_amount || '',
       loan_type: lead.loan_type || '',
       source: lead.source || '',
+      address: lead.address || '',
+      city: lead.city || '',
+      state: lead.state || '',
+      zip_code: lead.zip_code || '',
+      property_type: lead.property_type || '',
+      property_value: lead.property_value || '',
+      down_payment: lead.down_payment || '',
+      employment_status: lead.employment_status || '',
+      annual_income: lead.annual_income || '',
+      monthly_debts: lead.monthly_debts || '',
+      first_time_buyer: lead.first_time_buyer || false,
+      notes: lead.notes || '',
     });
     setShowModal(true);
   };
@@ -85,6 +127,18 @@ function Leads() {
       preapproval_amount: '',
       loan_type: '',
       source: '',
+      address: '',
+      city: '',
+      state: '',
+      zip_code: '',
+      property_type: '',
+      property_value: '',
+      down_payment: '',
+      employment_status: '',
+      annual_income: '',
+      monthly_debts: '',
+      first_time_buyer: false,
+      notes: '',
     });
   };
 
@@ -110,8 +164,69 @@ function Leads() {
         </button>
       </div>
 
-      <div className="leads-grid">
-        {leads.map((lead) => (
+      <div className="filter-tabs">
+        {filters.map((filter) => (
+          <button
+            key={filter}
+            className={`filter-tab ${activeFilter === filter ? 'active' : ''}`}
+            onClick={() => setActiveFilter(filter)}
+          >
+            {filter}
+          </button>
+        ))}
+      </div>
+
+      <div className="table-container">
+        <table className="leads-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Phone</th>
+              <th>Status</th>
+              <th>Last Contact</th>
+              <th>Source</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredLeads.map((lead) => (
+              <tr key={lead.id}>
+                <td className="lead-name">{lead.name}</td>
+                <td>{lead.email || 'N/A'}</td>
+                <td>{lead.phone || 'N/A'}</td>
+                <td>
+                  <span className={`status-badge status-${getStatusColor(lead.stage)}`}>
+                    {lead.stage}
+                  </span>
+                </td>
+                <td>{lead.updated_at ? new Date(lead.updated_at).toLocaleDateString() : 'N/A'}</td>
+                <td>{lead.source || 'N/A'}</td>
+                <td>
+                  <div className="table-actions">
+                    <button className="btn-icon" onClick={() => handleEdit(lead)} title="Edit">
+                      ✏️
+                    </button>
+                    <button className="btn-icon" onClick={() => handleDelete(lead.id)} title="Delete">
+                      🗑️
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {filteredLeads.length === 0 && (
+        <div className="empty-state">
+          <h3>No leads found</h3>
+          <p>Try adjusting your filters or add a new lead</p>
+        </div>
+      )}
+
+      <div className="legacy-leads-grid" style={{ display: 'none' }}>
+        {filteredLeads.map((lead) => (
           <div key={lead.id} className="lead-card">
             <div className="lead-header">
               <h3>{lead.name}</h3>
@@ -220,6 +335,89 @@ function Leads() {
                 </div>
               </div>
 
+              <div className="form-section-title">Property Information</div>
+
+              <div className="form-group">
+                <label>Property Address</label>
+                <input
+                  type="text"
+                  value={formData.address}
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  placeholder="Street address"
+                />
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>City</label>
+                  <input
+                    type="text"
+                    value={formData.city}
+                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>State</label>
+                  <input
+                    type="text"
+                    value={formData.state}
+                    onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                    maxLength="2"
+                    placeholder="CA"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>ZIP Code</label>
+                  <input
+                    type="text"
+                    value={formData.zip_code}
+                    onChange={(e) => setFormData({ ...formData, zip_code: e.target.value })}
+                    maxLength="10"
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Property Type</label>
+                  <select
+                    value={formData.property_type}
+                    onChange={(e) => setFormData({ ...formData, property_type: e.target.value })}
+                  >
+                    <option value="">Select...</option>
+                    <option value="Single Family">Single Family</option>
+                    <option value="Condo">Condo</option>
+                    <option value="Townhouse">Townhouse</option>
+                    <option value="Multi-Family">Multi-Family</option>
+                    <option value="Manufactured">Manufactured</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Property Value</label>
+                  <input
+                    type="number"
+                    value={formData.property_value}
+                    onChange={(e) => setFormData({ ...formData, property_value: e.target.value })}
+                    placeholder="$"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Down Payment</label>
+                  <input
+                    type="number"
+                    value={formData.down_payment}
+                    onChange={(e) => setFormData({ ...formData, down_payment: e.target.value })}
+                    placeholder="$"
+                  />
+                </div>
+              </div>
+
+              <div className="form-section-title">Financial Information</div>
+
               <div className="form-row">
                 <div className="form-group">
                   <label>Credit Score</label>
@@ -233,6 +431,43 @@ function Leads() {
                 </div>
 
                 <div className="form-group">
+                  <label>Annual Income</label>
+                  <input
+                    type="number"
+                    value={formData.annual_income}
+                    onChange={(e) => setFormData({ ...formData, annual_income: e.target.value })}
+                    placeholder="$"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Monthly Debts</label>
+                  <input
+                    type="number"
+                    value={formData.monthly_debts}
+                    onChange={(e) => setFormData({ ...formData, monthly_debts: e.target.value })}
+                    placeholder="$"
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Employment Status</label>
+                  <select
+                    value={formData.employment_status}
+                    onChange={(e) => setFormData({ ...formData, employment_status: e.target.value })}
+                  >
+                    <option value="">Select...</option>
+                    <option value="Full-Time">Full-Time</option>
+                    <option value="Part-Time">Part-Time</option>
+                    <option value="Self-Employed">Self-Employed</option>
+                    <option value="Retired">Retired</option>
+                    <option value="Unemployed">Unemployed</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
                   <label>Preapproval Amount</label>
                   <input
                     type="number"
@@ -240,9 +475,12 @@ function Leads() {
                     onChange={(e) =>
                       setFormData({ ...formData, preapproval_amount: e.target.value })
                     }
+                    placeholder="$"
                   />
                 </div>
               </div>
+
+              <div className="form-section-title">Loan Details</div>
 
               <div className="form-row">
                 <div className="form-group">
@@ -270,6 +508,27 @@ function Leads() {
                 </div>
               </div>
 
+              <div className="form-group">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={formData.first_time_buyer}
+                    onChange={(e) => setFormData({ ...formData, first_time_buyer: e.target.checked })}
+                  />
+                  First-Time Home Buyer
+                </label>
+              </div>
+
+              <div className="form-group">
+                <label>Notes</label>
+                <textarea
+                  rows="3"
+                  value={formData.notes}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  placeholder="Additional notes..."
+                />
+              </div>
+
               <div className="modal-actions">
                 <button type="button" className="btn-secondary" onClick={() => setShowModal(false)}>
                   Cancel
@@ -290,6 +549,21 @@ function getScoreLevel(score) {
   if (score >= 80) return 'high';
   if (score >= 60) return 'medium';
   return 'low';
+}
+
+function getStatusColor(status) {
+  const statusColors = {
+    'New': 'new',
+    'Attempted Contact': 'attempted',
+    'Prospect': 'prospect',
+    'Application': 'application',
+    'Completed': 'completed',
+    'Pre-Qualified': 'qualified',
+    'Pre-Approved': 'approved',
+    'Withdrawn': 'withdrawn',
+    'Does Not Qualify': 'disqualified',
+  };
+  return statusColors[status] || 'default';
 }
 
 export default Leads;

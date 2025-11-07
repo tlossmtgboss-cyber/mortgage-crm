@@ -1,27 +1,15 @@
 import React from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { clearAuth, getAuth } from '../utils/auth';
+import { Link, useLocation } from 'react-router-dom';
 import './Navigation.css';
 
-function Navigation() {
-  const navigate = useNavigate();
+function Navigation({ onToggleAssistant, assistantOpen }) {
   const location = useLocation();
-  const { user } = getAuth();
-
-  const handleLogout = () => {
-    clearAuth();
-    navigate('/login');
-  };
 
   const isActive = (path) => location.pathname === path;
 
   return (
     <nav className="navigation">
       <div className="nav-container">
-        <div className="nav-brand">
-          <h2>Mortgage CRM</h2>
-        </div>
-
         <div className="nav-links">
           <Link
             to="/dashboard"
@@ -39,7 +27,13 @@ function Navigation() {
             to="/loans"
             className={`nav-link ${isActive('/loans') ? 'active' : ''}`}
           >
-            Loans
+            Active Loans
+          </Link>
+          <Link
+            to="/portfolio"
+            className={`nav-link ${isActive('/portfolio') ? 'active' : ''}`}
+          >
+            Portfolio
           </Link>
           <Link
             to="/tasks"
@@ -47,14 +41,39 @@ function Navigation() {
           >
             Tasks
           </Link>
+          <Link
+            to="/calendar"
+            className={`nav-link ${isActive('/calendar') ? 'active' : ''}`}
+          >
+            Calendar
+          </Link>
+          <Link
+            to="/scorecard"
+            className={`nav-link ${isActive('/scorecard') ? 'active' : ''}`}
+          >
+            Scorecard
+          </Link>
+          <Link
+            to="/referral-partners"
+            className={`nav-link ${isActive('/referral-partners') ? 'active' : ''}`}
+          >
+            Partners
+          </Link>
+          <Link
+            to="/mum-clients"
+            className={`nav-link ${isActive('/mum-clients') ? 'active' : ''}`}
+          >
+            MUM Clients
+          </Link>
         </div>
 
-        <div className="nav-user">
-          <span className="user-name">{user?.full_name || user?.email || 'User'}</span>
-          <button onClick={handleLogout} className="btn-logout">
-            Logout
-          </button>
-        </div>
+        <button
+          className={`ai-assistant-toggle ${assistantOpen ? 'active' : ''}`}
+          onClick={onToggleAssistant}
+          title="Toggle AI Assistant"
+        >
+          AI Assistant
+        </button>
       </div>
     </nav>
   );
