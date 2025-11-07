@@ -33,7 +33,6 @@ stripe==7.8.0
 
 # Email Processing
 email-validator==2.1.0
-python-email==0.3.3
 emails==0.6
 
 # Background Tasks
