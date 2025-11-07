@@ -287,7 +287,7 @@ class Conversation(Base):
     message = Column(Text, nullable=False)
     response = Column(Text)
     role = Column(String, nullable=False)  # 'user' or 'assistant'
-    metadata = Column(JSON)
+    meta_data = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class CalendarEvent(Base):
@@ -306,7 +306,7 @@ class CalendarEvent(Base):
     attendees = Column(JSON)
     reminder_minutes = Column(Integer)
     status = Column(String, default="scheduled")  # scheduled, completed, cancelled
-    metadata = Column(JSON)
+    meta_data = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -324,7 +324,7 @@ class SMSMessage(Base):
     twilio_sid = Column(String)
     template_used = Column(String)
     error_message = Column(Text)
-    metadata = Column(JSON)
+    meta_data = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class EmailMessage(Base):
@@ -344,7 +344,7 @@ class EmailMessage(Base):
     has_attachments = Column(Boolean, default=False)
     attachments = Column(JSON)
     in_reply_to = Column(String)
-    metadata = Column(JSON)
+    meta_data = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
     received_at = Column(DateTime)
 
@@ -361,7 +361,7 @@ class TeamsMessage(Base):
     message_type = Column(String, default="direct")  # direct, channel
     status = Column(String)  # sent, delivered, failed
     microsoft_message_id = Column(String)
-    metadata = Column(JSON)
+    meta_data = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class IntegrationLog(Base):
@@ -417,7 +417,7 @@ class TeamMember(Base):
     status = Column(String, default="pending")  # pending, invited, active
     invited_at = Column(DateTime)
     joined_at = Column(DateTime)
-    metadata = Column(JSON)
+    meta_data = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 class Workflow(Base):
