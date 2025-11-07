@@ -110,7 +110,7 @@ class User(Base):
     role = Column(String, default="loan_officer")
     branch_id = Column(Integer, ForeignKey("branches.id"))
     is_active = Column(Boolean, default=True)
-    metadata = Column(JSON)
+    user_metadata = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
     branch = relationship("Branch", back_populates="users")
     leads = relationship("Lead", back_populates="owner")
@@ -136,7 +136,7 @@ class Lead(Base):
     owner_id = Column(Integer, ForeignKey("users.id"))
     last_contact = Column(DateTime)
     notes = Column(Text)
-    metadata = Column(JSON)
+    user_metadata = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     owner = relationship("User", back_populates="leads")
@@ -172,7 +172,7 @@ class Loan(Base):
     ai_insights = Column(Text)
     predicted_close_date = Column(DateTime)
     risk_score = Column(Integer, default=0)
-    metadata = Column(JSON)
+    user_metadata = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     loan_officer = relationship("User", back_populates="loans")
@@ -199,7 +199,7 @@ class AITask(Base):
     completed_at = Column(DateTime)
     estimated_time = Column(String)
     feedback = Column(Text)
-    metadata = Column(JSON)
+    user_metadata = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     loan = relationship("Loan", back_populates="tasks")
@@ -251,7 +251,7 @@ class Activity(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     duration = Column(String)
     sentiment = Column(String)
-    metadata = Column(JSON)
+    user_metadata = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
     lead = relationship("Lead", back_populates="activities")
     loan = relationship("Loan", back_populates="activities")
@@ -1115,7 +1115,7 @@ async def get_pipeline_analytics(db: Session = Depends(get_db), current_user: Us
 def init_db():
     """Create all database tables"""
     try:
-        Base.metadata.create_all(bind=engine)
+        Base.user_metadata.create_all(bind=engine)
         logger.info("✅ Database tables created successfully")
         return True
     except Exception as e:
