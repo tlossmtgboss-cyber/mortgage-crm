@@ -113,13 +113,30 @@ function Registration() {
         plan: formData.plan
       });
 
-      // Registration successful - redirect to email verification page
-      navigate('/verify-email-sent', {
-        state: {
-          email: formData.email,
-          message: response.data.message
-        }
-      });
+      // Check if dev mode (bypass email verification)
+      if (response.data.dev_mode && response.data.redirect_to) {
+        // Dev mode - create mock session and redirect
+        const mockToken = 'dev_token_' + response.data.user_id;
+        const mockUser = {
+          id: response.data.user_id,
+          email: response.data.email,
+          full_name: formData.full_name
+        };
+
+        localStorage.setItem('token', mockToken);
+        localStorage.setItem('user', JSON.stringify(mockUser));
+
+        // Redirect to onboarding or dashboard
+        navigate(response.data.redirect_to === '/dashboard' ? '/onboarding' : response.data.redirect_to);
+      } else {
+        // Production mode - redirect to email verification page
+        navigate('/verify-email-sent', {
+          state: {
+            email: formData.email,
+            message: response.data.message
+          }
+        });
+      }
 
     } catch (error) {
       console.error('Registration failed:', error);

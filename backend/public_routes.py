@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 from typing import Optional, Dict, List
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 
 from main import (
@@ -74,11 +74,13 @@ async def register_user(registration: UserRegistration, db: Session = Depends(ge
 
     Flow:
     1. Validate email not already registered
-    2. Create Stripe customer
+    2. Create Stripe customer (or skip in dev mode)
     3. Create user in database (unverified)
-    4. Create Stripe subscription with trial
+    4. Create Stripe subscription with trial (or skip in dev mode)
     5. Send verification email
     6. Return user info and client secret for payment setup
+
+    DEV MODE: Use email ending in @dev.local to bypass Stripe
     """
 
     # Check if user already exists
@@ -91,53 +93,82 @@ async def register_user(registration: UserRegistration, db: Session = Depends(ge
     if not plan_info:
         raise HTTPException(status_code=400, detail="Invalid subscription plan")
 
+    # Check if this is a dev/test registration (bypass Stripe)
+    is_dev_mode = registration.email.endswith('@dev.local') or registration.email.endswith('@test.com')
+
     try:
-        # Create Stripe customer
-        stripe_customer = stripe_service.create_customer(
-            email=registration.email,
-            name=registration.full_name,
-            metadata={
-                "company": registration.company_name,
-                "phone": registration.phone
-            }
-        )
+        stripe_customer = None
+        stripe_subscription = None
+        client_secret = None
+
+        if not is_dev_mode:
+            # Production mode - use Stripe
+            # Create Stripe customer
+            stripe_customer = stripe_service.create_customer(
+                email=registration.email,
+                name=registration.full_name,
+                metadata={
+                    "company": registration.company_name,
+                    "phone": registration.phone
+                }
+            )
 
         # Create user in database (unverified)
         db_user = User(
             email=registration.email,
             hashed_password=get_password_hash(registration.password),
             full_name=registration.full_name,
-            email_verified=False,
-            is_active=False,  # Activate after email verification
+            email_verified=is_dev_mode,  # Auto-verify dev accounts
+            is_active=is_dev_mode,  # Auto-activate dev accounts
             user_metadata={
                 "company_name": registration.company_name,
                 "phone": registration.phone,
-                "plan": registration.plan
+                "plan": registration.plan,
+                "dev_mode": is_dev_mode
             }
         )
         db.add(db_user)
         db.commit()
         db.refresh(db_user)
 
-        # Create Stripe subscription with trial
-        stripe_subscription = stripe_service.create_subscription(
-            customer_id=stripe_customer.id,
-            price_id=plan_info["stripe_price_id"],
-            trial_days=14
-        )
+        if not is_dev_mode:
+            # Production mode - create Stripe subscription
+            stripe_subscription = stripe_service.create_subscription(
+                customer_id=stripe_customer.id,
+                price_id=plan_info["stripe_price_id"],
+                trial_days=14
+            )
 
-        # Save subscription to database
-        db_subscription = Subscription(
-            user_id=db_user.id,
-            plan_name=registration.plan,
-            stripe_customer_id=stripe_customer.id,
-            stripe_subscription_id=stripe_subscription.id,
-            status="trialing",
-            current_period_start=datetime.fromtimestamp(stripe_subscription.current_period_start),
-            current_period_end=datetime.fromtimestamp(stripe_subscription.current_period_end),
-            trial_end=datetime.fromtimestamp(stripe_subscription.trial_end) if stripe_subscription.trial_end else None
-        )
-        db.add(db_subscription)
+            # Save subscription to database
+            db_subscription = Subscription(
+                user_id=db_user.id,
+                plan_name=registration.plan,
+                stripe_customer_id=stripe_customer.id,
+                stripe_subscription_id=stripe_subscription.id,
+                status="trialing",
+                current_period_start=datetime.fromtimestamp(stripe_subscription.current_period_start),
+                current_period_end=datetime.fromtimestamp(stripe_subscription.current_period_end),
+                trial_end=datetime.fromtimestamp(stripe_subscription.trial_end) if stripe_subscription.trial_end else None
+            )
+            db.add(db_subscription)
+
+            # Get client secret for payment setup
+            if stripe_subscription.latest_invoice:
+                if hasattr(stripe_subscription.latest_invoice, 'payment_intent'):
+                    client_secret = stripe_subscription.latest_invoice.payment_intent.client_secret
+        else:
+            # Dev mode - create mock subscription
+            db_subscription = Subscription(
+                user_id=db_user.id,
+                plan_name=registration.plan,
+                stripe_customer_id="dev_customer_" + str(db_user.id),
+                stripe_subscription_id="dev_sub_" + str(db_user.id),
+                status="active",
+                current_period_start=datetime.utcnow(),
+                current_period_end=datetime.utcnow() + timedelta(days=365),
+                trial_end=None
+            )
+            db.add(db_subscription)
 
         # Create onboarding progress
         onboarding = OnboardingProgress(
@@ -149,37 +180,39 @@ async def register_user(registration: UserRegistration, db: Session = Depends(ge
 
         db.commit()
 
-        # Generate and send verification email
-        verification_token = VerificationTokenService.create_verification_token(
-            db, db_user.id, registration.email
-        )
-        email_service.send_verification_email(
-            registration.email,
-            verification_token,
-            registration.full_name
-        )
+        # Generate and send verification email (skip in dev mode)
+        if not is_dev_mode:
+            verification_token = VerificationTokenService.create_verification_token(
+                db, db_user.id, registration.email
+            )
+            email_service.send_verification_email(
+                registration.email,
+                verification_token,
+                registration.full_name
+            )
 
-        logger.info(f"User registered: {registration.email}, subscription: {stripe_subscription.id}")
+        logger.info(f"User registered: {registration.email}, dev_mode: {is_dev_mode}")
 
-        # Get client secret for payment setup
-        client_secret = None
-        if stripe_subscription.latest_invoice:
-            if hasattr(stripe_subscription.latest_invoice, 'payment_intent'):
-                client_secret = stripe_subscription.latest_invoice.payment_intent.client_secret
-
-        return {
-            "message": "Registration successful. Please check your email to verify your account.",
+        response_data = {
+            "message": "Registration successful." if is_dev_mode else "Registration successful. Please check your email to verify your account.",
             "user_id": db_user.id,
             "email": db_user.email,
-            "subscription_id": stripe_subscription.id,
-            "client_secret": client_secret,
-            "trial_end": stripe_subscription.trial_end
+            "dev_mode": is_dev_mode
         }
+
+        if not is_dev_mode:
+            response_data["subscription_id"] = stripe_subscription.id
+            response_data["client_secret"] = client_secret
+            response_data["trial_end"] = stripe_subscription.trial_end
+        else:
+            response_data["redirect_to"] = "/dashboard"  # Skip email verification
+
+        return response_data
 
     except Exception as e:
         logger.error(f"Registration failed: {str(e)}")
         # Cleanup if something failed
-        if db_user and db_user.id:
+        if 'db_user' in locals() and db_user and db_user.id:
             db.delete(db_user)
             db.commit()
         raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
