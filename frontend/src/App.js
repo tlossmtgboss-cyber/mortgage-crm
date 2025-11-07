@@ -3,7 +3,15 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { isAuthenticated } from './utils/auth';
 import Navigation from './components/Navigation';
 import AIAssistant from './components/AIAssistant';
+
+// Public pages
+import LandingPage from './pages/LandingPage';
+import Registration from './pages/Registration';
+import EmailVerificationSent from './pages/EmailVerificationSent';
+import OnboardingWizard from './pages/OnboardingWizard';
 import Login from './pages/Login';
+
+// Protected pages
 import Dashboard from './pages/Dashboard';
 import Leads from './pages/Leads';
 import Loans from './pages/Loans';
@@ -32,9 +40,16 @@ function App() {
     <Router>
       <div className="app">
         <Routes>
+          {/* Public routes */}
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/register" element={<Registration />} />
+          <Route path="/verify-email-sent" element={<EmailVerificationSent />} />
+          <Route path="/onboarding" element={<OnboardingWizard />} />
           <Route path="/login" element={<Login />} />
+
+          {/* Protected routes */}
           <Route
-            path="/*"
+            path="/dashboard"
             element={
               <PrivateRoute>
                 <div className="app-layout">
@@ -43,20 +58,177 @@ function App() {
                     assistantOpen={assistantOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <Routes>
-                      <Route path="/" element={<Navigate to="/dashboard" />} />
-                      <Route path="/dashboard" element={<Dashboard />} />
-                      <Route path="/leads" element={<Leads />} />
-                      <Route path="/loans" element={<Loans />} />
-                      <Route path="/portfolio" element={<Portfolio />} />
-                      <Route path="/tasks" element={<Tasks />} />
-                      <Route path="/calendar" element={<Calendar />} />
-                      <Route path="/scorecard" element={<Scorecard />} />
-                      <Route path="/assistant" element={<Assistant />} />
-                      <Route path="/client/:type/:id" element={<ClientProfile />} />
-                      <Route path="/referral-partners" element={<ReferralPartners />} />
-                      <Route path="/mum-clients" element={<MUMClients />} />
-                    </Routes>
+                    <Dashboard />
+                  </main>
+                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/leads"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    assistantOpen={assistantOpen}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <Leads />
+                  </main>
+                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/loans"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    assistantOpen={assistantOpen}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <Loans />
+                  </main>
+                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/portfolio"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    assistantOpen={assistantOpen}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <Portfolio />
+                  </main>
+                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/tasks"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    assistantOpen={assistantOpen}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <Tasks />
+                  </main>
+                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/calendar"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    assistantOpen={assistantOpen}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <Calendar />
+                  </main>
+                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/scorecard"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    assistantOpen={assistantOpen}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <Scorecard />
+                  </main>
+                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/assistant"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    assistantOpen={assistantOpen}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <Assistant />
+                  </main>
+                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/client/:type/:id"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    assistantOpen={assistantOpen}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <ClientProfile />
+                  </main>
+                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/referral-partners"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    assistantOpen={assistantOpen}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <ReferralPartners />
+                  </main>
+                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/mum-clients"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    assistantOpen={assistantOpen}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <MUMClients />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                 </div>

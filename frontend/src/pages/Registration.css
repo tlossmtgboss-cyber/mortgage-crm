@@ -1,0 +1,380 @@
+.registration-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  padding: 40px 20px;
+}
+
+.registration-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 40px;
+  background: white;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+}
+
+@media (max-width: 1024px) {
+  .registration-container {
+    grid-template-columns: 1fr;
+  }
+
+  .registration-summary-section {
+    order: -1;
+  }
+}
+
+/* Form Section */
+.registration-form-section {
+  padding: 50px;
+}
+
+@media (max-width: 640px) {
+  .registration-form-section {
+    padding: 30px 20px;
+  }
+}
+
+.registration-header h1 {
+  font-size: 32px;
+  margin: 0 0 8px 0;
+  color: #1f2937;
+}
+
+.registration-header p {
+  font-size: 16px;
+  color: #6b7280;
+  margin: 0 0 32px 0;
+}
+
+/* Progress Steps */
+.progress-steps {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 40px;
+  padding: 0 20px;
+}
+
+.progress-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.step-number {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #e5e7eb;
+  color: #9ca3af;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 16px;
+  transition: all 0.3s ease;
+}
+
+.progress-step.active .step-number {
+  background-color: #18a0a6;
+  color: white;
+}
+
+.step-label {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.progress-line {
+  flex: 1;
+  height: 2px;
+  background-color: #e5e7eb;
+  margin: 0 10px;
+}
+
+/* Form */
+.registration-form {
+  max-width: 500px;
+}
+
+.form-step {
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 15px;
+  transition: all 0.2s ease;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #18a0a6;
+  box-shadow: 0 0 0 3px rgba(24, 160, 166, 0.1);
+}
+
+/* Buttons */
+.btn-next,
+.btn-back,
+.btn-submit {
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-next,
+.btn-submit {
+  width: 100%;
+  background-color: #18a0a6;
+  color: white;
+}
+
+.btn-next:hover,
+.btn-submit:hover {
+  background-color: #136b6f;
+}
+
+.btn-submit:disabled {
+  background-color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.btn-back {
+  background-color: white;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+}
+
+.btn-back:hover {
+  background-color: #f9fafb;
+}
+
+.form-buttons {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+/* Confirmation Summary */
+.confirmation-summary {
+  background-color: #f9fafb;
+  padding: 24px;
+  border-radius: 8px;
+  margin-bottom: 24px;
+}
+
+.confirmation-summary h3 {
+  font-size: 20px;
+  margin: 0 0 20px 0;
+  color: #1f2937;
+}
+
+.summary-section {
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.summary-section:last-of-type {
+  border-bottom: none;
+}
+
+.summary-section h4 {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0 0 12px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.summary-section p {
+  font-size: 15px;
+  color: #374151;
+  margin: 6px 0;
+}
+
+.trial-note {
+  color: #18a0a6;
+  font-weight: 500;
+  margin-top: 12px;
+}
+
+.terms-notice {
+  background-color: #fef3c7;
+  padding: 16px;
+  border-radius: 8px;
+  margin-top: 20px;
+}
+
+.terms-notice p {
+  font-size: 13px;
+  color: #92400e;
+  margin: 0;
+  line-height: 1.6;
+}
+
+/* Error Message */
+.error-message {
+  background-color: #fee2e2;
+  color: #991b1b;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+/* Footer */
+.registration-footer {
+  margin-top: 32px;
+  text-align: center;
+}
+
+.registration-footer p {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0;
+}
+
+.login-link {
+  color: #18a0a6;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.login-link:hover {
+  text-decoration: underline;
+}
+
+/* Summary Section */
+.registration-summary-section {
+  background: linear-gradient(135deg, #18a0a6 0%, #136b6f 100%);
+  padding: 50px 40px;
+  color: white;
+}
+
+@media (max-width: 640px) {
+  .registration-summary-section {
+    padding: 30px 20px;
+  }
+}
+
+.plan-summary-card {
+  position: sticky;
+  top: 50px;
+}
+
+.plan-summary-card h3 {
+  font-size: 18px;
+  margin: 0 0 24px 0;
+  opacity: 0.9;
+}
+
+.plan-details h2 {
+  font-size: 32px;
+  margin: 0 0 16px 0;
+}
+
+.plan-price {
+  margin-bottom: 16px;
+}
+
+.price-amount {
+  font-size: 42px;
+  font-weight: 700;
+}
+
+.price-period {
+  font-size: 18px;
+  opacity: 0.85;
+}
+
+.trial-badge {
+  display: inline-block;
+  background-color: rgba(255, 255, 255, 0.2);
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 24px;
+}
+
+.plan-features-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 32px 0;
+}
+
+.plan-features-list li {
+  padding: 10px 0;
+  font-size: 15px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.check-icon {
+  flex-shrink: 0;
+  font-weight: 600;
+  font-size: 18px;
+}
+
+.billing-info {
+  background-color: rgba(255, 255, 255, 0.1);
+  padding: 20px;
+  border-radius: 8px;
+}
+
+.billing-info p {
+  margin: 0 0 12px 0;
+  font-size: 15px;
+}
+
+.billing-info ol {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.billing-info li {
+  padding: 6px 0;
+  font-size: 14px;
+  opacity: 0.9;
+}

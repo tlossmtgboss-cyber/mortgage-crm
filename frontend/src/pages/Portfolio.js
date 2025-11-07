@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { portfolioAPI } from '../services/api';
 import './Portfolio.css';
 
 function Portfolio() {
@@ -9,46 +10,41 @@ function Portfolio() {
     closedLoans: 0,
     loans: []
   });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Mock data - replace with API call
-    const mockData = {
-      totalLoans: 47,
-      totalVolume: 23500000,
-      activeLoans: 12,
-      closedLoans: 35,
-      loans: [
-        {
-          id: 1,
-          borrower: 'Robert Brown',
-          loanAmount: 550000,
-          loanType: 'Conventional',
-          status: 'Closed',
-          closeDate: '2024-10-15',
-          rate: 6.5
-        },
-        {
-          id: 2,
-          borrower: 'Emily Davis',
-          loanAmount: 400000,
-          loanType: 'FHA',
-          status: 'Active',
-          closeDate: '2024-11-30',
-          rate: 6.25
-        },
-        {
-          id: 3,
-          borrower: 'Michael Chen',
-          loanAmount: 725000,
-          loanType: 'Jumbo',
-          status: 'Closed',
-          closeDate: '2024-09-20',
-          rate: 6.75
-        }
-      ]
-    };
-    setPortfolioData(mockData);
+    loadPortfolio();
   }, []);
+
+  const loadPortfolio = async () => {
+    try {
+      setLoading(true);
+      const [stats, loans] = await Promise.all([
+        portfolioAPI.getStats(),
+        portfolioAPI.getAll()
+      ]);
+
+      setPortfolioData({
+        totalLoans: stats.total_loans || 0,
+        totalVolume: stats.total_volume || 0,
+        activeLoans: stats.active_loans || 0,
+        closedLoans: stats.closed_loans || 0,
+        loans: loans.map(loan => ({
+          id: loan.id,
+          borrower: loan.client_name || loan.borrower_name || 'Unknown',
+          loanAmount: loan.loan_amount || 0,
+          loanType: loan.loan_type || 'N/A',
+          status: loan.status || 'Unknown',
+          closeDate: loan.close_date || loan.created_at,
+          rate: loan.interest_rate || 0
+        }))
+      });
+    } catch (error) {
+      console.error('Failed to load portfolio:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-US', {
@@ -58,10 +54,18 @@ function Portfolio() {
     }).format(amount);
   };
 
+  if (loading) {
+    return (
+      <div className="portfolio-container">
+        <div className="loading">Loading portfolio...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="portfolio-container">
       <h1 className="portfolio-title">Portfolio</h1>
-      
+
       <div className="portfolio-stats">
         <div className="stat-card">
           <div className="stat-icon">💼</div>

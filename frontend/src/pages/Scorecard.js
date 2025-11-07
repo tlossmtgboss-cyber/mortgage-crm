@@ -1,38 +1,73 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { analyticsAPI } from '../services/api';
 import './Scorecard.css';
 
 function Scorecard() {
-  const conversionMetrics = {
-    startsToApps: 77,
-    appsToFunded: 62,
-    pullThru: 48,
-    creditPullConversion: 40,
+  const [loading, setLoading] = useState(true);
+  const [conversionMetrics, setConversionMetrics] = useState({
+    startsToApps: 0,
+    appsToFunded: 0,
+    pullThru: 0,
+    creditPullConversion: 0,
+  });
+  const [volumeRevenue, setVolumeRevenue] = useState({
+    fundedLoans: 0,
+    totalVolume: 0,
+    avgLoanAmount: 0,
+    basisPoints: 0,
+  });
+  const [loanTypes, setLoanTypes] = useState([]);
+  const [referralSources, setReferralSources] = useState([]);
+  const [processTimeline, setProcessTimeline] = useState({
+    startsToApp: 0,
+    appToUnderwriting: 0,
+    lockFunding: 0,
+  });
+
+  useEffect(() => {
+    loadScorecard();
+  }, []);
+
+  const loadScorecard = async () => {
+    try {
+      setLoading(true);
+      const data = await analyticsAPI.getScorecard();
+
+      setConversionMetrics({
+        startsToApps: data.conversion_metrics.starts_to_apps || 0,
+        appsToFunded: data.conversion_metrics.apps_to_funded || 0,
+        pullThru: data.conversion_metrics.pull_thru || 0,
+        creditPullConversion: data.conversion_metrics.credit_pull_conversion || 0,
+      });
+
+      setVolumeRevenue({
+        fundedLoans: data.volume_revenue.funded_loans || 0,
+        totalVolume: data.volume_revenue.total_volume || 0,
+        avgLoanAmount: data.volume_revenue.avg_loan_amount || 0,
+        basisPoints: data.volume_revenue.basis_points || 0,
+      });
+
+      setLoanTypes(data.loan_type_distribution || []);
+      setReferralSources(data.referral_sources || []);
+      setProcessTimeline({
+        startsToApp: data.process_timeline.starts_to_app || 0,
+        appToUnderwriting: data.process_timeline.app_to_underwriting || 0,
+        lockFunding: data.process_timeline.lock_funding || 0,
+      });
+    } catch (error) {
+      console.error('Failed to load scorecard:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const volumeRevenue = {
-    fundedLoans: 60,
-    totalVolume: 21300000,
-    avgLoanAmount: 355000,
-    basisPoints: 185,
-  };
-
-  const loanTypes = [
-    { type: 'Conventional', volume: 19231700, percentage: 90.29 },
-    { type: 'FHA', volume: 841350, percentage: 3.95 },
-    { type: 'Jumbo', volume: 692250, percentage: 3.25 },
-    { type: 'Seconds/HELOC', volume: 534700, percentage: 2.51 },
-  ];
-
-  const referralSources = [
-    { source: 'Client Referrals', volume: 17300000 },
-    { source: 'Realtor Referrals', volume: 4000000 },
-  ];
-
-  const processTimeline = {
-    startsToApp: 10,
-    appToUnderwriting: 5,
-    lockFunding: 68,
-  };
+  if (loading) {
+    return (
+      <div className="scorecard-page">
+        <div className="loading">Loading scorecard...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="scorecard-page">

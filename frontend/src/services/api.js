@@ -200,6 +200,10 @@ export const analyticsAPI = {
     const response = await api.get('/api/v1/analytics/pipeline');
     return response.data;
   },
+  getScorecard: async () => {
+    const response = await api.get('/api/v1/analytics/scorecard');
+    return response.data;
+  },
 };
 
 // AI Assistant & Conversations
@@ -217,11 +221,31 @@ export const aiAPI = {
     const response = await api.post(`/api/v1/ai/complete-task?task_id=${taskId}`);
     return response.data;
   },
+  getSuggestions: async () => {
+    const response = await api.get('/api/v1/ai/suggestions');
+    return response.data;
+  },
 };
 
 export const conversationsAPI = {
   getAll: async (params = {}) => {
     const response = await api.get('/api/v1/conversations', { params });
+    return response.data;
+  },
+  create: async (data) => {
+    const response = await api.post('/api/v1/conversations/', data);
+    return response.data;
+  },
+};
+
+// Portfolio
+export const portfolioAPI = {
+  getAll: async (params = {}) => {
+    const response = await api.get('/api/v1/portfolio/', { params });
+    return response.data;
+  },
+  getStats: async () => {
+    const response = await api.get('/api/v1/portfolio/stats');
     return response.data;
   },
 };

@@ -1,0 +1,105 @@
+.verification-sent-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.verification-card {
+  background: white;
+  border-radius: 16px;
+  padding: 50px;
+  max-width: 600px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+}
+
+.success-icon {
+  font-size: 64px;
+  margin-bottom: 24px;
+}
+
+.verification-card h1 {
+  font-size: 32px;
+  margin: 0 0 16px 0;
+  color: #1f2937;
+}
+
+.main-message {
+  font-size: 16px;
+  color: #6b7280;
+  margin: 0 0 12px 0;
+}
+
+.instructions {
+  font-size: 15px;
+  color: #6b7280;
+  margin: 0 0 32px 0;
+}
+
+.info-box {
+  background-color: #f9fafb;
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 32px;
+  text-align: left;
+}
+
+.info-box h3 {
+  font-size: 18px;
+  margin: 0 0 16px 0;
+  color: #1f2937;
+}
+
+.info-box ol {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.info-box li {
+  padding: 8px 0;
+  font-size: 15px;
+  color: #4b5563;
+}
+
+.help-section {
+  margin-bottom: 24px;
+}
+
+.help-section p {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0 0 12px 0;
+}
+
+.btn-resend,
+.btn-back-home {
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.btn-resend {
+  background-color: #18a0a6;
+  color: white;
+}
+
+.btn-resend:hover {
+  background-color: #136b6f;
+}
+
+.btn-back-home {
+  background-color: white;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+}
+
+.btn-back-home:hover {
+  background-color: #f9fafb;
+}

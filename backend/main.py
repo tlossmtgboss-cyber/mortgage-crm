@@ -114,6 +114,7 @@ class User(Base):
     role = Column(String, default="loan_officer")
     branch_id = Column(Integer, ForeignKey("branches.id"))
     is_active = Column(Boolean, default=True)
+    email_verified = Column(Boolean, default=False)
     user_metadata = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
     branch = relationship("Branch", back_populates="users")
@@ -436,6 +437,7 @@ class EmailVerificationToken(Base):
     __tablename__ = "email_verification_tokens"
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
+    email = Column(String, nullable=False)
     token = Column(String, unique=True, nullable=False)
     expires_at = Column(DateTime, nullable=False)
     verified_at = Column(DateTime)
@@ -684,6 +686,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include public routes
+from public_routes import router as public_router
+app.include_router(public_router, tags=["Public"])
 
 # Auth
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -1343,6 +1349,124 @@ async def get_pipeline_analytics(db: Session = Depends(get_db), current_user: Us
         "total_loans": len(loans),
         "total_volume": sum([l.amount for l in loans if l.amount]),
         "stage_breakdown": stage_breakdown
+    }
+
+@app.get("/api/v1/analytics/scorecard")
+async def get_scorecard_metrics(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Get comprehensive scorecard metrics"""
+    # Get all leads and loans for the user
+    leads = db.query(Lead).filter(Lead.owner_id == current_user.id).all()
+    loans = db.query(Loan).filter(Loan.loan_officer_id == current_user.id).all()
+    funded_loans = [l for l in loans if l.stage == LoanStage.FUNDED]
+
+    # Calculate conversion metrics
+    total_leads = len(leads)
+    app_started = len([l for l in leads if l.stage in [LeadStage.APPLICATION_STARTED, LeadStage.APPLICATION_COMPLETE, LeadStage.PRE_APPROVED]])
+    funded_count = len(funded_loans)
+
+    conversion_metrics = {
+        "starts_to_apps": round((app_started / total_leads * 100) if total_leads > 0 else 0, 1),
+        "apps_to_funded": round((funded_count / app_started * 100) if app_started > 0 else 0, 1),
+        "pull_thru": round((funded_count / total_leads * 100) if total_leads > 0 else 0, 1),
+        "credit_pull_conversion": round((app_started / total_leads * 100) if total_leads > 0 else 0, 1)
+    }
+
+    # Calculate volume & revenue
+    total_volume = sum([l.amount for l in funded_loans if l.amount]) or 0
+    avg_loan_amount = (total_volume / len(funded_loans)) if funded_loans else 0
+
+    volume_revenue = {
+        "funded_loans": funded_count,
+        "total_volume": total_volume,
+        "avg_loan_amount": avg_loan_amount,
+        "basis_points": 185  # Placeholder - would be calculated from commission data
+    }
+
+    # Calculate loan type distribution
+    loan_types = {}
+    for loan in funded_loans:
+        loan_type = loan.product_type or "Other"
+        if loan_type not in loan_types:
+            loan_types[loan_type] = {"count": 0, "volume": 0}
+        loan_types[loan_type]["count"] += 1
+        loan_types[loan_type]["volume"] += loan.amount if loan.amount else 0
+
+    loan_type_distribution = [
+        {
+            "type": loan_type,
+            "volume": data["volume"],
+            "percentage": round((data["volume"] / total_volume * 100) if total_volume > 0 else 0, 2)
+        }
+        for loan_type, data in loan_types.items()
+    ]
+
+    # Referral sources (placeholder - would come from lead source tracking)
+    referral_sources = [
+        {"source": "Client Referrals", "volume": total_volume * 0.8 if total_volume else 0},
+        {"source": "Realtor Referrals", "volume": total_volume * 0.2 if total_volume else 0}
+    ]
+
+    # Process timeline (placeholder - would be calculated from actual timestamps)
+    process_timeline = {
+        "starts_to_app": 10,
+        "app_to_underwriting": 5,
+        "lock_funding": 68
+    }
+
+    return {
+        "conversion_metrics": conversion_metrics,
+        "volume_revenue": volume_revenue,
+        "loan_type_distribution": loan_type_distribution,
+        "referral_sources": referral_sources,
+        "process_timeline": process_timeline
+    }
+
+# ============================================================================
+# PORTFOLIO
+# ============================================================================
+
+@app.get("/api/v1/portfolio/")
+async def get_portfolio(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get portfolio loans (funded/completed loans)"""
+    # Get loans that are funded (completed)
+    portfolio_loans = db.query(Loan).filter(
+        Loan.loan_officer_id == current_user.id,
+        Loan.stage == LoanStage.FUNDED
+    ).order_by(Loan.updated_at.desc()).offset(skip).limit(limit).all()
+
+    return portfolio_loans
+
+@app.get("/api/v1/portfolio/stats")
+async def get_portfolio_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get portfolio statistics"""
+    # Get all funded loans for the user (completed loans in portfolio)
+    funded_loans = db.query(Loan).filter(
+        Loan.loan_officer_id == current_user.id,
+        Loan.stage == LoanStage.FUNDED
+    ).all()
+
+    # Calculate active loans (loans not funded yet)
+    active_loans = db.query(Loan).filter(
+        Loan.loan_officer_id == current_user.id,
+        Loan.stage != LoanStage.FUNDED
+    ).count()
+
+    # Calculate total volume of funded loans
+    total_volume = sum([loan.amount for loan in funded_loans if loan.amount]) or 0
+
+    return {
+        "total_loans": len(funded_loans),
+        "total_volume": total_volume,
+        "active_loans": active_loans,
+        "closed_loans": len(funded_loans)  # Funded loans are considered closed
     }
 
 # ============================================================================
