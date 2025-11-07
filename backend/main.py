@@ -36,7 +36,11 @@ logger = logging.getLogger(__name__)
 # CONFIGURATION
 # ============================================================================
 
+# Fix Railway DATABASE_URL format (postgres:// -> postgresql://)
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost:5432/agentic_crm")
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
 SECRET_KEY = os.getenv("SECRET_KEY", "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
@@ -46,8 +50,21 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
 # Database
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+try:
+    engine = create_engine(
+        DATABASE_URL, 
+        pool_pre_ping=True,
+        pool_size=5,
+        max_overflow=10,
+        pool_recycle=3600,
+        connect_args={"connect_timeout": 10}
+    )
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    logger.info("✅ Database engine created successfully")
+except Exception as e:
+    logger.error(f"❌ Failed to create database engine: {e}")
+    # Create a dummy sessionmaker for development
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False)
 Base = declarative_base()
 
 def get_db():
@@ -1997,15 +2014,21 @@ def create_sample_data(db: Session):
 async def startup_event():
     """Initialize database on startup"""
     logger.info("🚀 Starting Agentic AI Mortgage CRM...")
-
-    # Initialize database
-    if init_db():
-        # Create sample data
-        db = SessionLocal()
-        try:
-            create_sample_data(db)
-        finally:
-            db.close()
+    
+    try:
+        # Initialize database
+        if init_db():
+            # Create sample data
+            db = SessionLocal()
+            try:
+                create_sample_data(db)
+            except Exception as e:
+                logger.warning(f"⚠️ Sample data creation skipped: {e}")
+            finally:
+                db.close()
+    except Exception as e:
+        logger.warning(f"⚠️ Startup initialization skipped: {e}")
+        logger.info("Application will still start, database will be initialized on first request")
 
     logger.info("✅ CRM is ready!")
     logger.info("📚 API Documentation: http://localhost:8000/docs")
