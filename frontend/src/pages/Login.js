@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import { authAPI } from '../services/api';
 import { setAuth } from '../utils/auth';
 import './Login.css';
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 function Login() {
   const [email, setEmail] = useState('');
@@ -27,9 +30,23 @@ function Login() {
     }
   };
 
-  const handleDemoLogin = () => {
-    setEmail('demo@example.com');
-    setPassword('demo123');
+  const handleQuickTestLogin = async () => {
+    setError('');
+    setLoading(true);
+
+    try {
+      // Create demo user
+      await axios.post(`${API_BASE_URL}/api/v1/create-demo-user`);
+
+      // Login with demo credentials
+      const data = await authAPI.login('demo@test.com', 'demo123');
+      setAuth(data.access_token, data.user);
+      navigate('/dashboard');
+    } catch (err) {
+      setError('Quick test login failed. Backend might not be running.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -73,18 +90,21 @@ function Login() {
             {loading ? 'Logging in...' : 'Login'}
           </button>
 
+          <div className="divider">OR</div>
+
           <button
             type="button"
-            className="btn-secondary"
-            onClick={handleDemoLogin}
+            className="btn-quick-test"
+            onClick={handleQuickTestLogin}
             disabled={loading}
           >
-            Use Demo Account
+            🚀 Quick Test Login (Auto-creates demo account)
           </button>
         </form>
 
         <div className="login-footer">
-          <p>Demo: demo@example.com / demo123</p>
+          <p>Need an account? <a href="/register">Sign up here</a></p>
+          <p className="note">Quick Test Login creates a demo user instantly</p>
         </div>
       </div>
     </div>

@@ -28,6 +28,76 @@ email_service = EmailService()
 
 
 # ============================================================================
+# QUICK TEST/DEMO USER SETUP
+# ============================================================================
+
+@router.post("/api/v1/create-demo-user")
+async def create_demo_user(db: Session = Depends(get_db)):
+    """
+    Create or reset a demo user for testing
+    Email: demo@test.com
+    Password: demo123
+    """
+    demo_email = "demo@test.com"
+
+    # Delete existing demo user if exists
+    existing = db.query(User).filter(User.email == demo_email).first()
+    if existing:
+        db.delete(existing)
+        db.commit()
+
+    # Create demo user
+    demo_user = User(
+        email=demo_email,
+        hashed_password=get_password_hash("demo123"),
+        full_name="Demo User",
+        email_verified=True,
+        is_active=True,
+        role="loan_officer",
+        user_metadata={
+            "company_name": "Demo Company",
+            "phone": "555-0000",
+            "plan": "professional",
+            "demo_mode": True
+        }
+    )
+    db.add(demo_user)
+    db.commit()
+    db.refresh(demo_user)
+
+    # Create demo subscription
+    demo_subscription = Subscription(
+        user_id=demo_user.id,
+        stripe_customer_id="demo_customer",
+        stripe_subscription_id="demo_subscription",
+        status="active",
+        current_period_start=datetime.utcnow(),
+        current_period_end=datetime.utcnow() + timedelta(days=365),
+        trial_end=None
+    )
+    db.add(demo_subscription)
+
+    # Create onboarding progress (completed)
+    onboarding = OnboardingProgress(
+        user_id=demo_user.id,
+        current_step=5,
+        steps_completed=[1, 2, 3, 4, 5],
+        is_complete=True,
+        completed_at=datetime.utcnow()
+    )
+    db.add(onboarding)
+
+    db.commit()
+
+    return {
+        "message": "Demo user created successfully",
+        "email": demo_email,
+        "password": "demo123",
+        "note": "Use these credentials to login"
+    }
+
+
+# ============================================================================
 # PYDANTIC SCHEMAS
 # ============================================================================
 
