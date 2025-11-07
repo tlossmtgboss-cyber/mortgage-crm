@@ -1115,7 +1115,7 @@ async def get_pipeline_analytics(db: Session = Depends(get_db), current_user: Us
 def init_db():
     """Create all database tables"""
     try:
-        Base.user_metadata.create_all(bind=engine)
+        Base.metadata.create_all(bind=engine)
         logger.info("✅ Database tables created successfully")
         return True
     except Exception as e:
