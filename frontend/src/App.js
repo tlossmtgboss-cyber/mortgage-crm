@@ -7,6 +7,10 @@ import Dashboard from './pages/Dashboard';
 import Leads from './pages/Leads';
 import Loans from './pages/Loans';
 import Tasks from './pages/Tasks';
+import Portfolio from './pages/Portfolio';
+import Calendar from './pages/Calendar';
+import Scorecard from './pages/Scorecard';
+import Assistant from './pages/Assistant';
 import './App.css';
 
 function PrivateRoute({ children }) {
@@ -32,6 +36,10 @@ function App() {
                       <Route path="/leads" element={<Leads />} />
                       <Route path="/loans" element={<Loans />} />
                       <Route path="/tasks" element={<Tasks />} />
+                              <Route path="/portfolio" element={<Portfolio />} />
+                <Route path="/calendar" element={<Calendar />} />
+                <Route path="/scorecard" element={<Scorecard />} />
+                <Route path="/assistant" element={<Assistant />} />
                     </Routes>
                   </main>
                 </div>
