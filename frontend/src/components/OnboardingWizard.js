@@ -358,9 +358,9 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
   const renderStep = () => {
     switch (currentStep) {
       case 1:
-        return renderTeamRoles();
-      case 2:
         return renderProcessUpload();
+      case 2:
+        return renderTeamRoles();
       case 3:
         return renderProcessTree();
       case 4:
@@ -376,13 +376,17 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
     }
   };
 
-  // SCREEN 1: Team & Roles
+  // SCREEN 2: Team & Roles
   const renderTeamRoles = () => (
     <div className="step-content">
       <div className="step-header">
         <div className="step-icon">👥</div>
         <h2>Team & Roles</h2>
-        <p className="step-description">Set up your team members and assign roles</p>
+        <p className="step-description">
+          {formData.processTree
+            ? `Set up your team members - you'll assign them to the ${formData.processTree.tasks} generated tasks in the next step`
+            : 'Set up your team members and assign roles'}
+        </p>
       </div>
 
       <div className="form-section">
@@ -490,13 +494,13 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
     </div>
   );
 
-  // SCREEN 2: Systems & Processes Upload
+  // SCREEN 1: Systems & Processes Upload
   const renderProcessUpload = () => (
     <div className="step-content">
       <div className="step-header">
         <div className="step-icon">📄</div>
-        <h2>Systems & Processes Upload</h2>
-        <p className="step-description">Upload your SOPs and let AI build your process tree</p>
+        <h2>Upload Your Process Documents</h2>
+        <p className="step-description">Upload your SOPs first - AI will generate ALL tasks and workflows to assign to your team</p>
       </div>
 
       <div className="form-section">
@@ -1170,8 +1174,8 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
         {/* Step Indicators */}
         <div className="step-indicators">
           {[
-            { num: 1, label: 'Team' },
-            { num: 2, label: 'Process' },
+            { num: 1, label: 'Process' },
+            { num: 2, label: 'Team' },
             { num: 3, label: 'Ownership' },
             { num: 4, label: 'Integrations' },
             { num: 5, label: 'Compliance' },
