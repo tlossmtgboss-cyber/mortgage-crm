@@ -88,25 +88,29 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
   };
 
   const updateField = (field, value) => {
-    setFormData({ ...formData, [field]: value });
+    setFormData(prevData => ({ ...prevData, [field]: value }));
   };
 
   const addMember = () => {
-    setFormData({
-      ...formData,
-      members: [...formData.members, { firstName: '', lastName: '', email: '', phone: '', role: '' }]
-    });
+    setFormData(prevData => ({
+      ...prevData,
+      members: [...prevData.members, { firstName: '', lastName: '', email: '', phone: '', role: '' }]
+    }));
   };
 
   const updateMember = (index, field, value) => {
-    const newMembers = [...formData.members];
-    newMembers[index][field] = value;
-    setFormData({ ...formData, members: newMembers });
+    setFormData(prevData => {
+      const newMembers = [...prevData.members];
+      newMembers[index][field] = value;
+      return { ...prevData, members: newMembers };
+    });
   };
 
   const removeMember = (index) => {
-    const newMembers = formData.members.filter((_, i) => i !== index);
-    setFormData({ ...formData, members: newMembers });
+    setFormData(prevData => ({
+      ...prevData,
+      members: prevData.members.filter((_, i) => i !== index)
+    }));
   };
 
   // File upload handlers
@@ -263,52 +267,64 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
 
   // Milestone and task management
   const addMilestone = () => {
-    const newMilestone = {
-      name: 'New Milestone',
-      tasks: []
-    };
-    const newMilestones = [...formData.milestones, newMilestone];
-    updateField('milestones', newMilestones);
-    setActiveMilestone(newMilestones.length - 1);
+    setFormData(prevData => {
+      const newMilestone = {
+        name: 'New Milestone',
+        tasks: []
+      };
+      const newMilestones = [...prevData.milestones, newMilestone];
+      setActiveMilestone(newMilestones.length - 1);
+      return { ...prevData, milestones: newMilestones };
+    });
   };
 
   const updateMilestone = (index, field, value) => {
-    const newMilestones = [...formData.milestones];
-    newMilestones[index][field] = value;
-    updateField('milestones', newMilestones);
+    setFormData(prevData => {
+      const newMilestones = [...prevData.milestones];
+      newMilestones[index][field] = value;
+      return { ...prevData, milestones: newMilestones };
+    });
   };
 
   const removeMilestone = (index) => {
-    const newMilestones = formData.milestones.filter((_, i) => i !== index);
-    updateField('milestones', newMilestones);
-    if (activeMilestone >= newMilestones.length) {
-      setActiveMilestone(Math.max(0, newMilestones.length - 1));
-    }
+    setFormData(prevData => {
+      const newMilestones = prevData.milestones.filter((_, i) => i !== index);
+      if (activeMilestone >= newMilestones.length) {
+        setActiveMilestone(Math.max(0, newMilestones.length - 1));
+      }
+      return { ...prevData, milestones: newMilestones };
+    });
   };
 
   const addTask = (milestoneIndex) => {
-    const newTask = {
-      name: '',
-      owner: 'Loan Officer',
-      sla: 24,
-      slaUnit: 'hours',
-      aiAuto: false
-    };
-    const newMilestones = [...formData.milestones];
-    newMilestones[milestoneIndex].tasks = [...newMilestones[milestoneIndex].tasks, newTask];
-    updateField('milestones', newMilestones);
+    setFormData(prevData => {
+      const newTask = {
+        name: '',
+        owner: 'Loan Officer',
+        sla: 24,
+        slaUnit: 'hours',
+        aiAuto: false
+      };
+      const newMilestones = [...prevData.milestones];
+      newMilestones[milestoneIndex].tasks = [...newMilestones[milestoneIndex].tasks, newTask];
+      return { ...prevData, milestones: newMilestones };
+    });
   };
 
   const updateTask = (milestoneIndex, taskIndex, field, value) => {
-    const newMilestones = [...formData.milestones];
-    newMilestones[milestoneIndex].tasks[taskIndex][field] = value;
-    updateField('milestones', newMilestones);
+    setFormData(prevData => {
+      const newMilestones = [...prevData.milestones];
+      newMilestones[milestoneIndex].tasks[taskIndex][field] = value;
+      return { ...prevData, milestones: newMilestones };
+    });
   };
 
   const removeTask = (milestoneIndex, taskIndex) => {
-    const newMilestones = [...formData.milestones];
-    newMilestones[milestoneIndex].tasks = newMilestones[milestoneIndex].tasks.filter((_, i) => i !== taskIndex);
-    updateField('milestones', newMilestones);
+    setFormData(prevData => {
+      const newMilestones = [...prevData.milestones];
+      newMilestones[milestoneIndex].tasks = newMilestones[milestoneIndex].tasks.filter((_, i) => i !== taskIndex);
+      return { ...prevData, milestones: newMilestones };
+    });
   };
 
   const renderStep = () => {
