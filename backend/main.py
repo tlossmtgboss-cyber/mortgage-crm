@@ -152,6 +152,7 @@ class Lead(Base):
     debt_to_income = Column(Float)
     owner_id = Column(Integer, ForeignKey("users.id"))
     last_contact = Column(DateTime)
+    loan_number = Column(String)
     notes = Column(Text)
     # Property Information
     address = Column(String)
@@ -508,6 +509,8 @@ class LeadCreate(BaseModel):
     annual_income: Optional[float] = None
     monthly_debts: Optional[float] = None
     first_time_buyer: Optional[bool] = False
+    # Loan Information
+    loan_number: Optional[str] = None
     # Notes
     notes: Optional[str] = None
 
@@ -516,6 +519,7 @@ class LeadUpdate(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     stage: Optional[LeadStage] = None
+    loan_number: Optional[str] = None
     notes: Optional[str] = None
 
 class LeadResponse(BaseModel):
@@ -543,6 +547,8 @@ class LeadResponse(BaseModel):
     annual_income: Optional[float] = None
     monthly_debts: Optional[float] = None
     first_time_buyer: Optional[bool] = False
+    # Loan Information
+    loan_number: Optional[str] = None
     notes: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -1880,6 +1886,10 @@ def init_db():
                         END IF;
                         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='first_time_buyer') THEN
                             ALTER TABLE leads ADD COLUMN first_time_buyer BOOLEAN DEFAULT FALSE;
+                        END IF;
+                        -- Loan Information
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='loan_number') THEN
+                            ALTER TABLE leads ADD COLUMN loan_number VARCHAR;
                         END IF;
                     END $$;
                 """))
