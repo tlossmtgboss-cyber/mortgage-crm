@@ -28,6 +28,8 @@ import logging
 import random
 import secrets
 from openai import OpenAI
+import anthropic
+import requests
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
