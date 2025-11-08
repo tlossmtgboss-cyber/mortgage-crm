@@ -236,48 +236,14 @@ function Dashboard() {
             <h2>🎯 AI Prioritized Tasks (Today)</h2>
             <span className="task-count">{getAggregatedTasks().length} tasks</span>
           </div>
-          <div className="task-list">
-            {getAggregatedTasks().map((task) => (
-              <div key={task.id} className="task-item">
-                <div className="task-source-badge">
-                  <span className="source-icon">{task.sourceIcon}</span>
-                  <span className="source-text">{task.source}</span>
-                </div>
-                <div className="task-main">
-                  <div className="task-info">
-                    <div className="task-title">{task.title}</div>
-                    <div className="task-meta">
-                      <span className="borrower-name">{task.borrower}</span>
-                      <span className="task-stage">{task.stage}</span>
-                    </div>
-                  </div>
-                  <div
-                    className="urgency-badge"
-                    style={{ backgroundColor: getUrgencyColor(task.urgency) }}
-                  >
-                    {task.urgency}
-                  </div>
-                </div>
-                {task.ai_action && (
-                  <div className="ai-suggestion">
-                    <span className="ai-icon">🤖</span>
-                    <span className="ai-text">{task.ai_action}</span>
-                    <button className="btn-approve-sm">Approve</button>
-                  </div>
-                )}
-                <div className="task-actions">
-                  <button
-                    className="btn-complete-task"
-                    onClick={() => handleCompleteTask(task.id)}
-                  >
-                    ✓ Complete
-                  </button>
-                  {task.action && (
-                    <button className="btn-task-action">{task.action}</button>
-                  )}
-                </div>
-              </div>
-            ))}
+          <div className="task-summary-view">
+            <div className="task-count-display">
+              <div className="count-number">{getAggregatedTasks().length}</div>
+              <div className="count-label">Outstanding Tasks</div>
+            </div>
+            <div className="click-to-view">
+              <p>Click to view all tasks →</p>
+            </div>
           </div>
         </div>
 
