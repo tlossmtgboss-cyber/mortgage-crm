@@ -1,14 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { isAuthenticated } from './utils/auth';
 import Navigation from './components/Navigation';
 import AIAssistant from './components/AIAssistant';
+import OnboardingWizard from './components/OnboardingWizard';
 
 // Public pages
 import LandingPage from './pages/LandingPage';
 import Registration from './pages/Registration';
 import EmailVerificationSent from './pages/EmailVerificationSent';
-import OnboardingWizard from './pages/OnboardingWizard';
 import Login from './pages/Login';
 
 // Protected pages
@@ -34,20 +34,57 @@ function PrivateRoute({ children }) {
 
 function App() {
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [checkingOnboarding, setCheckingOnboarding] = useState(true);
 
   const toggleAssistant = () => {
     setAssistantOpen(!assistantOpen);
   };
 
+  const handleOnboardingComplete = () => {
+    setShowOnboarding(false);
+  };
+
+  useEffect(() => {
+    const checkOnboardingStatus = async () => {
+      if (isAuthenticated()) {
+        try {
+          const response = await fetch('/api/v1/users/me', {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+          });
+
+          if (response.ok) {
+            const userData = await response.json();
+            // Show onboarding wizard if user hasn't completed it
+            if (!userData.onboarding_completed) {
+              setShowOnboarding(true);
+            }
+          }
+        } catch (error) {
+          console.error('Error checking onboarding status:', error);
+        }
+      }
+      setCheckingOnboarding(false);
+    };
+
+    checkOnboardingStatus();
+  }, []);
+
   return (
     <Router>
       <div className="app">
+        {/* Show onboarding wizard overlay for first-time users */}
+        {showOnboarding && !checkingOnboarding && (
+          <OnboardingWizard onComplete={handleOnboardingComplete} />
+        )}
+
         <Routes>
           {/* Public routes */}
           <Route path="/" element={<LandingPage />} />
           <Route path="/register" element={<Registration />} />
           <Route path="/verify-email-sent" element={<EmailVerificationSent />} />
-          <Route path="/onboarding" element={<OnboardingWizard />} />
           <Route path="/login" element={<Login />} />
 
           {/* Protected routes */}

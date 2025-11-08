@@ -130,6 +130,7 @@ class User(Base):
     branch_id = Column(Integer, ForeignKey("branches.id"))
     is_active = Column(Boolean, default=True)
     email_verified = Column(Boolean, default=False)
+    onboarding_completed = Column(Boolean, default=False)
     user_metadata = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
     branch = relationship("Branch", back_populates="users")
@@ -586,6 +587,21 @@ class CalendarMapping(Base):
     event_type_uuid = Column(String)  # Calendly event type UUID
     event_type_name = Column(String)  # Friendly name (e.g., "Discovery Call")
     event_type_url = Column(String)  # Calendly booking page URL
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+class OnboardingStep(Base):
+    """Customizable onboarding step templates"""
+    __tablename__ = "onboarding_steps"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))  # Owner who customized this
+    step_number = Column(Integer, nullable=False)  # Order: 1, 2, 3, etc.
+    title = Column(String, nullable=False)  # "Upload Documents", "Add Team Members", etc.
+    description = Column(Text)  # Detailed description of what to do
+    icon = Column(String, default="📄")  # Emoji or icon identifier
+    required = Column(Boolean, default=True)  # Must complete to finish onboarding
+    fields = Column(JSON)  # Form fields configuration: [{"name": "document", "type": "file", "label": ""}]
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -3643,6 +3659,237 @@ Rules:
     except Exception as e:
         logger.error(f"AI scheduling error: {e}")
         raise HTTPException(status_code=500, detail=f"AI scheduling failed: {str(e)}")
+
+# ============================================================================
+# ONBOARDING ENDPOINTS
+# ============================================================================
+
+@app.get("/api/v1/onboarding/steps")
+async def get_onboarding_steps(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get onboarding step templates (customized or default)"""
+    try:
+        # Check if user has customized steps
+        custom_steps = db.query(OnboardingStep).filter(
+            OnboardingStep.user_id == current_user.id,
+            OnboardingStep.is_active == True
+        ).order_by(OnboardingStep.step_number).all()
+
+        if custom_steps:
+            return {
+                "steps": [
+                    {
+                        "id": step.id,
+                        "step_number": step.step_number,
+                        "title": step.title,
+                        "description": step.description,
+                        "icon": step.icon,
+                        "required": step.required,
+                        "fields": step.fields or []
+                    }
+                    for step in custom_steps
+                ],
+                "is_custom": True
+            }
+
+        # Return default onboarding steps
+        default_steps = [
+            {
+                "step_number": 1,
+                "title": "Welcome to Your CRM",
+                "description": "Let's get you set up with everything you need to manage your mortgage pipeline effectively.",
+                "icon": "👋",
+                "required": True,
+                "fields": []
+            },
+            {
+                "step_number": 2,
+                "title": "Upload Your Documents",
+                "description": "Upload important documents like rate sheets, guidelines, or templates you frequently use.",
+                "icon": "📄",
+                "required": False,
+                "fields": [
+                    {"name": "documents", "type": "file", "label": "Upload Documents", "multiple": True}
+                ]
+            },
+            {
+                "step_number": 3,
+                "title": "Connect Your Integrations",
+                "description": "Connect your email, calendar, and other tools to streamline your workflow.",
+                "icon": "🔗",
+                "required": False,
+                "fields": [
+                    {"name": "connect_email", "type": "button", "label": "Connect Outlook", "action": "email_oauth"},
+                    {"name": "connect_calendar", "type": "button", "label": "Connect Calendar", "action": "calendar_oauth"}
+                ]
+            },
+            {
+                "step_number": 4,
+                "title": "Add Team Members",
+                "description": "Invite processors, assistants, or team members who will work with you.",
+                "icon": "👥",
+                "required": False,
+                "fields": [
+                    {"name": "team_member_email", "type": "email", "label": "Team Member Email"},
+                    {"name": "team_member_role", "type": "select", "label": "Role", "options": ["Processor", "Assistant", "Loan Officer"]}
+                ]
+            },
+            {
+                "step_number": 5,
+                "title": "You're All Set!",
+                "description": "Your CRM is ready to go. Start adding leads and let AI help you close more deals!",
+                "icon": "🎉",
+                "required": True,
+                "fields": []
+            }
+        ]
+
+        return {"steps": default_steps, "is_custom": False}
+
+    except Exception as e:
+        logger.error(f"Get onboarding steps error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/onboarding/steps")
+async def update_onboarding_steps(
+    request: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update/customize onboarding step templates"""
+    try:
+        steps_data = request.get("steps", [])
+
+        # Delete existing custom steps
+        db.query(OnboardingStep).filter(
+            OnboardingStep.user_id == current_user.id
+        ).delete()
+
+        # Create new custom steps
+        for step_data in steps_data:
+            step = OnboardingStep(
+                user_id=current_user.id,
+                step_number=step_data.get("step_number"),
+                title=step_data.get("title"),
+                description=step_data.get("description"),
+                icon=step_data.get("icon", "📄"),
+                required=step_data.get("required", True),
+                fields=step_data.get("fields", [])
+            )
+            db.add(step)
+
+        db.commit()
+
+        return {"message": "Onboarding steps updated successfully", "count": len(steps_data)}
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Update onboarding steps error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/onboarding/progress")
+async def get_onboarding_progress(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get current user's onboarding progress"""
+    try:
+        progress = db.query(OnboardingProgress).filter(
+            OnboardingProgress.user_id == current_user.id
+        ).first()
+
+        if not progress:
+            # Create initial progress
+            progress = OnboardingProgress(
+                user_id=current_user.id,
+                current_step=1,
+                steps_completed=[]
+            )
+            db.add(progress)
+            db.commit()
+            db.refresh(progress)
+
+        return {
+            "current_step": progress.current_step,
+            "steps_completed": progress.steps_completed or [],
+            "is_complete": progress.is_complete,
+            "completed_at": progress.completed_at.isoformat() if progress.completed_at else None,
+            "uploaded_documents": progress.uploaded_documents or [],
+            "team_members_added": progress.team_members_added,
+            "workflows_generated": progress.workflows_generated
+        }
+
+    except Exception as e:
+        logger.error(f"Get onboarding progress error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/onboarding/progress")
+async def update_onboarding_progress(
+    request: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update user's onboarding progress"""
+    try:
+        progress = db.query(OnboardingProgress).filter(
+            OnboardingProgress.user_id == current_user.id
+        ).first()
+
+        if not progress:
+            progress = OnboardingProgress(user_id=current_user.id)
+            db.add(progress)
+
+        # Update fields
+        if "current_step" in request:
+            progress.current_step = request["current_step"]
+
+        if "steps_completed" in request:
+            progress.steps_completed = request["steps_completed"]
+
+        if "uploaded_documents" in request:
+            progress.uploaded_documents = request["uploaded_documents"]
+
+        if "team_members_added" in request:
+            progress.team_members_added = request["team_members_added"]
+
+        db.commit()
+
+        return {"message": "Progress updated successfully"}
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Update onboarding progress error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/onboarding/complete")
+async def complete_onboarding(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Mark onboarding as complete for user"""
+    try:
+        # Update progress
+        progress = db.query(OnboardingProgress).filter(
+            OnboardingProgress.user_id == current_user.id
+        ).first()
+
+        if progress:
+            progress.is_complete = True
+            progress.completed_at = datetime.utcnow()
+
+        # Update user
+        current_user.onboarding_completed = True
+
+        db.commit()
+
+        return {"message": "Onboarding completed!", "completed_at": datetime.utcnow().isoformat()}
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Complete onboarding error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================================================
 # STARTUP EVENT

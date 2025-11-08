@@ -652,6 +652,181 @@
   text-decoration: underline;
 }
 
+/* Onboarding Sections */
+.onboarding-steps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.step-card {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 24px;
+  transition: all 0.2s;
+}
+
+.step-card:hover {
+  border-color: #218D8D;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.step-card-header {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.step-icon-large {
+  font-size: 48px;
+  flex-shrink: 0;
+}
+
+.step-info h3 {
+  margin: 0 0 12px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.step-info p {
+  margin: 0;
+  font-size: 14px;
+  color: #666;
+  line-height: 1.6;
+}
+
+.required-badge {
+  display: inline-block;
+  padding: 4px 8px;
+  background: #fef3c7;
+  color: #92400e;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.step-fields-preview {
+  margin-top: 16px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.step-fields-preview strong {
+  color: #555;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.step-fields-preview ul {
+  margin: 0;
+  padding-left: 24px;
+  color: #666;
+}
+
+.step-fields-preview li {
+  margin-bottom: 4px;
+}
+
+/* Update Process */
+.editing-steps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.editing-step-card {
+  background: white;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.step-header-edit {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.step-header-edit h4 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #218D8D;
+}
+
+.btn-remove-step {
+  padding: 8px 16px;
+  background: #fee2e2;
+  color: #dc2626;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-remove-step:hover:not(:disabled) {
+  background: #fecaca;
+}
+
+.btn-remove-step:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-add-step {
+  width: 100%;
+  padding: 14px;
+  background: #f0f8f8;
+  color: #218D8D;
+  border: 2px dashed #218D8D;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-add-step:hover {
+  background: #e8f5f5;
+  border-style: solid;
+}
+
+.text-input,
+.select-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+
+.text-input:focus,
+.select-input:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
+}
+
+textarea.text-input {
+  resize: vertical;
+}
+
 /* Responsive Design */
 @media (max-width: 1024px) {
   .settings-content {

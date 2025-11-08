@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import OnboardingWizard from './OnboardingWizard';
 import './Settings.css';
 
 function Settings() {
   const [activeSection, setActiveSection] = useState('integrations');
   const [expandedSections, setExpandedSections] = useState({
     organizational: false,
-    scheduling: false
+    scheduling: false,
+    onboarding: false
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [connectedIntegrations, setConnectedIntegrations] = useState(new Set(['outlook']));
@@ -15,6 +15,9 @@ function Settings() {
   const [loadingCalendly, setLoadingCalendly] = useState(false);
   const [selectedStage, setSelectedStage] = useState('');
   const [selectedEventType, setSelectedEventType] = useState('');
+  const [onboardingSteps, setOnboardingSteps] = useState([]);
+  const [loadingSteps, setLoadingSteps] = useState(false);
+  const [editingSteps, setEditingSteps] = useState([]);
 
   const toggleSection = (section) => {
     setExpandedSections({
@@ -64,6 +67,79 @@ function Settings() {
     } catch (error) {
       console.error('Error fetching calendar mappings:', error);
     }
+  };
+
+  const fetchOnboardingSteps = async () => {
+    setLoadingSteps(true);
+    try {
+      const response = await fetch('/api/v1/onboarding/steps', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      const data = await response.json();
+      setOnboardingSteps(data.steps || []);
+      setEditingSteps(data.steps || []);
+    } catch (error) {
+      console.error('Error fetching onboarding steps:', error);
+    } finally {
+      setLoadingSteps(false);
+    }
+  };
+
+  const updateOnboardingSteps = async () => {
+    try {
+      const response = await fetch('/api/v1/onboarding/steps', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          steps: editingSteps
+        })
+      });
+
+      if (response.ok) {
+        alert('Onboarding process updated successfully!');
+        fetchOnboardingSteps();
+      } else {
+        alert('Failed to update onboarding process');
+      }
+    } catch (error) {
+      console.error('Error updating onboarding steps:', error);
+      alert('Error updating onboarding process');
+    }
+  };
+
+  const addOnboardingStep = () => {
+    const newStep = {
+      step_number: editingSteps.length + 1,
+      title: 'New Step',
+      description: 'Describe what the user should do in this step',
+      icon: '📌',
+      required: false,
+      fields: []
+    };
+    setEditingSteps([...editingSteps, newStep]);
+  };
+
+  const removeOnboardingStep = (index) => {
+    const updated = editingSteps.filter((_, i) => i !== index);
+    // Renumber steps
+    updated.forEach((step, i) => {
+      step.step_number = i + 1;
+    });
+    setEditingSteps(updated);
+  };
+
+  const updateStep = (index, field, value) => {
+    const updated = [...editingSteps];
+    updated[index] = {
+      ...updated[index],
+      [field]: value
+    };
+    setEditingSteps(updated);
   };
 
   const createCalendarMapping = async () => {
@@ -263,6 +339,9 @@ function Settings() {
       fetchCalendlyEventTypes();
       fetchCalendarMappings();
     }
+    if (activeSection === 'onboarding-current' || activeSection === 'onboarding-update') {
+      fetchOnboardingSteps();
+    }
   }, [activeSection]);
 
   return (
@@ -374,12 +453,29 @@ function Settings() {
             <span>Notifications</span>
           </button>
           <button
-            className={`sidebar-btn ${activeSection === 'onboarding' ? 'active' : ''}`}
-            onClick={() => setActiveSection('onboarding')}
+            className={`sidebar-btn parent ${expandedSections.onboarding ? 'expanded' : ''}`}
+            onClick={() => toggleSection('onboarding')}
           >
             <span className="icon">🚀</span>
             <span>Onboarding</span>
+            <span className="expand-icon">{expandedSections.onboarding ? '▼' : '▶'}</span>
           </button>
+          {expandedSections.onboarding && (
+            <div className="sidebar-children">
+              <button
+                className={`sidebar-btn child ${activeSection === 'onboarding-current' ? 'active' : ''}`}
+                onClick={() => setActiveSection('onboarding-current')}
+              >
+                <span>Current Process</span>
+              </button>
+              <button
+                className={`sidebar-btn child ${activeSection === 'onboarding-update' ? 'active' : ''}`}
+                onClick={() => setActiveSection('onboarding-update')}
+              >
+                <span>Update Process</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Main Content */}
@@ -479,15 +575,180 @@ function Settings() {
             </div>
           )}
 
-          {activeSection === 'onboarding' && (
-            <div className="onboarding-section">
-              <h2>Setup Wizard</h2>
+          {activeSection === 'onboarding-current' && (
+            <div className="onboarding-current-section">
+              <h2>Current Onboarding Process</h2>
               <p className="section-description">
-                Complete the onboarding process to set up your CRM
+                View the current onboarding flow that new users will experience
               </p>
-              <div className="onboarding-wrapper">
-                <OnboardingWizard />
-              </div>
+
+              {loadingSteps ? (
+                <div className="loading-spinner">Loading onboarding steps...</div>
+              ) : (
+                <>
+                  <div className="info-card" style={{ marginBottom: '24px' }}>
+                    <div className="info-icon">ℹ️</div>
+                    <div className="info-content">
+                      <h3>Onboarding Overview</h3>
+                      <p>
+                        When new users log in for the first time, they'll be guided through a
+                        step-by-step onboarding wizard with {onboardingSteps.length} steps.
+                      </p>
+                      <p>
+                        To customize this process, go to <strong>Update Process</strong>.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="onboarding-steps-list">
+                    {onboardingSteps.map((step, index) => (
+                      <div key={index} className="step-card">
+                        <div className="step-card-header">
+                          <span className="step-icon-large">{step.icon}</span>
+                          <div className="step-info">
+                            <h3>
+                              Step {step.step_number}: {step.title}
+                              {step.required && <span className="required-badge">Required</span>}
+                            </h3>
+                            <p>{step.description}</p>
+                          </div>
+                        </div>
+                        {step.fields && step.fields.length > 0 && (
+                          <div className="step-fields-preview">
+                            <strong>Form Fields:</strong>
+                            <ul>
+                              {step.fields.map((field, fieldIndex) => (
+                                <li key={fieldIndex}>
+                                  {field.label} ({field.type})
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              <button
+                className="btn-primary"
+                style={{ marginTop: '24px' }}
+                onClick={() => {
+                  setActiveSection('onboarding-update');
+                  fetchOnboardingSteps();
+                }}
+              >
+                Customize Onboarding →
+              </button>
+            </div>
+          )}
+
+          {activeSection === 'onboarding-update' && (
+            <div className="onboarding-update-section">
+              <h2>Update Onboarding Process</h2>
+              <p className="section-description">
+                Customize the onboarding steps for new users
+              </p>
+
+              {loadingSteps ? (
+                <div className="loading-spinner">Loading...</div>
+              ) : (
+                <>
+                  <div className="help-card" style={{ marginBottom: '24px' }}>
+                    <h4>How to Customize</h4>
+                    <p>
+                      Edit the title, description, icon, and fields for each step below. You can
+                      also add or remove steps. Changes will apply to all new users going through
+                      onboarding.
+                    </p>
+                  </div>
+
+                  <div className="editing-steps-list">
+                    {editingSteps.map((step, index) => (
+                      <div key={index} className="editing-step-card">
+                        <div className="step-header-edit">
+                          <h4>Step {index + 1}</h4>
+                          <button
+                            className="btn-remove-step"
+                            onClick={() => removeOnboardingStep(index)}
+                            disabled={editingSteps.length === 1}
+                          >
+                            ✕ Remove
+                          </button>
+                        </div>
+
+                        <div className="form-row">
+                          <div className="form-group">
+                            <label>Title</label>
+                            <input
+                              type="text"
+                              value={step.title}
+                              onChange={(e) => updateStep(index, 'title', e.target.value)}
+                              className="text-input"
+                              placeholder="Step Title"
+                            />
+                          </div>
+
+                          <div className="form-group">
+                            <label>Icon (Emoji)</label>
+                            <input
+                              type="text"
+                              value={step.icon}
+                              onChange={(e) => updateStep(index, 'icon', e.target.value)}
+                              className="text-input"
+                              placeholder="📄"
+                              maxLength="2"
+                              style={{ width: '80px' }}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="form-group">
+                          <label>Description</label>
+                          <textarea
+                            value={step.description}
+                            onChange={(e) => updateStep(index, 'description', e.target.value)}
+                            className="text-input"
+                            placeholder="Describe what the user should do..."
+                            rows="3"
+                          />
+                        </div>
+
+                        <div className="form-group">
+                          <label className="checkbox-label">
+                            <input
+                              type="checkbox"
+                              checked={step.required || false}
+                              onChange={(e) => updateStep(index, 'required', e.target.checked)}
+                            />
+                            Required Step (user must complete to finish onboarding)
+                          </label>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <button className="btn-add-step" onClick={addOnboardingStep}>
+                    + Add Step
+                  </button>
+
+                  <div className="update-actions" style={{ marginTop: '32px', display: 'flex', gap: '12px' }}>
+                    <button className="btn-primary" onClick={updateOnboardingSteps}>
+                      Save Changes
+                    </button>
+                    <button
+                      className="btn-secondary"
+                      onClick={() => {
+                        fetchOnboardingSteps();
+                        alert('Changes discarded');
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
