@@ -153,6 +153,20 @@ class Lead(Base):
     owner_id = Column(Integer, ForeignKey("users.id"))
     last_contact = Column(DateTime)
     notes = Column(Text)
+    # Property Information
+    address = Column(String)
+    city = Column(String)
+    state = Column(String)
+    zip_code = Column(String)
+    property_type = Column(String)
+    property_value = Column(Float)
+    down_payment = Column(Float)
+    # Financial Information
+    employment_status = Column(String)
+    annual_income = Column(Float)
+    monthly_debts = Column(Float)
+    first_time_buyer = Column(Boolean, default=False)
+    # Metadata
     user_metadata = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -481,6 +495,21 @@ class LeadCreate(BaseModel):
     loan_type: Optional[str] = None
     preapproval_amount: Optional[float] = None
     credit_score: Optional[int] = None
+    # Property Information
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zip_code: Optional[str] = None
+    property_type: Optional[str] = None
+    property_value: Optional[float] = None
+    down_payment: Optional[float] = None
+    # Financial Information
+    employment_status: Optional[str] = None
+    annual_income: Optional[float] = None
+    monthly_debts: Optional[float] = None
+    first_time_buyer: Optional[bool] = False
+    # Notes
+    notes: Optional[str] = None
 
 class LeadUpdate(BaseModel):
     name: Optional[str] = None
@@ -500,7 +529,23 @@ class LeadResponse(BaseModel):
     sentiment: Optional[str]
     next_action: Optional[str]
     preapproval_amount: Optional[float]
+    # Property Information
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zip_code: Optional[str] = None
+    property_type: Optional[str] = None
+    property_value: Optional[float] = None
+    down_payment: Optional[float] = None
+    # Financial Information
+    credit_score: Optional[int] = None
+    employment_status: Optional[str] = None
+    annual_income: Optional[float] = None
+    monthly_debts: Optional[float] = None
+    first_time_buyer: Optional[bool] = False
+    notes: Optional[str] = None
     created_at: datetime
+    updated_at: Optional[datetime] = None
     class Config:
         from_attributes = True
 
@@ -1796,6 +1841,49 @@ def init_db():
                         END IF;
                     END $$;
                 """))
+
+                # Add new Lead columns if they don't exist
+                conn.execute(text("""
+                    DO $$
+                    BEGIN
+                        -- Property Information
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='address') THEN
+                            ALTER TABLE leads ADD COLUMN address VARCHAR;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='city') THEN
+                            ALTER TABLE leads ADD COLUMN city VARCHAR;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='state') THEN
+                            ALTER TABLE leads ADD COLUMN state VARCHAR;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='zip_code') THEN
+                            ALTER TABLE leads ADD COLUMN zip_code VARCHAR;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='property_type') THEN
+                            ALTER TABLE leads ADD COLUMN property_type VARCHAR;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='property_value') THEN
+                            ALTER TABLE leads ADD COLUMN property_value FLOAT;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='down_payment') THEN
+                            ALTER TABLE leads ADD COLUMN down_payment FLOAT;
+                        END IF;
+                        -- Financial Information
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='employment_status') THEN
+                            ALTER TABLE leads ADD COLUMN employment_status VARCHAR;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='annual_income') THEN
+                            ALTER TABLE leads ADD COLUMN annual_income FLOAT;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='monthly_debts') THEN
+                            ALTER TABLE leads ADD COLUMN monthly_debts FLOAT;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='first_time_buyer') THEN
+                            ALTER TABLE leads ADD COLUMN first_time_buyer BOOLEAN DEFAULT FALSE;
+                        END IF;
+                    END $$;
+                """))
+
                 conn.commit()
                 logger.info("✅ Schema migrations applied")
         except Exception as e:
