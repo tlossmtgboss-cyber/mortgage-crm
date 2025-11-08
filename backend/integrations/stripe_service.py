@@ -8,8 +8,11 @@ for the mortgage CRM SaaS platform.
 import stripe
 import os
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, TYPE_CHECKING
 from sqlalchemy.orm import Session
+
+if TYPE_CHECKING:
+    import stripe.checkout
 
 # Initialize Stripe
 stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
@@ -131,7 +134,7 @@ class StripeService:
         cancel_url: str,
         trial_days: int = 14,
         metadata: Dict = None
-    ) -> stripe.checkout.Session:
+    ) -> Optional["stripe.checkout.Session"]:
         """
         Create a Stripe Checkout session for subscription signup
 

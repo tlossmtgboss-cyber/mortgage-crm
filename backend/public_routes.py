@@ -15,7 +15,7 @@ from main import (
     get_db, User, Subscription, OnboardingProgress, EmailVerificationToken,
     TeamMember, Workflow, get_password_hash
 )
-from integrations.stripe_service import StripeService
+# from integrations.stripe_service import StripeService  # Disabled for now
 from integrations.email_service import EmailService, VerificationTokenService
 
 logger = logging.getLogger(__name__)
@@ -23,7 +23,21 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Initialize services
-stripe_service = StripeService()
+# Stripe service disabled for now - using mock
+class MockStripeService:
+    """Mock Stripe service when Stripe is not configured"""
+    def get_plan_info(self, plan):
+        return {"name": plan, "price": 0, "features": []}
+    def create_customer(self, *args, **kwargs):
+        return None
+    def create_subscription(self, *args, **kwargs):
+        return None
+    def get_all_plans(self):
+        return []
+    def verify_webhook_signature(self, *args, **kwargs):
+        return None
+
+stripe_service = MockStripeService()
 email_service = EmailService()
 
 
