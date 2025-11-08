@@ -15,9 +15,10 @@ function AIAssistant({ isOpen, onClose, context = {} }) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (isOpen && context.lead_id || context.loan_id) {
+    if (isOpen && (context.lead_id || context.loan_id)) {
       loadConversations();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, context.lead_id, context.loan_id]);
 
   const loadConversations = async () => {

@@ -15,6 +15,7 @@ function ClientProfile() {
   useEffect(() => {
     loadClientData();
     loadConversations();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type, id]);
 
   const loadClientData = async () => {
