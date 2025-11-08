@@ -45,38 +45,57 @@ function App() {
 
   useEffect(() => {
     const checkOnboardingStatus = async () => {
-      if (isAuthenticated()) {
-        try {
-          const response = await fetch(`${API_BASE_URL}/api/v1/users/me`, {
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('token')}`
-            }
-          });
+      try {
+        if (isAuthenticated()) {
+          try {
+            const response = await fetch(`${API_BASE_URL}/api/v1/users/me`, {
+              headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+              }
+            });
 
-          if (response.ok) {
-            const userData = await response.json();
-            // Show onboarding wizard if user hasn't completed it
-            if (!userData.onboarding_completed) {
-              setShowOnboarding(true);
+            if (response.ok) {
+              const userData = await response.json();
+              // Show onboarding wizard if user hasn't completed it
+              if (!userData.onboarding_completed) {
+                setShowOnboarding(true);
+              }
+            } else {
+              // If endpoint doesn't exist, check localStorage
+              try {
+                const userStr = localStorage.getItem('user');
+                if (userStr) {
+                  const user = JSON.parse(userStr);
+                  // Default to showing onboarding for new users
+                  if (user.onboarding_completed === undefined || user.onboarding_completed === false) {
+                    setShowOnboarding(true);
+                  }
+                }
+              } catch (parseError) {
+                console.warn('Error parsing user data:', parseError);
+              }
             }
-          } else {
-            // If endpoint doesn't exist, check localStorage
-            const user = JSON.parse(localStorage.getItem('user') || '{}');
-            // Default to showing onboarding for new users (no onboarding_completed field)
-            if (user.onboarding_completed === undefined || user.onboarding_completed === false) {
-              setShowOnboarding(true);
+          } catch (error) {
+            console.error('Error checking onboarding status:', error);
+            // Fallback: check localStorage
+            try {
+              const userStr = localStorage.getItem('user');
+              if (userStr) {
+                const user = JSON.parse(userStr);
+                if (user.onboarding_completed === undefined || user.onboarding_completed === false) {
+                  setShowOnboarding(true);
+                }
+              }
+            } catch (parseError) {
+              console.warn('Error parsing user data in fallback:', parseError);
             }
-          }
-        } catch (error) {
-          console.error('Error checking onboarding status:', error);
-          // Fallback: check localStorage
-          const user = JSON.parse(localStorage.getItem('user') || '{}');
-          if (user.onboarding_completed === undefined || user.onboarding_completed === false) {
-            setShowOnboarding(true);
           }
         }
+      } catch (outerError) {
+        console.error('Critical error in onboarding check:', outerError);
+      } finally {
+        setCheckingOnboarding(false);
       }
-      setCheckingOnboarding(false);
     };
 
     checkOnboardingStatus();
