@@ -148,6 +148,251 @@ function LeadDetail() {
         </div>
       </div>
 
+      {/* Loan Information Toolbar */}
+      <div className="loan-toolbar">
+        <div className="toolbar-header">
+          <h3>Loan Details</h3>
+        </div>
+        <div className="loan-fields-grid">
+          <div className="loan-field">
+            <label>Loan Amount</label>
+            {editing ? (
+              <input
+                type="number"
+                value={formData.loan_amount || ''}
+                onChange={(e) => setFormData({...formData, loan_amount: e.target.value})}
+                placeholder="$"
+              />
+            ) : (
+              <div className="value">
+                {formData.loan_amount ? `$${parseFloat(formData.loan_amount).toLocaleString()}` : 'N/A'}
+              </div>
+            )}
+          </div>
+
+          <div className="loan-field">
+            <label>Interest Rate</label>
+            {editing ? (
+              <input
+                type="number"
+                step="0.001"
+                value={formData.interest_rate || ''}
+                onChange={(e) => setFormData({...formData, interest_rate: e.target.value})}
+                placeholder="%"
+              />
+            ) : (
+              <div className="value">{formData.interest_rate ? `${formData.interest_rate}%` : 'N/A'}</div>
+            )}
+          </div>
+
+          <div className="loan-field">
+            <label>Loan Term</label>
+            {editing ? (
+              <input
+                type="number"
+                value={formData.loan_term || ''}
+                onChange={(e) => setFormData({...formData, loan_term: e.target.value})}
+                placeholder="Years"
+              />
+            ) : (
+              <div className="value">{formData.loan_term ? `${formData.loan_term} years` : 'N/A'}</div>
+            )}
+          </div>
+
+          <div className="loan-field">
+            <label>Loan Type</label>
+            {editing ? (
+              <select
+                value={formData.loan_type || ''}
+                onChange={(e) => setFormData({...formData, loan_type: e.target.value})}
+              >
+                <option value="">Select...</option>
+                <option value="Conventional">Conventional</option>
+                <option value="FHA">FHA</option>
+                <option value="VA">VA</option>
+                <option value="USDA">USDA</option>
+                <option value="Jumbo">Jumbo</option>
+                <option value="HELOC">HELOC</option>
+              </select>
+            ) : (
+              <div className="value">{formData.loan_type || 'N/A'}</div>
+            )}
+          </div>
+
+          <div className="loan-field">
+            <label>Lock Date</label>
+            {editing ? (
+              <input
+                type="date"
+                value={formData.lock_date || ''}
+                onChange={(e) => setFormData({...formData, lock_date: e.target.value})}
+              />
+            ) : (
+              <div className="value">
+                {formData.lock_date ? new Date(formData.lock_date).toLocaleDateString() : 'N/A'}
+              </div>
+            )}
+          </div>
+
+          <div className="loan-field">
+            <label>Lock Expiration</label>
+            {editing ? (
+              <input
+                type="date"
+                value={formData.lock_expiration || ''}
+                onChange={(e) => setFormData({...formData, lock_expiration: e.target.value})}
+              />
+            ) : (
+              <div className="value">
+                {formData.lock_expiration ? new Date(formData.lock_expiration).toLocaleDateString() : 'N/A'}
+              </div>
+            )}
+          </div>
+
+          <div className="loan-field">
+            <label>APR</label>
+            {editing ? (
+              <input
+                type="number"
+                step="0.001"
+                value={formData.apr || ''}
+                onChange={(e) => setFormData({...formData, apr: e.target.value})}
+                placeholder="%"
+              />
+            ) : (
+              <div className="value">{formData.apr ? `${formData.apr}%` : 'N/A'}</div>
+            )}
+          </div>
+
+          <div className="loan-field">
+            <label>Points</label>
+            {editing ? (
+              <input
+                type="number"
+                step="0.125"
+                value={formData.points || ''}
+                onChange={(e) => setFormData({...formData, points: e.target.value})}
+              />
+            ) : (
+              <div className="value">{formData.points || 'N/A'}</div>
+            )}
+          </div>
+
+          <div className="loan-field">
+            <label>Lender</label>
+            {editing ? (
+              <input
+                type="text"
+                value={formData.lender || ''}
+                onChange={(e) => setFormData({...formData, lender: e.target.value})}
+              />
+            ) : (
+              <div className="value">{formData.lender || 'N/A'}</div>
+            )}
+          </div>
+
+          <div className="loan-field">
+            <label>Loan Officer</label>
+            {editing ? (
+              <input
+                type="text"
+                value={formData.loan_officer || ''}
+                onChange={(e) => setFormData({...formData, loan_officer: e.target.value})}
+              />
+            ) : (
+              <div className="value">{formData.loan_officer || 'N/A'}</div>
+            )}
+          </div>
+
+          <div className="loan-field">
+            <label>Processor</label>
+            {editing ? (
+              <input
+                type="text"
+                value={formData.processor || ''}
+                onChange={(e) => setFormData({...formData, processor: e.target.value})}
+              />
+            ) : (
+              <div className="value">{formData.processor || 'N/A'}</div>
+            )}
+          </div>
+
+          <div className="loan-field">
+            <label>Underwriter</label>
+            {editing ? (
+              <input
+                type="text"
+                value={formData.underwriter || ''}
+                onChange={(e) => setFormData({...formData, underwriter: e.target.value})}
+              />
+            ) : (
+              <div className="value">{formData.underwriter || 'N/A'}</div>
+            )}
+          </div>
+
+          <div className="loan-field">
+            <label>Closing Date</label>
+            {editing ? (
+              <input
+                type="date"
+                value={formData.closing_date || ''}
+                onChange={(e) => setFormData({...formData, closing_date: e.target.value})}
+              />
+            ) : (
+              <div className="value">
+                {formData.closing_date ? new Date(formData.closing_date).toLocaleDateString() : 'N/A'}
+              </div>
+            )}
+          </div>
+
+          <div className="loan-field">
+            <label>Appraisal Value</label>
+            {editing ? (
+              <input
+                type="number"
+                value={formData.appraisal_value || ''}
+                onChange={(e) => setFormData({...formData, appraisal_value: e.target.value})}
+                placeholder="$"
+              />
+            ) : (
+              <div className="value">
+                {formData.appraisal_value ? `$${parseFloat(formData.appraisal_value).toLocaleString()}` : 'N/A'}
+              </div>
+            )}
+          </div>
+
+          <div className="loan-field">
+            <label>LTV %</label>
+            {editing ? (
+              <input
+                type="number"
+                step="0.01"
+                value={formData.ltv || ''}
+                onChange={(e) => setFormData({...formData, ltv: e.target.value})}
+                placeholder="%"
+              />
+            ) : (
+              <div className="value">{formData.ltv ? `${formData.ltv}%` : 'N/A'}</div>
+            )}
+          </div>
+
+          <div className="loan-field">
+            <label>DTI %</label>
+            {editing ? (
+              <input
+                type="number"
+                step="0.01"
+                value={formData.dti || ''}
+                onChange={(e) => setFormData({...formData, dti: e.target.value})}
+                placeholder="%"
+              />
+            ) : (
+              <div className="value">{formData.dti ? `${formData.dti}%` : 'N/A'}</div>
+            )}
+          </div>
+        </div>
+      </div>
+
       <div className="detail-content">
         {/* Left Column - Lead Information */}
         <div className="left-column">

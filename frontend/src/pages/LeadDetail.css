@@ -72,6 +72,79 @@
   background: #dc2626;
 }
 
+/* Loan Information Toolbar */
+.loan-toolbar {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  border: 1px solid #e0e0e0;
+}
+
+.toolbar-header {
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #e9ecef;
+}
+
+.toolbar-header h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+.loan-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.loan-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.loan-field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.loan-field .value {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1a1a1a;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+}
+
+.loan-field input,
+.loan-field select {
+  padding: 8px 12px;
+  border: 2px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+
+.loan-field input:focus,
+.loan-field select:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
+}
+
 /* Two Column Layout */
 .detail-content {
   display: grid;
@@ -402,6 +475,16 @@
   .right-column {
     order: -1;
   }
+
+  .loan-fields-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .loan-fields-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 @media (max-width: 768px) {
@@ -411,5 +494,13 @@
 
   .action-buttons {
     grid-template-columns: 1fr;
+  }
+
+  .loan-fields-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .loan-toolbar {
+    padding: 16px;
   }
 }
