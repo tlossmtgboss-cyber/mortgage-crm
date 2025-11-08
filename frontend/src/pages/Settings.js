@@ -18,6 +18,7 @@ function Settings() {
   const [onboardingSteps, setOnboardingSteps] = useState([]);
   const [loadingSteps, setLoadingSteps] = useState(false);
   const [editingSteps, setEditingSteps] = useState([]);
+  const [processTree, setProcessTree] = useState(null);
 
   const toggleSection = (section) => {
     setExpandedSections({
@@ -66,6 +67,22 @@ function Settings() {
       setCalendarMappings(data.mappings || []);
     } catch (error) {
       console.error('Error fetching calendar mappings:', error);
+    }
+  };
+
+  const loadProcessTree = () => {
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        // Check if user has completed onboarding and stored process tree
+        const savedProcessTree = localStorage.getItem('onboardingProcessTree');
+        if (savedProcessTree) {
+          setProcessTree(JSON.parse(savedProcessTree));
+        }
+      }
+    } catch (error) {
+      console.error('Error loading process tree:', error);
     }
   };
 
@@ -339,7 +356,10 @@ function Settings() {
       fetchCalendlyEventTypes();
       fetchCalendarMappings();
     }
-    if (activeSection === 'onboarding-current' || activeSection === 'onboarding-update') {
+    if (activeSection === 'onboarding-current') {
+      loadProcessTree();
+    }
+    if (activeSection === 'onboarding-update') {
       fetchOnboardingSteps();
     }
   }, [activeSection]);
@@ -577,70 +597,86 @@ function Settings() {
 
           {activeSection === 'onboarding-current' && (
             <div className="onboarding-current-section">
-              <h2>Current Onboarding Process</h2>
+              <h2>Current Process Tree</h2>
               <p className="section-description">
-                View the current onboarding flow that new users will experience
+                Visual representation of your loan process milestones and tasks
               </p>
 
-              {loadingSteps ? (
-                <div className="loading-spinner">Loading onboarding steps...</div>
+              {!processTree ? (
+                <div className="empty-state">
+                  <div className="empty-icon">📋</div>
+                  <h3>No Process Tree Found</h3>
+                  <p>You haven't created a process tree yet during onboarding.</p>
+                  <p className="empty-hint">
+                    Complete the onboarding wizard and upload your process documents to generate your process tree.
+                  </p>
+                </div>
               ) : (
                 <>
                   <div className="info-card" style={{ marginBottom: '24px' }}>
-                    <div className="info-icon">ℹ️</div>
+                    <div className="info-icon">🤖</div>
                     <div className="info-content">
-                      <h3>Onboarding Overview</h3>
+                      <h3>Process Overview</h3>
                       <p>
-                        When new users log in for the first time, they'll be guided through a
-                        step-by-step onboarding wizard with {onboardingSteps.length} steps.
+                        Your process tree contains <strong>{processTree.milestones}</strong> milestones
+                        with <strong>{processTree.tasks}</strong> total tasks across <strong>{processTree.roles}</strong> roles.
                       </p>
                       <p>
-                        To customize this process, go to <strong>Update Process</strong>.
+                        This was generated from your uploaded process documents and defines your loan workflow.
                       </p>
                     </div>
                   </div>
 
-                  <div className="onboarding-steps-list">
-                    {onboardingSteps.map((step, index) => (
-                      <div key={index} className="step-card">
-                        <div className="step-card-header">
-                          <span className="step-icon-large">{step.icon}</span>
-                          <div className="step-info">
-                            <h3>
-                              Step {step.step_number}: {step.title}
-                              {step.required && <span className="required-badge">Required</span>}
-                            </h3>
-                            <p>{step.description}</p>
+                  <div className="process-tree-visual">
+                    {processTree.milestonesData && processTree.milestonesData.map((milestone, idx) => (
+                      <div key={idx} className="milestone-card">
+                        <div className="milestone-header">
+                          <div className="milestone-number">{idx + 1}</div>
+                          <div className="milestone-info">
+                            <h3>{milestone.name}</h3>
+                            <span className="task-count-badge">{milestone.tasks.length} tasks</span>
                           </div>
                         </div>
-                        {step.fields && step.fields.length > 0 && (
-                          <div className="step-fields-preview">
-                            <strong>Form Fields:</strong>
-                            <ul>
-                              {step.fields.map((field, fieldIndex) => (
-                                <li key={fieldIndex}>
-                                  {field.label} ({field.type})
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
+
+                        <div className="milestone-tasks">
+                          {milestone.tasks.map((task, taskIdx) => (
+                            <div key={taskIdx} className="process-task-item">
+                              <div className="task-left">
+                                <div className="task-number">{taskIdx + 1}</div>
+                                <div className="task-details">
+                                  <div className="task-name">{task.name}</div>
+                                  <div className="task-meta">
+                                    <span className="task-owner">👤 {task.owner}</span>
+                                    <span className="task-sla">⏱️ {task.sla} {task.slaUnit}</span>
+                                    {task.aiAuto && (
+                                      <span className="task-ai-badge">🤖 AI Auto</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     ))}
                   </div>
+
+                  <div className="process-summary-stats">
+                    <div className="stat-box">
+                      <div className="stat-value">{processTree.milestones}</div>
+                      <div className="stat-label">Milestones</div>
+                    </div>
+                    <div className="stat-box">
+                      <div className="stat-value">{processTree.tasks}</div>
+                      <div className="stat-label">Total Tasks</div>
+                    </div>
+                    <div className="stat-box">
+                      <div className="stat-value">{processTree.roles}</div>
+                      <div className="stat-label">Roles</div>
+                    </div>
+                  </div>
                 </>
               )}
-
-              <button
-                className="btn-primary"
-                style={{ marginTop: '24px' }}
-                onClick={() => {
-                  setActiveSection('onboarding-update');
-                  fetchOnboardingSteps();
-                }}
-              >
-                Customize Onboarding →
-              </button>
             </div>
           )}
 

@@ -66,6 +66,15 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
 
   const handleComplete = async () => {
     try {
+      // Save process tree to localStorage
+      if (formData.processTree && formData.milestones.length > 0) {
+        const processTreeData = {
+          ...formData.processTree,
+          milestonesData: formData.milestones
+        };
+        localStorage.setItem('onboardingProcessTree', JSON.stringify(processTreeData));
+      }
+
       const token = localStorage.getItem('token');
       const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
