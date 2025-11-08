@@ -401,10 +401,10 @@ async def register_user(registration: UserRegistration, db: Session = Depends(ge
         except Exception as cleanup_error:
             logger.error(f"Cleanup failed: {str(cleanup_error)}")
 
-        # Return detailed error for debugging (TODO: make generic in production)
+        # Return user-friendly error message
         raise HTTPException(
             status_code=500,
-            detail=f"Registration error: {str(e)} | Type: {type(e).__name__}"
+            detail="We encountered an error creating your account. Please try again or contact support if the issue persists."
         )
 
 
