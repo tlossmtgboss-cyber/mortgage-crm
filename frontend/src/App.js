@@ -5,6 +5,8 @@ import Navigation from './components/Navigation';
 import AIAssistant from './components/AIAssistant';
 import OnboardingWizard from './components/OnboardingWizard';
 
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+
 // Public pages
 import LandingPage from './pages/LandingPage';
 import Registration from './pages/Registration';
@@ -49,7 +51,7 @@ function App() {
     const checkOnboardingStatus = async () => {
       if (isAuthenticated()) {
         try {
-          const response = await fetch('/api/v1/users/me', {
+          const response = await fetch(`${API_BASE_URL}/api/v1/users/me`, {
             headers: {
               'Authorization': `Bearer ${localStorage.getItem('token')}`
             }
@@ -61,9 +63,21 @@ function App() {
             if (!userData.onboarding_completed) {
               setShowOnboarding(true);
             }
+          } else {
+            // If endpoint doesn't exist, check localStorage
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            // Default to showing onboarding for new users (no onboarding_completed field)
+            if (user.onboarding_completed === undefined || user.onboarding_completed === false) {
+              setShowOnboarding(true);
+            }
           }
         } catch (error) {
           console.error('Error checking onboarding status:', error);
+          // Fallback: check localStorage
+          const user = JSON.parse(localStorage.getItem('user') || '{}');
+          if (user.onboarding_completed === undefined || user.onboarding_completed === false) {
+            setShowOnboarding(true);
+          }
         }
       }
       setCheckingOnboarding(false);

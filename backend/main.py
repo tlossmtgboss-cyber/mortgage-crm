@@ -1096,6 +1096,21 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
         }
     }
 
+@app.get("/api/v1/users/me")
+async def get_current_user_info(current_user: User = Depends(get_current_user)):
+    """Get current user information including onboarding status"""
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "full_name": current_user.full_name,
+        "role": current_user.role,
+        "is_active": current_user.is_active,
+        "email_verified": current_user.email_verified,
+        "onboarding_completed": current_user.onboarding_completed,
+        "user_metadata": current_user.user_metadata,
+        "created_at": current_user.created_at.isoformat() if current_user.created_at else None
+    }
+
 # ============================================================================
 # DASHBOARD
 # ============================================================================
