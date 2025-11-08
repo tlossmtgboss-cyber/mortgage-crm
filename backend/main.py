@@ -2673,6 +2673,27 @@ def create_sample_data(db: Session):
         db.rollback()
 
 # ============================================================================
+# MORTGAGE GUIDELINES
+# ============================================================================
+
+@app.get("/api/v1/guidelines/session")
+async def get_guidelines_session(current_user: User = Depends(get_current_user)):
+    """
+    Returns the mortgage guidelines URL.
+    In the future, this could authenticate and return a session token.
+    """
+    guidelines_url = os.getenv("GUIDELINES_URL", "https://my.mortgageguidelines.com/")
+
+    # For now, just return the URL
+    # TODO: Implement actual authentication with stored credentials
+    # TODO: Use GUIDELINES_USERNAME and GUIDELINES_PASSWORD environment variables
+    return {
+        "url": guidelines_url,
+        "authenticated": False,
+        "message": "Please log in at the guidelines site"
+    }
+
+# ============================================================================
 # STARTUP EVENT
 # ============================================================================
 
