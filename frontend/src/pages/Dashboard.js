@@ -15,7 +15,7 @@ function Dashboard() {
   const [loanIssues, setLoanIssues] = useState([]);
   const [aiTasks, setAiTasks] = useState({ pending: [], waiting: [] });
   const [referralStats, setReferralStats] = useState({});
-  const [mumAlerts, setMumAlerts] = useState([]);
+  // const [mumAlerts, setMumAlerts] = useState([]); // Hard-coded in render
   const [teamStats, setTeamStats] = useState({});
   const [messages, setMessages] = useState([]);
 
@@ -36,7 +36,7 @@ function Dashboard() {
       setLoanIssues(mockLoanIssues());
       setAiTasks(mockAiTasks());
       setReferralStats(mockReferralStats());
-      setMumAlerts(mockMumAlerts());
+      // setMumAlerts(mockMumAlerts()); // Hard-coded in render
       setTeamStats(mockTeamStats());
       setMessages(mockMessages());
 
@@ -54,7 +54,7 @@ function Dashboard() {
       setLoanIssues(mockLoanIssues());
       setAiTasks(mockAiTasks());
       setReferralStats(mockReferralStats());
-      setMumAlerts(mockMumAlerts());
+      // setMumAlerts(mockMumAlerts()); // Hard-coded in render
       setTeamStats(mockTeamStats());
       setMessages(mockMessages());
     } finally {
@@ -354,19 +354,33 @@ function Dashboard() {
         <div className="dashboard-block mum-block">
           <div className="block-header">
             <h2>♻️ Client for Life Engine (MUM)</h2>
-            <span className="mum-count">{mumAlerts.length} actions</span>
+            <span className="mum-count">3 actions</span>
           </div>
           <div className="mum-list">
-            {mumAlerts.filter(alert => alert && alert.icon).map((alert, idx) => (
-              <div key={idx} className="mum-item">
-                <div className="mum-icon">{alert.icon}</div>
-                <div className="mum-content">
-                  <div className="mum-title">{alert.title}</div>
-                  <div className="mum-client">{alert.client}</div>
-                </div>
-                <button className="btn-mum-action">{alert.action}</button>
+            <div className="mum-item">
+              <div className="mum-icon">📅</div>
+              <div className="mum-content">
+                <div className="mum-title">Annual review due</div>
+                <div className="mum-client">Tom Wilson</div>
               </div>
-            ))}
+              <button className="btn-mum-action">Schedule</button>
+            </div>
+            <div className="mum-item">
+              <div className="mum-icon">📉</div>
+              <div className="mum-content">
+                <div className="mum-title">Rate drop opportunity</div>
+                <div className="mum-client">Lisa Brown</div>
+              </div>
+              <button className="btn-mum-action">Send alert</button>
+            </div>
+            <div className="mum-item">
+              <div className="mum-icon">🎂</div>
+              <div className="mum-content">
+                <div className="mum-title">Home anniversary</div>
+                <div className="mum-client">Mark Taylor</div>
+              </div>
+              <button className="btn-mum-action">Send card</button>
+            </div>
           </div>
         </div>
 
@@ -542,11 +556,11 @@ const mockReferralStats = () => ({
   ]
 });
 
-const mockMumAlerts = () => [
-  { icon: '📅', title: 'Annual review due', client: 'Tom Wilson', action: 'Schedule' },
-  { icon: '📉', title: 'Rate drop opportunity', client: 'Lisa Brown', action: 'Send alert' },
-  { icon: '🎂', title: 'Home anniversary', client: 'Mark Taylor', action: 'Send card' }
-];
+// const mockMumAlerts = () => [
+//   { icon: '📅', title: 'Annual review due', client: 'Tom Wilson', action: 'Schedule' },
+//   { icon: '📉', title: 'Rate drop opportunity', client: 'Lisa Brown', action: 'Send alert' },
+//   { icon: '🎂', title: 'Home anniversary', client: 'Mark Taylor', action: 'Send card' }
+// ];
 
 const mockTeamStats = () => ({
   has_team: true,
