@@ -84,7 +84,7 @@ function Leads() {
     try {
       // Combine primary borrower data with property and loan data
       const primaryBorrower = borrowers[0];
-      const formData = {
+      const rawData = {
         name: `${primaryBorrower.first_name} ${primaryBorrower.last_name}`.trim(),
         email: primaryBorrower.email,
         phone: primaryBorrower.phone,
@@ -95,6 +95,25 @@ function Leads() {
         ...propertyData,
         ...loanData,
       };
+
+      // Clean up data - convert empty strings to null for numeric fields
+      const formData = Object.entries(rawData).reduce((acc, [key, value]) => {
+        // Skip empty values
+        if (value === '' || value === undefined || value === null) {
+          return acc;
+        }
+        // Convert numeric strings to numbers for numeric fields
+        if (['credit_score', 'annual_income', 'monthly_debts', 'property_value',
+             'down_payment', 'preapproval_amount'].includes(key)) {
+          const num = parseFloat(value);
+          if (!isNaN(num)) {
+            acc[key] = num;
+          }
+        } else {
+          acc[key] = value;
+        }
+        return acc;
+      }, {});
 
       if (editingLead) {
         await leadsAPI.update(editingLead.id, formData);
@@ -107,7 +126,7 @@ function Leads() {
       loadLeads();
     } catch (err) {
       console.error('Failed to save lead:', err);
-      alert('Failed to save lead');
+      alert('Failed to save lead: ' + (err.response?.data?.detail || err.message));
     }
   };
 
