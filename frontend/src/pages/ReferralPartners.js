@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { partnersAPI } from '../services/api';
 import './ReferralPartners.css';
 
 function ReferralPartners() {
+  const navigate = useNavigate();
   const [partners, setPartners] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -35,7 +37,8 @@ function ReferralPartners() {
     }
   };
 
-  const handleDeletePartner = async (id) => {
+  const handleDeletePartner = async (id, e) => {
+    e.stopPropagation();
     if (!window.confirm('Delete this referral partner?')) return;
     try {
       await partnersAPI.delete(id);
@@ -55,7 +58,7 @@ function ReferralPartners() {
       silver: 'tier-silver',
       bronze: 'tier-bronze',
     };
-    return tierMap[tier] || 'tier-bronze';
+    return tierMap[tier?.toLowerCase()] || 'tier-bronze';
   };
 
   return (
@@ -94,60 +97,66 @@ function ReferralPartners() {
       {loading ? (
         <div className="loading">Loading partners...</div>
       ) : (
-        <div className="partners-grid">
-          {filteredPartners.map((partner) => (
-            <div key={partner.id} className="partner-card">
-              <div className="partner-header">
-                <div>
-                  <h3>{partner.name}</h3>
-                  <p className="company">{partner.company || 'No company'}</p>
-                </div>
-                <span className={`tier-badge ${getTierBadgeClass(partner.loyalty_tier)}`}>
-                  {partner.loyalty_tier}
-                </span>
-              </div>
-
-              <div className="partner-details">
-                <div className="detail-item">
-                  <label>Type</label>
-                  <p>{partner.type || 'N/A'}</p>
-                </div>
-                <div className="detail-item">
-                  <label>Email</label>
-                  <p>{partner.email || 'N/A'}</p>
-                </div>
-                <div className="detail-item">
-                  <label>Phone</label>
-                  <p>{partner.phone || 'N/A'}</p>
-                </div>
-              </div>
-
-              <div className="partner-stats">
-                <div className="stat">
-                  <span className="stat-value">{partner.referrals_in}</span>
-                  <span className="stat-label">Referrals In</span>
-                </div>
-                <div className="stat">
-                  <span className="stat-value">{partner.closed_loans}</span>
-                  <span className="stat-label">Closed Loans</span>
-                </div>
-                <div className="stat">
-                  <span className="stat-value">${(partner.volume / 1000000).toFixed(1)}M</span>
-                  <span className="stat-label">Volume</span>
-                </div>
-              </div>
-
-              <div className="partner-actions">
-                <button className="btn-view">View Details</button>
-                <button
-                  className="btn-delete"
-                  onClick={() => handleDeletePartner(partner.id)}
+        <div className="partners-list">
+          <table className="partners-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Company</th>
+                <th>Type</th>
+                <th>Tier</th>
+                <th>Contact</th>
+                <th>Referrals In</th>
+                <th>Closed Loans</th>
+                <th>Volume</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredPartners.map((partner) => (
+                <tr
+                  key={partner.id}
+                  className="partner-row"
+                  onClick={() => navigate(`/referral-partners/${partner.id}`)}
                 >
-                  Delete
-                </button>
-              </div>
+                  <td className="partner-name">{partner.name}</td>
+                  <td>{partner.company || 'N/A'}</td>
+                  <td>{partner.type || 'N/A'}</td>
+                  <td>
+                    <span className={`tier-badge ${getTierBadgeClass(partner.loyalty_tier)}`}>
+                      {partner.loyalty_tier || 'Bronze'}
+                    </span>
+                  </td>
+                  <td>
+                    <div className="contact-info">
+                      <div>{partner.email || 'N/A'}</div>
+                      <div className="phone">{partner.phone || 'N/A'}</div>
+                    </div>
+                  </td>
+                  <td className="stat-cell">{partner.referrals_in || 0}</td>
+                  <td className="stat-cell">{partner.closed_loans || 0}</td>
+                  <td className="stat-cell">
+                    ${((partner.volume || 0) / 1000000).toFixed(1)}M
+                  </td>
+                  <td>
+                    <button
+                      className="btn-delete-small"
+                      onClick={(e) => handleDeletePartner(partner.id, e)}
+                      title="Delete"
+                    >
+                      ×
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {filteredPartners.length === 0 && (
+            <div className="empty-state">
+              No referral partners found. Add your first partner to start tracking referrals.
             </div>
-          ))}
+          )}
         </div>
       )}
 
