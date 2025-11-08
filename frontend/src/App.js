@@ -24,6 +24,7 @@ import Assistant from './pages/Assistant';
 import ClientProfile from './pages/ClientProfile';
 import ReferralPartners from './pages/ReferralPartners';
 import ReferralPartnerDetail from './pages/ReferralPartnerDetail';
+import Settings from './pages/Settings';
 import './App.css';
 
 function PrivateRoute({ children }) {
@@ -247,6 +248,23 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <ReferralPartnerDetail />
+                  </main>
+                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    assistantOpen={assistantOpen}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <Settings />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                 </div>

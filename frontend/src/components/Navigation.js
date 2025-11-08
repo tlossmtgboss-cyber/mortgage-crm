@@ -61,13 +61,22 @@ function Navigation({ onToggleAssistant, assistantOpen }) {
           </Link>
         </div>
 
-        <button
-          className={`ai-assistant-toggle ${assistantOpen ? 'active' : ''}`}
-          onClick={onToggleAssistant}
-          title="Toggle AI Assistant"
-        >
-          AI Assistant
-        </button>
+        <div className="nav-actions">
+          <Link
+            to="/settings"
+            className={`settings-link ${isActive('/settings') ? 'active' : ''}`}
+            title="Settings"
+          >
+            ⚙️
+          </Link>
+          <button
+            className={`ai-assistant-toggle ${assistantOpen ? 'active' : ''}`}
+            onClick={onToggleAssistant}
+            title="Toggle AI Assistant"
+          >
+            AI Assistant
+          </button>
+        </div>
       </div>
     </nav>
   );
