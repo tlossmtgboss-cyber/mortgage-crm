@@ -59,6 +59,12 @@ function Navigation({ onToggleAssistant, assistantOpen }) {
           >
             Partners
           </Link>
+          <Link
+            to="/guidelines"
+            className={`nav-link ${isActive('/guidelines') ? 'active' : ''}`}
+          >
+            Guidelines
+          </Link>
         </div>
 
         <div className="nav-actions">
