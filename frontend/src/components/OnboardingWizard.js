@@ -248,19 +248,20 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
       }
     ];
 
-    // Update milestones with generated data
-    updateField('milestones', generatedMilestones);
-
     // Calculate stats
     const totalTasks = generatedMilestones.reduce((total, m) => total + m.tasks.length, 0);
 
-    // Update process tree state
-    updateField('processTree', {
-      generated: true,
-      milestones: generatedMilestones.length,
-      tasks: totalTasks,
-      roles: 5
-    });
+    // Update BOTH milestones AND processTree in a single atomic update
+    setFormData(prevData => ({
+      ...prevData,
+      milestones: generatedMilestones,
+      processTree: {
+        generated: true,
+        milestones: generatedMilestones.length,
+        tasks: totalTasks,
+        roles: 5
+      }
+    }));
 
     setIsProcessing(false);
   };
