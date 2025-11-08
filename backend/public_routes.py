@@ -226,6 +226,45 @@ class WorkflowCreate(BaseModel):
 # REGISTRATION & EMAIL VERIFICATION
 # ============================================================================
 
+@router.get("/api/v1/migrate-database")
+async def migrate_database(db: Session = Depends(get_db)):
+    """Add missing onboarding_completed column to users table"""
+    try:
+        from sqlalchemy import text
+
+        # Check if column exists
+        result = db.execute(text("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name='users'
+            AND column_name='onboarding_completed'
+        """))
+
+        if result.fetchone() is None:
+            # Add the column
+            db.execute(text("""
+                ALTER TABLE users
+                ADD COLUMN onboarding_completed BOOLEAN DEFAULT FALSE
+            """))
+            db.commit()
+            return {
+                "status": "success",
+                "message": "Added onboarding_completed column to users table"
+            }
+        else:
+            return {
+                "status": "already_exists",
+                "message": "Column already exists, no migration needed"
+            }
+
+    except Exception as e:
+        db.rollback()
+        return {
+            "status": "error",
+            "error": str(e),
+            "error_type": type(e).__name__
+        }
+
 @router.get("/api/v1/register-test")
 async def register_test():
     """Test endpoint to verify imports and JWT creation"""
