@@ -27,5 +27,20 @@
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
+    <script>
+      // Global error handler to prevent blank pages
+      window.addEventListener('error', function(event) {
+        console.error('Global error caught:', event.error);
+        const root = document.getElementById('root');
+        if (root && (!root.innerHTML || root.innerHTML.trim() === '')) {
+          root.innerHTML = '<div style="padding: 20px; font-family: Arial, sans-serif;"><h1>Application Error</h1><p>An error occurred while loading the application.</p><p style="margin-top: 20px;">Error: ' + (event.error ? event.error.toString() : event.message) + '</p><button onclick="localStorage.clear(); window.location.reload();" style="margin-top: 20px; padding: 10px 20px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px;">Clear Cache & Reload</button></div>';
+        }
+      });
+
+      // Catch unhandled promise rejections
+      window.addEventListener('unhandledrejection', function(event) {
+        console.error('Unhandled promise rejection:', event.reason);
+      });
+    </script>
   </body>
 </html>
