@@ -705,60 +705,76 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
                   ) : (
                     currentMilestone.tasks.map((task, taskIndex) => (
                       <div key={taskIndex} className="task-item">
-                        <div className="task-name">
-                          <input
-                            type="text"
-                            value={task.name}
-                            onChange={(e) => updateTask(activeMilestone, taskIndex, 'name', e.target.value)}
-                            placeholder="Task name"
-                            className="task-name-input"
-                          />
-                        </div>
-                        <div className="task-owner">
-                          <select
-                            value={task.owner}
-                            onChange={(e) => updateTask(activeMilestone, taskIndex, 'owner', e.target.value)}
-                            className="owner-select"
-                          >
-                            {availableRoles.map(role => (
-                              <option key={role} value={role}>{role}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div className="task-sla">
-                          <input
-                            type="number"
-                            value={task.sla}
-                            onChange={(e) => updateTask(activeMilestone, taskIndex, 'sla', parseInt(e.target.value) || 0)}
-                            className="sla-input"
-                            min="1"
-                          />
-                          <select
-                            value={task.slaUnit}
-                            onChange={(e) => updateTask(activeMilestone, taskIndex, 'slaUnit', e.target.value)}
-                            className="sla-unit-select"
-                          >
-                            <option value="hours">hours</option>
-                            <option value="days">days</option>
-                          </select>
-                        </div>
-                        <div className="task-auto">
-                          <label>
+                        <div className="task-header">
+                          <div className="task-name-section">
+                            <label className="task-label">Task</label>
                             <input
-                              type="checkbox"
-                              checked={task.aiAuto}
-                              onChange={(e) => updateTask(activeMilestone, taskIndex, 'aiAuto', e.target.checked)}
+                              type="text"
+                              value={task.name}
+                              onChange={(e) => updateTask(activeMilestone, taskIndex, 'name', e.target.value)}
+                              placeholder="What needs to be done?"
+                              className="task-name-input"
                             />
-                            AI Auto
-                          </label>
+                          </div>
+                          <button
+                            className="btn-remove-task"
+                            onClick={() => removeTask(activeMilestone, taskIndex)}
+                            title="Remove Task"
+                          >
+                            ×
+                          </button>
                         </div>
-                        <button
-                          className="btn-remove-task"
-                          onClick={() => removeTask(activeMilestone, taskIndex)}
-                          title="Remove Task"
-                        >
-                          ×
-                        </button>
+
+                        <div className="task-details">
+                          <div className="task-detail-group">
+                            <label className="detail-label">Assigned To</label>
+                            <select
+                              value={task.owner}
+                              onChange={(e) => updateTask(activeMilestone, taskIndex, 'owner', e.target.value)}
+                              className="owner-select"
+                            >
+                              {availableRoles.map(role => (
+                                <option key={role} value={role}>{role}</option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="task-detail-group">
+                            <label className="detail-label">Complete Within</label>
+                            <div className="task-sla">
+                              <input
+                                type="number"
+                                value={task.sla}
+                                onChange={(e) => updateTask(activeMilestone, taskIndex, 'sla', parseInt(e.target.value) || 0)}
+                                className="sla-input"
+                                min="1"
+                              />
+                              <select
+                                value={task.slaUnit}
+                                onChange={(e) => updateTask(activeMilestone, taskIndex, 'slaUnit', e.target.value)}
+                                className="sla-unit-select"
+                              >
+                                <option value="hours">hours</option>
+                                <option value="days">days</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="task-detail-group task-ai-section">
+                            <label className="ai-auto-label">
+                              <input
+                                type="checkbox"
+                                checked={task.aiAuto}
+                                onChange={(e) => updateTask(activeMilestone, taskIndex, 'aiAuto', e.target.checked)}
+                                className="ai-auto-checkbox"
+                              />
+                              <span className="ai-auto-text">
+                                <strong>AI Auto</strong>
+                                <span className="ai-auto-hint">AI attempts task, escalates to user if needed, learns for next time</span>
+                              </span>
+                            </label>
+                          </div>
+                        </div>
                       </div>
                     ))
                   )}

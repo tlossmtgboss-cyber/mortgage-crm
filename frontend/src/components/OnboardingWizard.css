@@ -764,19 +764,44 @@
 }
 
 .task-item {
-  display: grid;
-  grid-template-columns: 2fr 1.3fr 1.2fr auto auto;
-  gap: 12px;
-  align-items: center;
-  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
   background: #f8f9fa;
   border-radius: 8px;
   transition: all 0.2s ease;
+  border: 1px solid transparent;
 }
 
 .task-item:hover {
   background: #e9ecef;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  border-color: #cbd5e1;
+}
+
+.task-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.task-name-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.task-label,
+.detail-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .task-name {
@@ -791,7 +816,7 @@
   font-size: 14px;
   font-weight: 500;
   color: #374151;
-  padding: 8px 12px;
+  padding: 10px 14px;
   border-radius: 6px;
   transition: all 0.2s ease;
 }
@@ -804,6 +829,23 @@
 
 .task-name-input::placeholder {
   color: #9ca3af;
+}
+
+.task-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.task-detail-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.task-ai-section {
+  grid-column: 1 / -1;
+  padding-top: 4px;
 }
 
 .owner-select,
@@ -847,6 +889,42 @@
   outline: none;
   border-color: #764ba2;
   box-shadow: 0 0 0 3px rgba(118, 75, 162, 0.1);
+}
+
+.ai-auto-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.ai-auto-checkbox {
+  margin-top: 2px;
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  flex-shrink: 0;
+  accent-color: #764ba2;
+}
+
+.ai-auto-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.ai-auto-text strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.ai-auto-hint {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 400;
+  line-height: 1.4;
 }
 
 .task-auto label {
