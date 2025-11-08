@@ -81,6 +81,8 @@ function Scorecard() {
     referralSources: [
       { source: 'Client', referrals: 50, closedVolume: 17514870 },
       { source: 'Realtor', referrals: 10, closedVolume: 3098843 },
+      { source: 'Repeat Client', referrals: 0, closedVolume: 0 },
+      { source: 'Self Generated', referrals: 0, closedVolume: 0 },
       { source: 'Social Media/Network', referrals: 0, closedVolume: 0 },
       { source: 'Website', referrals: 0, closedVolume: 0 },
     ],
