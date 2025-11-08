@@ -621,8 +621,22 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
         <div className="step-header">
           <div className="step-icon">🗂️</div>
           <h2>Who Does What, When</h2>
-          <p className="step-description">Confirm and adjust your process ownership and SLAs</p>
+          <p className="step-description">
+            {formData.processTree
+              ? '✓ Review AI-generated tasks and assign ownership'
+              : 'Configure your process ownership and SLAs'}
+          </p>
         </div>
+
+        {formData.processTree && (
+          <div className="ai-generated-banner">
+            <span className="banner-icon">🤖</span>
+            <div className="banner-content">
+              <strong>AI-Generated Process Tree</strong>
+              <p>Review and approve the tasks below. You can edit, add, or remove any milestone or task.</p>
+            </div>
+          </div>
+        )}
 
         <div className="process-tree-editor">
           <div className="milestone-column">

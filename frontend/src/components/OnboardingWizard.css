@@ -501,6 +501,42 @@
   flex: 1;
 }
 
+/* AI Generated Banner */
+.ai-generated-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%);
+  border: 2px solid #c4b5fd;
+  border-radius: 12px;
+  margin-bottom: 24px;
+}
+
+.banner-icon {
+  font-size: 28px;
+  flex-shrink: 0;
+}
+
+.banner-content {
+  flex: 1;
+}
+
+.banner-content strong {
+  display: block;
+  font-size: 15px;
+  font-weight: 700;
+  color: #5b21b6;
+  margin-bottom: 4px;
+}
+
+.banner-content p {
+  font-size: 13px;
+  color: #6b21a8;
+  margin: 0;
+  line-height: 1.5;
+}
+
 /* Process tree editor */
 .process-tree-editor {
   display: grid;
