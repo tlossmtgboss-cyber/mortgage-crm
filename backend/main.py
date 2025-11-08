@@ -2807,7 +2807,7 @@ Be specific with numbers, percentages, and requirements.
 If you're not certain about specific current limits or requirements, acknowledge that guidelines may change."""
 
         message = client.messages.create(
-            model="claude-3-5-sonnet-20240620",
+            model="claude-3-haiku-20240307",
             max_tokens=2048,
             system=system_prompt,
             messages=[{"role": "user", "content": question}]
