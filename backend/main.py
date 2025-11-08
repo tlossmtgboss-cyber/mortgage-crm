@@ -2905,7 +2905,14 @@ If you're not certain about specific current limits or requirements, acknowledge
 
     except Exception as e:
         logger.error(f"Error in AI Underwriter: {e}")
-        raise HTTPException(status_code=500, detail="Failed to process question")
+        error_msg = str(e)
+        # Return more detailed error for debugging
+        if "authentication" in error_msg.lower() or "api key" in error_msg.lower():
+            raise HTTPException(status_code=500, detail=f"Anthropic API authentication error: {error_msg}")
+        elif "quota" in error_msg.lower() or "credit" in error_msg.lower():
+            raise HTTPException(status_code=500, detail=f"Anthropic API quota/billing error: {error_msg}")
+        else:
+            raise HTTPException(status_code=500, detail=f"AI Underwriter error: {error_msg}")
 
 # ============================================================================
 # EMAIL INTEGRATION - MICROSOFT GRAPH OAUTH
