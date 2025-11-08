@@ -18,7 +18,6 @@ function Dashboard() {
   const [mumAlerts, setMumAlerts] = useState([]);
   const [teamStats, setTeamStats] = useState({});
   const [messages, setMessages] = useState([]);
-  const [completedTasks, setCompletedTasks] = useState(new Set());
 
   useEffect(() => {
     loadDashboard();
@@ -63,147 +62,19 @@ function Dashboard() {
     }
   };
 
-  // Aggregate all tasks from different containers into AI Prioritized Tasks
-  const getAggregatedTasks = () => {
-    const tasks = [];
+  // Count all tasks from different containers for AI Prioritized Tasks display
+  const getAggregatedTasksCount = () => {
+    let count = 0;
 
-    // Add manual prioritized tasks
-    prioritizedTasks.forEach((task, idx) => {
-      if (!completedTasks.has(`priority-${idx}`)) {
-        tasks.push({
-          id: `priority-${idx}`,
-          ...task,
-          source: 'Manual Priority',
-          sourceIcon: '🎯'
-        });
-      }
-    });
+    count += prioritizedTasks.length;
+    count += loanIssues.length;
+    count += aiTasks.pending.length;
+    count += aiTasks.waiting.length;
+    count += mumAlerts.length;
+    count += (leadMetrics.alerts || []).length;
+    count += messages.filter(m => !m.read).length;
 
-    // Add loan issues as critical tasks
-    loanIssues.forEach((issue, idx) => {
-      if (!completedTasks.has(`issue-${idx}`)) {
-        tasks.push({
-          id: `issue-${idx}`,
-          title: issue.issue,
-          borrower: issue.borrower,
-          stage: 'Milestone Alert',
-          urgency: 'critical',
-          ai_action: null,
-          source: 'Milestone Risk',
-          sourceIcon: '🔥',
-          action: issue.action
-        });
-      }
-    });
-
-    // Add AI pending tasks
-    aiTasks.pending.forEach((task, idx) => {
-      if (!completedTasks.has(`ai-pending-${idx}`)) {
-        tasks.push({
-          id: `ai-pending-${idx}`,
-          title: task.task,
-          borrower: 'AI Task',
-          stage: 'Pending Approval',
-          urgency: 'high',
-          ai_action: task.what_ai_did,
-          source: 'AI Engine',
-          sourceIcon: '🤖',
-          confidence: task.confidence
-        });
-      }
-    });
-
-    // Add AI waiting tasks
-    aiTasks.waiting.forEach((task, idx) => {
-      if (!completedTasks.has(`ai-waiting-${idx}`)) {
-        tasks.push({
-          id: `ai-waiting-${idx}`,
-          title: task.task,
-          borrower: 'Needs Input',
-          stage: 'Waiting',
-          urgency: 'medium',
-          ai_action: null,
-          source: 'AI Engine',
-          sourceIcon: '🤖'
-        });
-      }
-    });
-
-    // Add MUM alerts
-    mumAlerts.forEach((alert, idx) => {
-      if (!completedTasks.has(`mum-${idx}`)) {
-        tasks.push({
-          id: `mum-${idx}`,
-          title: alert.title,
-          borrower: alert.client,
-          stage: 'Client Retention',
-          urgency: 'medium',
-          ai_action: null,
-          source: 'Client for Life',
-          sourceIcon: '♻️',
-          action: alert.action
-        });
-      }
-    });
-
-    // Add lead alerts
-    if (leadMetrics.alerts) {
-      leadMetrics.alerts.forEach((alert, idx) => {
-        if (!completedTasks.has(`lead-${idx}`)) {
-          tasks.push({
-            id: `lead-${idx}`,
-            title: alert,
-            borrower: 'Multiple Leads',
-            stage: 'Lead Follow-up',
-            urgency: 'high',
-            ai_action: null,
-            source: 'Leads Engine',
-            sourceIcon: '🚀'
-          });
-        }
-      });
-    }
-
-    // Add unread messages as tasks
-    messages.filter(m => !m.read).forEach((msg, idx) => {
-      if (!completedTasks.has(`message-${idx}`)) {
-        tasks.push({
-          id: `message-${idx}`,
-          title: `Respond to ${msg.from}`,
-          borrower: msg.from,
-          stage: 'Communication',
-          urgency: 'medium',
-          ai_action: msg.ai_summary,
-          source: 'Messages',
-          sourceIcon: '📬'
-        });
-      }
-    });
-
-    return tasks;
-  };
-
-  const handleCompleteTask = (taskId) => {
-    setCompletedTasks(prev => {
-      const newCompleted = new Set(prev);
-      newCompleted.add(taskId);
-      return newCompleted;
-    });
-  };
-
-  const getUrgencyColor = (urgency) => {
-    const colors = {
-      'critical': '#dc2626',
-      'high': '#f59e0b',
-      'medium': '#3b82f6',
-      'low': '#10b981'
-    };
-    return colors[urgency] || '#6b7280';
-  };
-
-  const handleApproveAiTask = async (taskId) => {
-    // TODO: Implement AI task approval
-    alert(`Approved task ${taskId}`);
+    return count;
   };
 
   if (loading) {
@@ -234,11 +105,11 @@ function Dashboard() {
         >
           <div className="block-header">
             <h2>🎯 AI Prioritized Tasks (Today)</h2>
-            <span className="task-count">{getAggregatedTasks().length} tasks</span>
+            <span className="task-count">{getAggregatedTasksCount()} tasks</span>
           </div>
           <div className="task-summary-view">
             <div className="task-count-display">
-              <div className="count-number">{getAggregatedTasks().length}</div>
+              <div className="count-number">{getAggregatedTasksCount()}</div>
               <div className="count-label">Outstanding Tasks</div>
             </div>
             <div className="click-to-view">
@@ -350,7 +221,7 @@ function Dashboard() {
             </div>
             <div className="ai-alerts-section">
               <div className="ai-alert-title">🚨 AI Alerts</div>
-              {leadMetrics.alerts && leadMetrics.alerts.filter((a, idx) => a && !completedTasks.has(`lead-${idx}`)).map((alert, idx) => (
+              {leadMetrics.alerts && leadMetrics.alerts.filter(a => a).map((alert, idx) => (
                 <div key={idx} className="ai-alert-item">
                   <span className="alert-dot"></span>
                   {alert}
@@ -364,10 +235,10 @@ function Dashboard() {
         <div className="dashboard-block issues-block">
           <div className="block-header">
             <h2>🔥 Milestone Risk Alerts</h2>
-            <span className="issue-count">{loanIssues.filter((issue, idx) => !completedTasks.has(`issue-${idx}`)).length} issues</span>
+            <span className="issue-count">{loanIssues.length} issues</span>
           </div>
           <div className="issues-list">
-            {loanIssues.filter((issue, idx) => issue && issue.borrower && !completedTasks.has(`issue-${idx}`)).map((issue, index) => (
+            {loanIssues.filter(issue => issue && issue.borrower).map((issue, index) => (
               <div key={index} className="issue-item">
                 <div className="issue-main">
                   <div className="issue-borrower">{issue.borrower}</div>
@@ -384,48 +255,7 @@ function Dashboard() {
           </div>
         </div>
 
-        {/* 6. AI TASK ENGINE PANEL */}
-        <div className="dashboard-block ai-engine-block">
-          <div className="block-header">
-            <h2>🤖 AI Task Engine</h2>
-          </div>
-          <div className="ai-engine-sections">
-            <div className="ai-section">
-              <h3>Pending Your Approval ({aiTasks.pending.length})</h3>
-              {aiTasks.pending.filter(task => task && task.task).map((task, idx) => (
-                <div key={idx} className="ai-task-card">
-                  <div className="ai-task-header">
-                    <span className="task-name">{task.task}</span>
-                    <span className="confidence-badge">{task.confidence}% confident</span>
-                  </div>
-                  <div className="ai-task-description">{task.what_ai_did}</div>
-                  <div className="ai-task-actions">
-                    <button className="btn-approve" onClick={() => handleApproveAiTask(task.id)}>
-                      ✓ Approve
-                    </button>
-                    <button className="btn-fix">Fix</button>
-                    <button className="btn-coach">Coach AI</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="ai-section">
-              <h3>Waiting for Your Input ({aiTasks.waiting.length})</h3>
-              {aiTasks.waiting.filter(task => task && task.task).map((task, idx) => (
-                <div key={idx} className="ai-task-simple">
-                  <span className="task-text">{task.task}</span>
-                  <div className="quick-actions">
-                    <button className="btn-quick-approve">✓</button>
-                    <button className="btn-quick-deny">✗</button>
-                    <button className="btn-quick-delegate">→</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* 7. REFERRALS & PARTNER HEALTH */}
+        {/* 6. REFERRALS & PARTNER HEALTH */}
         <div className="dashboard-block referrals-block">
           <div className="block-header">
             <h2>🤝 Referral Scoreboard</h2>
@@ -463,14 +293,14 @@ function Dashboard() {
           </div>
         </div>
 
-        {/* 8. CLIENT FOR LIFE ENGINE (MUM) */}
+        {/* 7. CLIENT FOR LIFE ENGINE (MUM) */}
         <div className="dashboard-block mum-block">
           <div className="block-header">
             <h2>♻️ Client for Life Engine (MUM)</h2>
-            <span className="mum-count">{mumAlerts.filter((alert, idx) => !completedTasks.has(`mum-${idx}`)).length} actions</span>
+            <span className="mum-count">{mumAlerts.length} actions</span>
           </div>
           <div className="mum-list">
-            {mumAlerts.filter((alert, idx) => !completedTasks.has(`mum-${idx}`)).map((alert, idx) => (
+            {mumAlerts.map((alert, idx) => (
               <div key={idx} className="mum-item">
                 <div className="mum-icon">{alert.icon}</div>
                 <div className="mum-content">
@@ -483,7 +313,7 @@ function Dashboard() {
           </div>
         </div>
 
-        {/* 9. TEAM OPERATIONS */}
+        {/* 8. TEAM OPERATIONS */}
         {teamStats.has_team && (
           <div className="dashboard-block team-block">
             <div className="block-header">
@@ -517,7 +347,7 @@ function Dashboard() {
           </div>
         )}
 
-        {/* 10. COMMUNICATION HUB */}
+        {/* 9. COMMUNICATION HUB */}
         <div className="dashboard-block messages-block">
           <div className="block-header">
             <h2>📬 Unified Messages</h2>

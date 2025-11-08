@@ -248,12 +248,238 @@
   color: var(--color-text-secondary);
 }
 
+/* AI Task Engine Section */
+.ai-engine-section {
+  margin-top: var(--space-xl);
+  padding: var(--space-xl);
+  background: var(--color-bg-base);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.section-title {
+  font-size: var(--font-2xl);
+  font-weight: var(--weight-bold);
+  color: var(--color-text-primary);
+  margin: 0 0 var(--space-lg) 0;
+}
+
+.ai-engine-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-xl);
+}
+
+.ai-engine-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.ai-column-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: var(--space-md);
+  border-bottom: 2px solid var(--color-border-light);
+}
+
+.ai-column-header h3 {
+  font-size: var(--font-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.ai-count-badge {
+  background: #667eea;
+  color: white;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.ai-tasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.ai-task-card {
+  padding: var(--space-md);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-base);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: all 150ms ease;
+}
+
+.ai-task-card:hover {
+  border-color: #667eea;
+  box-shadow: var(--shadow-md);
+}
+
+.ai-task-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.task-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+  flex: 1;
+}
+
+.confidence-badge {
+  background: #10b981;
+  color: white;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ai-task-description {
+  font-size: 13px;
+  color: #666;
+  line-height: 1.5;
+}
+
+.ai-task-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.btn-approve {
+  flex: 1;
+  padding: 8px 16px;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-approve:hover {
+  background: #059669;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+}
+
+.btn-fix,
+.btn-coach {
+  padding: 8px 16px;
+  background: white;
+  color: #667eea;
+  border: 2px solid #667eea;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-fix:hover,
+.btn-coach:hover {
+  background: #667eea;
+  color: white;
+}
+
+.ai-task-simple {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-md);
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-base);
+  gap: 12px;
+  transition: all 150ms ease;
+}
+
+.ai-task-simple:hover {
+  border-color: #667eea;
+  box-shadow: var(--shadow-sm);
+}
+
+.task-text {
+  font-size: 14px;
+  color: #1a1a1a;
+  flex: 1;
+}
+
+.quick-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-quick-approve,
+.btn-quick-deny,
+.btn-quick-delegate {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-quick-approve {
+  background: #10b981;
+  color: white;
+}
+
+.btn-quick-approve:hover {
+  background: #059669;
+  transform: scale(1.1);
+}
+
+.btn-quick-deny {
+  background: #ef4444;
+  color: white;
+}
+
+.btn-quick-deny:hover {
+  background: #dc2626;
+  transform: scale(1.1);
+}
+
+.btn-quick-delegate {
+  background: #3b82f6;
+  color: white;
+}
+
+.btn-quick-delegate:hover {
+  background: #2563eb;
+  transform: scale(1.1);
+}
+
 @media (max-width: 768px) {
   .tasks-page {
     padding: var(--space-md);
   }
 
   .tasks-sections {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-engine-grid {
     grid-template-columns: 1fr;
   }
 }

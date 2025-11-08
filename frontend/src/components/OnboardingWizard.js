@@ -874,11 +874,17 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
                       <div
                         key={taskIndex}
                         className="task-item"
-                        draggable
-                        onDragStart={(e) => handleDragStart(e, activeMilestone, taskIndex)}
-                        onDragEnd={() => setDraggedTask(null)}
                       >
                         <div className="task-header">
+                          <div
+                            className="drag-handle"
+                            draggable="true"
+                            onDragStart={(e) => handleDragStart(e, activeMilestone, taskIndex)}
+                            onDragEnd={() => setDraggedTask(null)}
+                            title="Drag to move task to another milestone"
+                          >
+                            ⋮⋮
+                          </div>
                           <div className="task-name-section">
                             <label className="task-label">Task</label>
                             <input
