@@ -40,6 +40,32 @@ function App() {
   };
 
   const handleOnboardingComplete = () => {
+    // Update localStorage to mark onboarding as completed
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        user.onboarding_completed = true;
+        localStorage.setItem('user', JSON.stringify(user));
+      }
+    } catch (error) {
+      console.error('Error updating user data:', error);
+    }
+    setShowOnboarding(false);
+  };
+
+  const handleOnboardingSkip = () => {
+    // Also mark as completed when skipped
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        user.onboarding_completed = true;
+        localStorage.setItem('user', JSON.stringify(user));
+      }
+    } catch (error) {
+      console.error('Error updating user data:', error);
+    }
     setShowOnboarding(false);
   };
 
@@ -119,7 +145,10 @@ function App() {
                 <>
                   {/* Show onboarding wizard for authenticated users who haven't completed it */}
                   {showOnboarding && !checkingOnboarding && (
-                    <OnboardingWizard onComplete={handleOnboardingComplete} />
+                    <OnboardingWizard
+                      onComplete={handleOnboardingComplete}
+                      onSkip={handleOnboardingSkip}
+                    />
                   )}
                   <div className="app-layout">
                     <Navigation

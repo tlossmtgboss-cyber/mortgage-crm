@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import './OnboardingWizard.css';
 
-const OnboardingWizard = ({ onComplete }) => {
+const OnboardingWizard = ({ onComplete, onSkip }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [activeMilestone, setActiveMilestone] = useState(0);
   const [formData, setFormData] = useState({
@@ -1029,6 +1029,13 @@ const OnboardingWizard = ({ onComplete }) => {
   return (
     <div className="onboarding-overlay">
       <div className="onboarding-wizard-v2">
+        {/* Close Button */}
+        {onSkip && (
+          <button className="btn-close-wizard" onClick={onSkip} title="Skip for now">
+            ×
+          </button>
+        )}
+
         {/* Progress Bar */}
         <div className="wizard-progress">
           <div className="progress-bar-container">

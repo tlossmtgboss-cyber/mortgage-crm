@@ -45,6 +45,34 @@
   }
 }
 
+/* Close button */
+.btn-close-wizard {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f8f9fa;
+  color: #6c757d;
+  border: none;
+  border-radius: 50%;
+  font-size: 28px;
+  font-weight: 300;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  z-index: 10;
+  line-height: 1;
+}
+
+.btn-close-wizard:hover {
+  background: #dc2626;
+  color: white;
+  transform: scale(1.1);
+}
+
 /* Progress bar at top */
 .wizard-progress {
   background: #f8f9fa;
