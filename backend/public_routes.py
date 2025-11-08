@@ -215,156 +215,122 @@ class WorkflowCreate(BaseModel):
 @router.post("/api/v1/register")
 async def register_user(registration: UserRegistration, db: Session = Depends(get_db)):
     """
-    Register a new user with Stripe subscription
+    Register a new user - PAYMENT BYPASSED FOR ALL USERS
 
     Flow:
     1. Validate email not already registered
-    2. Create Stripe customer (or skip in dev mode)
-    3. Create user in database (unverified)
-    4. Create Stripe subscription with trial (or skip in dev mode)
-    5. Send verification email
-    6. Return user info and client secret for payment setup
-
-    DEV MODE: Use email ending in @dev.local to bypass Stripe
+    2. Create user in database (auto-verified and activated)
+    3. Create mock subscription record
+    4. Create onboarding progress
+    5. Generate JWT token and return for immediate login
     """
 
-    # Check if user already exists
-    existing_user = db.query(User).filter(User.email == registration.email).first()
-    if existing_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
-
-    # Validate plan
-    plan_info = stripe_service.get_plan_info(registration.plan)
-    if not plan_info:
-        raise HTTPException(status_code=400, detail="Invalid subscription plan")
-
-    # TEMPORARY: Bypass payment for all users during development
-    # TODO: Re-enable Stripe when ready for production
-    is_dev_mode = True  # All registrations bypass payment for now
-    # is_dev_mode = registration.email.endswith('@dev.local') or registration.email.endswith('@test.com')
-
     try:
-        stripe_customer = None
-        stripe_subscription = None
-        client_secret = None
+        # Check if user already exists
+        existing_user = db.query(User).filter(User.email == registration.email).first()
+        if existing_user:
+            raise HTTPException(status_code=400, detail="Email already registered")
 
-        if not is_dev_mode:
-            # Production mode - use Stripe
-            # Create Stripe customer
-            stripe_customer = stripe_service.create_customer(
-                email=registration.email,
-                name=registration.full_name,
-                metadata={
-                    "company": registration.company_name,
-                    "phone": registration.phone
-                }
-            )
+        # Validate plan (just to ensure valid plan key)
+        plan_info = stripe_service.get_plan_info(registration.plan)
+        if not plan_info:
+            # Default to professional if invalid plan
+            registration.plan = "professional"
+            plan_info = stripe_service.get_plan_info("professional")
 
-        # Create user in database (unverified)
+        logger.info(f"Starting registration for: {registration.email}")
+
+        # Create user in database (auto-verified and activated)
         db_user = User(
             email=registration.email,
             hashed_password=get_password_hash(registration.password),
             full_name=registration.full_name,
-            email_verified=is_dev_mode,  # Auto-verify dev accounts
-            is_active=is_dev_mode,  # Auto-activate dev accounts
+            email_verified=True,  # Auto-verify all accounts
+            is_active=True,  # Auto-activate all accounts
             user_metadata={
-                "company_name": registration.company_name,
-                "phone": registration.phone,
+                "company_name": registration.company_name or "",
+                "phone": registration.phone or "",
                 "plan": registration.plan,
-                "dev_mode": is_dev_mode
+                "dev_mode": True
             }
         )
         db.add(db_user)
         db.commit()
         db.refresh(db_user)
 
-        if not is_dev_mode:
-            # Production mode - create Stripe subscription
-            stripe_subscription = stripe_service.create_subscription(
-                customer_id=stripe_customer.id,
-                price_id=plan_info["stripe_price_id"],
-                trial_days=14
-            )
+        logger.info(f"User created with ID: {db_user.id}")
 
-            # Save subscription to database
+        # Create mock subscription record
+        try:
             db_subscription = Subscription(
                 user_id=db_user.id,
-                stripe_customer_id=stripe_customer.id,
-                stripe_subscription_id=stripe_subscription.id,
-                status="trialing",
-                current_period_start=datetime.fromtimestamp(stripe_subscription.current_period_start),
-                current_period_end=datetime.fromtimestamp(stripe_subscription.current_period_end),
-                trial_end=datetime.fromtimestamp(stripe_subscription.trial_end) if stripe_subscription.trial_end else None
-            )
-            db.add(db_subscription)
-
-            # Get client secret for payment setup
-            if stripe_subscription.latest_invoice:
-                if hasattr(stripe_subscription.latest_invoice, 'payment_intent'):
-                    client_secret = stripe_subscription.latest_invoice.payment_intent.client_secret
-        else:
-            # Dev mode - create mock subscription
-            db_subscription = Subscription(
-                user_id=db_user.id,
-                stripe_customer_id="dev_customer_" + str(db_user.id),
-                stripe_subscription_id="dev_sub_" + str(db_user.id),
+                stripe_customer_id=f"dev_customer_{db_user.id}",
+                stripe_subscription_id=f"dev_sub_{db_user.id}",
                 status="active",
                 current_period_start=datetime.utcnow(),
                 current_period_end=datetime.utcnow() + timedelta(days=365),
                 trial_end=None
             )
             db.add(db_subscription)
+            db.commit()
+            logger.info(f"Subscription created for user {db_user.id}")
+        except Exception as sub_error:
+            logger.warning(f"Subscription creation failed (non-critical): {str(sub_error)}")
+            # Continue even if subscription fails
 
         # Create onboarding progress
-        onboarding = OnboardingProgress(
-            user_id=db_user.id,
-            current_step=1,
-            steps_completed=[]
-        )
-        db.add(onboarding)
-
-        db.commit()
-
-        # Generate and send verification email (skip in dev mode)
-        if not is_dev_mode:
-            verification_token = VerificationTokenService.create_verification_token(
-                db, db_user.id, registration.email
+        try:
+            onboarding = OnboardingProgress(
+                user_id=db_user.id,
+                current_step=1,
+                steps_completed=[]
             )
-            email_service.send_verification_email(
-                registration.email,
-                verification_token,
-                registration.full_name
-            )
+            db.add(onboarding)
+            db.commit()
+            logger.info(f"Onboarding progress created for user {db_user.id}")
+        except Exception as onboard_error:
+            logger.warning(f"Onboarding creation failed (non-critical): {str(onboard_error)}")
+            # Continue even if onboarding progress creation fails
 
-        logger.info(f"User registered: {registration.email}, dev_mode: {is_dev_mode}")
+        # Generate access token for immediate login
+        try:
+            access_token = create_access_token(data={"sub": db_user.email})
+        except Exception as token_error:
+            logger.error(f"Token generation failed: {str(token_error)}")
+            raise HTTPException(status_code=500, detail="Failed to generate authentication token")
 
-        response_data = {
-            "message": "Registration successful." if is_dev_mode else "Registration successful. Please check your email to verify your account.",
+        logger.info(f"Registration successful for: {registration.email}")
+
+        return {
+            "message": "Registration successful! Redirecting to dashboard...",
             "user_id": db_user.id,
             "email": db_user.email,
-            "dev_mode": is_dev_mode
+            "full_name": db_user.full_name,
+            "access_token": access_token,
+            "token_type": "bearer",
+            "dev_mode": True,
+            "redirect_to": "/dashboard"
         }
 
-        if not is_dev_mode:
-            response_data["subscription_id"] = stripe_subscription.id
-            response_data["client_secret"] = client_secret
-            response_data["trial_end"] = stripe_subscription.trial_end
-        else:
-            # Generate access token for immediate login
-            access_token = create_access_token(data={"sub": db_user.email})
-            response_data["access_token"] = access_token
-            response_data["token_type"] = "bearer"
-            response_data["redirect_to"] = "/dashboard"  # Skip email verification and go to onboarding
-
-        return response_data
-
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except Exception as e:
-        logger.error(f"Registration failed: {str(e)}")
-        # Cleanup if something failed
-        if 'db_user' in locals() and db_user and db_user.id:
-            db.delete(db_user)
-            db.commit()
-        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
+        logger.error(f"Registration failed with error: {str(e)}")
+        # Try to cleanup user if created
+        try:
+            if 'db_user' in locals() and db_user and hasattr(db_user, 'id'):
+                db.query(User).filter(User.id == db_user.id).delete()
+                db.commit()
+                logger.info(f"Cleaned up user after failed registration")
+        except Exception as cleanup_error:
+            logger.error(f"Cleanup failed: {str(cleanup_error)}")
+
+        # Return user-friendly error
+        raise HTTPException(
+            status_code=500,
+            detail="We encountered an error creating your account. Please try again or contact support if the issue persists."
+        )
 
 
 @router.post("/api/v1/verify-email")

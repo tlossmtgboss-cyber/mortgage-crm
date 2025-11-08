@@ -108,19 +108,19 @@ function Registration() {
         email: formData.email,
         password: formData.password,
         full_name: formData.full_name,
-        company_name: formData.company_name,
-        phone: formData.phone,
-        plan: formData.plan
+        company_name: formData.company_name || '',
+        phone: formData.phone || '',
+        plan: formData.plan || 'professional'
       });
 
-      // Check if dev mode (bypass email verification and payment)
-      if (response.data.dev_mode && response.data.redirect_to) {
+      // Check for successful registration response
+      if (response.data && response.data.access_token) {
         // Store authentication token and user info
         const token = response.data.access_token;
         const user = {
           id: response.data.user_id,
           email: response.data.email,
-          full_name: formData.full_name
+          full_name: response.data.full_name || formData.full_name
         };
 
         localStorage.setItem('token', token);
@@ -128,19 +128,40 @@ function Registration() {
 
         // Redirect to dashboard (onboarding wizard will show automatically)
         navigate('/dashboard');
-      } else {
-        // Production mode - redirect to email verification page
+      } else if (response.data && response.data.message) {
+        // Fallback: Email verification required (future production mode)
         navigate('/verify-email-sent', {
           state: {
             email: formData.email,
             message: response.data.message
           }
         });
+      } else {
+        // Unexpected response format
+        throw new Error('Unexpected response from server');
       }
 
     } catch (error) {
       console.error('Registration failed:', error);
-      setError(error.response?.data?.detail || 'Registration failed. Please try again.');
+
+      // Handle different error types
+      let errorMessage = 'Registration failed. Please try again.';
+
+      if (error.response) {
+        // Server responded with error
+        if (error.response.status === 400) {
+          errorMessage = error.response.data?.detail || 'Invalid registration data. Please check your information.';
+        } else if (error.response.status === 500) {
+          errorMessage = error.response.data?.detail || 'Server error. Please try again later.';
+        } else {
+          errorMessage = error.response.data?.detail || errorMessage;
+        }
+      } else if (error.request) {
+        // Network error
+        errorMessage = 'Unable to connect to server. Please check your internet connection.';
+      }
+
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
