@@ -84,8 +84,16 @@ function Leads() {
     try {
       // Combine primary borrower data with property and loan data
       const primaryBorrower = borrowers[0];
+
+      // Validate required fields
+      const fullName = `${primaryBorrower.first_name || ''} ${primaryBorrower.last_name || ''}`.trim();
+      if (!fullName) {
+        alert('Please enter at least a first name or last name');
+        return;
+      }
+
       const rawData = {
-        name: `${primaryBorrower.first_name} ${primaryBorrower.last_name}`.trim(),
+        name: fullName,
         email: primaryBorrower.email,
         phone: primaryBorrower.phone,
         credit_score: primaryBorrower.credit_score,
@@ -98,7 +106,12 @@ function Leads() {
 
       // Clean up data - convert empty strings to null for numeric fields
       const formData = Object.entries(rawData).reduce((acc, [key, value]) => {
-        // Skip empty values
+        // Always include name and first_time_buyer
+        if (key === 'name' || key === 'first_time_buyer') {
+          acc[key] = value;
+          return acc;
+        }
+        // Skip empty values for other fields
         if (value === '' || value === undefined || value === null) {
           return acc;
         }
@@ -115,6 +128,8 @@ function Leads() {
         return acc;
       }, {});
 
+      console.log('Submitting lead data:', formData);
+
       if (editingLead) {
         await leadsAPI.update(editingLead.id, formData);
       } else {
@@ -126,7 +141,13 @@ function Leads() {
       loadLeads();
     } catch (err) {
       console.error('Failed to save lead:', err);
-      alert('Failed to save lead: ' + (err.response?.data?.detail || err.message));
+      console.error('Error response:', err.response?.data);
+      const errorMsg = err.response?.data?.detail
+        ? (typeof err.response.data.detail === 'string'
+           ? err.response.data.detail
+           : JSON.stringify(err.response.data.detail))
+        : err.message;
+      alert('Failed to save lead: ' + errorMsg);
     }
   };
 
