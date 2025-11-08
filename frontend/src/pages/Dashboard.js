@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { dashboardAPI } from '../services/api';
+// import { dashboardAPI } from '../services/api'; // TODO: Re-enable when backend ready
 import './Dashboard.css';
 
 function Dashboard() {
