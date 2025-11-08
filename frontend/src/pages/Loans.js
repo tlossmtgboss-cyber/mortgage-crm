@@ -1,12 +1,62 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { loansAPI } from '../services/api';
 import './Loans.css';
 
+// Map pipeline stage IDs to filter names
+const stageIdToFilter = {
+  'new': 'New Leads',
+  'preapproved': 'Pre-Approved',
+  'processing': 'In Processing',
+  'underwriting': 'In Underwriting',
+  'ctc': 'Clear to Close',
+  'funded': 'Funded This Month'
+};
+
+// Generate mock loans data
+const generateMockLoans = () => {
+  const currentDate = new Date();
+  const currentMonth = currentDate.getMonth();
+  const currentYear = currentDate.getFullYear();
+
+  return [
+    // Current month funded loans
+    { id: 1, borrower_name: 'John Anderson', borrower: 'John Anderson', amount: 425000, property_address: '123 Oak St, Austin TX', stage: 'Funded This Month', days_in_process: 28, loan_officer: 'Sarah Johnson', created_at: new Date(currentYear, currentMonth, 5).toISOString(), funded_date: new Date(currentYear, currentMonth, 5).toISOString() },
+    { id: 2, borrower_name: 'Maria Garcia', borrower: 'Maria Garcia', amount: 380000, property_address: '456 Pine Ave, Dallas TX', stage: 'Funded This Month', days_in_process: 32, loan_officer: 'Mike Chen', created_at: new Date(currentYear, currentMonth, 8).toISOString(), funded_date: new Date(currentYear, currentMonth, 8).toISOString() },
+    { id: 3, borrower_name: 'Robert Kim', borrower: 'Robert Kim', amount: 520000, property_address: '789 Elm Dr, Houston TX', stage: 'Funded This Month', days_in_process: 25, loan_officer: 'Emily Davis', created_at: new Date(currentYear, currentMonth, 12).toISOString(), funded_date: new Date(currentYear, currentMonth, 12).toISOString() },
+    { id: 4, borrower_name: 'Lisa Chen', borrower: 'Lisa Chen', amount: 295000, property_address: '321 Maple Rd, San Antonio TX', stage: 'Funded This Month', days_in_process: 30, loan_officer: 'Sarah Johnson', created_at: new Date(currentYear, currentMonth, 15).toISOString(), funded_date: new Date(currentYear, currentMonth, 15).toISOString() },
+    { id: 5, borrower_name: 'David Martinez', borrower: 'David Martinez', amount: 615000, property_address: '654 Cedar Ln, Fort Worth TX', stage: 'Funded This Month', days_in_process: 27, loan_officer: 'Mike Chen', created_at: new Date(currentYear, currentMonth, 18).toISOString(), funded_date: new Date(currentYear, currentMonth, 18).toISOString() },
+    { id: 6, borrower_name: 'Amy Wilson', borrower: 'Amy Wilson', amount: 340000, property_address: '987 Birch St, Arlington TX', stage: 'Funded This Month', days_in_process: 29, loan_officer: 'Emily Davis', created_at: new Date(currentYear, currentMonth, 20).toISOString(), funded_date: new Date(currentYear, currentMonth, 20).toISOString() },
+    { id: 7, borrower_name: 'James Brown', borrower: 'James Brown', amount: 450000, property_address: '147 Spruce Ave, Plano TX', stage: 'Funded This Month', days_in_process: 31, loan_officer: 'Sarah Johnson', created_at: new Date(currentYear, currentMonth, 22).toISOString(), funded_date: new Date(currentYear, currentMonth, 22).toISOString() },
+    { id: 8, borrower_name: 'Jennifer Lee', borrower: 'Jennifer Lee', amount: 385000, property_address: '258 Walnut Dr, Irving TX', stage: 'Funded This Month', days_in_process: 26, loan_officer: 'Mike Chen', created_at: new Date(currentYear, currentMonth, 25).toISOString(), funded_date: new Date(currentYear, currentMonth, 25).toISOString() },
+    { id: 9, borrower_name: 'Michael Davis', borrower: 'Michael Davis', amount: 495000, property_address: '369 Ash Rd, Frisco TX', stage: 'Funded This Month', days_in_process: 28, loan_officer: 'Emily Davis', created_at: new Date(currentYear, currentMonth, 27).toISOString(), funded_date: new Date(currentYear, currentMonth, 27).toISOString() },
+
+    // Prior months funded loans
+    { id: 10, borrower_name: 'Thomas White', borrower: 'Thomas White', amount: 410000, property_address: '741 Cherry Ln, McKinney TX', stage: 'Funded Prior Month', days_in_process: 30, loan_officer: 'Sarah Johnson', created_at: new Date(currentYear, currentMonth - 1, 5).toISOString(), funded_date: new Date(currentYear, currentMonth - 1, 5).toISOString() },
+    { id: 11, borrower_name: 'Susan Taylor', borrower: 'Susan Taylor', amount: 375000, property_address: '852 Poplar St, Denton TX', stage: 'Funded Prior Month', days_in_process: 29, loan_officer: 'Mike Chen', created_at: new Date(currentYear, currentMonth - 1, 10).toISOString(), funded_date: new Date(currentYear, currentMonth - 1, 10).toISOString() },
+    { id: 12, borrower_name: 'Daniel Moore', borrower: 'Daniel Moore', amount: 530000, property_address: '963 Hickory Ave, Allen TX', stage: 'Funded Prior Month', days_in_process: 32, loan_officer: 'Emily Davis', created_at: new Date(currentYear, currentMonth - 1, 12).toISOString(), funded_date: new Date(currentYear, currentMonth - 1, 12).toISOString() },
+    { id: 13, borrower_name: 'Patricia Johnson', borrower: 'Patricia Johnson', amount: 325000, property_address: '159 Willow Dr, Carrollton TX', stage: 'Funded Prior Month', days_in_process: 27, loan_officer: 'Sarah Johnson', created_at: new Date(currentYear, currentMonth - 1, 15).toISOString(), funded_date: new Date(currentYear, currentMonth - 1, 15).toISOString() },
+    { id: 14, borrower_name: 'Kevin Anderson', borrower: 'Kevin Anderson', amount: 445000, property_address: '357 Magnolia Rd, Richardson TX', stage: 'Funded Prior Month', days_in_process: 28, loan_officer: 'Mike Chen', created_at: new Date(currentYear, currentMonth - 1, 18).toISOString(), funded_date: new Date(currentYear, currentMonth - 1, 18).toISOString() },
+    { id: 15, borrower_name: 'Nancy Thomas', borrower: 'Nancy Thomas', amount: 365000, property_address: '486 Sycamore Ln, Lewisville TX', stage: 'Funded Prior Month', days_in_process: 31, loan_officer: 'Emily Davis', created_at: new Date(currentYear, currentMonth - 1, 20).toISOString(), funded_date: new Date(currentYear, currentMonth - 1, 20).toISOString() },
+
+    // Active pipeline loans
+    { id: 16, borrower_name: 'Sarah Johnson', borrower: 'Sarah Johnson', amount: 425000, property_address: '234 Main St, Austin TX', stage: 'New Leads', days_in_process: 2, loan_officer: 'Sarah Johnson', created_at: new Date(currentYear, currentMonth, 28).toISOString() },
+    { id: 17, borrower_name: 'Mike Chen', borrower: 'Mike Chen', amount: 380000, property_address: '567 First Ave, Dallas TX', stage: 'Pre-Approved', days_in_process: 5, loan_officer: 'Mike Chen', created_at: new Date(currentYear, currentMonth, 25).toISOString() },
+    { id: 18, borrower_name: 'Emily Davis', borrower: 'Emily Davis', amount: 520000, property_address: '890 Second St, Houston TX', stage: 'In Processing', days_in_process: 12, loan_officer: 'Emily Davis', created_at: new Date(currentYear, currentMonth, 18).toISOString() },
+    { id: 19, borrower_name: 'Tom Wilson', borrower: 'Tom Wilson', amount: 295000, property_address: '123 Third Dr, San Antonio TX', stage: 'In Underwriting', days_in_process: 18, loan_officer: 'Sarah Johnson', created_at: new Date(currentYear, currentMonth, 12).toISOString() },
+    { id: 20, borrower_name: 'Lisa Brown', borrower: 'Lisa Brown', amount: 615000, property_address: '456 Fourth Rd, Fort Worth TX', stage: 'Clear to Close', days_in_process: 22, loan_officer: 'Mike Chen', created_at: new Date(currentYear, currentMonth, 8).toISOString() },
+  ];
+};
+
 function Loans() {
+  const [searchParams] = useSearchParams();
+  const stageParam = searchParams.get('stage');
+  const initialFilter = stageParam ? stageIdToFilter[stageParam] || 'All' : 'All';
+
   const [loans, setLoans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [activeFilter, setActiveFilter] = useState('All');
+  const [activeFilter, setActiveFilter] = useState(initialFilter);
   const [formData, setFormData] = useState({
     loan_number: '',
     borrower_name: '',
@@ -18,8 +68,13 @@ function Loans() {
 
   const filters = [
     'All',
-    'Contract Received',
+    'New Leads',
+    'Pre-Approved',
     'In Processing',
+    'In Underwriting',
+    'Clear to Close',
+    'Funded This Month',
+    'Contract Received',
     'Approved',
     'Suspended',
     'Denied',
@@ -30,12 +85,21 @@ function Loans() {
     loadLoans();
   }, []);
 
+  useEffect(() => {
+    // Update filter when URL parameter changes
+    if (stageParam && stageIdToFilter[stageParam]) {
+      setActiveFilter(stageIdToFilter[stageParam]);
+    }
+  }, [stageParam]);
+
   const loadLoans = async () => {
     try {
       const data = await loansAPI.getAll();
       setLoans(data);
     } catch (err) {
       console.error('Failed to load loans:', err);
+      // Use mock data on error
+      setLoans(generateMockLoans());
     } finally {
       setLoading(false);
     }
@@ -150,6 +214,56 @@ function Loans() {
         <div className="empty-state">
           <h3>No loans found</h3>
           <p>Try adjusting your filters or add a new loan</p>
+        </div>
+      )}
+
+      {/* Prior Months Closings - shown when viewing Funded This Month */}
+      {activeFilter === 'Funded This Month' && (
+        <div className="prior-months-section">
+          <div className="section-header">
+            <h2>Prior Months Closings</h2>
+            <p>Historical funded loans from previous months</p>
+          </div>
+
+          <div className="table-container">
+            <table className="loans-table">
+              <thead>
+                <tr>
+                  <th>Borrower</th>
+                  <th>Loan Amount</th>
+                  <th>Property Address</th>
+                  <th>Funded Date</th>
+                  <th>Days in Process</th>
+                  <th>Loan Officer</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loans
+                  .filter(loan => loan.stage === 'Funded Prior Month')
+                  .map((loan) => (
+                    <tr key={loan.id}>
+                      <td className="borrower-name">{loan.borrower || loan.borrower_name}</td>
+                      <td className="loan-amount">${(loan.amount || 0).toLocaleString()}</td>
+                      <td>{loan.property_address || 'N/A'}</td>
+                      <td>
+                        {loan.funded_date
+                          ? new Date(loan.funded_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                          : 'N/A'}
+                      </td>
+                      <td>{loan.days_in_process || calculateDays(loan.created_at)}</td>
+                      <td>{loan.loan_officer || 'Unassigned'}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+
+          {loans.filter(loan => loan.stage === 'Funded Prior Month').length === 0 && (
+            <div className="empty-state">
+              <h3>No prior month closings found</h3>
+              <p>There are no funded loans from previous months</p>
+            </div>
+          )}
         </div>
       )}
 

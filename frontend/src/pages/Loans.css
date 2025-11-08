@@ -138,6 +138,29 @@
   color: var(--color-text-secondary);
 }
 
+/* Prior Months Section */
+.prior-months-section {
+  margin-top: var(--space-xl);
+  padding-top: var(--space-xl);
+  border-top: 2px solid var(--color-border-light);
+}
+
+.prior-months-section .section-header {
+  margin-bottom: var(--space-lg);
+}
+
+.prior-months-section .section-header h2 {
+  font-size: var(--font-2xl);
+  font-weight: var(--weight-bold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-xs);
+}
+
+.prior-months-section .section-header p {
+  font-size: var(--font-base);
+  color: var(--color-text-secondary);
+}
+
 @media (max-width: 768px) {
   .loans-page {
     padding: var(--space-md);
