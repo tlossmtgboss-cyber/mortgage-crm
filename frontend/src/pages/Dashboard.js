@@ -67,13 +67,6 @@ function Dashboard() {
       icon: '📈',
       path: '/scorecard',
     },
-    {
-      id: 'assistant',
-      title: 'AI Assistant',
-      description: 'Your intelligent CRM copilot',
-      icon: '🤖',
-      path: '/assistant',
-    },
   ];
 
   return (
