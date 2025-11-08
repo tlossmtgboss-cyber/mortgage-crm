@@ -1096,23 +1096,6 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
         }
     }
 
-@app.post("/api/v1/register", response_model=UserResponse)
-async def register(user: UserCreate, db: Session = Depends(get_db)):
-    existing = db.query(User).filter(User.email == user.email).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Email already registered")
-
-    db_user = User(
-        email=user.email,
-        hashed_password=get_password_hash(user.password),
-        full_name=user.full_name
-    )
-    db.add(db_user)
-    db.commit()
-    db.refresh(db_user)
-    logger.info(f"User registered: {db_user.email}")
-    return db_user
-
 # ============================================================================
 # DASHBOARD
 # ============================================================================
