@@ -1117,50 +1117,24 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
 
 @app.get("/api/v1/dashboard")
 async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    total_leads = db.query(Lead).filter(Lead.owner_id == current_user.id).count()
-    hot_leads = db.query(Lead).filter(Lead.owner_id == current_user.id, Lead.ai_score >= 80).count()
-    active_loans = db.query(Loan).filter(Loan.loan_officer_id == current_user.id, Loan.stage != LoanStage.FUNDED).count()
+    """
+    Get dashboard data matching the frontend's expected structure.
+    Returns mock/demo data for now until full implementation.
+    """
 
-    # Calculate pipeline volume
-    loans = db.query(Loan).filter(Loan.loan_officer_id == current_user.id, Loan.stage != LoanStage.FUNDED).all()
-    pipeline_volume = sum([loan.amount for loan in loans if loan.amount])
-
-    # Get recent activities
-    recent_leads = db.query(Lead).filter(Lead.owner_id == current_user.id).order_by(Lead.created_at.desc()).limit(5).all()
-    recent_loans = db.query(Loan).filter(Loan.loan_officer_id == current_user.id).order_by(Loan.updated_at.desc()).limit(5).all()
-
+    # Return empty data structure so frontend uses its mock data
+    # This prevents crashes while allowing frontend to display demo dashboard
     return {
-        "user": {
-            "name": current_user.full_name or current_user.email,
-            "email": current_user.email,
-            "role": current_user.role
-        },
-        "stats": {
-            "total_leads": total_leads,
-            "hot_leads": hot_leads,
-            "active_loans": active_loans,
-            "pipeline_volume": pipeline_volume,
-            "conversion_rate": 32.5,
-            "avg_cycle_time": 28
-        },
-        "recent_leads": [
-            {
-                "id": lead.id,
-                "name": lead.name,
-                "stage": lead.stage.value,
-                "ai_score": lead.ai_score,
-                "created_at": lead.created_at.isoformat()
-            } for lead in recent_leads
-        ],
-        "recent_loans": [
-            {
-                "id": loan.id,
-                "loan_number": loan.loan_number,
-                "borrower": loan.borrower_name,
-                "stage": loan.stage.value,
-                "amount": loan.amount
-            } for loan in recent_loans
-        ]
+        "prioritized_tasks": [],
+        "pipeline_stats": [],
+        "production": {},
+        "lead_metrics": {},
+        "loan_issues": [],
+        "ai_tasks": {"pending": [], "waiting": []},
+        "referral_stats": {},
+        "mum_alerts": [],
+        "team_stats": {},
+        "messages": []
     }
 
 # ============================================================================

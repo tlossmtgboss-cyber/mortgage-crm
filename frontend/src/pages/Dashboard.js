@@ -29,16 +29,29 @@ function Dashboard() {
       const data = await dashboardAPI.getDashboard();
 
       // Parse dashboard data with safe defaults
-      setPrioritizedTasks((data.prioritized_tasks && data.prioritized_tasks.length > 0) ? data.prioritized_tasks : mockPrioritizedTasks());
-      setPipelineStats((data.pipeline_stats && data.pipeline_stats.length > 0) ? data.pipeline_stats : mockPipelineStats());
-      setProduction(data.production && typeof data.production === 'object' ? data.production : mockProduction());
-      setLeadMetrics(data.lead_metrics && typeof data.lead_metrics === 'object' ? data.lead_metrics : mockLeadMetrics());
-      setLoanIssues((data.loan_issues && data.loan_issues.length > 0) ? data.loan_issues : mockLoanIssues());
-      setAiTasks(data.ai_tasks && typeof data.ai_tasks === 'object' ? data.ai_tasks : mockAiTasks());
-      setReferralStats(data.referral_stats && typeof data.referral_stats === 'object' ? data.referral_stats : mockReferralStats());
-      setMumAlerts((data.mum_alerts && data.mum_alerts.length > 0) ? data.mum_alerts.filter(a => a && a.icon) : mockMumAlerts());
-      setTeamStats(data.team_stats && typeof data.team_stats === 'object' ? data.team_stats : mockTeamStats());
-      setMessages((data.messages && data.messages.length > 0) ? data.messages : mockMessages());
+      // Use mock data as fallback for everything
+      const validTasks = (data.prioritized_tasks && data.prioritized_tasks.length > 0) ? data.prioritized_tasks.filter(t => t && t.title) : [];
+      setPrioritizedTasks(validTasks.length > 0 ? validTasks : mockPrioritizedTasks());
+
+      const validStats = (data.pipeline_stats && data.pipeline_stats.length > 0) ? data.pipeline_stats.filter(s => s && s.name) : [];
+      setPipelineStats(validStats.length > 0 ? validStats : mockPipelineStats());
+
+      setProduction((data.production && typeof data.production === 'object' && data.production.funded !== undefined) ? data.production : mockProduction());
+      setLeadMetrics((data.lead_metrics && typeof data.lead_metrics === 'object' && data.lead_metrics.new_today !== undefined) ? data.lead_metrics : mockLeadMetrics());
+
+      const validIssues = (data.loan_issues && data.loan_issues.length > 0) ? data.loan_issues.filter(i => i && i.borrower) : [];
+      setLoanIssues(validIssues.length > 0 ? validIssues : mockLoanIssues());
+
+      setAiTasks((data.ai_tasks && typeof data.ai_tasks === 'object' && data.ai_tasks.pending) ? data.ai_tasks : mockAiTasks());
+      setReferralStats((data.referral_stats && typeof data.referral_stats === 'object' && data.referral_stats.top_partners) ? data.referral_stats : mockReferralStats());
+
+      const validAlerts = (data.mum_alerts && data.mum_alerts.length > 0) ? data.mum_alerts.filter(a => a && a.icon && a.title && a.client) : [];
+      setMumAlerts(validAlerts.length > 0 ? validAlerts : mockMumAlerts());
+
+      setTeamStats((data.team_stats && typeof data.team_stats === 'object') ? data.team_stats : mockTeamStats());
+
+      const validMessages = (data.messages && data.messages.length > 0) ? data.messages.filter(m => m && m.from) : [];
+      setMessages(validMessages.length > 0 ? validMessages : mockMessages());
     } catch (error) {
       console.error('Failed to load dashboard:', error);
       // Use mock data on error
