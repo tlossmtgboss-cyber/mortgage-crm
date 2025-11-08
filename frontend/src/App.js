@@ -104,8 +104,8 @@ function App() {
   return (
     <Router>
       <div className="app">
-        {/* Show onboarding wizard overlay for first-time users */}
-        {showOnboarding && !checkingOnboarding && (
+        {/* Show onboarding wizard overlay for first-time authenticated users only */}
+        {isAuthenticated() && showOnboarding && !checkingOnboarding && (
           <OnboardingWizard onComplete={handleOnboardingComplete} />
         )}
 
