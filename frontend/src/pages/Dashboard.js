@@ -228,7 +228,10 @@ function Dashboard() {
 
       <div className="dashboard-grid">
         {/* 1. AI PRIORITIZED TASKS */}
-        <div className="dashboard-block ai-tasks-block">
+        <div
+          className="dashboard-block ai-tasks-block clickable-block"
+          onClick={() => navigate('/tasks')}
+        >
           <div className="block-header">
             <h2>🎯 AI Prioritized Tasks (Today)</h2>
             <span className="task-count">{getAggregatedTasks().length} tasks</span>

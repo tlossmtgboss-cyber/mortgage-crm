@@ -44,6 +44,18 @@
   border: 1px solid #e0e0e0;
 }
 
+/* Clickable Block */
+.clickable-block {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.clickable-block:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-color: #764ba2;
+}
+
 .block-header {
   display: flex;
   justify-content: space-between;
