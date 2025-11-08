@@ -113,21 +113,21 @@ function Registration() {
         plan: formData.plan
       });
 
-      // Check if dev mode (bypass email verification)
+      // Check if dev mode (bypass email verification and payment)
       if (response.data.dev_mode && response.data.redirect_to) {
-        // Dev mode - create mock session and redirect
-        const mockToken = 'dev_token_' + response.data.user_id;
-        const mockUser = {
+        // Store authentication token and user info
+        const token = response.data.access_token;
+        const user = {
           id: response.data.user_id,
           email: response.data.email,
           full_name: formData.full_name
         };
 
-        localStorage.setItem('token', mockToken);
-        localStorage.setItem('user', JSON.stringify(mockUser));
+        localStorage.setItem('token', token);
+        localStorage.setItem('user', JSON.stringify(user));
 
-        // Redirect to onboarding or dashboard
-        navigate(response.data.redirect_to === '/dashboard' ? '/onboarding' : response.data.redirect_to);
+        // Redirect to dashboard (onboarding wizard will show automatically)
+        navigate('/dashboard');
       } else {
         // Production mode - redirect to email verification page
         navigate('/verify-email-sent', {

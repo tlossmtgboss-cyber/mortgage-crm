@@ -13,7 +13,7 @@ import logging
 
 from main import (
     get_db, User, Subscription, OnboardingProgress, EmailVerificationToken,
-    TeamMember, Workflow, get_password_hash
+    TeamMember, Workflow, get_password_hash, create_access_token
 )
 # from integrations.stripe_service import StripeService  # Disabled for now
 from integrations.email_service import EmailService, VerificationTokenService
@@ -238,8 +238,10 @@ async def register_user(registration: UserRegistration, db: Session = Depends(ge
     if not plan_info:
         raise HTTPException(status_code=400, detail="Invalid subscription plan")
 
-    # Check if this is a dev/test registration (bypass Stripe)
-    is_dev_mode = registration.email.endswith('@dev.local') or registration.email.endswith('@test.com')
+    # TEMPORARY: Bypass payment for all users during development
+    # TODO: Re-enable Stripe when ready for production
+    is_dev_mode = True  # All registrations bypass payment for now
+    # is_dev_mode = registration.email.endswith('@dev.local') or registration.email.endswith('@test.com')
 
     try:
         stripe_customer = None
@@ -348,7 +350,11 @@ async def register_user(registration: UserRegistration, db: Session = Depends(ge
             response_data["client_secret"] = client_secret
             response_data["trial_end"] = stripe_subscription.trial_end
         else:
-            response_data["redirect_to"] = "/dashboard"  # Skip email verification
+            # Generate access token for immediate login
+            access_token = create_access_token(data={"sub": db_user.email})
+            response_data["access_token"] = access_token
+            response_data["token_type"] = "bearer"
+            response_data["redirect_to"] = "/dashboard"  # Skip email verification and go to onboarding
 
         return response_data
 
