@@ -8,6 +8,7 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
   const [connectionModal, setConnectionModal] = useState(null);
   const [helpdeskModal, setHelpdeskModal] = useState(null);
   const [uploadedTestEmail, setUploadedTestEmail] = useState(null);
+  const [draggedTask, setDraggedTask] = useState(null);
   const [formData, setFormData] = useState({
     // Step 1: Team & Roles
     teamName: '',
@@ -340,6 +341,43 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
     });
   };
 
+  // Drag and Drop handlers for tasks between milestones
+  const handleDragStart = (e, milestoneIndex, taskIndex) => {
+    setDraggedTask({ milestoneIndex, taskIndex });
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDropTask = (e, targetMilestoneIndex) => {
+    e.preventDefault();
+    if (!draggedTask) return;
+
+    const { milestoneIndex: sourceMilestoneIndex, taskIndex: sourceTaskIndex } = draggedTask;
+
+    // If dropped in the same milestone, do nothing
+    if (sourceMilestoneIndex === targetMilestoneIndex) {
+      setDraggedTask(null);
+      return;
+    }
+
+    // Move task from source to target milestone
+    setFormData(prevData => {
+      const newMilestones = [...prevData.milestones];
+
+      // Get the task from source milestone
+      const taskToMove = { ...newMilestones[sourceMilestoneIndex].tasks[sourceTaskIndex] };
+
+      // Remove from source milestone
+      newMilestones[sourceMilestoneIndex].tasks = newMilestones[sourceMilestoneIndex].tasks.filter((_, i) => i !== sourceTaskIndex);
+
+      // Add to target milestone
+      newMilestones[targetMilestoneIndex].tasks = [...newMilestones[targetMilestoneIndex].tasks, taskToMove];
+
+      return { ...prevData, milestones: newMilestones };
+    });
+
+    setDraggedTask(null);
+  };
+
   const renderStep = () => {
     switch (currentStep) {
       case 1:
@@ -670,8 +708,10 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
               {formData.milestones.map((milestone, index) => (
                 <div
                   key={index}
-                  className={`milestone-item ${index === activeMilestone ? 'active' : ''}`}
+                  className={`milestone-item ${index === activeMilestone ? 'active' : ''} ${draggedTask && draggedTask.milestoneIndex !== index ? 'drop-target' : ''}`}
                   onClick={() => setActiveMilestone(index)}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDropTask(e, index)}
                 >
                   <input
                     type="text"
@@ -716,7 +756,13 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
                     </div>
                   ) : (
                     currentMilestone.tasks.map((task, taskIndex) => (
-                      <div key={taskIndex} className="task-item">
+                      <div
+                        key={taskIndex}
+                        className="task-item"
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, activeMilestone, taskIndex)}
+                        onDragEnd={() => setDraggedTask(null)}
+                      >
                         <div className="task-header">
                           <div className="task-name-section">
                             <label className="task-label">Task</label>
