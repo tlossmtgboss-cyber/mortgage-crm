@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { leadsAPI } from '../services/api';
 import './Leads.css';
 
 function Leads() {
+  const navigate = useNavigate();
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -192,7 +194,9 @@ function Leads() {
           <tbody>
             {filteredLeads.map((lead) => (
               <tr key={lead.id}>
-                <td className="lead-name">{lead.name}</td>
+                <td className="lead-name clickable" onClick={() => navigate(`/leads/${lead.id}`)}>
+                  {lead.name}
+                </td>
                 <td>{lead.email || 'N/A'}</td>
                 <td>{lead.phone || 'N/A'}</td>
                 <td>
@@ -204,10 +208,10 @@ function Leads() {
                 <td>{lead.source || 'N/A'}</td>
                 <td>
                   <div className="table-actions">
-                    <button className="btn-icon" onClick={() => handleEdit(lead)} title="Edit">
+                    <button className="btn-icon" onClick={(e) => { e.stopPropagation(); handleEdit(lead); }} title="Edit">
                       ✏️
                     </button>
-                    <button className="btn-icon" onClick={() => handleDelete(lead.id)} title="Delete">
+                    <button className="btn-icon" onClick={(e) => { e.stopPropagation(); handleDelete(lead.id); }} title="Delete">
                       🗑️
                     </button>
                   </div>
