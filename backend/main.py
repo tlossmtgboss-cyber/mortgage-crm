@@ -3,9 +3,11 @@
 # ============================================================================
 # All features implemented:
 # ✅ Complete CRUD for all entities
-# ✅ AI Integration with OpenAI
+# ✅ AI Integration with OpenAI & Anthropic Claude
 # ✅ Authentication & Security
 # ✅ Sample data generation
+# ✅ AI Underwriter with Claude AI
+# ✅ AI Assistant with OpenAI GPT
 # ============================================================================
 
 from fastapi import FastAPI, Depends, HTTPException, status, Request
