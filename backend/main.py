@@ -575,6 +575,19 @@ class MicrosoftToken(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+class CalendarMapping(Base):
+    """Maps lead stages to Calendly event types for automatic scheduling"""
+    __tablename__ = "calendar_mappings"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    stage = Column(String, index=True)  # Lead stage (new, qualified, meeting_scheduled, etc.)
+    event_type_uuid = Column(String)  # Calendly event type UUID
+    event_type_name = Column(String)  # Friendly name (e.g., "Discovery Call")
+    event_type_url = Column(String)  # Calendly booking page URL
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 # ============================================================================
 # PYDANTIC SCHEMAS
 # ============================================================================
@@ -3336,6 +3349,298 @@ async def calendly_webhook(request: Request, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Calendly webhook error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/calendly/calendar-mappings")
+async def create_calendar_mapping(
+    request: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Map a lead stage to a Calendly event type.
+    Example: map "new" stage to "Discovery Call" event type
+    """
+    stage = request.get("stage")
+    event_type_uuid = request.get("event_type_uuid")
+    event_type_name = request.get("event_type_name")
+    event_type_url = request.get("event_type_url")
+
+    if not all([stage, event_type_uuid, event_type_name]):
+        raise HTTPException(status_code=400, detail="stage, event_type_uuid, and event_type_name required")
+
+    # Check if mapping already exists
+    existing = db.query(CalendarMapping).filter(
+        CalendarMapping.user_id == current_user.id,
+        CalendarMapping.stage == stage
+    ).first()
+
+    if existing:
+        # Update existing mapping
+        existing.event_type_uuid = event_type_uuid
+        existing.event_type_name = event_type_name
+        existing.event_type_url = event_type_url
+        existing.is_active = True
+        db.commit()
+        return {"message": "Calendar mapping updated", "mapping_id": existing.id}
+    else:
+        # Create new mapping
+        mapping = CalendarMapping(
+            user_id=current_user.id,
+            stage=stage,
+            event_type_uuid=event_type_uuid,
+            event_type_name=event_type_name,
+            event_type_url=event_type_url
+        )
+        db.add(mapping)
+        db.commit()
+        return {"message": "Calendar mapping created", "mapping_id": mapping.id}
+
+
+@app.get("/api/v1/calendly/calendar-mappings")
+async def get_calendar_mappings(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all calendar mappings for current user"""
+    mappings = db.query(CalendarMapping).filter(
+        CalendarMapping.user_id == current_user.id,
+        CalendarMapping.is_active == True
+    ).all()
+
+    return {
+        "mappings": [
+            {
+                "id": m.id,
+                "stage": m.stage,
+                "event_type_uuid": m.event_type_uuid,
+                "event_type_name": m.event_type_name,
+                "event_type_url": m.event_type_url
+            }
+            for m in mappings
+        ]
+    }
+
+
+@app.get("/api/v1/calendly/availability")
+async def get_availability(
+    event_type_uuid: str,
+    start_time: str,
+    end_time: str,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get available time slots for a Calendly event type.
+
+    Args:
+        event_type_uuid: The UUID of the event type
+        start_time: ISO 8601 format (e.g., "2024-01-15T00:00:00Z")
+        end_time: ISO 8601 format (e.g., "2024-01-22T00:00:00Z")
+    """
+    calendly_token = os.getenv("CALENDLY_API_TOKEN")
+    if not calendly_token:
+        raise HTTPException(status_code=500, detail="Calendly API not configured")
+
+    try:
+        headers = {
+            "Authorization": f"Bearer {calendly_token}",
+            "Content-Type": "application/json"
+        }
+
+        # Get availability from Calendly
+        response = requests.get(
+            f"https://api.calendly.com/event_type_available_times",
+            headers=headers,
+            params={
+                "event_type": f"https://api.calendly.com/event_types/{event_type_uuid}",
+                "start_time": start_time,
+                "end_time": end_time
+            }
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        return {
+            "available_times": data.get("collection", []),
+            "count": len(data.get("collection", []))
+        }
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Calendly availability API error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch availability: {str(e)}")
+
+
+@app.post("/api/v1/calendly/ai-schedule")
+async def ai_schedule_conversation(
+    request: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    AI-powered scheduling conversation endpoint.
+    The AI can view availability and book appointments automatically.
+
+    Example conversation:
+    User: "I'd like to schedule a meeting"
+    AI: "I have these times available: Jan 15 at 2pm, Jan 16 at 10am..."
+    User: "Jan 15 at 2pm works"
+    AI: *books appointment* "Great! You're confirmed for Jan 15 at 2pm"
+    """
+    lead_id = request.get("lead_id")
+    message = request.get("message")
+    conversation_history = request.get("conversation_history", [])
+
+    if not lead_id or not message:
+        raise HTTPException(status_code=400, detail="lead_id and message required")
+
+    # Get lead details
+    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    # Get the appropriate calendar mapping for this lead's stage
+    mapping = db.query(CalendarMapping).filter(
+        CalendarMapping.user_id == current_user.id,
+        CalendarMapping.stage == lead.stage,
+        CalendarMapping.is_active == True
+    ).first()
+
+    if not mapping:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No calendar mapping found for stage '{lead.stage}'. Please configure calendar mappings first."
+        )
+
+    calendly_token = os.getenv("CALENDLY_API_TOKEN")
+    anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
+
+    if not calendly_token or not anthropic_api_key:
+        raise HTTPException(status_code=500, detail="Calendly or Anthropic API not configured")
+
+    try:
+        # Get availability for next 14 days
+        from datetime import timezone
+        start_time = datetime.now(timezone.utc).isoformat()
+        end_time = (datetime.now(timezone.utc) + timedelta(days=14)).isoformat()
+
+        headers = {
+            "Authorization": f"Bearer {calendly_token}",
+            "Content-Type": "application/json"
+        }
+
+        # Fetch available times
+        availability_response = requests.get(
+            f"https://api.calendly.com/event_type_available_times",
+            headers=headers,
+            params={
+                "event_type": f"https://api.calendly.com/event_types/{mapping.event_type_uuid}",
+                "start_time": start_time,
+                "end_time": end_time
+            }
+        )
+
+        available_slots = []
+        if availability_response.status_code == 200:
+            avail_data = availability_response.json()
+            available_slots = avail_data.get("collection", [])
+
+        # Format available slots for AI
+        formatted_slots = []
+        for slot in available_slots[:10]:  # Show first 10 slots
+            start_dt = datetime.fromisoformat(slot["start_time"].replace('Z', '+00:00'))
+            formatted_slots.append({
+                "datetime": start_dt.strftime("%A, %B %d at %I:%M %p"),
+                "iso_time": slot["start_time"]
+            })
+
+        # Build context for Claude
+        system_prompt = f"""You are a scheduling assistant for a mortgage loan officer. You help schedule {mapping.event_type_name} appointments.
+
+Lead Information:
+- Name: {lead.name}
+- Email: {lead.email}
+- Stage: {lead.stage}
+
+Available Time Slots:
+{chr(10).join([f"- {slot['datetime']}" for slot in formatted_slots]) if formatted_slots else "No availability in the next 14 days"}
+
+Your capabilities:
+1. View and present available time slots in a natural way
+2. When the lead confirms a specific time, extract the ISO timestamp and respond with BOOK:[iso_timestamp]
+3. Be friendly, professional, and helpful
+
+Rules:
+- Only book times from the available slots list
+- When booking, respond with EXACTLY: BOOK:[iso_timestamp] (e.g., "BOOK:2024-01-15T14:00:00Z")
+- After booking, confirm the appointment in natural language
+- If no slots available, suggest alternative dates or contact methods"""
+
+        # Call Claude
+        client = anthropic.Anthropic(api_key=anthropic_api_key)
+
+        messages = conversation_history + [{"role": "user", "content": message}]
+
+        ai_response = client.messages.create(
+            model="claude-3-5-sonnet-20241022",
+            max_tokens=1024,
+            system=system_prompt,
+            messages=messages
+        )
+
+        ai_message = ai_response.content[0].text
+
+        # Check if AI wants to book an appointment
+        if "BOOK:" in ai_message:
+            # Extract timestamp
+            booking_line = [line for line in ai_message.split('\n') if 'BOOK:' in line][0]
+            iso_timestamp = booking_line.split('BOOK:')[1].strip()
+
+            # Create single-use scheduling link
+            scheduling_payload = {
+                "max_event_count": 1,
+                "owner": f"https://api.calendly.com/event_types/{mapping.event_type_uuid}",
+                "owner_type": "EventType"
+            }
+
+            scheduling_response = requests.post(
+                "https://api.calendly.com/scheduling_links",
+                headers=headers,
+                json=scheduling_payload
+            )
+
+            if scheduling_response.status_code == 201:
+                scheduling_data = scheduling_response.json()
+                booking_url = scheduling_data["resource"]["booking_url"]
+
+                # Store in lead metadata
+                if not lead.meta_data:
+                    lead.meta_data = {}
+                lead.meta_data["calendly_link"] = booking_url
+                lead.meta_data["ai_suggested_time"] = iso_timestamp
+                lead.meta_data["calendly_created_at"] = datetime.utcnow().isoformat()
+                db.commit()
+
+                # Remove BOOK: directive from message shown to user
+                clean_message = ai_message.replace(booking_line, "").strip()
+
+                return {
+                    "ai_message": clean_message,
+                    "booking_created": True,
+                    "booking_url": booking_url,
+                    "suggested_time": iso_timestamp,
+                    "lead_name": lead.name
+                }
+
+        # Regular conversation response
+        return {
+            "ai_message": ai_message,
+            "booking_created": False,
+            "available_slots": formatted_slots[:5]  # Show top 5 in response
+        }
+
+    except Exception as e:
+        logger.error(f"AI scheduling error: {e}")
+        raise HTTPException(status_code=500, detail=f"AI scheduling failed: {str(e)}")
 
 # ============================================================================
 # STARTUP EVENT
