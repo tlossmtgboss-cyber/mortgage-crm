@@ -11,7 +11,7 @@
 from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, DateTime, Text, ForeignKey, JSON, Enum as SQLEnum, func, text, or_
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
@@ -26,6 +26,7 @@ import json
 import enum
 import logging
 import random
+import secrets
 from openai import OpenAI
 
 # Setup logging
@@ -2780,6 +2781,234 @@ async def get_guidelines_session(current_user: User = Depends(get_current_user))
         "authenticated": False,
         "message": "Please log in at the guidelines site"
     }
+
+# ============================================================================
+# EMAIL INTEGRATION - MICROSOFT GRAPH OAUTH
+# ============================================================================
+
+@app.get("/api/v1/email/connect")
+async def start_email_oauth(current_user: User = Depends(get_current_user)):
+    """
+    Initiates Microsoft OAuth flow for email integration.
+    Returns URL for user to authorize access to their Outlook.
+    """
+    client_id = os.getenv("MICROSOFT_CLIENT_ID")
+    tenant_id = os.getenv("MICROSOFT_TENANT_ID")
+    redirect_uri = os.getenv("MICROSOFT_REDIRECT_URI")
+
+    if not all([client_id, tenant_id, redirect_uri]):
+        raise HTTPException(status_code=500, detail="Microsoft Graph API not configured")
+
+    # Store user ID in state parameter to retrieve after callback
+    state = f"{current_user.id}_{secrets.token_urlsafe(32)}"
+
+    # Microsoft authorization endpoint
+    auth_url = (
+        f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/authorize?"
+        f"client_id={client_id}&"
+        f"response_type=code&"
+        f"redirect_uri={redirect_uri}&"
+        f"response_mode=query&"
+        f"scope=offline_access%20Mail.Read%20Mail.ReadWrite%20User.Read&"
+        f"state={state}"
+    )
+
+    return {
+        "auth_url": auth_url,
+        "message": "Redirect user to this URL to authorize email access"
+    }
+
+@app.get("/api/v1/email/oauth/callback")
+async def email_oauth_callback(code: str, state: str, db: Session = Depends(get_db)):
+    """
+    OAuth callback endpoint. Microsoft redirects here after user authorizes.
+    Exchanges authorization code for access token and stores it.
+    """
+    try:
+        # Extract user ID from state parameter
+        user_id = int(state.split("_")[0])
+
+        # Get configuration
+        client_id = os.getenv("MICROSOFT_CLIENT_ID")
+        client_secret = os.getenv("MICROSOFT_CLIENT_SECRET")
+        tenant_id = os.getenv("MICROSOFT_TENANT_ID")
+        redirect_uri = os.getenv("MICROSOFT_REDIRECT_URI")
+
+        # Exchange code for tokens
+        token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+        token_data = {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "code": code,
+            "redirect_uri": redirect_uri,
+            "grant_type": "authorization_code",
+            "scope": "offline_access Mail.Read Mail.ReadWrite User.Read"
+        }
+
+        import requests
+        token_response = requests.post(token_url, data=token_data)
+        token_response.raise_for_status()
+        tokens = token_response.json()
+
+        # Calculate token expiration
+        expires_in = tokens.get("expires_in", 3600)
+        expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+
+        # Store or update tokens in database
+        existing_token = db.query(MicrosoftToken).filter(
+            MicrosoftToken.user_id == user_id
+        ).first()
+
+        if existing_token:
+            existing_token.access_token = tokens["access_token"]
+            existing_token.refresh_token = tokens.get("refresh_token")
+            existing_token.expires_at = expires_at
+            existing_token.updated_at = datetime.utcnow()
+        else:
+            new_token = MicrosoftToken(
+                user_id=user_id,
+                access_token=tokens["access_token"],
+                refresh_token=tokens.get("refresh_token"),
+                token_type=tokens.get("token_type", "Bearer"),
+                expires_at=expires_at,
+                scope=tokens.get("scope", "")
+            )
+            db.add(new_token)
+
+        db.commit()
+        logger.info(f"✅ Email connected for user {user_id}")
+
+        # Redirect back to settings page with success message
+        return RedirectResponse(
+            url="https://mortgage-crm-nine.vercel.app/settings?email=connected",
+            status_code=302
+        )
+
+    except Exception as e:
+        logger.error(f"❌ Email OAuth callback error: {e}")
+        return RedirectResponse(
+            url="https://mortgage-crm-nine.vercel.app/settings?email=error",
+            status_code=302
+        )
+
+@app.get("/api/v1/email/status")
+async def get_email_connection_status(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Check if user has connected their email and if token is valid.
+    """
+    token = db.query(MicrosoftToken).filter(
+        MicrosoftToken.user_id == current_user.id
+    ).first()
+
+    if not token:
+        return {
+            "connected": False,
+            "email": None,
+            "last_sync": None
+        }
+
+    # Check if token is expired
+    is_expired = token.expires_at < datetime.utcnow() if token.expires_at else True
+
+    return {
+        "connected": True,
+        "token_expired": is_expired,
+        "last_sync": None,  # TODO: Track last email fetch time
+        "message": "Email connected" if not is_expired else "Token expired, please reconnect"
+    }
+
+@app.post("/api/v1/email/disconnect")
+async def disconnect_email(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Disconnect email integration by deleting stored tokens.
+    """
+    token = db.query(MicrosoftToken).filter(
+        MicrosoftToken.user_id == current_user.id
+    ).first()
+
+    if token:
+        db.delete(token)
+        db.commit()
+        logger.info(f"Email disconnected for user {current_user.id}")
+
+    return {"message": "Email disconnected successfully"}
+
+# ============================================================================
+# EMAIL INTEGRATION - HELPER FUNCTIONS
+# ============================================================================
+
+async def refresh_microsoft_token(user_id: int, db: Session) -> Optional[str]:
+    """
+    Refresh an expired Microsoft access token using refresh token.
+    Returns new access token or None if refresh fails.
+    """
+    token_record = db.query(MicrosoftToken).filter(
+        MicrosoftToken.user_id == user_id
+    ).first()
+
+    if not token_record or not token_record.refresh_token:
+        return None
+
+    try:
+        client_id = os.getenv("MICROSOFT_CLIENT_ID")
+        client_secret = os.getenv("MICROSOFT_CLIENT_SECRET")
+        tenant_id = os.getenv("MICROSOFT_TENANT_ID")
+
+        token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+        refresh_data = {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "refresh_token": token_record.refresh_token,
+            "grant_type": "refresh_token",
+            "scope": "offline_access Mail.Read Mail.ReadWrite User.Read"
+        }
+
+        import requests
+        response = requests.post(token_url, data=refresh_data)
+        response.raise_for_status()
+        tokens = response.json()
+
+        # Update stored tokens
+        expires_in = tokens.get("expires_in", 3600)
+        token_record.access_token = tokens["access_token"]
+        if "refresh_token" in tokens:
+            token_record.refresh_token = tokens["refresh_token"]
+        token_record.expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+        token_record.updated_at = datetime.utcnow()
+        db.commit()
+
+        return tokens["access_token"]
+
+    except Exception as e:
+        logger.error(f"Token refresh failed for user {user_id}: {e}")
+        return None
+
+async def get_valid_access_token(user_id: int, db: Session) -> Optional[str]:
+    """
+    Get a valid access token for user, refreshing if necessary.
+    """
+    token_record = db.query(MicrosoftToken).filter(
+        MicrosoftToken.user_id == user_id
+    ).first()
+
+    if not token_record:
+        return None
+
+    # Check if token is expired or about to expire (within 5 minutes)
+    if token_record.expires_at:
+        time_until_expiry = token_record.expires_at - datetime.utcnow()
+        if time_until_expiry.total_seconds() < 300:  # Less than 5 minutes
+            # Try to refresh
+            new_token = await refresh_microsoft_token(user_id, db)
+            return new_token if new_token else token_record.access_token
+
+    return token_record.access_token
 
 # ============================================================================
 # STARTUP EVENT
