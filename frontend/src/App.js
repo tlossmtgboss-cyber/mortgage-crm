@@ -104,13 +104,8 @@ function App() {
   return (
     <Router>
       <div className="app">
-        {/* Show onboarding wizard overlay for first-time authenticated users only */}
-        {isAuthenticated() && showOnboarding && !checkingOnboarding && (
-          <OnboardingWizard onComplete={handleOnboardingComplete} />
-        )}
-
         <Routes>
-          {/* Public routes */}
+          {/* Public routes - NO WIZARD HERE */}
           <Route path="/" element={<LandingPage />} />
           <Route path="/register" element={<Registration />} />
           <Route path="/verify-email-sent" element={<EmailVerificationSent />} />
@@ -121,16 +116,22 @@ function App() {
             path="/dashboard"
             element={
               <PrivateRoute>
-                <div className="app-layout">
-                  <Navigation
-                    onToggleAssistant={toggleAssistant}
-                    assistantOpen={assistantOpen}
-                  />
-                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <Dashboard />
-                  </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
-                </div>
+                <>
+                  {/* Show onboarding wizard for authenticated users who haven't completed it */}
+                  {showOnboarding && !checkingOnboarding && (
+                    <OnboardingWizard onComplete={handleOnboardingComplete} />
+                  )}
+                  <div className="app-layout">
+                    <Navigation
+                      onToggleAssistant={toggleAssistant}
+                      assistantOpen={assistantOpen}
+                    />
+                    <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                      <Dashboard />
+                    </main>
+                    <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  </div>
+                </>
               </PrivateRoute>
             }
           />
