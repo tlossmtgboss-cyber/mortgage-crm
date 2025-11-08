@@ -1780,6 +1780,27 @@ def init_db():
     try:
         Base.metadata.create_all(bind=engine)
         logger.info("✅ Database tables created successfully")
+
+        # Run schema migrations for existing tables
+        try:
+            with engine.connect() as conn:
+                # Add email_verified column if it doesn't exist
+                conn.execute(text("""
+                    DO $$
+                    BEGIN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM information_schema.columns
+                            WHERE table_name='users' AND column_name='email_verified'
+                        ) THEN
+                            ALTER TABLE users ADD COLUMN email_verified BOOLEAN DEFAULT FALSE;
+                        END IF;
+                    END $$;
+                """))
+                conn.commit()
+                logger.info("✅ Schema migrations applied")
+        except Exception as e:
+            logger.warning(f"⚠️ Schema migration note: {e}")
+
         return True
     except Exception as e:
         logger.error(f"❌ Database initialization failed: {e}")
