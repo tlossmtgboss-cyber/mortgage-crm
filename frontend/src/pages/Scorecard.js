@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { analyticsAPI } from '../services/api';
 import './Scorecard.css';
 
 function Scorecard() {
@@ -7,7 +6,7 @@ function Scorecard() {
   const [drillDownModal, setDrillDownModal] = useState(null);
 
   // Sample data - replace with API call
-  const [data, setData] = useState({
+  const [data] = useState({
     conversionMetrics: [
       {
         id: 'starts-to-apps',
@@ -130,8 +129,8 @@ function Scorecard() {
     try {
       setLoading(false);
       // TODO: Fetch real data from API
-      // const data = await analyticsAPI.getScorecard();
-      // setData(data);
+      // const apiData = await analyticsAPI.getScorecard();
+      // setData(apiData);
     } catch (error) {
       console.error('Failed to load scorecard:', error);
       setLoading(false);
