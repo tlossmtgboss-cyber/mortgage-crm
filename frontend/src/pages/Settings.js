@@ -4,6 +4,10 @@ import './Settings.css';
 
 function Settings() {
   const [activeSection, setActiveSection] = useState('integrations');
+  const [expandedSections, setExpandedSections] = useState({
+    organizational: false,
+    scheduling: false
+  });
   const [integrations, setIntegrations] = useState({
     microsoft: {
       connected: false,
@@ -21,6 +25,13 @@ function Settings() {
     },
     other: []
   });
+
+  const toggleSection = (section) => {
+    setExpandedSections({
+      ...expandedSections,
+      [section]: !expandedSections[section]
+    });
+  };
 
   const handleMicrosoftConnect = () => {
     // In a real app, this would initiate OAuth flow
@@ -80,6 +91,83 @@ function Settings() {
             <span className="icon">🔌</span>
             <span>Integrations</span>
           </button>
+
+          {/* Organizational Settings - Expandable */}
+          <button
+            className={`sidebar-btn parent ${expandedSections.organizational ? 'expanded' : ''}`}
+            onClick={() => toggleSection('organizational')}
+          >
+            <span className="icon">🏢</span>
+            <span>Organizational Settings</span>
+            <span className="expand-icon">{expandedSections.organizational ? '▼' : '▶'}</span>
+          </button>
+          {expandedSections.organizational && (
+            <div className="sidebar-children">
+              <button
+                className={`sidebar-btn child ${activeSection === 'company-info' ? 'active' : ''}`}
+                onClick={() => setActiveSection('company-info')}
+              >
+                <span>Company Info</span>
+              </button>
+              <button
+                className={`sidebar-btn child ${activeSection === 'team-members' ? 'active' : ''}`}
+                onClick={() => setActiveSection('team-members')}
+              >
+                <span>Team Members</span>
+              </button>
+              <button
+                className={`sidebar-btn child ${activeSection === 'roles-permissions' ? 'active' : ''}`}
+                onClick={() => setActiveSection('roles-permissions')}
+              >
+                <span>Roles & Permissions</span>
+              </button>
+              <button
+                className={`sidebar-btn child ${activeSection === 'branding' ? 'active' : ''}`}
+                onClick={() => setActiveSection('branding')}
+              >
+                <span>Branding</span>
+              </button>
+            </div>
+          )}
+
+          {/* Scheduling Settings - Expandable */}
+          <button
+            className={`sidebar-btn parent ${expandedSections.scheduling ? 'expanded' : ''}`}
+            onClick={() => toggleSection('scheduling')}
+          >
+            <span className="icon">📅</span>
+            <span>Scheduling Settings</span>
+            <span className="expand-icon">{expandedSections.scheduling ? '▼' : '▶'}</span>
+          </button>
+          {expandedSections.scheduling && (
+            <div className="sidebar-children">
+              <button
+                className={`sidebar-btn child ${activeSection === 'business-hours' ? 'active' : ''}`}
+                onClick={() => setActiveSection('business-hours')}
+              >
+                <span>Business Hours</span>
+              </button>
+              <button
+                className={`sidebar-btn child ${activeSection === 'appointment-types' ? 'active' : ''}`}
+                onClick={() => setActiveSection('appointment-types')}
+              >
+                <span>Appointment Types</span>
+              </button>
+              <button
+                className={`sidebar-btn child ${activeSection === 'calendar-settings' ? 'active' : ''}`}
+                onClick={() => setActiveSection('calendar-settings')}
+              >
+                <span>Calendar Settings</span>
+              </button>
+              <button
+                className={`sidebar-btn child ${activeSection === 'availability' ? 'active' : ''}`}
+                onClick={() => setActiveSection('availability')}
+              >
+                <span>Availability</span>
+              </button>
+            </div>
+          )}
+
           <button
             className={`sidebar-btn ${activeSection === 'profile' ? 'active' : ''}`}
             onClick={() => setActiveSection('profile')}
@@ -307,6 +395,88 @@ function Settings() {
               <div className="onboarding-wrapper">
                 <OnboardingWizard />
               </div>
+            </div>
+          )}
+
+          {/* Organizational Settings Sections */}
+          {activeSection === 'company-info' && (
+            <div className="company-info-section">
+              <h2>Company Information</h2>
+              <p className="section-description">
+                Manage your company profile and contact information
+              </p>
+              <p>Coming soon...</p>
+            </div>
+          )}
+
+          {activeSection === 'team-members' && (
+            <div className="team-members-section">
+              <h2>Team Members</h2>
+              <p className="section-description">
+                Add and manage your team members
+              </p>
+              <p>Coming soon...</p>
+            </div>
+          )}
+
+          {activeSection === 'roles-permissions' && (
+            <div className="roles-permissions-section">
+              <h2>Roles & Permissions</h2>
+              <p className="section-description">
+                Configure user roles and access levels
+              </p>
+              <p>Coming soon...</p>
+            </div>
+          )}
+
+          {activeSection === 'branding' && (
+            <div className="branding-section">
+              <h2>Branding</h2>
+              <p className="section-description">
+                Customize your company's branding and appearance
+              </p>
+              <p>Coming soon...</p>
+            </div>
+          )}
+
+          {/* Scheduling Settings Sections */}
+          {activeSection === 'business-hours' && (
+            <div className="business-hours-section">
+              <h2>Business Hours</h2>
+              <p className="section-description">
+                Set your operating hours and holidays
+              </p>
+              <p>Coming soon...</p>
+            </div>
+          )}
+
+          {activeSection === 'appointment-types' && (
+            <div className="appointment-types-section">
+              <h2>Appointment Types</h2>
+              <p className="section-description">
+                Configure different types of appointments and their durations
+              </p>
+              <p>Coming soon...</p>
+            </div>
+          )}
+
+          {activeSection === 'calendar-settings' && (
+            <div className="calendar-settings-section">
+              <h2>Calendar Settings</h2>
+              <p className="section-description">
+                Manage calendar sync and preferences
+              </p>
+              <p>Coming soon...</p>
+            </div>
+          )}
+
+          {activeSection === 'availability' && (
+            <div className="availability-section">
+              <h2>Availability</h2>
+              <p className="section-description">
+                Set your personal availability and time-off
+              </p>
+              <p>Coming soon...</p>
             </div>
           )}
         </div>

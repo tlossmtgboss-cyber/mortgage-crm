@@ -48,6 +48,7 @@
   color: #555;
   transition: all 0.2s;
   text-align: left;
+  position: relative;
 }
 
 .sidebar-btn .icon {
@@ -63,6 +64,71 @@
   background: #218D8D;
   color: white;
   border-color: #218D8D;
+}
+
+/* Parent buttons with expandable sections */
+.sidebar-btn.parent {
+  justify-content: space-between;
+  font-weight: 600;
+}
+
+.sidebar-btn.parent.expanded {
+  background: #f0f8f8;
+  border-color: #218D8D;
+  color: #218D8D;
+}
+
+.expand-icon {
+  font-size: 12px;
+  color: #999;
+  transition: transform 0.2s;
+}
+
+.sidebar-btn.parent.expanded .expand-icon {
+  color: #218D8D;
+}
+
+/* Child buttons container */
+.sidebar-children {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-left: 16px;
+  padding-left: 16px;
+  border-left: 2px solid #e0e0e0;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Child buttons */
+.sidebar-btn.child {
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 400;
+  border-color: transparent;
+  background: transparent;
+}
+
+.sidebar-btn.child:hover {
+  background: #f8f9fa;
+  border-color: #e0e0e0;
+}
+
+.sidebar-btn.child.active {
+  background: #218D8D;
+  color: white;
+  border-color: #218D8D;
+  font-weight: 500;
 }
 
 /* Main Content */
