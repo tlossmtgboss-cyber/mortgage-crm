@@ -374,6 +374,284 @@
   border: 2px solid #e9ecef;
 }
 
+/* Calendar Mappings */
+.calendar-settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.info-card {
+  background: linear-gradient(135deg, #f0f8f8 0%, #e8f5f5 100%);
+  border: 2px solid #218D8D;
+  border-radius: 12px;
+  padding: 24px;
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.info-icon {
+  font-size: 48px;
+  flex-shrink: 0;
+}
+
+.info-content h3 {
+  margin: 0 0 12px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #218D8D;
+}
+
+.info-content p {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: #555;
+  line-height: 1.6;
+}
+
+.info-content ul {
+  margin: 12px 0;
+  padding-left: 24px;
+}
+
+.info-content li {
+  font-size: 14px;
+  color: #555;
+  line-height: 1.8;
+  margin-bottom: 8px;
+}
+
+.mapping-form-card {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.mapping-form-card h3 {
+  margin: 0 0 20px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 16px;
+  align-items: end;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #555;
+}
+
+.form-select {
+  padding: 10px 14px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  transition: all 0.2s;
+  background: white;
+}
+
+.form-select:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
+}
+
+.loading-spinner {
+  padding: 10px 14px;
+  color: #999;
+  font-size: 14px;
+  font-style: italic;
+}
+
+.form-actions {
+  display: flex;
+  align-items: flex-end;
+}
+
+.btn-save-mapping {
+  padding: 10px 24px;
+  background: #218D8D;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btn-save-mapping:hover:not(:disabled) {
+  background: #1a7070;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(33, 141, 141, 0.3);
+}
+
+.btn-save-mapping:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.current-mappings-card {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.current-mappings-card h3 {
+  margin: 0 0 20px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.empty-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+}
+
+.empty-state p {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  color: #666;
+}
+
+.empty-hint {
+  font-size: 14px;
+  color: #999;
+}
+
+.mappings-table {
+  overflow-x: auto;
+}
+
+.mappings-table table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.mappings-table th {
+  text-align: left;
+  padding: 12px;
+  background: #f8f9fa;
+  font-size: 13px;
+  font-weight: 600;
+  color: #555;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.mappings-table td {
+  padding: 16px 12px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.mappings-table tr:hover {
+  background: #f8f9fa;
+}
+
+.stage-cell {
+  display: flex;
+  align-items: center;
+}
+
+.stage-badge {
+  display: inline-block;
+  padding: 6px 12px;
+  background: #e8f5f5;
+  color: #218D8D;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.calendar-cell strong {
+  font-size: 14px;
+  color: #333;
+}
+
+.calendar-uuid {
+  font-size: 12px;
+  color: #999;
+  font-family: monospace;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-badge.active {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.help-card {
+  background: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.help-card h4 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.help-card p {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: #555;
+}
+
+.help-card ol {
+  margin: 12px 0;
+  padding-left: 24px;
+}
+
+.help-card li {
+  font-size: 14px;
+  color: #555;
+  line-height: 1.8;
+  margin-bottom: 8px;
+}
+
+.help-card a {
+  color: #218D8D;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.help-card a:hover {
+  text-decoration: underline;
+}
+
 /* Responsive Design */
 @media (max-width: 1024px) {
   .settings-content {
@@ -407,6 +685,14 @@
   .integrations-grid {
     grid-template-columns: 1fr;
   }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .info-card {
+    flex-direction: column;
+  }
 }
 
 @media (max-width: 640px) {
@@ -422,5 +708,14 @@
   .card-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .mappings-table {
+    font-size: 13px;
+  }
+
+  .mappings-table th,
+  .mappings-table td {
+    padding: 10px 8px;
   }
 }
