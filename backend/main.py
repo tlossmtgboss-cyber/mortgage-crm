@@ -3131,6 +3131,213 @@ async def get_valid_access_token(user_id: int, db: Session) -> Optional[str]:
     return token_record.access_token
 
 # ============================================================================
+# CALENDLY INTEGRATION
+# ============================================================================
+
+@app.get("/api/v1/calendly/event-types")
+async def get_calendly_event_types(current_user: User = Depends(get_current_user)):
+    """
+    Get user's Calendly event types (available meeting types).
+    Uses Calendly Personal Access Token to fetch event types.
+    """
+    calendly_token = os.getenv("CALENDLY_API_TOKEN")
+    if not calendly_token:
+        raise HTTPException(status_code=500, detail="Calendly API not configured")
+
+    try:
+        # First, get the current user's URI
+        headers = {
+            "Authorization": f"Bearer {calendly_token}",
+            "Content-Type": "application/json"
+        }
+
+        # Get current user info
+        user_response = requests.get(
+            "https://api.calendly.com/users/me",
+            headers=headers
+        )
+        user_response.raise_for_status()
+        user_data = user_response.json()
+        user_uri = user_data["resource"]["uri"]
+
+        # Get event types for this user
+        event_types_response = requests.get(
+            f"https://api.calendly.com/event_types",
+            headers=headers,
+            params={"user": user_uri}
+        )
+        event_types_response.raise_for_status()
+        event_types_data = event_types_response.json()
+
+        return {
+            "event_types": event_types_data.get("collection", []),
+            "count": event_types_data.get("pagination", {}).get("count", 0)
+        }
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Calendly API error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch event types: {str(e)}")
+
+
+@app.post("/api/v1/calendly/scheduling-link")
+async def create_scheduling_link(
+    request: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Create a single-use Calendly scheduling link for a lead.
+    This link can be sent via email/SMS to allow the lead to book a meeting.
+    """
+    calendly_token = os.getenv("CALENDLY_API_TOKEN")
+    if not calendly_token:
+        raise HTTPException(status_code=500, detail="Calendly API not configured")
+
+    lead_id = request.get("lead_id")
+    event_type_uuid = request.get("event_type_uuid")
+
+    if not lead_id or not event_type_uuid:
+        raise HTTPException(status_code=400, detail="lead_id and event_type_uuid required")
+
+    # Get lead details
+    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    try:
+        headers = {
+            "Authorization": f"Bearer {calendly_token}",
+            "Content-Type": "application/json"
+        }
+
+        # Create single-use scheduling link
+        payload = {
+            "max_event_count": 1,  # Single-use link
+            "owner": f"https://api.calendly.com/event_types/{event_type_uuid}",
+            "owner_type": "EventType"
+        }
+
+        response = requests.post(
+            "https://api.calendly.com/scheduling_links",
+            headers=headers,
+            json=payload
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        booking_url = data["resource"]["booking_url"]
+
+        # Store the scheduling link in lead metadata
+        if not lead.meta_data:
+            lead.meta_data = {}
+        lead.meta_data["calendly_link"] = booking_url
+        lead.meta_data["calendly_created_at"] = datetime.utcnow().isoformat()
+        db.commit()
+
+        return {
+            "booking_url": booking_url,
+            "lead_id": lead_id,
+            "lead_name": lead.name,
+            "message": "Single-use scheduling link created successfully"
+        }
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Calendly API error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create scheduling link: {str(e)}")
+
+
+@app.post("/api/v1/calendly/webhook")
+async def calendly_webhook(request: Request, db: Session = Depends(get_db)):
+    """
+    Webhook endpoint to receive Calendly events.
+    Handles invitee.created, invitee.canceled, etc.
+
+    To set this up:
+    1. Go to Calendly Integrations > Webhooks
+    2. Add webhook URL: https://your-domain.com/api/v1/calendly/webhook
+    3. Subscribe to events: invitee.created, invitee.canceled
+    """
+    try:
+        payload = await request.json()
+        event_type = payload.get("event")
+
+        logger.info(f"Calendly webhook received: {event_type}")
+
+        if event_type == "invitee.created":
+            # Extract invitee and event details
+            invitee_data = payload.get("payload", {})
+            invitee_email = invitee_data.get("email")
+            invitee_name = invitee_data.get("name")
+            event_uri = invitee_data.get("event")
+            scheduled_at = invitee_data.get("scheduled_event", {}).get("start_time")
+
+            # Try to find matching lead by email
+            lead = db.query(Lead).filter(Lead.email == invitee_email).first()
+
+            if lead:
+                # Update lead with appointment info
+                if not lead.meta_data:
+                    lead.meta_data = {}
+
+                lead.meta_data["calendly_booked"] = True
+                lead.meta_data["calendly_booked_at"] = scheduled_at
+                lead.meta_data["calendly_event_uri"] = event_uri
+
+                # Move lead to "Meeting Scheduled" stage if applicable
+                lead.stage = "meeting_scheduled"
+
+                # Create a task for the user
+                task = Task(
+                    title=f"Meeting scheduled with {invitee_name}",
+                    description=f"Calendly meeting booked for {scheduled_at}",
+                    due_date=datetime.fromisoformat(scheduled_at.replace('Z', '+00:00')) if scheduled_at else None,
+                    priority="high",
+                    status="pending",
+                    lead_id=lead.id
+                )
+                db.add(task)
+                db.commit()
+
+                logger.info(f"Lead {lead.id} updated with Calendly appointment")
+            else:
+                # Create new lead from Calendly booking
+                new_lead = Lead(
+                    name=invitee_name,
+                    email=invitee_email,
+                    stage="meeting_scheduled",
+                    source="Calendly",
+                    meta_data={
+                        "calendly_booked": True,
+                        "calendly_booked_at": scheduled_at,
+                        "calendly_event_uri": event_uri
+                    }
+                )
+                db.add(new_lead)
+                db.commit()
+
+                logger.info(f"New lead created from Calendly: {invitee_name}")
+
+        elif event_type == "invitee.canceled":
+            # Handle cancellation
+            invitee_data = payload.get("payload", {})
+            invitee_email = invitee_data.get("email")
+
+            lead = db.query(Lead).filter(Lead.email == invitee_email).first()
+            if lead:
+                if lead.meta_data:
+                    lead.meta_data["calendly_booked"] = False
+                    lead.meta_data["calendly_canceled_at"] = datetime.utcnow().isoformat()
+                    db.commit()
+
+                    logger.info(f"Lead {lead.id} Calendly appointment canceled")
+
+        return {"status": "success", "event": event_type}
+
+    except Exception as e:
+        logger.error(f"Calendly webhook error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================================
 # STARTUP EVENT
 # ============================================================================
 
