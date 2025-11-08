@@ -224,16 +224,81 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
     // Simulate AI processing (replace with actual API call later)
     await new Promise(resolve => setTimeout(resolve, 2000));
 
-    // Calculate stats based on uploaded files
-    const numFiles = formData.sopFiles.length;
-    const estimatedMilestones = formData.milestones.length;
-    const estimatedTasks = formData.milestones.reduce((total, m) => total + m.tasks.length, 0) + (numFiles * 3);
+    // Sample milestones that would be extracted from documents
+    const generatedMilestones = [
+      {
+        name: 'New Lead',
+        tasks: [
+          { name: 'Initial contact', owner: 'Concierge', sla: 2, slaUnit: 'hours', aiAuto: true },
+          { name: 'Pre-qualification', owner: 'Loan Officer', sla: 24, slaUnit: 'hours', aiAuto: false },
+          { name: 'Credit pull authorization', owner: 'Loan Officer', sla: 48, slaUnit: 'hours', aiAuto: false }
+        ]
+      },
+      {
+        name: 'Application',
+        tasks: [
+          { name: 'Send application link', owner: 'Concierge', sla: 4, slaUnit: 'hours', aiAuto: true },
+          { name: 'Review application', owner: 'Loan Officer', sla: 24, slaUnit: 'hours', aiAuto: false },
+          { name: 'Initial disclosures', owner: 'Processor', sla: 3, slaUnit: 'days', aiAuto: false }
+        ]
+      },
+      {
+        name: 'Processing',
+        tasks: [
+          { name: 'Order appraisal', owner: 'Processor', sla: 2, slaUnit: 'days', aiAuto: false },
+          { name: 'Request documentation', owner: 'Processor', sla: 1, slaUnit: 'days', aiAuto: true },
+          { name: 'Title order', owner: 'Processor', sla: 3, slaUnit: 'days', aiAuto: false }
+        ]
+      },
+      {
+        name: 'Underwriting',
+        tasks: [
+          { name: 'Submit to underwriter', owner: 'Processor', sla: 1, slaUnit: 'days', aiAuto: false },
+          { name: 'Review conditions', owner: 'Loan Officer', sla: 24, slaUnit: 'hours', aiAuto: false },
+          { name: 'Clear conditions', owner: 'Processor', sla: 2, slaUnit: 'days', aiAuto: false }
+        ]
+      },
+      {
+        name: 'Clear to Close',
+        tasks: [
+          { name: 'Final review', owner: 'Loan Officer', sla: 24, slaUnit: 'hours', aiAuto: false },
+          { name: 'Schedule closing', owner: 'Processor', sla: 2, slaUnit: 'days', aiAuto: false }
+        ]
+      },
+      {
+        name: 'Closing',
+        tasks: [
+          { name: 'Send closing docs', owner: 'Processor', sla: 1, slaUnit: 'days', aiAuto: false },
+          { name: 'Confirm funding', owner: 'Processor', sla: 1, slaUnit: 'days', aiAuto: false }
+        ]
+      },
+      {
+        name: 'Post-Close',
+        tasks: [
+          { name: '7-day check-in', owner: 'Concierge', sla: 7, slaUnit: 'days', aiAuto: true },
+          { name: '30-day check-in', owner: 'Loan Officer', sla: 30, slaUnit: 'days', aiAuto: true }
+        ]
+      },
+      {
+        name: 'Annual Review',
+        tasks: [
+          { name: 'Send annual review invite', owner: 'Concierge', sla: 330, slaUnit: 'days', aiAuto: true },
+          { name: 'Review financial situation', owner: 'Loan Officer', sla: 365, slaUnit: 'days', aiAuto: false }
+        ]
+      }
+    ];
+
+    // Update milestones with generated data
+    updateField('milestones', generatedMilestones);
+
+    // Calculate stats
+    const totalTasks = generatedMilestones.reduce((total, m) => total + m.tasks.length, 0);
 
     // Update process tree state
     updateField('processTree', {
       generated: true,
-      milestones: estimatedMilestones,
-      tasks: estimatedTasks,
+      milestones: generatedMilestones.length,
+      tasks: totalTasks,
       roles: 5
     });
 
