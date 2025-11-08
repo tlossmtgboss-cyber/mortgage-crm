@@ -1114,6 +1114,88 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
     }
 
 # ============================================================================
+# USER MANAGEMENT (Admin)
+# ============================================================================
+
+@app.get("/api/v1/admin/users")
+async def get_all_users(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get all registered users (admin only)"""
+    # For now, allow all authenticated users to see this
+    # TODO: Add admin role check
+
+    users = db.query(User).order_by(User.created_at.desc()).all()
+
+    return [{
+        "id": user.id,
+        "email": user.email,
+        "full_name": user.full_name,
+        "role": user.role,
+        "is_active": user.is_active,
+        "email_verified": user.email_verified,
+        "onboarding_completed": user.onboarding_completed,
+        "user_metadata": user.user_metadata,
+        "created_at": user.created_at.isoformat() if user.created_at else None
+    } for user in users]
+
+@app.patch("/api/v1/admin/users/{user_id}")
+async def update_user(
+    user_id: int,
+    updates: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update user (admin only)"""
+    # For now, allow all authenticated users
+    # TODO: Add admin role check
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Update allowed fields
+    allowed_fields = ['is_active', 'role', 'email_verified', 'onboarding_completed', 'full_name']
+    for field, value in updates.items():
+        if field in allowed_fields:
+            setattr(user, field, value)
+
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "id": user.id,
+        "email": user.email,
+        "full_name": user.full_name,
+        "role": user.role,
+        "is_active": user.is_active,
+        "email_verified": user.email_verified,
+        "onboarding_completed": user.onboarding_completed,
+        "created_at": user.created_at.isoformat() if user.created_at else None
+    }
+
+@app.delete("/api/v1/admin/users/{user_id}")
+async def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete user (admin only)"""
+    # Prevent self-deletion
+    if user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    db.delete(user)
+    db.commit()
+
+    return {"message": "User deleted successfully"}
+
+# ============================================================================
 # DASHBOARD
 # ============================================================================
 
