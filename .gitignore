@@ -72,3 +72,4 @@ dist/
 
 # Docker volumes
 postgres_data/
+RAILWAY_CREDENTIALS_SETUP.md
