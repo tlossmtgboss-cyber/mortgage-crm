@@ -16,52 +16,8 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
     sopFiles: [],
     processTree: null,
 
-    // Step 3: Process Ownership
-    milestones: [
-      {
-        name: 'New Lead',
-        tasks: [
-          { name: 'Initial contact', owner: 'Loan Officer', sla: 24, slaUnit: 'hours', aiAuto: false },
-          { name: 'Pre-qualification', owner: 'Loan Officer', sla: 48, slaUnit: 'hours', aiAuto: false }
-        ]
-      },
-      {
-        name: 'Docs Out',
-        tasks: []
-      },
-      {
-        name: 'Disclosed',
-        tasks: []
-      },
-      {
-        name: 'Appraisal Received',
-        tasks: []
-      },
-      {
-        name: 'UW Approved',
-        tasks: []
-      },
-      {
-        name: 'Clear to Close',
-        tasks: []
-      },
-      {
-        name: 'Funded',
-        tasks: []
-      },
-      {
-        name: '30-Day Check-in',
-        tasks: []
-      },
-      {
-        name: '90-Day Check-in',
-        tasks: []
-      },
-      {
-        name: '330-Day Check-in',
-        tasks: []
-      }
-    ],
+    // Step 3: Process Ownership (populated by AI or manually)
+    milestones: [],
 
     // Step 4: Integrations
     calendly: { connected: false, eventTypes: [] },
@@ -620,6 +576,39 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
     const currentMilestone = formData.milestones[activeMilestone];
     const availableRoles = ['Loan Officer', 'Processor', 'Analyst', 'Concierge', 'Admin'];
 
+    // Show message if no milestones exist
+    if (formData.milestones.length === 0) {
+      return (
+        <div className="step-content">
+          <div className="step-header">
+            <div className="step-icon">🗂️</div>
+            <h2>Who Does What, When</h2>
+            <p className="step-description">No milestones or tasks found</p>
+          </div>
+
+          <div className="empty-milestones-state">
+            <div className="empty-state-icon">📋</div>
+            <h3>No Process Tree Generated</h3>
+            <p>
+              Go back to <strong>Step 1</strong> to upload your process documents and click
+              <strong> "🤖 AI: Parse & Generate Process Tree"</strong> to automatically create
+              all your milestones and tasks.
+            </p>
+            <button className="btn-back-to-upload" onClick={() => setCurrentStep(1)}>
+              ← Go Back to Upload Documents
+            </button>
+            <div className="or-divider">
+              <span>OR</span>
+            </div>
+            <p className="manual-option">Start building your process manually:</p>
+            <button className="btn-add-first-milestone" onClick={addMilestone}>
+              + Add Your First Milestone
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="step-content">
         <div className="step-header">
@@ -627,7 +616,7 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
           <h2>Who Does What, When</h2>
           <p className="step-description">
             {formData.processTree
-              ? '✓ Review AI-generated tasks and assign ownership'
+              ? `✓ Review ${formData.milestones.reduce((total, m) => total + m.tasks.length, 0)} AI-generated tasks and assign ownership`
               : 'Configure your process ownership and SLAs'}
           </p>
         </div>
@@ -637,7 +626,7 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
             <span className="banner-icon">🤖</span>
             <div className="banner-content">
               <strong>AI-Generated Process Tree</strong>
-              <p>Review and approve the tasks below. You can edit, add, or remove any milestone or task.</p>
+              <p>Review and approve the {formData.milestones.length} milestones and {formData.milestones.reduce((total, m) => total + m.tasks.length, 0)} tasks below. You can edit, add, or remove any milestone or task.</p>
             </div>
           </div>
         )}

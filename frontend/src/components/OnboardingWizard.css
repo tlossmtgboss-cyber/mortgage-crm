@@ -537,6 +537,104 @@
   line-height: 1.5;
 }
 
+/* Empty milestones state */
+.empty-milestones-state {
+  max-width: 600px;
+  margin: 40px auto;
+  text-align: center;
+  padding: 48px 32px;
+  background: #f8f9fa;
+  border-radius: 16px;
+  border: 2px dashed #cbd5e1;
+}
+
+.empty-state-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+}
+
+.empty-milestones-state h3 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0 0 16px 0;
+}
+
+.empty-milestones-state p {
+  font-size: 15px;
+  color: #6b7280;
+  line-height: 1.6;
+  margin: 0 0 24px 0;
+}
+
+.empty-milestones-state p strong {
+  color: #374151;
+  font-weight: 600;
+}
+
+.btn-back-to-upload {
+  padding: 14px 28px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-back-to-upload:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(118, 75, 162, 0.35);
+}
+
+.or-divider {
+  position: relative;
+  margin: 32px 0;
+  height: 1px;
+  background: #e5e7eb;
+}
+
+.or-divider span {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #f8f9fa;
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.manual-option {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0 0 16px 0;
+}
+
+.btn-add-first-milestone {
+  padding: 12px 24px;
+  background: white;
+  color: #764ba2;
+  border: 2px solid #764ba2;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-add-first-milestone:hover {
+  background: #764ba2;
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(118, 75, 162, 0.3);
+}
+
 /* Process tree editor */
 .process-tree-editor {
   display: grid;
