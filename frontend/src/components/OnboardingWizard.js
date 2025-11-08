@@ -3,6 +3,7 @@ import './OnboardingWizard.css';
 
 const OnboardingWizard = ({ onComplete }) => {
   const [currentStep, setCurrentStep] = useState(1);
+  const [activeMilestone, setActiveMilestone] = useState(0);
   const [formData, setFormData] = useState({
     // Step 1: Team & Roles
     teamName: '',
@@ -15,7 +16,51 @@ const OnboardingWizard = ({ onComplete }) => {
     processTree: null,
 
     // Step 3: Process Ownership
-    milestones: [],
+    milestones: [
+      {
+        name: 'New Lead',
+        tasks: [
+          { name: 'Initial contact', owner: 'Loan Officer', sla: 24, slaUnit: 'hours', aiAuto: false },
+          { name: 'Pre-qualification', owner: 'Loan Officer', sla: 48, slaUnit: 'hours', aiAuto: false }
+        ]
+      },
+      {
+        name: 'Docs Out',
+        tasks: []
+      },
+      {
+        name: 'Disclosed',
+        tasks: []
+      },
+      {
+        name: 'Appraisal Received',
+        tasks: []
+      },
+      {
+        name: 'UW Approved',
+        tasks: []
+      },
+      {
+        name: 'Clear to Close',
+        tasks: []
+      },
+      {
+        name: 'Funded',
+        tasks: []
+      },
+      {
+        name: '30-Day Check-in',
+        tasks: []
+      },
+      {
+        name: '90-Day Check-in',
+        tasks: []
+      },
+      {
+        name: '330-Day Check-in',
+        tasks: []
+      }
+    ],
 
     // Step 4: Integrations
     calendly: { connected: false, eventTypes: [] },
@@ -169,6 +214,56 @@ const OnboardingWizard = ({ onComplete }) => {
     e.stopPropagation();
     const files = Array.from(e.dataTransfer.files);
     addFiles(files);
+  };
+
+  // Milestone and task management
+  const addMilestone = () => {
+    const newMilestone = {
+      name: 'New Milestone',
+      tasks: []
+    };
+    const newMilestones = [...formData.milestones, newMilestone];
+    updateField('milestones', newMilestones);
+    setActiveMilestone(newMilestones.length - 1);
+  };
+
+  const updateMilestone = (index, field, value) => {
+    const newMilestones = [...formData.milestones];
+    newMilestones[index][field] = value;
+    updateField('milestones', newMilestones);
+  };
+
+  const removeMilestone = (index) => {
+    const newMilestones = formData.milestones.filter((_, i) => i !== index);
+    updateField('milestones', newMilestones);
+    if (activeMilestone >= newMilestones.length) {
+      setActiveMilestone(Math.max(0, newMilestones.length - 1));
+    }
+  };
+
+  const addTask = (milestoneIndex) => {
+    const newTask = {
+      name: '',
+      owner: 'Loan Officer',
+      sla: 24,
+      slaUnit: 'hours',
+      aiAuto: false
+    };
+    const newMilestones = [...formData.milestones];
+    newMilestones[milestoneIndex].tasks = [...newMilestones[milestoneIndex].tasks, newTask];
+    updateField('milestones', newMilestones);
+  };
+
+  const updateTask = (milestoneIndex, taskIndex, field, value) => {
+    const newMilestones = [...formData.milestones];
+    newMilestones[milestoneIndex].tasks[taskIndex][field] = value;
+    updateField('milestones', newMilestones);
+  };
+
+  const removeTask = (milestoneIndex, taskIndex) => {
+    const newMilestones = [...formData.milestones];
+    newMilestones[milestoneIndex].tasks = newMilestones[milestoneIndex].tasks.filter((_, i) => i !== taskIndex);
+    updateField('milestones', newMilestones);
   };
 
   const renderStep = () => {
@@ -410,77 +505,147 @@ const OnboardingWizard = ({ onComplete }) => {
   );
 
   // SCREEN 3: Confirm "Who Does What, When"
-  const renderProcessTree = () => (
-    <div className="step-content">
-      <div className="step-header">
-        <div className="step-icon">🗂️</div>
-        <h2>Who Does What, When</h2>
-        <p className="step-description">Confirm and adjust your process ownership and SLAs</p>
-      </div>
+  const renderProcessTree = () => {
+    const currentMilestone = formData.milestones[activeMilestone];
+    const availableRoles = ['Loan Officer', 'Processor', 'Analyst', 'Concierge', 'Admin'];
 
-      <div className="process-tree-editor">
-        <div className="milestone-column">
-          <h4>Milestones</h4>
-          <div className="milestone-list">
-            <div className="milestone-item active">New Lead</div>
-            <div className="milestone-item">Docs Out</div>
-            <div className="milestone-item">Disclosed</div>
-            <div className="milestone-item">Appraisal Received</div>
-            <div className="milestone-item">UW Approved</div>
-            <div className="milestone-item">Clear to Close</div>
-            <div className="milestone-item">Funded</div>
-            <div className="milestone-item">30-Day Check-in</div>
-            <div className="milestone-item">90-Day Check-in</div>
-            <div className="milestone-item">330-Day Check-in</div>
+    return (
+      <div className="step-content">
+        <div className="step-header">
+          <div className="step-icon">🗂️</div>
+          <h2>Who Does What, When</h2>
+          <p className="step-description">Confirm and adjust your process ownership and SLAs</p>
+        </div>
+
+        <div className="process-tree-editor">
+          <div className="milestone-column">
+            <div className="milestone-header">
+              <h4>Milestones</h4>
+              <button className="btn-add-milestone" onClick={addMilestone} title="Add Milestone">+</button>
+            </div>
+            <div className="milestone-list">
+              {formData.milestones.map((milestone, index) => (
+                <div
+                  key={index}
+                  className={`milestone-item ${index === activeMilestone ? 'active' : ''}`}
+                  onClick={() => setActiveMilestone(index)}
+                >
+                  <input
+                    type="text"
+                    value={milestone.name}
+                    onChange={(e) => updateMilestone(index, 'name', e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    className="milestone-name-input"
+                  />
+                  {formData.milestones.length > 1 && (
+                    <button
+                      className="btn-remove-milestone"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeMilestone(index);
+                      }}
+                      title="Remove Milestone"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="tasks-column">
+            {currentMilestone && (
+              <>
+                <div className="tasks-header">
+                  <h4>Tasks for "{currentMilestone.name}"</h4>
+                  <button
+                    className="btn-add-task"
+                    onClick={() => addTask(activeMilestone)}
+                  >
+                    + Add Task
+                  </button>
+                </div>
+                <div className="task-list">
+                  {currentMilestone.tasks.length === 0 ? (
+                    <div className="empty-tasks">
+                      <p>No tasks yet. Click "+ Add Task" to create one.</p>
+                    </div>
+                  ) : (
+                    currentMilestone.tasks.map((task, taskIndex) => (
+                      <div key={taskIndex} className="task-item">
+                        <div className="task-name">
+                          <input
+                            type="text"
+                            value={task.name}
+                            onChange={(e) => updateTask(activeMilestone, taskIndex, 'name', e.target.value)}
+                            placeholder="Task name"
+                            className="task-name-input"
+                          />
+                        </div>
+                        <div className="task-owner">
+                          <select
+                            value={task.owner}
+                            onChange={(e) => updateTask(activeMilestone, taskIndex, 'owner', e.target.value)}
+                            className="owner-select"
+                          >
+                            {availableRoles.map(role => (
+                              <option key={role} value={role}>{role}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="task-sla">
+                          <input
+                            type="number"
+                            value={task.sla}
+                            onChange={(e) => updateTask(activeMilestone, taskIndex, 'sla', parseInt(e.target.value) || 0)}
+                            className="sla-input"
+                            min="1"
+                          />
+                          <select
+                            value={task.slaUnit}
+                            onChange={(e) => updateTask(activeMilestone, taskIndex, 'slaUnit', e.target.value)}
+                            className="sla-unit-select"
+                          >
+                            <option value="hours">hours</option>
+                            <option value="days">days</option>
+                          </select>
+                        </div>
+                        <div className="task-auto">
+                          <label>
+                            <input
+                              type="checkbox"
+                              checked={task.aiAuto}
+                              onChange={(e) => updateTask(activeMilestone, taskIndex, 'aiAuto', e.target.checked)}
+                            />
+                            AI Auto
+                          </label>
+                        </div>
+                        <button
+                          className="btn-remove-task"
+                          onClick={() => removeTask(activeMilestone, taskIndex)}
+                          title="Remove Task"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
 
-        <div className="tasks-column">
-          <h4>Tasks for "New Lead"</h4>
-          <div className="task-list">
-            <div className="task-item">
-              <div className="task-name">Initial contact</div>
-              <div className="task-owner">
-                <select className="owner-select">
-                  <option>Loan Officer</option>
-                  <option>Concierge</option>
-                </select>
-              </div>
-              <div className="task-sla">
-                <input type="number" defaultValue="24" className="sla-input" /> hours
-              </div>
-              <div className="task-auto">
-                <label>
-                  <input type="checkbox" /> AI Auto
-                </label>
-              </div>
-            </div>
-            <div className="task-item">
-              <div className="task-name">Pre-qualification</div>
-              <div className="task-owner">
-                <select className="owner-select">
-                  <option>Loan Officer</option>
-                </select>
-              </div>
-              <div className="task-sla">
-                <input type="number" defaultValue="48" className="sla-input" /> hours
-              </div>
-              <div className="task-auto">
-                <label>
-                  <input type="checkbox" /> AI Auto
-                </label>
-              </div>
-            </div>
-          </div>
+        <div className="process-summary">
+          <p>
+            <strong>{formData.milestones.length}</strong> milestone{formData.milestones.length !== 1 ? 's' : ''} •
+            <strong> {formData.milestones.reduce((total, m) => total + m.tasks.length, 0)}</strong> total task{formData.milestones.reduce((total, m) => total + m.tasks.length, 0) !== 1 ? 's' : ''}
+          </p>
         </div>
       </div>
-
-      <div className="process-actions">
-        <button className="btn-secondary">Reset to AI Defaults</button>
-        <button className="btn-primary">Save & Publish Process v1</button>
-      </div>
-    </div>
-  );
+    );
+  };
 
   // SCREEN 4: Integrations
   const renderIntegrations = () => (

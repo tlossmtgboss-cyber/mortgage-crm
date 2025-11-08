@@ -476,17 +476,44 @@
 /* Process tree editor */
 .process-tree-editor {
   display: grid;
-  grid-template-columns: 200px 1fr;
+  grid-template-columns: 250px 1fr;
   gap: 24px;
   margin-top: 24px;
 }
 
-.milestone-column h4,
-.tasks-column h4 {
+.milestone-header,
+.tasks-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.milestone-header h4,
+.tasks-header h4 {
   font-size: 16px;
   font-weight: 700;
   color: #1a202c;
-  margin: 0 0 16px 0;
+  margin: 0;
+}
+
+.btn-add-milestone,
+.btn-add-task {
+  padding: 6px 12px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-add-milestone:hover,
+.btn-add-task:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(118, 75, 162, 0.3);
 }
 
 .milestone-list {
@@ -496,24 +523,76 @@
 }
 
 .milestone-item {
-  padding: 12px 16px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 12px;
   background: #f8f9fa;
   border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  color: #6c757d;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .milestone-item:hover {
   background: #e9ecef;
-  color: #374151;
 }
 
 .milestone-item.active {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.milestone-name-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.milestone-item.active .milestone-name-input {
   color: white;
+}
+
+.milestone-name-input:focus {
+  outline: none;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.btn-remove-milestone {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(220, 38, 38, 0.1);
+  color: #dc2626;
+  border: none;
+  border-radius: 4px;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.btn-remove-milestone:hover {
+  background: #dc2626;
+  color: white;
+}
+
+.milestone-item.active .btn-remove-milestone {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.milestone-item.active .btn-remove-milestone:hover {
+  background: #dc2626;
 }
 
 .task-list {
@@ -524,18 +603,161 @@
 
 .task-item {
   display: grid;
-  grid-template-columns: 2fr 1.5fr 1fr auto;
-  gap: 16px;
+  grid-template-columns: 2fr 1.3fr 1.2fr auto auto;
+  gap: 12px;
   align-items: center;
-  padding: 16px;
+  padding: 14px 16px;
   background: #f8f9fa;
   border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.task-item:hover {
+  background: #e9ecef;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .task-name {
+  display: flex;
+  align-items: center;
+}
+
+.task-name-input {
+  width: 100%;
+  border: 1px solid #e5e7eb;
+  background: white;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 500;
   color: #374151;
+  padding: 8px 12px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.task-name-input:focus {
+  outline: none;
+  border-color: #764ba2;
+  box-shadow: 0 0 0 3px rgba(118, 75, 162, 0.1);
+}
+
+.task-name-input::placeholder {
+  color: #9ca3af;
+}
+
+.owner-select,
+.sla-unit-select {
+  border: 1px solid #e5e7eb;
+  background: white;
+  font-size: 13px;
+  color: #374151;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.owner-select:focus,
+.sla-unit-select:focus {
+  outline: none;
+  border-color: #764ba2;
+  box-shadow: 0 0 0 3px rgba(118, 75, 162, 0.1);
+}
+
+.task-sla {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.sla-input {
+  width: 60px;
+  border: 1px solid #e5e7eb;
+  background: white;
+  font-size: 13px;
+  color: #374151;
+  padding: 8px 10px;
+  border-radius: 6px;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.sla-input:focus {
+  outline: none;
+  border-color: #764ba2;
+  box-shadow: 0 0 0 3px rgba(118, 75, 162, 0.1);
+}
+
+.task-auto label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #6b7280;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.task-auto input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.btn-remove-task {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fee2e2;
+  color: #dc2626;
+  border: none;
+  border-radius: 6px;
+  font-size: 20px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  line-height: 1;
+}
+
+.btn-remove-task:hover {
+  background: #dc2626;
+  color: white;
+  transform: scale(1.1);
+}
+
+.empty-tasks {
+  padding: 48px 24px;
+  text-align: center;
+  background: #f8f9fa;
+  border: 2px dashed #e5e7eb;
+  border-radius: 12px;
+}
+
+.empty-tasks p {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0;
+}
+
+.process-summary {
+  margin-top: 24px;
+  padding: 16px 24px;
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+  border-radius: 12px;
+  text-align: center;
+}
+
+.process-summary p {
+  font-size: 14px;
+  color: #166534;
+  margin: 0;
+}
+
+.process-summary strong {
+  color: #15803d;
+  font-size: 16px;
 }
 
 /* Test checklist */
