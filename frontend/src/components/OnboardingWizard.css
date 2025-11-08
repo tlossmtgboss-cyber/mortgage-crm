@@ -1779,3 +1779,141 @@
   color: #10b981;
   font-weight: 700;
 }
+
+/* Helpdesk Modal */
+.helpdesk-modal {
+  max-width: 600px;
+}
+
+.helpdesk-notice {
+  display: flex;
+  gap: 16px;
+  padding: 20px;
+  background: #fef3c7;
+  border: 2px solid #fbbf24;
+  border-radius: 12px;
+  margin-bottom: 24px;
+}
+
+.notice-icon {
+  font-size: 32px;
+  flex-shrink: 0;
+}
+
+.notice-content h4 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #92400e;
+  margin: 0 0 8px 0;
+}
+
+.notice-content p {
+  font-size: 14px;
+  color: #78350f;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.helpdesk-form {
+  margin-bottom: 24px;
+}
+
+.helpdesk-form .form-field {
+  margin-bottom: 16px;
+}
+
+.helpdesk-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.btn-cancel {
+  flex: 1;
+  padding: 12px 24px;
+  background: white;
+  color: #6b7280;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-cancel:hover {
+  background: #f9fafb;
+  color: #374151;
+}
+
+.btn-submit-ticket {
+  flex: 2;
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-submit-ticket:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(118, 75, 162, 0.4);
+}
+
+.support-info {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 20px;
+}
+
+.support-note {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 8px 0;
+  text-align: center;
+}
+
+.support-note strong {
+  color: #374151;
+}
+
+/* Uploaded Test File */
+.uploaded-test-file {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: #f0fdf4;
+  border: 2px solid #86efac;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.uploaded-test-file .file-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.uploaded-test-file .file-name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: #166534;
+}
+
+.uploaded-test-file .status-pass {
+  background: #10b981;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.test-input {
+  margin-top: 12px;
+  margin-bottom: 12px;
+}

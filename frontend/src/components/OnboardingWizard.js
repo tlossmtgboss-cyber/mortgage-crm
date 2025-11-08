@@ -6,6 +6,8 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
   const [activeMilestone, setActiveMilestone] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [connectionModal, setConnectionModal] = useState(null);
+  const [helpdeskModal, setHelpdeskModal] = useState(null);
+  const [uploadedTestEmail, setUploadedTestEmail] = useState(null);
   const [formData, setFormData] = useState({
     // Step 1: Team & Roles
     teamName: '',
@@ -1087,6 +1089,46 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
   );
 
   // SCREEN 7: Test & Go-Live
+  const handleTestCallClick = () => {
+    setHelpdeskModal({
+      feature: 'AI Calling Test',
+      message: 'This feature is not yet configured. Our team will help you set it up.'
+    });
+  };
+
+  const handleTestCalendarClick = () => {
+    setHelpdeskModal({
+      feature: 'Calendar Booking Test',
+      message: 'This feature requires Calendly integration to be fully configured.'
+    });
+  };
+
+  const handleEmailUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setUploadedTestEmail(file);
+      // Simulate email parsing
+      setTimeout(() => {
+        setFormData(prevData => ({
+          ...prevData,
+          testsPassed: { ...prevData.testsPassed, emailTest: true }
+        }));
+      }, 1000);
+    }
+  };
+
+  const handleCloseHelpdeskModal = () => {
+    setHelpdeskModal(null);
+  };
+
+  const handleSubmitTicket = (e) => {
+    e.preventDefault();
+    console.log('Helpdesk ticket submitted for:', helpdeskModal.feature);
+    // In production, this would send to your helpdesk system
+    setHelpdeskModal(null);
+    alert('Support ticket submitted! Our team will contact you shortly.');
+  };
+
   const renderTestGoLive = () => (
     <div className="step-content">
       <div className="step-header">
@@ -1108,12 +1150,12 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
             )}
           </div>
           <p>Call your phone number and verify voice quality, script, and transfer</p>
-          <button className="btn-test">Run Call Test</button>
           <input
             type="tel"
             placeholder="Your test phone number"
             className="input-field test-input"
           />
+          <button className="btn-test" onClick={handleTestCallClick}>Run Call Test</button>
         </div>
 
         <div className="test-item">
@@ -1126,9 +1168,28 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
             )}
           </div>
           <p>Upload a sample email to verify milestone detection</p>
-          <button className="btn-test">Upload Sample Email</button>
+          {uploadedTestEmail ? (
+            <div className="uploaded-test-file">
+              <span className="file-icon">📧</span>
+              <span className="file-name">{uploadedTestEmail.name}</span>
+              <span className="status-pass">✓ Uploaded</span>
+            </div>
+          ) : (
+            <div className="file-upload-area">
+              <input
+                type="file"
+                accept=".eml,.msg,.txt"
+                onChange={handleEmailUpload}
+                className="file-input"
+                id="email-test-upload"
+              />
+              <label htmlFor="email-test-upload" className="btn-test">
+                Upload Sample Email
+              </label>
+            </div>
+          )}
           <div className="email-test-example">
-            <p className="example-hint">Try uploading an "Appraisal Received" email</p>
+            <p className="example-hint">Try uploading an "Appraisal Received" email (.eml, .msg, or .txt)</p>
           </div>
         </div>
 
@@ -1138,7 +1199,7 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
             <span className="status-pending">Optional</span>
           </div>
           <p>Book a test appointment through Calendly integration</p>
-          <button className="btn-test-secondary">Test Calendly</button>
+          <button className="btn-test-secondary" onClick={handleTestCalendarClick}>Test Calendly</button>
         </div>
 
         <div className="test-item">
@@ -1257,6 +1318,104 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
           </button>
         </div>
       </div>
+
+      {/* Helpdesk Modal */}
+      {helpdeskModal && (
+        <div className="connection-modal-overlay" onClick={handleCloseHelpdeskModal}>
+          <div className="connection-modal helpdesk-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="btn-close-modal" onClick={handleCloseHelpdeskModal}>×</button>
+
+            <div className="modal-header">
+              <span className="modal-icon">🎫</span>
+              <h3>Submit Support Ticket</h3>
+              <p className="modal-description">Feature Not Yet Available</p>
+            </div>
+
+            <div className="modal-body">
+              <div className="helpdesk-notice">
+                <div className="notice-icon">ℹ️</div>
+                <div className="notice-content">
+                  <h4>{helpdeskModal.feature}</h4>
+                  <p>{helpdeskModal.message}</p>
+                </div>
+              </div>
+
+              <form className="helpdesk-form" onSubmit={handleSubmitTicket}>
+                <div className="form-field">
+                  <label>Your Name</label>
+                  <input
+                    type="text"
+                    className="input-field"
+                    placeholder="Full name"
+                    required
+                    defaultValue={`${formData.members[0]?.firstName || ''} ${formData.members[0]?.lastName || ''}`.trim()}
+                  />
+                </div>
+
+                <div className="form-field">
+                  <label>Email Address</label>
+                  <input
+                    type="email"
+                    className="input-field"
+                    placeholder="your@email.com"
+                    required
+                    defaultValue={formData.members[0]?.email || ''}
+                  />
+                </div>
+
+                <div className="form-field">
+                  <label>Phone Number (Optional)</label>
+                  <input
+                    type="tel"
+                    className="input-field"
+                    placeholder="(555) 123-4567"
+                    defaultValue={formData.members[0]?.phone || ''}
+                  />
+                </div>
+
+                <div className="form-field">
+                  <label>Issue Type</label>
+                  <select className="input-field" required>
+                    <option value="setup">Setup Assistance</option>
+                    <option value="bug">Report a Bug</option>
+                    <option value="feature">Feature Request</option>
+                    <option value="integration">Integration Help</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+
+                <div className="form-field">
+                  <label>Additional Details</label>
+                  <textarea
+                    className="textarea-field"
+                    placeholder="Please describe what you need help with..."
+                    rows="4"
+                    defaultValue={`I need help setting up: ${helpdeskModal.feature}`}
+                  ></textarea>
+                </div>
+
+                <div className="helpdesk-actions">
+                  <button type="button" className="btn-cancel" onClick={handleCloseHelpdeskModal}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn-submit-ticket">
+                    Submit Ticket
+                  </button>
+                </div>
+              </form>
+
+              <div className="support-info">
+                <p className="support-note">
+                  📧 You can also email us at <strong>support@mortgagecrm.com</strong>
+                </p>
+                <p className="support-note">
+                  ⏱️ Average response time: <strong>2-4 hours</strong>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Connection Modal */}
       {connectionModal && (
