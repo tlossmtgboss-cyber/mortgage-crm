@@ -5,6 +5,7 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [activeMilestone, setActiveMilestone] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [connectionModal, setConnectionModal] = useState(null);
   const [formData, setFormData] = useState({
     // Step 1: Team & Roles
     teamName: '',
@@ -795,93 +796,105 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
   };
 
   // SCREEN 4: Integrations
-  const renderIntegrations = () => (
-    <div className="step-content">
-      <div className="step-header">
-        <div className="step-icon">🔗</div>
-        <h2>Integrations</h2>
-        <p className="step-description">Connect your calendars, email, and phone systems</p>
-      </div>
+  const integrationsList = [
+    // Calendar & Scheduling
+    { id: 'calendly', name: 'Calendly', icon: '📅', category: 'Calendar', description: 'Automated appointment scheduling' },
+    { id: 'google-calendar', name: 'Google Calendar', icon: '📅', category: 'Calendar', description: 'Sync your Google Calendar events' },
+    { id: 'outlook-calendar', name: 'Outlook Calendar', icon: '📅', category: 'Calendar', description: 'Microsoft Outlook calendar integration' },
 
-      <div className="integrations-grid">
-        {/* Calendly */}
-        <div className="integration-card">
-          <h4>📅 Calendly</h4>
-          <p>Connect your Calendly for automated appointment scheduling</p>
-          {!formData.calendly.connected ? (
-            <button className="btn-connect">Connect Calendly</button>
-          ) : (
-            <div className="connected-status">
-              <p className="status-connected">✓ Connected</p>
-              <div className="event-types">
-                <label>
-                  <input type="checkbox" /> Annual Review (30min)
-                </label>
-                <label>
-                  <input type="checkbox" /> Pre-Approval (45min)
-                </label>
-                <label>
-                  <input type="checkbox" /> Refinance Consult (30min)
-                </label>
-              </div>
-            </div>
-          )}
+    // Email
+    { id: 'gmail', name: 'Gmail', icon: '📧', category: 'Email', description: 'Connect your Gmail account' },
+    { id: 'outlook', name: 'Microsoft 365', icon: '📧', category: 'Email', description: 'Outlook and Microsoft 365 email' },
+    { id: 'yahoo', name: 'Yahoo Mail', icon: '📧', category: 'Email', description: 'Yahoo email integration' },
+
+    // Phone & SMS
+    { id: 'twilio', name: 'Twilio', icon: '📞', category: 'Phone', description: 'AI calling, SMS, and voice' },
+    { id: 'ringcentral', name: 'RingCentral', icon: '📞', category: 'Phone', description: 'Business phone system' },
+    { id: 'dialpad', name: 'Dialpad', icon: '📞', category: 'Phone', description: 'Cloud-based phone system' },
+
+    // Document Management
+    { id: 'docusign', name: 'DocuSign', icon: '📝', category: 'Documents', description: 'Electronic signature platform' },
+    { id: 'adobe-sign', name: 'Adobe Sign', icon: '📝', category: 'Documents', description: 'Adobe document signing' },
+    { id: 'dropbox', name: 'Dropbox', icon: '📁', category: 'Documents', description: 'Cloud file storage' },
+    { id: 'google-drive', name: 'Google Drive', icon: '📁', category: 'Documents', description: 'Google cloud storage' },
+
+    // LOS (Loan Origination Systems)
+    { id: 'encompass', name: 'Encompass', icon: '🏢', category: 'LOS', description: 'ICE Mortgage Technology LOS', optional: true },
+    { id: 'calyx-point', name: 'Calyx Point', icon: '🏢', category: 'LOS', description: 'Calyx loan origination', optional: true },
+    { id: 'bytepro', name: 'BytePro', icon: '🏢', category: 'LOS', description: 'BytePro LOS integration', optional: true },
+
+    // CRM
+    { id: 'salesforce', name: 'Salesforce', icon: '☁️', category: 'CRM', description: 'Salesforce CRM integration', optional: true },
+    { id: 'hubspot', name: 'HubSpot', icon: '🎯', category: 'CRM', description: 'HubSpot marketing & CRM', optional: true },
+
+    // Credit Bureaus
+    { id: 'experian', name: 'Experian', icon: '💳', category: 'Credit', description: 'Experian credit reports', optional: true },
+    { id: 'equifax', name: 'Equifax', icon: '💳', category: 'Credit', description: 'Equifax credit data', optional: true },
+    { id: 'transunion', name: 'TransUnion', icon: '💳', category: 'Credit', description: 'TransUnion credit services', optional: true },
+
+    // Team Communication
+    { id: 'slack', name: 'Slack', icon: '💬', category: 'Communication', description: 'Team messaging and alerts' },
+    { id: 'teams', name: 'Microsoft Teams', icon: '💬', category: 'Communication', description: 'Microsoft Teams chat' },
+
+    // Accounting
+    { id: 'quickbooks', name: 'QuickBooks', icon: '💰', category: 'Accounting', description: 'QuickBooks accounting', optional: true },
+    { id: 'xero', name: 'Xero', icon: '💰', category: 'Accounting', description: 'Xero accounting software', optional: true }
+  ];
+
+  const handleConnectIntegration = (integration) => {
+    setConnectionModal(integration);
+  };
+
+  const handleCloseModal = () => {
+    setConnectionModal(null);
+  };
+
+  const handleAuthComplete = () => {
+    // Simulate successful connection
+    console.log(`Connected to ${connectionModal.name}`);
+    setConnectionModal(null);
+  };
+
+  const renderIntegrations = () => {
+    // Group integrations by category
+    const categories = [...new Set(integrationsList.map(i => i.category))];
+
+    return (
+      <div className="step-content">
+        <div className="step-header">
+          <div className="step-icon">🔗</div>
+          <h2>Integrations</h2>
+          <p className="step-description">Connect your tools and services</p>
         </div>
 
-        {/* Email */}
-        <div className="integration-card">
-          <h4>📧 Email</h4>
-          <p>Monitor email for appraisal receipts, disclosures, and more</p>
-          <div className="provider-choice">
-            <button className="btn-provider">
-              <img src="/microsoft-icon.svg" alt="Microsoft" className="provider-icon" />
-              Microsoft 365
-            </button>
-            <button className="btn-provider">
-              <img src="/gmail-icon.svg" alt="Gmail" className="provider-icon" />
-              Gmail
-            </button>
+        {categories.map(category => (
+          <div key={category} className="integration-category">
+            <h3 className="category-title">{category}</h3>
+            <div className="integrations-grid">
+              {integrationsList
+                .filter(integration => integration.category === category)
+                .map(integration => (
+                  <div key={integration.id} className={`integration-card ${integration.optional ? 'optional' : ''}`}>
+                    <div className="integration-header">
+                      <span className="integration-icon">{integration.icon}</span>
+                      <h4>{integration.name}</h4>
+                      {integration.optional && <span className="optional-badge">Optional</span>}
+                    </div>
+                    <p className="integration-description">{integration.description}</p>
+                    <button
+                      className="btn-connect"
+                      onClick={() => handleConnectIntegration(integration)}
+                    >
+                      Connect {integration.name}
+                    </button>
+                  </div>
+                ))}
+            </div>
           </div>
-          {formData.email.connected && (
-            <div className="mailbox-list">
-              <label>
-                <input type="checkbox" /> tim@mortgagecrm.com
-              </label>
-              <label>
-                <input type="checkbox" /> processor@mortgagecrm.com
-              </label>
-            </div>
-          )}
-        </div>
-
-        {/* Telephony */}
-        <div className="integration-card">
-          <h4>📞 Telephony</h4>
-          <p>Connect Twilio for AI calling and SMS</p>
-          <button className="btn-connect">Connect Twilio</button>
-          {formData.telephony.phoneNumbers.length > 0 && (
-            <div className="phone-numbers">
-              <p className="status-connected">✓ Connected</p>
-              <p>+1 (555) 123-4567</p>
-              <label>
-                <input type="checkbox" defaultChecked /> Enable call recording
-              </label>
-              <label>
-                <input type="checkbox" defaultChecked /> Branded caller ID
-              </label>
-            </div>
-          )}
-        </div>
-
-        {/* Optional: LOS */}
-        <div className="integration-card optional">
-          <h4>🏢 LOS (Optional)</h4>
-          <p>Encompass, ICE Mortgage, or other LOS integration</p>
-          <button className="btn-connect-secondary">Connect Later</button>
-        </div>
+        ))}
       </div>
-    </div>
-  );
+    );
+  };
 
   // SCREEN 5: Compliance & Guardrails
   const renderCompliance = () => (
@@ -1244,6 +1257,133 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
           </button>
         </div>
       </div>
+
+      {/* Connection Modal */}
+      {connectionModal && (
+        <div className="connection-modal-overlay" onClick={handleCloseModal}>
+          <div className="connection-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="btn-close-modal" onClick={handleCloseModal}>×</button>
+
+            <div className="modal-header">
+              <span className="modal-icon">{connectionModal.icon}</span>
+              <h3>Connect to {connectionModal.name}</h3>
+              <p className="modal-description">{connectionModal.description}</p>
+            </div>
+
+            <div className="modal-body">
+              <div className="auth-form">
+                <div className="auth-provider-logo">
+                  <span className="provider-logo-icon">{connectionModal.icon}</span>
+                  <h4>{connectionModal.name}</h4>
+                </div>
+
+                <p className="auth-instruction">
+                  Sign in to your {connectionModal.name} account to authorize access
+                </p>
+
+                <form className="oauth-form" onSubmit={(e) => { e.preventDefault(); handleAuthComplete(); }}>
+                  <div className="form-field">
+                    <label>Email or Username</label>
+                    <input
+                      type="text"
+                      className="input-field"
+                      placeholder={`Your ${connectionModal.name} email`}
+                      autoFocus
+                    />
+                  </div>
+
+                  <div className="form-field">
+                    <label>Password</label>
+                    <input
+                      type="password"
+                      className="input-field"
+                      placeholder="Password"
+                    />
+                  </div>
+
+                  <button type="submit" className="btn-authorize">
+                    Authorize Connection
+                  </button>
+                </form>
+
+                <div className="auth-footer">
+                  <p className="security-note">
+                    🔒 Your credentials are encrypted and securely stored. We only access data necessary for the integration.
+                  </p>
+                  <div className="permissions-info">
+                    <p className="permissions-title">This integration will be able to:</p>
+                    <ul className="permissions-list">
+                      {connectionModal.category === 'Email' && (
+                        <>
+                          <li>Read emails and attachments</li>
+                          <li>Send emails on your behalf</li>
+                          <li>Access contact information</li>
+                        </>
+                      )}
+                      {connectionModal.category === 'Calendar' && (
+                        <>
+                          <li>View and create calendar events</li>
+                          <li>Send meeting invitations</li>
+                          <li>Access availability information</li>
+                        </>
+                      )}
+                      {connectionModal.category === 'Phone' && (
+                        <>
+                          <li>Make and receive calls</li>
+                          <li>Send and receive SMS messages</li>
+                          <li>Access call history and recordings</li>
+                        </>
+                      )}
+                      {connectionModal.category === 'Documents' && (
+                        <>
+                          <li>Upload and download documents</li>
+                          <li>Create and modify files</li>
+                          <li>Share documents with clients</li>
+                        </>
+                      )}
+                      {connectionModal.category === 'LOS' && (
+                        <>
+                          <li>Read loan application data</li>
+                          <li>Update loan statuses</li>
+                          <li>Sync borrower information</li>
+                        </>
+                      )}
+                      {connectionModal.category === 'CRM' && (
+                        <>
+                          <li>Read and write contact data</li>
+                          <li>Create and update leads</li>
+                          <li>Sync pipeline information</li>
+                        </>
+                      )}
+                      {connectionModal.category === 'Credit' && (
+                        <>
+                          <li>Pull credit reports</li>
+                          <li>View credit scores</li>
+                          <li>Access credit history</li>
+                        </>
+                      )}
+                      {connectionModal.category === 'Communication' && (
+                        <>
+                          <li>Send messages to channels</li>
+                          <li>Create notifications</li>
+                          <li>Access team information</li>
+                        </>
+                      )}
+                      {connectionModal.category === 'Accounting' && (
+                        <>
+                          <li>Read transaction data</li>
+                          <li>Create invoices</li>
+                          <li>Sync financial records</li>
+                        </>
+                      )}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
