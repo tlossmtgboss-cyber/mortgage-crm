@@ -4,16 +4,10 @@ import { isAuthenticated } from './utils/auth';
 import Navigation from './components/Navigation';
 import AIAssistant from './components/AIAssistant';
 import OnboardingWizard from './components/OnboardingWizard';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-
-// Public pages
 import LandingPage from './pages/LandingPage';
 import Registration from './pages/Registration';
 import EmailVerificationSent from './pages/EmailVerificationSent';
 import Login from './pages/Login';
-
-// Protected pages
 import Dashboard from './pages/Dashboard';
 import Leads from './pages/Leads';
 import LeadDetail from './pages/LeadDetail';
@@ -29,6 +23,8 @@ import ReferralPartnerDetail from './pages/ReferralPartnerDetail';
 import AIUnderwriter from './pages/AIUnderwriter';
 import Settings from './pages/Settings';
 import './App.css';
+
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 function PrivateRoute({ children }) {
   return isAuthenticated() ? children : <Navigate to="/login" />;
