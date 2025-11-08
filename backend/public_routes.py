@@ -226,6 +226,24 @@ class WorkflowCreate(BaseModel):
 # REGISTRATION & EMAIL VERIFICATION
 # ============================================================================
 
+@router.get("/api/v1/register-test")
+async def register_test():
+    """Test endpoint to verify imports and JWT creation"""
+    try:
+        test_token = create_access_token(data={"sub": "test@example.com"})
+        return {
+            "status": "ok",
+            "jwt_import": "working",
+            "token_created": True,
+            "token_preview": test_token[:50] + "..."
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "error_type": type(e).__name__
+        }
+
 @router.post("/api/v1/register")
 async def register_user(registration: UserRegistration, db: Session = Depends(get_db)):
     """
@@ -330,7 +348,11 @@ async def register_user(registration: UserRegistration, db: Session = Depends(ge
         # Re-raise HTTP exceptions as-is
         raise
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
         logger.error(f"Registration failed with error: {str(e)}")
+        logger.error(f"Full traceback: {error_details}")
+
         # Try to cleanup user if created
         try:
             if 'db_user' in locals() and db_user and hasattr(db_user, 'id'):
@@ -340,10 +362,10 @@ async def register_user(registration: UserRegistration, db: Session = Depends(ge
         except Exception as cleanup_error:
             logger.error(f"Cleanup failed: {str(cleanup_error)}")
 
-        # Return user-friendly error
+        # Return detailed error for debugging (TODO: make generic in production)
         raise HTTPException(
             status_code=500,
-            detail="We encountered an error creating your account. Please try again or contact support if the issue persists."
+            detail=f"Registration error: {str(e)} | Type: {type(e).__name__}"
         )
 
 
