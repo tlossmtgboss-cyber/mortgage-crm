@@ -8,23 +8,8 @@ function Settings() {
     organizational: false,
     scheduling: false
   });
-  const [integrations, setIntegrations] = useState({
-    microsoft: {
-      connected: false,
-      email: '',
-      features: {
-        teams: false,
-        calendar: false,
-        email: false,
-        phone: false
-      }
-    },
-    calendly: {
-      connected: false,
-      apiKey: ''
-    },
-    other: []
-  });
+  const [searchTerm, setSearchTerm] = useState('');
+  const [connectedIntegrations, setConnectedIntegrations] = useState(new Set(['outlook']));
 
   const toggleSection = (section) => {
     setExpandedSections({
@@ -33,46 +18,157 @@ function Settings() {
     });
   };
 
-  const handleMicrosoftConnect = () => {
-    // In a real app, this would initiate OAuth flow
-    alert('Microsoft 365 OAuth integration coming soon!\n\nThis will allow you to:\n- Send SMS via Teams\n- Sync calendar appointments\n- Make phone calls through Teams\n- Send and receive emails');
+  const availableIntegrations = [
+    {
+      id: 'outlook',
+      name: 'Outlook Email',
+      description: 'Sync emails and automatically extract lead information with AI',
+      icon: '📧',
+      color: '#0078d4',
+      category: 'Email'
+    },
+    {
+      id: 'outlook-calendar',
+      name: 'Outlook Calendar',
+      description: 'Sync calendar events and schedule appointments',
+      icon: '📅',
+      color: '#0078d4',
+      category: 'Calendar'
+    },
+    {
+      id: 'teams',
+      name: 'Microsoft Teams',
+      description: 'Send messages, make calls, and collaborate with your team',
+      icon: '💬',
+      color: '#6264a7',
+      category: 'Communication'
+    },
+    {
+      id: 'zoom',
+      name: 'Zoom',
+      description: 'Host virtual meetings and consultations with clients',
+      icon: '📹',
+      color: '#2d8cff',
+      category: 'Communication'
+    },
+    {
+      id: 'calendly',
+      name: 'Calendly',
+      description: 'Automated scheduling for client meetings',
+      icon: '🗓️',
+      color: '#006bff',
+      category: 'Scheduling'
+    },
+    {
+      id: 'docusign',
+      name: 'DocuSign',
+      description: 'Send and sign loan documents electronically',
+      icon: '📝',
+      color: '#ffd500',
+      category: 'Documents'
+    },
+    {
+      id: 'salesforce',
+      name: 'Salesforce',
+      description: 'Sync contacts and deals with your Salesforce CRM',
+      icon: '☁️',
+      color: '#00a1e0',
+      category: 'CRM'
+    },
+    {
+      id: 'hubspot',
+      name: 'HubSpot',
+      description: 'Marketing automation and lead nurturing',
+      icon: '🎯',
+      color: '#ff7a59',
+      category: 'Marketing'
+    },
+    {
+      id: 'mailchimp',
+      name: 'Mailchimp',
+      description: 'Email marketing campaigns for your clients',
+      icon: '✉️',
+      color: '#ffe01b',
+      category: 'Marketing'
+    },
+    {
+      id: 'twilio',
+      name: 'Twilio SMS',
+      description: 'Send SMS messages to leads and clients',
+      icon: '📱',
+      color: '#f22f46',
+      category: 'Communication'
+    },
+    {
+      id: 'slack',
+      name: 'Slack',
+      description: 'Get notifications and updates in your Slack workspace',
+      icon: '💼',
+      color: '#4a154b',
+      category: 'Communication'
+    },
+    {
+      id: 'zapier',
+      name: 'Zapier',
+      description: 'Connect with 5,000+ apps through automated workflows',
+      icon: '⚡',
+      color: '#ff4a00',
+      category: 'Automation'
+    },
+    {
+      id: 'stripe',
+      name: 'Stripe',
+      description: 'Collect payments and processing fees',
+      icon: '💳',
+      color: '#635bff',
+      category: 'Payments'
+    },
+    {
+      id: 'quickbooks',
+      name: 'QuickBooks',
+      description: 'Sync financial data and commission tracking',
+      icon: '💰',
+      color: '#2ca01c',
+      category: 'Accounting'
+    },
+    {
+      id: 'google-calendar',
+      name: 'Google Calendar',
+      description: 'Sync appointments with Google Calendar',
+      icon: '📆',
+      color: '#4285f4',
+      category: 'Calendar'
+    },
+    {
+      id: 'google-drive',
+      name: 'Google Drive',
+      description: 'Store and share loan documents in Google Drive',
+      icon: '📂',
+      color: '#4285f4',
+      category: 'Documents'
+    }
+  ];
+
+  const toggleIntegration = (integrationId) => {
+    const newConnected = new Set(connectedIntegrations);
+    if (newConnected.has(integrationId)) {
+      newConnected.delete(integrationId);
+    } else {
+      newConnected.add(integrationId);
+    }
+    setConnectedIntegrations(newConnected);
   };
 
-  const handleMicrosoftDisconnect = () => {
-    setIntegrations({
-      ...integrations,
-      microsoft: {
-        connected: false,
-        email: '',
-        features: {
-          teams: false,
-          calendar: false,
-          email: false,
-          phone: false
-        }
-      }
-    });
-  };
+  const filteredIntegrations = availableIntegrations.filter(integration =>
+    integration.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    integration.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    integration.category.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-  const handleCalendlyConnect = (apiKey) => {
-    setIntegrations({
-      ...integrations,
-      calendly: {
-        connected: true,
-        apiKey: apiKey
-      }
-    });
-  };
+  const featuredIntegrations = filteredIntegrations.filter(i =>
+    ['outlook', 'outlook-calendar', 'teams', 'zoom', 'docusign', 'calendly'].includes(i.id)
+  );
 
-  const handleCalendlyDisconnect = () => {
-    setIntegrations({
-      ...integrations,
-      calendly: {
-        connected: false,
-        apiKey: ''
-      }
-    });
-  };
 
   return (
     <div className="settings-page">
@@ -194,180 +290,82 @@ function Settings() {
         {/* Main Content */}
         <div className="settings-main">
           {activeSection === 'integrations' && (
-            <div className="integrations-section">
-              <h2>Integrations</h2>
-              <p className="section-description">
-                Connect your favorite tools to streamline your workflow
-              </p>
-
-              {/* Microsoft 365 Integration */}
-              <div className="integration-card">
-                <div className="integration-header">
-                  <div className="integration-info">
-                    <div className="integration-icon microsoft">
-                      <span>M</span>
-                    </div>
-                    <div>
-                      <h3>Microsoft 365</h3>
-                      <p>Teams, Calendar, Email, and Phone integration</p>
-                    </div>
-                  </div>
-                  {integrations.microsoft.connected ? (
-                    <button className="btn-disconnect" onClick={handleMicrosoftDisconnect}>
-                      Disconnect
-                    </button>
-                  ) : (
-                    <button className="btn-connect" onClick={handleMicrosoftConnect}>
-                      Connect
-                    </button>
-                  )}
+            <div className="integrations-marketplace">
+              <div className="marketplace-header">
+                <div className="header-text">
+                  <h2>Integrations & Apps</h2>
+                  <p className="section-description">
+                    Discover ({availableIntegrations.length}) | Manage ({connectedIntegrations.size})
+                  </p>
                 </div>
-
-                {integrations.microsoft.connected && (
-                  <div className="integration-details">
-                    <div className="connected-account">
-                      <span className="label">Connected Account:</span>
-                      <span className="value">{integrations.microsoft.email}</span>
-                    </div>
-                    <div className="features-list">
-                      <h4>Enabled Features:</h4>
-                      <label className="feature-checkbox">
-                        <input
-                          type="checkbox"
-                          checked={integrations.microsoft.features.teams}
-                          onChange={(e) => setIntegrations({
-                            ...integrations,
-                            microsoft: {
-                              ...integrations.microsoft,
-                              features: {...integrations.microsoft.features, teams: e.target.checked}
-                            }
-                          })}
-                        />
-                        <span>Microsoft Teams (SMS & Chat)</span>
-                      </label>
-                      <label className="feature-checkbox">
-                        <input
-                          type="checkbox"
-                          checked={integrations.microsoft.features.calendar}
-                          onChange={(e) => setIntegrations({
-                            ...integrations,
-                            microsoft: {
-                              ...integrations.microsoft,
-                              features: {...integrations.microsoft.features, calendar: e.target.checked}
-                            }
-                          })}
-                        />
-                        <span>Calendar Sync</span>
-                      </label>
-                      <label className="feature-checkbox">
-                        <input
-                          type="checkbox"
-                          checked={integrations.microsoft.features.email}
-                          onChange={(e) => setIntegrations({
-                            ...integrations,
-                            microsoft: {
-                              ...integrations.microsoft,
-                              features: {...integrations.microsoft.features, email: e.target.checked}
-                            }
-                          })}
-                        />
-                        <span>Email Integration</span>
-                      </label>
-                      <label className="feature-checkbox">
-                        <input
-                          type="checkbox"
-                          checked={integrations.microsoft.features.phone}
-                          onChange={(e) => setIntegrations({
-                            ...integrations,
-                            microsoft: {
-                              ...integrations.microsoft,
-                              features: {...integrations.microsoft.features, phone: e.target.checked}
-                            }
-                          })}
-                        />
-                        <span>Teams Phone System</span>
-                      </label>
-                    </div>
-                  </div>
-                )}
-
-                <div className="integration-description">
-                  <strong>What you can do:</strong>
-                  <ul>
-                    <li>Send SMS messages directly from Teams</li>
-                    <li>Sync calendar appointments automatically</li>
-                    <li>Make phone calls through Teams Phone</li>
-                    <li>Send and receive emails from Outlook</li>
-                  </ul>
+                <div className="search-box">
+                  <input
+                    type="text"
+                    placeholder="Find integrations, apps, and more"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="integration-search"
+                  />
                 </div>
               </div>
 
-              {/* Calendly Integration */}
-              <div className="integration-card">
-                <div className="integration-header">
-                  <div className="integration-info">
-                    <div className="integration-icon calendly">
-                      <span>C</span>
-                    </div>
-                    <div>
-                      <h3>Calendly</h3>
-                      <p>Automated scheduling for client meetings</p>
-                    </div>
+              {/* Featured Section */}
+              {featuredIntegrations.length > 0 && !searchTerm && (
+                <div className="featured-section">
+                  <h3>Featured</h3>
+                  <div className="featured-grid">
+                    {featuredIntegrations.slice(0, 2).map(integration => (
+                      <div
+                        key={integration.id}
+                        className="featured-card"
+                        onClick={() => toggleIntegration(integration.id)}
+                      >
+                        <div className="featured-icon" style={{background: integration.color}}>
+                          <span>{integration.icon}</span>
+                        </div>
+                        <div className="featured-info">
+                          <h4>{integration.name}</h4>
+                          <p>{integration.description}</p>
+                          <span className={`status-badge ${connectedIntegrations.has(integration.id) ? 'connected' : ''}`}>
+                            {connectedIntegrations.has(integration.id) ? 'Connected' : 'Connect'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  {integrations.calendly.connected ? (
-                    <button className="btn-disconnect" onClick={handleCalendlyDisconnect}>
-                      Disconnect
-                    </button>
-                  ) : (
-                    <button className="btn-connect" onClick={() => {
-                      const apiKey = prompt('Enter your Calendly API Key:');
-                      if (apiKey) handleCalendlyConnect(apiKey);
-                    }}>
-                      Connect
-                    </button>
-                  )}
+                </div>
+              )}
+
+              {/* All Integrations Grid */}
+              <div className="all-integrations-section">
+                <div className="integrations-grid">
+                  {filteredIntegrations.map(integration => (
+                    <div
+                      key={integration.id}
+                      className="integration-grid-card"
+                      onClick={() => toggleIntegration(integration.id)}
+                    >
+                      <div className="card-icon" style={{background: integration.color}}>
+                        {integration.icon}
+                      </div>
+                      <div className="card-content">
+                        <div className="card-header">
+                          <h4>{integration.name}</h4>
+                          {connectedIntegrations.has(integration.id) && (
+                            <span className="connected-badge">Connected</span>
+                          )}
+                        </div>
+                        <p className="card-description">{integration.description}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
 
-                {integrations.calendly.connected && (
-                  <div className="integration-details">
-                    <div className="connected-account">
-                      <span className="label">API Key:</span>
-                      <span className="value">••••••••{integrations.calendly.apiKey.slice(-4)}</span>
-                    </div>
+                {filteredIntegrations.length === 0 && (
+                  <div className="no-results">
+                    <p>No integrations found matching "{searchTerm}"</p>
                   </div>
                 )}
-
-                <div className="integration-description">
-                  <strong>What you can do:</strong>
-                  <ul>
-                    <li>Share scheduling links with clients</li>
-                    <li>Automatically create appointments</li>
-                    <li>Sync with your CRM calendar</li>
-                  </ul>
-                </div>
-              </div>
-
-              {/* Coming Soon Section */}
-              <div className="coming-soon">
-                <h3>More Integrations Coming Soon</h3>
-                <div className="coming-soon-grid">
-                  <div className="coming-soon-item">
-                    <span className="icon">📧</span>
-                    <span>Mailchimp</span>
-                  </div>
-                  <div className="coming-soon-item">
-                    <span className="icon">📱</span>
-                    <span>Twilio SMS</span>
-                  </div>
-                  <div className="coming-soon-item">
-                    <span className="icon">💼</span>
-                    <span>Salesforce</span>
-                  </div>
-                  <div className="coming-soon-item">
-                    <span className="icon">📊</span>
-                    <span>HubSpot</span>
-                  </div>
-                </div>
               </div>
             </div>
           )}
