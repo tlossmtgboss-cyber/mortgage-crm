@@ -28,17 +28,17 @@ function Dashboard() {
       setLoading(true);
       const data = await dashboardAPI.getDashboard();
 
-      // Parse dashboard data
-      setPrioritizedTasks(data.prioritized_tasks || mockPrioritizedTasks());
-      setPipelineStats(data.pipeline_stats || mockPipelineStats());
-      setProduction(data.production || mockProduction());
-      setLeadMetrics(data.lead_metrics || mockLeadMetrics());
-      setLoanIssues(data.loan_issues || mockLoanIssues());
-      setAiTasks(data.ai_tasks || mockAiTasks());
-      setReferralStats(data.referral_stats || mockReferralStats());
-      setMumAlerts(data.mum_alerts || mockMumAlerts());
-      setTeamStats(data.team_stats || mockTeamStats());
-      setMessages(data.messages || mockMessages());
+      // Parse dashboard data with safe defaults
+      setPrioritizedTasks((data.prioritized_tasks && data.prioritized_tasks.length > 0) ? data.prioritized_tasks : mockPrioritizedTasks());
+      setPipelineStats((data.pipeline_stats && data.pipeline_stats.length > 0) ? data.pipeline_stats : mockPipelineStats());
+      setProduction(data.production && typeof data.production === 'object' ? data.production : mockProduction());
+      setLeadMetrics(data.lead_metrics && typeof data.lead_metrics === 'object' ? data.lead_metrics : mockLeadMetrics());
+      setLoanIssues((data.loan_issues && data.loan_issues.length > 0) ? data.loan_issues : mockLoanIssues());
+      setAiTasks(data.ai_tasks && typeof data.ai_tasks === 'object' ? data.ai_tasks : mockAiTasks());
+      setReferralStats(data.referral_stats && typeof data.referral_stats === 'object' ? data.referral_stats : mockReferralStats());
+      setMumAlerts((data.mum_alerts && data.mum_alerts.length > 0) ? data.mum_alerts.filter(a => a && a.icon) : mockMumAlerts());
+      setTeamStats(data.team_stats && typeof data.team_stats === 'object' ? data.team_stats : mockTeamStats());
+      setMessages((data.messages && data.messages.length > 0) ? data.messages : mockMessages());
     } catch (error) {
       console.error('Failed to load dashboard:', error);
       // Use mock data on error
@@ -100,7 +100,7 @@ function Dashboard() {
             <span className="task-count">{prioritizedTasks.length} tasks</span>
           </div>
           <div className="task-list">
-            {prioritizedTasks.map((task, index) => (
+            {prioritizedTasks.filter(task => task && task.title).map((task, index) => (
               <div key={index} className="task-item">
                 <div className="task-main">
                   <div className="task-info">
@@ -145,7 +145,7 @@ function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {pipelineStats.map((stage, index) => (
+                {pipelineStats.filter(stage => stage && stage.name).map((stage, index) => (
                   <tr
                     key={index}
                     onClick={() => navigate(`/loans?stage=${stage.id}`)}
@@ -232,7 +232,7 @@ function Dashboard() {
             </div>
             <div className="ai-alerts-section">
               <div className="ai-alert-title">🚨 AI Alerts</div>
-              {leadMetrics.alerts && leadMetrics.alerts.map((alert, idx) => (
+              {leadMetrics.alerts && leadMetrics.alerts.filter(a => a).map((alert, idx) => (
                 <div key={idx} className="ai-alert-item">
                   <span className="alert-dot"></span>
                   {alert}
@@ -249,7 +249,7 @@ function Dashboard() {
             <span className="issue-count">{loanIssues.length} issues</span>
           </div>
           <div className="issues-list">
-            {loanIssues.map((issue, index) => (
+            {loanIssues.filter(issue => issue && issue.borrower).map((issue, index) => (
               <div key={index} className="issue-item">
                 <div className="issue-main">
                   <div className="issue-borrower">{issue.borrower}</div>
@@ -274,7 +274,7 @@ function Dashboard() {
           <div className="ai-engine-sections">
             <div className="ai-section">
               <h3>Pending Your Approval ({aiTasks.pending.length})</h3>
-              {aiTasks.pending.map((task, idx) => (
+              {aiTasks.pending.filter(task => task && task.task).map((task, idx) => (
                 <div key={idx} className="ai-task-card">
                   <div className="ai-task-header">
                     <span className="task-name">{task.task}</span>
@@ -293,7 +293,7 @@ function Dashboard() {
             </div>
             <div className="ai-section">
               <h3>Waiting for Your Input ({aiTasks.waiting.length})</h3>
-              {aiTasks.waiting.map((task, idx) => (
+              {aiTasks.waiting.filter(task => task && task.task).map((task, idx) => (
                 <div key={idx} className="ai-task-simple">
                   <span className="task-text">{task.task}</span>
                   <div className="quick-actions">
@@ -314,7 +314,7 @@ function Dashboard() {
           </div>
           <div className="referrals-content">
             <div className="referral-stats-grid">
-              {referralStats.top_partners && referralStats.top_partners.map((partner, idx) => (
+              {referralStats.top_partners && referralStats.top_partners.filter(p => p && p.name).map((partner, idx) => (
                 <div key={idx} className="partner-card">
                   <div className="partner-name">{partner.name}</div>
                   <div className="partner-stats">
@@ -334,7 +334,7 @@ function Dashboard() {
             </div>
             <div className="engagement-heatmap">
               <h4>Partner Engagement</h4>
-              {referralStats.engagement && referralStats.engagement.map((item, idx) => (
+              {referralStats.engagement && referralStats.engagement.filter(i => i && i.partner).map((item, idx) => (
                 <div key={idx} className="engagement-item">
                   <span className="partner">{item.partner}</span>
                   <span className="last-contact">{item.last_contact}</span>
@@ -352,7 +352,7 @@ function Dashboard() {
             <span className="mum-count">{mumAlerts.length} actions</span>
           </div>
           <div className="mum-list">
-            {mumAlerts.map((alert, idx) => (
+            {mumAlerts.filter(alert => alert && alert.icon).map((alert, idx) => (
               <div key={idx} className="mum-item">
                 <div className="mum-icon">{alert.icon}</div>
                 <div className="mum-content">
@@ -388,7 +388,7 @@ function Dashboard() {
               </div>
               <div className="ai-coaching">
                 <div className="coaching-title">🎓 AI Coaching Insights</div>
-                {teamStats.insights && teamStats.insights.map((insight, idx) => (
+                {teamStats.insights && teamStats.insights.filter(i => i).map((insight, idx) => (
                   <div key={idx} className="coaching-insight">
                     <span className="insight-icon">💡</span>
                     {insight}
@@ -406,7 +406,7 @@ function Dashboard() {
             <span className="unread-count">{messages.filter(m => !m.read).length} unread</span>
           </div>
           <div className="messages-list">
-            {messages.slice(0, 5).map((msg, idx) => (
+            {messages.filter(msg => msg && msg.from).slice(0, 5).map((msg, idx) => (
               <div key={idx} className={`message-item ${!msg.read ? 'unread' : ''}`}>
                 <div className="message-type">{msg.type_icon}</div>
                 <div className="message-content">
