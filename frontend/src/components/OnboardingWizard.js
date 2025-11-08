@@ -4,6 +4,7 @@ import './OnboardingWizard.css';
 const OnboardingWizard = ({ onComplete, onSkip }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [activeMilestone, setActiveMilestone] = useState(0);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [formData, setFormData] = useState({
     // Step 1: Team & Roles
     teamName: '',
@@ -214,6 +215,29 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
     e.stopPropagation();
     const files = Array.from(e.dataTransfer.files);
     addFiles(files);
+  };
+
+  // AI Process Tree Generation
+  const handleAIProcessing = async () => {
+    setIsProcessing(true);
+
+    // Simulate AI processing (replace with actual API call later)
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Calculate stats based on uploaded files
+    const numFiles = formData.sopFiles.length;
+    const estimatedMilestones = formData.milestones.length;
+    const estimatedTasks = formData.milestones.reduce((total, m) => total + m.tasks.length, 0) + (numFiles * 3);
+
+    // Update process tree state
+    updateField('processTree', {
+      generated: true,
+      milestones: estimatedMilestones,
+      tasks: estimatedTasks,
+      roles: 5
+    });
+
+    setIsProcessing(false);
   };
 
   // Milestone and task management
@@ -470,10 +494,21 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
           )}
         </div>
 
-        {formData.sopFiles && formData.sopFiles.length > 0 && (
+        {formData.sopFiles && formData.sopFiles.length > 0 && !formData.processTree && (
           <div className="ai-processing">
-            <button className="btn-ai-process">
-              🤖 AI: Parse & Generate Process Tree
+            <button
+              className="btn-ai-process"
+              onClick={handleAIProcessing}
+              disabled={isProcessing}
+            >
+              {isProcessing ? (
+                <>
+                  <span className="spinner"></span>
+                  Processing...
+                </>
+              ) : (
+                <>🤖 AI: Parse & Generate Process Tree</>
+              )}
             </button>
             <p className="processing-hint">
               AI will extract milestones, tasks, and role ownership from your {formData.sopFiles.length} document{formData.sopFiles.length !== 1 ? 's' : ''}
@@ -486,18 +521,25 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
             <h4>✓ Process Tree Generated</h4>
             <div className="preview-stats">
               <div className="stat-item">
-                <span className="stat-number">12</span>
+                <span className="stat-number">{formData.processTree.milestones}</span>
                 <span className="stat-label">Milestones</span>
               </div>
               <div className="stat-item">
-                <span className="stat-number">47</span>
+                <span className="stat-number">{formData.processTree.tasks}</span>
                 <span className="stat-label">Tasks</span>
               </div>
               <div className="stat-item">
-                <span className="stat-number">8</span>
+                <span className="stat-number">{formData.processTree.roles}</span>
                 <span className="stat-label">Roles</span>
               </div>
             </div>
+            <button
+              className="btn-regenerate"
+              onClick={handleAIProcessing}
+              disabled={isProcessing}
+            >
+              🔄 Regenerate
+            </button>
           </div>
         )}
       </div>
