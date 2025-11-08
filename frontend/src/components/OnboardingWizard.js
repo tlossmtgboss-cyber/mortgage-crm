@@ -107,6 +107,70 @@ const OnboardingWizard = ({ onComplete }) => {
     setFormData({ ...formData, members: newMembers });
   };
 
+  // File upload handlers
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files);
+    addFiles(files);
+  };
+
+  const addFiles = (newFiles) => {
+    const MAX_FILES = 10;
+    const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB per file
+
+    const validFiles = newFiles.filter(file => {
+      // Check file type
+      const validTypes = ['.pdf', '.docx', '.xlsx', '.csv', '.doc', '.xls', '.txt'];
+      const fileExt = '.' + file.name.split('.').pop().toLowerCase();
+      if (!validTypes.includes(fileExt)) {
+        alert(`${file.name}: Invalid file type. Please upload PDF, DOCX, XLSX, or CSV files.`);
+        return false;
+      }
+
+      // Check file size
+      if (file.size > MAX_FILE_SIZE) {
+        alert(`${file.name}: File too large. Maximum size is 50MB.`);
+        return false;
+      }
+
+      return true;
+    });
+
+    const currentFiles = formData.sopFiles || [];
+    const combinedFiles = [...currentFiles, ...validFiles];
+
+    if (combinedFiles.length > MAX_FILES) {
+      alert(`Maximum ${MAX_FILES} files allowed. Only adding first ${MAX_FILES - currentFiles.length} files.`);
+      updateField('sopFiles', combinedFiles.slice(0, MAX_FILES));
+    } else {
+      updateField('sopFiles', combinedFiles);
+    }
+  };
+
+  const removeFile = (index) => {
+    const newFiles = formData.sopFiles.filter((_, i) => i !== index);
+    updateField('sopFiles', newFiles);
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const files = Array.from(e.dataTransfer.files);
+    addFiles(files);
+  };
+
   const renderStep = () => {
     switch (currentStep) {
       case 1:
@@ -255,49 +319,90 @@ const OnboardingWizard = ({ onComplete }) => {
         <div className="form-field">
           <label>Upload Process Documents</label>
           <p className="field-hint">PDFs, DOCX, XLSX, CSV of your SOPs (Lead → Loan → Post-Close)</p>
-          <div className="file-upload-area">
+          <div
+            className="file-upload-area"
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+          >
             <input
               type="file"
               multiple
-              accept=".pdf,.docx,.xlsx,.csv"
-              onChange={(e) => updateField('sopFiles', Array.from(e.target.files))}
+              accept=".pdf,.docx,.doc,.xlsx,.xls,.csv,.txt"
+              onChange={handleFileSelect}
               className="file-input"
               id="sop-upload"
             />
             <label htmlFor="sop-upload" className="file-upload-label">
               <div className="upload-icon">📎</div>
-              <div>Click to upload or drag and drop</div>
-              <div className="upload-hint">PDF, DOCX, XLSX, CSV (max 10 files)</div>
+              <div className="upload-text">Click to upload or drag and drop</div>
+              <div className="upload-hint">PDF, DOCX, XLSX, CSV, TXT (max 10 files, 50MB each)</div>
             </label>
           </div>
-          {formData.sopFiles.length > 0 && (
+
+          {formData.sopFiles && formData.sopFiles.length > 0 && (
             <div className="uploaded-files">
-              {Array.from(formData.sopFiles).map((file, index) => (
+              <div className="files-header">
+                <h4>{formData.sopFiles.length} file{formData.sopFiles.length !== 1 ? 's' : ''} uploaded</h4>
+                <button
+                  className="btn-clear-all"
+                  onClick={() => updateField('sopFiles', [])}
+                >
+                  Clear all
+                </button>
+              </div>
+              {formData.sopFiles.map((file, index) => (
                 <div key={index} className="file-item">
-                  📄 {file.name}
+                  <div className="file-icon">
+                    {file.name.endsWith('.pdf') ? '📕' :
+                     file.name.endsWith('.docx') || file.name.endsWith('.doc') ? '📘' :
+                     file.name.endsWith('.xlsx') || file.name.endsWith('.xls') ? '📗' :
+                     file.name.endsWith('.csv') ? '📊' : '📄'}
+                  </div>
+                  <div className="file-info">
+                    <div className="file-name">{file.name}</div>
+                    <div className="file-size">{formatFileSize(file.size)}</div>
+                  </div>
+                  <button
+                    className="btn-remove-file"
+                    onClick={() => removeFile(index)}
+                    title="Remove file"
+                  >
+                    ×
+                  </button>
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        {formData.sopFiles.length > 0 && (
+        {formData.sopFiles && formData.sopFiles.length > 0 && (
           <div className="ai-processing">
             <button className="btn-ai-process">
               🤖 AI: Parse & Generate Process Tree
             </button>
             <p className="processing-hint">
-              AI will extract milestones, tasks, and role ownership from your documents
+              AI will extract milestones, tasks, and role ownership from your {formData.sopFiles.length} document{formData.sopFiles.length !== 1 ? 's' : ''}
             </p>
           </div>
         )}
 
         {formData.processTree && (
           <div className="process-tree-preview">
-            <h4>Process Tree Preview</h4>
-            <p>✓ Identified 12 milestones</p>
-            <p>✓ Extracted 47 tasks</p>
-            <p>✓ Mapped role ownership</p>
+            <h4>✓ Process Tree Generated</h4>
+            <div className="preview-stats">
+              <div className="stat-item">
+                <span className="stat-number">12</span>
+                <span className="stat-label">Milestones</span>
+              </div>
+              <div className="stat-item">
+                <span className="stat-number">47</span>
+                <span className="stat-label">Tasks</span>
+              </div>
+              <div className="stat-item">
+                <span className="stat-number">8</span>
+                <span className="stat-label">Roles</span>
+              </div>
+            </div>
           </div>
         )}
       </div>
