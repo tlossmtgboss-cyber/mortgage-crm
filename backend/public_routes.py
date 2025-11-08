@@ -26,14 +26,75 @@ router = APIRouter()
 # Stripe service disabled for now - using mock
 class MockStripeService:
     """Mock Stripe service when Stripe is not configured"""
+
+    PLANS = {
+        "starter": {
+            "name": "Starter",
+            "price_monthly": 99,
+            "stripe_price_id": "price_starter",
+            "features": [
+                "Up to 5 team members",
+                "1,000 leads per month",
+                "Basic AI assistant",
+                "Email support",
+                "Calendar integration",
+                "Task automation"
+            ],
+            "user_limit": 5
+        },
+        "professional": {
+            "name": "Professional",
+            "price_monthly": 199,
+            "stripe_price_id": "price_professional",
+            "features": [
+                "Up to 15 team members",
+                "Unlimited leads",
+                "Advanced AI assistant with workflow automation",
+                "Priority support",
+                "Calendar + Email + Teams integration",
+                "Custom workflows",
+                "SMS notifications",
+                "Analytics & reporting"
+            ],
+            "user_limit": 15
+        },
+        "enterprise": {
+            "name": "Enterprise",
+            "price_monthly": 399,
+            "stripe_price_id": "price_enterprise",
+            "features": [
+                "Unlimited team members",
+                "Unlimited leads",
+                "Full AI agent capabilities",
+                "24/7 dedicated support",
+                "All integrations",
+                "Custom AI training",
+                "White-label options",
+                "API access",
+                "Custom reporting"
+            ],
+            "user_limit": 999
+        }
+    }
+
     def get_plan_info(self, plan):
-        return {"name": plan, "price": 0, "features": []}
+        return self.PLANS.get(plan)
+
     def create_customer(self, *args, **kwargs):
         return None
+
     def create_subscription(self, *args, **kwargs):
         return None
+
     def get_all_plans(self):
-        return []
+        return [
+            {
+                "key": key,
+                **plan_info
+            }
+            for key, plan_info in self.PLANS.items()
+        ]
+
     def verify_webhook_signature(self, *args, **kwargs):
         return None
 
