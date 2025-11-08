@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import OnboardingWizard from './OnboardingWizard';
 import './Settings.css';
 
 function Settings() {
@@ -92,6 +93,13 @@ function Settings() {
           >
             <span className="icon">🔔</span>
             <span>Notifications</span>
+          </button>
+          <button
+            className={`sidebar-btn ${activeSection === 'onboarding' ? 'active' : ''}`}
+            onClick={() => setActiveSection('onboarding')}
+          >
+            <span className="icon">🚀</span>
+            <span>Onboarding</span>
           </button>
         </div>
 
@@ -287,6 +295,18 @@ function Settings() {
             <div className="notifications-section">
               <h2>Notification Preferences</h2>
               <p>Coming soon...</p>
+            </div>
+          )}
+
+          {activeSection === 'onboarding' && (
+            <div className="onboarding-section">
+              <h2>Setup Wizard</h2>
+              <p className="section-description">
+                Complete the onboarding process to set up your CRM
+              </p>
+              <div className="onboarding-wrapper">
+                <OnboardingWizard />
+              </div>
             </div>
           )}
         </div>
