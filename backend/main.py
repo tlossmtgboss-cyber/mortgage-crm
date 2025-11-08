@@ -486,6 +486,94 @@ class EmailVerificationToken(Base):
     verified_at = Column(DateTime)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class Email(Base):
+    """Stores emails fetched from Microsoft Graph API"""
+    __tablename__ = "emails"
+    id = Column(Integer, primary_key=True, index=True)
+    message_id = Column(String, unique=True, index=True)  # Microsoft Graph message ID
+    user_id = Column(Integer, ForeignKey("users.id"))
+    lead_id = Column(Integer, ForeignKey("leads.id"))  # Linked lead if identified
+    sender_email = Column(String, index=True)
+    sender_name = Column(String)
+    recipient_emails = Column(JSON)  # Array of recipient emails
+    subject = Column(String)
+    body_text = Column(Text)  # Plain text body
+    body_html = Column(Text)  # HTML body
+    received_date = Column(DateTime, index=True)
+    is_read = Column(Boolean, default=False)
+    has_attachments = Column(Boolean, default=False)
+    attachments_metadata = Column(JSON)  # Attachment info (not content)
+    folder_name = Column(String)  # Which folder: Inbox, Sent, etc.
+    # AI Processing
+    processed = Column(Boolean, default=False, index=True)
+    ai_extracted_data = Column(JSON)  # What AI extracted
+    ai_confidence = Column(Float)  # Overall confidence score
+    processing_error = Column(Text)  # Error if processing failed
+    processed_at = Column(DateTime)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class AIAction(Base):
+    """Stores AI-suggested actions for user approval"""
+    __tablename__ = "ai_actions"
+    id = Column(Integer, primary_key=True, index=True)
+    email_id = Column(Integer, ForeignKey("emails.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+    lead_id = Column(Integer, ForeignKey("leads.id"))
+    task_id = Column(Integer, ForeignKey("tasks.id"))  # Associated approval task
+    # Action Details
+    action_type = Column(String, index=True)  # "create_lead", "update_field", "change_stage", "create_response"
+    entity_type = Column(String)  # "lead", "loan", "client"
+    entity_id = Column(Integer)  # ID of the entity to update
+    field_name = Column(String)  # Which field to update
+    old_value = Column(String)  # Current value (if update)
+    new_value = Column(String)  # Suggested value
+    suggested_changes = Column(JSON)  # Full change details
+    reasoning = Column(Text)  # AI's explanation
+    confidence = Column(Float)  # 0-100 confidence score
+    # Approval Status
+    status = Column(String, default="pending")  # pending, approved, rejected, auto_approved
+    approved_by_user = Column(Boolean)
+    auto_applied = Column(Boolean, default=False)
+    applied_at = Column(DateTime)
+    rejected_reason = Column(Text)
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    reviewed_at = Column(DateTime)
+
+class AILearningMetric(Base):
+    """Tracks AI learning and auto-approval thresholds"""
+    __tablename__ = "ai_learning_metrics"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    action_type = Column(String, index=True)  # "create_lead", "update_field", etc.
+    field_name = Column(String)  # Specific field if applicable
+    # Metrics
+    total_suggestions = Column(Integer, default=0)
+    approved_count = Column(Integer, default=0)
+    rejected_count = Column(Integer, default=0)
+    auto_approved_count = Column(Integer, default=0)
+    accuracy_rate = Column(Float, default=0.0)  # approved / total
+    # Thresholds
+    confidence_threshold = Column(Float, default=0.95)  # Min confidence for auto-approve
+    auto_approve_enabled = Column(Boolean, default=False)
+    min_suggestions_before_auto = Column(Integer, default=10)  # Need 10 approvals first
+    # Timestamps
+    last_updated = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class MicrosoftToken(Base):
+    """Stores Microsoft Graph OAuth tokens for email access"""
+    __tablename__ = "microsoft_tokens"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True)
+    access_token = Column(Text)  # Encrypted
+    refresh_token = Column(Text)  # Encrypted
+    token_type = Column(String)
+    expires_at = Column(DateTime)
+    scope = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 # ============================================================================
 # PYDANTIC SCHEMAS
 # ============================================================================
