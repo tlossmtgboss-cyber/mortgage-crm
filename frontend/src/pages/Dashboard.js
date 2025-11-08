@@ -15,9 +15,10 @@ function Dashboard() {
   const [loanIssues, setLoanIssues] = useState([]);
   const [aiTasks, setAiTasks] = useState({ pending: [], waiting: [] });
   const [referralStats, setReferralStats] = useState({});
-  // const [mumAlerts, setMumAlerts] = useState([]); // Hard-coded in render
+  const [mumAlerts, setMumAlerts] = useState([]);
   const [teamStats, setTeamStats] = useState({});
   const [messages, setMessages] = useState([]);
+  const [completedTasks, setCompletedTasks] = useState(new Set());
 
   useEffect(() => {
     loadDashboard();
@@ -36,7 +37,7 @@ function Dashboard() {
       setLoanIssues(mockLoanIssues());
       setAiTasks(mockAiTasks());
       setReferralStats(mockReferralStats());
-      // setMumAlerts(mockMumAlerts()); // Hard-coded in render
+      setMumAlerts(mockMumAlerts());
       setTeamStats(mockTeamStats());
       setMessages(mockMessages());
 
@@ -54,12 +55,140 @@ function Dashboard() {
       setLoanIssues(mockLoanIssues());
       setAiTasks(mockAiTasks());
       setReferralStats(mockReferralStats());
-      // setMumAlerts(mockMumAlerts()); // Hard-coded in render
+      setMumAlerts(mockMumAlerts());
       setTeamStats(mockTeamStats());
       setMessages(mockMessages());
     } finally {
       setLoading(false);
     }
+  };
+
+  // Aggregate all tasks from different containers into AI Prioritized Tasks
+  const getAggregatedTasks = () => {
+    const tasks = [];
+
+    // Add manual prioritized tasks
+    prioritizedTasks.forEach((task, idx) => {
+      if (!completedTasks.has(`priority-${idx}`)) {
+        tasks.push({
+          id: `priority-${idx}`,
+          ...task,
+          source: 'Manual Priority',
+          sourceIcon: '🎯'
+        });
+      }
+    });
+
+    // Add loan issues as critical tasks
+    loanIssues.forEach((issue, idx) => {
+      if (!completedTasks.has(`issue-${idx}`)) {
+        tasks.push({
+          id: `issue-${idx}`,
+          title: issue.issue,
+          borrower: issue.borrower,
+          stage: 'Milestone Alert',
+          urgency: 'critical',
+          ai_action: null,
+          source: 'Milestone Risk',
+          sourceIcon: '🔥',
+          action: issue.action
+        });
+      }
+    });
+
+    // Add AI pending tasks
+    aiTasks.pending.forEach((task, idx) => {
+      if (!completedTasks.has(`ai-pending-${idx}`)) {
+        tasks.push({
+          id: `ai-pending-${idx}`,
+          title: task.task,
+          borrower: 'AI Task',
+          stage: 'Pending Approval',
+          urgency: 'high',
+          ai_action: task.what_ai_did,
+          source: 'AI Engine',
+          sourceIcon: '🤖',
+          confidence: task.confidence
+        });
+      }
+    });
+
+    // Add AI waiting tasks
+    aiTasks.waiting.forEach((task, idx) => {
+      if (!completedTasks.has(`ai-waiting-${idx}`)) {
+        tasks.push({
+          id: `ai-waiting-${idx}`,
+          title: task.task,
+          borrower: 'Needs Input',
+          stage: 'Waiting',
+          urgency: 'medium',
+          ai_action: null,
+          source: 'AI Engine',
+          sourceIcon: '🤖'
+        });
+      }
+    });
+
+    // Add MUM alerts
+    mumAlerts.forEach((alert, idx) => {
+      if (!completedTasks.has(`mum-${idx}`)) {
+        tasks.push({
+          id: `mum-${idx}`,
+          title: alert.title,
+          borrower: alert.client,
+          stage: 'Client Retention',
+          urgency: 'medium',
+          ai_action: null,
+          source: 'Client for Life',
+          sourceIcon: '♻️',
+          action: alert.action
+        });
+      }
+    });
+
+    // Add lead alerts
+    if (leadMetrics.alerts) {
+      leadMetrics.alerts.forEach((alert, idx) => {
+        if (!completedTasks.has(`lead-${idx}`)) {
+          tasks.push({
+            id: `lead-${idx}`,
+            title: alert,
+            borrower: 'Multiple Leads',
+            stage: 'Lead Follow-up',
+            urgency: 'high',
+            ai_action: null,
+            source: 'Leads Engine',
+            sourceIcon: '🚀'
+          });
+        }
+      });
+    }
+
+    // Add unread messages as tasks
+    messages.filter(m => !m.read).forEach((msg, idx) => {
+      if (!completedTasks.has(`message-${idx}`)) {
+        tasks.push({
+          id: `message-${idx}`,
+          title: `Respond to ${msg.from}`,
+          borrower: msg.from,
+          stage: 'Communication',
+          urgency: 'medium',
+          ai_action: msg.ai_summary,
+          source: 'Messages',
+          sourceIcon: '📬'
+        });
+      }
+    });
+
+    return tasks;
+  };
+
+  const handleCompleteTask = (taskId) => {
+    setCompletedTasks(prev => {
+      const newCompleted = new Set(prev);
+      newCompleted.add(taskId);
+      return newCompleted;
+    });
   };
 
   const getUrgencyColor = (urgency) => {
@@ -102,11 +231,15 @@ function Dashboard() {
         <div className="dashboard-block ai-tasks-block">
           <div className="block-header">
             <h2>🎯 AI Prioritized Tasks (Today)</h2>
-            <span className="task-count">{prioritizedTasks.length} tasks</span>
+            <span className="task-count">{getAggregatedTasks().length} tasks</span>
           </div>
           <div className="task-list">
-            {prioritizedTasks.filter(task => task && task.title).map((task, index) => (
-              <div key={index} className="task-item">
+            {getAggregatedTasks().map((task) => (
+              <div key={task.id} className="task-item">
+                <div className="task-source-badge">
+                  <span className="source-icon">{task.sourceIcon}</span>
+                  <span className="source-text">{task.source}</span>
+                </div>
                 <div className="task-main">
                   <div className="task-info">
                     <div className="task-title">{task.title}</div>
@@ -129,6 +262,17 @@ function Dashboard() {
                     <button className="btn-approve-sm">Approve</button>
                   </div>
                 )}
+                <div className="task-actions">
+                  <button
+                    className="btn-complete-task"
+                    onClick={() => handleCompleteTask(task.id)}
+                  >
+                    ✓ Complete
+                  </button>
+                  {task.action && (
+                    <button className="btn-task-action">{task.action}</button>
+                  )}
+                </div>
               </div>
             ))}
           </div>
@@ -237,7 +381,7 @@ function Dashboard() {
             </div>
             <div className="ai-alerts-section">
               <div className="ai-alert-title">🚨 AI Alerts</div>
-              {leadMetrics.alerts && leadMetrics.alerts.filter(a => a).map((alert, idx) => (
+              {leadMetrics.alerts && leadMetrics.alerts.filter((a, idx) => a && !completedTasks.has(`lead-${idx}`)).map((alert, idx) => (
                 <div key={idx} className="ai-alert-item">
                   <span className="alert-dot"></span>
                   {alert}
@@ -251,10 +395,10 @@ function Dashboard() {
         <div className="dashboard-block issues-block">
           <div className="block-header">
             <h2>🔥 Milestone Risk Alerts</h2>
-            <span className="issue-count">{loanIssues.length} issues</span>
+            <span className="issue-count">{loanIssues.filter((issue, idx) => !completedTasks.has(`issue-${idx}`)).length} issues</span>
           </div>
           <div className="issues-list">
-            {loanIssues.filter(issue => issue && issue.borrower).map((issue, index) => (
+            {loanIssues.filter((issue, idx) => issue && issue.borrower && !completedTasks.has(`issue-${idx}`)).map((issue, index) => (
               <div key={index} className="issue-item">
                 <div className="issue-main">
                   <div className="issue-borrower">{issue.borrower}</div>
@@ -354,33 +498,19 @@ function Dashboard() {
         <div className="dashboard-block mum-block">
           <div className="block-header">
             <h2>♻️ Client for Life Engine (MUM)</h2>
-            <span className="mum-count">3 actions</span>
+            <span className="mum-count">{mumAlerts.filter((alert, idx) => !completedTasks.has(`mum-${idx}`)).length} actions</span>
           </div>
           <div className="mum-list">
-            <div className="mum-item">
-              <div className="mum-icon">📅</div>
-              <div className="mum-content">
-                <div className="mum-title">Annual review due</div>
-                <div className="mum-client">Tom Wilson</div>
+            {mumAlerts.filter((alert, idx) => !completedTasks.has(`mum-${idx}`)).map((alert, idx) => (
+              <div key={idx} className="mum-item">
+                <div className="mum-icon">{alert.icon}</div>
+                <div className="mum-content">
+                  <div className="mum-title">{alert.title}</div>
+                  <div className="mum-client">{alert.client}</div>
+                </div>
+                <button className="btn-mum-action">{alert.action}</button>
               </div>
-              <button className="btn-mum-action">Schedule</button>
-            </div>
-            <div className="mum-item">
-              <div className="mum-icon">📉</div>
-              <div className="mum-content">
-                <div className="mum-title">Rate drop opportunity</div>
-                <div className="mum-client">Lisa Brown</div>
-              </div>
-              <button className="btn-mum-action">Send alert</button>
-            </div>
-            <div className="mum-item">
-              <div className="mum-icon">🎂</div>
-              <div className="mum-content">
-                <div className="mum-title">Home anniversary</div>
-                <div className="mum-client">Mark Taylor</div>
-              </div>
-              <button className="btn-mum-action">Send card</button>
-            </div>
+            ))}
           </div>
         </div>
 
@@ -556,11 +686,11 @@ const mockReferralStats = () => ({
   ]
 });
 
-// const mockMumAlerts = () => [
-//   { icon: '📅', title: 'Annual review due', client: 'Tom Wilson', action: 'Schedule' },
-//   { icon: '📉', title: 'Rate drop opportunity', client: 'Lisa Brown', action: 'Send alert' },
-//   { icon: '🎂', title: 'Home anniversary', client: 'Mark Taylor', action: 'Send card' }
-// ];
+const mockMumAlerts = () => [
+  { icon: '📅', title: 'Annual review due', client: 'Tom Wilson', action: 'Schedule' },
+  { icon: '📉', title: 'Rate drop opportunity', client: 'Lisa Brown', action: 'Send alert' },
+  { icon: '🎂', title: 'Home anniversary', client: 'Mark Taylor', action: 'Send card' }
+];
 
 const mockTeamStats = () => ({
   has_team: true,

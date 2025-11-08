@@ -167,6 +167,75 @@
   transform: translateY(-1px);
 }
 
+/* Task Source Badge */
+.task-source-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 4px 10px;
+  background: #f0f0f0;
+  border-radius: 6px;
+  width: fit-content;
+}
+
+.source-icon {
+  font-size: 14px;
+}
+
+.source-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Task Actions */
+.task-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.btn-complete-task {
+  flex: 1;
+  padding: 8px 16px;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-complete-task:hover {
+  background: #059669;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+}
+
+.btn-task-action {
+  padding: 8px 16px;
+  background: white;
+  color: #218D8D;
+  border: 2px solid #218D8D;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-task-action:hover {
+  background: #218D8D;
+  color: white;
+}
+
 /* BLOCK 2: Pipeline */
 .pipeline-block {
   grid-column: 7 / 13;
