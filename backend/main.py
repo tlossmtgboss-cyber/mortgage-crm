@@ -1536,28 +1536,395 @@ async def get_portfolio_stats(
 # AI ASSISTANT & CONVERSATIONS
 # ============================================================================
 
+async def execute_ai_function(
+    function_name: str,
+    function_args: dict,
+    db: Session,
+    current_user: User,
+    context_lead: Optional[Lead] = None,
+    context_loan: Optional[Loan] = None
+) -> dict:
+    """Execute AI function calls and return results"""
+
+    try:
+        if function_name == "create_task":
+            # Create a new task
+            lead_id = function_args.get("lead_id") or (context_lead.id if context_lead else None)
+            loan_id = function_args.get("loan_id") or (context_loan.id if context_loan else None)
+
+            task_type = TaskType.LEAD if lead_id else (TaskType.LOAN if loan_id else TaskType.GENERAL)
+
+            new_task = AITask(
+                type=task_type,
+                title=function_args["title"],
+                description=function_args.get("description", ""),
+                assigned_to_id=current_user.id,
+                lead_id=lead_id,
+                loan_id=loan_id,
+                priority=function_args.get("priority", "medium"),
+                due_date=datetime.fromisoformat(function_args["due_date"]) if function_args.get("due_date") else None,
+                status="pending",
+                created_by_ai=True
+            )
+            db.add(new_task)
+            db.commit()
+            db.refresh(new_task)
+
+            # Log activity
+            if lead_id:
+                activity = Activity(
+                    type=ActivityType.NOTE,
+                    description=f"AI created task: {function_args['title']}",
+                    lead_id=lead_id,
+                    user_id=current_user.id
+                )
+                db.add(activity)
+                db.commit()
+
+            return {
+                "success": True,
+                "task_id": new_task.id,
+                "message": f"Task '{function_args['title']}' created successfully"
+            }
+
+        elif function_name == "update_lead_stage":
+            lead_id = function_args["lead_id"]
+            lead = db.query(Lead).filter(Lead.id == lead_id, Lead.owner_id == current_user.id).first()
+
+            if not lead:
+                return {"success": False, "error": "Lead not found or access denied"}
+
+            old_stage = lead.stage.value
+            new_stage_str = function_args["new_stage"]
+            new_stage = LeadStage[new_stage_str.upper().replace(" ", "_")]
+
+            lead.stage = new_stage
+            lead.updated_at = datetime.utcnow()
+
+            # Log activity
+            reason = function_args.get("reason", "Stage updated by AI")
+            activity = Activity(
+                type=ActivityType.STAGE_CHANGE,
+                description=f"AI updated stage from {old_stage} to {new_stage_str}. Reason: {reason}",
+                lead_id=lead_id,
+                user_id=current_user.id
+            )
+            db.add(activity)
+            db.commit()
+
+            return {
+                "success": True,
+                "lead_id": lead_id,
+                "old_stage": old_stage,
+                "new_stage": new_stage_str,
+                "message": f"Lead stage updated from {old_stage} to {new_stage_str}"
+            }
+
+        elif function_name == "add_activity":
+            lead_id = function_args.get("lead_id") or (context_lead.id if context_lead else None)
+            loan_id = function_args.get("loan_id") or (context_loan.id if context_loan else None)
+
+            # Map activity type string to enum
+            type_map = {
+                "note": ActivityType.NOTE,
+                "call": ActivityType.CALL,
+                "email": ActivityType.EMAIL,
+                "meeting": ActivityType.MEETING,
+                "sms": ActivityType.SMS,
+                "other": ActivityType.NOTE
+            }
+
+            activity_type = type_map.get(function_args["activity_type"], ActivityType.NOTE)
+
+            activity = Activity(
+                type=activity_type,
+                description=function_args["description"],
+                lead_id=lead_id,
+                loan_id=loan_id,
+                user_id=current_user.id
+            )
+            db.add(activity)
+            db.commit()
+            db.refresh(activity)
+
+            return {
+                "success": True,
+                "activity_id": activity.id,
+                "message": "Activity added successfully"
+            }
+
+        elif function_name == "get_lead_details":
+            lead_id = function_args["lead_id"]
+            lead = db.query(Lead).filter(Lead.id == lead_id, Lead.owner_id == current_user.id).first()
+
+            if not lead:
+                return {"success": False, "error": "Lead not found or access denied"}
+
+            return {
+                "success": True,
+                "lead": {
+                    "id": lead.id,
+                    "name": lead.name,
+                    "email": lead.email,
+                    "phone": lead.phone,
+                    "stage": lead.stage.value,
+                    "ai_score": lead.ai_score,
+                    "credit_score": lead.credit_score,
+                    "loan_type": lead.loan_type,
+                    "preapproval_amount": lead.preapproval_amount,
+                    "property_value": lead.property_value,
+                    "employment_status": lead.employment_status,
+                    "annual_income": lead.annual_income
+                }
+            }
+
+        elif function_name == "get_high_priority_leads":
+            limit = function_args.get("limit", 10)
+
+            # Get high-priority leads (high score, active stages)
+            leads = db.query(Lead).filter(
+                Lead.owner_id == current_user.id,
+                Lead.stage.in_([LeadStage.NEW, LeadStage.ATTEMPTED_CONTACT, LeadStage.PROSPECT, LeadStage.PRE_QUALIFIED])
+            ).order_by(Lead.ai_score.desc()).limit(limit).all()
+
+            return {
+                "success": True,
+                "count": len(leads),
+                "leads": [
+                    {
+                        "id": lead.id,
+                        "name": lead.name,
+                        "stage": lead.stage.value,
+                        "ai_score": lead.ai_score,
+                        "credit_score": lead.credit_score,
+                        "email": lead.email
+                    }
+                    for lead in leads
+                ]
+            }
+
+        elif function_name == "search_leads":
+            query = function_args["query"].lower()
+            stage_filter = function_args.get("stage")
+
+            # Search by name or email
+            leads_query = db.query(Lead).filter(
+                Lead.owner_id == current_user.id,
+                or_(
+                    Lead.name.ilike(f"%{query}%"),
+                    Lead.email.ilike(f"%{query}%")
+                )
+            )
+
+            if stage_filter:
+                try:
+                    stage_enum = LeadStage[stage_filter.upper().replace(" ", "_")]
+                    leads_query = leads_query.filter(Lead.stage == stage_enum)
+                except KeyError:
+                    pass
+
+            leads = leads_query.limit(10).all()
+
+            return {
+                "success": True,
+                "count": len(leads),
+                "leads": [
+                    {
+                        "id": lead.id,
+                        "name": lead.name,
+                        "email": lead.email,
+                        "stage": lead.stage.value,
+                        "ai_score": lead.ai_score
+                    }
+                    for lead in leads
+                ]
+            }
+
+        else:
+            return {"success": False, "error": f"Unknown function: {function_name}"}
+
+    except Exception as e:
+        logger.error(f"Error executing AI function {function_name}: {e}")
+        return {"success": False, "error": str(e)}
+
 @app.post("/api/v1/ai/chat", response_model=ConversationResponse)
 async def ai_chat(
     conversation: ConversationCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """AI Assistant chat endpoint with context awareness"""
+    """AI Assistant chat endpoint with agentic function calling capabilities"""
 
     if not openai_client:
         raise HTTPException(status_code=503, detail="OpenAI API key not configured")
 
     # Build context from lead or loan if provided
     context_info = ""
+    context_lead = None
+    context_loan = None
+
     if conversation.lead_id:
-        lead = db.query(Lead).filter(Lead.id == conversation.lead_id).first()
-        if lead:
-            context_info = f"Lead: {lead.name}, Stage: {lead.stage.value}, Score: {lead.ai_score}, Credit: {lead.credit_score}"
+        context_lead = db.query(Lead).filter(Lead.id == conversation.lead_id).first()
+        if context_lead:
+            context_info = f"Lead: {context_lead.name}, Stage: {context_lead.stage.value}, Score: {context_lead.ai_score}, Credit: {context_lead.credit_score}"
 
     if conversation.loan_id:
-        loan = db.query(Loan).filter(Loan.id == conversation.loan_id).first()
-        if loan:
-            context_info = f"Loan: {loan.loan_number}, Borrower: {loan.borrower_name}, Stage: {loan.stage.value}, Amount: ${loan.amount:,.0f}"
+        context_loan = db.query(Loan).filter(Loan.id == conversation.loan_id).first()
+        if context_loan:
+            context_info = f"Loan: {context_loan.loan_number}, Borrower: {context_loan.borrower_name}, Stage: {context_loan.stage.value}, Amount: ${context_loan.amount:,.0f}"
+
+    # Define available functions for AI to call
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "create_task",
+                "description": "Create a new task for a lead or loan. Use this when the user asks you to create a task, reminder, or follow-up.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "title": {
+                            "type": "string",
+                            "description": "The task title (e.g., 'Call John about pre-approval')"
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "Detailed description of the task"
+                        },
+                        "lead_id": {
+                            "type": "integer",
+                            "description": "The lead ID this task is for (if applicable)"
+                        },
+                        "loan_id": {
+                            "type": "integer",
+                            "description": "The loan ID this task is for (if applicable)"
+                        },
+                        "due_date": {
+                            "type": "string",
+                            "description": "Due date in ISO format (e.g., '2025-11-10T10:00:00')"
+                        },
+                        "priority": {
+                            "type": "string",
+                            "enum": ["high", "medium", "low"],
+                            "description": "Task priority level"
+                        }
+                    },
+                    "required": ["title"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "update_lead_stage",
+                "description": "Update a lead's stage in the pipeline. Use this when progressing a lead or changing their status.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "lead_id": {
+                            "type": "integer",
+                            "description": "The lead ID to update"
+                        },
+                        "new_stage": {
+                            "type": "string",
+                            "enum": ["New", "Attempted Contact", "Prospect", "Pre-Qualified", "Pre-Approved", "Application", "Completed", "Withdrawn", "Does Not Qualify"],
+                            "description": "The new stage for the lead"
+                        },
+                        "reason": {
+                            "type": "string",
+                            "description": "Brief reason for the stage change"
+                        }
+                    },
+                    "required": ["lead_id", "new_stage"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "add_activity",
+                "description": "Add a note, activity, or log entry to a lead or loan. Use this to record conversations, notes, or important events.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "lead_id": {
+                            "type": "integer",
+                            "description": "The lead ID (if applicable)"
+                        },
+                        "loan_id": {
+                            "type": "integer",
+                            "description": "The loan ID (if applicable)"
+                        },
+                        "activity_type": {
+                            "type": "string",
+                            "enum": ["note", "call", "email", "meeting", "sms", "other"],
+                            "description": "Type of activity"
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "The activity description or note content"
+                        }
+                    },
+                    "required": ["description", "activity_type"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_lead_details",
+                "description": "Retrieve detailed information about a specific lead. Use this when you need more information about a lead.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "lead_id": {
+                            "type": "integer",
+                            "description": "The lead ID to retrieve"
+                        }
+                    },
+                    "required": ["lead_id"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_high_priority_leads",
+                "description": "Get a list of high-priority leads that need attention. Use this when asked about priorities or what to work on.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "limit": {
+                            "type": "integer",
+                            "description": "Maximum number of leads to return (default 10)",
+                            "default": 10
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "search_leads",
+                "description": "Search for leads by name, email, or other criteria.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "Search query (name, email, etc.)"
+                        },
+                        "stage": {
+                            "type": "string",
+                            "description": "Filter by stage"
+                        }
+                    },
+                    "required": ["query"]
+                }
+            }
+        }
+    ]
 
     # Get conversation history for context
     history = db.query(Conversation).filter(
@@ -1568,20 +1935,22 @@ async def ai_chat(
     messages = [
         {
             "role": "system",
-            "content": f"""You are an AI assistant for a mortgage CRM system. You help loan officers manage leads, loans, tasks, and client relationships.
+            "content": f"""You are an agentic AI assistant for a mortgage CRM system. You can autonomously execute actions to help loan officers.
 
 Current user: {current_user.full_name or current_user.email}
 {f'Context: {context_info}' if context_info else ''}
 
-You can help with:
-- Lead prioritization and follow-up strategies
-- Loan status updates and timeline management
-- Task automation and completion
-- Client communication suggestions
-- Analytics and performance insights
-- Calendar and appointment scheduling
+You have the ability to:
+- Create tasks and reminders
+- Update lead stages
+- Add notes and activities
+- Retrieve lead information
+- Search for leads
+- Analyze priorities
 
-Be concise, professional, and action-oriented."""
+When a user asks you to do something, use the available functions to actually perform the action. Don't just suggest - DO IT.
+
+Be proactive, professional, and action-oriented. Always confirm what you've done."""
         }
     ]
 
@@ -1595,17 +1964,71 @@ Be concise, professional, and action-oriented."""
     messages.append({"role": "user", "content": conversation.message})
 
     try:
-        # Call OpenAI
+        # Call OpenAI with function calling
         response = openai_client.chat.completions.create(
             model="gpt-4o-mini",
             messages=messages,
+            tools=tools,
+            tool_choice="auto",
             temperature=0.7,
-            max_tokens=500
+            max_tokens=1000
         )
 
-        ai_response = response.choices[0].message.content
+        response_message = response.choices[0].message
+        tool_calls = response_message.tool_calls
+        actions_taken = []
 
-        # Save conversation
+        # Execute any function calls
+        if tool_calls:
+            messages.append(response_message)
+
+            for tool_call in tool_calls:
+                function_name = tool_call.function.name
+                function_args = json.loads(tool_call.function.arguments)
+
+                logger.info(f"AI calling function: {function_name} with args: {function_args}")
+
+                # Execute the function
+                function_response = await execute_ai_function(
+                    function_name,
+                    function_args,
+                    db,
+                    current_user,
+                    context_lead,
+                    context_loan
+                )
+
+                actions_taken.append({
+                    "function": function_name,
+                    "args": function_args,
+                    "result": function_response
+                })
+
+                # Add function response to messages
+                messages.append({
+                    "tool_call_id": tool_call.id,
+                    "role": "tool",
+                    "name": function_name,
+                    "content": json.dumps(function_response)
+                })
+
+            # Get final response from AI after function execution
+            second_response = openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=messages,
+                temperature=0.7,
+                max_tokens=500
+            )
+
+            ai_response = second_response.choices[0].message.content
+        else:
+            ai_response = response_message.content
+
+        # Save conversation with actions metadata
+        metadata = conversation.context or {}
+        if actions_taken:
+            metadata["actions_taken"] = actions_taken
+
         db_conversation = Conversation(
             user_id=current_user.id,
             lead_id=conversation.lead_id,
@@ -1613,24 +2036,25 @@ Be concise, professional, and action-oriented."""
             message=conversation.message,
             response=ai_response,
             role="user",
-            metadata=conversation.context
+            metadata=metadata
         )
         db.add(db_conversation)
 
-        # Also save assistant response
+        # Save assistant response
         db_assistant = Conversation(
             user_id=current_user.id,
             lead_id=conversation.lead_id,
             loan_id=conversation.loan_id,
             message=ai_response,
-            role="assistant"
+            role="assistant",
+            metadata={"actions": actions_taken} if actions_taken else None
         )
         db.add(db_assistant)
 
         db.commit()
         db.refresh(db_conversation)
 
-        logger.info(f"AI chat completed for user {current_user.email}")
+        logger.info(f"AI chat completed for user {current_user.email}. Actions taken: {len(actions_taken)}")
         return db_conversation
 
     except Exception as e:
