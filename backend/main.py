@@ -167,6 +167,22 @@ class Lead(Base):
     annual_income = Column(Float)
     monthly_debts = Column(Float)
     first_time_buyer = Column(Boolean, default=False)
+    # Loan Details
+    loan_amount = Column(Float)
+    interest_rate = Column(Float)
+    loan_term = Column(Integer)
+    apr = Column(Float)
+    points = Column(Float)
+    lock_date = Column(DateTime)
+    lock_expiration = Column(DateTime)
+    closing_date = Column(DateTime)
+    lender = Column(String)
+    loan_officer = Column(String)
+    processor = Column(String)
+    underwriter = Column(String)
+    appraisal_value = Column(Float)
+    ltv = Column(Float)
+    dti = Column(Float)
     # Metadata
     user_metadata = Column(JSON)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -511,6 +527,22 @@ class LeadCreate(BaseModel):
     first_time_buyer: Optional[bool] = False
     # Loan Information
     loan_number: Optional[str] = None
+    # Loan Details
+    loan_amount: Optional[float] = None
+    interest_rate: Optional[float] = None
+    loan_term: Optional[int] = None
+    apr: Optional[float] = None
+    points: Optional[float] = None
+    lock_date: Optional[datetime] = None
+    lock_expiration: Optional[datetime] = None
+    closing_date: Optional[datetime] = None
+    lender: Optional[str] = None
+    loan_officer: Optional[str] = None
+    processor: Optional[str] = None
+    underwriter: Optional[str] = None
+    appraisal_value: Optional[float] = None
+    ltv: Optional[float] = None
+    dti: Optional[float] = None
     # Notes
     notes: Optional[str] = None
 
@@ -521,6 +553,39 @@ class LeadUpdate(BaseModel):
     stage: Optional[LeadStage] = None
     loan_number: Optional[str] = None
     notes: Optional[str] = None
+    # Property Information
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zip_code: Optional[str] = None
+    property_type: Optional[str] = None
+    property_value: Optional[float] = None
+    down_payment: Optional[float] = None
+    # Financial Information
+    credit_score: Optional[int] = None
+    employment_status: Optional[str] = None
+    annual_income: Optional[float] = None
+    monthly_debts: Optional[float] = None
+    first_time_buyer: Optional[bool] = None
+    loan_type: Optional[str] = None
+    preapproval_amount: Optional[float] = None
+    source: Optional[str] = None
+    # Loan Details
+    loan_amount: Optional[float] = None
+    interest_rate: Optional[float] = None
+    loan_term: Optional[int] = None
+    apr: Optional[float] = None
+    points: Optional[float] = None
+    lock_date: Optional[datetime] = None
+    lock_expiration: Optional[datetime] = None
+    closing_date: Optional[datetime] = None
+    lender: Optional[str] = None
+    loan_officer: Optional[str] = None
+    processor: Optional[str] = None
+    underwriter: Optional[str] = None
+    appraisal_value: Optional[float] = None
+    ltv: Optional[float] = None
+    dti: Optional[float] = None
 
 class LeadResponse(BaseModel):
     id: int
@@ -549,6 +614,23 @@ class LeadResponse(BaseModel):
     first_time_buyer: Optional[bool] = False
     # Loan Information
     loan_number: Optional[str] = None
+    loan_type: Optional[str] = None
+    # Loan Details
+    loan_amount: Optional[float] = None
+    interest_rate: Optional[float] = None
+    loan_term: Optional[int] = None
+    apr: Optional[float] = None
+    points: Optional[float] = None
+    lock_date: Optional[datetime] = None
+    lock_expiration: Optional[datetime] = None
+    closing_date: Optional[datetime] = None
+    lender: Optional[str] = None
+    loan_officer: Optional[str] = None
+    processor: Optional[str] = None
+    underwriter: Optional[str] = None
+    appraisal_value: Optional[float] = None
+    ltv: Optional[float] = None
+    dti: Optional[float] = None
     notes: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -2314,6 +2396,52 @@ def init_db():
                         -- Loan Information
                         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='loan_number') THEN
                             ALTER TABLE leads ADD COLUMN loan_number VARCHAR;
+                        END IF;
+                        -- Loan Details
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='loan_amount') THEN
+                            ALTER TABLE leads ADD COLUMN loan_amount FLOAT;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='interest_rate') THEN
+                            ALTER TABLE leads ADD COLUMN interest_rate FLOAT;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='loan_term') THEN
+                            ALTER TABLE leads ADD COLUMN loan_term INTEGER;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='apr') THEN
+                            ALTER TABLE leads ADD COLUMN apr FLOAT;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='points') THEN
+                            ALTER TABLE leads ADD COLUMN points FLOAT;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='lock_date') THEN
+                            ALTER TABLE leads ADD COLUMN lock_date TIMESTAMP;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='lock_expiration') THEN
+                            ALTER TABLE leads ADD COLUMN lock_expiration TIMESTAMP;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='closing_date') THEN
+                            ALTER TABLE leads ADD COLUMN closing_date TIMESTAMP;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='lender') THEN
+                            ALTER TABLE leads ADD COLUMN lender VARCHAR;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='loan_officer') THEN
+                            ALTER TABLE leads ADD COLUMN loan_officer VARCHAR;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='processor') THEN
+                            ALTER TABLE leads ADD COLUMN processor VARCHAR;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='underwriter') THEN
+                            ALTER TABLE leads ADD COLUMN underwriter VARCHAR;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='appraisal_value') THEN
+                            ALTER TABLE leads ADD COLUMN appraisal_value FLOAT;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='ltv') THEN
+                            ALTER TABLE leads ADD COLUMN ltv FLOAT;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='dti') THEN
+                            ALTER TABLE leads ADD COLUMN dti FLOAT;
                         END IF;
                     END $$;
                 """))
