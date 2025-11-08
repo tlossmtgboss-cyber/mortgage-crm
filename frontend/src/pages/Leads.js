@@ -17,6 +17,7 @@ function Leads() {
     credit_score: '',
     preapproval_amount: '',
     loan_type: '',
+    loan_number: '',
     source: '',
     address: '',
     city: '',
@@ -91,6 +92,7 @@ function Leads() {
       credit_score: lead.credit_score || '',
       preapproval_amount: lead.preapproval_amount || '',
       loan_type: lead.loan_type || '',
+      loan_number: lead.loan_number || '',
       source: lead.source || '',
       address: lead.address || '',
       city: lead.city || '',
@@ -128,6 +130,7 @@ function Leads() {
       credit_score: '',
       preapproval_amount: '',
       loan_type: '',
+      loan_number: '',
       source: '',
       address: '',
       city: '',
@@ -499,6 +502,16 @@ function Leads() {
                     <option value="Cash-Out Refi">Cash-Out Refi</option>
                     <option value="HELOC">HELOC</option>
                   </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Loan Number</label>
+                  <input
+                    type="text"
+                    value={formData.loan_number}
+                    onChange={(e) => setFormData({ ...formData, loan_number: e.target.value })}
+                    placeholder="Optional loan number"
+                  />
                 </div>
 
                 <div className="form-group">

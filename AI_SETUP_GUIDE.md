@@ -12,7 +12,16 @@ This guide explains how to set up and enhance the agentic AI capabilities in you
 - **Task Suggestions**: AI can suggest task completions
 - **Frontend Integration**: AI Assistant component in UI
 
-### ❌ Not Yet Configured/Implemented
+### ✅ NEW - Agentic Features NOW IMPLEMENTED!
+The AI can now autonomously execute actions using function calling:
+- **create_task**: Creates tasks automatically
+- **update_lead_stage**: Moves leads through pipeline
+- **add_activity**: Logs notes and activities
+- **get_lead_details**: Retrieves lead information
+- **get_high_priority_leads**: Analyzes priorities
+- **search_leads**: Searches your CRM data
+
+### ❌ Not Yet Configured
 
 #### 1. OpenAI API Key (CRITICAL - DO THIS FIRST)
 **Status**: Not set in production
