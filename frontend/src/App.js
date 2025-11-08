@@ -24,7 +24,7 @@ import Assistant from './pages/Assistant';
 import ClientProfile from './pages/ClientProfile';
 import ReferralPartners from './pages/ReferralPartners';
 import ReferralPartnerDetail from './pages/ReferralPartnerDetail';
-import Guidelines from './pages/Guidelines';
+import AIUnderwriter from './pages/AIUnderwriter';
 import Settings from './pages/Settings';
 import './App.css';
 
@@ -256,7 +256,7 @@ function App() {
             }
           />
           <Route
-            path="/guidelines"
+            path="/ai-underwriter"
             element={
               <PrivateRoute>
                 <div className="app-layout">
@@ -265,7 +265,7 @@ function App() {
                     assistantOpen={assistantOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <Guidelines />
+                    <AIUnderwriter />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                 </div>

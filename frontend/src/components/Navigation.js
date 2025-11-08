@@ -60,10 +60,10 @@ function Navigation({ onToggleAssistant, assistantOpen }) {
             Partners
           </Link>
           <Link
-            to="/guidelines"
-            className={`nav-link ${isActive('/guidelines') ? 'active' : ''}`}
+            to="/ai-underwriter"
+            className={`nav-link ${isActive('/ai-underwriter') ? 'active' : ''}`}
           >
-            Guidelines
+            AI Underwriter
           </Link>
         </div>
 

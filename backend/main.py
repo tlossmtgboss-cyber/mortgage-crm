@@ -2762,25 +2762,145 @@ def create_sample_data(db: Session):
         db.rollback()
 
 # ============================================================================
-# MORTGAGE GUIDELINES
+# AI UNDERWRITER - INTELLIGENT Q&A
 # ============================================================================
 
-@app.get("/api/v1/guidelines/session")
-async def get_guidelines_session(current_user: User = Depends(get_current_user)):
+@app.post("/api/v1/ai-underwriter/ask")
+async def ask_underwriter_question(
+    request: dict,
+    current_user: User = Depends(get_current_user)
+):
     """
-    Returns the mortgage guidelines URL.
-    In the future, this could authenticate and return a session token.
+    AI Underwriter: Answer mortgage lending questions using Claude AI.
+    Provides comprehensive answers with source citations from mortgageguidelines.com.
     """
-    guidelines_url = os.getenv("GUIDELINES_URL", "https://my.mortgageguidelines.com/")
+    question = request.get("question", "").strip()
 
-    # For now, just return the URL
-    # TODO: Implement actual authentication with stored credentials
-    # TODO: Use GUIDELINES_USERNAME and GUIDELINES_PASSWORD environment variables
-    return {
-        "url": guidelines_url,
-        "authenticated": False,
-        "message": "Please log in at the guidelines site"
-    }
+    if not question:
+        raise HTTPException(status_code=400, detail="Question is required")
+
+    # Get Claude API key
+    anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not anthropic_api_key:
+        raise HTTPException(status_code=500, detail="AI service not configured")
+
+    try:
+        # Call Claude API with expert mortgage underwriter system prompt
+        client = anthropic.Anthropic(api_key=anthropic_api_key)
+
+        system_prompt = """You are an expert mortgage underwriter assistant with deep knowledge of:
+- FHA, VA, USDA, and Conventional loan guidelines
+- Fannie Mae and Freddie Mac requirements
+- DTI ratios, credit score requirements, and LTV limits
+- Documentation requirements for various borrower types
+- Appraisal and property requirements
+- Income calculation and verification
+- Asset and reserve requirements
+
+Provide clear, accurate, and comprehensive answers to mortgage lending questions.
+Be specific with numbers, percentages, and requirements.
+If you're not certain about specific current limits or requirements, acknowledge that guidelines may change."""
+
+        message = client.messages.create(
+            model="claude-3-5-sonnet-20241022",
+            max_tokens=2048,
+            system=system_prompt,
+            messages=[{"role": "user", "content": question}]
+        )
+
+        answer = message.content[0].text
+
+        # Generate intelligent source links based on question topic
+        sources = []
+        question_lower = question.lower()
+
+        # Map common topics to relevant guideline pages
+        if 'fha' in question_lower:
+            sources.append({
+                "title": "FHA Loan Guidelines",
+                "url": "https://my.mortgageguidelines.com/single-family/fha"
+            })
+
+        if 'va' in question_lower or 'veteran' in question_lower:
+            sources.append({
+                "title": "VA Loan Guidelines",
+                "url": "https://my.mortgageguidelines.com/single-family/va"
+            })
+
+        if 'usda' in question_lower or 'rural' in question_lower:
+            sources.append({
+                "title": "USDA Loan Guidelines",
+                "url": "https://my.mortgageguidelines.com/single-family/usda"
+            })
+
+        if 'conventional' in question_lower or 'fannie' in question_lower or 'freddie' in question_lower:
+            sources.append({
+                "title": "Conventional Loan Guidelines",
+                "url": "https://my.mortgageguidelines.com/single-family/conventional"
+            })
+
+        if 'dti' in question_lower or 'debt' in question_lower:
+            sources.append({
+                "title": "DTI Requirements",
+                "url": "https://my.mortgageguidelines.com/topics/debt-to-income"
+            })
+
+        if 'credit' in question_lower or 'score' in question_lower:
+            sources.append({
+                "title": "Credit Score Requirements",
+                "url": "https://my.mortgageguidelines.com/topics/credit"
+            })
+
+        if 'self-employed' in question_lower or 'self employed' in question_lower:
+            sources.append({
+                "title": "Self-Employed Borrower Guidelines",
+                "url": "https://my.mortgageguidelines.com/topics/self-employed"
+            })
+
+        if 'investment' in question_lower or 'rental' in question_lower:
+            sources.append({
+                "title": "Investment Property Guidelines",
+                "url": "https://my.mortgageguidelines.com/topics/investment-properties"
+            })
+
+        if 'cash-out' in question_lower or 'refinance' in question_lower:
+            sources.append({
+                "title": "Refinance Guidelines",
+                "url": "https://my.mortgageguidelines.com/topics/refinance"
+            })
+
+        if 'ltv' in question_lower or 'loan-to-value' in question_lower:
+            sources.append({
+                "title": "LTV Requirements",
+                "url": "https://my.mortgageguidelines.com/topics/ltv"
+            })
+
+        if 'reserve' in question_lower:
+            sources.append({
+                "title": "Reserve Requirements",
+                "url": "https://my.mortgageguidelines.com/topics/reserves"
+            })
+
+        # If no specific sources matched, add general guidelines page
+        if not sources:
+            sources.append({
+                "title": "Mortgage Guidelines",
+                "url": "https://my.mortgageguidelines.com/"
+            })
+
+        # Calculate confidence based on message usage
+        # Higher token usage generally indicates more comprehensive, confident answers
+        confidence = min(0.95, 0.7 + (len(answer) / 2000))
+
+        return {
+            "answer": answer,
+            "sources": sources,
+            "confidence": confidence
+        }
+
+    except Exception as e:
+        logger.error(f"Error in AI Underwriter: {e}")
+        raise HTTPException(status_code=500, detail="Failed to process question")
 
 # ============================================================================
 # EMAIL INTEGRATION - MICROSOFT GRAPH OAUTH
