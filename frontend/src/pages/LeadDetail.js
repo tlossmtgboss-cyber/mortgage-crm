@@ -54,14 +54,16 @@ function LeadDetail() {
 
       // Add co-borrower if exists
       if (leadData.coborrower_name) {
+        const coborrowerName = String(leadData.coborrower_name || '');
+        const nameParts = coborrowerName.split(' ');
         borrowersList.push({
           id: 1,
           name: leadData.coborrower_name,
           type: 'co-borrower',
           data: {
             name: leadData.coborrower_name,
-            first_name: leadData.coborrower_name ? leadData.coborrower_name.split(' ')[0] : '',
-            last_name: leadData.coborrower_name ? leadData.coborrower_name.split(' ').slice(1).join(' ') : '',
+            first_name: nameParts[0] || '',
+            last_name: nameParts.slice(1).join(' ') || '',
             // Co-borrower fields would be stored separately in a real implementation
           }
         });
@@ -1158,14 +1160,14 @@ function LeadDetail() {
                   <div key={email.id} className="email-item">
                     <div className="email-header">
                       <span className="email-subject">
-                        {email.description.split('\n')[0]}
+                        {(email.description || email.content || '').split('\n')[0] || 'No subject'}
                       </span>
                       <span className="email-date">
                         {new Date(email.created_at).toLocaleDateString()}
                       </span>
                     </div>
                     <div className="email-preview">
-                      {email.description.substring(0, 100)}...
+                      {(email.description || email.content || '').substring(0, 100)}...
                     </div>
                   </div>
                 ))
