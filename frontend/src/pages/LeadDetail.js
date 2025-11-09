@@ -196,20 +196,14 @@ function LeadDetail() {
     };
 
     try {
-      console.log('Adding borrower:', fullName);
-      console.log('Current borrowers count:', borrowers.length);
-
       // Save the first additional borrower as co-borrower
       if (borrowers.length === 1) {
-        console.log('Updating lead with co-borrower name:', fullName);
         await leadsAPI.update(id, {
           co_applicant_name: fullName
         });
-        console.log('Co-borrower saved to backend');
 
         // Reload lead data to sync with backend
         const leadData = await leadsAPI.getById(id);
-        console.log('Reloaded lead data:', leadData);
         setLead(leadData);
 
         // Rebuild borrowers array with the new co-borrower
@@ -240,17 +234,13 @@ function LeadDetail() {
           });
         }
 
-        console.log('Updated borrowers array:', updatedBorrowers);
         setBorrowers(updatedBorrowers);
         const targetIndex = updatedBorrowers.length > 1 ? 1 : 0;
-        console.log('Setting active borrower to index:', targetIndex);
         setActiveBorrower(targetIndex);
         if (updatedBorrowers[targetIndex]) {
           setFormData(updatedBorrowers[targetIndex].data);
         }
-        console.log('Total borrowers after update:', updatedBorrowers.length);
       } else {
-        console.log('Adding additional borrower to local state only');
         // For additional borrowers beyond the first co-borrower, store in local state only
         setBorrowers([...borrowers, newBorrower]);
         setActiveBorrower(borrowers.length);
@@ -300,9 +290,6 @@ function LeadDetail() {
       </div>
     );
   }
-
-  console.log('Rendering with borrowers:', borrowers);
-  console.log('Active borrower index:', activeBorrower);
 
   return (
     <div className="lead-detail-page">
