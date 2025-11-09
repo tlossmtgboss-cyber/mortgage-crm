@@ -1470,26 +1470,26 @@
 .efficiency-score-display {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border-radius: 12px;
-  padding: 24px;
+  padding: 12px;
   color: white;
 }
 
 .score-number {
-  font-size: 64px;
+  font-size: 32px;
   font-weight: 700;
   line-height: 1;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .score-label {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 500;
   opacity: 0.9;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .score-trend {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
   display: inline-flex;
   align-items: center;
