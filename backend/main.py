@@ -668,6 +668,21 @@ class AITrainingEvent(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime, default=datetime.utcnow)
 
+class MicrosoftOAuthToken(Base):
+    __tablename__ = "microsoft_oauth_tokens"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True)
+    access_token = Column(Text)  # Encrypted token
+    refresh_token = Column(Text)  # Encrypted token
+    token_expires_at = Column(DateTime)
+    email_address = Column(String)  # Microsoft email address
+    sync_enabled = Column(Boolean, default=True)
+    last_sync_at = Column(DateTime)
+    sync_folder = Column(String, default="Inbox")  # Which folder to sync
+    sync_frequency_minutes = Column(Integer, default=15)  # How often to sync
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 # ============================================================================
 # PYDANTIC SCHEMAS
 # ============================================================================
@@ -1077,6 +1092,25 @@ class ReconciliationRejection(BaseModel):
     reason: Optional[str] = None
 
 # ============================================================================
+# MICROSOFT OAUTH SCHEMAS
+# ============================================================================
+
+class MicrosoftOAuthConnect(BaseModel):
+    authorization_code: str
+    redirect_uri: str
+
+class MicrosoftTokenResponse(BaseModel):
+    connected: bool
+    email_address: Optional[str] = None
+    sync_enabled: bool = True
+    last_sync_at: Optional[datetime] = None
+
+class MicrosoftSyncSettings(BaseModel):
+    sync_enabled: Optional[bool] = None
+    sync_folder: Optional[str] = None
+    sync_frequency_minutes: Optional[int] = None
+
+# ============================================================================
 # FASTAPI APP
 # ============================================================================
 
@@ -1448,6 +1482,206 @@ def apply_extracted_data(extracted_data: ExtractedData, db: Session) -> bool:
         logger.error(f"Apply extracted data error: {e}")
         db.rollback()
         return False
+
+# ============================================================================
+# MICROSOFT OAUTH & EMAIL SYNC FUNCTIONS
+# ============================================================================
+
+# Simple token encryption (use Fernet for production)
+from cryptography.fernet import Fernet
+import base64
+
+# Generate encryption key from SECRET_KEY (in production, use dedicated key)
+def get_encryption_key():
+    # Use first 32 bytes of SECRET_KEY, base64 encoded
+    key_material = SECRET_KEY.encode()[:32].ljust(32, b'0')
+    return base64.urlsafe_b64encode(key_material)
+
+def encrypt_token(token: str) -> str:
+    """Encrypt a token for secure storage"""
+    f = Fernet(get_encryption_key())
+    return f.encrypt(token.encode()).decode()
+
+def decrypt_token(encrypted_token: str) -> str:
+    """Decrypt a stored token"""
+    f = Fernet(get_encryption_key())
+    return f.decrypt(encrypted_token.encode()).decode()
+
+async def refresh_microsoft_token(oauth_record: MicrosoftOAuthToken, db: Session) -> bool:
+    """Refresh an expired Microsoft access token"""
+    try:
+        refresh_token = decrypt_token(oauth_record.refresh_token)
+
+        # Microsoft token endpoint
+        token_url = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
+
+        # Get client credentials from environment
+        client_id = os.getenv("MICROSOFT_CLIENT_ID")
+        client_secret = os.getenv("MICROSOFT_CLIENT_SECRET")
+
+        if not client_id or not client_secret:
+            logger.error("Microsoft OAuth credentials not configured")
+            return False
+
+        data = {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "refresh_token": refresh_token,
+            "grant_type": "refresh_token",
+            "scope": "https://graph.microsoft.com/Mail.Read offline_access"
+        }
+
+        response = requests.post(token_url, data=data)
+
+        if response.status_code == 200:
+            token_data = response.json()
+
+            # Update tokens
+            oauth_record.access_token = encrypt_token(token_data["access_token"])
+            oauth_record.refresh_token = encrypt_token(token_data["refresh_token"])
+            oauth_record.token_expires_at = datetime.utcnow() + timedelta(seconds=token_data["expires_in"])
+            oauth_record.updated_at = datetime.utcnow()
+
+            db.commit()
+            logger.info(f"Refreshed Microsoft token for user {oauth_record.user_id}")
+            return True
+        else:
+            logger.error(f"Failed to refresh Microsoft token: {response.text}")
+            return False
+
+    except Exception as e:
+        logger.error(f"Error refreshing Microsoft token: {e}")
+        return False
+
+async def fetch_microsoft_emails(oauth_record: MicrosoftOAuthToken, db: Session, limit: int = 50):
+    """Fetch emails from Microsoft Graph API"""
+    try:
+        # Check if token needs refresh
+        if oauth_record.token_expires_at < datetime.utcnow() + timedelta(minutes=5):
+            logger.info("Token expiring soon, refreshing...")
+            if not await refresh_microsoft_token(oauth_record, db):
+                return {"error": "Failed to refresh token"}
+
+        access_token = decrypt_token(oauth_record.access_token)
+
+        # Microsoft Graph API endpoint
+        folder = oauth_record.sync_folder or "Inbox"
+        graph_url = f"https://graph.microsoft.com/v1.0/me/mailFolders/{folder}/messages"
+
+        # Get emails from last sync or last 7 days
+        if oauth_record.last_sync_at:
+            filter_date = oauth_record.last_sync_at.isoformat()
+            graph_url += f"?$filter=receivedDateTime gt {filter_date}&$top={limit}&$orderby=receivedDateTime desc"
+        else:
+            # First sync - get last 7 days
+            seven_days_ago = (datetime.utcnow() - timedelta(days=7)).isoformat()
+            graph_url += f"?$filter=receivedDateTime gt {seven_days_ago}&$top={limit}&$orderby=receivedDateTime desc"
+
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+
+        response = requests.get(graph_url, headers=headers)
+
+        if response.status_code == 200:
+            emails_data = response.json()
+            emails = emails_data.get("value", [])
+
+            logger.info(f"Fetched {len(emails)} emails from Microsoft for user {oauth_record.user_id}")
+
+            # Update last sync time
+            oauth_record.last_sync_at = datetime.utcnow()
+            db.commit()
+
+            return {"emails": emails, "count": len(emails)}
+        else:
+            logger.error(f"Failed to fetch Microsoft emails: {response.status_code} - {response.text}")
+            return {"error": f"Microsoft API error: {response.status_code}"}
+
+    except Exception as e:
+        logger.error(f"Error fetching Microsoft emails: {e}")
+        return {"error": str(e)}
+
+async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Session):
+    """Process a Microsoft Graph email and ingest into DRE"""
+    try:
+        # Extract email data
+        subject = email_data.get("subject", "")
+        sender = email_data.get("from", {}).get("emailAddress", {}).get("address", "")
+        recipients = [r.get("emailAddress", {}).get("address", "") for r in email_data.get("toRecipients", [])]
+        received_at = email_data.get("receivedDateTime", "")
+
+        # Get body content
+        body = email_data.get("body", {})
+        raw_html = body.get("content", "") if body.get("contentType") == "html" else None
+        raw_text = body.get("content", "") if body.get("contentType") == "text" else None
+
+        # Create incoming data event
+        db_event = IncomingDataEvent(
+            source="microsoft365",
+            raw_text=raw_text,
+            raw_html=raw_html,
+            subject=subject,
+            sender=sender,
+            recipients=recipients,
+            received_at=datetime.fromisoformat(received_at.replace('Z', '+00:00')) if received_at else datetime.utcnow(),
+            user_id=user_id,
+            processed=False
+        )
+        db.add(db_event)
+        db.commit()
+        db.refresh(db_event)
+
+        logger.info(f"Ingested Microsoft email {db_event.id} from {sender}")
+
+        # Trigger extraction
+        content = raw_text or raw_html or ""
+        classification = classify_email_content(content, subject)
+
+        if classification["category"] != "unrelated" and classification["confidence"] >= 0.5:
+            fields = extract_loan_fields(content, classification["category"])
+
+            if fields:
+                confidences = [field.get("confidence", 0.0) for field in fields.values()]
+                avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
+
+                entity_match = match_entity(fields, db, user_id)
+
+                status = "pending_review"
+                if avg_confidence > 0.85 and entity_match["confidence"] > 0.90:
+                    status = "auto_approved"
+                elif avg_confidence < 0.60 or entity_match["confidence"] < 0.50:
+                    status = "needs_review"
+
+                extracted = ExtractedData(
+                    event_id=db_event.id,
+                    category=classification["category"],
+                    subcategory=classification.get("subcategory"),
+                    fields=fields,
+                    match_entity_type=entity_match["entity_type"],
+                    match_entity_id=entity_match["entity_id"],
+                    match_confidence=entity_match["confidence"],
+                    ai_confidence=avg_confidence,
+                    status=status
+                )
+                db.add(extracted)
+                db_event.processed = True
+                db.commit()
+
+                # Auto-apply if high confidence
+                if status == "auto_approved":
+                    if apply_extracted_data(extracted, db):
+                        extracted.status = "applied"
+                        db.commit()
+                        logger.info(f"Auto-applied extraction from email {db_event.id}")
+
+        return {"status": "success", "event_id": db_event.id}
+
+    except Exception as e:
+        logger.error(f"Error processing Microsoft email: {e}")
+        db.rollback()
+        return {"status": "error", "error": str(e)}
 
 # ============================================================================
 # DATA RECONCILIATION ENGINE - API ENDPOINTS
@@ -1838,6 +2072,255 @@ async def correct_and_train(
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================================================
+# MICROSOFT 365 OAUTH ENDPOINTS
+# ============================================================================
+
+@app.post("/api/v1/microsoft/connect")
+async def connect_microsoft365(
+    auth_data: MicrosoftOAuthConnect,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Exchange authorization code for access token and store"""
+    try:
+        # Microsoft token endpoint
+        token_url = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
+
+        # Get client credentials from environment
+        client_id = os.getenv("MICROSOFT_CLIENT_ID")
+        client_secret = os.getenv("MICROSOFT_CLIENT_SECRET")
+
+        if not client_id or not client_secret:
+            raise HTTPException(status_code=500, detail="Microsoft OAuth not configured. Contact administrator.")
+
+        # Exchange authorization code for tokens
+        data = {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "code": auth_data.authorization_code,
+            "redirect_uri": auth_data.redirect_uri,
+            "grant_type": "authorization_code",
+            "scope": "https://graph.microsoft.com/Mail.Read offline_access"
+        }
+
+        response = requests.post(token_url, data=data)
+
+        if response.status_code != 200:
+            logger.error(f"Microsoft token exchange failed: {response.text}")
+            raise HTTPException(status_code=400, detail="Failed to connect to Microsoft 365")
+
+        token_data = response.json()
+
+        # Get user's email address from Microsoft
+        access_token = token_data["access_token"]
+        headers = {"Authorization": f"Bearer {access_token}"}
+        profile_response = requests.get("https://graph.microsoft.com/v1.0/me", headers=headers)
+
+        email_address = None
+        if profile_response.status_code == 200:
+            profile = profile_response.json()
+            email_address = profile.get("mail") or profile.get("userPrincipalName")
+
+        # Check if user already has OAuth record
+        existing = db.query(MicrosoftOAuthToken).filter(
+            MicrosoftOAuthToken.user_id == current_user.id
+        ).first()
+
+        if existing:
+            # Update existing record
+            existing.access_token = encrypt_token(token_data["access_token"])
+            existing.refresh_token = encrypt_token(token_data["refresh_token"])
+            existing.token_expires_at = datetime.utcnow() + timedelta(seconds=token_data["expires_in"])
+            existing.email_address = email_address
+            existing.sync_enabled = True
+            existing.updated_at = datetime.utcnow()
+            db.commit()
+
+            logger.info(f"Updated Microsoft OAuth for user {current_user.id}")
+        else:
+            # Create new OAuth record
+            oauth_record = MicrosoftOAuthToken(
+                user_id=current_user.id,
+                access_token=encrypt_token(token_data["access_token"]),
+                refresh_token=encrypt_token(token_data["refresh_token"]),
+                token_expires_at=datetime.utcnow() + timedelta(seconds=token_data["expires_in"]),
+                email_address=email_address,
+                sync_enabled=True
+            )
+            db.add(oauth_record)
+            db.commit()
+
+            logger.info(f"Created Microsoft OAuth for user {current_user.id}")
+
+        return {
+            "status": "success",
+            "message": "Microsoft 365 connected successfully",
+            "email_address": email_address
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Microsoft connect error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/microsoft/status")
+async def get_microsoft_status(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get Microsoft 365 connection status"""
+    try:
+        oauth_record = db.query(MicrosoftOAuthToken).filter(
+            MicrosoftOAuthToken.user_id == current_user.id
+        ).first()
+
+        if not oauth_record:
+            return {
+                "connected": False,
+                "email_address": None,
+                "sync_enabled": False,
+                "last_sync_at": None
+            }
+
+        return {
+            "connected": True,
+            "email_address": oauth_record.email_address,
+            "sync_enabled": oauth_record.sync_enabled,
+            "last_sync_at": oauth_record.last_sync_at,
+            "sync_folder": oauth_record.sync_folder,
+            "sync_frequency_minutes": oauth_record.sync_frequency_minutes
+        }
+
+    except Exception as e:
+        logger.error(f"Microsoft status error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/microsoft/disconnect")
+async def disconnect_microsoft365(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Disconnect Microsoft 365 account"""
+    try:
+        oauth_record = db.query(MicrosoftOAuthToken).filter(
+            MicrosoftOAuthToken.user_id == current_user.id
+        ).first()
+
+        if not oauth_record:
+            raise HTTPException(status_code=404, detail="No Microsoft 365 connection found")
+
+        db.delete(oauth_record)
+        db.commit()
+
+        logger.info(f"Disconnected Microsoft 365 for user {current_user.id}")
+
+        return {
+            "status": "success",
+            "message": "Microsoft 365 disconnected successfully"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Microsoft disconnect error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/microsoft/sync-now")
+async def sync_microsoft_emails_now(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Manually trigger email sync from Microsoft 365"""
+    try:
+        oauth_record = db.query(MicrosoftOAuthToken).filter(
+            MicrosoftOAuthToken.user_id == current_user.id
+        ).first()
+
+        if not oauth_record:
+            raise HTTPException(status_code=404, detail="Microsoft 365 not connected")
+
+        if not oauth_record.sync_enabled:
+            raise HTTPException(status_code=400, detail="Email sync is disabled")
+
+        # Fetch emails
+        result = await fetch_microsoft_emails(oauth_record, db, limit=50)
+
+        if "error" in result:
+            raise HTTPException(status_code=500, detail=result["error"])
+
+        # Process each email through DRE
+        emails = result.get("emails", [])
+        processed_count = 0
+
+        for email_data in emails:
+            process_result = await process_microsoft_email_to_dre(email_data, current_user.id, db)
+            if process_result.get("status") == "success":
+                processed_count += 1
+
+        logger.info(f"Synced {processed_count}/{len(emails)} emails for user {current_user.id}")
+
+        return {
+            "status": "success",
+            "fetched_count": len(emails),
+            "processed_count": processed_count,
+            "message": f"Synced {processed_count} emails successfully"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Microsoft sync error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.patch("/api/v1/microsoft/settings")
+async def update_microsoft_settings(
+    settings: MicrosoftSyncSettings,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update Microsoft 365 sync settings"""
+    try:
+        oauth_record = db.query(MicrosoftOAuthToken).filter(
+            MicrosoftOAuthToken.user_id == current_user.id
+        ).first()
+
+        if not oauth_record:
+            raise HTTPException(status_code=404, detail="Microsoft 365 not connected")
+
+        # Update settings
+        if settings.sync_enabled is not None:
+            oauth_record.sync_enabled = settings.sync_enabled
+
+        if settings.sync_folder is not None:
+            oauth_record.sync_folder = settings.sync_folder
+
+        if settings.sync_frequency_minutes is not None:
+            # Validate frequency (min 5 minutes, max 1440 = 24 hours)
+            if settings.sync_frequency_minutes < 5 or settings.sync_frequency_minutes > 1440:
+                raise HTTPException(status_code=400, detail="Sync frequency must be between 5 and 1440 minutes")
+            oauth_record.sync_frequency_minutes = settings.sync_frequency_minutes
+
+        oauth_record.updated_at = datetime.utcnow()
+        db.commit()
+
+        logger.info(f"Updated Microsoft settings for user {current_user.id}")
+
+        return {
+            "status": "success",
+            "message": "Settings updated successfully"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Microsoft settings update error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================================
 # API ROUTES
 # ============================================================================
 
@@ -2061,6 +2544,42 @@ async def create_dre_tables(db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         logger.error(f"❌ Failed to create DRE tables: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
+
+@app.post("/admin/create-microsoft-oauth-table")
+async def create_microsoft_oauth_table(db: Session = Depends(get_db)):
+    """Admin endpoint to create Microsoft OAuth tokens table"""
+    try:
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS microsoft_oauth_tokens (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER UNIQUE NOT NULL REFERENCES users(id),
+                access_token TEXT,
+                refresh_token TEXT,
+                token_expires_at TIMESTAMP,
+                email_address VARCHAR,
+                sync_enabled BOOLEAN DEFAULT TRUE,
+                last_sync_at TIMESTAMP,
+                sync_folder VARCHAR DEFAULT 'Inbox',
+                sync_frequency_minutes INTEGER DEFAULT 15,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """))
+
+        db.commit()
+
+        logger.info("✅ Microsoft OAuth tokens table created successfully")
+        return {
+            "status": "success",
+            "message": "Microsoft OAuth tokens table created"
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Failed to create Microsoft OAuth tokens table: {e}")
         return JSONResponse(
             status_code=500,
             content={"status": "error", "message": str(e)}

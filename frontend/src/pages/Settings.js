@@ -9,7 +9,7 @@ function Settings() {
     onboarding: false
   });
   const [searchTerm, setSearchTerm] = useState('');
-  const [connectedIntegrations, setConnectedIntegrations] = useState(new Set(['outlook']));
+  const [connectedIntegrations, setConnectedIntegrations] = useState(new Set());
   const [calendlyEventTypes, setCalendlyEventTypes] = useState([]);
   const [calendarMappings, setCalendarMappings] = useState([]);
   const [loadingCalendly, setLoadingCalendly] = useState(false);
@@ -23,6 +23,15 @@ function Settings() {
   const [loadingApiKeys, setLoadingApiKeys] = useState(false);
   const [newApiKeyName, setNewApiKeyName] = useState('');
   const [createdKey, setCreatedKey] = useState(null);
+
+  // Microsoft 365 integration state
+  const [microsoftStatus, setMicrosoftStatus] = useState({
+    connected: false,
+    email_address: null,
+    sync_enabled: false,
+    last_sync_at: null
+  });
+  const [loadingMicrosoft, setLoadingMicrosoft] = useState(false);
 
   const toggleSection = (section) => {
     setExpandedSections({
@@ -296,6 +305,164 @@ function Settings() {
     }
   };
 
+  // Microsoft 365 Integration Functions
+  const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+  const MICROSOFT_CLIENT_ID = 'YOUR_MICROSOFT_CLIENT_ID'; // Replace with actual client ID
+  const MICROSOFT_REDIRECT_URI = `${window.location.origin}/settings`; // OAuth callback
+
+  const checkMicrosoftStatus = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/status`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setMicrosoftStatus(data);
+
+        // Update connected integrations
+        const newConnected = new Set(connectedIntegrations);
+        if (data.connected) {
+          newConnected.add('outlook');
+        } else {
+          newConnected.delete('outlook');
+        }
+        setConnectedIntegrations(newConnected);
+      }
+    } catch (error) {
+      console.error('Error checking Microsoft status:', error);
+    }
+  };
+
+  const connectMicrosoft365 = () => {
+    // Microsoft OAuth URL
+    const scopes = 'https://graph.microsoft.com/Mail.Read offline_access';
+    const authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${MICROSOFT_CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(MICROSOFT_REDIRECT_URI)}&response_mode=query&scope=${encodeURIComponent(scopes)}&state=12345`;
+
+    // Open OAuth popup
+    const width = 600;
+    const height = 700;
+    const left = (window.screen.width / 2) - (width / 2);
+    const top = (window.screen.height / 2) - (height / 2);
+
+    const popup = window.open(
+      authUrl,
+      'Microsoft 365 Login',
+      `width=${width},height=${height},top=${top},left=${left}`
+    );
+
+    // Listen for the callback
+    const checkPopup = setInterval(() => {
+      try {
+        if (popup.closed) {
+          clearInterval(checkPopup);
+          checkMicrosoftStatus(); // Refresh status after popup closes
+        }
+
+        // Check if popup redirected back with code
+        if (popup.location.href.includes(window.location.origin)) {
+          const urlParams = new URLSearchParams(popup.location.search);
+          const code = urlParams.get('code');
+
+          if (code) {
+            clearInterval(checkPopup);
+            popup.close();
+            handleMicrosoftCallback(code);
+          }
+        }
+      } catch (e) {
+        // Ignore cross-origin errors
+      }
+    }, 500);
+  };
+
+  const handleMicrosoftCallback = async (authorizationCode) => {
+    setLoadingMicrosoft(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/connect`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          authorization_code: authorizationCode,
+          redirect_uri: MICROSOFT_REDIRECT_URI
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(`Microsoft 365 connected successfully! ${data.email_address}`);
+        await checkMicrosoftStatus();
+      } else {
+        const error = await response.json();
+        alert(`Failed to connect Microsoft 365: ${error.detail}`);
+      }
+    } catch (error) {
+      console.error('Error connecting Microsoft 365:', error);
+      alert('Error connecting to Microsoft 365');
+    } finally {
+      setLoadingMicrosoft(false);
+    }
+  };
+
+  const disconnectMicrosoft365 = async () => {
+    if (!window.confirm('Are you sure you want to disconnect Microsoft 365?')) {
+      return;
+    }
+
+    setLoadingMicrosoft(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/disconnect`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        alert('Microsoft 365 disconnected successfully');
+        await checkMicrosoftStatus();
+      } else {
+        alert('Failed to disconnect Microsoft 365');
+      }
+    } catch (error) {
+      console.error('Error disconnecting Microsoft 365:', error);
+      alert('Error disconnecting Microsoft 365');
+    } finally {
+      setLoadingMicrosoft(false);
+    }
+  };
+
+  const syncMicrosoftNow = async () => {
+    setLoadingMicrosoft(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/sync-now`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(`Synced ${data.processed_count}/${data.fetched_count} emails successfully!`);
+        await checkMicrosoftStatus();
+      } else {
+        const error = await response.json();
+        alert(`Failed to sync emails: ${error.detail}`);
+      }
+    } catch (error) {
+      console.error('Error syncing emails:', error);
+      alert('Error syncing emails');
+    } finally {
+      setLoadingMicrosoft(false);
+    }
+  };
+
   const availableIntegrations = [
     {
       id: 'outlook',
@@ -428,6 +595,17 @@ function Settings() {
   ];
 
   const toggleIntegration = (integrationId) => {
+    // Handle Outlook specially - use OAuth flow
+    if (integrationId === 'outlook') {
+      if (microsoftStatus.connected) {
+        disconnectMicrosoft365();
+      } else {
+        connectMicrosoft365();
+      }
+      return;
+    }
+
+    // For other integrations, toggle normally
     const newConnected = new Set(connectedIntegrations);
     if (newConnected.has(integrationId)) {
       newConnected.delete(integrationId);
@@ -448,6 +626,9 @@ function Settings() {
   );
 
   useEffect(() => {
+    if (activeSection === 'integrations') {
+      checkMicrosoftStatus();
+    }
     if (activeSection === 'calendar-settings') {
       fetchCalendlyEventTypes();
       fetchCalendarMappings();
@@ -626,6 +807,48 @@ function Settings() {
                   />
                 </div>
               </div>
+
+              {/* Microsoft 365 Status Panel */}
+              {microsoftStatus.connected && (
+                <div className="microsoft-status-panel">
+                  <div className="status-header">
+                    <div className="status-icon" style={{background: '#0078d4'}}>
+                      📧
+                    </div>
+                    <div className="status-info">
+                      <h3>Microsoft 365 Connected</h3>
+                      <p>{microsoftStatus.email_address}</p>
+                    </div>
+                    <div className="status-actions">
+                      <button
+                        className="btn-sync"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          syncMicrosoftNow();
+                        }}
+                        disabled={loadingMicrosoft}
+                      >
+                        {loadingMicrosoft ? 'Syncing...' : '🔄 Sync Now'}
+                      </button>
+                      <button
+                        className="btn-disconnect"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          disconnectMicrosoft365();
+                        }}
+                        disabled={loadingMicrosoft}
+                      >
+                        Disconnect
+                      </button>
+                    </div>
+                  </div>
+                  {microsoftStatus.last_sync_at && (
+                    <div className="status-meta">
+                      Last synced: {new Date(microsoftStatus.last_sync_at).toLocaleString()}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Featured Section */}
               {featuredIntegrations.length > 0 && !searchTerm && (
