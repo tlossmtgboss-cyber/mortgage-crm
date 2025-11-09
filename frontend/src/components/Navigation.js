@@ -85,12 +85,6 @@ function Navigation({ onToggleAssistant, assistantOpen, taskCounts = {} }) {
           >
             🏆 Coach
           </button>
-          <Link
-            to="/reconciliation"
-            className={`nav-link ${isActive('/reconciliation') ? 'active' : ''}`}
-          >
-            🔄 Reconciliation
-          </Link>
         </div>
 
         <div className="nav-actions">
