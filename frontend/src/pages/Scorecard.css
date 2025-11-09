@@ -1,7 +1,7 @@
 .scorecard-page {
   padding: 32px 40px;
-  max-width: 100%;
-  margin: 0;
+  max-width: 1400px;
+  margin: 0 auto;
   background: #ffffff;
   min-height: 100vh;
 }
@@ -46,35 +46,47 @@
 
 /* Sections */
 .metrics-section {
-  margin-bottom: 48px;
+  margin-bottom: 60px;
 }
 
 .metrics-section h2 {
-  font-size: 14px;
-  font-weight: 600;
-  color: #64748b;
-  margin-bottom: 20px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1a202c;
+  margin-bottom: 28px;
   padding-left: 0;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
+  text-align: center;
+  border-bottom: 3px solid #218D8D;
+  padding-bottom: 12px;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 /* Conversion Metrics Grid */
 .conversion-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
+  gap: 24px;
+  max-width: 100%;
+  margin: 0 auto;
 }
 
 .conversion-card {
   background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 24px;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 28px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.3s;
   position: relative;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 .conversion-card:hover {
@@ -130,17 +142,23 @@
 .volume-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
+  gap: 24px;
+  max-width: 100%;
+  margin: 0 auto;
 }
 
 .volume-card {
   background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 24px;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 28px;
   cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 .volume-card:hover {
@@ -175,17 +193,23 @@
 .timeline-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
+  gap: 24px;
+  max-width: 100%;
+  margin: 0 auto;
 }
 
 .timeline-card {
   background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 24px;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 28px;
   cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
 }
 
 .timeline-card:hover {
