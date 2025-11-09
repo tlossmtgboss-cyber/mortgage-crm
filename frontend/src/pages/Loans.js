@@ -114,7 +114,21 @@ function Loans() {
     } catch (err) {
       console.error('Failed to create loan:', err);
       console.error('Error response:', err.response?.data);
-      const errorMessage = err.response?.data?.detail || err.message || 'Failed to create loan';
+      let errorMessage = 'Failed to create loan';
+
+      if (err.response?.data?.detail) {
+        // Handle both string and object detail
+        if (typeof err.response.data.detail === 'string') {
+          errorMessage = err.response.data.detail;
+        } else {
+          errorMessage = JSON.stringify(err.response.data.detail);
+        }
+      } else if (err.response?.data) {
+        errorMessage = JSON.stringify(err.response.data);
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+
       alert(`Failed to create loan: ${errorMessage}`);
     }
   };
