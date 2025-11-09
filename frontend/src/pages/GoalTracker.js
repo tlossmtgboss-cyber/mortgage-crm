@@ -18,13 +18,16 @@ function GoalTracker() {
   });
 
   const [calculated, setCalculated] = useState({});
+  const [actualData, setActualData] = useState({});
   const [history, setHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
   const [lastSaved, setLastSaved] = useState(null);
+  const [loadingActuals, setLoadingActuals] = useState(false);
 
   // Load saved data on mount
   useEffect(() => {
     loadSavedData();
+    loadActualData();
   }, []);
 
   // Auto-save when inputs change
@@ -32,6 +35,102 @@ function GoalTracker() {
     calculateMetrics();
     saveData();
   }, [inputs]);
+
+  const loadActualData = async () => {
+    setLoadingActuals(true);
+    try {
+      const token = localStorage.getItem('token');
+      const API_URL = process.env.REACT_APP_API_URL || '';
+
+      // Fetch loans data
+      const loansResponse = await fetch(`${API_URL}/api/v1/loans`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const loans = await loansResponse.json();
+      const loansArray = Array.isArray(loans) ? loans : [];
+
+      // Fetch leads data
+      const leadsResponse = await fetch(`${API_URL}/api/v1/leads`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const leads = await leadsResponse.json();
+      const leadsArray = Array.isArray(leads) ? leads : [];
+
+      // Calculate actual metrics
+      const now = new Date();
+      const startOfYear = new Date(now.getFullYear(), 0, 1);
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - now.getDay());
+      const startOfDay = new Date(now);
+      startOfDay.setHours(0, 0, 0, 0);
+
+      // Filter funded/closed loans (where stage is "Funded" or "Closed")
+      const fundedLoans = loansArray.filter(l =>
+        l.stage === 'Funded' || l.stage === 'Closed' || l.stage === 'funded' || l.stage === 'closed'
+      );
+
+      const yearFunded = fundedLoans.filter(l => new Date(l.updated_at || l.created_at) >= startOfYear);
+      const monthFunded = fundedLoans.filter(l => new Date(l.updated_at || l.created_at) >= startOfMonth);
+      const weekFunded = fundedLoans.filter(l => new Date(l.updated_at || l.created_at) >= startOfWeek);
+      const dayFunded = fundedLoans.filter(l => new Date(l.updated_at || l.created_at) >= startOfDay);
+
+      // Calculate total volume
+      const annualFundedUnits = yearFunded.length;
+      const annualFundedVolume = yearFunded.reduce((sum, l) => sum + (parseFloat(l.amount) || 0), 0);
+
+      // Calculate originations (all active loans)
+      const activeLoans = loansArray.filter(l =>
+        l.stage !== 'Funded' && l.stage !== 'Closed' && l.stage !== 'Denied' &&
+        l.stage !== 'funded' && l.stage !== 'closed' && l.stage !== 'denied'
+      );
+
+      const yearOriginated = activeLoans.filter(l => new Date(l.created_at) >= startOfYear);
+      const monthOriginated = activeLoans.filter(l => new Date(l.created_at) >= startOfMonth);
+      const weekOriginated = activeLoans.filter(l => new Date(l.created_at) >= startOfWeek);
+      const dayOriginated = activeLoans.filter(l => new Date(l.created_at) >= startOfDay);
+
+      const annualOriginatedUnits = yearOriginated.length;
+      const monthlyOriginatedUnits = monthOriginated.length;
+      const weeklyOriginatedUnits = weekOriginated.length;
+      const dailyOriginatedUnits = dayOriginated.length;
+
+      // Calculate pre-quals from leads
+      const preQualLeads = leadsArray.filter(l => l.stage === 'Pre-Qualified' || l.stage === 'Qualified');
+      const yearPreQuals = preQualLeads.filter(l => new Date(l.updated_at || l.created_at) >= startOfYear);
+      const monthPreQuals = preQualLeads.filter(l => new Date(l.updated_at || l.created_at) >= startOfMonth);
+      const dayPreQuals = preQualLeads.filter(l => new Date(l.updated_at || l.created_at) >= startOfDay);
+
+      setActualData({
+        annualFundedUnits,
+        annualFundedVolume,
+        annualOriginatedUnits,
+        monthlyOriginatedUnits,
+        weeklyOriginatedUnits,
+        dailyOriginatedUnits,
+        annualPreQuals: yearPreQuals.length,
+        monthlyPreQuals: monthPreQuals.length,
+        dailyPreQuals: dayPreQuals.length
+      });
+
+    } catch (error) {
+      console.error('Failed to load actual data:', error);
+      // Set empty actuals on error
+      setActualData({
+        annualFundedUnits: 0,
+        annualFundedVolume: 0,
+        annualOriginatedUnits: 0,
+        monthlyOriginatedUnits: 0,
+        weeklyOriginatedUnits: 0,
+        dailyOriginatedUnits: 0,
+        annualPreQuals: 0,
+        monthlyPreQuals: 0,
+        dailyPreQuals: 0
+      });
+    } finally {
+      setLoadingActuals(false);
+    }
+  };
 
   const loadSavedData = () => {
     try {
@@ -258,6 +357,32 @@ function GoalTracker() {
     return `${(value * 100).toFixed(0)}%`;
   };
 
+  const calculateProgress = (actual, goal) => {
+    if (!goal || goal === 0) return 0;
+    return Math.min(Math.round((actual / goal) * 100), 100);
+  };
+
+  const renderGoalActualCell = (goal, actual, formatter = formatNumber) => {
+    const progress = calculateProgress(actual, goal);
+    const progressColor = progress >= 100 ? '#10b981' : progress >= 75 ? '#f59e0b' : '#ef4444';
+
+    return (
+      <td className="goal-actual-cell">
+        <div className="goal-value">Goal: {formatter(goal || 0)}</div>
+        <div className="actual-value">Actual: {formatter(actual || 0)}</div>
+        <div className="progress-bar-container">
+          <div
+            className="progress-bar-fill"
+            style={{ width: `${progress}%`, background: progressColor }}
+          />
+        </div>
+        <div className="progress-text" style={{ color: progressColor }}>
+          {progress}% of goal
+        </div>
+      </td>
+    );
+  };
+
   return (
     <div className="goal-tracker-page">
       <div className="page-header">
@@ -361,7 +486,11 @@ function GoalTracker() {
                   </tr>
                   <tr>
                     <td className="label-cell">Annual Closings Unit Goal</td>
-                    <td className="calculated-cell">{formatNumber(calculated.annualClosingsUnitGoal || 0)}</td>
+                    {renderGoalActualCell(
+                      calculated.annualClosingsUnitGoal,
+                      actualData.annualFundedUnits,
+                      formatNumber
+                    )}
                   </tr>
                   <tr>
                     <td className="label-cell">Determine Your "Pull Through" %</td>
@@ -379,11 +508,19 @@ function GoalTracker() {
                   </tr>
                   <tr>
                     <td className="label-cell">Annual Origination Dollar Goal</td>
-                    <td className="calculated-cell">{formatCurrency(calculated.annualOriginationDollarGoal || 0)}</td>
+                    {renderGoalActualCell(
+                      calculated.annualOriginationDollarGoal,
+                      actualData.annualFundedVolume,
+                      formatCurrency
+                    )}
                   </tr>
                   <tr>
                     <td className="label-cell">Annual Origination Unit Goal</td>
-                    <td className="calculated-cell">{formatNumber(calculated.annualOriginationUnitGoal || 0)}</td>
+                    {renderGoalActualCell(
+                      calculated.annualOriginationUnitGoal,
+                      actualData.annualOriginatedUnits,
+                      formatNumber
+                    )}
                   </tr>
                 </tbody>
               </table>
@@ -398,19 +535,35 @@ function GoalTracker() {
                 <tbody>
                   <tr>
                     <td className="label-cell">Annual Units Goal</td>
-                    <td className="calculated-cell">{formatNumber(calculated.annualUnitsGoal || 0)}</td>
+                    {renderGoalActualCell(
+                      calculated.annualUnitsGoal,
+                      actualData.annualOriginatedUnits,
+                      formatNumber
+                    )}
                   </tr>
                   <tr>
                     <td className="label-cell">Monthly Units Goal</td>
-                    <td className="calculated-cell">{formatNumber(calculated.monthlyUnitsGoal || 0)}</td>
+                    {renderGoalActualCell(
+                      calculated.monthlyUnitsGoal,
+                      actualData.monthlyOriginatedUnits,
+                      formatNumber
+                    )}
                   </tr>
                   <tr>
                     <td className="label-cell">Weekly Units Goal</td>
-                    <td className="calculated-cell">{formatNumber(calculated.weeklyUnitsGoal || 0)}</td>
+                    {renderGoalActualCell(
+                      calculated.weeklyUnitsGoal,
+                      actualData.weeklyOriginatedUnits,
+                      formatNumber
+                    )}
                   </tr>
                   <tr>
                     <td className="label-cell">Daily Units Goal</td>
-                    <td className="calculated-cell">{formatNumber(calculated.dailyUnitsGoal || 0)}</td>
+                    {renderGoalActualCell(
+                      calculated.dailyUnitsGoal,
+                      actualData.dailyOriginatedUnits,
+                      formatNumber
+                    )}
                   </tr>
                 </tbody>
               </table>
@@ -425,7 +578,11 @@ function GoalTracker() {
                 <tbody>
                   <tr>
                     <td className="label-cell">Daily Loans</td>
-                    <td className="calculated-cell">{formatNumber(calculated.dailyLoans || 0)}</td>
+                    {renderGoalActualCell(
+                      calculated.dailyLoans,
+                      actualData.dailyOriginatedUnits,
+                      formatNumber
+                    )}
                   </tr>
                   <tr>
                     <td className="label-cell">Conversion to Application</td>
@@ -443,7 +600,11 @@ function GoalTracker() {
                   </tr>
                   <tr>
                     <td className="label-cell">Daily Referred Pre-Qualifications Needed</td>
-                    <td className="calculated-cell">{formatNumber(calculated.dailyReferredPreQuals || 0)}</td>
+                    {renderGoalActualCell(
+                      calculated.dailyReferredPreQuals,
+                      actualData.dailyPreQuals,
+                      formatNumber
+                    )}
                   </tr>
                 </tbody>
               </table>
@@ -458,7 +619,11 @@ function GoalTracker() {
                 <tbody>
                   <tr>
                     <td className="label-cell">Monthly Referred Pre-Qual Conversations Needed</td>
-                    <td className="calculated-cell">{formatNumber(calculated.monthlyReferredPreQuals || 0)}</td>
+                    {renderGoalActualCell(
+                      calculated.monthlyReferredPreQuals,
+                      actualData.monthlyPreQuals,
+                      formatNumber
+                    )}
                   </tr>
                   <tr>
                     <td className="label-cell">Minimum Referred Pre-Qual Goal per Partner</td>
