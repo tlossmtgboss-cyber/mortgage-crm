@@ -159,11 +159,13 @@ function Dashboard() {
           </div>
         </div>
 
-        {/* 3. MONTHLY PRODUCTION TRACKER */}
+        {/* 3. MONTHLY PRODUCTION TRACKER - UNIFIED */}
         <div className="dashboard-block production-tracker-block">
           <div className="block-header">
             <h2>💰 Monthly Production Tracker</h2>
           </div>
+
+          {/* Top Row: 4 KPI Cards */}
           <div className="production-kpis">
             <div className="kpi-card">
               <div className="kpi-label">Annual Origination Goal</div>
@@ -237,13 +239,8 @@ function Dashboard() {
               </div>
             </div>
           </div>
-        </div>
 
-        {/* 4. LEADS & CONVERSION ENGINE */}
-        <div className="dashboard-block leads-engine-block">
-          <div className="block-header">
-            <h2>🚀 Leads & Conversion Engine</h2>
-          </div>
+          {/* Bottom Row: Lead Metrics and AI Alerts */}
           <div className="leads-metrics-row">
             <div className="metric-row">
               <div className="metric-item">
