@@ -1,0 +1,338 @@
+# Zapier Integration Configuration Guide
+
+## Test Results
+
+All tests completed successfully on 2025-11-09.
+
+### Test Summary
+- ✅ Created Lead #44: Sarah Johnson
+- ✅ AI Score: 90/100 (High-quality lead)
+- ✅ Successfully updated lead stage to "Application Started"
+- ✅ Sent lead data to Zapier webhook
+- ✅ All authentication working correctly
+
+---
+
+## Authentication
+
+**API Key:** `185b7101-9435-44da-87ab-b7582c4e4607`
+
+**Required Header:**
+```
+X-API-Key: 185b7101-9435-44da-87ab-b7582c4e4607
+```
+
+---
+
+## Zapier Configuration Templates
+
+### Template 1: Form Submission → Create CRM Lead
+
+**Use Case:** When someone fills out a mortgage pre-qualification form, automatically create a lead in your CRM.
+
+#### Trigger
+- **App:** Google Forms / Typeform / Webflow / etc.
+- **Event:** New Form Submission
+
+#### Action
+- **App:** Webhooks by Zapier
+- **Event:** POST Request
+
+**Configuration:**
+```
+URL: https://mortgage-crm-production-7a9a.up.railway.app/api/v1/leads/
+
+Method: POST
+
+Headers:
+X-API-Key: 185b7101-9435-44da-87ab-b7582c4e4607
+Content-Type: application/json
+
+Data (JSON):
+{
+  "name": "{{First Name}} {{Last Name}}",
+  "email": "{{Email}}",
+  "phone": "{{Phone}}",
+  "stage": "New",
+  "source": "Zapier - Web Form",
+  "credit_score": "{{Credit Score}}",
+  "employment_status": "{{Employment Status}}",
+  "annual_income": "{{Annual Income}}",
+  "monthly_debts": "{{Monthly Debts}}",
+  "property_type": "{{Property Type}}",
+  "property_value": "{{Property Value}}",
+  "down_payment": "{{Down Payment Available}}",
+  "address": "{{Property Address}}",
+  "city": "{{City}}",
+  "state": "{{State}}",
+  "zip_code": "{{Zip Code}}",
+  "first_time_buyer": "{{First Time Buyer}}",
+  "notes": "{{Additional Notes}}"
+}
+```
+
+**Tested Example:**
+```json
+{
+  "name": "Sarah Johnson",
+  "email": "sarah.johnson@email.com",
+  "phone": "555-123-4567",
+  "stage": "New",
+  "source": "Zapier - Web Form",
+  "credit_score": 750,
+  "employment_status": "Full-time",
+  "annual_income": 125000,
+  "monthly_debts": 2500,
+  "property_type": "Single Family",
+  "property_value": 450000,
+  "down_payment": 75000,
+  "address": "123 Main Street",
+  "city": "San Francisco",
+  "state": "CA",
+  "zip_code": "94102",
+  "first_time_buyer": false,
+  "notes": "Looking to close within 60 days. Pre-approved by another lender but shopping for better rates."
+}
+```
+
+**Result:**
+- Lead ID: 44
+- AI Score: 90 (automatically calculated)
+- Sentiment: positive
+- Status: Created successfully
+
+---
+
+### Template 2: Update Lead Status
+
+**Use Case:** When a loan officer updates a lead in another system, sync the changes to your CRM.
+
+#### Trigger
+- **App:** Gmail / Google Sheets / Airtable / etc.
+- **Event:** Varies by app
+
+#### Action
+- **App:** Webhooks by Zapier
+- **Event:** PATCH Request
+
+**Configuration:**
+```
+URL: https://mortgage-crm-production-7a9a.up.railway.app/api/v1/leads/{{Lead ID}}
+
+Method: PATCH
+
+Headers:
+X-API-Key: 185b7101-9435-44da-87ab-b7582c4e4607
+Content-Type: application/json
+
+Data (JSON):
+{
+  "stage": "{{New Stage}}",
+  "preapproval_amount": "{{Preapproval Amount}}",
+  "loan_type": "{{Loan Type}}",
+  "loan_amount": "{{Loan Amount}}",
+  "interest_rate": "{{Interest Rate}}",
+  "loan_term": "{{Loan Term}}",
+  "notes": "{{Updated Notes}}"
+}
+```
+
+**Tested Example:**
+```json
+{
+  "stage": "Application Started",
+  "preapproval_amount": 375000,
+  "loan_type": "Conventional",
+  "loan_amount": 375000,
+  "interest_rate": 6.75,
+  "loan_term": 30,
+  "notes": "Called on 11/9/2025 - Contacted client, discussed loan options. Starting application process."
+}
+```
+
+**Result:**
+- Updated Lead ID: 44
+- Stage: Changed from "New" to "Application Started"
+- Status: Updated successfully
+
+---
+
+### Template 3: New Lead → Send to Zapier Webhook
+
+**Use Case:** When a new lead is created in your CRM, trigger other actions (send email, add to Google Sheets, etc.)
+
+#### Trigger
+- **Method:** Zapier Polling (every 5-15 minutes)
+- **Endpoint:** `GET https://mortgage-crm-production-7a9a.up.railway.app/api/v1/leads?limit=100`
+- **Authentication:** X-API-Key header
+
+#### Action
+- **Your Zapier Webhook:** `https://hooks.zapier.com/hooks/catch/2446725/usnpkzc/`
+
+**Configuration:**
+```
+URL: https://hooks.zapier.com/hooks/catch/2446725/usnpkzc/
+
+Method: POST
+
+Data: (Pass through lead data from trigger)
+```
+
+**Test Result:**
+- Webhook Response: `{"status": "success"}`
+- Request ID: `019a6a45-22e0-a71e-38dd-bcf1561d4a10`
+
+---
+
+## Available Lead Fields
+
+### Required Fields
+- `name` (string) - Lead's full name
+- `email` (string) - Lead's email address
+
+### Optional Fields
+
+**Contact Information:**
+- `phone` (string)
+- `co_applicant_name` (string)
+- `co_applicant_email` (string)
+- `co_applicant_phone` (string)
+
+**Lead Management:**
+- `stage` (string) - Options: "New", "Attempted Contact", "Prospect", "Application Started", "Application Complete", "Pre-Approved"
+- `source` (string) - Where the lead came from
+- `next_action` (string) - Auto-generated by AI
+
+**Financial Information:**
+- `credit_score` (integer)
+- `employment_status` (string)
+- `annual_income` (number)
+- `monthly_debts` (number)
+- `preapproval_amount` (number)
+
+**Property Information:**
+- `address` (string)
+- `city` (string)
+- `state` (string)
+- `zip_code` (string)
+- `property_type` (string)
+- `property_value` (number)
+- `down_payment` (number)
+- `first_time_buyer` (boolean)
+
+**Loan Details:**
+- `loan_number` (string)
+- `loan_type` (string)
+- `loan_amount` (number)
+- `interest_rate` (number)
+- `loan_term` (integer)
+- `apr` (number)
+- `points` (number)
+- `lock_date` (date)
+- `lock_expiration` (date)
+- `closing_date` (date)
+
+**Team & Processing:**
+- `lender` (string)
+- `loan_officer` (string)
+- `processor` (string)
+- `underwriter` (string)
+
+**AI-Generated Fields (Read-Only):**
+- `ai_score` (integer 0-100) - Automatically calculated based on financial info
+- `sentiment` (string) - "positive", "neutral", or "needs-attention"
+
+**Other:**
+- `notes` (text) - Free-form notes
+- `appraisal_value` (number)
+- `ltv` (number) - Loan-to-Value ratio
+- `dti` (number) - Debt-to-Income ratio
+
+---
+
+## Example Workflows
+
+### 1. Google Forms → CRM → Gmail
+**Workflow:** Form submission creates lead, sends welcome email
+
+1. **Trigger:** Google Forms - New Response
+2. **Action 1:** Webhooks - Create Lead in CRM
+3. **Action 2:** Gmail - Send Email (use lead ID from Action 1)
+
+### 2. CRM → Airtable → Slack
+**Workflow:** New high-quality lead triggers team notification
+
+1. **Trigger:** Webhooks - Poll CRM for new leads (filter: ai_score > 80)
+2. **Action 1:** Airtable - Create Record
+3. **Action 2:** Slack - Send Channel Message
+
+### 3. Calendly → CRM → Update
+**Workflow:** When client books appointment, update lead stage
+
+1. **Trigger:** Calendly - Invitee Created
+2. **Filter:** Only continue if email matches lead
+3. **Action:** Webhooks - Update Lead stage to "Prospect"
+
+---
+
+## Testing Your Zaps
+
+### Test Create Lead
+```bash
+curl -X POST "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/leads/" \
+-H "X-API-Key: 185b7101-9435-44da-87ab-b7582c4e4607" \
+-H "Content-Type: application/json" \
+-d '{
+  "name": "Test Lead",
+  "email": "test@example.com",
+  "stage": "New",
+  "source": "Zapier Test"
+}'
+```
+
+### Test Update Lead
+```bash
+curl -X PATCH "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/leads/44" \
+-H "X-API-Key: 185b7101-9435-44da-87ab-b7582c4e4607" \
+-H "Content-Type: application/json" \
+-d '{
+  "stage": "Prospect",
+  "notes": "Test update from Zapier"
+}'
+```
+
+### Test Get Leads
+```bash
+curl "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/leads?limit=10" \
+-H "X-API-Key: 185b7101-9435-44da-87ab-b7582c4e4607"
+```
+
+---
+
+## Common Issues & Solutions
+
+### Issue: "Not authenticated"
+**Solution:** Ensure X-API-Key header is exactly: `185b7101-9435-44da-87ab-b7582c4e4607`
+
+### Issue: "Lead not found"
+**Solution:** Verify the lead ID exists by listing leads first
+
+### Issue: Webhook not receiving data
+**Solution:** Check that the webhook URL is exactly: `https://hooks.zapier.com/hooks/catch/2446725/usnpkzc/`
+
+### Issue: Field validation errors
+**Solution:** Ensure required fields (name, email) are provided and properly formatted
+
+---
+
+## Support
+
+For questions or issues:
+1. Check the test results above
+2. Verify your API key is correct
+3. Test with curl commands provided
+4. Check Zapier task history for detailed error messages
+
+**API Base URL:** `https://mortgage-crm-production-7a9a.up.railway.app`
+**API Key:** `185b7101-9435-44da-87ab-b7582c4e4607`
+**Webhook URL:** `https://hooks.zapier.com/hooks/catch/2446725/usnpkzc/`
