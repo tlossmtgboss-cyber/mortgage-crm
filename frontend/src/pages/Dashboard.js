@@ -292,9 +292,6 @@ function Dashboard() {
 
       {/* Draggable Containers */}
       <div className="draggable-containers-wrapper">
-        <div style={{ padding: '10px', background: '#ff0000', color: 'white', marginBottom: '10px' }}>
-          🔴 DRAG-AND-DROP VERSION LOADED - You should see drag handles (⋮⋮) below
-        </div>
         {containerOrder.map((containerId, index) => renderDraggableContainer(containerId, index))}
       </div>
 
