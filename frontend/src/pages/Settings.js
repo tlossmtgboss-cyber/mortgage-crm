@@ -6,7 +6,8 @@ function Settings() {
   const [expandedSections, setExpandedSections] = useState({
     organizational: false,
     scheduling: false,
-    onboarding: false
+    onboarding: false,
+    masterAdmin: false
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [connectedIntegrations, setConnectedIntegrations] = useState(new Set());
@@ -23,6 +24,12 @@ function Settings() {
   const [loadingApiKeys, setLoadingApiKeys] = useState(false);
   const [newApiKeyName, setNewApiKeyName] = useState('');
   const [createdKey, setCreatedKey] = useState(null);
+
+  // User Management state
+  const [users, setUsers] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [usersError, setUsersError] = useState(null);
+  const [editingUser, setEditingUser] = useState(null);
 
   // Microsoft 365 integration state
   const [microsoftStatus, setMicrosoftStatus] = useState({
@@ -482,6 +489,145 @@ function Settings() {
     }
   };
 
+  // User Management Functions
+  const loadUsers = async () => {
+    setLoadingUsers(true);
+    setUsersError(null);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/api/v1/admin/users`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to load users: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setUsers(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Failed to load users:', err);
+      setUsersError('Failed to load users. Please try again.');
+      setUsers([]);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  const handleToggleActive = async (userId, currentStatus) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/api/v1/admin/users/${userId}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ is_active: !currentStatus })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update user status');
+      }
+
+      await loadUsers();
+    } catch (err) {
+      console.error('Failed to update user:', err);
+      alert('Failed to update user status');
+    }
+  };
+
+  const handleToggleVerified = async (userId, currentStatus) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/api/v1/admin/users/${userId}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ email_verified: !currentStatus })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update verification');
+      }
+
+      await loadUsers();
+    } catch (err) {
+      console.error('Failed to update user:', err);
+      alert('Failed to update user verification');
+    }
+  };
+
+  const handleUpdateRole = async (userId, newRole) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/api/v1/admin/users/${userId}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ role: newRole })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update role');
+      }
+
+      await loadUsers();
+      setEditingUser(null);
+    } catch (err) {
+      console.error('Failed to update role:', err);
+      alert('Failed to update user role');
+    }
+  };
+
+  const handleDeleteUser = async (userId) => {
+    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+
+    if (currentUser.id === userId) {
+      alert('You cannot delete your own account. Please contact another administrator.');
+      return;
+    }
+
+    if (!window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+
+      if (!token) {
+        alert('You are not authenticated. Please log in again.');
+        return;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/v1/admin/users/${userId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Failed to delete user');
+      }
+
+      alert('User deleted successfully');
+      await loadUsers();
+    } catch (err) {
+      console.error('Failed to delete user:', err);
+      alert(err.message || 'Failed to delete user');
+    }
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+  };
+
   const availableIntegrations = [
     {
       id: 'outlook',
@@ -800,6 +946,29 @@ function Settings() {
                 onClick={() => setActiveSection('onboarding-update')}
               >
                 <span>Update Process</span>
+              </button>
+            </div>
+          )}
+
+          {/* Master Administrator - Expandable */}
+          <button
+            className={`sidebar-btn parent ${expandedSections.masterAdmin ? 'expanded' : ''}`}
+            onClick={() => toggleSection('masterAdmin')}
+          >
+            <span className="icon">👑</span>
+            <span>Master Administrator</span>
+            <span className="expand-icon">{expandedSections.masterAdmin ? '▼' : '▶'}</span>
+          </button>
+          {expandedSections.masterAdmin && (
+            <div className="sidebar-children">
+              <button
+                className={`sidebar-btn child ${activeSection === 'user-management' ? 'active' : ''}`}
+                onClick={() => {
+                  setActiveSection('user-management');
+                  loadUsers();
+                }}
+              >
+                <span>User Management</span>
               </button>
             </div>
           )}
@@ -1470,6 +1639,144 @@ function Settings() {
                 Set your personal availability and time-off
               </p>
               <p>Coming soon...</p>
+            </div>
+          )}
+
+          {/* Master Administrator - User Management */}
+          {activeSection === 'user-management' && (
+            <div className="user-management-section">
+              <div className="page-header">
+                <div>
+                  <h2>User Management</h2>
+                  <p className="section-description">
+                    Manage all registered users and their permissions
+                  </p>
+                </div>
+                <div className="header-stats">
+                  <div className="stat-box">
+                    <div className="stat-value">{users.length}</div>
+                    <div className="stat-label">Total Users</div>
+                  </div>
+                  <div className="stat-box">
+                    <div className="stat-value">{users.filter(u => u.is_active).length}</div>
+                    <div className="stat-label">Active</div>
+                  </div>
+                  <div className="stat-box">
+                    <div className="stat-value">{users.filter(u => u.email_verified).length}</div>
+                    <div className="stat-label">Verified</div>
+                  </div>
+                </div>
+              </div>
+
+              {usersError && <div className="error-message">{usersError}</div>}
+
+              {loadingUsers ? (
+                <div className="loading">Loading users...</div>
+              ) : (
+                <div className="users-table-container">
+                  <table className="users-table">
+                    <thead>
+                      <tr>
+                        <th>User</th>
+                        <th>Email</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th>Verified</th>
+                        <th>Onboarded</th>
+                        <th>Registered</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {users.map((user) => {
+                        const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+                        const isCurrentUser = user.id === currentUser.id;
+                        return (
+                          <tr key={user.id} className={!user.is_active ? 'inactive-user' : ''}>
+                            <td>
+                              <div className="user-info">
+                                <div className="user-avatar">{user.full_name?.charAt(0) || user.email.charAt(0)}</div>
+                                <div>
+                                  <div className="user-name">
+                                    {user.full_name || 'Unnamed User'}
+                                    {isCurrentUser && <span className="current-user-badge">You</span>}
+                                  </div>
+                                  <div className="user-id">ID: {user.id}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td>{user.email}</td>
+                            <td>
+                              {editingUser === user.id ? (
+                                <select
+                                  value={user.role}
+                                  onChange={(e) => handleUpdateRole(user.id, e.target.value)}
+                                  onBlur={() => setEditingUser(null)}
+                                  autoFocus
+                                  className="role-select"
+                                >
+                                  <option value="loan_officer">Loan Officer</option>
+                                  <option value="admin">Admin</option>
+                                  <option value="processor">Processor</option>
+                                  <option value="underwriter">Underwriter</option>
+                                  <option value="manager">Manager</option>
+                                </select>
+                              ) : (
+                                <span
+                                  className="role-badge"
+                                  onClick={() => setEditingUser(user.id)}
+                                  title="Click to edit"
+                                >
+                                  {user.role || 'loan_officer'}
+                                </span>
+                              )}
+                            </td>
+                            <td>
+                              <button
+                                className={`status-badge ${user.is_active ? 'active' : 'inactive'}`}
+                                onClick={() => handleToggleActive(user.id, user.is_active)}
+                              >
+                                {user.is_active ? 'Active' : 'Inactive'}
+                              </button>
+                            </td>
+                            <td>
+                              <button
+                                className={`verify-badge ${user.email_verified ? 'verified' : 'unverified'}`}
+                                onClick={() => handleToggleVerified(user.id, user.email_verified)}
+                              >
+                                {user.email_verified ? '✓ Verified' : '✗ Not Verified'}
+                              </button>
+                            </td>
+                            <td>
+                              <span className={`onboarding-badge ${user.onboarding_completed ? 'completed' : 'pending'}`}>
+                                {user.onboarding_completed ? 'Completed' : 'Pending'}
+                              </span>
+                            </td>
+                            <td className="date-cell">{formatDate(user.created_at)}</td>
+                            <td>
+                              <button
+                                className="btn-delete"
+                                onClick={() => handleDeleteUser(user.id)}
+                                disabled={isCurrentUser}
+                                title={isCurrentUser ? "You cannot delete your own account" : "Delete user"}
+                              >
+                                Delete
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+
+                  {users.length === 0 && (
+                    <div className="empty-state">
+                      <div className="empty-icon">👥</div>
+                      <p>No users found</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
