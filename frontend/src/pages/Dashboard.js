@@ -39,9 +39,32 @@ function Dashboard() {
   // Load saved container order
   const loadContainerOrder = () => {
     try {
+      const defaultOrder = [
+        'ai-alerts',
+        'production-tracker',
+        'efficiency',
+        'ai-tasks',
+        'pipeline',
+        'referrals',
+        'team',
+        'messages'
+      ];
+
       const saved = localStorage.getItem('dashboardOrder');
       if (saved) {
-        setContainerOrder(JSON.parse(saved));
+        const savedOrder = JSON.parse(saved);
+        // Merge any new containers that don't exist in saved order
+        const missingContainers = defaultOrder.filter(c => !savedOrder.includes(c));
+        if (missingContainers.length > 0) {
+          // Add missing containers after 'production-tracker'
+          const trackerIndex = savedOrder.indexOf('production-tracker');
+          const newOrder = [...savedOrder];
+          newOrder.splice(trackerIndex + 1, 0, ...missingContainers);
+          setContainerOrder(newOrder);
+          saveContainerOrder(newOrder);
+        } else {
+          setContainerOrder(savedOrder);
+        }
       }
     } catch (error) {
       console.error('Failed to load container order:', error);
