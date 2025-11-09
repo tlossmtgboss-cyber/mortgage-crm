@@ -145,6 +145,118 @@
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
+/* Profile Tabs */
+.profile-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  border-bottom: 2px solid #e0e0e0;
+  padding-bottom: 0;
+}
+
+.tab-btn {
+  padding: 12px 24px;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+  color: #666;
+  transition: all 0.2s ease;
+  position: relative;
+  bottom: -2px;
+}
+
+.tab-btn:hover {
+  color: #218D8D;
+  background: #f8f9fa;
+}
+
+.tab-btn.active {
+  color: #218D8D;
+  border-bottom-color: #218D8D;
+  background: transparent;
+}
+
+/* Circle Tab Styles */
+.circle-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.circle-description {
+  font-size: 14px;
+  color: #666;
+  line-height: 1.6;
+  margin: 0;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border-left: 4px solid #218D8D;
+}
+
+.circle-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.circle-card {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 16px;
+  transition: all 0.2s ease;
+}
+
+.circle-card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  border-color: #218D8D;
+}
+
+.circle-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.circle-header h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+.btn-add-circle {
+  padding: 6px 14px;
+  background: #218D8D;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-add-circle:hover {
+  background: #1a7070;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(33, 141, 141, 0.3);
+}
+
+.circle-list {
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* Two Column Layout */
 .detail-content {
   display: grid;
@@ -502,5 +614,20 @@
 
   .loan-toolbar {
     padding: 16px;
+  }
+
+  .profile-tabs {
+    overflow-x: auto;
+    gap: 4px;
+  }
+
+  .tab-btn {
+    padding: 10px 16px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+
+  .circle-grid {
+    grid-template-columns: 1fr;
   }
 }

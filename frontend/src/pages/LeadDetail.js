@@ -15,6 +15,7 @@ function LeadDetail() {
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState({});
   const [emails, setEmails] = useState([]);
+  const [activeTab, setActiveTab] = useState('personal');
 
   useEffect(() => {
     loadLeadData();
@@ -394,10 +395,39 @@ function LeadDetail() {
         </div>
       </div>
 
+      {/* Tab Navigation */}
+      <div className="profile-tabs">
+        <button
+          className={`tab-btn ${activeTab === 'personal' ? 'active' : ''}`}
+          onClick={() => setActiveTab('personal')}
+        >
+          Personal Information
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'loan' ? 'active' : ''}`}
+          onClick={() => setActiveTab('loan')}
+        >
+          Loan Information
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'conversation' ? 'active' : ''}`}
+          onClick={() => setActiveTab('conversation')}
+        >
+          Conversation Log
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'circle' ? 'active' : ''}`}
+          onClick={() => setActiveTab('circle')}
+        >
+          Circle
+        </button>
+      </div>
+
       <div className="detail-content">
         {/* Left Column - Lead Information */}
         <div className="left-column">
-          {/* Personal Information */}
+          {/* Personal Information Tab */}
+          {activeTab === 'personal' && (
           <div className="info-section">
             <h2>Personal Information</h2>
             <div className="info-grid compact">
@@ -481,8 +511,10 @@ function LeadDetail() {
               </div>
             </div>
           </div>
+          )}
 
-          {/* Loan Information */}
+          {/* Loan Information Tab */}
+          {activeTab === 'loan' && (
           <div className="info-section">
             <h2>Loan Information</h2>
             <div className="info-grid compact">
@@ -588,8 +620,10 @@ function LeadDetail() {
               </div>
             </div>
           </div>
+          )}
 
-          {/* Conversation Log */}
+          {/* Conversation Log Tab */}
+          {activeTab === 'conversation' && (
           <div className="info-section">
             <h2>Conversation Log</h2>
             <div className="conversation-log">
@@ -629,6 +663,62 @@ function LeadDetail() {
               </button>
             </form>
           </div>
+          )}
+
+          {/* Circle Tab */}
+          {activeTab === 'circle' && (
+          <div className="info-section">
+            <h2>Circle</h2>
+            <div className="circle-content">
+              <p className="circle-description">
+                View and manage the borrower's circle of influence - family members, co-borrowers,
+                real estate agents, and other key contacts involved in the loan process.
+              </p>
+
+              <div className="circle-grid">
+                <div className="circle-card">
+                  <div className="circle-header">
+                    <h3>👥 Co-Borrowers</h3>
+                    <button className="btn-add-circle">+ Add</button>
+                  </div>
+                  <div className="circle-list">
+                    <div className="empty-state">No co-borrowers added yet</div>
+                  </div>
+                </div>
+
+                <div className="circle-card">
+                  <div className="circle-header">
+                    <h3>🏡 Real Estate Agent</h3>
+                    <button className="btn-add-circle">+ Add</button>
+                  </div>
+                  <div className="circle-list">
+                    <div className="empty-state">No agent assigned yet</div>
+                  </div>
+                </div>
+
+                <div className="circle-card">
+                  <div className="circle-header">
+                    <h3>👨‍👩‍👧 Family Members</h3>
+                    <button className="btn-add-circle">+ Add</button>
+                  </div>
+                  <div className="circle-list">
+                    <div className="empty-state">No family members added yet</div>
+                  </div>
+                </div>
+
+                <div className="circle-card">
+                  <div className="circle-header">
+                    <h3>🤝 Other Contacts</h3>
+                    <button className="btn-add-circle">+ Add</button>
+                  </div>
+                  <div className="circle-list">
+                    <div className="empty-state">No other contacts added yet</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          )}
         </div>
 
         {/* Right Column - Actions & Email History */}
