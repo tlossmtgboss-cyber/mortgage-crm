@@ -624,45 +624,47 @@ function LeadDetail() {
 
           {/* Conversation Log Tab */}
           {activeTab === 'conversation' && (
-          <div className="info-section">
-            <h2>Conversation Log</h2>
-            <div className="conversation-log">
-              {activities.length > 0 ? (
-                activities.map((activity) => (
-                  <div key={activity.id} className="activity-item">
-                    <div className="activity-header">
-                      <span className={`activity-type ${activity.type}`}>
-                        {activity.type}
-                      </span>
-                      <span className="activity-date">
-                        {new Date(activity.created_at).toLocaleString()}
-                      </span>
+          <>
+            <div className="info-section">
+              <h2>Conversation Log</h2>
+              <div className="conversation-log">
+                {activities.length > 0 ? (
+                  activities.map((activity) => (
+                    <div key={activity.id} className="activity-item">
+                      <div className="activity-header">
+                        <span className={`activity-type ${activity.type}`}>
+                          {activity.type}
+                        </span>
+                        <span className="activity-date">
+                          {new Date(activity.created_at).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="activity-description">{activity.description}</div>
                     </div>
-                    <div className="activity-description">{activity.description}</div>
-                  </div>
-                ))
-              ) : (
-                <div className="empty-state">No activities yet</div>
-              )}
+                  ))
+                ) : (
+                  <div className="empty-state">No activities yet</div>
+                )}
+              </div>
             </div>
-          </div>
 
-          {/* AI Chat Assistant */}
-          <div className="info-section">
-            <h2>AI Chat Assistant</h2>
-            <form onSubmit={handleSendMessage} className="ai-chat-form">
-              <textarea
-                value={chatMessage}
-                onChange={(e) => setChatMessage(e.target.value)}
-                placeholder="Ask the AI assistant about this lead..."
-                rows="3"
-                disabled={chatLoading}
-              />
-              <button type="submit" disabled={chatLoading || !chatMessage.trim()}>
-                {chatLoading ? 'Sending...' : 'Send Message'}
-              </button>
-            </form>
-          </div>
+            {/* AI Chat Assistant */}
+            <div className="info-section">
+              <h2>AI Chat Assistant</h2>
+              <form onSubmit={handleSendMessage} className="ai-chat-form">
+                <textarea
+                  value={chatMessage}
+                  onChange={(e) => setChatMessage(e.target.value)}
+                  placeholder="Ask the AI assistant about this lead..."
+                  rows="3"
+                  disabled={chatLoading}
+                />
+                <button type="submit" disabled={chatLoading || !chatMessage.trim()}>
+                  {chatLoading ? 'Sending...' : 'Send Message'}
+                </button>
+              </form>
+            </div>
+          </>
           )}
 
           {/* Circle Tab */}
