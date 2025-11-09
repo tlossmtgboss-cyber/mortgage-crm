@@ -225,21 +225,25 @@ function LeadDetail() {
         ];
 
         if (leadData.coborrower_name) {
+          const coborrowerParts = (leadData.coborrower_name || '').split(' ');
           updatedBorrowers.push({
             id: 1,
             name: leadData.coborrower_name,
             type: 'co-borrower',
             data: {
               name: leadData.coborrower_name,
-              first_name: leadData.coborrower_name.split(' ')[0] || '',
-              last_name: leadData.coborrower_name.split(' ').slice(1).join(' ') || '',
+              first_name: coborrowerParts[0] || '',
+              last_name: coborrowerParts.slice(1).join(' ') || '',
             }
           });
         }
 
         setBorrowers(updatedBorrowers);
-        setActiveBorrower(1);
-        setFormData(updatedBorrowers[1].data);
+        const targetIndex = updatedBorrowers.length > 1 ? 1 : 0;
+        setActiveBorrower(targetIndex);
+        if (updatedBorrowers[targetIndex]) {
+          setFormData(updatedBorrowers[targetIndex].data);
+        }
       } else {
         console.log('Adding additional borrower to local state only');
         // For additional borrowers beyond the first co-borrower, store in local state only
