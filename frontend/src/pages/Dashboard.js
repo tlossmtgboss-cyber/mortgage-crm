@@ -318,6 +318,64 @@ function Dashboard() {
               </div>
             </div>
           </div>
+
+          {/* AI Coaching Insights */}
+          <div className="ai-insights-section">
+            <div className="ai-insights-header">
+              <span className="insights-icon">💡</span>
+              <h3>AI Coaching Insights</h3>
+            </div>
+            <div className="insights-list">
+              {production.annualProgress < 75 && (
+                <div className="insight-item warning">
+                  <span className="insight-icon">⚠️</span>
+                  <span className="insight-text">
+                    You're at {production.annualProgress}% of your annual goal. Consider increasing your lead generation activities to stay on track.
+                  </span>
+                </div>
+              )}
+              {production.monthlyProgress > 100 && (
+                <div className="insight-item success">
+                  <span className="insight-icon">🎉</span>
+                  <span className="insight-text">
+                    Excellent! You've exceeded your monthly goal by {(production.monthlyProgress - 100).toFixed(0)}%. Keep up the great work!
+                  </span>
+                </div>
+              )}
+              {production.monthlyProgress < 50 && (
+                <div className="insight-item warning">
+                  <span className="insight-icon">📈</span>
+                  <span className="insight-text">
+                    You're only at {production.monthlyProgress}% of your monthly goal. Focus on converting your pipeline to close more deals this month.
+                  </span>
+                </div>
+              )}
+              {production.weeklyProgress < 80 && production.weeklyProgress > 0 && (
+                <div className="insight-item info">
+                  <span className="insight-icon">📊</span>
+                  <span className="insight-text">
+                    Weekly progress is at {production.weeklyProgress}%. Review your pipeline and prioritize hot leads to finish strong.
+                  </span>
+                </div>
+              )}
+              {production.dailyActual === 0 && (
+                <div className="insight-item info">
+                  <span className="insight-icon">🎯</span>
+                  <span className="insight-text">
+                    No units closed today yet. Connect with your active deals to move them towards closing.
+                  </span>
+                </div>
+              )}
+              {production.annualProgress >= 75 && production.annualProgress < 90 && (
+                <div className="insight-item success">
+                  <span className="insight-icon">✨</span>
+                  <span className="insight-text">
+                    You're {(100 - production.annualProgress).toFixed(0)}% away from your annual goal. Maintain your current pace to finish strong!
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       );
     }

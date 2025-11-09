@@ -1722,3 +1722,71 @@
     font-size: 36px;
   }
 }
+
+/* AI Coaching Insights */
+.ai-insights-section {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.ai-insights-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.insights-icon {
+  font-size: 24px;
+}
+
+.ai-insights-header h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+.insights-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.insight-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 8px;
+  background: #f8f9fa;
+  border-left: 4px solid #cbd5e1;
+}
+
+.insight-item.warning {
+  background: #fef3c7;
+  border-left-color: #f59e0b;
+}
+
+.insight-item.success {
+  background: #d1fae5;
+  border-left-color: #10b981;
+}
+
+.insight-item.info {
+  background: #dbeafe;
+  border-left-color: #3b82f6;
+}
+
+.insight-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.insight-text {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #374151;
+  flex: 1;
+}
