@@ -57,12 +57,35 @@ function GoalTracker() {
     }
   };
 
-  const saveData = () => {
+  const saveData = async () => {
     try {
       localStorage.setItem('goalTrackerInputs', JSON.stringify(inputs));
       const now = new Date();
       localStorage.setItem('goalTrackerLastSaved', now.toISOString());
       setLastSaved(now);
+
+      // Also save goals to backend if user is logged in
+      const token = localStorage.getItem('token');
+      if (token && calculated.annualOriginationUnitGoal) {
+        try {
+          await fetch('/api/v1/users/me/goals', {
+            method: 'PATCH',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              annualGoal: calculated.annualOriginationUnitGoal,
+              monthlyGoal: calculated.monthlyUnitsGoal,
+              weeklyGoal: calculated.weeklyUnitsGoal,
+              dailyGoal: calculated.dailyUnitsGoal
+            })
+          });
+        } catch (apiError) {
+          console.error('Failed to sync goals to server:', apiError);
+          // Continue anyway - localStorage is saved
+        }
+      }
     } catch (error) {
       console.error('Failed to save data:', error);
     }

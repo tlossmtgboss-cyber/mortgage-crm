@@ -83,19 +83,35 @@ function Dashboard() {
   const loadDashboard = async () => {
     try {
       setLoading(true);
-      const goals = loadGoalTrackerData();
 
-      setPrioritizedTasks(mockPrioritizedTasks());
-      setPipelineStats(mockPipelineStats());
-      setProduction(mockProduction(goals));
-      setLeadMetrics(mockLeadMetrics());
-      setLoanIssues(mockLoanIssues());
-      setAiTasks(mockAiTasks());
-      setReferralStats(mockReferralStats());
-      setTeamStats(mockTeamStats());
-      setMessages(mockMessages());
+      // Fetch real data from backend
+      const response = await fetch('/api/v1/dashboard', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch dashboard data');
+      }
+
+      const data = await response.json();
+
+      // Set all data from backend
+      setPrioritizedTasks(data.prioritized_tasks || []);
+      setPipelineStats(data.pipeline_stats || []);
+      setProduction(data.production || {});
+      setLeadMetrics(data.lead_metrics || {});
+      setLoanIssues(data.loan_issues || []);
+      setAiTasks(data.ai_tasks || { pending: [], waiting: [] });
+      setReferralStats(data.referral_stats || {});
+      setTeamStats(data.team_stats || {});
+      setMessages(data.messages || []);
+
     } catch (error) {
       console.error('Failed to load dashboard:', error);
+      // Fallback to mock data on error
       const goals = loadGoalTrackerData();
       setPrioritizedTasks(mockPrioritizedTasks());
       setPipelineStats(mockPipelineStats());
