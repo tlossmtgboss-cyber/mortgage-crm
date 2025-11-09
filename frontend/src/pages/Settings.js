@@ -212,10 +212,24 @@ function Settings() {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
+
+      if (!response.ok) {
+        throw new Error(`API returned ${response.status}`);
+      }
+
       const data = await response.json();
-      setApiKeys(data || []);
+      console.log('API Keys response:', data);
+
+      // Ensure data is an array
+      if (Array.isArray(data)) {
+        setApiKeys(data);
+      } else {
+        console.error('API keys response is not an array:', data);
+        setApiKeys([]);
+      }
     } catch (error) {
       console.error('Error fetching API keys:', error);
+      setApiKeys([]);
     } finally {
       setLoadingApiKeys(false);
     }
