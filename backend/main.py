@@ -1621,19 +1621,26 @@ async def delete_lead(lead_id: int, db: Session = Depends(get_db), current_user:
 
 @app.post("/api/v1/loans/", response_model=LoanResponse, status_code=201)
 async def create_loan(loan: LoanCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    existing = db.query(Loan).filter(Loan.loan_number == loan.loan_number).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Loan number already exists")
+    try:
+        existing = db.query(Loan).filter(Loan.loan_number == loan.loan_number).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Loan number already exists")
 
-    db_loan = Loan(**loan.dict(), loan_officer_id=current_user.id)
-    db_loan.ai_insights = generate_ai_insights(db_loan)
+        db_loan = Loan(**loan.dict(), loan_officer_id=current_user.id)
+        db_loan.ai_insights = generate_ai_insights(db_loan)
 
-    db.add(db_loan)
-    db.commit()
-    db.refresh(db_loan)
+        db.add(db_loan)
+        db.commit()
+        db.refresh(db_loan)
 
-    logger.info(f"Loan created: {db_loan.loan_number} - ${db_loan.amount:,.0f}")
-    return db_loan
+        logger.info(f"Loan created: {db_loan.loan_number} - ${db_loan.amount:,.0f}")
+        return db_loan
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating loan: {str(e)}", exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to create loan: {str(e)}")
 
 @app.get("/api/v1/loans/", response_model=List[LoanResponse])
 async def get_loans(
