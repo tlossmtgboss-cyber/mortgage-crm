@@ -1334,6 +1334,11 @@ textarea.text-input {
   background: #f7fafc;
 }
 
+.users-table tbody tr.clickable-user-row:hover {
+  background: #edf2f7;
+  border-left: 3px solid #218D8D;
+}
+
 .users-table tbody tr.inactive-user {
   opacity: 0.6;
 }

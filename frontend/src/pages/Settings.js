@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import './Settings.css';
 
 function Settings() {
+  const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState('integrations');
   const [expandedSections, setExpandedSections] = useState({
     organizational: false,
@@ -1692,7 +1694,12 @@ function Settings() {
                         const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
                         const isCurrentUser = user.id === currentUser.id;
                         return (
-                          <tr key={user.id} className={!user.is_active ? 'inactive-user' : ''}>
+                          <tr
+                            key={user.id}
+                            className={`clickable-user-row ${!user.is_active ? 'inactive-user' : ''}`}
+                            onClick={() => navigate(`/users/${user.id}`)}
+                            style={{ cursor: 'pointer' }}
+                          >
                             <td>
                               <div className="user-info">
                                 <div className="user-avatar">{user.full_name?.charAt(0) || user.email.charAt(0)}</div>
@@ -1712,6 +1719,7 @@ function Settings() {
                                   value={user.role}
                                   onChange={(e) => handleUpdateRole(user.id, e.target.value)}
                                   onBlur={() => setEditingUser(null)}
+                                  onClick={(e) => e.stopPropagation()}
                                   autoFocus
                                   className="role-select"
                                 >
@@ -1724,7 +1732,10 @@ function Settings() {
                               ) : (
                                 <span
                                   className="role-badge"
-                                  onClick={() => setEditingUser(user.id)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditingUser(user.id);
+                                  }}
                                   title="Click to edit"
                                 >
                                   {user.role || 'loan_officer'}
@@ -1734,7 +1745,10 @@ function Settings() {
                             <td>
                               <button
                                 className={`status-badge ${user.is_active ? 'active' : 'inactive'}`}
-                                onClick={() => handleToggleActive(user.id, user.is_active)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleActive(user.id, user.is_active);
+                                }}
                               >
                                 {user.is_active ? 'Active' : 'Inactive'}
                               </button>
@@ -1742,7 +1756,10 @@ function Settings() {
                             <td>
                               <button
                                 className={`verify-badge ${user.email_verified ? 'verified' : 'unverified'}`}
-                                onClick={() => handleToggleVerified(user.id, user.email_verified)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleVerified(user.id, user.email_verified);
+                                }}
                               >
                                 {user.email_verified ? '✓ Verified' : '✗ Not Verified'}
                               </button>
@@ -1756,7 +1773,10 @@ function Settings() {
                             <td>
                               <button
                                 className="btn-delete"
-                                onClick={() => handleDeleteUser(user.id)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteUser(user.id);
+                                }}
                                 disabled={isCurrentUser}
                                 title={isCurrentUser ? "You cannot delete your own account" : "Delete user"}
                               >
