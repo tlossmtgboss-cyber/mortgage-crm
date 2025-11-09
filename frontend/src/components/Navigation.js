@@ -89,13 +89,6 @@ function Navigation({ onToggleAssistant, assistantOpen, taskCounts = {} }) {
 
         <div className="nav-actions">
           <Link
-            to="/users"
-            className={`settings-link ${isActive('/users') ? 'active' : ''}`}
-            title="User Management"
-          >
-            👥
-          </Link>
-          <Link
             to="/settings"
             className={`settings-link ${isActive('/settings') ? 'active' : ''}`}
             title="Settings"
