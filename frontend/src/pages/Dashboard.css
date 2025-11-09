@@ -301,6 +301,11 @@
   grid-column: 7 / 13;
 }
 
+/* BLOCK 3: Monthly Production Tracker - Full Width */
+.production-tracker-block {
+  grid-column: 1 / 13;
+}
+
 .pipeline-table table {
   width: 100%;
   border-collapse: collapse;
