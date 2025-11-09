@@ -172,3 +172,32 @@
     justify-content: flex-end;
   }
 }
+
+/* Coach Link Special Styling */
+.coach-link {
+  background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%) !important;
+  color: #1a1a2e !important;
+  font-weight: 700 !important;
+  box-shadow: 0 2px 8px rgba(255, 215, 0, 0.3);
+  animation: pulseGlow 2s ease-in-out infinite;
+}
+
+.coach-link:hover {
+  background: linear-gradient(135deg, #ffed4e 0%, #ffd700 100%) !important;
+  box-shadow: 0 4px 12px rgba(255, 215, 0, 0.5) !important;
+  transform: translateY(-1px);
+}
+
+.coach-link.active {
+  background: linear-gradient(135deg, #ffd700 0%, #ffb700 100%) !important;
+  box-shadow: 0 4px 16px rgba(255, 215, 0, 0.6) !important;
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 2px 8px rgba(255, 215, 0, 0.3);
+  }
+  50% {
+    box-shadow: 0 2px 12px rgba(255, 215, 0, 0.5);
+  }
+}

@@ -928,6 +928,32 @@ class ConversationResponse(BaseModel):
     class Config:
         from_attributes = True
 
+# ============================================================================
+# PERFORMANCE COACH SCHEMAS
+# ============================================================================
+
+class CoachMode(str, Enum):
+    daily_briefing = "daily_briefing"
+    pipeline_audit = "pipeline_audit"
+    focus_reset = "focus_reset"
+    accountability = "accountability"
+    tactical_advice = "tactical_advice"
+    tough_love = "tough_love"
+    teach_process = "teach_process"
+    priority_guidance = "priority_guidance"
+
+class CoachRequest(BaseModel):
+    mode: CoachMode
+    message: Optional[str] = None
+    context: Optional[Dict[str, Any]] = None
+
+class CoachResponse(BaseModel):
+    mode: CoachMode
+    response: str
+    priorities: Optional[List[Dict[str, Any]]] = None
+    metrics: Optional[Dict[str, Any]] = None
+    action_items: Optional[List[str]] = None
+
 class CalendarEventCreate(BaseModel):
     title: str
     description: Optional[str] = None
@@ -4461,6 +4487,325 @@ async def complete_onboarding(
         db.rollback()
         logger.error(f"Complete onboarding error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================================
+# AGENTIC AI PERFORMANCE COACH ("THE PROCESS COACH")
+# ============================================================================
+
+def build_coach_context(user: User, db: Session) -> Dict[str, Any]:
+    """Build comprehensive context for the Performance Coach"""
+
+    # Get user's pipeline
+    leads = db.query(Lead).filter(Lead.owner_id == user.id).all()
+    loans = db.query(Loan).filter(Loan.loan_officer_id == user.id).all()
+
+    # Get open tasks
+    open_tasks = db.query(AITask).filter(
+        AITask.assigned_to_id == user.id,
+        AITask.is_complete == False
+    ).all()
+
+    # Get overdue tasks
+    overdue_tasks = [t for t in open_tasks if t.due_date and t.due_date < datetime.utcnow()]
+
+    # Calculate pipeline metrics
+    leads_by_stage = {}
+    for lead in leads:
+        stage = lead.stage.value
+        leads_by_stage[stage] = leads_by_stage.get(stage, 0) + 1
+
+    loans_by_stage = {}
+    for loan in loans:
+        stage = loan.stage.value
+        loans_by_stage[stage] = loans_by_stage.get(stage, 0) + 1
+
+    # Identify bottlenecks (loans/leads stuck in same stage > 7 days)
+    bottlenecks = []
+    for lead in leads:
+        days_in_stage = (datetime.utcnow() - lead.last_activity).days if lead.last_activity else 0
+        if days_in_stage > 7:
+            bottlenecks.append({"type": "Lead", "name": lead.name, "stage": lead.stage.value, "days": days_in_stage})
+
+    for loan in loans:
+        if loan.updated_at:
+            days_in_stage = (datetime.utcnow() - loan.updated_at).days
+            if days_in_stage > 7:
+                bottlenecks.append({"type": "Loan", "name": loan.loan_number, "stage": loan.stage.value, "days": days_in_stage})
+
+    return {
+        "user": {
+            "name": user.full_name,
+            "role": user.role,
+            "email": user.email
+        },
+        "pipeline": {
+            "total_leads": len(leads),
+            "total_loans": len(loans),
+            "leads_by_stage": leads_by_stage,
+            "loans_by_stage": loans_by_stage
+        },
+        "tasks": {
+            "total_open": len(open_tasks),
+            "overdue": len(overdue_tasks),
+            "overdue_list": [{"title": t.title, "days_overdue": (datetime.utcnow() - t.due_date).days} for t in overdue_tasks[:5]]
+        },
+        "bottlenecks": bottlenecks[:10]  # Top 10 bottlenecks
+    }
+
+def get_coach_system_prompt(mode: CoachMode) -> str:
+    """Get the system prompt for the Performance Coach based on mode"""
+
+    base_personality = """You are The Process Coach - a high-performance coach for mortgage professionals.
+
+Your coaching philosophy is inspired by elite athletic coaching principles:
+- PROCESS OVER OUTCOME: Focus on daily execution, not results
+- BRUTAL CLARITY: Direct, concise, no fluff
+- STANDARD-FIRST: Do things the right way every time
+- DISTRACTION-RESISTANT: Cut noise, maintain focus
+- CONTROLLED URGENCY: Push pace without panic
+- ROLE ACCOUNTABILITY: Everyone has a job
+- BEHAVIOR-BASED: Habits, routines, fundamentals
+- EXECUTION-ONLY: No excuses, output only
+
+Communication style:
+- Short, punchy sentences
+- Military/coaching brevity
+- Call out inefficiencies directly
+- No motivational speaker energy
+- No "you got this" cheerleading
+- Pure tactical guidance
+- Action-oriented only
+"""
+
+    mode_prompts = {
+        CoachMode.daily_briefing: base_personality + """
+MODE: Daily Briefing
+
+Your job: Review their pipeline and give them their top 3 priorities for today.
+
+Format:
+"Morning. Today we run The Process.
+
+Top priorities:
+1. [High-leverage task]
+2. [High-leverage task]
+3. [High-leverage task]
+
+Eliminate distractions. Execute with pace."
+
+Be specific. Use their actual pipeline data.""",
+
+        CoachMode.pipeline_audit: base_personality + """
+MODE: Pipeline Audit
+
+Your job: Identify bottlenecks, stalled deals, and what needs immediate action.
+
+Format:
+"Pipeline audit complete.
+
+Bottlenecks:
+- [Specific deal/lead + issue]
+- [Specific deal/lead + issue]
+
+Fix these now. Nothing else matters until this is done."
+
+Be ruthless. Call out what's broken.""",
+
+        CoachMode.focus_reset: base_personality + """
+MODE: Focus Reset
+
+Your job: Get them back on track when they're scattered or overwhelmed.
+
+Format:
+"Focus reset.
+
+Right now: [One specific task]
+Duration: 25 minutes
+No exceptions.
+
+Everything else can wait."
+
+Single-task them. Break the overwhelm.""",
+
+        CoachMode.accountability: base_personality + """
+MODE: Accountability
+
+Your job: Review their performance and hold them to their standard.
+
+Format:
+"Performance review:
+
+Wins: [List what they did well]
+Misses: [List what they missed]
+
+Fix the misses tomorrow. No repeating patterns."
+
+Be fair but firm.""",
+
+        CoachMode.tactical_advice: base_personality + """
+MODE: Tactical Advice
+
+Your job: Answer their specific question with actionable guidance.
+
+Stay brief. Give the play call. Move on.""",
+
+        CoachMode.tough_love: base_personality + """
+MODE: Tough Love Correction
+
+Your job: Call out lazy habits, drift, or declining standards.
+
+Format:
+"Your current output does not match your goals.
+
+Issue: [Specific problem]
+Standard: [What the standard should be]
+Fix: [Specific action]
+
+Raise your standard. Follow the system."
+
+Be direct. No sugar coating.""",
+
+        CoachMode.teach_process: base_personality + """
+MODE: Teach The Process
+
+Your job: Teach them how to think about systems, habits, and execution.
+
+Explain the principle. Give the drill. Apply it to their situation.""",
+
+        CoachMode.priority_guidance: base_personality + """
+MODE: Priority Guidance
+
+Your job: Help them decide what to do next when they're unsure.
+
+Format:
+"Priority decision:
+
+Do this: [Highest leverage task]
+Then this: [Second priority]
+
+Everything else is distraction."
+
+Clear hierarchy. No ambiguity."""
+    }
+
+    return mode_prompts.get(mode, base_personality)
+
+def generate_priorities(context: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Generate prioritized action items from context"""
+    priorities = []
+
+    # Priority 1: Overdue tasks
+    if context["tasks"]["overdue"] > 0:
+        priorities.append({
+            "priority": 1,
+            "category": "Overdue Tasks",
+            "action": f"Clear {context['tasks']['overdue']} overdue tasks",
+            "urgency": "CRITICAL"
+        })
+
+    # Priority 2: Bottlenecked deals
+    if context["bottlenecks"]:
+        top_bottleneck = context["bottlenecks"][0]
+        priorities.append({
+            "priority": 2,
+            "category": "Pipeline Bottleneck",
+            "action": f"Unstick {top_bottleneck['name']} ({top_bottleneck['days']} days in {top_bottleneck['stage']})",
+            "urgency": "HIGH"
+        })
+
+    # Priority 3: High-value pipeline movement
+    priorities.append({
+        "priority": 3,
+        "category": "Pipeline Advancement",
+        "action": "Move top 3 deals forward one stage",
+        "urgency": "MEDIUM"
+    })
+
+    return priorities
+
+@app.post("/api/v1/coach", response_model=CoachResponse)
+async def performance_coach(
+    request: CoachRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Agentic AI Performance Coach endpoint"""
+
+    if not openai_client:
+        raise HTTPException(status_code=503, detail="OpenAI API key not configured")
+
+    try:
+        # Build comprehensive context
+        context = build_coach_context(current_user, db)
+
+        # Get system prompt for the mode
+        system_prompt = get_coach_system_prompt(request.mode)
+
+        # Build user message with context
+        context_message = f"""
+USER CONTEXT:
+- Name: {context['user']['name']}
+- Role: {context['user']['role']}
+
+PIPELINE:
+- Total Leads: {context['pipeline']['total_leads']}
+- Total Loans: {context['pipeline']['total_loans']}
+- Leads by Stage: {context['pipeline']['leads_by_stage']}
+- Loans by Stage: {context['pipeline']['loans_by_stage']}
+
+TASKS:
+- Total Open: {context['tasks']['total_open']}
+- Overdue: {context['tasks']['overdue']}
+- Top Overdue: {context['tasks']['overdue_list']}
+
+BOTTLENECKS:
+{chr(10).join([f"- {b['type']}: {b['name']} ({b['days']} days in {b['stage']})" for b in context['bottlenecks']])}
+
+"""
+
+        if request.message:
+            context_message += f"\nUSER REQUEST: {request.message}"
+
+        # Call OpenAI with the coach system prompt
+        response = openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": context_message}
+            ],
+            temperature=0.7,
+            max_tokens=500
+        )
+
+        coach_response = response.choices[0].message.content
+
+        # Generate priorities if in daily_briefing or priority_guidance mode
+        priorities = None
+        if request.mode in [CoachMode.daily_briefing, CoachMode.priority_guidance]:
+            priorities = generate_priorities(context)
+
+        # Generate action items from bottlenecks
+        action_items = None
+        if request.mode == CoachMode.pipeline_audit:
+            action_items = [f"Fix {b['name']} - stuck {b['days']} days in {b['stage']}" for b in context['bottlenecks'][:5]]
+
+        logger.info(f"Performance Coach responded to {current_user.email} in {request.mode.value} mode")
+
+        return CoachResponse(
+            mode=request.mode,
+            response=coach_response,
+            priorities=priorities,
+            metrics={
+                "pipeline_health": "good" if len(context['bottlenecks']) < 3 else "needs_attention",
+                "total_bottlenecks": len(context['bottlenecks']),
+                "overdue_tasks": context['tasks']['overdue']
+            },
+            action_items=action_items
+        )
+
+    except Exception as e:
+        logger.error(f"Performance Coach error: {e}")
+        raise HTTPException(status_code=500, detail=f"Coach error: {str(e)}")
 
 # ============================================================================
 # STARTUP EVENT

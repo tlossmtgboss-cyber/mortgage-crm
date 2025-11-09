@@ -79,6 +79,12 @@ function Navigation({ onToggleAssistant, assistantOpen, taskCounts = {} }) {
           >
             AI Underwriter
           </Link>
+          <Link
+            to="/coach"
+            className={`nav-link coach-link ${isActive('/coach') ? 'active' : ''}`}
+          >
+            🏆 Coach
+          </Link>
         </div>
 
         <div className="nav-actions">
