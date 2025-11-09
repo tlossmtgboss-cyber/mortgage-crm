@@ -2776,6 +2776,34 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
         }
     }
 
+@app.post("/api/v1/create-demo-user")
+async def create_demo_user(db: Session = Depends(get_db)):
+    """Create or ensure demo user exists for quick testing"""
+    try:
+        # Check if demo user already exists
+        demo_user = db.query(User).filter(User.email == "demo@test.com").first()
+
+        if not demo_user:
+            # Create demo user
+            demo_user = User(
+                email="demo@test.com",
+                hashed_password=get_password_hash("demo123"),
+                full_name="Demo User",
+                role="loan_officer",
+                is_active=True,
+                email_verified=True,
+                onboarding_completed=True
+            )
+            db.add(demo_user)
+            db.commit()
+            db.refresh(demo_user)
+            return {"message": "Demo user created successfully"}
+        else:
+            return {"message": "Demo user already exists"}
+    except Exception as e:
+        logger.error(f"Error creating demo user: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create demo user")
+
 @app.get("/api/v1/users/me")
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
     """Get current user information including onboarding status"""
