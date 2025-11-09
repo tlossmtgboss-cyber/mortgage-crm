@@ -251,18 +251,23 @@ function Settings() {
         body: JSON.stringify({ name: newApiKeyName })
       });
 
+      console.log('Create API key response status:', response.status);
+
       if (response.ok) {
         const data = await response.json();
+        console.log('API key created:', data);
         setCreatedKey(data.key);
         setNewApiKeyName('');
         fetchApiKeys();
         alert('API key created successfully! Make sure to copy it now - you won\'t be able to see it again.');
       } else {
-        alert('Failed to create API key');
+        const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }));
+        console.error('Failed to create API key:', response.status, errorData);
+        alert(`Failed to create API key: ${errorData.detail || errorData.message || 'Unknown error'}`);
       }
     } catch (error) {
       console.error('Error creating API key:', error);
-      alert('Error creating API key');
+      alert(`Error creating API key: ${error.message}`);
     }
   };
 
