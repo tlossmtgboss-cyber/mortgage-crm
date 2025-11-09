@@ -21,6 +21,7 @@ import ClientProfile from './pages/ClientProfile';
 import ReferralPartners from './pages/ReferralPartners';
 import ReferralPartnerDetail from './pages/ReferralPartnerDetail';
 import AIUnderwriter from './pages/AIUnderwriter';
+import GoalTracker from './pages/GoalTracker';
 import Settings from './pages/Settings';
 import Users from './pages/Users';
 import './App.css';
@@ -373,6 +374,23 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <AIUnderwriter />
+                  </main>
+                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/goal-tracker"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    assistantOpen={assistantOpen}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <GoalTracker />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                 </div>
