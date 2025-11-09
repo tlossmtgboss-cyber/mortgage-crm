@@ -3014,6 +3014,19 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     Get dashboard data with real metrics from database.
     All values are server-computed from CRM database.
     """
+    # TEMPORARY: Return mock data to isolate issue
+    return {
+        "prioritized_tasks": [],
+        "pipeline_stats": [],
+        "production": {"annualGoal": 222, "annualActual": 0, "annualProgress": 0, "monthlyGoal": 18.5, "monthlyActual": 0, "monthlyProgress": 0},
+        "lead_metrics": {"new_today": 0, "conversion_rate": 0, "hot_leads": 0, "alerts": []},
+        "loan_issues": [],
+        "ai_tasks": {"pending": [], "waiting": []},
+        "referral_stats": {"top_partners": [], "engagement": []},
+        "team_stats": {"has_team": False, "avg_workload": 0, "backlog": 0, "sla_missed": 0, "insights": []},
+        "messages": []
+    }
+
     from datetime import date, timedelta
     from sqlalchemy import func, extract
 
