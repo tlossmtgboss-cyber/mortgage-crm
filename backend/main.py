@@ -1223,22 +1223,33 @@ async def create_api_key(
     current_user: User = Depends(get_current_user)
 ):
     """Generate a new API key for the current user"""
-    # Generate a secure API key
-    api_key_string = generate_api_key()
+    try:
+        # Generate a secure API key
+        api_key_string = generate_api_key()
 
-    # Create the API key record
-    new_api_key = ApiKey(
-        key=api_key_string,
-        name=key_data.name,
-        user_id=current_user.id
-    )
+        logger.info(f"Attempting to create API key '{key_data.name}' for user {current_user.email}")
 
-    db.add(new_api_key)
-    db.commit()
-    db.refresh(new_api_key)
+        # Create the API key record
+        new_api_key = ApiKey(
+            key=api_key_string,
+            name=key_data.name,
+            user_id=current_user.id
+        )
 
-    logger.info(f"API key created for user {current_user.email}: {key_data.name}")
-    return new_api_key
+        db.add(new_api_key)
+        db.commit()
+        db.refresh(new_api_key)
+
+        logger.info(f"✅ API key created successfully for user {current_user.email}: {key_data.name}")
+        return new_api_key
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Failed to create API key: {str(e)}")
+        logger.exception(e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create API key: {str(e)}"
+        )
 
 @app.get("/api/v1/api-keys", response_model=List[ApiKeyResponse])
 async def list_api_keys(
