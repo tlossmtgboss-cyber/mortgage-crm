@@ -85,27 +85,35 @@
   border-color: var(--color-primary);
 }
 
-/* AI Assistant Link in Main Nav */
-.ai-assistant-link {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-  color: white;
+/* Coach Link Special Styling */
+.coach-link {
+  background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%) !important;
+  color: #1a1a2e !important;
+  font-weight: 700 !important;
+  box-shadow: 0 2px 8px rgba(255, 215, 0, 0.3);
+  animation: pulseGlow 2s ease-in-out infinite;
   border: none;
   cursor: pointer;
-  font-weight: 600;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
 }
 
-.ai-assistant-link:hover {
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-  color: white;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.5);
+.coach-link:hover {
+  background: linear-gradient(135deg, #ffed4e 0%, #ffd700 100%) !important;
+  box-shadow: 0 4px 12px rgba(255, 215, 0, 0.5) !important;
   transform: translateY(-1px);
 }
 
-.ai-assistant-link.active {
-  background: linear-gradient(135deg, #4338ca 0%, #6d28d9 100%);
-  color: white;
-  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.6);
+.coach-link.active {
+  background: linear-gradient(135deg, #ffd700 0%, #ffb700 100%) !important;
+  box-shadow: 0 4px 16px rgba(255, 215, 0, 0.6) !important;
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 2px 8px rgba(255, 215, 0, 0.3);
+  }
+  50% {
+    box-shadow: 0 2px 12px rgba(255, 215, 0, 0.5);
+  }
 }
 
 .logout-btn {
@@ -138,7 +146,7 @@
   }
 
   .nav-link,
-  .ai-assistant-link,
+  .coach-link,
   .logout-btn {
     padding: var(--space-sm);
     font-size: var(--font-sm);

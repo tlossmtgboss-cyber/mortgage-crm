@@ -80,10 +80,10 @@ function Navigation({ onToggleAssistant, assistantOpen, taskCounts = {} }) {
             AI Underwriter
           </Link>
           <button
-            className={`nav-link ai-assistant-link ${assistantOpen ? 'active' : ''}`}
+            className={`nav-link coach-link ${assistantOpen ? 'active' : ''}`}
             onClick={onToggleAssistant}
           >
-            🤖 AI Assistant
+            🏆 Coach
           </button>
           <Link
             to="/reconciliation"
