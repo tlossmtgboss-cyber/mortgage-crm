@@ -401,7 +401,7 @@ function LeadDetail() {
           className={`tab-btn ${activeTab === 'personal' ? 'active' : ''}`}
           onClick={() => setActiveTab('personal')}
         >
-          Personal Information
+          Personal
         </button>
         <button
           className={`tab-btn ${activeTab === 'employment' ? 'active' : ''}`}
@@ -413,7 +413,7 @@ function LeadDetail() {
           className={`tab-btn ${activeTab === 'loan' ? 'active' : ''}`}
           onClick={() => setActiveTab('loan')}
         >
-          Loan Information
+          Loan
         </button>
         <button
           className={`tab-btn ${activeTab === 'conversation' ? 'active' : ''}`}
