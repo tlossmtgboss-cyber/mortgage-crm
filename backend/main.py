@@ -1019,7 +1019,7 @@ def generate_ai_insights(loan: Loan) -> str:
     """Generate AI insights for a loan (simple rule-based for now)"""
     insights = []
 
-    if loan.days_in_stage > 10:
+    if loan.days_in_stage and loan.days_in_stage > 10:
         insights.append(f"⚠️ Loan has been in {loan.stage.value} stage for {loan.days_in_stage} days")
 
     if loan.closing_date and (loan.closing_date - datetime.utcnow()).days < 7:
