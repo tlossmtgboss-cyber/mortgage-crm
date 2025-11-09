@@ -1239,6 +1239,605 @@ def calculate_lead_score(lead: Lead) -> int:
     return min(max(score, 0), 100)
 
 # ============================================================================
+# DATA RECONCILIATION ENGINE (DRE) - AI EXTRACTION
+# ============================================================================
+
+def classify_email_content(content: str, subject: str) -> Dict[str, Any]:
+    """Use AI to classify email content and determine category"""
+
+    if not openai_client:
+        return {"category": "unknown", "subcategory": "", "confidence": 0.0}
+
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": """You are an email classification expert for mortgage loan processing.
+
+Classify emails into categories:
+- lead_update: New lead information or lead status changes
+- loan_update: Active loan milestone updates
+- rate_lock: Rate lock confirmations or expirations
+- appraisal: Appraisal scheduling or results
+- title: Title work, clear to close
+- insurance: HOI binders, insurance updates
+- closing: Closing date/time, CD delivery
+- document: Document receipt confirmations
+- portfolio: Servicing, escrow, tax updates
+- unrelated: Not mortgage-related
+
+Return JSON: {"category": "...", "subcategory": "...", "confidence": 0.0-1.0}"""
+                },
+                {
+                    "role": "user",
+                    "content": f"Subject: {subject}\n\nContent: {content[:1000]}"
+                }
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.3
+        )
+
+        result = json.loads(response.choices[0].message.content)
+        return result
+    except Exception as e:
+        logger.error(f"Email classification error: {e}")
+        return {"category": "error", "subcategory": "", "confidence": 0.0}
+
+def extract_loan_fields(content: str, category: str) -> Dict[str, Dict[str, Any]]:
+    """Extract structured loan fields from email content"""
+
+    if not openai_client:
+        return {}
+
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {
+                    "role": "system",
+                    "content": f"""Extract mortgage loan fields from this {category} email.
+
+Extract any present fields:
+- loan_number: string
+- borrower_name: string
+- property_address: string
+- loan_amount: float
+- rate: float (as decimal, e.g., 6.125)
+- rate_lock_date: ISO date
+- lock_expiration: ISO date
+- appraisal_date: ISO date
+- appraisal_value: float
+- closing_date: ISO datetime
+- milestone: string (e.g., "RateLocked", "AppraisalOrdered", "ClearToClose")
+- documents_received: list of strings
+- lender: string
+- realtor_name: string
+- title_company: string
+
+For each field found, return:
+{{"field_name": {{"value": actual_value, "confidence": 0.0-1.0}}}}
+
+Return JSON object. Only include fields you found. Use null for missing."""
+                },
+                {
+                    "role": "user",
+                    "content": content[:2000]
+                }
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.2
+        )
+
+        fields = json.loads(response.choices[0].message.content)
+        return fields
+    except Exception as e:
+        logger.error(f"Field extraction error: {e}")
+        return {}
+
+def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str, Any]:
+    """Match extracted fields to existing CRM entities"""
+
+    match_results = {
+        "entity_type": None,
+        "entity_id": None,
+        "confidence": 0.0,
+        "candidates": []
+    }
+
+    # Try to match by loan number first (highest confidence)
+    if "loan_number" in fields and fields["loan_number"].get("value"):
+        loan_num = str(fields["loan_number"]["value"])
+        loan = db.query(Loan).filter(
+            Loan.loan_number == loan_num,
+            Loan.loan_officer_id == user_id
+        ).first()
+
+        if loan:
+            match_results["entity_type"] = "loan"
+            match_results["entity_id"] = loan.id
+            match_results["confidence"] = 0.95
+            return match_results
+
+    # Try to match by borrower name + fuzzy matching
+    if "borrower_name" in fields and fields["borrower_name"].get("value"):
+        borrower = fields["borrower_name"]["value"].lower()
+
+        # Try leads first
+        leads = db.query(Lead).filter(Lead.owner_id == user_id).all()
+        for lead in leads:
+            if lead.name and borrower in lead.name.lower():
+                match_results["candidates"].append({
+                    "type": "lead",
+                    "id": lead.id,
+                    "name": lead.name,
+                    "confidence": 0.75
+                })
+
+        # Try loans
+        loans = db.query(Loan).filter(Loan.loan_officer_id == user_id).all()
+        for loan in loans:
+            if loan.borrower_name and borrower in loan.borrower_name.lower():
+                match_results["candidates"].append({
+                    "type": "loan",
+                    "id": loan.id,
+                    "name": loan.borrower_name,
+                    "confidence": 0.80
+                })
+
+    # Return best candidate if found
+    if match_results["candidates"]:
+        best = max(match_results["candidates"], key=lambda x: x["confidence"])
+        match_results["entity_type"] = best["type"]
+        match_results["entity_id"] = best["id"]
+        match_results["confidence"] = best["confidence"]
+
+    return match_results
+
+def apply_extracted_data(extracted_data: ExtractedData, db: Session) -> bool:
+    """Apply extracted data to CRM entities"""
+
+    try:
+        if extracted_data.match_entity_type == "loan" and extracted_data.match_entity_id:
+            loan = db.query(Loan).filter(Loan.id == extracted_data.match_entity_id).first()
+            if not loan:
+                return False
+
+            # Apply high-confidence fields
+            fields = extracted_data.fields
+
+            if "rate" in fields and fields["rate"]["confidence"] > 0.85:
+                loan.rate = float(fields["rate"]["value"])
+
+            if "loan_amount" in fields and fields["loan_amount"]["confidence"] > 0.85:
+                loan.loan_amount = float(fields["loan_amount"]["value"])
+
+            if "closing_date" in fields and fields["closing_date"]["confidence"] > 0.80:
+                loan.closing_date = datetime.fromisoformat(fields["closing_date"]["value"])
+
+            if "milestone" in fields and fields["milestone"]["confidence"] > 0.90:
+                # Update stage based on milestone
+                milestone = fields["milestone"]["value"]
+                if "ClearToClose" in milestone or "CTC" in milestone:
+                    loan.stage = LoanStage.CLEAR_TO_CLOSE
+                elif "Processing" in milestone:
+                    loan.stage = LoanStage.PROCESSING
+
+            db.commit()
+            return True
+
+        elif extracted_data.match_entity_type == "lead" and extracted_data.match_entity_id:
+            lead = db.query(Lead).filter(Lead.id == extracted_data.match_entity_id).first()
+            if not lead:
+                return False
+
+            fields = extracted_data.fields
+
+            if "credit_score" in fields and fields["credit_score"]["confidence"] > 0.85:
+                lead.credit_score = int(fields["credit_score"]["value"])
+
+            if "loan_amount" in fields and fields["loan_amount"]["confidence"] > 0.80:
+                lead.loan_amount = float(fields["loan_amount"]["value"])
+
+            db.commit()
+            return True
+
+        return False
+    except Exception as e:
+        logger.error(f"Apply extracted data error: {e}")
+        db.rollback()
+        return False
+
+# ============================================================================
+# DATA RECONCILIATION ENGINE - API ENDPOINTS
+# ============================================================================
+
+@app.post("/api/v1/reconciliation/ingest")
+async def ingest_email_data(
+    event: IncomingDataEventCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Ingest incoming email data for reconciliation"""
+    try:
+        # Create incoming data event
+        db_event = IncomingDataEvent(
+            source=event.source,
+            raw_text=event.raw_text,
+            raw_html=event.raw_html,
+            subject=event.subject,
+            sender=event.sender,
+            recipients=event.recipients,
+            attachments=event.attachments,
+            user_id=current_user.id,
+            processed=False
+        )
+        db.add(db_event)
+        db.commit()
+        db.refresh(db_event)
+
+        logger.info(f"Ingested email data event {db_event.id} for user {current_user.id}")
+
+        return {
+            "status": "success",
+            "event_id": db_event.id,
+            "message": "Email data ingested successfully"
+        }
+    except Exception as e:
+        logger.error(f"Ingest error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/reconciliation/extract/{event_id}")
+async def extract_email_data(
+    event_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Trigger AI extraction on an ingested email event"""
+    try:
+        # Get the event
+        event = db.query(IncomingDataEvent).filter(
+            IncomingDataEvent.id == event_id,
+            IncomingDataEvent.user_id == current_user.id
+        ).first()
+
+        if not event:
+            raise HTTPException(status_code=404, detail="Event not found")
+
+        # Classify the email
+        content = event.raw_text or event.raw_html or ""
+        subject = event.subject or ""
+
+        classification = classify_email_content(content, subject)
+
+        if classification["category"] == "unrelated" or classification["confidence"] < 0.5:
+            event.processed = True
+            db.commit()
+            return {
+                "status": "skipped",
+                "reason": "Email classified as unrelated or low confidence",
+                "classification": classification
+            }
+
+        # Extract fields
+        fields = extract_loan_fields(content, classification["category"])
+
+        if not fields:
+            event.processed = True
+            db.commit()
+            return {
+                "status": "no_data",
+                "reason": "No extractable fields found",
+                "classification": classification
+            }
+
+        # Calculate overall AI confidence
+        confidences = [field.get("confidence", 0.0) for field in fields.values()]
+        avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
+
+        # Match entity
+        entity_match = match_entity(fields, db, current_user.id)
+
+        # Determine status based on confidence
+        status = "pending_review"
+        if avg_confidence > 0.85 and entity_match["confidence"] > 0.90:
+            status = "auto_approved"
+        elif avg_confidence < 0.60 or entity_match["confidence"] < 0.50:
+            status = "needs_review"
+
+        # Create extracted data record
+        extracted = ExtractedData(
+            event_id=event.id,
+            category=classification["category"],
+            subcategory=classification.get("subcategory"),
+            fields=fields,
+            match_entity_type=entity_match["entity_type"],
+            match_entity_id=entity_match["entity_id"],
+            match_confidence=entity_match["confidence"],
+            ai_confidence=avg_confidence,
+            status=status
+        )
+        db.add(extracted)
+
+        # Mark event as processed
+        event.processed = True
+
+        db.commit()
+        db.refresh(extracted)
+
+        # Auto-apply if high confidence
+        if status == "auto_approved":
+            applied = apply_extracted_data(extracted, db)
+            if applied:
+                extracted.status = "applied"
+                db.commit()
+
+        logger.info(f"Extracted data from event {event_id}, status: {extracted.status}")
+
+        return {
+            "status": "success",
+            "extracted_data_id": extracted.id,
+            "category": extracted.category,
+            "ai_confidence": extracted.ai_confidence,
+            "match_confidence": extracted.match_confidence,
+            "extraction_status": extracted.status,
+            "fields": extracted.fields,
+            "entity_match": {
+                "type": extracted.match_entity_type,
+                "id": extracted.match_entity_id
+            }
+        }
+    except Exception as e:
+        logger.error(f"Extraction error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/reconciliation/pending")
+async def get_pending_reconciliation(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all pending reconciliation items for review"""
+    try:
+        # Get all extracted data that needs review
+        pending = db.query(ExtractedData).join(
+            IncomingDataEvent,
+            ExtractedData.event_id == IncomingDataEvent.id
+        ).filter(
+            IncomingDataEvent.user_id == current_user.id,
+            ExtractedData.status.in_(["pending_review", "needs_review"])
+        ).order_by(ExtractedData.created_at.desc()).all()
+
+        # Format response with event details
+        results = []
+        for item in pending:
+            event = db.query(IncomingDataEvent).filter(
+                IncomingDataEvent.id == item.event_id
+            ).first()
+
+            results.append({
+                "id": item.id,
+                "event_id": item.event_id,
+                "category": item.category,
+                "subcategory": item.subcategory,
+                "fields": item.fields,
+                "match_entity_type": item.match_entity_type,
+                "match_entity_id": item.match_entity_id,
+                "match_confidence": item.match_confidence,
+                "ai_confidence": item.ai_confidence,
+                "status": item.status,
+                "created_at": item.created_at,
+                "email": {
+                    "subject": event.subject,
+                    "sender": event.sender,
+                    "received_at": event.received_at
+                }
+            })
+
+        logger.info(f"Retrieved {len(results)} pending reconciliation items for user {current_user.id}")
+
+        return {
+            "status": "success",
+            "count": len(results),
+            "items": results
+        }
+    except Exception as e:
+        logger.error(f"Get pending error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/reconciliation/approve")
+async def approve_reconciliation(
+    approval: ReconciliationApproval,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Approve extracted data and apply to CRM"""
+    try:
+        # Get extracted data
+        extracted = db.query(ExtractedData).join(
+            IncomingDataEvent,
+            ExtractedData.event_id == IncomingDataEvent.id
+        ).filter(
+            ExtractedData.id == approval.extracted_data_id,
+            IncomingDataEvent.user_id == current_user.id
+        ).first()
+
+        if not extracted:
+            raise HTTPException(status_code=404, detail="Extracted data not found")
+
+        # Apply corrections if provided
+        if approval.corrections:
+            for field_name, corrected_value in approval.corrections.items():
+                if field_name in extracted.fields:
+                    # Store original value for training
+                    original = extracted.fields[field_name]["value"]
+
+                    # Create training event
+                    training = AITrainingEvent(
+                        extracted_data_id=extracted.id,
+                        field_name=field_name,
+                        original_value=str(original),
+                        corrected_value=str(corrected_value),
+                        label="corrected",
+                        user_id=current_user.id
+                    )
+                    db.add(training)
+
+                    # Update field value
+                    extracted.fields[field_name]["value"] = corrected_value
+                    extracted.fields[field_name]["confidence"] = 1.0  # User-verified
+
+        # Apply partial approval if specified
+        if approval.approved_fields:
+            # Only apply specified fields
+            original_fields = extracted.fields.copy()
+            extracted.fields = {k: v for k, v in original_fields.items() if k in approval.approved_fields}
+
+        # Apply to CRM
+        applied = apply_extracted_data(extracted, db)
+
+        if applied:
+            extracted.status = "approved"
+            db.commit()
+
+            logger.info(f"Approved and applied extracted data {extracted.id}")
+
+            return {
+                "status": "success",
+                "message": "Data approved and applied to CRM",
+                "extracted_data_id": extracted.id
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to apply data to CRM")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Approval error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/reconciliation/reject")
+async def reject_reconciliation(
+    rejection: ReconciliationRejection,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Reject extracted data"""
+    try:
+        # Get extracted data
+        extracted = db.query(ExtractedData).join(
+            IncomingDataEvent,
+            ExtractedData.event_id == IncomingDataEvent.id
+        ).filter(
+            ExtractedData.id == rejection.extracted_data_id,
+            IncomingDataEvent.user_id == current_user.id
+        ).first()
+
+        if not extracted:
+            raise HTTPException(status_code=404, detail="Extracted data not found")
+
+        # Create training events for all fields (mark as incorrect)
+        for field_name, field_data in extracted.fields.items():
+            training = AITrainingEvent(
+                extracted_data_id=extracted.id,
+                field_name=field_name,
+                original_value=str(field_data.get("value", "")),
+                corrected_value="",  # Empty means rejected
+                label="rejected",
+                user_id=current_user.id,
+                notes=rejection.reason
+            )
+            db.add(training)
+
+        extracted.status = "rejected"
+        db.commit()
+
+        logger.info(f"Rejected extracted data {extracted.id}: {rejection.reason}")
+
+        return {
+            "status": "success",
+            "message": "Data rejected",
+            "extracted_data_id": extracted.id
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Rejection error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/reconciliation/correct")
+async def correct_and_train(
+    correction: ReconciliationApproval,  # Reuse same schema
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Correct extracted data and train AI"""
+    try:
+        # Get extracted data
+        extracted = db.query(ExtractedData).join(
+            IncomingDataEvent,
+            ExtractedData.event_id == IncomingDataEvent.id
+        ).filter(
+            ExtractedData.id == correction.extracted_data_id,
+            IncomingDataEvent.user_id == current_user.id
+        ).first()
+
+        if not extracted:
+            raise HTTPException(status_code=404, detail="Extracted data not found")
+
+        if not correction.corrections:
+            raise HTTPException(status_code=400, detail="No corrections provided")
+
+        # Apply corrections and create training events
+        for field_name, corrected_value in correction.corrections.items():
+            if field_name in extracted.fields:
+                original = extracted.fields[field_name]["value"]
+
+                # Create training event
+                training = AITrainingEvent(
+                    extracted_data_id=extracted.id,
+                    field_name=field_name,
+                    original_value=str(original),
+                    corrected_value=str(corrected_value),
+                    label="corrected",
+                    user_id=current_user.id
+                )
+                db.add(training)
+
+                # Update field
+                extracted.fields[field_name]["value"] = corrected_value
+                extracted.fields[field_name]["confidence"] = 1.0
+
+        # Apply corrected data
+        applied = apply_extracted_data(extracted, db)
+
+        if applied:
+            extracted.status = "corrected_and_applied"
+            db.commit()
+
+            logger.info(f"Corrected and applied extracted data {extracted.id}")
+
+            return {
+                "status": "success",
+                "message": "Data corrected and applied. AI will learn from this correction.",
+                "extracted_data_id": extracted.id,
+                "corrections_count": len(correction.corrections)
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to apply corrected data")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Correction error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================================
 # API ROUTES
 # ============================================================================
 
@@ -1336,6 +1935,77 @@ async def add_coborrower_columns(db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         logger.error(f"❌ Failed to add co-borrower columns: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
+
+@app.post("/admin/create-dre-tables")
+async def create_dre_tables(db: Session = Depends(get_db)):
+    """Admin endpoint to create Data Reconciliation Engine tables"""
+    try:
+        # Create incoming_data_events table
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS incoming_data_events (
+                id SERIAL PRIMARY KEY,
+                source VARCHAR NOT NULL,
+                raw_text TEXT,
+                raw_html TEXT,
+                subject VARCHAR,
+                sender VARCHAR,
+                recipients JSON,
+                attachments JSON,
+                received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                processed BOOLEAN DEFAULT FALSE,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """))
+
+        # Create extracted_data table
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS extracted_data (
+                id SERIAL PRIMARY KEY,
+                event_id INTEGER NOT NULL REFERENCES incoming_data_events(id),
+                category VARCHAR,
+                subcategory VARCHAR,
+                fields JSON NOT NULL,
+                match_entity_type VARCHAR,
+                match_entity_id INTEGER,
+                match_confidence FLOAT,
+                ai_confidence FLOAT,
+                status VARCHAR DEFAULT 'pending_review',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """))
+
+        # Create ai_training_events table
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS ai_training_events (
+                id SERIAL PRIMARY KEY,
+                extracted_data_id INTEGER NOT NULL REFERENCES extracted_data(id),
+                field_name VARCHAR NOT NULL,
+                original_value VARCHAR,
+                corrected_value VARCHAR,
+                label VARCHAR NOT NULL,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """))
+
+        db.commit()
+
+        logger.info("✅ DRE tables created successfully")
+        return {
+            "status": "success",
+            "message": "Data Reconciliation Engine tables created",
+            "tables": ["incoming_data_events", "extracted_data", "ai_training_events"]
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Failed to create DRE tables: {e}")
         return JSONResponse(
             status_code=500,
             content={"status": "error", "message": str(e)}
@@ -4634,6 +5304,15 @@ def build_coach_context(user: User, db: Session) -> Dict[str, Any]:
     # Get overdue tasks
     overdue_tasks = [t for t in open_tasks if t.due_date and t.due_date < datetime.utcnow()]
 
+    # Get pending reconciliation items
+    pending_reconciliation = db.query(ExtractedData).join(
+        IncomingDataEvent,
+        ExtractedData.event_id == IncomingDataEvent.id
+    ).filter(
+        IncomingDataEvent.user_id == user.id,
+        ExtractedData.status.in_(["pending_review", "needs_review"])
+    ).count()
+
     # Calculate pipeline metrics
     leads_by_stage = {}
     for lead in leads:
@@ -4678,6 +5357,9 @@ def build_coach_context(user: User, db: Session) -> Dict[str, Any]:
             "overdue": len(overdue_tasks),
             "overdue_list": [{"title": t.title, "days_overdue": (datetime.utcnow() - t.due_date).days} for t in overdue_tasks[:5]]
         },
+        "reconciliation": {
+            "pending_review": pending_reconciliation
+        },
         "bottlenecks": bottlenecks[:10]  # Top 10 bottlenecks
     }
 
@@ -4712,6 +5394,8 @@ MODE: Daily Briefing
 
 Your job: Review their pipeline and give them their top 3 priorities for today.
 
+Important: If they have pending reconciliation items, prioritize those. Data accuracy is fundamental to The Process.
+
 Format:
 "Morning. Today we run The Process.
 
@@ -4722,12 +5406,14 @@ Top priorities:
 
 Eliminate distractions. Execute with pace."
 
-Be specific. Use their actual pipeline data.""",
+Be specific. Use their actual pipeline data. If reconciliation.pending_review > 0, include reviewing those items as a priority.""",
 
         CoachMode.pipeline_audit: base_personality + """
 MODE: Pipeline Audit
 
 Your job: Identify bottlenecks, stalled deals, and what needs immediate action.
+
+Include data reconciliation if pending. Unreviewed data = blind spots in your pipeline.
 
 Format:
 "Pipeline audit complete.
@@ -4738,7 +5424,7 @@ Bottlenecks:
 
 Fix these now. Nothing else matters until this is done."
 
-Be ruthless. Call out what's broken.""",
+Be ruthless. Call out what's broken. If reconciliation.pending_review > 0, flag it as a data integrity issue.""",
 
         CoachMode.focus_reset: base_personality + """
 MODE: Focus Reset
