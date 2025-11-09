@@ -178,9 +178,11 @@ function Loans() {
     alert('Export functionality coming soon');
   };
 
+  // Ensure loans is always an array before filtering
+  const safeLoans = Array.isArray(loans) ? loans : [];
   const filteredLoans = activeFilter === 'All'
-    ? loans
-    : loans.filter(loan => loan.stage === activeFilter);
+    ? safeLoans
+    : safeLoans.filter(loan => loan.stage === activeFilter);
 
   if (loading) return <div className="loading">Loading loans...</div>;
 
@@ -276,7 +278,7 @@ function Loans() {
                 </tr>
               </thead>
               <tbody>
-                {loans
+                {safeLoans
                   .filter(loan => loan.stage === 'Funded Prior Month')
                   .map((loan) => (
                     <tr
@@ -311,7 +313,7 @@ function Loans() {
 
       <div className="legacy-loans-grid" style={{ display: 'none' }}>
         <div className="loans-grid">
-          {loans.map((loan) => (
+          {safeLoans.map((loan) => (
             <div key={loan.id} className="loan-card">
             <div className="loan-header">
               <div>
