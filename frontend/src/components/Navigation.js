@@ -79,12 +79,12 @@ function Navigation({ onToggleAssistant, assistantOpen, taskCounts = {} }) {
           >
             AI Underwriter
           </Link>
-          <Link
-            to="/coach"
-            className={`nav-link coach-link ${isActive('/coach') ? 'active' : ''}`}
+          <button
+            className={`nav-link ai-assistant-link ${assistantOpen ? 'active' : ''}`}
+            onClick={onToggleAssistant}
           >
-            🏆 Coach
-          </Link>
+            🤖 AI Assistant
+          </button>
           <Link
             to="/reconciliation"
             className={`nav-link ${isActive('/reconciliation') ? 'active' : ''}`}
@@ -108,13 +108,6 @@ function Navigation({ onToggleAssistant, assistantOpen, taskCounts = {} }) {
           >
             ⚙️
           </Link>
-          <button
-            className={`ai-assistant-toggle ${assistantOpen ? 'active' : ''}`}
-            onClick={onToggleAssistant}
-            title="Toggle AI Assistant"
-          >
-            AI Assistant
-          </button>
           <button
             className="logout-btn"
             onClick={handleLogout}
