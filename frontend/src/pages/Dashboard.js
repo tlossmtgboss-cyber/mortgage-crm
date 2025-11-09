@@ -179,12 +179,15 @@ function Dashboard() {
         <div
           key={containerId}
           className={`ai-alerts-container draggable-container ${isDragging ? 'dragging' : ''}`}
-          draggable="true"
-          onDragStart={() => handleDragStart(index)}
           onDragOver={(e) => handleDragOver(e, index)}
           onDragEnd={handleDragEnd}
         >
-          <div className="drag-handle" title="Drag to reorder">⋮⋮</div>
+          <div
+            className="drag-handle"
+            title="Drag to reorder"
+            draggable="true"
+            onDragStart={() => handleDragStart(index)}
+          >⋮⋮</div>
           <div className="ai-alerts-header">
             <span className="alerts-icon">🚨</span>
             <h3>AI Alerts</h3>
@@ -206,12 +209,15 @@ function Dashboard() {
         <div
           key={containerId}
           className={`dashboard-block production-tracker-block-standalone draggable-container ${isDragging ? 'dragging' : ''}`}
-          draggable="true"
-          onDragStart={() => handleDragStart(index)}
           onDragOver={(e) => handleDragOver(e, index)}
           onDragEnd={handleDragEnd}
         >
-          <div className="drag-handle" title="Drag to reorder">⋮⋮</div>
+          <div
+            className="drag-handle"
+            title="Drag to reorder"
+            draggable="true"
+            onDragStart={() => handleDragStart(index)}
+          >⋮⋮</div>
           <div className="block-header clickable-block" onClick={() => navigate('/goal-tracker')}>
             <h2>💰 Monthly Production Tracker</h2>
           </div>
@@ -294,12 +300,15 @@ function Dashboard() {
         <div
           key={containerId}
           className={`dashboard-block ai-tasks-block draggable-container ${isDragging ? 'dragging' : ''}`}
-          draggable="true"
-          onDragStart={() => handleDragStart(index)}
           onDragOver={(e) => handleDragOver(e, index)}
           onDragEnd={handleDragEnd}
         >
-          <div className="drag-handle" title="Drag to reorder">⋮⋮</div>
+          <div
+            className="drag-handle"
+            title="Drag to reorder"
+            draggable="true"
+            onDragStart={() => handleDragStart(index)}
+          >⋮⋮</div>
           <div className="block-header clickable-block" onClick={() => navigate('/tasks')}>
             <h2>🎯 AI Prioritized Tasks (Today)</h2>
             <span className="task-count">{getAggregatedTasksCount()} tasks</span>
@@ -322,12 +331,15 @@ function Dashboard() {
         <div
           key={containerId}
           className={`dashboard-block pipeline-block draggable-container ${isDragging ? 'dragging' : ''}`}
-          draggable="true"
-          onDragStart={() => handleDragStart(index)}
           onDragOver={(e) => handleDragOver(e, index)}
           onDragEnd={handleDragEnd}
         >
-          <div className="drag-handle" title="Drag to reorder">⋮⋮</div>
+          <div
+            className="drag-handle"
+            title="Drag to reorder"
+            draggable="true"
+            onDragStart={() => handleDragStart(index)}
+          >⋮⋮</div>
           <div className="block-header">
             <h2>💼 Live Loan Pipeline</h2>
           </div>
@@ -375,12 +387,15 @@ function Dashboard() {
         <div
           key={containerId}
           className={`dashboard-block referrals-block draggable-container ${isDragging ? 'dragging' : ''}`}
-          draggable="true"
-          onDragStart={() => handleDragStart(index)}
           onDragOver={(e) => handleDragOver(e, index)}
           onDragEnd={handleDragEnd}
         >
-          <div className="drag-handle" title="Drag to reorder">⋮⋮</div>
+          <div
+            className="drag-handle"
+            title="Drag to reorder"
+            draggable="true"
+            onDragStart={() => handleDragStart(index)}
+          >⋮⋮</div>
           <div className="block-header">
             <h2>🤝 Referral Scoreboard</h2>
           </div>
@@ -424,12 +439,15 @@ function Dashboard() {
         <div
           key={containerId}
           className={`dashboard-block team-block draggable-container ${isDragging ? 'dragging' : ''}`}
-          draggable="true"
-          onDragStart={() => handleDragStart(index)}
           onDragOver={(e) => handleDragOver(e, index)}
           onDragEnd={handleDragEnd}
         >
-          <div className="drag-handle" title="Drag to reorder">⋮⋮</div>
+          <div
+            className="drag-handle"
+            title="Drag to reorder"
+            draggable="true"
+            onDragStart={() => handleDragStart(index)}
+          >⋮⋮</div>
           <div className="block-header">
             <h2>👥 Team Performance</h2>
           </div>
@@ -467,12 +485,15 @@ function Dashboard() {
         <div
           key={containerId}
           className={`dashboard-block messages-block draggable-container ${isDragging ? 'dragging' : ''}`}
-          draggable="true"
-          onDragStart={() => handleDragStart(index)}
           onDragOver={(e) => handleDragOver(e, index)}
           onDragEnd={handleDragEnd}
         >
-          <div className="drag-handle" title="Drag to reorder">⋮⋮</div>
+          <div
+            className="drag-handle"
+            title="Drag to reorder"
+            draggable="true"
+            onDragStart={() => handleDragStart(index)}
+          >⋮⋮</div>
           <div className="block-header">
             <h2>📬 Unified Messages</h2>
             <span className="unread-count">{messages.filter(m => !m.read).length} unread</span>
