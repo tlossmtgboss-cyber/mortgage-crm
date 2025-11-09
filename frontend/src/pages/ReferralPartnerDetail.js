@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { partnersAPI, leadsAPI } from '../services/api';
+import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import './ReferralPartnerDetail.css';
 
 function ReferralPartnerDetail() {
@@ -109,11 +110,11 @@ function ReferralPartnerDetail() {
           </div>
           <div className="info-item">
             <span className="label">Email</span>
-            <span className="value">{partner.email || 'N/A'}</span>
+            <span className="value"><ClickableEmail email={partner.email} /></span>
           </div>
           <div className="info-item">
             <span className="label">Phone</span>
-            <span className="value">{partner.phone || 'N/A'}</span>
+            <span className="value"><ClickablePhone phone={partner.phone} /></span>
           </div>
         </div>
 

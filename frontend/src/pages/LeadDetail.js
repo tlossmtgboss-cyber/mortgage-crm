@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { leadsAPI, activitiesAPI, aiAPI } from '../services/api';
+import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import './LeadDetail.css';
 
 function LeadDetail() {
@@ -421,7 +422,9 @@ function LeadDetail() {
                     onChange={(e) => setFormData({...formData, email: e.target.value})}
                   />
                 ) : (
-                  <div className="value">{lead.email || 'N/A'}</div>
+                  <div className="value">
+                    <ClickableEmail email={lead.email} />
+                  </div>
                 )}
               </div>
               <div className="info-field">
@@ -433,9 +436,9 @@ function LeadDetail() {
                     onChange={(e) => setFormData({...formData, phone: e.target.value})}
                   />
                 ) : (
-                  <a href={`tel:${lead.phone}`} className="value phone-link">
-                    {lead.phone || 'N/A'}
-                  </a>
+                  <div className="value">
+                    <ClickablePhone phone={lead.phone} />
+                  </div>
                 )}
               </div>
               <div className="info-field">

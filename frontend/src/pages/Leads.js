@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { leadsAPI } from '../services/api';
+import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import './Leads.css';
 
 // Generate mock leads data
@@ -590,8 +591,8 @@ function Leads() {
                 <td className="lead-name clickable" onClick={() => navigate(`/leads/${lead.id}`)}>
                   {lead.name}
                 </td>
-                <td>{lead.email || 'N/A'}</td>
-                <td>{lead.phone || 'N/A'}</td>
+                <td><ClickableEmail email={lead.email} /></td>
+                <td><ClickablePhone phone={lead.phone} /></td>
                 <td>
                   <span className={`status-badge status-${getStatusColor(lead.stage)}`}>
                     {lead.stage}

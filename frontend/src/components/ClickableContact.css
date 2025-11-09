@@ -1,0 +1,54 @@
+/* Clickable Contact Styles */
+
+.clickable-email,
+.clickable-phone {
+  color: #218D8D;
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-bottom: 1px solid transparent;
+}
+
+.clickable-email:hover,
+.clickable-phone:hover {
+  color: #1a7070;
+  border-bottom-color: #1a7070;
+}
+
+.clickable-email:active,
+.clickable-phone:active {
+  transform: scale(0.98);
+}
+
+/* Add icons via pseudo-elements */
+.clickable-email::before {
+  content: '📧';
+  font-size: 14px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.clickable-email:hover::before {
+  opacity: 1;
+}
+
+.clickable-phone::before {
+  content: '📞';
+  font-size: 14px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.clickable-phone:hover::before {
+  opacity: 1;
+}
+
+/* No value styling */
+.no-value {
+  color: #999;
+  font-style: italic;
+}
