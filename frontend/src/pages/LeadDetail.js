@@ -12,7 +12,7 @@ function LeadDetail() {
   const [loading, setLoading] = useState(true);
   const [chatMessage, setChatMessage] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
-  const [editing, setEditing] = useState(false);
+  const [editing, setEditing] = useState(true); // Always in edit mode
   const [formData, setFormData] = useState({});
   const [emails, setEmails] = useState([]);
   const [activeTab, setActiveTab] = useState('personal');
@@ -20,6 +20,7 @@ function LeadDetail() {
   const [noteLoading, setNoteLoading] = useState(false);
   const [borrowers, setBorrowers] = useState([]);
   const [activeBorrower, setActiveBorrower] = useState(0);
+  const [saveTimeout, setSaveTimeout] = useState(null);
 
   useEffect(() => {
     loadLeadData();
@@ -169,7 +170,69 @@ function LeadDetail() {
     } else {
       setFormData(lead);
     }
-    setEditing(false);
+  };
+
+  // Auto-save function with debounce
+  const autoSaveField = async (fieldName, fieldValue) => {
+    try {
+      let dataToSave;
+
+      // Check if we're editing the co-borrower
+      if (activeBorrower === 1) {
+        // Update co-borrower fields
+        const updatedData = {...formData, [fieldName]: fieldValue};
+        const coApplicantName = updatedData.first_name && updatedData.last_name
+          ? `${updatedData.first_name} ${updatedData.last_name}`
+          : updatedData.name || '';
+
+        dataToSave = {
+          co_applicant_name: coApplicantName,
+          co_applicant_email: updatedData.email || null,
+          co_applicant_phone: updatedData.phone || null
+        };
+      } else {
+        // Update primary borrower field
+        dataToSave = {
+          [fieldName]: fieldValue
+        };
+
+        // If updating first_name or last_name, also update name
+        if (fieldName === 'first_name' || fieldName === 'last_name') {
+          const updatedData = {...formData, [fieldName]: fieldValue};
+          if (updatedData.first_name && updatedData.last_name) {
+            dataToSave.name = `${updatedData.first_name} ${updatedData.last_name}`;
+          }
+        }
+      }
+
+      await leadsAPI.update(id, dataToSave);
+      console.log(`Field ${fieldName} saved successfully`);
+
+      // Reload to sync with backend
+      const updatedLead = await leadsAPI.getById(id);
+      setLead(updatedLead);
+    } catch (error) {
+      console.error('Failed to auto-save field:', error);
+      // Silently fail for auto-save to avoid disrupting user
+    }
+  };
+
+  // Handle field change with debounced auto-save
+  const handleFieldChange = (fieldName, fieldValue) => {
+    // Update form data immediately for responsive UI
+    setFormData({...formData, [fieldName]: fieldValue});
+
+    // Clear existing timeout
+    if (saveTimeout) {
+      clearTimeout(saveTimeout);
+    }
+
+    // Set new timeout for auto-save (wait 1 second after user stops typing)
+    const newTimeout = setTimeout(() => {
+      autoSaveField(fieldName, fieldValue);
+    }, 1000);
+
+    setSaveTimeout(newTimeout);
   };
 
   const handleSendMessage = async (e) => {
@@ -379,239 +442,165 @@ function LeadDetail() {
         <div className="loan-fields-grid">
           <div className="loan-field">
             <label>Loan Amount</label>
-            {editing ? (
-              <input
-                type="number"
-                value={formData.loan_amount || ''}
-                onChange={(e) => setFormData({...formData, loan_amount: e.target.value})}
-                placeholder="$"
-              />
-            ) : (
-              <div className="value">
-                {formData.loan_amount ? `$${parseFloat(formData.loan_amount).toLocaleString()}` : 'N/A'}
-              </div>
-            )}
+            <input
+              type="number"
+              value={formData.loan_amount || ''}
+              onChange={(e) => handleFieldChange('loan_amount', e.target.value)}
+              placeholder="$"
+            />
           </div>
 
           <div className="loan-field">
             <label>Interest Rate</label>
-            {editing ? (
-              <input
-                type="number"
-                step="0.001"
-                value={formData.interest_rate || ''}
-                onChange={(e) => setFormData({...formData, interest_rate: e.target.value})}
-                placeholder="%"
-              />
-            ) : (
-              <div className="value">{formData.interest_rate ? `${formData.interest_rate}%` : 'N/A'}</div>
-            )}
+            <input
+              type="number"
+              step="0.001"
+              value={formData.interest_rate || ''}
+              onChange={(e) => handleFieldChange('interest_rate', e.target.value)}
+              placeholder="%"
+            />
           </div>
 
           <div className="loan-field">
             <label>Loan Term</label>
-            {editing ? (
-              <input
-                type="number"
-                value={formData.loan_term || ''}
-                onChange={(e) => setFormData({...formData, loan_term: e.target.value})}
-                placeholder="Years"
-              />
-            ) : (
-              <div className="value">{formData.loan_term ? `${formData.loan_term} years` : 'N/A'}</div>
-            )}
+            <input
+              type="number"
+              value={formData.loan_term || ''}
+              onChange={(e) => handleFieldChange('loan_term', e.target.value)}
+              placeholder="Years"
+            />
           </div>
 
           <div className="loan-field">
             <label>Loan Type</label>
-            {editing ? (
-              <select
-                value={formData.loan_type || ''}
-                onChange={(e) => setFormData({...formData, loan_type: e.target.value})}
-              >
-                <option value="">Select...</option>
-                <option value="Conventional">Conventional</option>
-                <option value="FHA">FHA</option>
-                <option value="VA">VA</option>
-                <option value="USDA">USDA</option>
-                <option value="Jumbo">Jumbo</option>
-                <option value="HELOC">HELOC</option>
-              </select>
-            ) : (
-              <div className="value">{formData.loan_type || 'N/A'}</div>
-            )}
+            <select
+              value={formData.loan_type || ''}
+              onChange={(e) => handleFieldChange('loan_type', e.target.value)}
+            >
+              <option value="">Select...</option>
+              <option value="Conventional">Conventional</option>
+              <option value="FHA">FHA</option>
+              <option value="VA">VA</option>
+              <option value="USDA">USDA</option>
+              <option value="Jumbo">Jumbo</option>
+              <option value="HELOC">HELOC</option>
+            </select>
           </div>
 
           <div className="loan-field">
             <label>Lock Date</label>
-            {editing ? (
-              <input
-                type="date"
-                value={formData.lock_date || ''}
-                onChange={(e) => setFormData({...formData, lock_date: e.target.value})}
-              />
-            ) : (
-              <div className="value">
-                {formData.lock_date ? new Date(formData.lock_date).toLocaleDateString() : 'N/A'}
-              </div>
-            )}
+            <input
+              type="date"
+              value={formData.lock_date || ''}
+              onChange={(e) => handleFieldChange('lock_date', e.target.value)}
+            />
           </div>
 
           <div className="loan-field">
             <label>Lock Expiration</label>
-            {editing ? (
-              <input
-                type="date"
-                value={formData.lock_expiration || ''}
-                onChange={(e) => setFormData({...formData, lock_expiration: e.target.value})}
-              />
-            ) : (
-              <div className="value">
-                {formData.lock_expiration ? new Date(formData.lock_expiration).toLocaleDateString() : 'N/A'}
-              </div>
-            )}
+            <input
+              type="date"
+              value={formData.lock_expiration || ''}
+              onChange={(e) => handleFieldChange('lock_expiration', e.target.value)}
+            />
           </div>
 
           <div className="loan-field">
             <label>APR</label>
-            {editing ? (
-              <input
-                type="number"
-                step="0.001"
-                value={formData.apr || ''}
-                onChange={(e) => setFormData({...formData, apr: e.target.value})}
-                placeholder="%"
-              />
-            ) : (
-              <div className="value">{formData.apr ? `${formData.apr}%` : 'N/A'}</div>
-            )}
+            <input
+              type="number"
+              step="0.001"
+              value={formData.apr || ''}
+              onChange={(e) => handleFieldChange('apr', e.target.value)}
+              placeholder="%"
+            />
           </div>
 
           <div className="loan-field">
             <label>Points</label>
-            {editing ? (
-              <input
-                type="number"
-                step="0.125"
-                value={formData.points || ''}
-                onChange={(e) => setFormData({...formData, points: e.target.value})}
-              />
-            ) : (
-              <div className="value">{formData.points || 'N/A'}</div>
-            )}
+            <input
+              type="number"
+              step="0.125"
+              value={formData.points || ''}
+              onChange={(e) => handleFieldChange('points', e.target.value)}
+            />
           </div>
 
           <div className="loan-field">
             <label>Lender</label>
-            {editing ? (
-              <input
-                type="text"
-                value={formData.lender || ''}
-                onChange={(e) => setFormData({...formData, lender: e.target.value})}
-              />
-            ) : (
-              <div className="value">{formData.lender || 'N/A'}</div>
-            )}
+            <input
+              type="text"
+              value={formData.lender || ''}
+              onChange={(e) => handleFieldChange('lender', e.target.value)}
+            />
           </div>
 
           <div className="loan-field">
             <label>Loan Officer</label>
-            {editing ? (
-              <input
-                type="text"
-                value={formData.loan_officer || ''}
-                onChange={(e) => setFormData({...formData, loan_officer: e.target.value})}
-              />
-            ) : (
-              <div className="value">{formData.loan_officer || 'N/A'}</div>
-            )}
+            <input
+              type="text"
+              value={formData.loan_officer || ''}
+              onChange={(e) => handleFieldChange('loan_officer', e.target.value)}
+            />
           </div>
 
           <div className="loan-field">
             <label>Processor</label>
-            {editing ? (
-              <input
-                type="text"
-                value={formData.processor || ''}
-                onChange={(e) => setFormData({...formData, processor: e.target.value})}
-              />
-            ) : (
-              <div className="value">{formData.processor || 'N/A'}</div>
-            )}
+            <input
+              type="text"
+              value={formData.processor || ''}
+              onChange={(e) => handleFieldChange('processor', e.target.value)}
+            />
           </div>
 
           <div className="loan-field">
             <label>Underwriter</label>
-            {editing ? (
-              <input
-                type="text"
-                value={formData.underwriter || ''}
-                onChange={(e) => setFormData({...formData, underwriter: e.target.value})}
-              />
-            ) : (
-              <div className="value">{formData.underwriter || 'N/A'}</div>
-            )}
+            <input
+              type="text"
+              value={formData.underwriter || ''}
+              onChange={(e) => handleFieldChange('underwriter', e.target.value)}
+            />
           </div>
 
           <div className="loan-field">
             <label>Closing Date</label>
-            {editing ? (
-              <input
-                type="date"
-                value={formData.closing_date || ''}
-                onChange={(e) => setFormData({...formData, closing_date: e.target.value})}
-              />
-            ) : (
-              <div className="value">
-                {formData.closing_date ? new Date(formData.closing_date).toLocaleDateString() : 'N/A'}
-              </div>
-            )}
+            <input
+              type="date"
+              value={formData.closing_date || ''}
+              onChange={(e) => handleFieldChange('closing_date', e.target.value)}
+            />
           </div>
 
           <div className="loan-field">
             <label>Appraisal Value</label>
-            {editing ? (
-              <input
-                type="number"
-                value={formData.appraisal_value || ''}
-                onChange={(e) => setFormData({...formData, appraisal_value: e.target.value})}
-                placeholder="$"
-              />
-            ) : (
-              <div className="value">
-                {formData.appraisal_value ? `$${parseFloat(formData.appraisal_value).toLocaleString()}` : 'N/A'}
-              </div>
-            )}
+            <input
+              type="number"
+              value={formData.appraisal_value || ''}
+              onChange={(e) => handleFieldChange('appraisal_value', e.target.value)}
+              placeholder="$"
+            />
           </div>
 
           <div className="loan-field">
             <label>LTV %</label>
-            {editing ? (
-              <input
-                type="number"
-                step="0.01"
-                value={formData.ltv || ''}
-                onChange={(e) => setFormData({...formData, ltv: e.target.value})}
-                placeholder="%"
-              />
-            ) : (
-              <div className="value">{formData.ltv ? `${formData.ltv}%` : 'N/A'}</div>
-            )}
+            <input
+              type="number"
+              step="0.01"
+              value={formData.ltv || ''}
+              onChange={(e) => handleFieldChange('ltv', e.target.value)}
+              placeholder="%"
+            />
           </div>
 
           <div className="loan-field">
             <label>DTI %</label>
-            {editing ? (
-              <input
-                type="number"
-                step="0.01"
-                value={formData.dti || ''}
-                onChange={(e) => setFormData({...formData, dti: e.target.value})}
-                placeholder="%"
-              />
-            ) : (
-              <div className="value">{formData.dti ? `${formData.dti}%` : 'N/A'}</div>
-            )}
+            <input
+              type="number"
+              step="0.01"
+              value={formData.dti || ''}
+              onChange={(e) => handleFieldChange('dti', e.target.value)}
+              placeholder="%"
+            />
           </div>
         </div>
       </div>
@@ -683,67 +672,43 @@ function LeadDetail() {
             <div className="info-grid compact">
               <div className="info-field">
                 <label>First Name</label>
-                {editing ? (
-                  <input
-                    type="text"
-                    value={formData.first_name || ''}
-                    onChange={(e) => setFormData({...formData, first_name: e.target.value})}
-                  />
-                ) : (
-                  <div className="value">{formData.first_name || (formData.name ? formData.name.split(' ')[0] : 'N/A')}</div>
-                )}
+                <input
+                  type="text"
+                  value={formData.first_name || ''}
+                  onChange={(e) => handleFieldChange('first_name', e.target.value)}
+                />
               </div>
               <div className="info-field">
                 <label>Last Name</label>
-                {editing ? (
-                  <input
-                    type="text"
-                    value={formData.last_name || ''}
-                    onChange={(e) => setFormData({...formData, last_name: e.target.value})}
-                  />
-                ) : (
-                  <div className="value">{formData.last_name || (formData.name ? formData.name.split(' ').slice(1).join(' ') : 'N/A')}</div>
-                )}
+                <input
+                  type="text"
+                  value={formData.last_name || ''}
+                  onChange={(e) => handleFieldChange('last_name', e.target.value)}
+                />
               </div>
               <div className="info-field">
                 <label>Email</label>
-                {editing ? (
-                  <input
-                    type="email"
-                    value={formData.email || ''}
-                    onChange={(e) => setFormData({...formData, email: e.target.value})}
-                  />
-                ) : (
-                  <div className="value">
-                    <ClickableEmail email={formData.email} />
-                  </div>
-                )}
+                <input
+                  type="email"
+                  value={formData.email || ''}
+                  onChange={(e) => handleFieldChange('email', e.target.value)}
+                />
               </div>
               <div className="info-field">
                 <label>Phone</label>
-                {editing ? (
-                  <input
-                    type="tel"
-                    value={formData.phone || ''}
-                    onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                  />
-                ) : (
-                  <div className="value">
-                    <ClickablePhone phone={formData.phone} />
-                  </div>
-                )}
+                <input
+                  type="tel"
+                  value={formData.phone || ''}
+                  onChange={(e) => handleFieldChange('phone', e.target.value)}
+                />
               </div>
               <div className="info-field">
                 <label>Loan Number</label>
-                {editing ? (
-                  <input
-                    type="text"
-                    value={formData.loan_number || ''}
-                    onChange={(e) => setFormData({...formData, loan_number: e.target.value})}
-                  />
-                ) : (
-                  <div className="value">{formData.loan_number || 'N/A'}</div>
-                )}
+                <input
+                  type="text"
+                  value={formData.loan_number || ''}
+                  onChange={(e) => handleFieldChange('loan_number', e.target.value)}
+                />
               </div>
             </div>
           </div>
@@ -756,105 +721,67 @@ function LeadDetail() {
             <div className="info-grid compact">
               <div className="info-field">
                 <label>Employment Status</label>
-                {editing ? (
-                  <input
-                    type="text"
-                    value={formData.employment_status || ''}
-                    onChange={(e) => setFormData({...formData, employment_status: e.target.value})}
-                  />
-                ) : (
-                  <div className="value">{formData.employment_status || 'N/A'}</div>
-                )}
+                <input
+                  type="text"
+                  value={formData.employment_status || ''}
+                  onChange={(e) => handleFieldChange('employment_status', e.target.value)}
+                />
               </div>
               <div className="info-field">
                 <label>Employer Name</label>
-                {editing ? (
-                  <input
-                    type="text"
-                    value={formData.employer_name || ''}
-                    onChange={(e) => setFormData({...formData, employer_name: e.target.value})}
-                  />
-                ) : (
-                  <div className="value">{formData.employer_name || 'N/A'}</div>
-                )}
+                <input
+                  type="text"
+                  value={formData.employer_name || ''}
+                  onChange={(e) => handleFieldChange('employer_name', e.target.value)}
+                />
               </div>
               <div className="info-field">
                 <label>Job Title</label>
-                {editing ? (
-                  <input
-                    type="text"
-                    value={formData.job_title || ''}
-                    onChange={(e) => setFormData({...formData, job_title: e.target.value})}
-                  />
-                ) : (
-                  <div className="value">{formData.job_title || 'N/A'}</div>
-                )}
+                <input
+                  type="text"
+                  value={formData.job_title || ''}
+                  onChange={(e) => handleFieldChange('job_title', e.target.value)}
+                />
               </div>
               <div className="info-field">
                 <label>Years at Job</label>
-                {editing ? (
-                  <input
-                    type="number"
-                    value={formData.years_at_job || ''}
-                    onChange={(e) => setFormData({...formData, years_at_job: parseFloat(e.target.value)})}
-                  />
-                ) : (
-                  <div className="value">{formData.years_at_job || 'N/A'}</div>
-                )}
+                <input
+                  type="number"
+                  value={formData.years_at_job || ''}
+                  onChange={(e) => handleFieldChange('years_at_job', parseFloat(e.target.value))}
+                />
               </div>
               <div className="info-field">
                 <label>Annual Income</label>
-                {editing ? (
-                  <input
-                    type="number"
-                    value={formData.annual_income || ''}
-                    onChange={(e) => setFormData({...formData, annual_income: parseFloat(e.target.value)})}
-                  />
-                ) : (
-                  <div className="value">
-                    {lead.annual_income ? `$${lead.annual_income.toLocaleString()}` : 'N/A'}
-                  </div>
-                )}
+                <input
+                  type="number"
+                  value={formData.annual_income || ''}
+                  onChange={(e) => handleFieldChange('annual_income', parseFloat(e.target.value))}
+                />
               </div>
               <div className="info-field">
                 <label>Monthly Income</label>
-                {editing ? (
-                  <input
-                    type="number"
-                    value={formData.monthly_income || ''}
-                    onChange={(e) => setFormData({...formData, monthly_income: parseFloat(e.target.value)})}
-                  />
-                ) : (
-                  <div className="value">
-                    {lead.monthly_income ? `$${lead.monthly_income.toLocaleString()}` : 'N/A'}
-                  </div>
-                )}
+                <input
+                  type="number"
+                  value={formData.monthly_income || ''}
+                  onChange={(e) => handleFieldChange('monthly_income', parseFloat(e.target.value))}
+                />
               </div>
               <div className="info-field">
                 <label>Other Income</label>
-                {editing ? (
-                  <input
-                    type="number"
-                    value={formData.other_income || ''}
-                    onChange={(e) => setFormData({...formData, other_income: parseFloat(e.target.value)})}
-                  />
-                ) : (
-                  <div className="value">
-                    {lead.other_income ? `$${lead.other_income.toLocaleString()}` : 'N/A'}
-                  </div>
-                )}
+                <input
+                  type="number"
+                  value={formData.other_income || ''}
+                  onChange={(e) => handleFieldChange('other_income', parseFloat(e.target.value))}
+                />
               </div>
               <div className="info-field">
                 <label>Income Source</label>
-                {editing ? (
-                  <input
-                    type="text"
-                    value={formData.income_source || ''}
-                    onChange={(e) => setFormData({...formData, income_source: e.target.value})}
-                  />
-                ) : (
-                  <div className="value">{formData.income_source || 'N/A'}</div>
-                )}
+                <input
+                  type="text"
+                  value={formData.income_source || ''}
+                  onChange={(e) => handleFieldChange('income_source', e.target.value)}
+                />
               </div>
             </div>
           </div>
@@ -867,103 +794,67 @@ function LeadDetail() {
             <div className="info-grid compact">
               <div className="info-field">
                 <label>Property Address</label>
-                {editing ? (
-                  <input
-                    type="text"
-                    value={formData.address || ''}
-                    onChange={(e) => setFormData({...formData, address: e.target.value})}
-                  />
-                ) : (
-                  <div className="value">{formData.address || 'N/A'}</div>
-                )}
+                <input
+                  type="text"
+                  value={formData.address || ''}
+                  onChange={(e) => handleFieldChange('address', e.target.value)}
+                />
               </div>
               <div className="info-field">
                 <label>City</label>
-                {editing ? (
-                  <input
-                    type="text"
-                    value={formData.city || ''}
-                    onChange={(e) => setFormData({...formData, city: e.target.value})}
-                  />
-                ) : (
-                  <div className="value">{formData.city || 'N/A'}</div>
-                )}
+                <input
+                  type="text"
+                  value={formData.city || ''}
+                  onChange={(e) => handleFieldChange('city', e.target.value)}
+                />
               </div>
               <div className="info-field">
                 <label>State</label>
-                {editing ? (
-                  <input
-                    type="text"
-                    value={formData.state || ''}
-                    onChange={(e) => setFormData({...formData, state: e.target.value})}
-                  />
-                ) : (
-                  <div className="value">{formData.state || 'N/A'}</div>
-                )}
+                <input
+                  type="text"
+                  value={formData.state || ''}
+                  onChange={(e) => handleFieldChange('state', e.target.value)}
+                />
               </div>
               <div className="info-field">
                 <label>Zip Code</label>
-                {editing ? (
-                  <input
-                    type="text"
-                    value={formData.zip_code || ''}
-                    onChange={(e) => setFormData({...formData, zip_code: e.target.value})}
-                  />
-                ) : (
-                  <div className="value">{formData.zip_code || 'N/A'}</div>
-                )}
+                <input
+                  type="text"
+                  value={formData.zip_code || ''}
+                  onChange={(e) => handleFieldChange('zip_code', e.target.value)}
+                />
               </div>
               <div className="info-field">
                 <label>Property Type</label>
-                {editing ? (
-                  <input
-                    type="text"
-                    value={formData.property_type || ''}
-                    onChange={(e) => setFormData({...formData, property_type: e.target.value})}
-                  />
-                ) : (
-                  <div className="value">{formData.property_type || 'N/A'}</div>
-                )}
+                <input
+                  type="text"
+                  value={formData.property_type || ''}
+                  onChange={(e) => handleFieldChange('property_type', e.target.value)}
+                />
               </div>
               <div className="info-field">
                 <label>Property Value</label>
-                {editing ? (
-                  <input
-                    type="number"
-                    value={formData.property_value || ''}
-                    onChange={(e) => setFormData({...formData, property_value: parseFloat(e.target.value)})}
-                  />
-                ) : (
-                  <div className="value">
-                    {formData.property_value ? `$${formData.property_value.toLocaleString()}` : 'N/A'}
-                  </div>
-                )}
+                <input
+                  type="number"
+                  value={formData.property_value || ''}
+                  onChange={(e) => handleFieldChange('property_value', parseFloat(e.target.value))}
+                />
               </div>
               <div className="info-field">
                 <label>Down Payment</label>
-                {editing ? (
-                  <input
-                    type="number"
-                    value={formData.down_payment || ''}
-                    onChange={(e) => setFormData({...formData, down_payment: parseFloat(e.target.value)})}
-                  />
-                ) : (
-                  <div className="value">
-                    {lead.down_payment ? `$${lead.down_payment.toLocaleString()}` : 'N/A'}
-                  </div>
-                )}
+                <input
+                  type="number"
+                  value={formData.down_payment || ''}
+                  onChange={(e) => handleFieldChange('down_payment', parseFloat(e.target.value))}
+                />
               </div>
               <div className="info-field">
                 <label>Credit Score</label>
-                {editing ? (
-                  <input
-                    type="number"
-                    value={formData.credit_score || ''}
-                    onChange={(e) => setFormData({...formData, credit_score: parseInt(e.target.value)})}
-                  />
-                ) : (
-                  <div className="value">{formData.credit_score || 'N/A'}</div>
-                )}
+                <input
+                  type="number"
+                  value={formData.credit_score || ''}
+                  onChange={(e) => handleFieldChange('credit_score', parseInt(e.target.value))}
+                />
               </div>
             </div>
           </div>
