@@ -92,16 +92,63 @@ function LeadDetail() {
 
   const handleSave = async () => {
     try {
-      // Combine first_name and last_name into name for backend
-      const dataToSave = {
-        ...formData,
-        name: formData.first_name && formData.last_name
+      let dataToSave;
+
+      // Check if we're editing the co-borrower
+      if (activeBorrower === 1) {
+        // Only update co_applicant_name for co-borrower
+        const coApplicantName = formData.first_name && formData.last_name
           ? `${formData.first_name} ${formData.last_name}`
-          : formData.name || ''
-      };
+          : formData.name || '';
+
+        dataToSave = {
+          co_applicant_name: coApplicantName
+        };
+      } else {
+        // Update primary borrower fields
+        dataToSave = {
+          ...formData,
+          name: formData.first_name && formData.last_name
+            ? `${formData.first_name} ${formData.last_name}`
+            : formData.name || ''
+        };
+      }
 
       await leadsAPI.update(id, dataToSave);
-      setLead(dataToSave);
+
+      // Reload the lead data to sync with backend
+      const updatedLead = await leadsAPI.getById(id);
+      setLead(updatedLead);
+
+      // Update the borrowers array
+      if (activeBorrower === 1 && updatedLead.co_applicant_name) {
+        const primaryName = updatedLead.first_name && updatedLead.last_name
+          ? `${updatedLead.first_name} ${updatedLead.last_name}`
+          : updatedLead.name || 'Primary Borrower';
+
+        const coborrowerParts = (updatedLead.co_applicant_name || '').split(' ');
+        const updatedBorrowers = [
+          {
+            id: 0,
+            name: primaryName,
+            type: 'primary',
+            data: updatedLead
+          },
+          {
+            id: 1,
+            name: updatedLead.co_applicant_name,
+            type: 'co-borrower',
+            data: {
+              name: updatedLead.co_applicant_name,
+              first_name: coborrowerParts[0] || '',
+              last_name: coborrowerParts.slice(1).join(' ') || '',
+            }
+          }
+        ];
+        setBorrowers(updatedBorrowers);
+        setFormData(updatedBorrowers[1].data);
+      }
+
       setEditing(false);
       alert('Lead updated successfully!');
     } catch (error) {
@@ -111,7 +158,12 @@ function LeadDetail() {
   };
 
   const handleCancel = () => {
-    setFormData(lead);
+    // Restore the correct borrower's data based on active borrower
+    if (activeBorrower < borrowers.length) {
+      setFormData(borrowers[activeBorrower].data);
+    } else {
+      setFormData(lead);
+    }
     setEditing(false);
   };
 
