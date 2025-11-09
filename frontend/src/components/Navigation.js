@@ -1,15 +1,24 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import './Navigation.css';
 
 function Navigation({ onToggleAssistant, assistantOpen, taskCounts = {} }) {
   const location = useLocation();
+  const navigate = useNavigate();
 
   const isActive = (path) => location.pathname === path;
 
   const renderBadge = (count) => {
     if (!count || count === 0) return null;
     return <span className="nav-badge">({count})</span>;
+  };
+
+  const handleLogout = () => {
+    if (window.confirm('Are you sure you want to log out?')) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      navigate('/login');
+    }
   };
 
   return (
@@ -93,6 +102,13 @@ function Navigation({ onToggleAssistant, assistantOpen, taskCounts = {} }) {
             title="Toggle AI Assistant"
           >
             AI Assistant
+          </button>
+          <button
+            className="logout-btn"
+            onClick={handleLogout}
+            title="Logout"
+          >
+            🚪 Logout
           </button>
         </div>
       </div>

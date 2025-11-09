@@ -108,6 +108,26 @@
   border-color: var(--color-primary);
 }
 
+.logout-btn {
+  padding: var(--space-sm) var(--space-md);
+  background: #ef4444;
+  color: white;
+  border: 1px solid #dc2626;
+  border-radius: var(--radius-base);
+  font-weight: var(--weight-medium);
+  font-size: var(--font-base);
+  cursor: pointer;
+  transition: all 250ms ease;
+  white-space: nowrap;
+}
+
+.logout-btn:hover {
+  background: #dc2626;
+  border-color: #b91c1c;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+}
+
 @media (max-width: 1024px) {
   .nav-container {
     padding: 0 var(--space-md);
@@ -123,6 +143,11 @@
   }
 
   .ai-assistant-toggle {
+    padding: var(--space-sm);
+    font-size: var(--font-sm);
+  }
+
+  .logout-btn {
     padding: var(--space-sm);
     font-size: var(--font-sm);
   }
