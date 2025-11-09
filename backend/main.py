@@ -3183,7 +3183,8 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     tasks_today = db.query(AITask).filter(
         AITask.assigned_to_id == current_user.id,
         AITask.type.in_([TaskType.IN_PROGRESS, TaskType.HUMAN_NEEDED, TaskType.AWAITING_REVIEW]),
-        AITask.due_date <= today + timedelta(days=1)
+        AITask.due_date.isnot(None),
+        AITask.due_date <= datetime.combine(today + timedelta(days=1), datetime.max.time())
     ).order_by(AITask.priority.desc(), AITask.due_date).limit(10).all()
 
     prioritized_tasks = [{
