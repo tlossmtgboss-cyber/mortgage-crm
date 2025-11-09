@@ -226,6 +226,13 @@ function Tasks() {
           📬 Unified Messages
           <span className="tab-badge">{messages.filter(m => !m.read).length}</span>
         </button>
+        <button
+          className={`tab-button ${activeTab === 'mum' ? 'active' : ''}`}
+          onClick={() => setActiveTab('mum')}
+        >
+          ♻️ Client for Life Engine (MUM)
+          <span className="tab-badge">{mumAlerts.length}</span>
+        </button>
       </div>
 
       {/* Outstanding Tasks Tab */}
@@ -338,7 +345,7 @@ function Tasks() {
                       ✓ Approve
                     </button>
                     <button className="btn-fix">Fix</button>
-                    <button className="btn-coach">Coach AI</button>
+                    <button className="btn-coach" onClick={() => navigate('/coach')}>Steve Staben Performance Coach</button>
                   </div>
                 </div>
               ))}
@@ -465,6 +472,37 @@ function Tasks() {
             <button className="btn-view-all" onClick={() => navigate('/assistant')}>
               View All Messages →
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Client for Life Engine (MUM) Tab */}
+      {activeTab === 'mum' && (
+        <div className="tab-content">
+          <div className="mum-section">
+            <div className="mum-header">
+              <h2>♻️ Client for Life Engine (MUM)</h2>
+              <span className="actions-badge">{mumAlerts.length} actions</span>
+            </div>
+            <div className="mum-alerts-list">
+              {mumAlerts.map((alert, idx) => (
+                <div key={idx} className="mum-alert-card">
+                  <div className="mum-alert-icon">{alert.icon}</div>
+                  <div className="mum-alert-content">
+                    <h4 className="mum-alert-title">{alert.title}</h4>
+                    <p className="mum-alert-client">{alert.client}</p>
+                  </div>
+                  <div className="mum-alert-action">
+                    <button className="btn-mum-action">{alert.action}</button>
+                  </div>
+                </div>
+              ))}
+              {mumAlerts.length === 0 && (
+                <div className="empty-state">
+                  <p>No client retention actions needed</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
