@@ -307,7 +307,7 @@ function Settings() {
 
   // Microsoft 365 Integration Functions
   const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-  const MICROSOFT_CLIENT_ID = 'YOUR_MICROSOFT_CLIENT_ID'; // Replace with actual client ID
+  const MICROSOFT_CLIENT_ID = process.env.REACT_APP_MICROSOFT_CLIENT_ID || 'YOUR_MICROSOFT_CLIENT_ID'; // Replace with actual client ID
   const MICROSOFT_REDIRECT_URI = `${window.location.origin}/settings`; // OAuth callback
 
   const checkMicrosoftStatus = async () => {
