@@ -145,6 +145,80 @@
   box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
+/* Borrower Selector */
+.borrower-selector {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 16px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  align-items: center;
+}
+
+.borrower-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: #f8f9fa;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.borrower-btn:hover {
+  background: #e9ecef;
+  border-color: #218D8D;
+  transform: translateY(-2px);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}
+
+.borrower-btn.active {
+  background: #218D8D;
+  color: white;
+  border-color: #218D8D;
+}
+
+.borrower-badge {
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.3);
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.borrower-btn.active .borrower-badge {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.borrower-add-btn {
+  padding: 10px 16px;
+  background: transparent;
+  border: 2px dashed #218D8D;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #218D8D;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-left: auto;
+}
+
+.borrower-add-btn:hover {
+  background: #e9f5f5;
+  border-color: #1a7070;
+  color: #1a7070;
+  transform: translateY(-2px);
+}
+
 /* Profile Tabs */
 .profile-tabs {
   display: flex;
@@ -772,6 +846,22 @@
 
   .loan-toolbar {
     padding: 16px;
+  }
+
+  .borrower-selector {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .borrower-btn {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+
+  .borrower-add-btn {
+    width: 100%;
+    margin-left: 0;
+    margin-top: 8px;
   }
 
   .profile-tabs {

@@ -18,6 +18,8 @@ function LeadDetail() {
   const [activeTab, setActiveTab] = useState('personal');
   const [noteText, setNoteText] = useState('');
   const [noteLoading, setNoteLoading] = useState(false);
+  const [borrowers, setBorrowers] = useState([]);
+  const [activeBorrower, setActiveBorrower] = useState(0);
 
   useEffect(() => {
     loadLeadData();
@@ -35,6 +37,31 @@ function LeadDetail() {
       setLead(leadData);
       setFormData(leadData);
       setActivities(activitiesData || []);
+
+      // Initialize borrowers array
+      const borrowersList = [
+        {
+          id: 0,
+          name: leadData.name || 'Primary Borrower',
+          type: 'primary',
+          data: leadData
+        }
+      ];
+
+      // Add co-borrower if exists
+      if (leadData.coborrower_name) {
+        borrowersList.push({
+          id: 1,
+          name: leadData.coborrower_name,
+          type: 'co-borrower',
+          data: {
+            name: leadData.coborrower_name,
+            // Co-borrower fields would be stored separately in a real implementation
+          }
+        });
+      }
+
+      setBorrowers(borrowersList);
     } catch (error) {
       console.error('Failed to load lead data:', error);
       alert('Failed to load lead details');
@@ -115,6 +142,32 @@ function LeadDetail() {
       alert('Failed to add note');
     } finally {
       setNoteLoading(false);
+    }
+  };
+
+  const handleSwitchBorrower = (borrowerIndex) => {
+    setActiveBorrower(borrowerIndex);
+    const borrower = borrowers[borrowerIndex];
+    if (borrower && borrower.data) {
+      setFormData(borrower.data);
+    }
+  };
+
+  const handleAddBorrower = () => {
+    const newBorrowerName = prompt('Enter borrower name:');
+    if (newBorrowerName && newBorrowerName.trim()) {
+      const newBorrower = {
+        id: borrowers.length,
+        name: newBorrowerName.trim(),
+        type: 'additional',
+        data: {
+          name: newBorrowerName.trim(),
+          // Initialize with empty fields
+        }
+      };
+      setBorrowers([...borrowers, newBorrower]);
+      setActiveBorrower(borrowers.length);
+      setFormData(newBorrower.data);
     }
   };
 
@@ -417,6 +470,23 @@ function LeadDetail() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* Borrower Selector */}
+      <div className="borrower-selector">
+        {borrowers.map((borrower, index) => (
+          <button
+            key={borrower.id}
+            className={`borrower-btn ${activeBorrower === index ? 'active' : ''}`}
+            onClick={() => handleSwitchBorrower(index)}
+          >
+            {borrower.name}
+            {borrower.type === 'primary' && <span className="borrower-badge">Primary</span>}
+          </button>
+        ))}
+        <button className="borrower-add-btn" onClick={handleAddBorrower} title="Add Borrower">
+          + Add Person
+        </button>
       </div>
 
       {/* Tab Navigation */}
