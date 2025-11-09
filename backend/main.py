@@ -4,10 +4,11 @@
 # All features implemented:
 # ✅ Complete CRUD for all entities
 # ✅ AI Integration with OpenAI & Anthropic Claude
-# ✅ Authentication & Security
+# ✅ Authentication & Security (JWT + API Keys)
 # ✅ Sample data generation
 # ✅ AI Underwriter with Claude AI
 # ✅ AI Assistant with OpenAI GPT
+# ✅ Zapier Integration via API Keys
 # ============================================================================
 
 from fastapi import FastAPI, Depends, HTTPException, status, Request
