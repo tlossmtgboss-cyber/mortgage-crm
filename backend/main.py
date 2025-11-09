@@ -622,6 +622,53 @@ class OnboardingStep(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 # ============================================================================
+# DATA RECONCILIATION ENGINE (DRE) MODELS
+# ============================================================================
+
+class IncomingDataEvent(Base):
+    __tablename__ = "incoming_data_events"
+    id = Column(Integer, primary_key=True, index=True)
+    source = Column(String, nullable=False)  # 'outlook', 'calendar', 'dropbox', etc.
+    raw_text = Column(Text)
+    raw_html = Column(Text)
+    subject = Column(String)
+    sender = Column(String)
+    recipients = Column(JSON)
+    attachments = Column(JSON)
+    received_at = Column(DateTime, default=datetime.utcnow)
+    processed = Column(Boolean, default=False)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class ExtractedData(Base):
+    __tablename__ = "extracted_data"
+    id = Column(Integer, primary_key=True, index=True)
+    event_id = Column(Integer, ForeignKey("incoming_data_events.id"))
+    category = Column(String)  # 'lead_update', 'loan_update', 'portfolio_update', etc.
+    subcategory = Column(String)  # 'rate_lock', 'appraisal', 'title_clear', etc.
+    fields = Column(JSON)  # {field_name: {value, confidence}}
+    match_entity_type = Column(String)  # 'lead', 'loan', 'partner', etc.
+    match_entity_id = Column(Integer)  # ID of matched entity
+    match_confidence = Column(Float)
+    ai_confidence = Column(Float)
+    status = Column(String, default='pending_review')  # 'auto_applied', 'pending_review', 'rejected', 'error'
+    applied_at = Column(DateTime)
+    reviewed_by = Column(Integer, ForeignKey("users.id"))
+    reviewed_at = Column(DateTime)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class AITrainingEvent(Base):
+    __tablename__ = "ai_training_events"
+    id = Column(Integer, primary_key=True, index=True)
+    extracted_data_id = Column(Integer, ForeignKey("extracted_data.id"))
+    field_name = Column(String)
+    original_value = Column(String)
+    corrected_value = Column(String)
+    label = Column(String)  # 'correct', 'incorrect', 'overridden'
+    user_id = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+# ============================================================================
 # PYDANTIC SCHEMAS
 # ============================================================================
 
@@ -991,6 +1038,43 @@ class CalendarEventResponse(BaseModel):
     created_at: datetime
     class Config:
         from_attributes = True
+
+# ============================================================================
+# DATA RECONCILIATION ENGINE SCHEMAS
+# ============================================================================
+
+class IncomingDataEventCreate(BaseModel):
+    source: str
+    raw_text: Optional[str] = None
+    raw_html: Optional[str] = None
+    subject: Optional[str] = None
+    sender: Optional[str] = None
+    recipients: Optional[List[str]] = None
+    attachments: Optional[List[Dict[str, Any]]] = None
+
+class ExtractedDataResponse(BaseModel):
+    id: int
+    event_id: int
+    category: Optional[str]
+    subcategory: Optional[str]
+    fields: Dict[str, Any]
+    match_entity_type: Optional[str]
+    match_entity_id: Optional[int]
+    match_confidence: Optional[float]
+    ai_confidence: Optional[float]
+    status: str
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
+class ReconciliationApproval(BaseModel):
+    extracted_data_id: int
+    approved_fields: Optional[Dict[str, Any]] = None  # If partial approval
+    corrections: Optional[Dict[str, Any]] = None  # If user corrected values
+
+class ReconciliationRejection(BaseModel):
+    extracted_data_id: int
+    reason: Optional[str] = None
 
 # ============================================================================
 # FASTAPI APP
