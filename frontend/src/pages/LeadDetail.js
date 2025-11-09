@@ -451,6 +451,12 @@ function LeadDetail() {
         >
           Circle
         </button>
+        <button
+          className={`tab-btn ${activeTab === 'documents' ? 'active' : ''}`}
+          onClick={() => setActiveTab('documents')}
+        >
+          Documents
+        </button>
       </div>
 
       <div className="detail-content">
@@ -826,6 +832,87 @@ function LeadDetail() {
                   </div>
                   <div className="circle-list">
                     <div className="empty-state">No other contacts added yet</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          )}
+
+          {/* Documents Tab */}
+          {activeTab === 'documents' && (
+          <div className="info-section">
+            <h2>Documents</h2>
+            <div className="documents-content">
+              <p className="circle-description">
+                Manage and organize all loan-related documents including income verification,
+                credit reports, property documents, and disclosures.
+              </p>
+
+              <div className="documents-upload-area">
+                <button className="btn-upload-document">
+                  📄 Upload Document
+                </button>
+              </div>
+
+              <div className="documents-grid">
+                <div className="document-category">
+                  <div className="category-header">
+                    <h3>📋 Income Verification</h3>
+                    <span className="doc-count">0 files</span>
+                  </div>
+                  <div className="document-list">
+                    <div className="empty-state">No documents uploaded yet</div>
+                  </div>
+                </div>
+
+                <div className="document-category">
+                  <div className="category-header">
+                    <h3>💳 Credit Reports</h3>
+                    <span className="doc-count">0 files</span>
+                  </div>
+                  <div className="document-list">
+                    <div className="empty-state">No documents uploaded yet</div>
+                  </div>
+                </div>
+
+                <div className="document-category">
+                  <div className="category-header">
+                    <h3>🏠 Property Documents</h3>
+                    <span className="doc-count">0 files</span>
+                  </div>
+                  <div className="document-list">
+                    <div className="empty-state">No documents uploaded yet</div>
+                  </div>
+                </div>
+
+                <div className="document-category">
+                  <div className="category-header">
+                    <h3>✍️ Disclosures & Forms</h3>
+                    <span className="doc-count">0 files</span>
+                  </div>
+                  <div className="document-list">
+                    <div className="empty-state">No documents uploaded yet</div>
+                  </div>
+                </div>
+
+                <div className="document-category">
+                  <div className="category-header">
+                    <h3>🏦 Bank Statements</h3>
+                    <span className="doc-count">0 files</span>
+                  </div>
+                  <div className="document-list">
+                    <div className="empty-state">No documents uploaded yet</div>
+                  </div>
+                </div>
+
+                <div className="document-category">
+                  <div className="category-header">
+                    <h3>📑 Other Documents</h3>
+                    <span className="doc-count">0 files</span>
+                  </div>
+                  <div className="document-list">
+                    <div className="empty-state">No documents uploaded yet</div>
                   </div>
                 </div>
               </div>
