@@ -2993,6 +2993,21 @@ async def delete_user(
 # DASHBOARD
 # ============================================================================
 
+@app.get("/api/v1/dashboard-test")
+async def get_dashboard_test(current_user: User = Depends(get_current_user)):
+    """Test endpoint to verify basic dashboard functionality"""
+    return {
+        "status": "ok",
+        "user": current_user.email,
+        "prioritized_tasks": [],
+        "pipeline_stats": [],
+        "production": {"annualGoal": 222, "annualActual": 0, "annualProgress": 0},
+        "lead_metrics": {"new_today": 0, "conversion_rate": 0},
+        "referral_stats": {"top_partners": []},
+        "team_stats": {"has_team": False},
+        "messages": []
+    }
+
 @app.get("/api/v1/dashboard")
 async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
