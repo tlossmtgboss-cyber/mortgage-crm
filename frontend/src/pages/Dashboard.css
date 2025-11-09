@@ -1456,3 +1456,269 @@
     font-size: 14px;
   }
 }
+
+/* LOAN EFFICIENCY MONITOR */
+.efficiency-block {
+  grid-column: 1 / 13;
+}
+
+.efficiency-summary {
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.efficiency-score-display {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  padding: 24px;
+  color: white;
+}
+
+.score-number {
+  font-size: 64px;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.score-label {
+  font-size: 16px;
+  font-weight: 500;
+  opacity: 0.9;
+  margin-bottom: 8px;
+}
+
+.score-trend {
+  font-size: 14px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 20px;
+}
+
+.score-trend.up {
+  color: #10b981;
+}
+
+.score-trend.down {
+  color: #ef4444;
+}
+
+.efficiency-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.efficiency-card {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+}
+
+.efficiency-card h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #666;
+  margin: 0 0 16px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Stage Efficiency */
+.stage-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.stage-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.stage-name {
+  width: 80px;
+  font-weight: 500;
+  color: #666;
+  font-size: 11px;
+}
+
+.stage-bar-container {
+  flex: 1;
+  height: 8px;
+  background: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.stage-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.stage-bar.on-track {
+  background: #10b981;
+}
+
+.stage-bar.slightly-delayed {
+  background: #f59e0b;
+}
+
+.stage-bar.behind {
+  background: #ef4444;
+}
+
+.stage-percent {
+  width: 35px;
+  text-align: right;
+  font-weight: 600;
+  color: #1a1a1a;
+  font-size: 11px;
+}
+
+/* Team Efficiency */
+.team-roles {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.team-role-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.role-name {
+  width: 90px;
+  font-weight: 500;
+  color: #666;
+  font-size: 11px;
+}
+
+.role-bar-container {
+  flex: 1;
+  height: 8px;
+  background: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.role-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.role-bar.high {
+  background: #10b981;
+}
+
+.role-bar.medium {
+  background: #f59e0b;
+}
+
+.role-bar.low {
+  background: #ef4444;
+}
+
+.role-percent {
+  width: 35px;
+  text-align: right;
+  font-weight: 600;
+  color: #1a1a1a;
+  font-size: 11px;
+}
+
+/* Bottlenecks */
+.bottleneck-count {
+  font-size: 48px;
+  font-weight: 700;
+  color: #ef4444;
+  text-align: center;
+  margin-bottom: 12px;
+  line-height: 1;
+}
+
+.bottleneck-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bottleneck-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  color: #555;
+  line-height: 1.4;
+}
+
+.bottleneck-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.bottleneck-text {
+  flex: 1;
+}
+
+.btn-view-efficiency {
+  width: 100%;
+  padding: 12px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-view-efficiency:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+/* Responsive - Efficiency */
+@media (max-width: 1400px) {
+  .efficiency-cards {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .score-number {
+    font-size: 48px;
+  }
+
+  .efficiency-score-display {
+    padding: 16px;
+  }
+
+  .stage-name, .role-name {
+    width: 70px;
+    font-size: 10px;
+  }
+
+  .stage-percent, .role-percent {
+    width: 30px;
+    font-size: 10px;
+  }
+
+  .bottleneck-count {
+    font-size: 36px;
+  }
+}

@@ -16,12 +16,14 @@ function Dashboard() {
   const [referralStats, setReferralStats] = useState({});
   const [teamStats, setTeamStats] = useState({});
   const [messages, setMessages] = useState([]);
+  const [efficiency, setEfficiency] = useState({});
 
   // Drag and drop state
   const [draggedIndex, setDraggedIndex] = useState(null);
   const [containerOrder, setContainerOrder] = useState([
     'ai-alerts',
     'production-tracker',
+    'efficiency',
     'ai-tasks',
     'pipeline',
     'referrals',
@@ -109,6 +111,7 @@ function Dashboard() {
       setReferralStats(data.referral_stats || {});
       setTeamStats(data.team_stats || {});
       setMessages(data.messages || []);
+      setEfficiency(data.efficiency || {});
 
     } catch (error) {
       console.error('Failed to load dashboard:', error);
@@ -123,6 +126,7 @@ function Dashboard() {
       setReferralStats(mockReferralStats());
       setTeamStats(mockTeamStats());
       setMessages(mockMessages());
+      setEfficiency(mockEfficiency());
     } finally {
       setLoading(false);
     }
@@ -291,6 +295,101 @@ function Dashboard() {
               </div>
             </div>
           </div>
+        </div>
+      );
+    }
+
+    if (containerId === 'efficiency') {
+      return (
+        <div
+          key={containerId}
+          className={`dashboard-block efficiency-block draggable-container ${isDragging ? 'dragging' : ''}`}
+          onDragOver={(e) => handleDragOver(e, index)}
+          onDragEnd={handleDragEnd}
+        >
+          <div
+            className="drag-handle"
+            title="Drag to reorder"
+            draggable="true"
+            onDragStart={() => handleDragStart(index)}
+          >⋮⋮</div>
+          <div className="block-header">
+            <h2>📊 Loan Efficiency Monitor</h2>
+          </div>
+
+          {/* Summary Bar */}
+          <div className="efficiency-summary">
+            <div className="efficiency-score-display">
+              <div className="score-number">{efficiency.overallScore || 0}</div>
+              <div className="score-label">Pipeline Efficiency</div>
+              <div className={`score-trend ${(efficiency.trend || 0) >= 0 ? 'up' : 'down'}`}>
+                {(efficiency.trend || 0) >= 0 ? '↑' : '↓'} {Math.abs(efficiency.trend || 0)}% (7 days)
+              </div>
+            </div>
+          </div>
+
+          {/* Three Mini-Cards */}
+          <div className="efficiency-cards">
+            {/* Stage Efficiency */}
+            <div className="efficiency-card stage-efficiency">
+              <h4>Stage Efficiency</h4>
+              <div className="stage-bars">
+                {(efficiency.stages || []).map((stage, idx) => (
+                  <div key={idx} className="stage-bar-row">
+                    <span className="stage-name">{stage.name}</span>
+                    <div className="stage-bar-container">
+                      <div
+                        className={`stage-bar ${stage.status}`}
+                        style={{ width: `${stage.efficiency}%` }}
+                      ></div>
+                    </div>
+                    <span className="stage-percent">{stage.efficiency}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Team Efficiency */}
+            <div className="efficiency-card team-efficiency">
+              <h4>Team Efficiency</h4>
+              <div className="team-roles">
+                {(efficiency.team || []).map((role, idx) => (
+                  <div key={idx} className="team-role-row">
+                    <span className="role-name">{role.role}</span>
+                    <div className="role-bar-container">
+                      <div
+                        className={`role-bar ${role.performance >= 80 ? 'high' : role.performance >= 60 ? 'medium' : 'low'}`}
+                        style={{ width: `${role.performance}%` }}
+                      ></div>
+                    </div>
+                    <span className="role-percent">{role.performance}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Bottlenecks */}
+            <div className="efficiency-card bottlenecks">
+              <h4>Active Bottlenecks</h4>
+              <div className="bottleneck-count">{efficiency.bottleneckCount || 0}</div>
+              <div className="bottleneck-list">
+                {(efficiency.bottlenecks || []).slice(0, 3).map((bottleneck, idx) => (
+                  <div key={idx} className="bottleneck-item">
+                    <span className="bottleneck-icon">⚠️</span>
+                    <span className="bottleneck-text">{bottleneck}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* View Full Report Button */}
+          <button
+            className="btn-view-efficiency"
+            onClick={() => navigate('/dashboard/efficiency')}
+          >
+            View Full Efficiency Report →
+          </button>
         </div>
       );
     }
@@ -829,5 +928,32 @@ const mockMessages = () => [
     duration: '0:45'
   }
 ];
+
+const mockEfficiency = () => ({
+  overallScore: 78,
+  trend: 5,
+  stages: [
+    { name: 'Lead Intake', efficiency: 92, status: 'on-track' },
+    { name: 'Pre-Approval', efficiency: 85, status: 'on-track' },
+    { name: 'Contract', efficiency: 78, status: 'slightly-delayed' },
+    { name: 'Processing', efficiency: 65, status: 'behind' },
+    { name: 'Underwriting', efficiency: 88, status: 'on-track' },
+    { name: 'Conditions', efficiency: 58, status: 'behind' },
+    { name: 'CTC', efficiency: 82, status: 'on-track' },
+    { name: 'Closing', efficiency: 90, status: 'on-track' }
+  ],
+  team: [
+    { role: 'Loan Officer', performance: 85 },
+    { role: 'App Analyst', performance: 92 },
+    { role: 'Processor', performance: 68 },
+    { role: 'Concierge', performance: 88 }
+  ],
+  bottleneckCount: 8,
+  bottlenecks: [
+    '5 loans stuck in Conditions > 72 hours',
+    '3 loans waiting on borrower docs',
+    '2 loans with unreviewed appraisal reports'
+  ]
+});
 
 export default Dashboard;
