@@ -139,6 +139,16 @@ class User(Base):
     leads = relationship("Lead", back_populates="owner")
     loans = relationship("Loan", back_populates="loan_officer")
 
+class ApiKey(Base):
+    __tablename__ = "api_keys"
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String, unique=True, index=True, nullable=False)
+    name = Column(String, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_used_at = Column(DateTime, nullable=True)
+
 class Lead(Base):
     __tablename__ = "leads"
     id = Column(Integer, primary_key=True, index=True)
@@ -628,6 +638,19 @@ class UserResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class ApiKeyCreate(BaseModel):
+    name: str
+
+class ApiKeyResponse(BaseModel):
+    id: int
+    key: str
+    name: str
+    is_active: bool
+    created_at: datetime
+    last_used_at: Optional[datetime]
+    class Config:
+        from_attributes = True
+
 class LeadCreate(BaseModel):
     name: str
     email: Optional[str] = None
@@ -1006,6 +1029,28 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+    # Check if token is an API key (starts with 'sk_')
+    if token.startswith('sk_'):
+        api_key = db.query(ApiKey).filter(
+            ApiKey.key == token,
+            ApiKey.is_active == True
+        ).first()
+
+        if api_key is None:
+            raise credentials_exception
+
+        # Update last used timestamp
+        api_key.last_used_at = datetime.utcnow()
+        db.commit()
+
+        # Get the user associated with this API key
+        user = db.query(User).filter(User.id == api_key.user_id).first()
+        if user is None:
+            raise credentials_exception
+        return user
+
+    # Otherwise, treat it as a JWT token
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
@@ -1018,6 +1063,16 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     if user is None:
         raise credentials_exception
     return user
+
+# ============================================================================
+# API KEY HELPER FUNCTIONS
+# ============================================================================
+
+def generate_api_key() -> str:
+    """Generate a secure API key with prefix 'sk_'"""
+    import secrets
+    random_part = secrets.token_urlsafe(32)
+    return f"sk_{random_part}"
 
 # ============================================================================
 # AI HELPER FUNCTIONS
@@ -1155,6 +1210,66 @@ async def update_user_goals(
 
     logger.info(f"Goals updated for user {current_user.email}")
     return {"success": True, "goals": goals}
+
+# ============================================================================
+# API KEY MANAGEMENT
+# ============================================================================
+
+@app.post("/api/v1/api-keys", response_model=ApiKeyResponse)
+async def create_api_key(
+    key_data: ApiKeyCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Generate a new API key for the current user"""
+    # Generate a secure API key
+    api_key_string = generate_api_key()
+
+    # Create the API key record
+    new_api_key = ApiKey(
+        key=api_key_string,
+        name=key_data.name,
+        user_id=current_user.id
+    )
+
+    db.add(new_api_key)
+    db.commit()
+    db.refresh(new_api_key)
+
+    logger.info(f"API key created for user {current_user.email}: {key_data.name}")
+    return new_api_key
+
+@app.get("/api/v1/api-keys", response_model=List[ApiKeyResponse])
+async def list_api_keys(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """List all API keys for the current user"""
+    api_keys = db.query(ApiKey).filter(
+        ApiKey.user_id == current_user.id
+    ).all()
+    return api_keys
+
+@app.delete("/api/v1/api-keys/{key_id}")
+async def revoke_api_key(
+    key_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Revoke (deactivate) an API key"""
+    api_key = db.query(ApiKey).filter(
+        ApiKey.id == key_id,
+        ApiKey.user_id == current_user.id
+    ).first()
+
+    if not api_key:
+        raise HTTPException(status_code=404, detail="API key not found")
+
+    api_key.is_active = False
+    db.commit()
+
+    logger.info(f"API key revoked for user {current_user.email}: {api_key.name}")
+    return {"message": "API key revoked successfully"}
 
 # ============================================================================
 # USER MANAGEMENT (Admin)
