@@ -932,7 +932,7 @@ class ConversationResponse(BaseModel):
 # PERFORMANCE COACH SCHEMAS
 # ============================================================================
 
-class CoachMode(str, Enum):
+class CoachMode(str, enum.Enum):
     daily_briefing = "daily_briefing"
     pipeline_audit = "pipeline_audit"
     focus_reset = "focus_reset"
