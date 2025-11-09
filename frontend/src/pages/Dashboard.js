@@ -160,7 +160,10 @@ function Dashboard() {
         </div>
 
         {/* 3. MONTHLY PRODUCTION TRACKER - UNIFIED */}
-        <div className="dashboard-block production-tracker-block">
+        <div
+          className="dashboard-block production-tracker-block clickable-block"
+          onClick={() => navigate('/goal-tracker')}
+        >
           <div className="block-header">
             <h2>💰 Monthly Production Tracker</h2>
           </div>
