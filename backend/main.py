@@ -3124,7 +3124,7 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
         "count": len(processing),
         "alerts": processing_alerts,
         "alert_text": "delayed" if processing_alerts > 0 else "",
-        "volume": int(processing_volume)
+        "volume": int(processing_volume) if processing_volume else 0
     })
 
     # Loans in underwriting
@@ -3142,7 +3142,7 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
         "count": len(underwriting),
         "alerts": underwriting_alerts,
         "alert_text": "suspended" if underwriting_alerts > 0 else "",
-        "volume": int(underwriting_volume)
+        "volume": int(underwriting_volume) if underwriting_volume else 0
     })
 
     # Clear to close
@@ -3159,7 +3159,7 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
         "count": len(ctc),
         "alerts": 0,
         "alert_text": "",
-        "volume": int(ctc_volume)
+        "volume": int(ctc_volume) if ctc_volume else 0
     })
 
     # Funded this month
@@ -3178,7 +3178,7 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
         "count": len(funded),
         "alerts": 0,
         "alert_text": "",
-        "volume": int(funded_volume)
+        "volume": int(funded_volume) if funded_volume else 0
     })
 
     # ============================================================================
