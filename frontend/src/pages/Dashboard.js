@@ -19,7 +19,15 @@ function Dashboard() {
 
   // Drag and drop state
   const [draggedIndex, setDraggedIndex] = useState(null);
-  const [containerOrder, setContainerOrder] = useState(['ai-alerts', 'production-tracker']);
+  const [containerOrder, setContainerOrder] = useState([
+    'ai-alerts',
+    'production-tracker',
+    'ai-tasks',
+    'pipeline',
+    'referrals',
+    'team',
+    'messages'
+  ]);
 
   useEffect(() => {
     loadDashboard();
@@ -264,44 +272,18 @@ function Dashboard() {
       );
     }
 
-    return null;
-  };
-
-  if (loading) {
-    return (
-      <div className="dashboard">
-        <div className="loading-state">
-          <div className="loading-spinner"></div>
-          <p>Loading your command center...</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="dashboard">
-      <div className="dashboard-header-compact">
-        <h1>
-          Today's Command Center{' '}
-          <span className="task-count-badge">({getAggregatedTasksCount()})</span>
-        </h1>
-        <div className="header-date">
-          {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-        </div>
-      </div>
-
-      {/* Draggable Containers */}
-      <div className="draggable-containers-wrapper">
-        {containerOrder.map((containerId, index) => renderDraggableContainer(containerId, index))}
-      </div>
-
-      <div className="dashboard-grid">
-        {/* AI PRIORITIZED TASKS */}
+    if (containerId === 'ai-tasks') {
+      return (
         <div
-          className="dashboard-block ai-tasks-block clickable-block"
-          onClick={() => navigate('/tasks')}
+          key={containerId}
+          className={`dashboard-block ai-tasks-block draggable-container ${isDragging ? 'dragging' : ''}`}
+          draggable="true"
+          onDragStart={() => handleDragStart(index)}
+          onDragOver={(e) => handleDragOver(e, index)}
+          onDragEnd={handleDragEnd}
         >
-          <div className="block-header">
+          <div className="drag-handle" title="Drag to reorder">⋮⋮</div>
+          <div className="block-header clickable-block" onClick={() => navigate('/tasks')}>
             <h2>🎯 AI Prioritized Tasks (Today)</h2>
             <span className="task-count">{getAggregatedTasksCount()} tasks</span>
           </div>
@@ -315,9 +297,20 @@ function Dashboard() {
             </div>
           </div>
         </div>
+      );
+    }
 
-        {/* LIVE LOAN PIPELINE */}
-        <div className="dashboard-block pipeline-block">
+    if (containerId === 'pipeline') {
+      return (
+        <div
+          key={containerId}
+          className={`dashboard-block pipeline-block draggable-container ${isDragging ? 'dragging' : ''}`}
+          draggable="true"
+          onDragStart={() => handleDragStart(index)}
+          onDragOver={(e) => handleDragOver(e, index)}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="drag-handle" title="Drag to reorder">⋮⋮</div>
           <div className="block-header">
             <h2>💼 Live Loan Pipeline</h2>
           </div>
@@ -332,9 +325,9 @@ function Dashboard() {
                 </tr>
               </thead>
               <tbody>
-                {pipelineStats.filter(stage => stage && stage.name).map((stage, index) => (
+                {pipelineStats.filter(stage => stage && stage.name).map((stage, stageIndex) => (
                   <tr
-                    key={index}
+                    key={stageIndex}
                     onClick={() => navigate(`/loans?stage=${stage.id}`)}
                     className="clickable-row"
                   >
@@ -357,9 +350,20 @@ function Dashboard() {
             </table>
           </div>
         </div>
+      );
+    }
 
-        {/* REFERRALS & PARTNER HEALTH */}
-        <div className="dashboard-block referrals-block">
+    if (containerId === 'referrals') {
+      return (
+        <div
+          key={containerId}
+          className={`dashboard-block referrals-block draggable-container ${isDragging ? 'dragging' : ''}`}
+          draggable="true"
+          onDragStart={() => handleDragStart(index)}
+          onDragOver={(e) => handleDragOver(e, index)}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="drag-handle" title="Drag to reorder">⋮⋮</div>
           <div className="block-header">
             <h2>🤝 Referral Scoreboard</h2>
           </div>
@@ -395,43 +399,63 @@ function Dashboard() {
             </div>
           </div>
         </div>
+      );
+    }
 
-        {/* TEAM OPERATIONS */}
-        {teamStats.has_team && (
-          <div className="dashboard-block team-block">
-            <div className="block-header">
-              <h2>👥 Team Performance</h2>
+    if (containerId === 'team' && teamStats.has_team) {
+      return (
+        <div
+          key={containerId}
+          className={`dashboard-block team-block draggable-container ${isDragging ? 'dragging' : ''}`}
+          draggable="true"
+          onDragStart={() => handleDragStart(index)}
+          onDragOver={(e) => handleDragOver(e, index)}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="drag-handle" title="Drag to reorder">⋮⋮</div>
+          <div className="block-header">
+            <h2>👥 Team Performance</h2>
+          </div>
+          <div className="team-content">
+            <div className="team-metrics">
+              <div className="team-metric">
+                <div className="metric-label">Processor Workload</div>
+                <div className="metric-value">{teamStats.avg_workload} files/person</div>
+              </div>
+              <div className="team-metric">
+                <div className="metric-label">Task Backlog</div>
+                <div className="metric-value warn">{teamStats.backlog}</div>
+              </div>
+              <div className="team-metric">
+                <div className="metric-label">SLA Missed</div>
+                <div className="metric-value">{teamStats.sla_missed}</div>
+              </div>
             </div>
-            <div className="team-content">
-              <div className="team-metrics">
-                <div className="team-metric">
-                  <div className="metric-label">Processor Workload</div>
-                  <div className="metric-value">{teamStats.avg_workload} files/person</div>
+            <div className="ai-coaching">
+              <div className="coaching-title">🎓 AI Coaching Insights</div>
+              {teamStats.insights && teamStats.insights.filter(i => i).map((insight, idx) => (
+                <div key={idx} className="coaching-insight">
+                  <span className="insight-icon">💡</span>
+                  {insight}
                 </div>
-                <div className="team-metric">
-                  <div className="metric-label">Task Backlog</div>
-                  <div className="metric-value warn">{teamStats.backlog}</div>
-                </div>
-                <div className="team-metric">
-                  <div className="metric-label">SLA Missed</div>
-                  <div className="metric-value">{teamStats.sla_missed}</div>
-                </div>
-              </div>
-              <div className="ai-coaching">
-                <div className="coaching-title">🎓 AI Coaching Insights</div>
-                {teamStats.insights && teamStats.insights.filter(i => i).map((insight, idx) => (
-                  <div key={idx} className="coaching-insight">
-                    <span className="insight-icon">💡</span>
-                    {insight}
-                  </div>
-                ))}
-              </div>
+              ))}
             </div>
           </div>
-        )}
+        </div>
+      );
+    }
 
-        {/* COMMUNICATION HUB */}
-        <div className="dashboard-block messages-block">
+    if (containerId === 'messages') {
+      return (
+        <div
+          key={containerId}
+          className={`dashboard-block messages-block draggable-container ${isDragging ? 'dragging' : ''}`}
+          draggable="true"
+          onDragStart={() => handleDragStart(index)}
+          onDragOver={(e) => handleDragOver(e, index)}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="drag-handle" title="Drag to reorder">⋮⋮</div>
           <div className="block-header">
             <h2>📬 Unified Messages</h2>
             <span className="unread-count">{messages.filter(m => !m.read).length} unread</span>
@@ -488,6 +512,38 @@ function Dashboard() {
             View All Messages →
           </button>
         </div>
+      );
+    }
+
+    return null;
+  };
+
+  if (loading) {
+    return (
+      <div className="dashboard">
+        <div className="loading-state">
+          <div className="loading-spinner"></div>
+          <p>Loading your command center...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="dashboard">
+      <div className="dashboard-header-compact">
+        <h1>
+          Today's Command Center{' '}
+          <span className="task-count-badge">({getAggregatedTasksCount()})</span>
+        </h1>
+        <div className="header-date">
+          {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+        </div>
+      </div>
+
+      {/* Draggable Containers */}
+      <div className="draggable-containers-wrapper">
+        {containerOrder.map((containerId, index) => renderDraggableContainer(containerId, index))}
       </div>
     </div>
   );

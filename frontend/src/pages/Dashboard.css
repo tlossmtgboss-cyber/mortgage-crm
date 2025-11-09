@@ -40,7 +40,6 @@
   border-left: 6px solid #f59e0b;
   border-radius: 8px;
   padding: 16px 20px;
-  padding-left: 50px;
   box-shadow: 0 2px 8px rgba(245, 158, 11, 0.15);
 }
 
@@ -100,6 +99,7 @@
   position: relative;
   cursor: move;
   transition: all 0.2s ease;
+  padding-left: 50px;
 }
 
 .draggable-container.dragging {
@@ -109,6 +109,12 @@
 
 .draggable-container:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Ensure draggable dashboard blocks are full width */
+.draggable-container.dashboard-block {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .drag-handle {
@@ -139,11 +145,6 @@
   color: #764ba2;
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
   transform: translateY(-50%) scale(1.05);
-}
-
-/* Monthly Production Tracker Standalone */
-.production-tracker-block-standalone {
-  padding-left: 50px;
 }
 
 /* Dashboard Grid Layout */
