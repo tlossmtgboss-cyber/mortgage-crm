@@ -3069,6 +3069,22 @@ def init_db():
                     END $$;
                 """))
 
+                # Create api_keys table if it doesn't exist
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS api_keys (
+                        id SERIAL PRIMARY KEY,
+                        key VARCHAR UNIQUE NOT NULL,
+                        name VARCHAR NOT NULL,
+                        user_id INTEGER NOT NULL REFERENCES users(id),
+                        is_active BOOLEAN DEFAULT TRUE,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        last_used_at TIMESTAMP
+                    );
+                """))
+                conn.execute(text("""
+                    CREATE INDEX IF NOT EXISTS ix_api_keys_key ON api_keys(key);
+                """))
+
                 conn.commit()
                 logger.info("✅ Schema migrations applied")
         except Exception as e:
