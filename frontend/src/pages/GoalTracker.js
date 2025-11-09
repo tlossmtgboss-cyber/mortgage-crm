@@ -135,21 +135,21 @@ function GoalTracker() {
 
     // Part 1: Volume Goals
     const annualClosingsUnitGoal = inputs.annualClosingsDollarGoal / inputs.avgLoanAmount;
-    const annualOriginationDollarGoal = inputs.avgLoanAmount * Math.floor(annualClosingsUnitGoal / inputs.pullThroughRate);
-    const annualOriginationUnitGoal = Math.floor(annualClosingsUnitGoal / inputs.pullThroughRate);
+    const annualOriginationDollarGoal = inputs.annualClosingsDollarGoal / inputs.pullThroughRate;
+    const annualOriginationUnitGoal = annualClosingsUnitGoal / inputs.pullThroughRate;
 
     // Part 2: Chunk Down - Building Consistency
     const annualUnitsGoal = annualOriginationUnitGoal;
     const monthlyUnitsGoal = annualUnitsGoal / 12;
-    const weeklyUnitsGoal = Math.ceil(annualUnitsGoal / 52);
-    const dailyUnitsGoal = Math.ceil(weeklyUnitsGoal / 5);
+    const weeklyUnitsGoal = annualUnitsGoal / 52;
+    const dailyUnitsGoal = weeklyUnitsGoal / 5;
 
     // Part 3: Referred Pre-Qual Conversion
     const dailyLoans = dailyUnitsGoal;
-    const dailyReferredPreQuals = Math.ceil(dailyLoans / inputs.conversionToApp);
+    const dailyReferredPreQuals = dailyLoans / inputs.conversionToApp;
 
     // Part 4: Referral Standards for Strategic Partners
-    const monthlyReferredPreQuals = Math.ceil(dailyReferredPreQuals * 5 * 52 / 12);
+    const monthlyReferredPreQuals = Math.round(dailyReferredPreQuals * 5 * 52 / 12);
     const minPreQualPerPartner = monthlyReferredPreQuals / inputs.totalReferralPartners;
 
     // ===== HIGH TRUST BUSINESS PLAN =====
@@ -175,8 +175,8 @@ function GoalTracker() {
     const ht_weeklyPreQualsNeeded = ht_weeklyLoans / inputs.preQualToAppRate;
 
     // Part 4: Strategic Partner Referral Standards (High Trust)
-    const ht_monthlyPreQualInquiries = Math.ceil(ht_dailyPreQualsNeeded * 5 * 52 / 12);
-    const ht_totalPartnersNeeded = Math.ceil(ht_monthlyPreQualInquiries / minPreQualPerPartner);
+    const ht_monthlyPreQualInquiries = Math.round(ht_dailyPreQualsNeeded * 5 * 52 / 12);
+    const ht_totalPartnersNeeded = Math.round(ht_monthlyPreQualInquiries / minPreQualPerPartner);
 
     setCalculated({
       // Simplified Business Plan
