@@ -3311,14 +3311,14 @@ async def get_leads(
     return leads
 
 @app.get("/api/v1/leads/{lead_id}", response_model=LeadResponse)
-async def get_lead(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_lead(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
     lead = db.query(Lead).filter(Lead.id == lead_id, Lead.owner_id == current_user.id).first()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     return lead
 
 @app.patch("/api/v1/leads/{lead_id}", response_model=LeadResponse)
-async def update_lead(lead_id: int, lead_update: LeadUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def update_lead(lead_id: int, lead_update: LeadUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
     lead = db.query(Lead).filter(Lead.id == lead_id, Lead.owner_id == current_user.id).first()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
