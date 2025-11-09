@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import './Tasks.css';
 
 function Tasks() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [completedTasks, setCompletedTasks] = useState(new Set());
+  const [activeTab, setActiveTab] = useState('outstanding');
 
   // Dashboard data states
   const [prioritizedTasks, setPrioritizedTasks] = useState([]);
@@ -201,7 +204,34 @@ function Tasks() {
         <p>{allTasks.length} total tasks</p>
       </div>
 
-      <div className="tasks-sections">
+      {/* Tab Navigation */}
+      <div className="task-tabs">
+        <button
+          className={`tab-button ${activeTab === 'outstanding' ? 'active' : ''}`}
+          onClick={() => setActiveTab('outstanding')}
+        >
+          Outstanding Tasks
+          <span className="tab-badge">{allTasks.length}</span>
+        </button>
+        <button
+          className={`tab-button ${activeTab === 'reconciliation' ? 'active' : ''}`}
+          onClick={() => setActiveTab('reconciliation')}
+        >
+          🔄 Reconciliation
+        </button>
+        <button
+          className={`tab-button ${activeTab === 'messages' ? 'active' : ''}`}
+          onClick={() => setActiveTab('messages')}
+        >
+          📬 Unified Messages
+          <span className="tab-badge">{messages.filter(m => !m.read).length}</span>
+        </button>
+      </div>
+
+      {/* Outstanding Tasks Tab */}
+      {activeTab === 'outstanding' && (
+        <div className="tab-content">
+          <div className="tasks-sections">
         <div className="task-section">
           <div className="section-header">
             <h2>Outstanding Tasks</h2>
@@ -344,7 +374,100 @@ function Tasks() {
             </div>
           </div>
         </div>
-      </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reconciliation Tab */}
+      {activeTab === 'reconciliation' && (
+        <div className="tab-content">
+          <div className="reconciliation-content">
+            <div className="reconciliation-section">
+              <h3>Reconciliation Center</h3>
+              <p className="section-description">
+                Reconcile your loan pipeline data, verify accuracy, and resolve discrepancies.
+              </p>
+              <div className="reconciliation-actions">
+                <button className="btn-reconcile">
+                  Run Monthly Reconciliation
+                </button>
+                <button className="btn-reconcile">
+                  View Past Reconciliations
+                </button>
+                <button className="btn-reconcile">
+                  Export Reconciliation Report
+                </button>
+              </div>
+              <div className="reconciliation-placeholder">
+                <p>Reconciliation features coming soon...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Unified Messages Tab */}
+      {activeTab === 'messages' && (
+        <div className="tab-content">
+          <div className="unified-messages-section">
+            <div className="messages-header">
+              <h2>📬 Unified Messages</h2>
+              <span className="unread-count">{messages.filter(m => !m.read).length} unread</span>
+            </div>
+            <div className="messages-list">
+              {messages.filter(msg => msg && msg.from).map((msg, idx) => (
+                <div key={msg.id || idx} className={`message-item ${!msg.read ? 'unread' : ''} ${msg.requires_response ? 'needs-response' : ''}`}>
+                  <div className="message-left">
+                    <div className="message-type-icon">{msg.type_icon}</div>
+                    <div className="message-content">
+                      <div className="message-header">
+                        <div className="message-from-line">
+                          <span className="message-from">{msg.from}</span>
+                          <span className="message-client-type">{msg.client_type}</span>
+                        </div>
+                        <div className="message-meta">
+                          <span className="message-source">{msg.source}</span>
+                          <span className="message-timestamp">{msg.timestamp}</span>
+                        </div>
+                      </div>
+                      <div className="message-preview">{msg.preview}</div>
+                      {msg.ai_summary && (
+                        <div className="ai-summary">
+                          <span className="ai-icon">🤖</span>
+                          <span className="ai-text">{msg.ai_summary}</span>
+                        </div>
+                      )}
+                      {msg.task_created && (
+                        <div className="task-status">
+                          <span className="task-badge">✓ Task Created: {msg.task_id}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="message-actions">
+                    {msg.type === 'voicemail' && (
+                      <button className="btn-icon-sm" title="Play Voicemail">
+                        <span className="voicemail-duration">{msg.duration}</span> ▶️
+                      </button>
+                    )}
+                    {msg.type === 'email' && (
+                      <button className="btn-icon-sm" title="View in Outlook">📧</button>
+                    )}
+                    {msg.type === 'text' && (
+                      <button className="btn-icon-sm" title="View in Teams">💬</button>
+                    )}
+                    <button className="btn-icon-sm btn-reply" title="Reply">↩️</button>
+                    <button className="btn-icon-sm" title="AI Suggested Response">🤖</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button className="btn-view-all" onClick={() => navigate('/assistant')}>
+              View All Messages →
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -432,18 +555,59 @@ const mockLeadMetrics = () => ({
 
 const mockMessages = () => [
   {
+    id: 1,
+    type: 'email',
     type_icon: '📧',
     from: 'Sarah Johnson',
+    client_type: 'Pre-Approved',
+    source: 'Outlook',
+    timestamp: '2 hours ago',
     preview: 'Quick question about my pre-approval...',
     ai_summary: 'Asking about pre-approval expiration date',
-    read: false
+    read: false,
+    requires_response: true
   },
   {
+    id: 2,
+    type: 'text',
     type_icon: '💬',
     from: 'Mike Chen',
+    client_type: 'Processing',
+    source: 'Teams',
+    timestamp: '5 hours ago',
     preview: 'Thanks for the update!',
     ai_summary: null,
-    read: true
+    read: true,
+    requires_response: false
+  },
+  {
+    id: 3,
+    type: 'voicemail',
+    type_icon: '🎙️',
+    from: 'Emily Davis',
+    client_type: 'Application Started',
+    source: 'Voicemail',
+    timestamp: '1 day ago',
+    preview: 'Left voicemail about appraisal timing',
+    ai_summary: 'Wants to know when appraisal will be scheduled',
+    duration: '1:23',
+    read: false,
+    requires_response: true
+  },
+  {
+    id: 4,
+    type: 'email',
+    type_icon: '📧',
+    from: 'John Smith',
+    client_type: 'Prospect',
+    source: 'Outlook',
+    timestamp: '3 days ago',
+    preview: 'Following up on our conversation...',
+    ai_summary: 'Requesting rate quote for $450k loan',
+    read: true,
+    requires_response: false,
+    task_created: true,
+    task_id: 'TASK-123'
   }
 ];
 

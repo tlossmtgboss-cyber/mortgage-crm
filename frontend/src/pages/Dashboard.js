@@ -27,8 +27,7 @@ function Dashboard() {
     'ai-tasks',
     'pipeline',
     'referrals',
-    'team',
-    'messages'
+    'team'
   ]);
 
   useEffect(() => {
@@ -46,8 +45,7 @@ function Dashboard() {
         'ai-tasks',
         'pipeline',
         'referrals',
-        'team',
-        'messages'
+        'team'
       ];
 
       const saved = localStorage.getItem('dashboardOrder');
@@ -656,79 +654,6 @@ function Dashboard() {
               ))}
             </div>
           </div>
-        </div>
-      );
-    }
-
-    if (containerId === 'messages') {
-      return (
-        <div
-          key={containerId}
-          className={`dashboard-block messages-block draggable-container ${isDragging ? 'dragging' : ''}`}
-          onDragOver={(e) => handleDragOver(e, index)}
-          onDragEnd={handleDragEnd}
-        >
-          <div
-            className="drag-handle"
-            title="Drag to reorder"
-            draggable="true"
-            onDragStart={() => handleDragStart(index)}
-          >⋮⋮</div>
-          <div className="block-header">
-            <h2>📬 Unified Messages</h2>
-            <span className="unread-count">{messages.filter(m => !m.read).length} unread</span>
-          </div>
-          <div className="messages-list">
-            {messages.filter(msg => msg && msg.from).slice(0, 6).map((msg, idx) => (
-              <div key={msg.id || idx} className={`message-item ${!msg.read ? 'unread' : ''} ${msg.requires_response ? 'needs-response' : ''}`}>
-                <div className="message-left">
-                  <div className="message-type-icon">{msg.type_icon}</div>
-                  <div className="message-content">
-                    <div className="message-header">
-                      <div className="message-from-line">
-                        <span className="message-from">{msg.from}</span>
-                        <span className="message-client-type">{msg.client_type}</span>
-                      </div>
-                      <div className="message-meta">
-                        <span className="message-source">{msg.source}</span>
-                        <span className="message-timestamp">{msg.timestamp}</span>
-                      </div>
-                    </div>
-                    <div className="message-preview">{msg.preview}</div>
-                    {msg.ai_summary && (
-                      <div className="ai-summary">
-                        <span className="ai-icon">🤖</span>
-                        <span className="ai-text">{msg.ai_summary}</span>
-                      </div>
-                    )}
-                    {msg.task_created && (
-                      <div className="task-status">
-                        <span className="task-badge">✓ Task Created: {msg.task_id}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="message-actions">
-                  {msg.type === 'voicemail' && (
-                    <button className="btn-icon-sm" title="Play Voicemail">
-                      <span className="voicemail-duration">{msg.duration}</span> ▶️
-                    </button>
-                  )}
-                  {msg.type === 'email' && (
-                    <button className="btn-icon-sm" title="View in Outlook">📧</button>
-                  )}
-                  {msg.type === 'text' && (
-                    <button className="btn-icon-sm" title="View in Teams">💬</button>
-                  )}
-                  <button className="btn-icon-sm btn-reply" title="Reply">↩️</button>
-                  <button className="btn-icon-sm" title="AI Suggested Response">🤖</button>
-                </div>
-              </div>
-            ))}
-          </div>
-          <button className="btn-view-all" onClick={() => navigate('/assistant')}>
-            View All Messages →
-          </button>
         </div>
       );
     }
