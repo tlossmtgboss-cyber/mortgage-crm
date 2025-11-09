@@ -4564,9 +4564,12 @@ def build_coach_context(user: User, db: Session) -> Dict[str, Any]:
     # Identify bottlenecks (loans/leads stuck in same stage > 7 days)
     bottlenecks = []
     for lead in leads:
-        days_in_stage = (datetime.utcnow() - lead.last_activity).days if lead.last_activity else 0
-        if days_in_stage > 7:
-            bottlenecks.append({"type": "Lead", "name": lead.name, "stage": lead.stage.value, "days": days_in_stage})
+        # Use last_contact if available, otherwise updated_at
+        last_activity = lead.last_contact or lead.updated_at
+        if last_activity:
+            days_in_stage = (datetime.utcnow() - last_activity).days
+            if days_in_stage > 7:
+                bottlenecks.append({"type": "Lead", "name": lead.name, "stage": lead.stage.value, "days": days_in_stage})
 
     for loan in loans:
         if loan.updated_at:
