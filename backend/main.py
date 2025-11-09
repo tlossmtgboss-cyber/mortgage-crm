@@ -1215,6 +1215,48 @@ async def create_api_keys_table(db: Session = Depends(get_db)):
             content={"status": "error", "message": str(e)}
         )
 
+@app.post("/admin/add-coborrower-columns")
+async def add_coborrower_columns(db: Session = Depends(get_db)):
+    """Admin endpoint to add co-borrower email and phone columns"""
+    try:
+        # Add co_applicant_email column
+        db.execute(text("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='leads' AND column_name='co_applicant_email'
+                ) THEN
+                    ALTER TABLE leads ADD COLUMN co_applicant_email VARCHAR;
+                END IF;
+            END $$;
+        """))
+
+        # Add co_applicant_phone column
+        db.execute(text("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='leads' AND column_name='co_applicant_phone'
+                ) THEN
+                    ALTER TABLE leads ADD COLUMN co_applicant_phone VARCHAR;
+                END IF;
+            END $$;
+        """))
+
+        db.commit()
+
+        logger.info("✅ Co-borrower columns added successfully")
+        return {"status": "success", "message": "Co-borrower columns added"}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Failed to add co-borrower columns: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
+
 # ============================================================================
 # AUTH ROUTES
 # ============================================================================
