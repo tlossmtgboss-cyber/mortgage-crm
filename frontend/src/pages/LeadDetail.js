@@ -404,6 +404,12 @@ function LeadDetail() {
           Personal Information
         </button>
         <button
+          className={`tab-btn ${activeTab === 'employment' ? 'active' : ''}`}
+          onClick={() => setActiveTab('employment')}
+        >
+          Employment
+        </button>
+        <button
           className={`tab-btn ${activeTab === 'loan' ? 'active' : ''}`}
           onClick={() => setActiveTab('loan')}
         >
@@ -483,6 +489,15 @@ function LeadDetail() {
                   <div className="value">{lead.loan_number || 'N/A'}</div>
                 )}
               </div>
+            </div>
+          </div>
+          )}
+
+          {/* Employment Tab */}
+          {activeTab === 'employment' && (
+          <div className="info-section">
+            <h2>Employment Information</h2>
+            <div className="info-grid compact">
               <div className="info-field">
                 <label>Employment Status</label>
                 {editing ? (
@@ -493,6 +508,42 @@ function LeadDetail() {
                   />
                 ) : (
                   <div className="value">{lead.employment_status || 'N/A'}</div>
+                )}
+              </div>
+              <div className="info-field">
+                <label>Employer Name</label>
+                {editing ? (
+                  <input
+                    type="text"
+                    value={formData.employer_name || ''}
+                    onChange={(e) => setFormData({...formData, employer_name: e.target.value})}
+                  />
+                ) : (
+                  <div className="value">{lead.employer_name || 'N/A'}</div>
+                )}
+              </div>
+              <div className="info-field">
+                <label>Job Title</label>
+                {editing ? (
+                  <input
+                    type="text"
+                    value={formData.job_title || ''}
+                    onChange={(e) => setFormData({...formData, job_title: e.target.value})}
+                  />
+                ) : (
+                  <div className="value">{lead.job_title || 'N/A'}</div>
+                )}
+              </div>
+              <div className="info-field">
+                <label>Years at Job</label>
+                {editing ? (
+                  <input
+                    type="number"
+                    value={formData.years_at_job || ''}
+                    onChange={(e) => setFormData({...formData, years_at_job: parseFloat(e.target.value)})}
+                  />
+                ) : (
+                  <div className="value">{lead.years_at_job || 'N/A'}</div>
                 )}
               </div>
               <div className="info-field">
@@ -507,6 +558,46 @@ function LeadDetail() {
                   <div className="value">
                     {lead.annual_income ? `$${lead.annual_income.toLocaleString()}` : 'N/A'}
                   </div>
+                )}
+              </div>
+              <div className="info-field">
+                <label>Monthly Income</label>
+                {editing ? (
+                  <input
+                    type="number"
+                    value={formData.monthly_income || ''}
+                    onChange={(e) => setFormData({...formData, monthly_income: parseFloat(e.target.value)})}
+                  />
+                ) : (
+                  <div className="value">
+                    {lead.monthly_income ? `$${lead.monthly_income.toLocaleString()}` : 'N/A'}
+                  </div>
+                )}
+              </div>
+              <div className="info-field">
+                <label>Other Income</label>
+                {editing ? (
+                  <input
+                    type="number"
+                    value={formData.other_income || ''}
+                    onChange={(e) => setFormData({...formData, other_income: parseFloat(e.target.value)})}
+                  />
+                ) : (
+                  <div className="value">
+                    {lead.other_income ? `$${lead.other_income.toLocaleString()}` : 'N/A'}
+                  </div>
+                )}
+              </div>
+              <div className="info-field">
+                <label>Income Source</label>
+                {editing ? (
+                  <input
+                    type="text"
+                    value={formData.income_source || ''}
+                    onChange={(e) => setFormData({...formData, income_source: e.target.value})}
+                  />
+                ) : (
+                  <div className="value">{lead.income_source || 'N/A'}</div>
                 )}
               </div>
             </div>
