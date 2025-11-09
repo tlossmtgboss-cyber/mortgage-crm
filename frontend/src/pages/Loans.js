@@ -113,7 +113,9 @@ function Loans() {
       loadLoans();
     } catch (err) {
       console.error('Failed to create loan:', err);
-      alert('Failed to create loan');
+      console.error('Error response:', err.response?.data);
+      const errorMessage = err.response?.data?.detail || err.message || 'Failed to create loan';
+      alert(`Failed to create loan: ${errorMessage}`);
     }
   };
 
