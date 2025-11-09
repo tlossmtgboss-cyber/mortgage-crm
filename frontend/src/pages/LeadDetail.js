@@ -167,7 +167,7 @@ function LeadDetail() {
     }
   };
 
-  const handleAddBorrower = () => {
+  const handleAddBorrower = async () => {
     const firstName = prompt('Enter first name:');
     if (!firstName || !firstName.trim()) return;
 
@@ -178,7 +178,7 @@ function LeadDetail() {
     const newBorrower = {
       id: borrowers.length,
       name: fullName,
-      type: 'additional',
+      type: borrowers.length === 1 ? 'co-borrower' : 'additional',
       data: {
         name: fullName,
         first_name: firstName.trim(),
@@ -186,9 +186,59 @@ function LeadDetail() {
         // Initialize with empty fields
       }
     };
-    setBorrowers([...borrowers, newBorrower]);
-    setActiveBorrower(borrowers.length);
-    setFormData(newBorrower.data);
+
+    try {
+      // Save the first additional borrower as co-borrower
+      if (borrowers.length === 1) {
+        await leadsAPI.update(id, {
+          coborrower_name: fullName
+        });
+        // Reload lead data to sync with backend
+        const leadData = await leadsAPI.getById(id);
+        setLead(leadData);
+
+        // Rebuild borrowers array with the new co-borrower
+        const primaryName = leadData.first_name && leadData.last_name
+          ? `${leadData.first_name} ${leadData.last_name}`
+          : leadData.name || 'Primary Borrower';
+
+        const updatedBorrowers = [
+          {
+            id: 0,
+            name: primaryName,
+            type: 'primary',
+            data: leadData
+          }
+        ];
+
+        if (leadData.coborrower_name) {
+          updatedBorrowers.push({
+            id: 1,
+            name: leadData.coborrower_name,
+            type: 'co-borrower',
+            data: {
+              name: leadData.coborrower_name,
+              first_name: leadData.coborrower_name.split(' ')[0] || '',
+              last_name: leadData.coborrower_name.split(' ').slice(1).join(' ') || '',
+            }
+          });
+        }
+
+        setBorrowers(updatedBorrowers);
+        setActiveBorrower(1);
+        setFormData(updatedBorrowers[1].data);
+      } else {
+        // For additional borrowers beyond the first co-borrower, store in local state only
+        setBorrowers([...borrowers, newBorrower]);
+        setActiveBorrower(borrowers.length);
+        setFormData(newBorrower.data);
+      }
+
+      alert(`${fullName} has been added successfully!`);
+    } catch (error) {
+      console.error('Failed to add borrower:', error);
+      alert('Failed to add borrower. Please try again.');
+    }
   };
 
   const handleAction = async (action) => {
