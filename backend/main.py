@@ -672,6 +672,7 @@ class LeadUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
+    co_applicant_name: Optional[str] = None
     stage: Optional[LeadStage] = None
     loan_number: Optional[str] = None
     notes: Optional[str] = None
