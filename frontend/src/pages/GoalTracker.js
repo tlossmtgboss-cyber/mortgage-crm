@@ -68,7 +68,8 @@ function GoalTracker() {
       const token = localStorage.getItem('token');
       if (token && calculated.annualOriginationUnitGoal) {
         try {
-          await fetch('/api/v1/users/me/goals', {
+          const API_URL = process.env.REACT_APP_API_URL || '';
+          await fetch(`${API_URL}/api/v1/users/me/goals`, {
             method: 'PATCH',
             headers: {
               'Authorization': `Bearer ${token}`,

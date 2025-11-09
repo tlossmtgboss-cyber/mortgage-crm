@@ -85,7 +85,8 @@ function Dashboard() {
       setLoading(true);
 
       // Fetch real data from backend
-      const response = await fetch('/api/v1/dashboard', {
+      const API_URL = process.env.REACT_APP_API_URL || '';
+      const response = await fetch(`${API_URL}/api/v1/dashboard`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json'
