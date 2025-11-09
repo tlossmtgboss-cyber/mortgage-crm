@@ -18,9 +18,12 @@ function ReferralPartners() {
     try {
       setLoading(true);
       const data = await partnersAPI.getAll();
-      setPartners(data);
+      // Ensure data is always an array
+      setPartners(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Failed to load referral partners:', error);
+      // Set empty array on error
+      setPartners([]);
     } finally {
       setLoading(false);
     }
@@ -48,9 +51,11 @@ function ReferralPartners() {
     }
   };
 
+  // Ensure partners is always an array before filtering
+  const safePartners = Array.isArray(partners) ? partners : [];
   const filteredPartners = filterStatus === 'all'
-    ? partners
-    : partners.filter(p => p.status === filterStatus);
+    ? safePartners
+    : safePartners.filter(p => p.status === filterStatus);
 
   const getTierBadgeClass = (tier) => {
     const tierMap = {
@@ -66,7 +71,7 @@ function ReferralPartners() {
       <div className="page-header">
         <div>
           <h1>Referral Partners</h1>
-          <p>{partners.length} total partners</p>
+          <p>{safePartners.length} total partners</p>
         </div>
         <button className="btn-add" onClick={() => setShowAddModal(true)}>
           + Add Partner
@@ -78,19 +83,19 @@ function ReferralPartners() {
           className={filterStatus === 'all' ? 'active' : ''}
           onClick={() => setFilterStatus('all')}
         >
-          All ({partners.length})
+          All ({safePartners.length})
         </button>
         <button
           className={filterStatus === 'active' ? 'active' : ''}
           onClick={() => setFilterStatus('active')}
         >
-          Active ({partners.filter(p => p.status === 'active').length})
+          Active ({safePartners.filter(p => p.status === 'active').length})
         </button>
         <button
           className={filterStatus === 'inactive' ? 'active' : ''}
           onClick={() => setFilterStatus('inactive')}
         >
-          Inactive ({partners.filter(p => p.status === 'inactive').length})
+          Inactive ({safePartners.filter(p => p.status === 'inactive').length})
         </button>
       </div>
 
