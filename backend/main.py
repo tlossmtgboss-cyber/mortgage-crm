@@ -2430,6 +2430,36 @@ async def health_check(db: Session = Depends(get_db)):
             content={"status": "unhealthy", "error": str(e)}
         )
 
+@app.post("/authentication/test")
+async def authentication_test_post(current_user: User = Depends(get_current_user_flexible)):
+    """
+    Zapier authentication test endpoint (POST method).
+    This endpoint verifies that the API key authentication is working correctly.
+    """
+    return {
+        "authenticated": True,
+        "user_id": current_user.id,
+        "email": current_user.email,
+        "name": current_user.full_name,
+        "message": "Authentication successful",
+        "timestamp": datetime.utcnow()
+    }
+
+@app.get("/authentication/test")
+async def authentication_test_get(current_user: User = Depends(get_current_user_flexible)):
+    """
+    Zapier authentication test endpoint (GET method).
+    This endpoint verifies that the API key authentication is working correctly.
+    """
+    return {
+        "authenticated": True,
+        "user_id": current_user.id,
+        "email": current_user.email,
+        "name": current_user.full_name,
+        "message": "Authentication successful",
+        "timestamp": datetime.utcnow()
+    }
+
 @app.post("/admin/create-api-keys-table")
 async def create_api_keys_table(db: Session = Depends(get_db)):
     """Admin endpoint to manually create the api_keys table"""
@@ -2663,6 +2693,59 @@ async def create_microsoft_oauth_table(db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         logger.error(f"❌ Failed to create Microsoft OAuth tokens table: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
+
+@app.post("/admin/create-zapier-api-key")
+async def create_zapier_api_key(db: Session = Depends(get_db)):
+    """Admin endpoint to create the Zapier API key for integration"""
+    try:
+        # Get the first user (demo user) or create one
+        user = db.query(User).first()
+        if not user:
+            logger.error("No users found in database")
+            return JSONResponse(
+                status_code=500,
+                content={"status": "error", "message": "No users found. Please create a user first."}
+            )
+
+        # Check if the Zapier API key already exists
+        zapier_api_key = "185b7101-9435-44da-87ab-b7582c4e4607"
+        existing_key = db.query(ApiKey).filter(ApiKey.key == zapier_api_key).first()
+
+        if existing_key:
+            logger.info("✅ Zapier API key already exists")
+            return {
+                "status": "success",
+                "message": "Zapier API key already exists",
+                "key": zapier_api_key,
+                "user_email": user.email
+            }
+
+        # Create the API key
+        new_api_key = ApiKey(
+            key=zapier_api_key,
+            name="Zapier Integration",
+            user_id=user.id,
+            is_active=True
+        )
+
+        db.add(new_api_key)
+        db.commit()
+        db.refresh(new_api_key)
+
+        logger.info(f"✅ Zapier API key created for user {user.email}")
+        return {
+            "status": "success",
+            "message": "Zapier API key created successfully",
+            "key": zapier_api_key,
+            "user_email": user.email
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Failed to create Zapier API key: {e}")
         return JSONResponse(
             status_code=500,
             content={"status": "error", "message": str(e)}
