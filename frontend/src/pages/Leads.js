@@ -319,7 +319,8 @@ function Leads() {
   const loadLeads = async () => {
     try {
       const data = await leadsAPI.getAll();
-      setLeads(data);
+      // Ensure data is always an array
+      setLeads(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to load leads:', err);
       // Use mock data on error
@@ -329,9 +330,11 @@ function Leads() {
     }
   };
 
+  // Ensure leads is always an array before filtering
+  const safeLeads = Array.isArray(leads) ? leads : [];
   const filteredLeads = activeFilter === 'All'
-    ? leads
-    : leads.filter(lead => lead.stage === activeFilter);
+    ? safeLeads
+    : safeLeads.filter(lead => lead.stage === activeFilter);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
