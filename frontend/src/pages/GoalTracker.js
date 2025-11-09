@@ -18,10 +18,117 @@ function GoalTracker() {
   });
 
   const [calculated, setCalculated] = useState({});
+  const [history, setHistory] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [lastSaved, setLastSaved] = useState(null);
 
+  // Load saved data on mount
+  useEffect(() => {
+    loadSavedData();
+  }, []);
+
+  // Auto-save when inputs change
   useEffect(() => {
     calculateMetrics();
+    saveData();
   }, [inputs]);
+
+  const loadSavedData = () => {
+    try {
+      // Load current inputs
+      const savedInputs = localStorage.getItem('goalTrackerInputs');
+      if (savedInputs) {
+        setInputs(JSON.parse(savedInputs));
+      }
+
+      // Load history
+      const savedHistory = localStorage.getItem('goalTrackerHistory');
+      if (savedHistory) {
+        setHistory(JSON.parse(savedHistory));
+      }
+
+      // Load last saved timestamp
+      const savedTimestamp = localStorage.getItem('goalTrackerLastSaved');
+      if (savedTimestamp) {
+        setLastSaved(new Date(savedTimestamp));
+      }
+    } catch (error) {
+      console.error('Failed to load saved data:', error);
+    }
+  };
+
+  const saveData = () => {
+    try {
+      localStorage.setItem('goalTrackerInputs', JSON.stringify(inputs));
+      const now = new Date();
+      localStorage.setItem('goalTrackerLastSaved', now.toISOString());
+      setLastSaved(now);
+    } catch (error) {
+      console.error('Failed to save data:', error);
+    }
+  };
+
+  const saveSnapshot = () => {
+    const snapshot = {
+      date: new Date().toISOString(),
+      inputs: { ...inputs },
+      calculated: { ...calculated },
+    };
+
+    const newHistory = [snapshot, ...history].slice(0, 50); // Keep last 50 snapshots
+    setHistory(newHistory);
+    localStorage.setItem('goalTrackerHistory', JSON.stringify(newHistory));
+  };
+
+  const loadSnapshot = (snapshot) => {
+    setInputs(snapshot.inputs);
+    setCalculated(snapshot.calculated);
+  };
+
+  const clearHistory = () => {
+    if (window.confirm('Are you sure you want to clear all historical data?')) {
+      setHistory([]);
+      localStorage.removeItem('goalTrackerHistory');
+    }
+  };
+
+  const exportToExcel = () => {
+    // Create CSV format that can be opened in Excel
+    const csvRows = [
+      ['High Trust Business Plan - Export'],
+      ['Generated:', new Date().toLocaleString()],
+      [],
+      ['INPUTS'],
+      ['Average Loan Amount', inputs.avgLoanAmount],
+      ['Annual Closings Dollar Goal', inputs.annualClosingsDollarGoal],
+      ['Pull Through Rate', inputs.pullThroughRate],
+      ['Conversion to App', inputs.conversionToApp],
+      ['Total Referral Partners', inputs.totalReferralPartners],
+      ['Annual Income Goal', inputs.annualIncomeGoal],
+      ['Average Commission Basis Points', inputs.avgCommissionBasisPoints],
+      ['Pre-Qual to App Rate', inputs.preQualToAppRate],
+      [],
+      ['CALCULATED METRICS'],
+      ['Annual Closings Unit Goal', calculated.annualClosingsUnitGoal],
+      ['Annual Origination Dollar Goal', calculated.annualOriginationDollarGoal],
+      ['Annual Origination Unit Goal', calculated.annualOriginationUnitGoal],
+      ['Monthly Units Goal', calculated.monthlyUnitsGoal],
+      ['Weekly Units Goal', calculated.weeklyUnitsGoal],
+      ['Daily Units Goal', calculated.dailyUnitsGoal],
+      ['Daily Referred Pre-Quals Needed', calculated.dailyReferredPreQuals],
+      ['Monthly Referred Pre-Quals Needed', calculated.monthlyReferredPreQuals],
+      ['Min Pre-Qual Per Partner', calculated.minPreQualPerPartner],
+    ];
+
+    const csvContent = csvRows.map(row => row.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `business-plan-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
 
   const calculateMetrics = () => {
     // ===== SIMPLIFIED BUSINESS PLAN =====
@@ -132,6 +239,63 @@ function GoalTracker() {
       <div className="page-header">
         <h1>📊 High Trust Business Plan</h1>
         <p className="plan-subtitle">Set your goals and see exactly what activities you need to hit them</p>
+
+        {/* Action Buttons */}
+        <div className="action-buttons">
+          <button className="btn-primary" onClick={saveSnapshot}>
+            💾 Save Snapshot
+          </button>
+          <button className="btn-secondary" onClick={() => setShowHistory(!showHistory)}>
+            📈 {showHistory ? 'Hide' : 'View'} History ({history.length})
+          </button>
+          <button className="btn-secondary" onClick={exportToExcel}>
+            📥 Export to Excel
+          </button>
+          {lastSaved && (
+            <span className="last-saved">
+              Last saved: {lastSaved.toLocaleTimeString()}
+            </span>
+          )}
+        </div>
+
+        {/* History Panel */}
+        {showHistory && (
+          <div className="history-panel">
+            <div className="history-header">
+              <h3>📊 Historical Snapshots</h3>
+              {history.length > 0 && (
+                <button className="btn-danger-sm" onClick={clearHistory}>
+                  Clear All
+                </button>
+              )}
+            </div>
+            {history.length === 0 ? (
+              <p className="no-history">No snapshots saved yet. Click "Save Snapshot" to track your progress over time.</p>
+            ) : (
+              <div className="history-list">
+                {history.map((snapshot, index) => (
+                  <div key={index} className="history-item">
+                    <div className="history-date">
+                      {new Date(snapshot.date).toLocaleString()}
+                    </div>
+                    <div className="history-metrics">
+                      <span>Daily Goal: {formatNumber(snapshot.calculated.dailyUnitsGoal || 0)}</span>
+                      <span>Monthly: {formatNumber(snapshot.calculated.monthlyUnitsGoal || 0)}</span>
+                      <span>Annual: {formatCurrency(snapshot.inputs.annualClosingsDollarGoal || 0)}</span>
+                    </div>
+                    <button
+                      className="btn-load"
+                      onClick={() => loadSnapshot(snapshot)}
+                    >
+                      Load
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="plan-key">
           <span className="key-item"><span className="key-box user-input"></span> User Input Fields</span>
           <span className="key-item"><span className="key-box calculated"></span> Calculated Values</span>
