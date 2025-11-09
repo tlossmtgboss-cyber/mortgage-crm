@@ -3130,7 +3130,7 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     ).all()
 
     underwriting_volume = sum(loan.amount for loan in underwriting if loan.amount)
-    underwriting_alerts = sum(1 for loan in underwriting if loan.status == "suspended")
+    underwriting_alerts = sum(1 for loan in underwriting if loan.sla_status == "suspended")
 
     pipeline_stats.append({
         "id": "underwriting",
@@ -3249,7 +3249,6 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     # ============================================================================
 
     partners = db.query(ReferralPartner).filter(
-        ReferralPartner.owner_id == current_user.id,
         ReferralPartner.status == "active"
     ).limit(5).all()
 
