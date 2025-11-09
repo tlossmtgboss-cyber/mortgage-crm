@@ -3180,16 +3180,16 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     # TASKS FOR TODAY
     # ============================================================================
 
-    tasks_today = db.query(Task).filter(
-        Task.owner_id == current_user.id,
-        Task.status.in_(["pending", "in_progress"]),
-        Task.due_date <= today + timedelta(days=1)
-    ).order_by(Task.priority.desc(), Task.due_date).limit(10).all()
+    tasks_today = db.query(AITask).filter(
+        AITask.assigned_to_id == current_user.id,
+        AITask.type.in_([TaskType.IN_PROGRESS, TaskType.HUMAN_NEEDED, TaskType.AWAITING_REVIEW]),
+        AITask.due_date <= today + timedelta(days=1)
+    ).order_by(AITask.priority.desc(), AITask.due_date).limit(10).all()
 
     prioritized_tasks = [{
         "title": task.title,
-        "borrower": task.related_contact_name,
-        "stage": task.related_type,
+        "borrower": task.borrower_name,
+        "stage": task.category,
         "urgency": task.priority,
         "ai_action": None
     } for task in tasks_today]
