@@ -218,7 +218,7 @@ function Portfolio() {
         totalVolume: stats.total_volume || 0,
         activeLoans: stats.active_loans || 0,
         closedLoans: stats.closed_loans || 0,
-        loans: loans.map(loan => ({
+        loans: Array.isArray(loans) ? loans.map(loan => ({
           id: loan.id,
           borrower: loan.client_name || loan.borrower_name || 'Unknown',
           loanAmount: loan.loan_amount || 0,
@@ -226,10 +226,10 @@ function Portfolio() {
           status: loan.status || 'Unknown',
           closeDate: loan.close_date || loan.created_at,
           rate: loan.interest_rate || 0
-        }))
+        })) : []
       });
 
-      setMumClients(mum || []);
+      setMumClients(Array.isArray(mum) ? mum : []);
     } catch (error) {
       console.error('Failed to load portfolio data:', error);
       // Use mock data on error

@@ -95,7 +95,8 @@ function Loans() {
   const loadLoans = async () => {
     try {
       const data = await loansAPI.getAll();
-      setLoans(data);
+      // Ensure data is an array
+      setLoans(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to load loans:', err);
       // Use mock data on error
