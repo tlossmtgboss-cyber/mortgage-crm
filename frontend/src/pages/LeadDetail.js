@@ -39,10 +39,14 @@ function LeadDetail() {
       setActivities(activitiesData || []);
 
       // Initialize borrowers array
+      const primaryName = leadData.first_name && leadData.last_name
+        ? `${leadData.first_name} ${leadData.last_name}`
+        : leadData.name || 'Primary Borrower';
+
       const borrowersList = [
         {
           id: 0,
-          name: leadData.name || 'Primary Borrower',
+          name: primaryName,
           type: 'primary',
           data: leadData
         }
@@ -56,6 +60,8 @@ function LeadDetail() {
           type: 'co-borrower',
           data: {
             name: leadData.coborrower_name,
+            first_name: leadData.coborrower_name ? leadData.coborrower_name.split(' ')[0] : '',
+            last_name: leadData.coborrower_name ? leadData.coborrower_name.split(' ').slice(1).join(' ') : '',
             // Co-borrower fields would be stored separately in a real implementation
           }
         });
@@ -84,8 +90,16 @@ function LeadDetail() {
 
   const handleSave = async () => {
     try {
-      await leadsAPI.update(id, formData);
-      setLead(formData);
+      // Combine first_name and last_name into name for backend
+      const dataToSave = {
+        ...formData,
+        name: formData.first_name && formData.last_name
+          ? `${formData.first_name} ${formData.last_name}`
+          : formData.name || ''
+      };
+
+      await leadsAPI.update(id, dataToSave);
+      setLead(dataToSave);
       setEditing(false);
       alert('Lead updated successfully!');
     } catch (error) {
@@ -154,21 +168,27 @@ function LeadDetail() {
   };
 
   const handleAddBorrower = () => {
-    const newBorrowerName = prompt('Enter borrower name:');
-    if (newBorrowerName && newBorrowerName.trim()) {
-      const newBorrower = {
-        id: borrowers.length,
-        name: newBorrowerName.trim(),
-        type: 'additional',
-        data: {
-          name: newBorrowerName.trim(),
-          // Initialize with empty fields
-        }
-      };
-      setBorrowers([...borrowers, newBorrower]);
-      setActiveBorrower(borrowers.length);
-      setFormData(newBorrower.data);
-    }
+    const firstName = prompt('Enter first name:');
+    if (!firstName || !firstName.trim()) return;
+
+    const lastName = prompt('Enter last name:');
+    if (!lastName || !lastName.trim()) return;
+
+    const fullName = `${firstName.trim()} ${lastName.trim()}`;
+    const newBorrower = {
+      id: borrowers.length,
+      name: fullName,
+      type: 'additional',
+      data: {
+        name: fullName,
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        // Initialize with empty fields
+      }
+    };
+    setBorrowers([...borrowers, newBorrower]);
+    setActiveBorrower(borrowers.length);
+    setFormData(newBorrower.data);
   };
 
   const handleAction = async (action) => {
@@ -538,15 +558,27 @@ function LeadDetail() {
             <h2>Personal Information</h2>
             <div className="info-grid compact">
               <div className="info-field">
-                <label>Name</label>
+                <label>First Name</label>
                 {editing ? (
                   <input
                     type="text"
-                    value={formData.name || ''}
-                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                    value={formData.first_name || ''}
+                    onChange={(e) => setFormData({...formData, first_name: e.target.value})}
                   />
                 ) : (
-                  <div className="value">{lead.name}</div>
+                  <div className="value">{lead.first_name || (lead.name ? lead.name.split(' ')[0] : 'N/A')}</div>
+                )}
+              </div>
+              <div className="info-field">
+                <label>Last Name</label>
+                {editing ? (
+                  <input
+                    type="text"
+                    value={formData.last_name || ''}
+                    onChange={(e) => setFormData({...formData, last_name: e.target.value})}
+                  />
+                ) : (
+                  <div className="value">{lead.last_name || (lead.name ? lead.name.split(' ').slice(1).join(' ') : 'N/A')}</div>
                 )}
               </div>
               <div className="info-field">
