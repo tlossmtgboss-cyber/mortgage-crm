@@ -122,7 +122,11 @@ function Loans() {
       console.error('Error response:', err.response?.data);
       let errorMessage = 'Failed to create loan';
 
-      if (err.response?.data?.detail) {
+      if (err.message === 'Network Error') {
+        errorMessage = 'Cannot connect to server. Please check your internet connection or try logging out and back in.';
+      } else if (err.response?.status === 401) {
+        errorMessage = 'Your session has expired. Please log out and log back in.';
+      } else if (err.response?.data?.detail) {
         // Handle both string and object detail
         if (typeof err.response.data.detail === 'string') {
           errorMessage = err.response.data.detail;
