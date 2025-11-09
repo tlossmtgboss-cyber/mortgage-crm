@@ -566,7 +566,7 @@ function LeadDetail() {
                     onChange={(e) => setFormData({...formData, first_name: e.target.value})}
                   />
                 ) : (
-                  <div className="value">{lead.first_name || (lead.name ? lead.name.split(' ')[0] : 'N/A')}</div>
+                  <div className="value">{formData.first_name || (formData.name ? formData.name.split(' ')[0] : 'N/A')}</div>
                 )}
               </div>
               <div className="info-field">
@@ -578,7 +578,7 @@ function LeadDetail() {
                     onChange={(e) => setFormData({...formData, last_name: e.target.value})}
                   />
                 ) : (
-                  <div className="value">{lead.last_name || (lead.name ? lead.name.split(' ').slice(1).join(' ') : 'N/A')}</div>
+                  <div className="value">{formData.last_name || (formData.name ? formData.name.split(' ').slice(1).join(' ') : 'N/A')}</div>
                 )}
               </div>
               <div className="info-field">
@@ -591,7 +591,7 @@ function LeadDetail() {
                   />
                 ) : (
                   <div className="value">
-                    <ClickableEmail email={lead.email} />
+                    <ClickableEmail email={formData.email} />
                   </div>
                 )}
               </div>
@@ -605,7 +605,7 @@ function LeadDetail() {
                   />
                 ) : (
                   <div className="value">
-                    <ClickablePhone phone={lead.phone} />
+                    <ClickablePhone phone={formData.phone} />
                   </div>
                 )}
               </div>
@@ -618,7 +618,7 @@ function LeadDetail() {
                     onChange={(e) => setFormData({...formData, loan_number: e.target.value})}
                   />
                 ) : (
-                  <div className="value">{lead.loan_number || 'N/A'}</div>
+                  <div className="value">{formData.loan_number || 'N/A'}</div>
                 )}
               </div>
             </div>
@@ -639,7 +639,7 @@ function LeadDetail() {
                     onChange={(e) => setFormData({...formData, employment_status: e.target.value})}
                   />
                 ) : (
-                  <div className="value">{lead.employment_status || 'N/A'}</div>
+                  <div className="value">{formData.employment_status || 'N/A'}</div>
                 )}
               </div>
               <div className="info-field">
@@ -651,7 +651,7 @@ function LeadDetail() {
                     onChange={(e) => setFormData({...formData, employer_name: e.target.value})}
                   />
                 ) : (
-                  <div className="value">{lead.employer_name || 'N/A'}</div>
+                  <div className="value">{formData.employer_name || 'N/A'}</div>
                 )}
               </div>
               <div className="info-field">
@@ -663,7 +663,7 @@ function LeadDetail() {
                     onChange={(e) => setFormData({...formData, job_title: e.target.value})}
                   />
                 ) : (
-                  <div className="value">{lead.job_title || 'N/A'}</div>
+                  <div className="value">{formData.job_title || 'N/A'}</div>
                 )}
               </div>
               <div className="info-field">
@@ -675,7 +675,7 @@ function LeadDetail() {
                     onChange={(e) => setFormData({...formData, years_at_job: parseFloat(e.target.value)})}
                   />
                 ) : (
-                  <div className="value">{lead.years_at_job || 'N/A'}</div>
+                  <div className="value">{formData.years_at_job || 'N/A'}</div>
                 )}
               </div>
               <div className="info-field">
@@ -729,7 +729,7 @@ function LeadDetail() {
                     onChange={(e) => setFormData({...formData, income_source: e.target.value})}
                   />
                 ) : (
-                  <div className="value">{lead.income_source || 'N/A'}</div>
+                  <div className="value">{formData.income_source || 'N/A'}</div>
                 )}
               </div>
             </div>
@@ -750,7 +750,7 @@ function LeadDetail() {
                     onChange={(e) => setFormData({...formData, address: e.target.value})}
                   />
                 ) : (
-                  <div className="value">{lead.address || 'N/A'}</div>
+                  <div className="value">{formData.address || 'N/A'}</div>
                 )}
               </div>
               <div className="info-field">
@@ -762,7 +762,7 @@ function LeadDetail() {
                     onChange={(e) => setFormData({...formData, city: e.target.value})}
                   />
                 ) : (
-                  <div className="value">{lead.city || 'N/A'}</div>
+                  <div className="value">{formData.city || 'N/A'}</div>
                 )}
               </div>
               <div className="info-field">
@@ -774,7 +774,7 @@ function LeadDetail() {
                     onChange={(e) => setFormData({...formData, state: e.target.value})}
                   />
                 ) : (
-                  <div className="value">{lead.state || 'N/A'}</div>
+                  <div className="value">{formData.state || 'N/A'}</div>
                 )}
               </div>
               <div className="info-field">
@@ -786,7 +786,7 @@ function LeadDetail() {
                     onChange={(e) => setFormData({...formData, zip_code: e.target.value})}
                   />
                 ) : (
-                  <div className="value">{lead.zip_code || 'N/A'}</div>
+                  <div className="value">{formData.zip_code || 'N/A'}</div>
                 )}
               </div>
               <div className="info-field">
@@ -798,7 +798,7 @@ function LeadDetail() {
                     onChange={(e) => setFormData({...formData, property_type: e.target.value})}
                   />
                 ) : (
-                  <div className="value">{lead.property_type || 'N/A'}</div>
+                  <div className="value">{formData.property_type || 'N/A'}</div>
                 )}
               </div>
               <div className="info-field">
@@ -811,7 +811,7 @@ function LeadDetail() {
                   />
                 ) : (
                   <div className="value">
-                    {lead.property_value ? `$${lead.property_value.toLocaleString()}` : 'N/A'}
+                    {formData.property_value ? `$${formData.property_value.toLocaleString()}` : 'N/A'}
                   </div>
                 )}
               </div>
@@ -838,7 +838,7 @@ function LeadDetail() {
                     onChange={(e) => setFormData({...formData, credit_score: parseInt(e.target.value)})}
                   />
                 ) : (
-                  <div className="value">{lead.credit_score || 'N/A'}</div>
+                  <div className="value">{formData.credit_score || 'N/A'}</div>
                 )}
               </div>
             </div>
