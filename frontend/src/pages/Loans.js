@@ -113,17 +113,24 @@ function Loans() {
         submitData.closing_date = `${submitData.closing_date}T00:00:00`;
       }
 
+      console.log('Submitting loan data:', submitData);
+      console.log('Auth token exists:', !!localStorage.getItem('token'));
+
       await loansAPI.create(submitData);
       setShowModal(false);
       resetForm();
       loadLoans();
     } catch (err) {
       console.error('Failed to create loan:', err);
-      console.error('Error response:', err.response?.data);
+      console.error('Error response:', err.response);
+      console.error('Error config:', err.config);
+      console.error('Error message:', err.message);
+
       let errorMessage = 'Failed to create loan';
 
       if (err.message === 'Network Error') {
-        errorMessage = 'Cannot connect to server. Please check your internet connection or try logging out and back in.';
+        const hasToken = !!localStorage.getItem('token');
+        errorMessage = `Cannot connect to server. Auth token present: ${hasToken}. Please try logging out and back in.`;
       } else if (err.response?.status === 401) {
         errorMessage = 'Your session has expired. Please log out and log back in.';
       } else if (err.response?.data?.detail) {
