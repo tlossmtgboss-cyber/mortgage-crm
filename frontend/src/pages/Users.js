@@ -78,20 +78,52 @@ function Users() {
   };
 
   const handleDeleteUser = async (userId) => {
+    // Get current user to prevent self-deletion attempt
+    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+
+    if (currentUser.id === userId) {
+      alert('You cannot delete your own account. Please contact another administrator.');
+      return;
+    }
+
     if (!window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
       return;
     }
 
     try {
       const token = localStorage.getItem('token');
+
+      if (!token) {
+        alert('You are not authenticated. Please log in again.');
+        return;
+      }
+
       await axios.delete(
         `${API_BASE_URL}/api/v1/admin/users/${userId}`,
         { headers: { 'Authorization': `Bearer ${token}` } }
       );
+
+      alert('User deleted successfully');
       await loadUsers();
     } catch (err) {
       console.error('Failed to delete user:', err);
-      alert(err.response?.data?.detail || 'Failed to delete user');
+      console.error('Error response:', err.response);
+
+      let errorMessage = 'Failed to delete user';
+
+      if (err.response?.status === 401) {
+        errorMessage = 'Authentication failed. Please log out and log back in.';
+      } else if (err.response?.status === 403) {
+        errorMessage = 'You do not have permission to delete users.';
+      } else if (err.response?.data?.detail) {
+        errorMessage = err.response.data.detail;
+      } else if (err.message === 'Network Error') {
+        errorMessage = 'Cannot connect to server. Please check your connection and try again.';
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+
+      alert(errorMessage);
     }
   };
 
@@ -104,6 +136,8 @@ function Users() {
   if (loading) {
     return <div className="users-page"><div className="loading">Loading users...</div></div>;
   }
+
+  const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
 
   return (
     <div className="users-page">
@@ -145,13 +179,18 @@ function Users() {
             </tr>
           </thead>
           <tbody>
-            {users.map((user) => (
+            {users.map((user) => {
+              const isCurrentUser = user.id === currentUser.id;
+              return (
               <tr key={user.id} className={!user.is_active ? 'inactive-user' : ''}>
                 <td>
                   <div className="user-info">
                     <div className="user-avatar">{user.full_name?.charAt(0) || user.email.charAt(0)}</div>
                     <div>
-                      <div className="user-name">{user.full_name || 'Unnamed User'}</div>
+                      <div className="user-name">
+                        {user.full_name || 'Unnamed User'}
+                        {isCurrentUser && <span className="current-user-badge">You</span>}
+                      </div>
                       <div className="user-id">ID: {user.id}</div>
                     </div>
                   </div>
@@ -208,13 +247,15 @@ function Users() {
                   <button
                     className="btn-delete"
                     onClick={() => handleDeleteUser(user.id)}
-                    title="Delete user"
+                    disabled={isCurrentUser}
+                    title={isCurrentUser ? "You cannot delete your own account" : "Delete user"}
                   >
                     Delete
                   </button>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
 
