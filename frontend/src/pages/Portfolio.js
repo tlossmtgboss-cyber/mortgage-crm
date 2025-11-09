@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { portfolioAPI, mumAPI } from '../services/api';
 import './Portfolio.css';
 
@@ -185,6 +186,7 @@ const generateMockMumClients = () => {
 };
 
 function Portfolio() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('loans');
   const [portfolioData, setPortfolioData] = useState({
     totalLoans: 0,
@@ -407,7 +409,11 @@ function Portfolio() {
             </thead>
             <tbody>
               {portfolioData.loans.map((loan) => (
-                <tr key={loan.id}>
+                <tr
+                  key={loan.id}
+                  onClick={() => navigate(`/portfolio/${loan.id}`)}
+                  style={{ cursor: 'pointer' }}
+                >
                   <td>{loan.borrower}</td>
                   <td>{formatCurrency(loan.loanAmount)}</td>
                   <td>{loan.loanType}</td>
@@ -468,7 +474,11 @@ function Portfolio() {
               </thead>
               <tbody>
                 {filteredMumClients.map((client) => (
-                  <tr key={client.id}>
+                  <tr
+                    key={client.id}
+                    onClick={() => navigate(`/portfolio/${client.id}`)}
+                    style={{ cursor: 'pointer' }}
+                  >
                     <td>
                       <strong>{client.name}</strong>
                     </td>

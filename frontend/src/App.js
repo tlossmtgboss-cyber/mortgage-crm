@@ -230,6 +230,23 @@ function App() {
             }
           />
           <Route
+            path="/loans/:id"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    assistantOpen={assistantOpen}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LeadDetail />
+                  </main>
+                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
             path="/portfolio"
             element={
               <PrivateRoute>
@@ -240,6 +257,23 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <Portfolio />
+                  </main>
+                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/portfolio/:id"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    assistantOpen={assistantOpen}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LeadDetail />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                 </div>

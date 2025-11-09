@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { loansAPI } from '../services/api';
 import './Loans.css';
 
@@ -55,6 +55,7 @@ const generateMockLoans = () => {
 
 function Loans() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const stageParam = searchParams.get('stage');
   const initialFilter = stageParam ? stageIdToFilter[stageParam] || 'All' : 'All';
 
@@ -225,7 +226,11 @@ function Loans() {
           </thead>
           <tbody>
             {filteredLoans.map((loan) => (
-              <tr key={loan.id}>
+              <tr
+                key={loan.id}
+                onClick={() => navigate(`/loans/${loan.id}`)}
+                style={{ cursor: 'pointer' }}
+              >
                 <td className="borrower-name">{loan.borrower || loan.borrower_name}</td>
                 <td className="loan-amount">${(loan.amount || 0).toLocaleString()}</td>
                 <td>{loan.property_address || 'N/A'}</td>
@@ -273,7 +278,11 @@ function Loans() {
                 {loans
                   .filter(loan => loan.stage === 'Funded Prior Month')
                   .map((loan) => (
-                    <tr key={loan.id}>
+                    <tr
+                      key={loan.id}
+                      onClick={() => navigate(`/loans/${loan.id}`)}
+                      style={{ cursor: 'pointer' }}
+                    >
                       <td className="borrower-name">{loan.borrower || loan.borrower_name}</td>
                       <td className="loan-amount">${(loan.amount || 0).toLocaleString()}</td>
                       <td>{loan.property_address || 'N/A'}</td>
