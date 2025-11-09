@@ -1209,6 +1209,89 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         raise credentials_exception
     return user
 
+async def get_current_user_flexible(
+    request: Request,
+    db: Session = Depends(get_db)
+) -> User:
+    """
+    Flexible authentication that supports both:
+    1. Authorization: Bearer <token|api_key>
+    2. X-API-Key: <api_key>
+
+    This is useful for Zapier and other integrations.
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Not authenticated",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    token = None
+
+    # Check X-API-Key header first (for Zapier and similar integrations)
+    api_key_header = request.headers.get("X-API-Key")
+    if api_key_header:
+        # Try to find API key in database
+        api_key = db.query(ApiKey).filter(
+            ApiKey.key == api_key_header,
+            ApiKey.is_active == True
+        ).first()
+
+        if api_key:
+            # Update last used timestamp
+            api_key.last_used_at = datetime.utcnow()
+            db.commit()
+
+            # Get the user associated with this API key
+            user = db.query(User).filter(User.id == api_key.user_id).first()
+            if user:
+                return user
+
+        # If we have X-API-Key header but it's invalid, raise exception
+        raise credentials_exception
+
+    # Check Authorization header (Bearer token)
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        token = auth_header.replace("Bearer ", "")
+
+    if not token:
+        raise credentials_exception
+
+    # Check if token is an API key (starts with 'sk_')
+    if token.startswith('sk_'):
+        api_key = db.query(ApiKey).filter(
+            ApiKey.key == token,
+            ApiKey.is_active == True
+        ).first()
+
+        if api_key is None:
+            raise credentials_exception
+
+        # Update last used timestamp
+        api_key.last_used_at = datetime.utcnow()
+        db.commit()
+
+        # Get the user associated with this API key
+        user = db.query(User).filter(User.id == api_key.user_id).first()
+        if user is None:
+            raise credentials_exception
+        return user
+
+    # Otherwise, treat it as a JWT token
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+
+    user = db.query(User).filter(User.email == email).first()
+    if user is None:
+        raise credentials_exception
+    return user
+
 # ============================================================================
 # API KEY HELPER FUNCTIONS
 # ============================================================================
@@ -3107,7 +3190,7 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
 # ============================================================================
 
 @app.post("/api/v1/leads/", response_model=LeadResponse, status_code=201)
-async def create_lead(lead: LeadCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def create_lead(lead: LeadCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
     db_lead = Lead(
         **lead.dict(),
         owner_id=current_user.id,
@@ -3131,7 +3214,7 @@ async def get_leads(
     limit: int = 100,
     stage: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user_flexible)
 ):
     query = db.query(Lead).filter(Lead.owner_id == current_user.id)
     if stage:
