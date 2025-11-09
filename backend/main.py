@@ -1940,6 +1940,61 @@ async def add_coborrower_columns(db: Session = Depends(get_db)):
             content={"status": "error", "message": str(e)}
         )
 
+@app.post("/admin/add-dre-columns")
+async def add_dre_columns(db: Session = Depends(get_db)):
+    """Admin endpoint to add missing columns to extracted_data table"""
+    try:
+        # Add applied_at column
+        db.execute(text("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='extracted_data' AND column_name='applied_at'
+                ) THEN
+                    ALTER TABLE extracted_data ADD COLUMN applied_at TIMESTAMP;
+                END IF;
+            END $$;
+        """))
+
+        # Add reviewed_by column
+        db.execute(text("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='extracted_data' AND column_name='reviewed_by'
+                ) THEN
+                    ALTER TABLE extracted_data ADD COLUMN reviewed_by INTEGER REFERENCES users(id);
+                END IF;
+            END $$;
+        """))
+
+        # Add reviewed_at column
+        db.execute(text("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='extracted_data' AND column_name='reviewed_at'
+                ) THEN
+                    ALTER TABLE extracted_data ADD COLUMN reviewed_at TIMESTAMP;
+                END IF;
+            END $$;
+        """))
+
+        db.commit()
+
+        logger.info("✅ DRE columns added successfully")
+        return {"status": "success", "message": "DRE columns added successfully"}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Failed to add DRE columns: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
+
 @app.post("/admin/create-dre-tables")
 async def create_dre_tables(db: Session = Depends(get_db)):
     """Admin endpoint to create Data Reconciliation Engine tables"""
