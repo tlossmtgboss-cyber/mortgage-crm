@@ -240,12 +240,15 @@ function LeadDetail() {
           });
         }
 
+        console.log('Updated borrowers array:', updatedBorrowers);
         setBorrowers(updatedBorrowers);
         const targetIndex = updatedBorrowers.length > 1 ? 1 : 0;
+        console.log('Setting active borrower to index:', targetIndex);
         setActiveBorrower(targetIndex);
         if (updatedBorrowers[targetIndex]) {
           setFormData(updatedBorrowers[targetIndex].data);
         }
+        console.log('Total borrowers after update:', updatedBorrowers.length);
       } else {
         console.log('Adding additional borrower to local state only');
         // For additional borrowers beyond the first co-borrower, store in local state only
@@ -297,6 +300,9 @@ function LeadDetail() {
       </div>
     );
   }
+
+  console.log('Rendering with borrowers:', borrowers);
+  console.log('Active borrower index:', activeBorrower);
 
   return (
     <div className="lead-detail-page">
