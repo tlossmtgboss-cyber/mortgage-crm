@@ -144,8 +144,8 @@ function LeadDetail() {
     try {
       setNoteLoading(true);
       await activitiesAPI.create({
-        type: 'note',
-        description: noteText,
+        type: 'Note',
+        content: noteText,
         lead_id: id
       });
 
@@ -153,7 +153,8 @@ function LeadDetail() {
       loadLeadData();
     } catch (error) {
       console.error('Failed to add note:', error);
-      alert('Failed to add note');
+      console.error('Error details:', error.response?.data);
+      alert('Failed to add note. Please try again.');
     } finally {
       setNoteLoading(false);
     }
