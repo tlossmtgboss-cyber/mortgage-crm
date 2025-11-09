@@ -143,18 +143,23 @@ function LeadDetail() {
 
     try {
       setNoteLoading(true);
-      await activitiesAPI.create({
+      const noteData = {
         type: 'Note',
         content: noteText,
-        lead_id: id
-      });
+        lead_id: parseInt(id)
+      };
+      console.log('Creating note with data:', noteData);
+
+      const result = await activitiesAPI.create(noteData);
+      console.log('Note created successfully:', result);
 
       setNoteText('');
       loadLeadData();
     } catch (error) {
       console.error('Failed to add note:', error);
-      console.error('Error details:', error.response?.data);
-      alert('Failed to add note. Please try again.');
+      console.error('Error response:', error.response?.data);
+      const errorMsg = error.response?.data?.detail || 'Failed to add note. Please check console for details.';
+      alert(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
     } finally {
       setNoteLoading(false);
     }
@@ -927,7 +932,7 @@ function LeadDetail() {
                         {new Date(activity.created_at).toLocaleString()}
                       </span>
                     </div>
-                    <div className="activity-description">{activity.description}</div>
+                    <div className="activity-description">{activity.content || activity.description}</div>
                   </div>
                 ))
               ) : (
