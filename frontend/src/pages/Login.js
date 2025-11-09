@@ -35,15 +35,13 @@ function Login() {
     setLoading(true);
 
     try {
-      // Create demo user
-      await axios.post(`${API_BASE_URL}/api/v1/create-demo-user`);
-
       // Login with demo credentials
-      const data = await authAPI.login('demo@test.com', 'demo123');
+      const data = await authAPI.login('demo@example.com', 'demo123');
       setAuth(data.access_token, data.user);
       navigate('/dashboard');
     } catch (err) {
-      setError('Quick test login failed. Backend might not be running.');
+      setError('Quick test login failed. Please try again or contact support.');
+      console.error('Quick login error:', err);
     } finally {
       setLoading(false);
     }
