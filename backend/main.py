@@ -1155,6 +1155,40 @@ async def health_check(db: Session = Depends(get_db)):
             content={"status": "unhealthy", "error": str(e)}
         )
 
+@app.post("/admin/create-api-keys-table")
+async def create_api_keys_table(db: Session = Depends(get_db)):
+    """Admin endpoint to manually create the api_keys table"""
+    try:
+        # Create api_keys table
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS api_keys (
+                id SERIAL PRIMARY KEY,
+                key VARCHAR UNIQUE NOT NULL,
+                name VARCHAR NOT NULL,
+                user_id INTEGER NOT NULL REFERENCES users(id),
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_used_at TIMESTAMP
+            );
+        """))
+
+        # Create index
+        db.execute(text("""
+            CREATE INDEX IF NOT EXISTS ix_api_keys_key ON api_keys(key);
+        """))
+
+        db.commit()
+
+        logger.info("✅ api_keys table created successfully")
+        return {"status": "success", "message": "api_keys table created"}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Failed to create api_keys table: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
+
 # ============================================================================
 # AUTH ROUTES
 # ============================================================================
