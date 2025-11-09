@@ -16,6 +16,8 @@ function LeadDetail() {
   const [formData, setFormData] = useState({});
   const [emails, setEmails] = useState([]);
   const [activeTab, setActiveTab] = useState('personal');
+  const [noteText, setNoteText] = useState('');
+  const [noteLoading, setNoteLoading] = useState(false);
 
   useEffect(() => {
     loadLeadData();
@@ -91,6 +93,28 @@ function LeadDetail() {
       alert('Failed to send message');
     } finally {
       setChatLoading(false);
+    }
+  };
+
+  const handleAddNote = async (e) => {
+    e.preventDefault();
+    if (!noteText.trim()) return;
+
+    try {
+      setNoteLoading(true);
+      await activitiesAPI.create({
+        type: 'note',
+        description: noteText,
+        lead_id: id
+      });
+
+      setNoteText('');
+      loadLeadData();
+    } catch (error) {
+      console.error('Failed to add note:', error);
+      alert('Failed to add note');
+    } finally {
+      setNoteLoading(false);
     }
   };
 
@@ -717,6 +741,21 @@ function LeadDetail() {
           {activeTab === 'conversation' && (
           <div className="info-section">
             <h2>Conversation Log</h2>
+
+            {/* Add Note Form */}
+            <form onSubmit={handleAddNote} className="add-note-form">
+              <textarea
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                placeholder="Add a note to the conversation log..."
+                rows="3"
+                disabled={noteLoading}
+              />
+              <button type="submit" disabled={noteLoading || !noteText.trim()}>
+                {noteLoading ? 'Adding...' : 'Add Note'}
+              </button>
+            </form>
+
             <div className="conversation-log">
               {activities.length > 0 ? (
                 activities.map((activity) => (

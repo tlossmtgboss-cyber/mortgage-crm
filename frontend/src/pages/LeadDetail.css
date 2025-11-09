@@ -387,6 +387,59 @@
   line-height: 1.5;
 }
 
+/* Add Note Form */
+.add-note-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 2px solid #e0e0e0;
+}
+
+.add-note-form textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  background: white;
+}
+
+.add-note-form textarea:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
+}
+
+.add-note-form button {
+  padding: 10px 20px;
+  background: #218D8D;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  align-self: flex-end;
+}
+
+.add-note-form button:hover:not(:disabled) {
+  background: #1a7070;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(33, 141, 141, 0.3);
+}
+
+.add-note-form button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* AI Chat Form */
 .ai-chat-form {
   display: flex;
