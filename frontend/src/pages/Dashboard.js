@@ -15,7 +15,6 @@ function Dashboard() {
   const [loanIssues, setLoanIssues] = useState([]);
   const [aiTasks, setAiTasks] = useState({ pending: [], waiting: [] });
   const [referralStats, setReferralStats] = useState({});
-  const [mumAlerts, setMumAlerts] = useState([]);
   const [teamStats, setTeamStats] = useState({});
   const [messages, setMessages] = useState([]);
 
@@ -36,7 +35,6 @@ function Dashboard() {
       setLoanIssues(mockLoanIssues());
       setAiTasks(mockAiTasks());
       setReferralStats(mockReferralStats());
-      setMumAlerts(mockMumAlerts());
       setTeamStats(mockTeamStats());
       setMessages(mockMessages());
 
@@ -54,7 +52,6 @@ function Dashboard() {
       setLoanIssues(mockLoanIssues());
       setAiTasks(mockAiTasks());
       setReferralStats(mockReferralStats());
-      setMumAlerts(mockMumAlerts());
       setTeamStats(mockTeamStats());
       setMessages(mockMessages());
     } finally {
@@ -70,7 +67,6 @@ function Dashboard() {
     count += loanIssues.length;
     count += aiTasks.pending.length;
     count += aiTasks.waiting.length;
-    count += mumAlerts.length;
     count += (leadMetrics.alerts || []).length;
     count += messages.filter(m => !m.read).length;
 
@@ -160,47 +156,92 @@ function Dashboard() {
           </div>
         </div>
 
-        {/* 3. MONEY BOARD */}
-        <div className="dashboard-block money-block">
+        {/* 3. MONTHLY PRODUCTION TRACKER */}
+        <div className="dashboard-block production-tracker-block">
           <div className="block-header">
             <h2>💰 Monthly Production Tracker</h2>
           </div>
-          <div className="money-stats">
-            <div className="money-row">
-              <div className="money-stat">
-                <div className="money-label">Loans Funded</div>
-                <div className="money-value">{production.funded}</div>
-              </div>
-              <div className="money-stat">
-                <div className="money-label">Projected (AI)</div>
-                <div className="money-value highlight">{production.projected}</div>
-              </div>
-              <div className="money-stat">
-                <div className="money-label">Dollar Volume</div>
-                <div className="money-value">${(production.volume / 1000000).toFixed(1)}M</div>
+          <div className="production-kpis">
+            <div className="kpi-card">
+              <div className="kpi-label">Annual Origination Goal</div>
+              <div className="kpi-values">
+                <div className="kpi-row">
+                  <span className="kpi-caption">Goal:</span>
+                  <span className="kpi-number">{production.annualGoal || 222}</span>
+                </div>
+                <div className="kpi-row">
+                  <span className="kpi-caption">Actual:</span>
+                  <span className="kpi-number highlight">{production.annualActual || 189}</span>
+                </div>
+                <div className="kpi-progress-bar">
+                  <div className="kpi-progress-fill" style={{ width: `${production.annualProgress || 85}%` }}></div>
+                </div>
+                <div className="kpi-percentage">{production.annualProgress || 85}% of Goal</div>
               </div>
             </div>
-            <div className="target-bar">
-              <div className="target-progress" style={{ width: `${production.progress}%` }}></div>
+
+            <div className="kpi-card">
+              <div className="kpi-label">Monthly Units Goal</div>
+              <div className="kpi-values">
+                <div className="kpi-row">
+                  <span className="kpi-caption">Goal:</span>
+                  <span className="kpi-number">{production.monthlyGoal || 18.5}</span>
+                </div>
+                <div className="kpi-row">
+                  <span className="kpi-caption">Actual:</span>
+                  <span className="kpi-number highlight">{production.monthlyActual || 14}</span>
+                </div>
+                <div className="kpi-progress-bar">
+                  <div className="kpi-progress-fill" style={{ width: `${production.monthlyProgress || 76}%` }}></div>
+                </div>
+                <div className="kpi-percentage">{production.monthlyProgress || 76}% of Goal</div>
+              </div>
             </div>
-            <div className="target-text">
-              <span>{production.progress}% of monthly target</span>
-              <span className="target-amount">${(production.target / 1000000).toFixed(1)}M</span>
+
+            <div className="kpi-card">
+              <div className="kpi-label">Weekly Units Goal</div>
+              <div className="kpi-values">
+                <div className="kpi-row">
+                  <span className="kpi-caption">Goal:</span>
+                  <span className="kpi-number">{production.weeklyGoal || 5}</span>
+                </div>
+                <div className="kpi-row">
+                  <span className="kpi-caption">Actual:</span>
+                  <span className="kpi-number highlight">{production.weeklyActual || 4}</span>
+                </div>
+                <div className="kpi-progress-bar">
+                  <div className="kpi-progress-fill" style={{ width: `${production.weeklyProgress || 80}%` }}></div>
+                </div>
+                <div className="kpi-percentage">{production.weeklyProgress || 80}% of Goal</div>
+              </div>
             </div>
-            <div className="ai-projection">
-              🤖 <strong>AI Projection:</strong> Based on your current pipeline and conversion patterns,
-              you're pacing to fund <strong>${(production.ai_projection / 1000000).toFixed(1)}M</strong> this month
-              (<span className="positive">+{production.projection_change}%</span>)
+
+            <div className="kpi-card">
+              <div className="kpi-label">Daily Units Goal</div>
+              <div className="kpi-values">
+                <div className="kpi-row">
+                  <span className="kpi-caption">Goal:</span>
+                  <span className="kpi-number">{production.dailyGoal || 1}</span>
+                </div>
+                <div className="kpi-row">
+                  <span className="kpi-caption">Actual:</span>
+                  <span className="kpi-number highlight">{production.dailyActual || 1}</span>
+                </div>
+                <div className="kpi-progress-bar">
+                  <div className="kpi-progress-fill" style={{ width: `${production.dailyProgress || 100}%` }}></div>
+                </div>
+                <div className="kpi-percentage">{production.dailyProgress || 100}% of Goal</div>
+              </div>
             </div>
           </div>
         </div>
 
         {/* 4. LEADS & CONVERSION ENGINE */}
-        <div className="dashboard-block leads-block">
+        <div className="dashboard-block leads-engine-block">
           <div className="block-header">
             <h2>🚀 Leads & Conversion Engine</h2>
           </div>
-          <div className="leads-metrics">
+          <div className="leads-metrics-row">
             <div className="metric-row">
               <div className="metric-item">
                 <div className="metric-value">{leadMetrics.new_today}</div>
@@ -219,9 +260,10 @@ function Dashboard() {
                 <div className="metric-label">Hot Leads (AI)</div>
               </div>
             </div>
-            <div className="ai-alerts-section">
+
+            <div className="ai-alerts-section compact">
               <div className="ai-alert-title">🚨 AI Alerts</div>
-              {leadMetrics.alerts && leadMetrics.alerts.filter(a => a).map((alert, idx) => (
+              {leadMetrics.alerts && leadMetrics.alerts.filter(a => a).slice(0, 3).map((alert, idx) => (
                 <div key={idx} className="ai-alert-item">
                   <span className="alert-dot"></span>
                   {alert}
@@ -231,31 +273,7 @@ function Dashboard() {
           </div>
         </div>
 
-        {/* 5. LOAN ISSUES & FIRE PREVENTION */}
-        <div className="dashboard-block issues-block">
-          <div className="block-header">
-            <h2>🔥 Milestone Risk Alerts</h2>
-            <span className="issue-count">{loanIssues.length} issues</span>
-          </div>
-          <div className="issues-list">
-            {loanIssues.filter(issue => issue && issue.borrower).map((issue, index) => (
-              <div key={index} className="issue-item">
-                <div className="issue-main">
-                  <div className="issue-borrower">{issue.borrower}</div>
-                  <div className="issue-problem">{issue.issue}</div>
-                </div>
-                <div className="issue-details">
-                  <div className="time-remaining" style={{ color: issue.time_color }}>
-                    {issue.time_remaining}
-                  </div>
-                  <button className="btn-fix">{issue.action}</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* 6. REFERRALS & PARTNER HEALTH */}
+        {/* 5. REFERRALS & PARTNER HEALTH */}
         <div className="dashboard-block referrals-block">
           <div className="block-header">
             <h2>🤝 Referral Scoreboard</h2>
@@ -293,27 +311,7 @@ function Dashboard() {
           </div>
         </div>
 
-        {/* 7. CLIENT FOR LIFE ENGINE (MUM) */}
-        <div className="dashboard-block mum-block">
-          <div className="block-header">
-            <h2>♻️ Client for Life Engine (MUM)</h2>
-            <span className="mum-count">{mumAlerts.length} actions</span>
-          </div>
-          <div className="mum-list">
-            {mumAlerts.map((alert, idx) => (
-              <div key={idx} className="mum-item">
-                <div className="mum-icon">{alert.icon}</div>
-                <div className="mum-content">
-                  <div className="mum-title">{alert.title}</div>
-                  <div className="mum-client">{alert.client}</div>
-                </div>
-                <button className="btn-mum-action">{alert.action}</button>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* 8. TEAM OPERATIONS */}
+        {/* 7. TEAM OPERATIONS */}
         {teamStats.has_team && (
           <div className="dashboard-block team-block">
             <div className="block-header">
@@ -354,20 +352,49 @@ function Dashboard() {
             <span className="unread-count">{messages.filter(m => !m.read).length} unread</span>
           </div>
           <div className="messages-list">
-            {messages.filter(msg => msg && msg.from).slice(0, 5).map((msg, idx) => (
-              <div key={idx} className={`message-item ${!msg.read ? 'unread' : ''}`}>
-                <div className="message-type">{msg.type_icon}</div>
-                <div className="message-content">
-                  <div className="message-from">{msg.from}</div>
-                  <div className="message-preview">{msg.preview}</div>
-                  {msg.ai_summary && (
-                    <div className="ai-summary">🤖 {msg.ai_summary}</div>
-                  )}
+            {messages.filter(msg => msg && msg.from).slice(0, 6).map((msg, idx) => (
+              <div key={msg.id || idx} className={`message-item ${!msg.read ? 'unread' : ''} ${msg.requires_response ? 'needs-response' : ''}`}>
+                <div className="message-left">
+                  <div className="message-type-icon">{msg.type_icon}</div>
+                  <div className="message-content">
+                    <div className="message-header">
+                      <div className="message-from-line">
+                        <span className="message-from">{msg.from}</span>
+                        <span className="message-client-type">{msg.client_type}</span>
+                      </div>
+                      <div className="message-meta">
+                        <span className="message-source">{msg.source}</span>
+                        <span className="message-timestamp">{msg.timestamp}</span>
+                      </div>
+                    </div>
+                    <div className="message-preview">{msg.preview}</div>
+                    {msg.ai_summary && (
+                      <div className="ai-summary">
+                        <span className="ai-icon">🤖</span>
+                        <span className="ai-text">{msg.ai_summary}</span>
+                      </div>
+                    )}
+                    {msg.task_created && (
+                      <div className="task-status">
+                        <span className="task-badge">✓ Task Created: {msg.task_id}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="message-actions">
-                  <button className="btn-icon-sm" title="Reply">↩️</button>
-                  <button className="btn-icon-sm" title="AI Response">🤖</button>
-                  <button className="btn-icon-sm" title="Create Task">✓</button>
+                  {msg.type === 'voicemail' && (
+                    <button className="btn-icon-sm" title="Play Voicemail">
+                      <span className="voicemail-duration">{msg.duration}</span> ▶️
+                    </button>
+                  )}
+                  {msg.type === 'email' && (
+                    <button className="btn-icon-sm" title="View in Outlook">📧</button>
+                  )}
+                  {msg.type === 'text' && (
+                    <button className="btn-icon-sm" title="View in Teams">💬</button>
+                  )}
+                  <button className="btn-icon-sm btn-reply" title="Reply">↩️</button>
+                  <button className="btn-icon-sm" title="AI Suggested Response">🤖</button>
                 </div>
               </div>
             ))}
@@ -422,7 +449,24 @@ const mockProduction = () => ({
   target: 6000000,
   progress: 57,
   ai_projection: 5900000,
-  projection_change: 12
+  projection_change: 12,
+
+  // KPI Goals and Actuals (from Business Plan)
+  annualGoal: 222,
+  annualActual: 189,
+  annualProgress: 85,
+
+  monthlyGoal: 18.5,
+  monthlyActual: 14,
+  monthlyProgress: 76,
+
+  weeklyGoal: 5,
+  weeklyActual: 4,
+  weeklyProgress: 80,
+
+  dailyGoal: 1,
+  dailyActual: 1,
+  dailyProgress: 100
 });
 
 const mockLeadMetrics = () => ({
@@ -485,12 +529,6 @@ const mockReferralStats = () => ({
   ]
 });
 
-const mockMumAlerts = () => [
-  { icon: '📅', title: 'Annual review due', client: 'Tom Wilson', action: 'Schedule' },
-  { icon: '📉', title: 'Rate drop opportunity', client: 'Lisa Brown', action: 'Send alert' },
-  { icon: '🎂', title: 'Home anniversary', client: 'Mark Taylor', action: 'Send card' }
-];
-
 const mockTeamStats = () => ({
   has_team: true,
   avg_workload: 8,
@@ -504,18 +542,100 @@ const mockTeamStats = () => ({
 
 const mockMessages = () => [
   {
+    id: 1,
+    type: 'email',
     type_icon: '📧',
     from: 'Sarah Johnson',
+    client_type: 'Active Loan',
+    source: 'Outlook',
     preview: 'Quick question about my pre-approval...',
-    ai_summary: 'Asking about pre-approval expiration date',
-    read: false
+    full_message: 'Hi, I wanted to check on the expiration date for my pre-approval letter. Can you help?',
+    ai_summary: 'Client asking about pre-approval expiration date - needs response by EOD',
+    timestamp: '2 hours ago',
+    read: false,
+    task_created: true,
+    task_id: 'TSK-1234',
+    requires_response: true
   },
   {
+    id: 2,
+    type: 'text',
     type_icon: '💬',
     from: 'Mike Chen',
-    preview: 'Thanks for the update!',
-    ai_summary: null,
-    read: true
+    client_type: 'Lead',
+    source: 'Teams',
+    preview: 'Thanks for the rate quote! When can we schedule a call?',
+    full_message: 'Thanks for the rate quote! When can we schedule a call to discuss next steps?',
+    ai_summary: 'Lead requesting callback to discuss loan options',
+    timestamp: '4 hours ago',
+    read: false,
+    task_created: true,
+    task_id: 'TSK-1235',
+    requires_response: true
+  },
+  {
+    id: 3,
+    type: 'voicemail',
+    type_icon: '🎤',
+    from: 'Lisa Brown',
+    client_type: 'Portfolio Client',
+    source: 'Phone',
+    preview: 'Voicemail (1:23) - Interested in refinancing...',
+    full_message: '[Voicemail transcription] Hi, this is Lisa Brown. I saw rates dropped and wanted to talk about refinancing my mortgage. Please call me back at 555-0123.',
+    ai_summary: 'Portfolio client interested in refinance opportunity - high priority',
+    timestamp: '6 hours ago',
+    read: false,
+    task_created: true,
+    task_id: 'TSK-1236',
+    requires_response: true,
+    duration: '1:23'
+  },
+  {
+    id: 4,
+    type: 'email',
+    type_icon: '📧',
+    from: 'Tom Wilson',
+    client_type: 'Portfolio Client',
+    source: 'Outlook',
+    preview: 'Happy anniversary! Thanks for the card.',
+    full_message: 'Thank you so much for remembering my home purchase anniversary! The card was very thoughtful.',
+    ai_summary: 'Client thanking for anniversary card - positive relationship building',
+    timestamp: '1 day ago',
+    read: true,
+    task_created: false,
+    requires_response: false
+  },
+  {
+    id: 5,
+    type: 'text',
+    type_icon: '💬',
+    from: 'Jennifer Davis',
+    client_type: 'Active Loan',
+    source: 'Teams',
+    preview: 'Just uploaded the bank statements you requested',
+    full_message: 'Hi! I just uploaded my bank statements to the portal. Let me know if you need anything else.',
+    ai_summary: 'Client uploaded required documents - verify completion',
+    timestamp: '1 day ago',
+    read: false,
+    task_created: true,
+    task_id: 'TSK-1237',
+    requires_response: true
+  },
+  {
+    id: 6,
+    type: 'voicemail',
+    type_icon: '🎤',
+    from: 'Robert Kim',
+    client_type: 'Lead',
+    source: 'Phone',
+    preview: 'Voicemail (0:45) - Returning your call...',
+    full_message: '[Voicemail transcription] Hey, this is Robert Kim returning your call about the first-time homebuyer program. Give me a call when you can.',
+    ai_summary: 'Lead returning call about first-time homebuyer program',
+    timestamp: '2 days ago',
+    read: true,
+    task_created: false,
+    requires_response: false,
+    duration: '0:45'
   }
 ];
 

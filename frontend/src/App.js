@@ -36,6 +36,15 @@ function App() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
 
+  // Task counts for navigation badges (MUM = Client for Life Engine tasks)
+  const [taskCounts, setTaskCounts] = useState({
+    leads: 0,
+    loans: 0,
+    portfolio: 3,  // MUM tasks
+    tasks: 0,
+    partners: 0
+  });
+
   const toggleAssistant = () => {
     setAssistantOpen(!assistantOpen);
   };
@@ -155,6 +164,7 @@ function App() {
                     <Navigation
                       onToggleAssistant={toggleAssistant}
                       assistantOpen={assistantOpen}
+                      taskCounts={taskCounts}
                     />
                     <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                       <Dashboard />

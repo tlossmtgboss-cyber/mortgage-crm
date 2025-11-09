@@ -71,6 +71,104 @@
   color: #666;
 }
 
+/* MUM Tasks Widget */
+.mum-tasks-widget {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 32px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.mum-widget-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.mum-widget-header h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+.mum-count-badge {
+  background: #218D8D;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mum-tasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mum-task-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border-left: 4px solid #218D8D;
+  transition: all 0.2s;
+}
+
+.mum-task-item:hover {
+  background: #f1f3f5;
+  transform: translateX(4px);
+}
+
+.mum-task-icon {
+  font-size: 28px;
+  min-width: 40px;
+  text-align: center;
+}
+
+.mum-task-content {
+  flex: 1;
+}
+
+.mum-task-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 4px;
+}
+
+.mum-task-client {
+  font-size: 13px;
+  color: #666;
+}
+
+.btn-mum-action {
+  padding: 8px 18px;
+  background: #218D8D;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.btn-mum-action:hover {
+  background: #1a7070;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(33, 141, 141, 0.3);
+}
+
 /* Tabs */
 .portfolio-tabs {
   display: flex;

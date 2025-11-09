@@ -2,10 +2,15 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import './Navigation.css';
 
-function Navigation({ onToggleAssistant, assistantOpen }) {
+function Navigation({ onToggleAssistant, assistantOpen, taskCounts = {} }) {
   const location = useLocation();
 
   const isActive = (path) => location.pathname === path;
+
+  const renderBadge = (count) => {
+    if (!count || count === 0) return null;
+    return <span className="nav-badge">({count})</span>;
+  };
 
   return (
     <nav className="navigation">
@@ -21,25 +26,25 @@ function Navigation({ onToggleAssistant, assistantOpen }) {
             to="/leads"
             className={`nav-link ${isActive('/leads') ? 'active' : ''}`}
           >
-            Leads
+            Leads {renderBadge(taskCounts.leads)}
           </Link>
           <Link
             to="/loans"
             className={`nav-link ${isActive('/loans') ? 'active' : ''}`}
           >
-            Active Loans
+            Active Loans {renderBadge(taskCounts.loans)}
           </Link>
           <Link
             to="/portfolio"
             className={`nav-link ${isActive('/portfolio') ? 'active' : ''}`}
           >
-            Portfolio
+            Portfolio {renderBadge(taskCounts.portfolio)}
           </Link>
           <Link
             to="/tasks"
             className={`nav-link ${isActive('/tasks') ? 'active' : ''}`}
           >
-            Tasks
+            Tasks {renderBadge(taskCounts.tasks)}
           </Link>
           <Link
             to="/calendar"
@@ -57,7 +62,7 @@ function Navigation({ onToggleAssistant, assistantOpen }) {
             to="/referral-partners"
             className={`nav-link ${isActive('/referral-partners') ? 'active' : ''}`}
           >
-            Partners
+            Partners {renderBadge(taskCounts.partners)}
           </Link>
           <Link
             to="/ai-underwriter"

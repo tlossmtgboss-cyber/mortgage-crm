@@ -45,6 +45,24 @@ function LandingPage() {
 
   return (
     <div className="landing-page">
+      {/* Navigation Bar */}
+      <nav className="landing-nav">
+        <div className="landing-nav-container">
+          <div className="landing-logo">
+            <span className="logo-icon">🏠</span>
+            <span className="logo-text">Mortgage CRM</span>
+          </div>
+          <div className="landing-nav-actions">
+            <button className="btn-login" onClick={() => navigate('/login')}>
+              Log In
+            </button>
+            <button className="btn-signup" onClick={() => handleGetStarted('professional')}>
+              Sign Up
+            </button>
+          </div>
+        </div>
+      </nav>
+
       {/* Hero Section */}
       <section className="hero-section">
         <div className="hero-content">
