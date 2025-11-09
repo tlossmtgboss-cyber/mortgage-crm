@@ -146,6 +146,8 @@ class Lead(Base):
     email = Column(String, index=True)
     phone = Column(String)
     co_applicant_name = Column(String)
+    co_applicant_email = Column(String)
+    co_applicant_phone = Column(String)
     stage = Column(SQLEnum(LeadStage), default=LeadStage.NEW)
     source = Column(String)
     referral_partner_id = Column(Integer, ForeignKey("referral_partners.id"))
@@ -673,6 +675,8 @@ class LeadUpdate(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     co_applicant_name: Optional[str] = None
+    co_applicant_email: Optional[str] = None
+    co_applicant_phone: Optional[str] = None
     stage: Optional[LeadStage] = None
     loan_number: Optional[str] = None
     notes: Optional[str] = None
@@ -716,6 +720,8 @@ class LeadResponse(BaseModel):
     email: Optional[str]
     phone: Optional[str]
     co_applicant_name: Optional[str] = None
+    co_applicant_email: Optional[str] = None
+    co_applicant_phone: Optional[str] = None
     stage: LeadStage
     source: Optional[str]
     ai_score: int

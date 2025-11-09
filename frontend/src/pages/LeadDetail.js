@@ -64,7 +64,8 @@ function LeadDetail() {
             name: leadData.co_applicant_name,
             first_name: nameParts[0] || '',
             last_name: nameParts.slice(1).join(' ') || '',
-            // Co-borrower fields would be stored separately in a real implementation
+            email: leadData.co_applicant_email || '',
+            phone: leadData.co_applicant_phone || '',
           }
         });
       }
@@ -96,13 +97,15 @@ function LeadDetail() {
 
       // Check if we're editing the co-borrower
       if (activeBorrower === 1) {
-        // Only update co_applicant_name for co-borrower
+        // Update co-borrower fields
         const coApplicantName = formData.first_name && formData.last_name
           ? `${formData.first_name} ${formData.last_name}`
           : formData.name || '';
 
         dataToSave = {
-          co_applicant_name: coApplicantName
+          co_applicant_name: coApplicantName,
+          co_applicant_email: formData.email || null,
+          co_applicant_phone: formData.phone || null
         };
       } else {
         // Update primary borrower fields
@@ -142,6 +145,8 @@ function LeadDetail() {
               name: updatedLead.co_applicant_name,
               first_name: coborrowerParts[0] || '',
               last_name: coborrowerParts.slice(1).join(' ') || '',
+              email: updatedLead.co_applicant_email || '',
+              phone: updatedLead.co_applicant_phone || '',
             }
           }
         ];
@@ -282,6 +287,8 @@ function LeadDetail() {
               name: leadData.co_applicant_name,
               first_name: coborrowerParts[0] || '',
               last_name: coborrowerParts.slice(1).join(' ') || '',
+              email: leadData.co_applicant_email || '',
+              phone: leadData.co_applicant_phone || '',
             }
           });
         }
