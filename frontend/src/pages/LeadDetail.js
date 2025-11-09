@@ -53,15 +53,15 @@ function LeadDetail() {
       ];
 
       // Add co-borrower if exists
-      if (leadData.coborrower_name) {
-        const coborrowerName = String(leadData.coborrower_name || '');
+      if (leadData.co_applicant_name) {
+        const coborrowerName = String(leadData.co_applicant_name || '');
         const nameParts = coborrowerName.split(' ');
         borrowersList.push({
           id: 1,
-          name: leadData.coborrower_name,
+          name: leadData.co_applicant_name,
           type: 'co-borrower',
           data: {
-            name: leadData.coborrower_name,
+            name: leadData.co_applicant_name,
             first_name: nameParts[0] || '',
             last_name: nameParts.slice(1).join(' ') || '',
             // Co-borrower fields would be stored separately in a real implementation
@@ -203,7 +203,7 @@ function LeadDetail() {
       if (borrowers.length === 1) {
         console.log('Updating lead with co-borrower name:', fullName);
         await leadsAPI.update(id, {
-          coborrower_name: fullName
+          co_applicant_name: fullName
         });
         console.log('Co-borrower saved to backend');
 
@@ -226,14 +226,14 @@ function LeadDetail() {
           }
         ];
 
-        if (leadData.coborrower_name) {
-          const coborrowerParts = (leadData.coborrower_name || '').split(' ');
+        if (leadData.co_applicant_name) {
+          const coborrowerParts = (leadData.co_applicant_name || '').split(' ');
           updatedBorrowers.push({
             id: 1,
-            name: leadData.coborrower_name,
+            name: leadData.co_applicant_name,
             type: 'co-borrower',
             data: {
-              name: leadData.coborrower_name,
+              name: leadData.co_applicant_name,
               first_name: coborrowerParts[0] || '',
               last_name: coborrowerParts.slice(1).join(' ') || '',
             }
