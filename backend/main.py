@@ -4544,7 +4544,7 @@ def build_coach_context(user: User, db: Session) -> Dict[str, Any]:
     # Get open tasks
     open_tasks = db.query(AITask).filter(
         AITask.assigned_to_id == user.id,
-        AITask.is_complete == False
+        AITask.type != TaskType.COMPLETED
     ).all()
 
     # Get overdue tasks
