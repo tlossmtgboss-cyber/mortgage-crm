@@ -946,10 +946,28 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# CORS
+# CORS - Allow all Vercel deployments
+allowed_origins = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "https://mortgage-crm-nine.vercel.app"
+]
+
+# Allow all Vercel preview deployments
+import re
+def is_allowed_origin(origin: str) -> bool:
+    if origin in allowed_origins:
+        return True
+    # Allow any Vercel deployment
+    if re.match(r"https://.*\.vercel\.app$", origin):
+        return True
+    return False
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001", "https://mortgage-crm-nine.vercel.app"],    allow_credentials=True,
+    allow_origin_regex=r"https://.*\.vercel\.app$",
+    allow_origins=allowed_origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
