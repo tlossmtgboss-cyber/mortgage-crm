@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-// import { dashboardAPI } from '../services/api'; // TODO: Re-enable when backend ready
 import './Dashboard.css';
 
 function Dashboard() {
@@ -18,36 +17,81 @@ function Dashboard() {
   const [teamStats, setTeamStats] = useState({});
   const [messages, setMessages] = useState([]);
 
+  // Drag and drop state
+  const [draggedIndex, setDraggedIndex] = useState(null);
+  const [containerOrder, setContainerOrder] = useState(['ai-alerts', 'production-tracker']);
+
   useEffect(() => {
     loadDashboard();
+    loadContainerOrder();
   }, []);
+
+  // Load saved container order
+  const loadContainerOrder = () => {
+    try {
+      const saved = localStorage.getItem('dashboardOrder');
+      if (saved) {
+        setContainerOrder(JSON.parse(saved));
+      }
+    } catch (error) {
+      console.error('Failed to load container order:', error);
+    }
+  };
+
+  // Save container order
+  const saveContainerOrder = (order) => {
+    try {
+      localStorage.setItem('dashboardOrder', JSON.stringify(order));
+    } catch (error) {
+      console.error('Failed to save container order:', error);
+    }
+  };
+
+  // Load Goal Tracker data
+  const loadGoalTrackerData = () => {
+    try {
+      const savedInputs = localStorage.getItem('goalTrackerInputs');
+      if (savedInputs) {
+        const inputs = JSON.parse(savedInputs);
+        const annualClosingsUnitGoal = inputs.annualClosingsDollarGoal / inputs.avgLoanAmount;
+        const annualOriginationUnitGoal = annualClosingsUnitGoal / inputs.pullThroughRate;
+        const monthlyUnitsGoal = annualOriginationUnitGoal / 12;
+        const weeklyUnitsGoal = annualOriginationUnitGoal / 52;
+        const dailyUnitsGoal = weeklyUnitsGoal / 5;
+
+        return {
+          annualGoal: annualOriginationUnitGoal,
+          monthlyGoal: monthlyUnitsGoal,
+          weeklyGoal: weeklyUnitsGoal,
+          dailyGoal: dailyUnitsGoal,
+        };
+      }
+    } catch (error) {
+      console.error('Failed to load goal tracker data:', error);
+    }
+    return { annualGoal: 222, monthlyGoal: 18.5, weeklyGoal: 5, dailyGoal: 1 };
+  };
 
   const loadDashboard = async () => {
     try {
       setLoading(true);
+      const goals = loadGoalTrackerData();
 
-      // TEMPORARY: Use mock data until backend is fully implemented
-      // This prevents crashes from API data structure mismatches
       setPrioritizedTasks(mockPrioritizedTasks());
       setPipelineStats(mockPipelineStats());
-      setProduction(mockProduction());
+      setProduction(mockProduction(goals));
       setLeadMetrics(mockLeadMetrics());
       setLoanIssues(mockLoanIssues());
       setAiTasks(mockAiTasks());
       setReferralStats(mockReferralStats());
       setTeamStats(mockTeamStats());
       setMessages(mockMessages());
-
-      // TODO: Re-enable API call when backend returns correct structure
-      // const data = await dashboardAPI.getDashboard();
-      // ... validation logic ...
-
     } catch (error) {
       console.error('Failed to load dashboard:', error);
-      // Use mock data on error
+      const goals = loadGoalTrackerData();
       setPrioritizedTasks(mockPrioritizedTasks());
       setPipelineStats(mockPipelineStats());
-      setProduction(mockProduction());
+      setProduction(mockProduction(goals));
       setLeadMetrics(mockLeadMetrics());
       setLoanIssues(mockLoanIssues());
       setAiTasks(mockAiTasks());
@@ -59,18 +103,168 @@ function Dashboard() {
     }
   };
 
-  // Count all tasks from different containers for AI Prioritized Tasks display
+  // Drag handlers
+  const handleDragStart = (index) => {
+    setDraggedIndex(index);
+  };
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === index) return;
+
+    const newOrder = [...containerOrder];
+    const draggedItem = newOrder[draggedIndex];
+    newOrder.splice(draggedIndex, 1);
+    newOrder.splice(index, 0, draggedItem);
+
+    setContainerOrder(newOrder);
+    setDraggedIndex(index);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    saveContainerOrder(containerOrder);
+  };
+
   const getAggregatedTasksCount = () => {
     let count = 0;
-
     count += prioritizedTasks.length;
     count += loanIssues.length;
     count += aiTasks.pending.length;
     count += aiTasks.waiting.length;
     count += (leadMetrics.alerts || []).length;
     count += messages.filter(m => !m.read).length;
-
     return count;
+  };
+
+  const formatGoalNumber = (value) => {
+    if (!value) return '0.00';
+    return Number(value).toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+  };
+
+  // Render draggable containers
+  const renderDraggableContainer = (containerId, index) => {
+    const isDragging = draggedIndex === index;
+
+    if (containerId === 'ai-alerts') {
+      return (
+        <div
+          key={containerId}
+          className={`ai-alerts-container draggable-container ${isDragging ? 'dragging' : ''}`}
+          draggable="true"
+          onDragStart={() => handleDragStart(index)}
+          onDragOver={(e) => handleDragOver(e, index)}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="drag-handle" title="Drag to reorder">⋮⋮</div>
+          <div className="ai-alerts-header">
+            <span className="alerts-icon">🚨</span>
+            <h3>AI Alerts</h3>
+          </div>
+          <div className="ai-alerts-list">
+            {leadMetrics.alerts && leadMetrics.alerts.filter(a => a).map((alert, idx) => (
+              <div key={idx} className="ai-alert-row">
+                <span className="alert-bullet">●</span>
+                <span className="alert-text">{alert}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    if (containerId === 'production-tracker') {
+      return (
+        <div
+          key={containerId}
+          className={`dashboard-block production-tracker-block-standalone draggable-container ${isDragging ? 'dragging' : ''}`}
+          draggable="true"
+          onDragStart={() => handleDragStart(index)}
+          onDragOver={(e) => handleDragOver(e, index)}
+          onDragEnd={handleDragEnd}
+        >
+          <div className="drag-handle" title="Drag to reorder">⋮⋮</div>
+          <div className="block-header clickable-block" onClick={() => navigate('/goal-tracker')}>
+            <h2>💰 Monthly Production Tracker</h2>
+          </div>
+          <div className="production-kpis">
+            <div className="kpi-card">
+              <div className="kpi-label">Annual Origination Goal</div>
+              <div className="kpi-values">
+                <div className="kpi-row">
+                  <span className="kpi-caption">Goal:</span>
+                  <span className="kpi-number">{formatGoalNumber(production.annualGoal)}</span>
+                </div>
+                <div className="kpi-row">
+                  <span className="kpi-caption">Actual:</span>
+                  <span className="kpi-number highlight">{formatGoalNumber(production.annualActual)}</span>
+                </div>
+                <div className="kpi-progress-bar">
+                  <div className="kpi-progress-fill" style={{ width: `${production.annualProgress || 0}%` }}></div>
+                </div>
+                <div className="kpi-percentage">{production.annualProgress || 0}% of Goal</div>
+              </div>
+            </div>
+            <div className="kpi-card">
+              <div className="kpi-label">Monthly Units Goal</div>
+              <div className="kpi-values">
+                <div className="kpi-row">
+                  <span className="kpi-caption">Goal:</span>
+                  <span className="kpi-number">{formatGoalNumber(production.monthlyGoal)}</span>
+                </div>
+                <div className="kpi-row">
+                  <span className="kpi-caption">Actual:</span>
+                  <span className="kpi-number highlight">{formatGoalNumber(production.monthlyActual)}</span>
+                </div>
+                <div className="kpi-progress-bar">
+                  <div className="kpi-progress-fill" style={{ width: `${production.monthlyProgress || 0}%` }}></div>
+                </div>
+                <div className="kpi-percentage">{production.monthlyProgress || 0}% of Goal</div>
+              </div>
+            </div>
+            <div className="kpi-card">
+              <div className="kpi-label">Weekly Units Goal</div>
+              <div className="kpi-values">
+                <div className="kpi-row">
+                  <span className="kpi-caption">Goal:</span>
+                  <span className="kpi-number">{formatGoalNumber(production.weeklyGoal)}</span>
+                </div>
+                <div className="kpi-row">
+                  <span className="kpi-caption">Actual:</span>
+                  <span className="kpi-number highlight">{formatGoalNumber(production.weeklyActual)}</span>
+                </div>
+                <div className="kpi-progress-bar">
+                  <div className="kpi-progress-fill" style={{ width: `${production.weeklyProgress || 0}%` }}></div>
+                </div>
+                <div className="kpi-percentage">{production.weeklyProgress || 0}% of Goal</div>
+              </div>
+            </div>
+            <div className="kpi-card">
+              <div className="kpi-label">Daily Units Goal</div>
+              <div className="kpi-values">
+                <div className="kpi-row">
+                  <span className="kpi-caption">Goal:</span>
+                  <span className="kpi-number">{formatGoalNumber(production.dailyGoal)}</span>
+                </div>
+                <div className="kpi-row">
+                  <span className="kpi-caption">Actual:</span>
+                  <span className="kpi-number highlight">{formatGoalNumber(production.dailyActual)}</span>
+                </div>
+                <div className="kpi-progress-bar">
+                  <div className="kpi-progress-fill" style={{ width: `${production.dailyProgress || 0}%` }}></div>
+                </div>
+                <div className="kpi-percentage">{production.dailyProgress || 0}% of Goal</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return null;
   };
 
   if (loading) {
@@ -96,8 +290,16 @@ function Dashboard() {
         </div>
       </div>
 
+      {/* Draggable Containers */}
+      <div className="draggable-containers-wrapper">
+        <div style={{ padding: '10px', background: '#ff0000', color: 'white', marginBottom: '10px' }}>
+          🔴 DRAG-AND-DROP VERSION LOADED - You should see drag handles (⋮⋮) below
+        </div>
+        {containerOrder.map((containerId, index) => renderDraggableContainer(containerId, index))}
+      </div>
+
       <div className="dashboard-grid">
-        {/* 1. AI PRIORITIZED TASKS */}
+        {/* AI PRIORITIZED TASKS */}
         <div
           className="dashboard-block ai-tasks-block clickable-block"
           onClick={() => navigate('/tasks')}
@@ -117,7 +319,7 @@ function Dashboard() {
           </div>
         </div>
 
-        {/* 2. PIPELINE AT A GLANCE */}
+        {/* LIVE LOAN PIPELINE */}
         <div className="dashboard-block pipeline-block">
           <div className="block-header">
             <h2>💼 Live Loan Pipeline</h2>
@@ -159,124 +361,7 @@ function Dashboard() {
           </div>
         </div>
 
-        {/* 3. MONTHLY PRODUCTION TRACKER - UNIFIED */}
-        <div
-          className="dashboard-block production-tracker-block clickable-block"
-          onClick={() => navigate('/goal-tracker')}
-        >
-          <div className="block-header">
-            <h2>💰 Monthly Production Tracker</h2>
-          </div>
-
-          {/* Top Row: 4 KPI Cards */}
-          <div className="production-kpis">
-            <div className="kpi-card">
-              <div className="kpi-label">Annual Origination Goal</div>
-              <div className="kpi-values">
-                <div className="kpi-row">
-                  <span className="kpi-caption">Goal:</span>
-                  <span className="kpi-number">{production.annualGoal || 222}</span>
-                </div>
-                <div className="kpi-row">
-                  <span className="kpi-caption">Actual:</span>
-                  <span className="kpi-number highlight">{production.annualActual || 189}</span>
-                </div>
-                <div className="kpi-progress-bar">
-                  <div className="kpi-progress-fill" style={{ width: `${production.annualProgress || 85}%` }}></div>
-                </div>
-                <div className="kpi-percentage">{production.annualProgress || 85}% of Goal</div>
-              </div>
-            </div>
-
-            <div className="kpi-card">
-              <div className="kpi-label">Monthly Units Goal</div>
-              <div className="kpi-values">
-                <div className="kpi-row">
-                  <span className="kpi-caption">Goal:</span>
-                  <span className="kpi-number">{production.monthlyGoal || 18.5}</span>
-                </div>
-                <div className="kpi-row">
-                  <span className="kpi-caption">Actual:</span>
-                  <span className="kpi-number highlight">{production.monthlyActual || 14}</span>
-                </div>
-                <div className="kpi-progress-bar">
-                  <div className="kpi-progress-fill" style={{ width: `${production.monthlyProgress || 76}%` }}></div>
-                </div>
-                <div className="kpi-percentage">{production.monthlyProgress || 76}% of Goal</div>
-              </div>
-            </div>
-
-            <div className="kpi-card">
-              <div className="kpi-label">Weekly Units Goal</div>
-              <div className="kpi-values">
-                <div className="kpi-row">
-                  <span className="kpi-caption">Goal:</span>
-                  <span className="kpi-number">{production.weeklyGoal || 5}</span>
-                </div>
-                <div className="kpi-row">
-                  <span className="kpi-caption">Actual:</span>
-                  <span className="kpi-number highlight">{production.weeklyActual || 4}</span>
-                </div>
-                <div className="kpi-progress-bar">
-                  <div className="kpi-progress-fill" style={{ width: `${production.weeklyProgress || 80}%` }}></div>
-                </div>
-                <div className="kpi-percentage">{production.weeklyProgress || 80}% of Goal</div>
-              </div>
-            </div>
-
-            <div className="kpi-card">
-              <div className="kpi-label">Daily Units Goal</div>
-              <div className="kpi-values">
-                <div className="kpi-row">
-                  <span className="kpi-caption">Goal:</span>
-                  <span className="kpi-number">{production.dailyGoal || 1}</span>
-                </div>
-                <div className="kpi-row">
-                  <span className="kpi-caption">Actual:</span>
-                  <span className="kpi-number highlight">{production.dailyActual || 1}</span>
-                </div>
-                <div className="kpi-progress-bar">
-                  <div className="kpi-progress-fill" style={{ width: `${production.dailyProgress || 100}%` }}></div>
-                </div>
-                <div className="kpi-percentage">{production.dailyProgress || 100}% of Goal</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Bottom Row: Lead Metrics and AI Alerts */}
-          <div className="leads-metrics-row">
-            <div className="metric-row">
-              <div className="metric-item">
-                <div className="metric-value">{leadMetrics.new_today}</div>
-                <div className="metric-label">New Leads Today</div>
-              </div>
-              <div className="metric-item">
-                <div className="metric-value">{leadMetrics.avg_contact_time}h</div>
-                <div className="metric-label">Avg Time-to-Contact</div>
-              </div>
-              <div className="metric-item">
-                <div className="metric-value">{leadMetrics.conversion_rate}%</div>
-                <div className="metric-label">Leads → Apps</div>
-              </div>
-              <div className="metric-item">
-                <div className="metric-value hot">{leadMetrics.hot_leads}</div>
-                <div className="metric-label">Hot Leads (AI)</div>
-              </div>
-            </div>
-
-            <div className="ai-alerts-section compact">
-              <div className="ai-alert-title">🚨 AI Alerts</div>
-              {leadMetrics.alerts && leadMetrics.alerts.filter(a => a).slice(0, 3).map((alert, idx) => (
-                <div key={idx} className="ai-alert-item">
-                  <span className="alert-dot"></span>
-                  {alert}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* 5. REFERRALS & PARTNER HEALTH */}
+        {/* REFERRALS & PARTNER HEALTH */}
         <div className="dashboard-block referrals-block">
           <div className="block-header">
             <h2>🤝 Referral Scoreboard</h2>
@@ -314,7 +399,7 @@ function Dashboard() {
           </div>
         </div>
 
-        {/* 7. TEAM OPERATIONS */}
+        {/* TEAM OPERATIONS */}
         {teamStats.has_team && (
           <div className="dashboard-block team-block">
             <div className="block-header">
@@ -348,7 +433,7 @@ function Dashboard() {
           </div>
         )}
 
-        {/* 9. COMMUNICATION HUB */}
+        {/* COMMUNICATION HUB */}
         <div className="dashboard-block messages-block">
           <div className="block-header">
             <h2>📬 Unified Messages</h2>
@@ -445,32 +530,44 @@ const mockPipelineStats = () => [
   { id: 'funded', name: 'Funded This Month', count: 9, alerts: 0, alert_text: '', volume: 3400000 }
 ];
 
-const mockProduction = () => ({
-  funded: 9,
-  projected: 14,
-  volume: 3400000,
-  target: 6000000,
-  progress: 57,
-  ai_projection: 5900000,
-  projection_change: 12,
+const mockProduction = (goals = {}) => {
+  const annualGoal = goals.annualGoal || 222;
+  const monthlyGoal = goals.monthlyGoal || 18.5;
+  const weeklyGoal = goals.weeklyGoal || 5;
+  const dailyGoal = goals.dailyGoal || 1;
 
-  // KPI Goals and Actuals (from Business Plan)
-  annualGoal: 222,
-  annualActual: 189,
-  annualProgress: 85,
+  const annualActual = 189;
+  const monthlyActual = 14;
+  const weeklyActual = 4;
+  const dailyActual = 1;
 
-  monthlyGoal: 18.5,
-  monthlyActual: 14,
-  monthlyProgress: 76,
+  const annualProgress = Math.round((annualActual / annualGoal) * 100);
+  const monthlyProgress = Math.round((monthlyActual / monthlyGoal) * 100);
+  const weeklyProgress = Math.round((weeklyActual / weeklyGoal) * 100);
+  const dailyProgress = Math.round((dailyActual / dailyGoal) * 100);
 
-  weeklyGoal: 5,
-  weeklyActual: 4,
-  weeklyProgress: 80,
-
-  dailyGoal: 1,
-  dailyActual: 1,
-  dailyProgress: 100
-});
+  return {
+    funded: 9,
+    projected: 14,
+    volume: 3400000,
+    target: 6000000,
+    progress: 57,
+    ai_projection: 5900000,
+    projection_change: 12,
+    annualGoal,
+    annualActual,
+    annualProgress,
+    monthlyGoal,
+    monthlyActual,
+    monthlyProgress,
+    weeklyGoal,
+    weeklyActual,
+    weeklyProgress,
+    dailyGoal,
+    dailyActual,
+    dailyProgress,
+  };
+};
 
 const mockLeadMetrics = () => ({
   new_today: 3,

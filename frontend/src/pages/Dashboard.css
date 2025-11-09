@@ -34,6 +34,118 @@
   font-size: 26px;
 }
 
+/* AI Alerts Container */
+.ai-alerts-container {
+  background: #fff3e0;
+  border-left: 6px solid #f59e0b;
+  border-radius: 8px;
+  padding: 16px 20px;
+  padding-left: 50px;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.15);
+}
+
+.ai-alerts-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.alerts-icon {
+  font-size: 20px;
+}
+
+.ai-alerts-header h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: #92400e;
+  margin: 0;
+}
+
+.ai-alerts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ai-alert-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 14px;
+  color: #78350f;
+  line-height: 1.5;
+}
+
+.alert-bullet {
+  color: #f59e0b;
+  font-size: 12px;
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+.alert-text {
+  flex: 1;
+}
+
+/* Draggable Containers */
+.draggable-containers-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: var(--space-md);
+}
+
+.draggable-container {
+  position: relative;
+  cursor: move;
+  transition: all 0.2s ease;
+}
+
+.draggable-container.dragging {
+  opacity: 0.5;
+  transform: scale(0.98);
+}
+
+.draggable-container:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.drag-handle {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 24px;
+  font-weight: bold;
+  color: #667eea;
+  background: white;
+  border-radius: 6px;
+  cursor: grab;
+  user-select: none;
+  z-index: 100;
+  padding: 8px 6px;
+  line-height: 1;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+  transition: all 0.2s ease;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+  transform: translateY(-50%) scale(1.1);
+}
+
+.drag-handle:hover {
+  color: #764ba2;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  transform: translateY(-50%) scale(1.05);
+}
+
+/* Monthly Production Tracker Standalone */
+.production-tracker-block-standalone {
+  padding-left: 50px;
+}
+
 /* Dashboard Grid Layout */
 .dashboard-grid {
   display: grid;
