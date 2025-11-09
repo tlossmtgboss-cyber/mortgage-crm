@@ -107,7 +107,13 @@ function Loans() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await loansAPI.create(formData);
+      // Convert date to datetime format for backend
+      const submitData = { ...formData };
+      if (submitData.closing_date) {
+        submitData.closing_date = `${submitData.closing_date}T00:00:00`;
+      }
+
+      await loansAPI.create(submitData);
       setShowModal(false);
       resetForm();
       loadLoans();
