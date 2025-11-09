@@ -194,13 +194,20 @@ function LeadDetail() {
     };
 
     try {
+      console.log('Adding borrower:', fullName);
+      console.log('Current borrowers count:', borrowers.length);
+
       // Save the first additional borrower as co-borrower
       if (borrowers.length === 1) {
+        console.log('Updating lead with co-borrower name:', fullName);
         await leadsAPI.update(id, {
           coborrower_name: fullName
         });
+        console.log('Co-borrower saved to backend');
+
         // Reload lead data to sync with backend
         const leadData = await leadsAPI.getById(id);
+        console.log('Reloaded lead data:', leadData);
         setLead(leadData);
 
         // Rebuild borrowers array with the new co-borrower
@@ -234,6 +241,7 @@ function LeadDetail() {
         setActiveBorrower(1);
         setFormData(updatedBorrowers[1].data);
       } else {
+        console.log('Adding additional borrower to local state only');
         // For additional borrowers beyond the first co-borrower, store in local state only
         setBorrowers([...borrowers, newBorrower]);
         setActiveBorrower(borrowers.length);
@@ -243,7 +251,9 @@ function LeadDetail() {
       alert(`${fullName} has been added successfully!`);
     } catch (error) {
       console.error('Failed to add borrower:', error);
-      alert('Failed to add borrower. Please try again.');
+      console.error('Error response:', error.response?.data);
+      const errorMsg = error.response?.data?.detail || error.message || 'Failed to add borrower. Please check console for details.';
+      alert(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
     }
   };
 
