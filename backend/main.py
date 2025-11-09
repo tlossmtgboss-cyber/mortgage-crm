@@ -714,6 +714,7 @@ class LeadResponse(BaseModel):
     name: str
     email: Optional[str]
     phone: Optional[str]
+    co_applicant_name: Optional[str] = None
     stage: LeadStage
     source: Optional[str]
     ai_score: int
