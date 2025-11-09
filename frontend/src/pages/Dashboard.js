@@ -87,7 +87,10 @@ function Dashboard() {
   return (
     <div className="dashboard">
       <div className="dashboard-header-compact">
-        <h1>Today's Command Center</h1>
+        <h1>
+          Today's Command Center{' '}
+          <span className="task-count-badge">({getAggregatedTasksCount()})</span>
+        </h1>
         <div className="header-date">
           {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
         </div>

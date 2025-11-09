@@ -28,6 +28,12 @@
   font-weight: 500;
 }
 
+.task-count-badge {
+  color: #ef4444;
+  font-weight: 700;
+  font-size: 26px;
+}
+
 /* Dashboard Grid Layout */
 .dashboard-grid {
   display: grid;
