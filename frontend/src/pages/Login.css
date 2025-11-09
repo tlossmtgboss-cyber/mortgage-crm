@@ -192,3 +192,23 @@
   color: #bbb;
   font-style: italic;
 }
+
+.demo-credentials {
+  background-color: #f0f9ff;
+  border: 2px solid #0ea5e9;
+  border-radius: 8px;
+  padding: 16px;
+  margin-top: 16px;
+}
+
+.demo-credentials .note {
+  color: #0369a1;
+  font-size: 13px;
+  font-style: normal;
+  margin: 4px 0;
+}
+
+.demo-credentials .note strong {
+  font-size: 14px;
+  color: #0c4a6e;
+}

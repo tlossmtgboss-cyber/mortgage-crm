@@ -19,12 +19,18 @@ function Login() {
     setError('');
     setLoading(true);
 
+    console.log('Attempting login with:', email);
+
     try {
       const data = await authAPI.login(email, password);
+      console.log('Login successful:', data);
       setAuth(data.access_token, data.user);
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.detail || 'Login failed. Please try again.');
+      console.error('Login error:', err);
+      console.error('Error response:', err.response);
+      const errorMessage = err.response?.data?.detail || err.message || 'Login failed. Please check your credentials and try again.';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -102,7 +108,11 @@ function Login() {
 
         <div className="login-footer">
           <p>Need an account? <a href="/register">Sign up here</a></p>
-          <p className="note">Quick Test Login creates a demo user instantly</p>
+          <div className="demo-credentials">
+            <p className="note"><strong>Demo Credentials:</strong></p>
+            <p className="note">Email: demo@example.com</p>
+            <p className="note">Password: demo123</p>
+          </div>
         </div>
       </div>
     </div>

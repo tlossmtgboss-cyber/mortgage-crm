@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/token",
+      "destination": "https://mortgage-crm-production-7a9a.up.railway.app/token"
+    },
+    {
       "source": "/api/:path*",
       "destination": "https://mortgage-crm-production-7a9a.up.railway.app/api/:path*"
     }
