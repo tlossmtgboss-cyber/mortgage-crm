@@ -1,7 +1,9 @@
 .lead-detail-page {
-  padding: 20px;
+  padding: 32px;
   max-width: 1600px;
   margin: 0 auto;
+  background: #ffffff;
+  min-height: 100vh;
 }
 
 .detail-header {
@@ -76,66 +78,69 @@
 .loan-toolbar {
   background: white;
   border-radius: 8px;
-  padding: 8px 12px;
+  padding: 20px 24px;
   margin-bottom: 24px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  border: 1px solid #e0e0e0;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  border: 1px solid #e2e8f0;
 }
 
 .toolbar-header {
-  margin-bottom: 6px;
-  padding-bottom: 4px;
-  border-bottom: 1px solid #e9ecef;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #e2e8f0;
 }
 
 .toolbar-header h3 {
   font-size: 14px;
-  font-weight: 700;
-  color: #1a1a1a;
+  font-weight: 600;
+  color: #64748b;
   margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .loan-fields-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
+  gap: 16px;
 }
 
 .loan-field {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
 }
 
 .loan-field label {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 600;
   color: #64748b;
   text-transform: uppercase;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.5px;
 }
 
 .loan-field .value {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
-  color: #1a1a1a;
-  padding: 3px 6px;
+  color: #1a202c;
+  padding: 8px 12px;
   background: #f8fafc;
-  border-radius: 4px;
+  border-radius: 6px;
   border: 1px solid #e2e8f0;
-  min-height: 24px;
+  min-height: 36px;
   display: flex;
   align-items: center;
 }
 
 .loan-field input,
 .loan-field select {
-  padding: 3px 6px;
+  padding: 8px 12px;
   border: 1px solid #e2e8f0;
-  border-radius: 4px;
-  font-size: 12px;
+  border-radius: 6px;
+  font-size: 13px;
   font-family: inherit;
   transition: all 0.2s;
+  min-height: 36px;
 }
 
 .loan-field input:focus,
@@ -149,11 +154,12 @@
 .borrower-selector {
   display: flex;
   gap: 12px;
-  margin-bottom: 16px;
-  padding: 16px;
+  margin-bottom: 24px;
+  padding: 20px 24px;
   background: white;
   border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  border: 1px solid #e2e8f0;
   align-items: center;
 }
 
@@ -308,30 +314,32 @@
 
 .document-category {
   background: white;
-  border: 1px solid #e0e0e0;
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
-  padding: 16px;
+  padding: 20px;
   transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
 
 .document-category:hover {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-  border-color: #218D8D;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  border-color: #cbd5e0;
+  transform: translateY(-2px);
 }
 
 .document-category .category-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
   padding-bottom: 12px;
-  border-bottom: 2px solid #f0f0f0;
+  border-bottom: 2px solid #e2e8f0;
 }
 
 .document-category .category-header h3 {
-  font-size: 15px;
-  font-weight: 700;
-  color: #1a1a1a;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a202c;
   margin: 0;
 }
 
@@ -352,27 +360,30 @@
 }
 
 .document-item {
-  padding: 10px;
-  background: #f8f9fa;
+  padding: 12px;
+  background: #f8fafc;
   border-radius: 6px;
+  border: 1px solid #e2e8f0;
   border-left: 3px solid #218D8D;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .document-item:hover {
-  background: #e9ecef;
-  transform: translateX(4px);
+  background: white;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  transform: translateY(-1px);
 }
 
 .circle-description {
   font-size: 14px;
-  color: #666;
+  color: #64748b;
   line-height: 1.6;
   margin: 0;
-  padding: 16px;
-  background: #f8f9fa;
+  padding: 20px;
+  background: #f8fafc;
   border-radius: 8px;
+  border: 1px solid #e2e8f0;
   border-left: 4px solid #218D8D;
 }
 
@@ -384,15 +395,17 @@
 
 .circle-card {
   background: white;
-  border: 1px solid #e0e0e0;
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
-  padding: 16px;
+  padding: 20px;
   transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
 
 .circle-card:hover {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-  border-color: #218D8D;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  border-color: #cbd5e0;
+  transform: translateY(-2px);
 }
 
 .circle-header {
@@ -401,13 +414,13 @@
   align-items: center;
   margin-bottom: 16px;
   padding-bottom: 12px;
-  border-bottom: 2px solid #f0f0f0;
+  border-bottom: 2px solid #e2e8f0;
 }
 
 .circle-header h3 {
-  font-size: 16px;
-  font-weight: 700;
-  color: #1a1a1a;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a202c;
   margin: 0;
 }
 
@@ -453,62 +466,68 @@
 .info-section {
   background: white;
   border-radius: 8px;
-  padding: 20px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  padding: 24px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  border: 1px solid #e2e8f0;
 }
 
 .info-section h2 {
-  font-size: 18px;
+  font-size: 14px;
   font-weight: 600;
-  color: #333;
-  margin: 0 0 16px 0;
+  color: #64748b;
+  margin: 0 0 20px 0;
   padding-bottom: 12px;
-  border-bottom: 2px solid #f0f0f0;
+  border-bottom: 2px solid #e2e8f0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 /* Compact Info Grid */
 .info-grid.compact {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+  gap: 16px;
 }
 
 .info-field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .info-field label {
   font-size: 11px;
   font-weight: 600;
-  color: #666;
+  color: #64748b;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .info-field .value {
   font-size: 14px;
-  color: #333;
-  padding: 8px;
-  background: #f8f9fa;
-  border-radius: 4px;
-  min-height: 34px;
+  color: #1a202c;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  min-height: 40px;
   display: flex;
   align-items: center;
 }
 
 .info-field input {
-  padding: 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
   font-size: 14px;
   font-family: inherit;
+  transition: all 0.2s;
 }
 
 .info-field input:focus {
   outline: none;
   border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
 }
 
 .phone-link {
@@ -531,10 +550,12 @@
 }
 
 .activity-item {
-  padding: 12px;
-  background: #f8f9fa;
-  border-radius: 6px;
-  border-left: 3px solid #218D8D;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border-left: 4px solid #218D8D;
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid #218D8D;
 }
 
 .activity-header {
@@ -572,10 +593,10 @@
   flex-direction: column;
   gap: 12px;
   margin-bottom: 24px;
-  padding: 16px;
-  background: #f8f9fa;
+  padding: 20px;
+  background: #f8fafc;
   border-radius: 8px;
-  border: 2px solid #e0e0e0;
+  border: 2px solid #e2e8f0;
 }
 
 .add-note-form textarea {
@@ -674,18 +695,21 @@
 .email-history-card {
   background: white;
   border-radius: 8px;
-  padding: 20px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  padding: 24px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  border: 1px solid #e2e8f0;
 }
 
 .actions-card h3,
 .email-history-card h3 {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
-  color: #333;
-  margin: 0 0 16px 0;
+  color: #64748b;
+  margin: 0 0 20px 0;
   padding-bottom: 12px;
-  border-bottom: 2px solid #f0f0f0;
+  border-bottom: 2px solid #e2e8f0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 /* Action Buttons */
@@ -700,22 +724,22 @@
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  padding: 16px;
-  background: #f8f9fa;
-  border: 2px solid #e9ecef;
+  padding: 18px;
+  background: #f8fafc;
+  border: 2px solid #e2e8f0;
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
   font-size: 13px;
   font-weight: 500;
-  color: #333;
+  color: #1a202c;
 }
 
 .action-btn:hover:not(:disabled) {
   background: white;
   border-color: #218D8D;
   transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
 }
 
 .action-btn:disabled {
@@ -753,17 +777,19 @@
 }
 
 .email-item {
-  padding: 12px;
-  background: #f8f9fa;
-  border-radius: 6px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
-  border-left: 3px solid #3b82f6;
+  border: 1px solid #e2e8f0;
+  border-left: 4px solid #3b82f6;
 }
 
 .email-item:hover {
-  background: #e9ecef;
-  transform: translateX(4px);
+  background: white;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  transform: translateY(-1px);
 }
 
 .email-header {
