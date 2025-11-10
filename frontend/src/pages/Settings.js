@@ -58,9 +58,9 @@ function Settings() {
   const loadTeamMembers = async () => {
     setLoadingTeam(true);
     try {
-      const data = await teamAPI.getMembers();
+      const data = await teamAPI.getWorkflowMembers();
       setTeamMembers(data.team_members || []);
-      setAvailableRoles(data.available_roles || []);
+      setAvailableRoles([]); // Workflow members don't use the role system
     } catch (error) {
       console.error('Error loading team members:', error);
     } finally {
@@ -1479,9 +1479,9 @@ function Settings() {
             <div className="team-members-section">
               <div className="section-header">
                 <div>
-                  <h2>Team Members</h2>
+                  <h2>CRM Workflow Team</h2>
                   <p className="section-description">
-                    Manage your team members and their role assignments
+                    Team members involved in your loan workflow (processors, underwriters, loan officers, etc.)
                   </p>
                 </div>
               </div>
@@ -1490,79 +1490,57 @@ function Settings() {
                 <div className="loading-state">Loading team members...</div>
               ) : (
                 <>
-                  {/* Available Roles Overview */}
-                  {availableRoles.length > 0 && (
-                    <div className="roles-overview">
-                      <h3>Available Roles</h3>
-                      <div className="roles-grid">
-                        {availableRoles.map(role => (
-                          <div key={role.id} className="role-overview-card">
-                            <div className="role-overview-header">
-                              <h4>{role.role_title}</h4>
-                              <span className="role-tasks-badge">{role.tasks_count} tasks</span>
-                            </div>
-                            <p className="role-overview-description">{role.responsibilities}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
                   {/* Team Members List */}
                   <div className="team-members-list">
                     <h3>Team Members ({teamMembers.length})</h3>
                     <div className="members-grid">
-                      {teamMembers.map(member => (
+                      {teamMembers.map((member, index) => (
                         <div
-                          key={member.id}
-                          className={`member-card ${member.is_current ? 'current-user' : ''}`}
-                          onClick={() => navigate(`/team/${member.id}`)}
-                          style={{ cursor: 'pointer' }}
+                          key={`${member.name}-${member.role}-${index}`}
+                          className="member-card"
                         >
                           <div className="member-header">
                             <div className="member-avatar">
-                              {member.full_name ? member.full_name.charAt(0).toUpperCase() : member.email.charAt(0).toUpperCase()}
+                              {member.name.charAt(0).toUpperCase()}
                             </div>
                             <div className="member-info">
-                              <h4>{member.full_name || member.email}</h4>
-                              <p className="member-email">{member.email}</p>
+                              <h4>{member.name}</h4>
+                              {member.email && <p className="member-email">{member.email}</p>}
                             </div>
-                            {member.is_current && (
-                              <span className="current-badge">You</span>
-                            )}
                           </div>
 
-                          {member.role && (
-                            <div className="member-role">
-                              <span className="role-label">Role:</span>
-                              <span className="role-value">{member.role.role_title}</span>
-                            </div>
-                          )}
-
-                          {member.tasks_count > 0 && (
-                            <div className="member-stats">
-                              <span className="stat-item">📋 {member.tasks_count} tasks</span>
-                            </div>
-                          )}
-
-                          <div className="member-actions">
-                            <button
-                              className="btn-view-profile"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                navigate(`/team/${member.id}`);
-                              }}
-                            >
-                              View Profile →
-                            </button>
+                          <div className="member-role">
+                            <span className="role-label">Role:</span>
+                            <span className="role-value">{member.role}</span>
                           </div>
+
+                          <div className="member-stats">
+                            <span className="stat-item">📋 {member.loan_count} {member.loan_count === 1 ? 'loan' : 'loans'}</span>
+                          </div>
+
+                          {member.loans && member.loans.length > 0 && (
+                            <div className="member-loans">
+                              <details>
+                                <summary>View Loans ({member.loans.length})</summary>
+                                <div className="loans-list">
+                                  {member.loans.map((loan, loanIndex) => (
+                                    <div key={loanIndex} className="loan-item">
+                                      <strong>{loan.loan_number}</strong> - {loan.borrower_name}
+                                      <br />
+                                      <small>Stage: {loan.stage}</small>
+                                    </div>
+                                  ))}
+                                </div>
+                              </details>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
 
                     {teamMembers.length === 0 && (
                       <div className="empty-state">
-                        <p>No team members found. Complete the onboarding process to set up your team.</p>
+                        <p>No workflow team members found. Team members will appear once they are assigned to loans.</p>
                       </div>
                     )}
                   </div>

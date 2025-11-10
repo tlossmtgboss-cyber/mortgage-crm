@@ -398,6 +398,10 @@ export const teamAPI = {
     const response = await api.get('/api/v1/team/members');
     return response.data;
   },
+  getWorkflowMembers: async () => {
+    const response = await api.get('/api/v1/team/workflow-members');
+    return response.data;
+  },
   getMemberDetail: async (userId) => {
     const response = await api.get(`/api/v1/team/members/${userId}`);
     return response.data;

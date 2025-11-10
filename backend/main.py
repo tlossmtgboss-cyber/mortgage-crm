@@ -8307,6 +8307,146 @@ async def get_team_member_detail(
         logger.error(f"Get team member detail error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/v1/team/workflow-members")
+async def get_workflow_team_members(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get CRM workflow team members (processors, underwriters, loan officers, etc.)"""
+    try:
+        # Get all loans for the current user's organization
+        loans = db.query(Loan).all()
+
+        # Aggregate team members by role
+        processors = {}
+        underwriters = {}
+        loan_officers = {}
+        realtors = {}
+        title_companies = {}
+
+        for loan in loans:
+            # Count processors
+            if loan.processor and loan.processor.strip():
+                processor_name = loan.processor.strip()
+                if processor_name not in processors:
+                    processors[processor_name] = {
+                        "name": processor_name,
+                        "role": "Processor",
+                        "loan_count": 0,
+                        "loans": []
+                    }
+                processors[processor_name]["loan_count"] += 1
+                processors[processor_name]["loans"].append({
+                    "id": loan.id,
+                    "loan_number": loan.loan_number,
+                    "borrower_name": loan.borrower_name,
+                    "stage": loan.stage.value
+                })
+
+            # Count underwriters
+            if loan.underwriter and loan.underwriter.strip():
+                underwriter_name = loan.underwriter.strip()
+                if underwriter_name not in underwriters:
+                    underwriters[underwriter_name] = {
+                        "name": underwriter_name,
+                        "role": "Underwriter",
+                        "loan_count": 0,
+                        "loans": []
+                    }
+                underwriters[underwriter_name]["loan_count"] += 1
+                underwriters[underwriter_name]["loans"].append({
+                    "id": loan.id,
+                    "loan_number": loan.loan_number,
+                    "borrower_name": loan.borrower_name,
+                    "stage": loan.stage.value
+                })
+
+            # Count loan officers
+            if loan.loan_officer:
+                officer_name = loan.loan_officer.full_name
+                if officer_name not in loan_officers:
+                    loan_officers[officer_name] = {
+                        "name": officer_name,
+                        "role": "Loan Officer",
+                        "loan_count": 0,
+                        "loans": [],
+                        "email": loan.loan_officer.email
+                    }
+                loan_officers[officer_name]["loan_count"] += 1
+                loan_officers[officer_name]["loans"].append({
+                    "id": loan.id,
+                    "loan_number": loan.loan_number,
+                    "borrower_name": loan.borrower_name,
+                    "stage": loan.stage.value
+                })
+
+            # Count realtors
+            if loan.realtor_agent and loan.realtor_agent.strip():
+                realtor_name = loan.realtor_agent.strip()
+                if realtor_name not in realtors:
+                    realtors[realtor_name] = {
+                        "name": realtor_name,
+                        "role": "Realtor",
+                        "loan_count": 0,
+                        "loans": []
+                    }
+                realtors[realtor_name]["loan_count"] += 1
+                realtors[realtor_name]["loans"].append({
+                    "id": loan.id,
+                    "loan_number": loan.loan_number,
+                    "borrower_name": loan.borrower_name,
+                    "stage": loan.stage.value
+                })
+
+            # Count title companies
+            if loan.title_company and loan.title_company.strip():
+                title_name = loan.title_company.strip()
+                if title_name not in title_companies:
+                    title_companies[title_name] = {
+                        "name": title_name,
+                        "role": "Title Company",
+                        "loan_count": 0,
+                        "loans": []
+                    }
+                title_companies[title_name]["loan_count"] += 1
+                title_companies[title_name]["loans"].append({
+                    "id": loan.id,
+                    "loan_number": loan.loan_number,
+                    "borrower_name": loan.borrower_name,
+                    "stage": loan.stage.value
+                })
+
+        # Combine all team members
+        all_members = []
+        all_members.extend(processors.values())
+        all_members.extend(underwriters.values())
+        all_members.extend(loan_officers.values())
+        all_members.extend(realtors.values())
+        all_members.extend(title_companies.values())
+
+        # Sort by loan count descending
+        all_members.sort(key=lambda x: x["loan_count"], reverse=True)
+
+        # Get role statistics
+        role_stats = {
+            "processors": len(processors),
+            "underwriters": len(underwriters),
+            "loan_officers": len(loan_officers),
+            "realtors": len(realtors),
+            "title_companies": len(title_companies),
+            "total_members": len(all_members)
+        }
+
+        return {
+            "team_members": all_members,
+            "role_stats": role_stats,
+            "total_loans": len(loans)
+        }
+
+    except Exception as e:
+        logger.error(f"Get workflow team members error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # ============================================================================
 # AGENTIC AI PERFORMANCE COACH ("THE PROCESS COACH")
 # ============================================================================
