@@ -68,135 +68,342 @@ function LoanDetail() {
     try {
       await loansAPI.update(id, formData);
       setLoan(formData);
+      setEditing(false);
+      alert('Loan updated successfully!');
     } catch (error) {
       console.error('Failed to save loan:', error);
       alert('Failed to save changes');
     }
   };
 
-  const handleChange = (field, value) => {
+  const handleCancel = () => {
+    setFormData(loan);
+  };
+
+  const handleFieldChange = (field, value) => {
     const updatedData = { ...formData, [field]: value };
     setFormData(updatedData);
 
     // Auto-save after 1 second of no typing
     if (saveTimeout) clearTimeout(saveTimeout);
-    setSaveTimeout(setTimeout(() => handleSave(), 1000));
+    setSaveTimeout(setTimeout(async () => {
+      try {
+        await loansAPI.update(id, { [field]: value });
+      } catch (error) {
+        console.error('Auto-save failed:', error);
+      }
+    }, 1000));
+  };
+
+  const handleSwitchBorrower = (borrowerIndex) => {
+    setActiveBorrower(borrowerIndex);
+    const borrower = borrowers[borrowerIndex];
+    if (borrower && borrower.data) {
+      setFormData({...formData, ...borrower.data});
+    }
   };
 
   if (loading) {
-    return <div className="loading">Loading loan details...</div>;
+    return (
+      <div className="lead-detail-page">
+        <div className="loading">Loading loan details...</div>
+      </div>
+    );
   }
 
   if (!loan) {
-    return <div className="error">Loan not found</div>;
+    return (
+      <div className="lead-detail-page">
+        <div className="error">Loan not found</div>
+      </div>
+    );
   }
 
   const currentBorrower = borrowers[activeBorrower] || borrowers[0];
 
   return (
-    <div className="lead-detail">
+    <div className="lead-detail-page">
+      {/* Header */}
       <div className="detail-header">
-        <button className="back-btn" onClick={() => navigate('/loans')}>
+        <button className="btn-back" onClick={() => navigate('/loans')}>
           ← Back to Loans
         </button>
-        <h1>{loan.borrower_name}</h1>
+        <div className="header-actions">
+          {editing ? (
+            <>
+              <button className="btn-save" onClick={handleSave}>Save</button>
+              <button className="btn-cancel" onClick={handleCancel}>Cancel</button>
+            </>
+          ) : (
+            <button className="btn-edit-header" onClick={() => setEditing(true)}>
+              ✏️ Edit
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="detail-content">
-        {/* Borrower Tabs */}
-        {borrowers.length > 1 && (
-          <div className="borrower-tabs">
-            {borrowers.map((borrower, index) => (
-              <button
-                key={borrower.id}
-                className={`borrower-tab ${activeBorrower === index ? 'active' : ''}`}
-                onClick={() => setActiveBorrower(index)}
-              >
-                {borrower.name}
-                {borrower.type === 'primary' && <span className="badge primary-badge">PRIMARY</span>}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Tabs */}
-        <div className="tabs">
-          <button
-            className={`tab ${activeTab === 'personal' ? 'active' : ''}`}
-            onClick={() => setActiveTab('personal')}
-          >
-            Personal
-          </button>
-          <button
-            className={`tab ${activeTab === 'employment' ? 'active' : ''}`}
-            onClick={() => setActiveTab('employment')}
-          >
-            Employment
-          </button>
-          <button
-            className={`tab ${activeTab === 'loan' ? 'active' : ''}`}
-            onClick={() => setActiveTab('loan')}
-          >
-            Loan
-          </button>
-          <button
-            className={`tab ${activeTab === 'conversation' ? 'active' : ''}`}
-            onClick={() => setActiveTab('conversation')}
-          >
-            Conversation Log
-          </button>
-          <button
-            className={`tab ${activeTab === 'checklist' ? 'active' : ''}`}
-            onClick={() => setActiveTab('checklist')}
-          >
-            Checklist
-          </button>
+      {/* Loan Information Toolbar */}
+      <div className="loan-toolbar">
+        <div className="toolbar-header">
+          <h3>Loan Details</h3>
         </div>
+        <div className="loan-fields-grid">
+          <div className="loan-field">
+            <label>Loan Amount</label>
+            <input
+              type="number"
+              value={formData.amount || ''}
+              onChange={(e) => handleFieldChange('amount', parseFloat(e.target.value))}
+              placeholder="$"
+            />
+          </div>
 
+          <div className="loan-field">
+            <label>Interest Rate</label>
+            <input
+              type="number"
+              step="0.001"
+              value={formData.interest_rate || ''}
+              onChange={(e) => handleFieldChange('interest_rate', parseFloat(e.target.value))}
+              placeholder="%"
+            />
+          </div>
+
+          <div className="loan-field">
+            <label>Loan Term</label>
+            <input
+              type="number"
+              value={formData.term || ''}
+              onChange={(e) => handleFieldChange('term', parseInt(e.target.value))}
+              placeholder="months"
+            />
+          </div>
+
+          <div className="loan-field">
+            <label>Loan Type</label>
+            <input
+              type="text"
+              value={formData.product_type || ''}
+              onChange={(e) => handleFieldChange('product_type', e.target.value)}
+            />
+          </div>
+
+          <div className="loan-field">
+            <label>Lock Date</label>
+            <input
+              type="date"
+              value={formData.lock_date ? formData.lock_date.split('T')[0] : ''}
+              onChange={(e) => handleFieldChange('lock_date', e.target.value)}
+            />
+          </div>
+
+          <div className="loan-field">
+            <label>Lock Expiration</label>
+            <input
+              type="date"
+              value={formData.lock_expiration ? formData.lock_expiration.split('T')[0] : ''}
+              onChange={(e) => handleFieldChange('lock_expiration', e.target.value)}
+            />
+          </div>
+
+          <div className="loan-field">
+            <label>APR</label>
+            <input
+              type="number"
+              step="0.001"
+              value={formData.apr || ''}
+              onChange={(e) => handleFieldChange('apr', parseFloat(e.target.value))}
+              placeholder="%"
+            />
+          </div>
+
+          <div className="loan-field">
+            <label>Points</label>
+            <input
+              type="number"
+              step="0.125"
+              value={formData.points || ''}
+              onChange={(e) => handleFieldChange('points', parseFloat(e.target.value))}
+            />
+          </div>
+
+          <div className="loan-field">
+            <label>Lender</label>
+            <input
+              type="text"
+              value={formData.lender || ''}
+              onChange={(e) => handleFieldChange('lender', e.target.value)}
+            />
+          </div>
+
+          <div className="loan-field">
+            <label>Loan Officer</label>
+            <input
+              type="text"
+              value={formData.loan_officer_name || ''}
+              onChange={(e) => handleFieldChange('loan_officer_name', e.target.value)}
+            />
+          </div>
+
+          <div className="loan-field">
+            <label>Processor</label>
+            <input
+              type="text"
+              value={formData.processor || ''}
+              onChange={(e) => handleFieldChange('processor', e.target.value)}
+            />
+          </div>
+
+          <div className="loan-field">
+            <label>Underwriter</label>
+            <input
+              type="text"
+              value={formData.underwriter || ''}
+              onChange={(e) => handleFieldChange('underwriter', e.target.value)}
+            />
+          </div>
+
+          <div className="loan-field">
+            <label>Closing Date</label>
+            <input
+              type="date"
+              value={formData.closing_date ? formData.closing_date.split('T')[0] : ''}
+              onChange={(e) => handleFieldChange('closing_date', e.target.value)}
+            />
+          </div>
+
+          <div className="loan-field">
+            <label>Appraisal Value</label>
+            <input
+              type="number"
+              value={formData.appraisal_value || ''}
+              onChange={(e) => handleFieldChange('appraisal_value', parseFloat(e.target.value))}
+              placeholder="$"
+            />
+          </div>
+
+          <div className="loan-field">
+            <label>LTV %</label>
+            <input
+              type="number"
+              step="0.01"
+              value={formData.ltv || ''}
+              onChange={(e) => handleFieldChange('ltv', parseFloat(e.target.value))}
+              placeholder="%"
+            />
+          </div>
+
+          <div className="loan-field">
+            <label>DTI %</label>
+            <input
+              type="number"
+              step="0.01"
+              value={formData.dti || ''}
+              onChange={(e) => handleFieldChange('dti', parseFloat(e.target.value))}
+              placeholder="%"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Borrower Selector */}
+      <div className="borrower-selector">
+        {borrowers.map((borrower, index) => (
+          <button
+            key={borrower.id}
+            className={`borrower-btn ${activeBorrower === index ? 'active' : ''}`}
+            onClick={() => handleSwitchBorrower(index)}
+          >
+            {borrower.name}
+            {borrower.type === 'primary' && <span className="borrower-badge">Primary</span>}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab Navigation */}
+      <div className="profile-tabs">
+        <button
+          className={`tab-btn ${activeTab === 'personal' ? 'active' : ''}`}
+          onClick={() => setActiveTab('personal')}
+        >
+          Personal
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'employment' ? 'active' : ''}`}
+          onClick={() => setActiveTab('employment')}
+        >
+          Employment
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'loan' ? 'active' : ''}`}
+          onClick={() => setActiveTab('loan')}
+        >
+          Loan
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'conversation' ? 'active' : ''}`}
+          onClick={() => setActiveTab('conversation')}
+        >
+          Conversation Log
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'checklist' ? 'active' : ''}`}
+          onClick={() => setActiveTab('checklist')}
+        >
+          Checklist
+        </button>
+      </div>
+
+      {/* Tab Content */}
+      <div className="tab-content-container">
         {/* Personal Information Tab */}
         {activeTab === 'personal' && (
           <div className="tab-content">
             <h2>Personal Information</h2>
             <div className="form-section">
-              <div className="form-group">
-                <label>First Name</label>
-                <input
-                  type="text"
-                  value={currentBorrower.data.name?.split(' ')[0] || ''}
-                  disabled
-                />
+              <div className="form-row">
+                <div className="form-group">
+                  <label>First Name</label>
+                  <input
+                    type="text"
+                    value={currentBorrower.data.name?.split(' ')[0] || ''}
+                    disabled
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Last Name</label>
+                  <input
+                    type="text"
+                    value={currentBorrower.data.name?.split(' ').slice(1).join(' ') || ''}
+                    disabled
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Email</label>
+                  {currentBorrower.data.email ? (
+                    <ClickableEmail email={currentBorrower.data.email} />
+                  ) : (
+                    <input type="email" value="" placeholder="No email provided" disabled />
+                  )}
+                </div>
+                <div className="form-group">
+                  <label>Phone</label>
+                  {currentBorrower.data.phone ? (
+                    <ClickablePhone phone={currentBorrower.data.phone} />
+                  ) : (
+                    <input type="tel" value="" placeholder="No phone provided" disabled />
+                  )}
+                </div>
               </div>
-              <div className="form-group">
-                <label>Last Name</label>
-                <input
-                  type="text"
-                  value={currentBorrower.data.name?.split(' ').slice(1).join(' ') || ''}
-                  disabled
-                />
-              </div>
-              <div className="form-group">
-                <label>Email</label>
-                {currentBorrower.data.email ? (
-                  <ClickableEmail email={currentBorrower.data.email} />
-                ) : (
-                  <input type="email" value="" placeholder="No email provided" disabled />
-                )}
-              </div>
-              <div className="form-group">
-                <label>Phone</label>
-                {currentBorrower.data.phone ? (
-                  <ClickablePhone phone={currentBorrower.data.phone} />
-                ) : (
-                  <input type="tel" value="" placeholder="No phone provided" disabled />
-                )}
-              </div>
-              <div className="form-group">
-                <label>Loan Number</label>
-                <input
-                  type="text"
-                  value={formData.loan_number || ''}
-                  disabled
-                />
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Loan Number</label>
+                  <input
+                    type="text"
+                    value={formData.loan_number || ''}
+                    onChange={(e) => handleFieldChange('loan_number', e.target.value)}
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -215,106 +422,23 @@ function LoanDetail() {
         {/* Loan Tab */}
         {activeTab === 'loan' && (
           <div className="tab-content">
-            <h2>Loan Details</h2>
+            <h2>Property & Loan Details</h2>
             <div className="form-section">
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Loan Amount</label>
-                  <input
-                    type="text"
-                    value={formData.amount ? `$${formData.amount.toLocaleString()}` : ''}
-                    onChange={(e) => {
-                      const numValue = parseFloat(e.target.value.replace(/[^0-9.]/g, ''));
-                      handleChange('amount', numValue);
-                    }}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Interest Rate</label>
-                  <input
-                    type="text"
-                    value={formData.interest_rate ? `${formData.interest_rate}%` : ''}
-                    onChange={(e) => {
-                      const numValue = parseFloat(e.target.value.replace(/[^0-9.]/g, ''));
-                      handleChange('interest_rate', numValue);
-                    }}
-                  />
-                </div>
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Lender</label>
-                  <input
-                    type="text"
-                    value={formData.lender || ''}
-                    onChange={(e) => handleChange('lender', e.target.value)}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Loan Officer</label>
-                  <input
-                    type="text"
-                    value={formData.loan_officer_name || ''}
-                    disabled
-                  />
-                </div>
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Lock Date</label>
-                  <input
-                    type="date"
-                    value={formData.lock_date ? formData.lock_date.split('T')[0] : ''}
-                    onChange={(e) => handleChange('lock_date', e.target.value)}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Lock Expiration</label>
-                  <input
-                    type="date"
-                    value={formData.lock_expiration ? formData.lock_expiration.split('T')[0] : ''}
-                    onChange={(e) => handleChange('lock_expiration', e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Closing Date</label>
-                  <input
-                    type="date"
-                    value={formData.closing_date ? formData.closing_date.split('T')[0] : ''}
-                    onChange={(e) => handleChange('closing_date', e.target.value)}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Appraisal Value</label>
-                  <input
-                    type="text"
-                    value={formData.appraisal_value ? `$${formData.appraisal_value.toLocaleString()}` : ''}
-                    onChange={(e) => {
-                      const numValue = parseFloat(e.target.value.replace(/[^0-9.]/g, ''));
-                      handleChange('appraisal_value', numValue);
-                    }}
-                  />
-                </div>
-              </div>
               <div className="form-row">
                 <div className="form-group">
                   <label>Property Address</label>
                   <input
                     type="text"
                     value={formData.property_address || ''}
-                    onChange={(e) => handleChange('property_address', e.target.value)}
+                    onChange={(e) => handleFieldChange('property_address', e.target.value)}
                   />
                 </div>
-              </div>
-              <div className="form-row">
                 <div className="form-group">
                   <label>Property City</label>
                   <input
                     type="text"
                     value={formData.property_city || ''}
-                    onChange={(e) => handleChange('property_city', e.target.value)}
+                    onChange={(e) => handleFieldChange('property_city', e.target.value)}
                   />
                 </div>
                 <div className="form-group">
@@ -322,7 +446,7 @@ function LoanDetail() {
                   <input
                     type="text"
                     value={formData.property_state || ''}
-                    onChange={(e) => handleChange('property_state', e.target.value)}
+                    onChange={(e) => handleFieldChange('property_state', e.target.value)}
                     maxLength="2"
                   />
                 </div>
@@ -331,18 +455,20 @@ function LoanDetail() {
                   <input
                     type="text"
                     value={formData.property_zip || ''}
-                    onChange={(e) => handleChange('property_zip', e.target.value)}
+                    onChange={(e) => handleFieldChange('property_zip', e.target.value)}
                   />
                 </div>
               </div>
-              <div className="form-group">
-                <label>Notes</label>
-                <textarea
-                  rows="4"
-                  value={formData.notes || ''}
-                  onChange={(e) => handleChange('notes', e.target.value)}
-                  placeholder="Add notes about this loan..."
-                />
+              <div className="form-row">
+                <div className="form-group" style={{gridColumn: 'span 4'}}>
+                  <label>Notes</label>
+                  <textarea
+                    rows="4"
+                    value={formData.notes || ''}
+                    onChange={(e) => handleFieldChange('notes', e.target.value)}
+                    placeholder="Add notes about this loan..."
+                  />
+                </div>
               </div>
             </div>
           </div>
