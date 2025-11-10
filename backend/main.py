@@ -622,6 +622,20 @@ class MicrosoftToken(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
+class SalesforceToken(Base):
+    """Stores Salesforce OAuth tokens for CRM integration"""
+    __tablename__ = "salesforce_tokens"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True)
+    access_token = Column(Text)  # Encrypted
+    refresh_token = Column(Text)  # Encrypted
+    instance_url = Column(String)  # Salesforce instance URL
+    token_type = Column(String)
+    expires_at = Column(DateTime)
+    scope = Column(String)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
 class CalendarMapping(Base):
     """Maps lead stages to Calendly event types for automatic scheduling"""
     __tablename__ = "calendar_mappings"
@@ -6808,6 +6822,146 @@ async def get_valid_access_token(user_id: int, db: Session) -> Optional[str]:
             return new_token if new_token else token_record.access_token
 
     return token_record.access_token
+
+# ============================================================================
+# SALESFORCE INTEGRATION
+# ============================================================================
+
+from integrations.salesforce_service import salesforce_client
+
+@app.get("/api/v1/salesforce/oauth/start")
+async def start_salesforce_oauth(current_user: User = Depends(get_current_user)):
+    """
+    Initiates Salesforce OAuth flow for CRM integration.
+    Returns URL for user to authorize access to Salesforce.
+    """
+    if not salesforce_client.enabled:
+        raise HTTPException(status_code=500, detail="Salesforce API not configured")
+
+    # Store user ID in state parameter to retrieve after callback
+    state = f"{current_user.id}_{secrets.token_urlsafe(32)}"
+
+    # Get Salesforce authorization URL
+    auth_url = salesforce_client.get_authorization_url(state)
+
+    return {
+        "auth_url": auth_url,
+        "message": "Redirect user to this URL to authorize Salesforce access"
+    }
+
+@app.get("/api/v1/salesforce/oauth/callback")
+async def salesforce_oauth_callback(code: str, state: str, db: Session = Depends(get_db)):
+    """
+    OAuth callback endpoint. Salesforce redirects here after user authorizes.
+    Exchanges authorization code for access token and stores it.
+    """
+    try:
+        # Extract user ID from state parameter
+        user_id = int(state.split("_")[0])
+
+        # Exchange code for tokens
+        token_data = salesforce_client.exchange_code_for_token(code)
+
+        if not token_data:
+            raise HTTPException(status_code=500, detail="Failed to exchange code for token")
+
+        # Calculate token expiration (Salesforce tokens don't expire by default,
+        # but we'll set a reasonable time for refresh)
+        expires_at = datetime.now(timezone.utc) + timedelta(days=90)  # Refresh every 90 days
+
+        # Store or update tokens in database
+        existing_token = db.query(SalesforceToken).filter(
+            SalesforceToken.user_id == user_id
+        ).first()
+
+        if existing_token:
+            existing_token.access_token = token_data["access_token"]
+            existing_token.refresh_token = token_data.get("refresh_token")
+            existing_token.instance_url = token_data.get("instance_url")
+            existing_token.token_type = token_data.get("token_type", "Bearer")
+            existing_token.expires_at = expires_at
+            existing_token.updated_at = datetime.now(timezone.utc)
+        else:
+            new_token = SalesforceToken(
+                user_id=user_id,
+                access_token=token_data["access_token"],
+                refresh_token=token_data.get("refresh_token"),
+                instance_url=token_data.get("instance_url"),
+                token_type=token_data.get("token_type", "Bearer"),
+                expires_at=expires_at,
+                scope="api refresh_token offline_access"
+            )
+            db.add(new_token)
+
+        db.commit()
+        logger.info(f"✅ Salesforce connected for user {user_id}")
+
+        # Redirect back to settings page with success message
+        return RedirectResponse(
+            url="https://mortgage-crm-nine.vercel.app/settings?salesforce=connected",
+            status_code=302
+        )
+
+    except Exception as e:
+        logger.error(f"❌ Salesforce OAuth callback error: {e}")
+        return RedirectResponse(
+            url="https://mortgage-crm-nine.vercel.app/settings?salesforce=error",
+            status_code=302
+        )
+
+@app.get("/api/v1/salesforce/status")
+async def get_salesforce_connection_status(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Check if user has connected their Salesforce and if token is valid.
+    """
+    token = db.query(SalesforceToken).filter(
+        SalesforceToken.user_id == current_user.id
+    ).first()
+
+    if not token:
+        return {
+            "connected": False,
+            "message": "Salesforce not connected"
+        }
+
+    # Check if token is expired (if we had an expiration, but SF tokens don't expire)
+    is_expired = False
+    if token.expires_at and token.expires_at < datetime.now(timezone.utc):
+        is_expired = True
+
+    return {
+        "connected": True,
+        "instance_url": token.instance_url,
+        "expires_at": token.expires_at.isoformat() if token.expires_at else None,
+        "is_expired": is_expired,
+        "connected_at": token.created_at.isoformat()
+    }
+
+@app.delete("/api/v1/salesforce/disconnect")
+async def disconnect_salesforce(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Disconnect Salesforce integration by deleting stored tokens.
+    """
+    token = db.query(SalesforceToken).filter(
+        SalesforceToken.user_id == current_user.id
+    ).first()
+
+    if token:
+        # Attempt to revoke the token with Salesforce
+        salesforce_client.revoke_token(token.access_token)
+
+        # Delete from database
+        db.delete(token)
+        db.commit()
+        logger.info(f"Salesforce disconnected for user {current_user.id}")
+
+    return {"message": "Salesforce disconnected successfully"}
 
 # ============================================================================
 # CALENDLY INTEGRATION

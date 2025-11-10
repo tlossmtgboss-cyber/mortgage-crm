@@ -1311,8 +1311,83 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
     { id: 'xero', name: 'Xero', icon: '💰', category: 'Accounting', description: 'Xero accounting software', optional: true }
   ];
 
-  const handleConnectIntegration = (integration) => {
-    setConnectionModal(integration);
+  const handleConnectIntegration = async (integration) => {
+    // Handle Salesforce OAuth flow differently
+    if (integration.id === 'salesforce') {
+      try {
+        const token = localStorage.getItem('token');
+        const isVercel = window.location.hostname.includes('vercel.app');
+        const API_BASE_URL = isVercel ? '' : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
+
+        const response = await fetch(`${API_BASE_URL}/api/v1/salesforce/oauth/start`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to initiate Salesforce OAuth');
+        }
+
+        const data = await response.json();
+
+        // Open OAuth window
+        const width = 600;
+        const height = 700;
+        const left = (window.screen.width - width) / 2;
+        const top = (window.screen.height - height) / 2;
+
+        const popup = window.open(
+          data.auth_url,
+          'Salesforce OAuth',
+          `width=${width},height=${height},left=${left},top=${top}`
+        );
+
+        // Monitor the popup for closing
+        const checkPopup = setInterval(() => {
+          if (popup && popup.closed) {
+            clearInterval(checkPopup);
+            // Check connection status after popup closes
+            checkSalesforceConnection();
+          }
+        }, 1000);
+
+      } catch (error) {
+        console.error('Salesforce OAuth error:', error);
+        alert('Failed to connect to Salesforce. Please ensure the integration is configured in your environment.');
+      }
+    } else {
+      // For other integrations, show the modal
+      setConnectionModal(integration);
+    }
+  };
+
+  const checkSalesforceConnection = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const isVercel = window.location.hostname.includes('vercel.app');
+      const API_BASE_URL = isVercel ? '' : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
+
+      const response = await fetch(`${API_BASE_URL}/api/v1/salesforce/status`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.connected) {
+          alert('✅ Salesforce connected successfully!');
+          // Update formData to reflect connection
+          setFormData(prevData => ({
+            ...prevData,
+            salesforceConnected: true
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('Error checking Salesforce status:', error);
+    }
   };
 
   const handleCloseModal = () => {
@@ -1320,7 +1395,7 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
   };
 
   const handleAuthComplete = () => {
-    // Simulate successful connection
+    // Simulate successful connection for non-OAuth integrations
     console.log(`Connected to ${connectionModal.name}`);
     setConnectionModal(null);
   };
