@@ -4,266 +4,440 @@ import './Users.css';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
+const DEFAULT_ROLES = [
+  { id: 1, name: 'Loan Officer', taskCount: 1 },
+  { id: 2, name: 'Application Analysis', taskCount: 1 },
+  { id: 3, name: 'Production Assistant 1', taskCount: 1 },
+  { id: 4, name: 'Production Assistant 2', taskCount: 1 },
+  { id: 5, name: 'Processing Assistant', taskCount: 1 },
+  { id: 6, name: 'Concierge', taskCount: 1 },
+  { id: 7, name: 'Executive Assistant', taskCount: 1 },
+  { id: 8, name: 'Loan Processor', taskCount: 1 },
+  { id: 9, name: 'Underwriter', taskCount: 1 },
+  { id: 10, name: 'Closer', taskCount: 1 },
+  { id: 11, name: 'Funder', taskCount: 1 },
+  { id: 12, name: 'Servicing', taskCount: 1 }
+];
+
 function Users() {
-  const [users, setUsers] = useState([]);
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [availableRoles, setAvailableRoles] = useState(DEFAULT_ROLES);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [editingUser, setEditingUser] = useState(null);
+  const [showAddMemberModal, setShowAddMemberModal] = useState(false);
+  const [showAddRoleModal, setShowAddRoleModal] = useState(false);
+  const [editingMember, setEditingMember] = useState(null);
 
   useEffect(() => {
-    loadUsers();
+    loadTeamMembers();
+    loadRoles();
   }, []);
 
-  const loadUsers = async () => {
+  const loadTeamMembers = () => {
     try {
-      setLoading(true);
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`${API_BASE_URL}/api/v1/admin/users`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      setUsers(response.data);
-      setError(null);
-    } catch (err) {
-      console.error('Failed to load users:', err);
-      setError('Failed to load users. Please try again.');
+      // Load team members from localStorage (saved during onboarding)
+      const storedMembers = localStorage.getItem('teamMembers');
+      if (storedMembers) {
+        setTeamMembers(JSON.parse(storedMembers));
+      } else {
+        // Initialize with empty array
+        setTeamMembers([]);
+      }
+    } catch (error) {
+      console.error('Failed to load team members:', error);
+      setTeamMembers([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleToggleActive = async (userId, currentStatus) => {
+  const loadRoles = () => {
     try {
-      const token = localStorage.getItem('token');
-      await axios.patch(
-        `${API_BASE_URL}/api/v1/admin/users/${userId}`,
-        { is_active: !currentStatus },
-        { headers: { 'Authorization': `Bearer ${token}` } }
-      );
-      await loadUsers();
-    } catch (err) {
-      console.error('Failed to update user:', err);
-      alert('Failed to update user status');
-    }
-  };
-
-  const handleToggleVerified = async (userId, currentStatus) => {
-    try {
-      const token = localStorage.getItem('token');
-      await axios.patch(
-        `${API_BASE_URL}/api/v1/admin/users/${userId}`,
-        { email_verified: !currentStatus },
-        { headers: { 'Authorization': `Bearer ${token}` } }
-      );
-      await loadUsers();
-    } catch (err) {
-      console.error('Failed to update user:', err);
-      alert('Failed to update user verification');
-    }
-  };
-
-  const handleUpdateRole = async (userId, newRole) => {
-    try {
-      const token = localStorage.getItem('token');
-      await axios.patch(
-        `${API_BASE_URL}/api/v1/admin/users/${userId}`,
-        { role: newRole },
-        { headers: { 'Authorization': `Bearer ${token}` } }
-      );
-      await loadUsers();
-      setEditingUser(null);
-    } catch (err) {
-      console.error('Failed to update role:', err);
-      alert('Failed to update user role');
-    }
-  };
-
-  const handleDeleteUser = async (userId) => {
-    // Get current user to prevent self-deletion attempt
-    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-
-    if (currentUser.id === userId) {
-      alert('You cannot delete your own account. Please contact another administrator.');
-      return;
-    }
-
-    if (!window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
-      return;
-    }
-
-    try {
-      const token = localStorage.getItem('token');
-
-      if (!token) {
-        alert('You are not authenticated. Please log in again.');
-        return;
+      const storedRoles = localStorage.getItem('availableRoles');
+      if (storedRoles) {
+        setAvailableRoles(JSON.parse(storedRoles));
+      } else {
+        // Save default roles to localStorage
+        localStorage.setItem('availableRoles', JSON.stringify(DEFAULT_ROLES));
       }
-
-      await axios.delete(
-        `${API_BASE_URL}/api/v1/admin/users/${userId}`,
-        { headers: { 'Authorization': `Bearer ${token}` } }
-      );
-
-      alert('User deleted successfully');
-      await loadUsers();
-    } catch (err) {
-      console.error('Failed to delete user:', err);
-      console.error('Error response:', err.response);
-
-      let errorMessage = 'Failed to delete user';
-
-      if (err.response?.status === 401) {
-        errorMessage = 'Authentication failed. Please log out and log back in.';
-      } else if (err.response?.status === 403) {
-        errorMessage = 'You do not have permission to delete users.';
-      } else if (err.response?.data?.detail) {
-        errorMessage = err.response.data.detail;
-      } else if (err.message === 'Network Error') {
-        errorMessage = 'Cannot connect to server. Please check your connection and try again.';
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-
-      alert(errorMessage);
+    } catch (error) {
+      console.error('Failed to load roles:', error);
+      setAvailableRoles(DEFAULT_ROLES);
     }
   };
 
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+  const saveTeamMembers = (members) => {
+    localStorage.setItem('teamMembers', JSON.stringify(members));
+    setTeamMembers(members);
+  };
+
+  const saveRoles = (roles) => {
+    localStorage.setItem('availableRoles', JSON.stringify(roles));
+    setAvailableRoles(roles);
+  };
+
+  const handleAddMember = (memberData) => {
+    const newMember = {
+      id: Date.now(),
+      ...memberData,
+      createdAt: new Date().toISOString()
+    };
+    const updatedMembers = [...teamMembers, newMember];
+    saveTeamMembers(updatedMembers);
+    setShowAddMemberModal(false);
+  };
+
+  const handleUpdateMember = (memberId, updates) => {
+    const updatedMembers = teamMembers.map(member =>
+      member.id === memberId ? { ...member, ...updates } : member
+    );
+    saveTeamMembers(updatedMembers);
+    setEditingMember(null);
+  };
+
+  const handleDeleteMember = (memberId) => {
+    if (!window.confirm('Are you sure you want to remove this team member?')) return;
+    const updatedMembers = teamMembers.filter(member => member.id !== memberId);
+    saveTeamMembers(updatedMembers);
+  };
+
+  const handleAddRole = (roleName) => {
+    const newRole = {
+      id: Date.now(),
+      name: roleName,
+      taskCount: 0
+    };
+    const updatedRoles = [...availableRoles, newRole];
+    saveRoles(updatedRoles);
+    setShowAddRoleModal(false);
+  };
+
+  const handleDeleteRole = (roleId) => {
+    if (!window.confirm('Are you sure you want to delete this role?')) return;
+    const updatedRoles = availableRoles.filter(role => role.id !== roleId);
+    saveRoles(updatedRoles);
   };
 
   if (loading) {
-    return <div className="users-page"><div className="loading">Loading users...</div></div>;
+    return <div className="users-page"><div className="loading">Loading team members...</div></div>;
   }
-
-  const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
 
   return (
     <div className="users-page">
       <div className="page-header">
         <div>
-          <h1>User Management</h1>
-          <p>Manage all registered users and their permissions</p>
-        </div>
-        <div className="header-stats">
-          <div className="stat-box">
-            <div className="stat-value">{users.length}</div>
-            <div className="stat-label">Total Users</div>
-          </div>
-          <div className="stat-box">
-            <div className="stat-value">{users.filter(u => u.is_active).length}</div>
-            <div className="stat-label">Active</div>
-          </div>
-          <div className="stat-box">
-            <div className="stat-value">{users.filter(u => u.email_verified).length}</div>
-            <div className="stat-label">Verified</div>
-          </div>
+          <h1>Team Members</h1>
+          <p>Manage your team members and their role assignments</p>
         </div>
       </div>
 
-      {error && <div className="error-message">{error}</div>}
+      {/* Available Roles Section */}
+      <div className="roles-section">
+        <div className="section-header">
+          <h2>Available Roles</h2>
+          <button className="btn-add-role" onClick={() => setShowAddRoleModal(true)}>
+            + Add Role
+          </button>
+        </div>
+        <div className="roles-grid">
+          {availableRoles.map(role => (
+            <div key={role.id} className="role-card">
+              <div className="role-header">
+                <h3>{role.name}</h3>
+                <button
+                  className="btn-delete-role"
+                  onClick={() => handleDeleteRole(role.id)}
+                  title="Delete role"
+                >
+                  ×
+                </button>
+              </div>
+              <p className="role-tasks">{role.taskCount} tasks</p>
+              <p className="role-description">
+                {role.name === 'Loan Officer' && 'Assist customers in selecting and applying for a mortgage loan and initial document...'}
+                {role.name === 'Loan Processor' && 'Verify information on mortgage applications and ensure all necessary documents are...'}
+                {role.name === 'Underwriter' && 'Assess risk of loan applications and decide on approval or denial.'}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
 
-      <div className="users-table-container">
-        <table className="users-table">
-          <thead>
-            <tr>
-              <th>User</th>
-              <th>Email</th>
-              <th>Role</th>
-              <th>Status</th>
-              <th>Verified</th>
-              <th>Onboarded</th>
-              <th>Registered</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((user) => {
-              const isCurrentUser = user.id === currentUser.id;
-              return (
-              <tr key={user.id} className={!user.is_active ? 'inactive-user' : ''}>
-                <td>
-                  <div className="user-info">
-                    <div className="user-avatar">{user.full_name?.charAt(0) || user.email.charAt(0)}</div>
-                    <div>
-                      <div className="user-name">
-                        {user.full_name || 'Unnamed User'}
-                        {isCurrentUser && <span className="current-user-badge">You</span>}
-                      </div>
-                      <div className="user-id">ID: {user.id}</div>
-                    </div>
-                  </div>
-                </td>
-                <td>{user.email}</td>
-                <td>
-                  {editingUser === user.id ? (
-                    <select
-                      value={user.role}
-                      onChange={(e) => handleUpdateRole(user.id, e.target.value)}
-                      onBlur={() => setEditingUser(null)}
-                      autoFocus
-                      className="role-select"
-                    >
-                      <option value="loan_officer">Loan Officer</option>
-                      <option value="admin">Admin</option>
-                      <option value="processor">Processor</option>
-                      <option value="underwriter">Underwriter</option>
-                      <option value="manager">Manager</option>
-                    </select>
-                  ) : (
-                    <span
-                      className="role-badge"
-                      onClick={() => setEditingUser(user.id)}
-                      title="Click to edit"
-                    >
-                      {user.role || 'loan_officer'}
-                    </span>
-                  )}
-                </td>
-                <td>
-                  <button
-                    className={`status-badge ${user.is_active ? 'active' : 'inactive'}`}
-                    onClick={() => handleToggleActive(user.id, user.is_active)}
-                  >
-                    {user.is_active ? 'Active' : 'Inactive'}
-                  </button>
-                </td>
-                <td>
-                  <button
-                    className={`verify-badge ${user.email_verified ? 'verified' : 'unverified'}`}
-                    onClick={() => handleToggleVerified(user.id, user.email_verified)}
-                  >
-                    {user.email_verified ? '✓ Verified' : '✗ Not Verified'}
-                  </button>
-                </td>
-                <td>
-                  <span className={`onboarding-badge ${user.onboarding_completed ? 'completed' : 'pending'}`}>
-                    {user.onboarding_completed ? 'Completed' : 'Pending'}
+      {/* Team Members Section */}
+      <div className="team-members-section">
+        <div className="section-header">
+          <h2>Team Members ({teamMembers.length})</h2>
+          <button className="btn-add-member" onClick={() => setShowAddMemberModal(true)}>
+            + Add Team Member
+          </button>
+        </div>
+
+        <div className="members-grid">
+          {teamMembers.map(member => (
+            <div key={member.id} className="member-card">
+              <div className="member-avatar">
+                {(member.firstName?.[0] || '') + (member.lastName?.[0] || '')}
+              </div>
+              <div className="member-info">
+                <h3>{member.firstName} {member.lastName}</h3>
+                <p className="member-email">{member.email}</p>
+                {member.role && (
+                  <span className="role-badge-small">
+                    Role: {member.role}
                   </span>
-                </td>
-                <td className="date-cell">{formatDate(user.created_at)}</td>
-                <td>
-                  <button
-                    className="btn-delete"
-                    onClick={() => handleDeleteUser(user.id)}
-                    disabled={isCurrentUser}
-                    title={isCurrentUser ? "You cannot delete your own account" : "Delete user"}
-                  >
-                    Delete
-                  </button>
-                </td>
-              </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                )}
+              </div>
+              <div className="member-actions">
+                <button
+                  className="btn-view-profile"
+                  onClick={() => setEditingMember(member)}
+                >
+                  View Profile →
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
 
-        {users.length === 0 && (
+        {teamMembers.length === 0 && (
           <div className="empty-state">
-            <p>No users found</p>
+            <p>No team members found. Add your first team member to get started.</p>
           </div>
         )}
+      </div>
+
+      {/* Add Role Modal */}
+      {showAddRoleModal && (
+        <AddRoleModal
+          onClose={() => setShowAddRoleModal(false)}
+          onAdd={handleAddRole}
+        />
+      )}
+
+      {/* Add Member Modal */}
+      {showAddMemberModal && (
+        <AddMemberModal
+          onClose={() => setShowAddMemberModal(false)}
+          onAdd={handleAddMember}
+          availableRoles={availableRoles}
+        />
+      )}
+
+      {/* Edit Member Modal */}
+      {editingMember && (
+        <EditMemberModal
+          member={editingMember}
+          onClose={() => setEditingMember(null)}
+          onUpdate={handleUpdateMember}
+          onDelete={handleDeleteMember}
+          availableRoles={availableRoles}
+        />
+      )}
+    </div>
+  );
+}
+
+// Add Role Modal Component
+function AddRoleModal({ onClose, onAdd }) {
+  const [roleName, setRoleName] = useState('');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (roleName.trim()) {
+      onAdd(roleName.trim());
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content small-modal" onClick={(e) => e.stopPropagation()}>
+        <h3>Add New Role</h3>
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label>Role Name *</label>
+            <input
+              type="text"
+              value={roleName}
+              onChange={(e) => setRoleName(e.target.value)}
+              placeholder="e.g., Junior Loan Officer"
+              required
+              autoFocus
+            />
+          </div>
+          <div className="form-actions">
+            <button type="button" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn-primary">Add Role</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// Add Member Modal Component
+function AddMemberModal({ onClose, onAdd, availableRoles }) {
+  const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    role: ''
+  });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onAdd(formData);
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <h3>Add Team Member</h3>
+        <form onSubmit={handleSubmit}>
+          <div className="form-row">
+            <div className="form-group">
+              <label>First Name *</label>
+              <input
+                type="text"
+                value={formData.firstName}
+                onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label>Last Name *</label>
+              <input
+                type="text"
+                value={formData.lastName}
+                onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                required
+              />
+            </div>
+          </div>
+          <div className="form-group">
+            <label>Email *</label>
+            <input
+              type="email"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label>Phone</label>
+            <input
+              type="tel"
+              value={formData.phone}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+            />
+          </div>
+          <div className="form-group">
+            <label>Role</label>
+            <select
+              value={formData.role}
+              onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+            >
+              <option value="">Select Role</option>
+              {availableRoles.map(role => (
+                <option key={role.id} value={role.name}>{role.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-actions">
+            <button type="button" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn-primary">Add Member</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// Edit Member Modal Component
+function EditMemberModal({ member, onClose, onUpdate, onDelete, availableRoles }) {
+  const [formData, setFormData] = useState({
+    firstName: member.firstName || '',
+    lastName: member.lastName || '',
+    email: member.email || '',
+    phone: member.phone || '',
+    role: member.role || ''
+  });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onUpdate(member.id, formData);
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <h3>Edit Team Member</h3>
+        <form onSubmit={handleSubmit}>
+          <div className="form-row">
+            <div className="form-group">
+              <label>First Name *</label>
+              <input
+                type="text"
+                value={formData.firstName}
+                onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label>Last Name *</label>
+              <input
+                type="text"
+                value={formData.lastName}
+                onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                required
+              />
+            </div>
+          </div>
+          <div className="form-group">
+            <label>Email *</label>
+            <input
+              type="email"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              required
+            />
+          </div>
+          <div className="form-group">
+            <label>Phone</label>
+            <input
+              type="tel"
+              value={formData.phone}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+            />
+          </div>
+          <div className="form-group">
+            <label>Role</label>
+            <select
+              value={formData.role}
+              onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+            >
+              <option value="">Select Role</option>
+              {availableRoles.map(role => (
+                <option key={role.id} value={role.name}>{role.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-actions">
+            <button
+              type="button"
+              className="btn-delete"
+              onClick={() => {
+                onDelete(member.id);
+                onClose();
+              }}
+            >
+              Delete Member
+            </button>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button type="button" onClick={onClose}>Cancel</button>
+              <button type="submit" className="btn-primary">Save Changes</button>
+            </div>
+          </div>
+        </form>
       </div>
     </div>
   );
