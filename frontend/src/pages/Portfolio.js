@@ -252,12 +252,19 @@ function Portfolio() {
 
   const handleAddClient = async (clientData) => {
     try {
+      console.log('Creating MUM client with data:', clientData);
       await mumAPI.create(clientData);
       loadData();
       setShowAddModal(false);
     } catch (error) {
       console.error('Failed to create client:', error);
-      alert('Failed to create MUM client. Please try again.');
+      console.error('Error response:', error.response?.data);
+      const errorMsg = error.response?.data?.detail
+        ? (typeof error.response.data.detail === 'string'
+           ? error.response.data.detail
+           : JSON.stringify(error.response.data.detail))
+        : error.message || 'Unknown error';
+      alert('Failed to create MUM client: ' + errorMsg);
     }
   };
 

@@ -31,12 +31,19 @@ function ReferralPartners() {
 
   const handleAddPartner = async (partnerData) => {
     try {
+      console.log('Creating referral partner with data:', partnerData);
       await partnersAPI.create(partnerData);
       loadPartners();
       setShowAddModal(false);
     } catch (error) {
       console.error('Failed to create partner:', error);
-      alert('Failed to create referral partner. Please try again.');
+      console.error('Error response:', error.response?.data);
+      const errorMsg = error.response?.data?.detail
+        ? (typeof error.response.data.detail === 'string'
+           ? error.response.data.detail
+           : JSON.stringify(error.response.data.detail))
+        : error.message || 'Unknown error';
+      alert('Failed to create referral partner: ' + errorMsg);
     }
   };
 
