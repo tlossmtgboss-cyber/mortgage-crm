@@ -3611,6 +3611,309 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     }
 
 # ============================================================================
+# LOAN SCORECARD REPORT
+# ============================================================================
+
+@app.get("/api/v1/scorecard")
+async def get_scorecard(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get comprehensive loan scorecard metrics matching the Loan Scorecard Report format.
+    Includes conversion metrics, funding totals, and referral source breakdown.
+    """
+    from datetime import date, timedelta
+    from sqlalchemy import func, extract, case
+    from decimal import Decimal
+
+    # Date range setup
+    if start_date and end_date:
+        start = datetime.strptime(start_date, "%Y-%m-%d").date()
+        end = datetime.strptime(end_date, "%Y-%m-%d").date()
+    else:
+        # Default to current month
+        today = date.today()
+        start = today.replace(day=1)
+        end = today
+
+    # ============================================================================
+    # LOAN STARTS VS. ACTIVITY TOTALS
+    # ============================================================================
+
+    # Get all relevant loans and leads for the period
+    all_leads = db.query(Lead).filter(
+        Lead.owner_id == current_user.id,
+        Lead.created_at >= start,
+        Lead.created_at <= end
+    ).all()
+
+    all_loans = db.query(Loan).filter(
+        Loan.loan_officer_id == current_user.id
+    ).all()
+
+    # Calculate counts
+    starts_count = len(all_leads)  # Total leads
+
+    # Applications (leads that became loans)
+    apps_count = db.query(func.count(Loan.id)).filter(
+        Loan.loan_officer_id == current_user.id,
+        Loan.created_at >= start,
+        Loan.created_at <= end
+    ).scalar() or 0
+
+    # Funded loans
+    funded_count = db.query(func.count(Loan.id)).filter(
+        Loan.loan_officer_id == current_user.id,
+        Loan.stage == LoanStage.FUNDED,
+        Loan.funded_date >= start,
+        Loan.funded_date <= end
+    ).scalar() or 0
+
+    # Credit pulls (assuming leads with credit_score indicate credit pulled)
+    credit_pulls = db.query(func.count(Lead.id)).filter(
+        Lead.owner_id == current_user.id,
+        Lead.created_at >= start,
+        Lead.created_at <= end,
+        Lead.credit_score.isnot(None)
+    ).scalar() or 0
+
+    # Cancelled loans
+    cancelled_count = db.query(func.count(Loan.id)).filter(
+        Loan.loan_officer_id == current_user.id,
+        Loan.stage == LoanStage.CANCELLED,
+        Loan.created_at >= start,
+        Loan.created_at <= end
+    ).scalar() or 0
+
+    # Denied loans
+    denied_count = db.query(func.count(Loan.id)).filter(
+        Loan.loan_officer_id == current_user.id,
+        Loan.stage == LoanStage.DENIED,
+        Loan.created_at >= start,
+        Loan.created_at <= end
+    ).scalar() or 0
+
+    # UW to TBDs (underwriting to clear to close)
+    uw_count = db.query(func.count(Loan.id)).filter(
+        Loan.loan_officer_id == current_user.id,
+        Loan.stage == LoanStage.UNDERWRITING,
+        Loan.created_at >= start,
+        Loan.created_at <= end
+    ).scalar() or 0
+
+    ctc_count = db.query(func.count(Loan.id)).filter(
+        Loan.loan_officer_id == current_user.id,
+        Loan.stage == LoanStage.CLEAR_TO_CLOSE,
+        Loan.created_at >= start,
+        Loan.created_at <= end
+    ).scalar() or 0
+
+    # Initial lock to funded (loans that locked and funded)
+    locked_funded = funded_count  # Simplified - all funded loans were locked
+
+    # Calculate conversion percentages
+    starts_to_apps_pct = int((apps_count / starts_count * 100)) if starts_count > 0 else 0
+    apps_to_funded_pct = int((funded_count / apps_count * 100)) if apps_count > 0 else 0
+    starts_to_funded_pct = int((funded_count / starts_count * 100)) if starts_count > 0 else 0
+    credit_to_funded_pct = int((funded_count / credit_pulls * 100)) if credit_pulls > 0 else 0
+    starts_to_cancelled_pct = int((cancelled_count / starts_count * 100)) if starts_count > 0 else 0
+    starts_to_denied_pct = int((denied_count / starts_count * 100)) if starts_count > 0 else 0
+    uw_to_ctc_pct = int((ctc_count / uw_count * 100)) if uw_count > 0 else 0
+    lock_to_funded_pct = int((funded_count / locked_funded * 100)) if locked_funded > 0 else 0
+
+    conversion_metrics = [
+        {
+            "metric": "Starts to Appl(E)",
+            "current": apps_count,
+            "total": starts_count,
+            "mot_pct": starts_to_apps_pct,
+            "goal_pct": 75,
+            "status": "good" if starts_to_apps_pct >= 75 else "warning" if starts_to_apps_pct >= 60 else "critical"
+        },
+        {
+            "metric": "Appl(E) to Funded",
+            "current": funded_count,
+            "total": apps_count,
+            "mot_pct": apps_to_funded_pct,
+            "goal_pct": 80,
+            "status": "good" if apps_to_funded_pct >= 80 else "warning" if apps_to_funded_pct >= 60 else "critical"
+        },
+        {
+            "metric": "Starts to Funded",
+            "current": funded_count,
+            "total": starts_count,
+            "mot_pct": starts_to_funded_pct,
+            "goal_pct": 50,
+            "status": "good" if starts_to_funded_pct >= 50 else "warning" if starts_to_funded_pct >= 40 else "critical"
+        },
+        {
+            "metric": "Credit Pulls to Funded",
+            "current": funded_count,
+            "total": credit_pulls,
+            "mot_pct": credit_to_funded_pct,
+            "goal_pct": 70,
+            "status": "critical" if credit_to_funded_pct < 50 else "warning" if credit_to_funded_pct < 70 else "good"
+        },
+        {
+            "metric": "Starts to Cancelled",
+            "current": cancelled_count,
+            "total": starts_count,
+            "mot_pct": starts_to_cancelled_pct,
+            "goal_pct": 10,
+            "status": "good" if starts_to_cancelled_pct <= 10 else "warning"
+        },
+        {
+            "metric": "Starts to Denied",
+            "current": denied_count,
+            "total": starts_count,
+            "mot_pct": starts_to_denied_pct,
+            "goal_pct": 5,
+            "status": "good" if starts_to_denied_pct <= 5 else "warning"
+        },
+        {
+            "metric": "UW to TBDs",
+            "current": ctc_count,
+            "total": uw_count,
+            "mot_pct": uw_to_ctc_pct,
+            "goal_pct": 50,
+            "status": "good" if uw_to_ctc_pct >= 50 else "warning"
+        },
+        {
+            "metric": "Initial Lock to Funded",
+            "current": funded_count,
+            "total": locked_funded,
+            "mot_pct": lock_to_funded_pct,
+            "goal_pct": 90,
+            "status": "warning" if lock_to_funded_pct < 90 else "good"
+        }
+    ]
+
+    # ============================================================================
+    # CONVERSION UPSWING (10% Pull-Thru Analysis)
+    # ============================================================================
+
+    # Calculate current vs target metrics
+    current_pull_thru_pct = starts_to_funded_pct
+    target_pull_thru_pct = current_pull_thru_pct + 10  # 10% improvement
+
+    # Get funded loans for volume calculations
+    funded_loans = db.query(Loan).filter(
+        Loan.loan_officer_id == current_user.id,
+        Loan.stage == LoanStage.FUNDED,
+        Loan.funded_date >= start,
+        Loan.funded_date <= end
+    ).all()
+
+    current_avg_amount = sum(loan.amount for loan in funded_loans if loan.amount) / len(funded_loans) if funded_loans else 0
+    current_volume = sum(loan.amount for loan in funded_loans if loan.amount)
+
+    # Project 10% increase
+    target_funded_count = int(funded_count * 1.1)
+    target_volume = current_volume * 1.1
+    volume_increase = target_volume - current_volume
+
+    # Basis points (commission) - assuming 100 bps average
+    current_bps = 100
+    current_compensation = (current_volume * current_bps) / 10000
+    target_compensation = (target_volume * current_bps) / 10000
+    additional_compensation = target_compensation - current_compensation
+
+    conversion_upswing = {
+        "current_starts": starts_count,
+        "target_starts": int(starts_count * 1.1),
+        "current_pull_thru_pct": current_pull_thru_pct,
+        "target_pull_thru_pct": target_pull_thru_pct,
+        "current_avg_amount": current_avg_amount,
+        "target_avg_amount": current_avg_amount,
+        "current_volume": current_volume,
+        "target_volume": target_volume,
+        "volume_increase": volume_increase,
+        "current_bps": current_bps,
+        "target_bps": current_bps,
+        "current_compensation": current_compensation,
+        "additional_compensation": additional_compensation
+    }
+
+    # ============================================================================
+    # FUNDING TOTALS
+    # ============================================================================
+
+    # Get all funded loans
+    funded_loans_all = db.query(Loan).filter(
+        Loan.loan_officer_id == current_user.id,
+        Loan.stage == LoanStage.FUNDED,
+        Loan.funded_date >= start,
+        Loan.funded_date <= end
+    ).all()
+
+    # Calculate totals
+    total_funded_units = len(funded_loans_all)
+    total_funded_volume = sum(loan.amount for loan in funded_loans_all if loan.amount)
+
+    # Break down by loan type
+    loan_type_breakdown = {}
+    for loan in funded_loans_all:
+        loan_type = loan.loan_type or "Unknown"
+        if loan_type not in loan_type_breakdown:
+            loan_type_breakdown[loan_type] = {"units": 0, "volume": 0}
+        loan_type_breakdown[loan_type]["units"] += 1
+        loan_type_breakdown[loan_type]["volume"] += loan.amount if loan.amount else 0
+
+    loan_types = [
+        {
+            "type": loan_type,
+            "units": data["units"],
+            "volume": data["volume"],
+            "percentage": (data["volume"] / total_funded_volume * 100) if total_funded_volume > 0 else 0
+        }
+        for loan_type, data in loan_type_breakdown.items()
+    ]
+
+    # Break down by referral source
+    referral_breakdown = {}
+    for loan in funded_loans_all:
+        source = loan.source or "Unknown"
+        if source not in referral_breakdown:
+            referral_breakdown[source] = {"referrals": 0, "closed_volume": 0}
+        referral_breakdown[source]["referrals"] += 1
+        referral_breakdown[source]["closed_volume"] += loan.amount if loan.amount else 0
+
+    referral_sources = [
+        {
+            "source": source,
+            "referrals": data["referrals"],
+            "closed_volume": data["closed_volume"]
+        }
+        for source, data in referral_breakdown.items()
+    ]
+
+    funding_totals = {
+        "total_units": total_funded_units,
+        "total_volume": total_funded_volume,
+        "loan_types": loan_types,
+        "referral_sources": referral_sources,
+        "avg_loan_amount": total_funded_volume / total_funded_units if total_funded_units > 0 else 0
+    }
+
+    # ============================================================================
+    # RETURN COMPLETE SCORECARD
+    # ============================================================================
+
+    return {
+        "period": {
+            "start_date": start.isoformat(),
+            "end_date": end.isoformat()
+        },
+        "conversion_metrics": conversion_metrics,
+        "conversion_upswing": conversion_upswing,
+        "funding_totals": funding_totals,
+        "generated_at": datetime.now(timezone.utc).isoformat()
+    }
+
+# ============================================================================
 # LEADS CRUD
 # ============================================================================
 

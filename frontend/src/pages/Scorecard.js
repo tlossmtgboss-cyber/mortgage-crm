@@ -1,142 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { analyticsAPI } from '../services/api';
 import './Scorecard.css';
 
 function Scorecard() {
-  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [drillDownModal, setDrillDownModal] = useState(null);
-
-  // Sample data - will be replaced with API call
-  const [data, setData] = useState({
-    conversionMetrics: [
-      {
-        id: 'starts-to-apps',
-        title: 'Starts to Apps (LE)',
-        value: 77,
-        goal: 75,
-        current: 73,
-        total: 95,
-        isPercentage: true,
-      },
-      {
-        id: 'apps-to-funded',
-        title: 'Apps (LE) to Funded',
-        value: 62,
-        goal: 80,
-        current: 45,
-        total: 73,
-        isPercentage: true,
-      },
-      {
-        id: 'starts-to-funded',
-        title: 'Starts to Funded Pull-thru',
-        value: 47,
-        goal: 50,
-        current: 45,
-        total: 95,
-        isPercentage: true,
-      },
-      {
-        id: 'credit-to-funded',
-        title: 'Credit Pull to Funded',
-        value: 40,
-        goal: 70,
-        current: 45,
-        total: 112,
-        isPercentage: true,
-      },
-    ],
-    volumeRevenue: [
-      {
-        id: 'total-loans',
-        title: 'Total Loans',
-        value: 60,
-        subtitle: 'Year to Date',
-        route: '/portfolio',
-      },
-      {
-        id: 'total-volume',
-        title: 'Total Volume',
-        value: '$21.3M',
-        subtitle: 'Year to Date',
-        route: '/portfolio',
-      },
-      {
-        id: 'referrals',
-        title: 'Referrals',
-        value: 60,
-        subtitle: 'Active Referral Partners',
-        route: '/referral-partners',
-      },
-      {
-        id: 'commission',
-        title: 'Commission Earned',
-        value: '$213,000',
-        subtitle: 'Year to Date',
-        route: '/portfolio',
-      },
-      {
-        id: 'portfolio-value',
-        title: 'Portfolio Value',
-        value: '$21.3M',
-        subtitle: 'Total Active Loans',
-        route: '/portfolio',
-      },
-    ],
-    loanTypes: [
-      { type: 'Conventional', units: 54, volume: 19244653, percentage: 90.29 },
-      { type: 'FHA', units: 2, volume: 841649, percentage: 3.95 },
-      { type: 'JUMBO', units: 1, volume: 692000, percentage: 3.25 },
-      { type: 'Seconds/HELOC', units: 3, volume: 535211, percentage: 2.51 },
-    ],
-    referralSources: [
-      { source: 'Client', referrals: 50, closedVolume: 17514870 },
-      { source: 'Realtor', referrals: 10, closedVolume: 3098843 },
-      { source: 'Repeat Client', referrals: 0, closedVolume: 0 },
-      { source: 'Self Generated', referrals: 0, closedVolume: 0 },
-      { source: 'Social Media/Network', referrals: 0, closedVolume: 0 },
-      { source: 'Website', referrals: 0, closedVolume: 0 },
-    ],
-    processTimeline: [
-      {
-        id: 'starts-to-app',
-        title: 'Avg Starts to App (LE)',
-        value: '10 Days',
-        subtitle: 'Loan Officer Average',
-      },
-      {
-        id: 'app-to-uw',
-        title: 'Avg App (LE) to UW',
-        value: '5 Days',
-        subtitle: 'Loan Officer Average',
-      },
-      {
-        id: 'lock-to-funded',
-        title: 'Initial Lock to Funded',
-        value: 68,
-        goal: 90,
-        current: 45,
-        total: 66,
-        isPercentage: true,
-      },
-      {
-        id: 'lock-extensions',
-        title: 'Lock Extensions',
-        value: 5,
-        goal: 10,
-        current: 3,
-        total: 66,
-        isPercentage: true,
-        isLowerBetter: true,
-      },
-    ],
-  });
+  const [data, setData] = useState(null);
+  const [period, setPeriod] = useState({ start: null, end: null });
 
   useEffect(() => {
     loadScorecard();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Auto-refresh every 60 seconds for real-time updates
+    const interval = setInterval(loadScorecard, 60000);
+    return () => clearInterval(interval);
   }, []);
 
   const loadScorecard = async () => {
@@ -145,36 +20,45 @@ function Scorecard() {
       // Fetch real data from API
       const apiData = await analyticsAPI.getScorecard();
       setData(apiData);
+      if (apiData.period) {
+        setPeriod(apiData.period);
+      }
       setLoading(false);
     } catch (error) {
       console.error('Failed to load scorecard:', error);
       setLoading(false);
-      // Keep sample data if API fails
     }
   };
 
-  const handleMetricClick = (metric, type) => {
-    setDrillDownModal({ metric, type });
+  const getStatusColor = (status) => {
+    if (status === 'good') return '#4caf50';
+    if (status === 'warning') return '#ff9800';
+    if (status === 'critical') return '#f44336';
+    return '#9e9e9e';
   };
 
-  const handleExportReport = () => {
-    alert('Export Report functionality coming soon!');
+  const formatCurrency = (amount) => {
+    if (!amount) return '$0.00';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
   };
 
-  const renderProgressBar = (value, goal) => {
-    const percentage = (value / goal) * 100;
-    const isOverGoal = percentage >= 100;
-    return (
-      <div className="progress-bar">
-        <div
-          className={`progress-fill ${isOverGoal ? 'over-goal' : ''}`}
-          style={{ width: `${Math.min(percentage, 100)}%` }}
-        />
-      </div>
-    );
+  const formatNumber = (num) => {
+    if (!num) return '0';
+    return new Intl.NumberFormat('en-US').format(num);
   };
 
-  if (loading) {
+  const formatDate = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+  };
+
+  if (loading || !data) {
     return (
       <div className="scorecard-page">
         <div className="loading">Loading scorecard...</div>
@@ -184,294 +68,193 @@ function Scorecard() {
 
   return (
     <div className="scorecard-page">
-      <div className="scorecard-header">
-        <div>
-          <h1>Scorecard - Business Metrics</h1>
+      <div className="scorecard-header-main">
+        <h1>Loan Scorecard Report</h1>
+        <div className="scorecard-subtitle">
+          {formatDate(period.start_date)} | LO Scorecard
         </div>
-        <button className="btn-export" onClick={handleExportReport}>
-          Export Report
-        </button>
       </div>
 
-      {/* Conversion Metrics */}
-      <section className="metrics-section">
-        <h2>Conversion Metrics</h2>
-        <div className="conversion-grid">
-          {data.conversionMetrics.map((metric) => (
-            <div
-              key={metric.id}
-              className="conversion-card clickable"
-              onClick={() => handleMetricClick(metric, 'conversion')}
-            >
-              <div className="metric-title">{metric.title}</div>
-              <div className="metric-value-large">{metric.value}%</div>
-              <div className="metric-goal">
-                Goal: {metric.goal}% | {metric.current} of {metric.total}
-              </div>
-              {renderProgressBar(metric.value, metric.goal)}
-            </div>
-          ))}
+      {/* LOAN STARTS VS. ACTIVITY TOTALS */}
+      <section className="scorecard-section green-section">
+        <div className="section-header green-header">
+          <span className="indicator"></span>
+          Loan Starts vs. Activity Totals
         </div>
-      </section>
-
-      {/* Volume & Revenue */}
-      <section className="metrics-section">
-        <h2>Volume & Revenue</h2>
-        <div className="volume-grid">
-          {data.volumeRevenue.map((metric) => (
-            <div
-              key={metric.id}
-              className="volume-card clickable"
-              onClick={() => metric.route && navigate(metric.route)}
-            >
-              <div className="metric-title">{metric.title}</div>
-              <div className="metric-value-large">{metric.value}</div>
-              <div className="metric-subtitle">{metric.subtitle}</div>
-            </div>
-          ))}
+        <div className="section-subheader">
+          Counts: {period.start_date} - {period.end_date}
         </div>
-      </section>
 
-      {/* Loan Type Distribution */}
-      <section className="metrics-section">
-        <h2>Loan Type Distribution</h2>
-        <div className="table-container">
-          <table className="metrics-table">
+        <div className="metrics-table-container">
+          <table className="scorecard-table">
             <thead>
               <tr>
-                <th>Loan Type</th>
-                <th>Units</th>
-                <th>Volume</th>
-                <th>% of Total</th>
+                <th>Counts</th>
+                <th></th>
+                <th></th>
+                <th>MoT%</th>
+                <th>Progress</th>
+                <th>Goal%</th>
               </tr>
             </thead>
             <tbody>
-              {data.loanTypes.map((item) => (
-                <tr
-                  key={item.type}
-                  className="clickable-row"
-                  onClick={() => handleMetricClick(item, 'loanType')}
-                >
-                  <td className="type-label">{item.type}</td>
-                  <td>{item.units}</td>
-                  <td className="volume-amount">${item.volume.toLocaleString()}</td>
-                  <td>{item.percentage}%</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* Referral Source Performance */}
-      <section className="metrics-section">
-        <h2>Referral Source Performance</h2>
-        <div className="table-container">
-          <table className="metrics-table">
-            <thead>
-              <tr>
-                <th>Referral Source</th>
-                <th>Referrals</th>
-                <th>Closed Volume</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.referralSources.map((item) => (
-                <tr
-                  key={item.source}
-                  className="clickable-row"
-                  onClick={() => handleMetricClick(item, 'referralSource')}
-                >
-                  <td className="type-label">{item.source}</td>
-                  <td>{item.referrals}</td>
-                  <td className="volume-amount">${item.closedVolume.toLocaleString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* Process Timeline */}
-      <section className="metrics-section">
-        <h2>Process Timeline</h2>
-        <div className="timeline-grid">
-          {data.processTimeline.map((metric) => (
-            <div
-              key={metric.id}
-              className="timeline-card clickable"
-              onClick={() => handleMetricClick(metric, 'timeline')}
-            >
-              <div className="metric-title">{metric.title}</div>
-              <div className="metric-value-large">
-                {metric.isPercentage ? `${metric.value}%` : metric.value}
-              </div>
-              {metric.goal ? (
-                <>
-                  <div className="metric-goal">
-                    Goal: {metric.isLowerBetter ? '<' : ''}{metric.goal}
-                    {metric.isPercentage ? '%' : ''} | {metric.current} of {metric.total}
-                  </div>
-                  {renderProgressBar(
-                    metric.isLowerBetter ? metric.goal - metric.value + metric.goal : metric.value,
-                    metric.goal
-                  )}
-                </>
-              ) : (
-                <div className="metric-subtitle">{metric.subtitle}</div>
-              )}
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* Drill-Down Modal */}
-      {drillDownModal && (
-        <div className="modal-overlay" onClick={() => setDrillDownModal(null)}>
-          <div className="drill-down-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>
-                {drillDownModal.metric.title || drillDownModal.metric.type || drillDownModal.metric.source}
-              </h2>
-              <button className="close-btn" onClick={() => setDrillDownModal(null)}>
-                ×
-              </button>
-            </div>
-            <div className="modal-content">
-              <div className="drill-down-summary">
-                <h3>Detailed Breakdown</h3>
-                <p>Click on any data point below to see individual records:</p>
-              </div>
-
-              {drillDownModal.type === 'conversion' && (
-                <div className="drill-down-stats">
-                  <div className="stat-row">
-                    <span className="stat-label">Current Performance:</span>
-                    <span className="stat-value">
-                      {drillDownModal.metric.value}% ({drillDownModal.metric.current} of{' '}
-                      {drillDownModal.metric.total})
-                    </span>
-                  </div>
-                  <div className="stat-row">
-                    <span className="stat-label">Goal:</span>
-                    <span className="stat-value">{drillDownModal.metric.goal}%</span>
-                  </div>
-                  <div className="stat-row">
-                    <span className="stat-label">Gap to Goal:</span>
-                    <span
-                      className={`stat-value ${
-                        drillDownModal.metric.value >= drillDownModal.metric.goal ? 'positive' : 'negative'
-                      }`}
-                    >
-                      {drillDownModal.metric.value >= drillDownModal.metric.goal ? '+' : ''}
-                      {drillDownModal.metric.value - drillDownModal.metric.goal}%
-                    </span>
-                  </div>
-                </div>
-              )}
-
-              {drillDownModal.type === 'volume' && (
-                <div className="drill-down-stats">
-                  <div className="stat-row">
-                    <span className="stat-label">Current Period:</span>
-                    <span className="stat-value">{drillDownModal.metric.value}</span>
-                  </div>
-                  <div className="stat-row">
-                    <span className="stat-label">Average:</span>
-                    <span className="stat-value">{drillDownModal.metric.subtitle}</span>
-                  </div>
-                </div>
-              )}
-
-              {drillDownModal.type === 'loanType' && (
-                <div className="drill-down-stats">
-                  <div className="stat-row">
-                    <span className="stat-label">Units:</span>
-                    <span className="stat-value">{drillDownModal.metric.units}</span>
-                  </div>
-                  <div className="stat-row">
-                    <span className="stat-label">Total Volume:</span>
-                    <span className="stat-value">${drillDownModal.metric.volume.toLocaleString()}</span>
-                  </div>
-                  <div className="stat-row">
-                    <span className="stat-label">Average Loan Size:</span>
-                    <span className="stat-value">
-                      ${(drillDownModal.metric.volume / drillDownModal.metric.units).toLocaleString(undefined, {
-                        maximumFractionDigits: 0,
-                      })}
-                    </span>
-                  </div>
-                  <div className="stat-row">
-                    <span className="stat-label">Percentage of Portfolio:</span>
-                    <span className="stat-value">{drillDownModal.metric.percentage}%</span>
-                  </div>
-                </div>
-              )}
-
-              {drillDownModal.type === 'referralSource' && (
-                <div className="drill-down-stats">
-                  <div className="stat-row">
-                    <span className="stat-label">Total Referrals:</span>
-                    <span className="stat-value">{drillDownModal.metric.referrals}</span>
-                  </div>
-                  <div className="stat-row">
-                    <span className="stat-label">Closed Volume:</span>
-                    <span className="stat-value">${drillDownModal.metric.closedVolume.toLocaleString()}</span>
-                  </div>
-                  {drillDownModal.metric.referrals > 0 && (
-                    <div className="stat-row">
-                      <span className="stat-label">Avg Volume per Referral:</span>
-                      <span className="stat-value">
-                        ${(drillDownModal.metric.closedVolume / drillDownModal.metric.referrals).toLocaleString(
-                          undefined,
-                          { maximumFractionDigits: 0 }
-                        )}
-                      </span>
+              {data.conversion_metrics.map((metric, index) => (
+                <tr key={index}>
+                  <td className="metric-name">{metric.metric}</td>
+                  <td className="metric-count">{metric.total}</td>
+                  <td className="metric-count">{metric.current}</td>
+                  <td className="metric-pct">{metric.mot_pct}%</td>
+                  <td className="progress-cell">
+                    <div className="progress-bar-container">
+                      <div
+                        className="progress-bar-fill"
+                        style={{
+                          width: `${Math.min((metric.mot_pct / metric.goal_pct) * 100, 100)}%`,
+                          backgroundColor: getStatusColor(metric.status),
+                        }}
+                      />
                     </div>
-                  )}
-                </div>
-              )}
+                  </td>
+                  <td className="metric-pct goal-pct">{metric.goal_pct}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
-              {drillDownModal.type === 'timeline' && (
-                <div className="drill-down-stats">
-                  <div className="stat-row">
-                    <span className="stat-label">Current Performance:</span>
-                    <span className="stat-value">
-                      {drillDownModal.metric.isPercentage
-                        ? `${drillDownModal.metric.value}%`
-                        : drillDownModal.metric.value}
-                    </span>
-                  </div>
-                  {drillDownModal.metric.goal && (
-                    <>
-                      <div className="stat-row">
-                        <span className="stat-label">Goal:</span>
-                        <span className="stat-value">
-                          {drillDownModal.metric.isLowerBetter ? '<' : ''}
-                          {drillDownModal.metric.goal}
-                          {drillDownModal.metric.isPercentage ? '%' : ''}
-                        </span>
-                      </div>
-                      <div className="stat-row">
-                        <span className="stat-label">Sample Size:</span>
-                        <span className="stat-value">
-                          {drillDownModal.metric.current} of {drillDownModal.metric.total}
-                        </span>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
+      {/* CONVERSION UPSWING */}
+      <section className="scorecard-section pink-section">
+        <div className="section-header pink-header">
+          <span className="indicator"></span>
+          Conversion Upswing:
+        </div>
 
-              <div className="modal-actions">
-                <button className="btn-primary" onClick={() => setDrillDownModal(null)}>
-                  Close
-                </button>
-              </div>
-            </div>
+        <div className="upswing-grid">
+          <div className="upswing-table">
+            <h4>10% in Starts</h4>
+            <table>
+              <tbody>
+                <tr>
+                  <td>Starts</td>
+                  <td className="value">{formatNumber(data.conversion_upswing.current_starts)}</td>
+                  <td className="target">Current</td>
+                </tr>
+                <tr>
+                  <td>Starts to Funded Pull-thru</td>
+                  <td className="value">{data.conversion_upswing.current_pull_thru_pct}%</td>
+                  <td className="target">{data.conversion_upswing.target_pull_thru_pct}%</td>
+                </tr>
+                <tr>
+                  <td>Avg loan amount</td>
+                  <td className="value">{formatCurrency(data.conversion_upswing.current_avg_amount)}</td>
+                  <td className="target">{formatCurrency(data.conversion_upswing.target_avg_amount)}</td>
+                </tr>
+                <tr>
+                  <td>Increase in volume</td>
+                  <td className="value">{formatCurrency(data.conversion_upswing.current_volume)}</td>
+                  <td className="target">{formatCurrency(data.conversion_upswing.volume_increase)}</td>
+                </tr>
+                <tr>
+                  <td>Current Avg bps</td>
+                  <td className="value">{data.conversion_upswing.current_bps}</td>
+                  <td className="target">{data.conversion_upswing.target_bps}</td>
+                </tr>
+                <tr>
+                  <td>Additional compensation</td>
+                  <td className="value">{formatCurrency(data.conversion_upswing.current_compensation)}</td>
+                  <td className="target highlight">{formatCurrency(data.conversion_upswing.additional_compensation)}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
-      )}
+      </section>
+
+      {/* FUNDING TOTALS */}
+      <section className="scorecard-section yellow-section">
+        <div className="section-header yellow-header">
+          <span className="indicator"></span>
+          Funding Totals
+        </div>
+
+        <div className="funding-grid">
+          {/* Funded Loans Summary */}
+          <div className="funding-table-container">
+            <table className="funding-table">
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Units</th>
+                  <th>Volume</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="label">Funded Loans</td>
+                  <td>{data.funding_totals.total_units}</td>
+                  <td className="volume">{formatCurrency(data.funding_totals.total_volume)}</td>
+                </tr>
+                <tr>
+                  <td className="label">Avg Loan Amount</td>
+                  <td colSpan="2">{formatCurrency(data.funding_totals.avg_loan_amount)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* Loan Type Breakdown */}
+          <div className="funding-table-container">
+            <table className="funding-table">
+              <thead>
+                <tr>
+                  <th>Loan Type</th>
+                  <th>Units</th>
+                  <th>Volume</th>
+                  <th>%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.funding_totals.loan_types.map((type, index) => (
+                  <tr key={index}>
+                    <td>{type.type}</td>
+                    <td>{type.units}</td>
+                    <td className="volume">{formatCurrency(type.volume)}</td>
+                    <td>{type.percentage.toFixed(2)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Referral Source Breakdown */}
+          <div className="funding-table-container">
+            <table className="funding-table">
+              <thead>
+                <tr>
+                  <th>Referral Source</th>
+                  <th>Referrals</th>
+                  <th>Closed Volume</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.funding_totals.referral_sources.map((source, index) => (
+                  <tr key={index}>
+                    <td>{source.source}</td>
+                    <td>{source.referrals}</td>
+                    <td className="volume">{formatCurrency(source.closed_volume)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <div className="scorecard-footer">
+        <small>Last updated: {new Date(data.generated_at).toLocaleString()}</small>
+        <small>Auto-refreshes every 60 seconds</small>
+      </div>
     </div>
   );
 }
