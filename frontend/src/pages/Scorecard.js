@@ -19,13 +19,67 @@ function Scorecard() {
       setLoading(true);
       // Fetch real data from API
       const apiData = await analyticsAPI.getScorecard();
-      setData(apiData);
-      if (apiData.period) {
-        setPeriod(apiData.period);
+
+      // Ensure all required data structures exist with defaults
+      const normalizedData = {
+        conversion_metrics: apiData?.conversion_metrics || [],
+        conversion_upswing: apiData?.conversion_upswing || {
+          current_starts: 0,
+          current_pull_thru_pct: 0,
+          target_pull_thru_pct: 0,
+          current_avg_amount: 0,
+          target_avg_amount: 0,
+          current_volume: 0,
+          volume_increase: 0,
+          current_bps: 0,
+          target_bps: 0,
+          current_compensation: 0,
+          additional_compensation: 0
+        },
+        funding_totals: {
+          total_units: apiData?.funding_totals?.total_units || 0,
+          total_volume: apiData?.funding_totals?.total_volume || 0,
+          avg_loan_amount: apiData?.funding_totals?.avg_loan_amount || 0,
+          loan_types: apiData?.funding_totals?.loan_types || [],
+          referral_sources: apiData?.funding_totals?.referral_sources || []
+        },
+        period: apiData?.period || { start_date: '', end_date: '' },
+        generated_at: apiData?.generated_at || new Date().toISOString()
+      };
+
+      setData(normalizedData);
+      if (normalizedData.period) {
+        setPeriod(normalizedData.period);
       }
       setLoading(false);
     } catch (error) {
       console.error('Failed to load scorecard:', error);
+      // Set empty data structure on error so page doesn't crash
+      setData({
+        conversion_metrics: [],
+        conversion_upswing: {
+          current_starts: 0,
+          current_pull_thru_pct: 0,
+          target_pull_thru_pct: 0,
+          current_avg_amount: 0,
+          target_avg_amount: 0,
+          current_volume: 0,
+          volume_increase: 0,
+          current_bps: 0,
+          target_bps: 0,
+          current_compensation: 0,
+          additional_compensation: 0
+        },
+        funding_totals: {
+          total_units: 0,
+          total_volume: 0,
+          avg_loan_amount: 0,
+          loan_types: [],
+          referral_sources: []
+        },
+        period: { start_date: new Date().toISOString(), end_date: new Date().toISOString() },
+        generated_at: new Date().toISOString()
+      });
       setLoading(false);
     }
   };
@@ -98,26 +152,34 @@ function Scorecard() {
               </tr>
             </thead>
             <tbody>
-              {data.conversion_metrics.map((metric, index) => (
-                <tr key={index}>
-                  <td className="metric-name">{metric.metric}</td>
-                  <td className="metric-count">{metric.total}</td>
-                  <td className="metric-count">{metric.current}</td>
-                  <td className="metric-pct">{metric.mot_pct}%</td>
-                  <td className="progress-cell">
-                    <div className="progress-bar-container">
-                      <div
-                        className="progress-bar-fill"
-                        style={{
-                          width: `${Math.min((metric.mot_pct / metric.goal_pct) * 100, 100)}%`,
-                          backgroundColor: getStatusColor(metric.status),
-                        }}
-                      />
-                    </div>
+              {data.conversion_metrics && data.conversion_metrics.length > 0 ? (
+                data.conversion_metrics.map((metric, index) => (
+                  <tr key={index}>
+                    <td className="metric-name">{metric.metric}</td>
+                    <td className="metric-count">{metric.total}</td>
+                    <td className="metric-count">{metric.current}</td>
+                    <td className="metric-pct">{metric.mot_pct}%</td>
+                    <td className="progress-cell">
+                      <div className="progress-bar-container">
+                        <div
+                          className="progress-bar-fill"
+                          style={{
+                            width: `${Math.min((metric.mot_pct / metric.goal_pct) * 100, 100)}%`,
+                            backgroundColor: getStatusColor(metric.status),
+                          }}
+                        />
+                      </div>
+                    </td>
+                    <td className="metric-pct goal-pct">{metric.goal_pct}%</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
+                    No conversion metrics available
                   </td>
-                  <td className="metric-pct goal-pct">{metric.goal_pct}%</td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
@@ -215,14 +277,22 @@ function Scorecard() {
                 </tr>
               </thead>
               <tbody>
-                {data.funding_totals.loan_types.map((type, index) => (
-                  <tr key={index}>
-                    <td>{type.type}</td>
-                    <td>{type.units}</td>
-                    <td className="volume">{formatCurrency(type.volume)}</td>
-                    <td>{type.percentage.toFixed(2)}%</td>
+                {data.funding_totals.loan_types && data.funding_totals.loan_types.length > 0 ? (
+                  data.funding_totals.loan_types.map((type, index) => (
+                    <tr key={index}>
+                      <td>{type.type}</td>
+                      <td>{type.units}</td>
+                      <td className="volume">{formatCurrency(type.volume)}</td>
+                      <td>{type.percentage.toFixed(2)}%</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="4" style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
+                      No loan type data available
+                    </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
@@ -238,13 +308,21 @@ function Scorecard() {
                 </tr>
               </thead>
               <tbody>
-                {data.funding_totals.referral_sources.map((source, index) => (
-                  <tr key={index}>
-                    <td>{source.source}</td>
-                    <td>{source.referrals}</td>
-                    <td className="volume">{formatCurrency(source.closed_volume)}</td>
+                {data.funding_totals.referral_sources && data.funding_totals.referral_sources.length > 0 ? (
+                  data.funding_totals.referral_sources.map((source, index) => (
+                    <tr key={index}>
+                      <td>{source.source}</td>
+                      <td>{source.referrals}</td>
+                      <td className="volume">{formatCurrency(source.closed_volume)}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="3" style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
+                      No referral source data available
+                    </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
