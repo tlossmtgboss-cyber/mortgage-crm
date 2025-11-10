@@ -10,6 +10,9 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
   const [helpdeskModal, setHelpdeskModal] = useState(null);
   const [uploadedTestEmail, setUploadedTestEmail] = useState(null);
   const [draggedTask, setDraggedTask] = useState(null);
+  const [taskEditModal, setTaskEditModal] = useState(null);
+  const [roleAddModal, setRoleAddModal] = useState(false);
+  const [newRoleForm, setNewRoleForm] = useState({ role_title: '', role_name: '', responsibilities: '', skills_required: [], key_activities: [] });
   const [formData, setFormData] = useState({
     // Step 1: Upload Documents
     sopFiles: [],
@@ -560,6 +563,88 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
     setDraggedTask(null);
   };
 
+  // Task Edit Modal handlers
+  const handleOpenTaskEdit = (task) => {
+    setTaskEditModal({
+      ...task,
+      tempRoleId: task.role_id,
+      tempUserId: null
+    });
+  };
+
+  const handleCloseTaskEdit = () => {
+    setTaskEditModal(null);
+  };
+
+  const handleSaveTaskEdit = () => {
+    if (!taskEditModal) return;
+
+    setFormData(prevData => {
+      const newTasks = prevData.extractedTasks.map(task => {
+        if (task.id === taskEditModal.id) {
+          return {
+            ...task,
+            task_name: taskEditModal.task_name,
+            task_description: taskEditModal.task_description,
+            role_id: taskEditModal.tempRoleId,
+            assigned_user_id: taskEditModal.tempUserId,
+            sla: taskEditModal.sla,
+            sla_unit: taskEditModal.sla_unit,
+            ai_automatable: taskEditModal.ai_automatable
+          };
+        }
+        return task;
+      });
+
+      return { ...prevData, extractedTasks: newTasks };
+    });
+
+    setTaskEditModal(null);
+  };
+
+  const handleUpdateTaskEditField = (field, value) => {
+    setTaskEditModal(prev => ({ ...prev, [field]: value }));
+  };
+
+  // Role Add Modal handlers
+  const handleOpenRoleAdd = () => {
+    setNewRoleForm({
+      role_title: '',
+      role_name: '',
+      responsibilities: '',
+      skills_required: [],
+      key_activities: []
+    });
+    setRoleAddModal(true);
+  };
+
+  const handleCloseRoleAdd = () => {
+    setRoleAddModal(false);
+  };
+
+  const handleSaveNewRole = () => {
+    if (!newRoleForm.role_title || !newRoleForm.role_name) {
+      alert('Please enter both role title and role name');
+      return;
+    }
+
+    const newRole = {
+      id: `role_${Date.now()}`,
+      role_title: newRoleForm.role_title,
+      role_name: newRoleForm.role_name,
+      responsibilities: newRoleForm.responsibilities,
+      skills_required: newRoleForm.skills_required,
+      key_activities: newRoleForm.key_activities
+    };
+
+    setFormData(prevData => ({
+      ...prevData,
+      extractedRoles: [...(prevData.extractedRoles || []), newRole]
+    }));
+
+    setRoleAddModal(false);
+  };
+
   const renderStep = () => {
     switch (currentStep) {
       case 1:
@@ -664,8 +749,11 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
           <div className="step-icon">📋</div>
           <h2>Review Tasks by Role</h2>
           <p className="step-description">
-            Review all {formData.extractedTasks?.length || 0} tasks organized by role. Each task has been assigned to the appropriate team member.
+            Review all {formData.extractedTasks?.length || 0} tasks organized by role. Click any task to edit, reassign, or view details.
           </p>
+          <button className="btn-add-role" onClick={handleOpenRoleAdd}>
+            + Add New Role
+          </button>
         </div>
 
         <div className="tasks-by-role-container">
@@ -679,8 +767,14 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
               <div className="tasks-grid">
                 {tasks.map((task, index) => {
                   const milestone = formData.extractedMilestones?.find(m => m.id === task.milestone_id);
+                  const assignedUser = formData.members?.find(m => m.email === task.assigned_user_id);
+
                   return (
-                    <div key={task.id} className="task-review-card">
+                    <div
+                      key={task.id}
+                      className="task-review-card clickable"
+                      onClick={() => handleOpenTaskEdit(task)}
+                    >
                       <div className="task-review-header">
                         <span className="task-number">{index + 1}</span>
                         <h4>{task.task_name}</h4>
@@ -693,6 +787,9 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
                       <div className="task-meta-info">
                         {milestone && (
                           <span className="meta-badge milestone-badge">📍 {milestone.name}</span>
+                        )}
+                        {assignedUser && (
+                          <span className="meta-badge user-badge">👤 {assignedUser.firstName} {assignedUser.lastName}</span>
                         )}
                         {task.estimated_duration && (
                           <span className="meta-badge time-badge">⏱️ {task.estimated_duration} min</span>
@@ -1921,6 +2018,179 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
                     </ul>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Task Edit Modal */}
+      {taskEditModal && (
+        <div className="connection-modal-overlay" onClick={handleCloseTaskEdit}>
+          <div className="connection-modal task-edit-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="btn-close-modal" onClick={handleCloseTaskEdit}>×</button>
+
+            <div className="modal-header">
+              <span className="modal-icon">📋</span>
+              <h3>Edit Task</h3>
+              <p className="modal-description">Update task details and assignment</p>
+            </div>
+
+            <div className="modal-body">
+              <div className="form-field">
+                <label>Task Name</label>
+                <input
+                  type="text"
+                  className="input-field"
+                  value={taskEditModal.task_name || ''}
+                  onChange={(e) => handleUpdateTaskEditField('task_name', e.target.value)}
+                />
+              </div>
+
+              <div className="form-field">
+                <label>Description</label>
+                <textarea
+                  className="textarea-field"
+                  rows="3"
+                  value={taskEditModal.task_description || ''}
+                  onChange={(e) => handleUpdateTaskEditField('task_description', e.target.value)}
+                />
+              </div>
+
+              <div className="form-field">
+                <label>Assigned Role</label>
+                <select
+                  className="input-field"
+                  value={taskEditModal.tempRoleId || ''}
+                  onChange={(e) => handleUpdateTaskEditField('tempRoleId', e.target.value)}
+                >
+                  <option value="">Select Role</option>
+                  {formData.extractedRoles?.map(role => (
+                    <option key={role.id} value={role.id}>
+                      {role.role_title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-field">
+                <label>Assigned User (Optional)</label>
+                <select
+                  className="input-field"
+                  value={taskEditModal.tempUserId || ''}
+                  onChange={(e) => handleUpdateTaskEditField('tempUserId', e.target.value)}
+                >
+                  <option value="">Select User</option>
+                  {formData.members?.filter(m => m.email).map((member, idx) => (
+                    <option key={idx} value={member.email}>
+                      {member.firstName} {member.lastName} ({member.role})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-row">
+                <div className="form-field">
+                  <label>SLA</label>
+                  <input
+                    type="number"
+                    className="input-field"
+                    value={taskEditModal.sla || ''}
+                    onChange={(e) => handleUpdateTaskEditField('sla', parseInt(e.target.value) || 0)}
+                    min="1"
+                  />
+                </div>
+
+                <div className="form-field">
+                  <label>SLA Unit</label>
+                  <select
+                    className="input-field"
+                    value={taskEditModal.sla_unit || 'hours'}
+                    onChange={(e) => handleUpdateTaskEditField('sla_unit', e.target.value)}
+                  >
+                    <option value="hours">Hours</option>
+                    <option value="days">Days</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-field">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={taskEditModal.ai_automatable || false}
+                    onChange={(e) => handleUpdateTaskEditField('ai_automatable', e.target.checked)}
+                  />
+                  <span>AI Automatable</span>
+                </label>
+              </div>
+
+              <div className="modal-actions">
+                <button className="btn-cancel" onClick={handleCloseTaskEdit}>
+                  Cancel
+                </button>
+                <button className="btn-save" onClick={handleSaveTaskEdit}>
+                  Save Changes
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Role Add Modal */}
+      {roleAddModal && (
+        <div className="connection-modal-overlay" onClick={handleCloseRoleAdd}>
+          <div className="connection-modal role-add-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="btn-close-modal" onClick={handleCloseRoleAdd}>×</button>
+
+            <div className="modal-header">
+              <span className="modal-icon">👥</span>
+              <h3>Add New Role</h3>
+              <p className="modal-description">Create a custom role for your team</p>
+            </div>
+
+            <div className="modal-body">
+              <div className="form-field">
+                <label>Role Title *</label>
+                <input
+                  type="text"
+                  className="input-field"
+                  placeholder="e.g., Senior Loan Officer"
+                  value={newRoleForm.role_title}
+                  onChange={(e) => setNewRoleForm({ ...newRoleForm, role_title: e.target.value })}
+                />
+              </div>
+
+              <div className="form-field">
+                <label>Role Name (Internal) *</label>
+                <input
+                  type="text"
+                  className="input-field"
+                  placeholder="e.g., senior_loan_officer"
+                  value={newRoleForm.role_name}
+                  onChange={(e) => setNewRoleForm({ ...newRoleForm, role_name: e.target.value })}
+                />
+              </div>
+
+              <div className="form-field">
+                <label>Responsibilities</label>
+                <textarea
+                  className="textarea-field"
+                  rows="3"
+                  placeholder="Describe what this role is responsible for..."
+                  value={newRoleForm.responsibilities}
+                  onChange={(e) => setNewRoleForm({ ...newRoleForm, responsibilities: e.target.value })}
+                />
+              </div>
+
+              <div className="modal-actions">
+                <button className="btn-cancel" onClick={handleCloseRoleAdd}>
+                  Cancel
+                </button>
+                <button className="btn-save" onClick={handleSaveNewRole}>
+                  Add Role
+                </button>
               </div>
             </div>
           </div>
