@@ -3857,6 +3857,71 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
         }
 
 # ============================================================================
+# DEBUG ENDPOINT - TEMPORARY
+# ============================================================================
+
+@app.get("/api/v1/dashboard-debug")
+async def get_dashboard_debug(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Temporary debug endpoint to test dashboard sections"""
+    import traceback
+    results = {}
+
+    try:
+        from datetime import date, timedelta
+        from sqlalchemy import func, extract
+
+        today = date.today()
+        start_of_month = today.replace(day=1)
+        results["step1"] = "imports_ok"
+
+        # Test production metrics
+        user_metadata = current_user.user_metadata or {}
+        goals = user_metadata.get('goals', {})
+        annual_actual = db.query(func.count(Loan.id)).filter(
+            Loan.loan_officer_id == current_user.id,
+            Loan.stage == LoanStage.FUNDED,
+            Loan.funded_date.isnot(None),
+            extract('year', Loan.funded_date) == today.year
+        ).scalar() or 0
+        results["step2_production"] = f"annual_actual={annual_actual}"
+
+        # Test pipeline stats
+        new_leads = db.query(func.count(Lead.id)).filter(
+            Lead.owner_id == current_user.id,
+            Lead.stage == LeadStage.NEW
+        ).scalar() or 0
+        results["step3_pipeline"] = f"new_leads={new_leads}"
+
+        # Test tasks
+        tasks_today = db.query(Task).filter(
+            Task.owner_id == current_user.id,
+            Task.status.in_(["pending", "in_progress"]),
+            Task.due_date <= today + timedelta(days=1)
+        ).order_by(Task.priority.desc(), Task.due_date).limit(10).all()
+        results["step4_tasks"] = f"tasks_count={len(tasks_today)}"
+
+        # Test prioritized_tasks list comprehension
+        prioritized_tasks = [{
+            "title": task.title,
+            "borrower": task.related_contact_name,
+            "stage": task.related_type,
+            "urgency": task.priority,
+            "ai_action": None
+        } for task in tasks_today]
+        results["step5_prioritized"] = f"prioritized_count={len(prioritized_tasks)}"
+
+        return {"status": "all_ok", "results": results}
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "results": results,
+            "error": str(e),
+            "type": type(e).__name__,
+            "traceback": traceback.format_exc()
+        }
+
+# ============================================================================
 # LOAN SCORECARD REPORT
 # ============================================================================
 
