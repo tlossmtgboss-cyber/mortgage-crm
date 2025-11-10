@@ -5201,7 +5201,7 @@ async def get_scorecard_metrics(db: Session = Depends(get_db), current_user: Use
     # Calculate loan type distribution from real data
     loan_types = {}
     for loan in funded_loans:
-        loan_type = loan.product_type or "Conventional"
+        loan_type = loan.program or "Conventional"
         if loan_type not in loan_types:
             loan_types[loan_type] = {"count": 0, "volume": 0}
         loan_types[loan_type]["count"] += 1
