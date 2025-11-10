@@ -3812,7 +3812,6 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     # ============================================================================
 
     partners = db.query(ReferralPartner).filter(
-        ReferralPartner.owner_id == current_user.id,
         ReferralPartner.status == "active"
     ).limit(5).all()
 
