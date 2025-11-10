@@ -99,8 +99,42 @@ export const loansAPI = {
     return response.data;
   },
   create: async (data) => {
-    const response = await api.post('/api/v1/loans/', data);
-    return response.data;
+    try {
+      console.log('Creating loan with data:', data);
+      console.log('API Base URL:', API_BASE_URL);
+      console.log('Auth token exists:', !!localStorage.getItem('token'));
+
+      const response = await api.post('/api/v1/loans/', data);
+      console.log('Loan created successfully:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Loan creation error details:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          baseURL: error.config?.baseURL
+        }
+      });
+
+      // If 405 error, try without trailing slash as fallback
+      if (error.response?.status === 405) {
+        console.log('Retrying without trailing slash...');
+        try {
+          const retryResponse = await api.post('/api/v1/loans', data);
+          console.log('Retry successful:', retryResponse.data);
+          return retryResponse.data;
+        } catch (retryError) {
+          console.error('Retry also failed:', retryError);
+          throw retryError;
+        }
+      }
+
+      throw error;
+    }
   },
   update: async (id, data) => {
     const response = await api.patch(`/api/v1/loans/${id}`, data);
