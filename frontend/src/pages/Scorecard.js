@@ -129,115 +129,124 @@ function Scorecard() {
         </div>
       </div>
 
-      {/* LOAN STARTS VS. ACTIVITY TOTALS */}
-      <section className="scorecard-section green-section">
-        <div className="section-header green-header">
-          <span className="indicator"></span>
-          Loan Starts vs. Activity Totals
-        </div>
-        <div className="section-subheader">
-          Counts: {period.start_date} - {period.end_date}
-        </div>
+      {/* TOP ROW: Loan Starts (left) and Conversion Upswing (right) */}
+      <div className="scorecard-top-row">
+        {/* LOAN STARTS VS. ACTIVITY TOTALS */}
+        <section className="scorecard-section green-section">
+          <div className="section-header green-header">
+            <span className="indicator"></span>
+            Loan Starts vs. Activity Totals
+          </div>
+          <div className="section-subheader">
+            Counts: {period.start_date} - {period.end_date}
+          </div>
 
-        <div className="metrics-table-container">
-          <table className="scorecard-table">
-            <thead>
-              <tr>
-                <th>Counts</th>
-                <th></th>
-                <th></th>
-                <th>MoT%</th>
-                <th>Progress</th>
-                <th>Goal%</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.conversion_metrics && data.conversion_metrics.length > 0 ? (
-                data.conversion_metrics.map((metric, index) => (
-                  <tr key={index}>
-                    <td className="metric-name">{metric.metric}</td>
-                    <td className="metric-count">{metric.total}</td>
-                    <td className="metric-count">{metric.current}</td>
-                    <td className="metric-pct">{metric.mot_pct}%</td>
-                    <td className="progress-cell">
-                      <div className="progress-bar-container">
-                        <div
-                          className="progress-bar-fill"
-                          style={{
-                            width: `${Math.min((metric.mot_pct / metric.goal_pct) * 100, 100)}%`,
-                            backgroundColor: getStatusColor(metric.status),
-                          }}
-                        />
-                      </div>
-                    </td>
-                    <td className="metric-pct goal-pct">{metric.goal_pct}%</td>
-                  </tr>
-                ))
-              ) : (
+          <div className="metrics-table-container">
+            <table className="scorecard-table">
+              <thead>
                 <tr>
-                  <td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
-                    No conversion metrics available
-                  </td>
+                  <th>Counts</th>
+                  <th></th>
+                  <th></th>
+                  <th>MoT%</th>
+                  <th>Progress</th>
+                  <th>Goal%</th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* CONVERSION UPSWING */}
-      <section className="scorecard-section pink-section">
-        <div className="section-header pink-header">
-          <span className="indicator"></span>
-          Conversion Upswing:
-        </div>
-
-        <div className="upswing-grid">
-          <div className="upswing-table">
-            <h4>10% in Starts</h4>
-            <table>
+              </thead>
               <tbody>
-                <tr>
-                  <td>Starts</td>
-                  <td className="value">{formatNumber(data.conversion_upswing.current_starts)}</td>
-                  <td className="target">Current</td>
-                </tr>
-                <tr>
-                  <td>Starts to Funded Pull-thru</td>
-                  <td className="value">{data.conversion_upswing.current_pull_thru_pct}%</td>
-                  <td className="target">{data.conversion_upswing.target_pull_thru_pct}%</td>
-                </tr>
-                <tr>
-                  <td>Avg loan amount</td>
-                  <td className="value">{formatCurrency(data.conversion_upswing.current_avg_amount)}</td>
-                  <td className="target">{formatCurrency(data.conversion_upswing.target_avg_amount)}</td>
-                </tr>
-                <tr>
-                  <td>Increase in volume</td>
-                  <td className="value">{formatCurrency(data.conversion_upswing.current_volume)}</td>
-                  <td className="target">{formatCurrency(data.conversion_upswing.volume_increase)}</td>
-                </tr>
-                <tr>
-                  <td>Current Avg bps</td>
-                  <td className="value">{data.conversion_upswing.current_bps}</td>
-                  <td className="target">{data.conversion_upswing.target_bps}</td>
-                </tr>
-                <tr>
-                  <td>Additional compensation</td>
-                  <td className="value">{formatCurrency(data.conversion_upswing.current_compensation)}</td>
-                  <td className="target highlight">{formatCurrency(data.conversion_upswing.additional_compensation)}</td>
-                </tr>
+                {data.conversion_metrics && data.conversion_metrics.length > 0 ? (
+                  data.conversion_metrics.map((metric, index) => (
+                    <tr key={index}>
+                      <td className="metric-name">{metric.metric}</td>
+                      <td className="metric-count">{metric.total}</td>
+                      <td className="metric-count">{metric.current}</td>
+                      <td className="metric-pct">{metric.mot_pct}%</td>
+                      <td className="progress-cell">
+                        <div className="progress-bar-container">
+                          <div
+                            className="progress-bar-fill"
+                            style={{
+                              width: `${Math.min((metric.mot_pct / metric.goal_pct) * 100, 100)}%`,
+                              backgroundColor: getStatusColor(metric.status),
+                            }}
+                          />
+                        </div>
+                      </td>
+                      <td className="metric-pct goal-pct">{metric.goal_pct}%</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="6" style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
+                      No conversion metrics available
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* FUNDING TOTALS */}
+        {/* CONVERSION UPSWING */}
+        <section className="scorecard-section pink-section">
+          <div className="section-header pink-header">
+            <span className="indicator"></span>
+            Conversion Upswing:
+          </div>
+          <div className="section-subheader">
+            {period.start_date} - {period.end_date}
+          </div>
+
+          <div className="upswing-grid">
+            <div className="upswing-table">
+              <h4>10% in Starts</h4>
+              <table>
+                <tbody>
+                  <tr>
+                    <td>Starts</td>
+                    <td className="value">{formatNumber(data.conversion_upswing.current_starts)}</td>
+                    <td className="target">Current</td>
+                  </tr>
+                  <tr>
+                    <td>Starts to Funded Pull-thru</td>
+                    <td className="value">{data.conversion_upswing.current_pull_thru_pct}%</td>
+                    <td className="target">{data.conversion_upswing.target_pull_thru_pct}%</td>
+                  </tr>
+                  <tr>
+                    <td>Avg loan amount</td>
+                    <td className="value">{formatCurrency(data.conversion_upswing.current_avg_amount)}</td>
+                    <td className="target">{formatCurrency(data.conversion_upswing.target_avg_amount)}</td>
+                  </tr>
+                  <tr>
+                    <td>Increase in volume</td>
+                    <td className="value">{formatCurrency(data.conversion_upswing.current_volume)}</td>
+                    <td className="target">{formatCurrency(data.conversion_upswing.volume_increase)}</td>
+                  </tr>
+                  <tr>
+                    <td>Current Avg bps</td>
+                    <td className="value">{data.conversion_upswing.current_bps}</td>
+                    <td className="target">{data.conversion_upswing.target_bps}</td>
+                  </tr>
+                  <tr>
+                    <td>Additional compensation</td>
+                    <td className="value">{formatCurrency(data.conversion_upswing.current_compensation)}</td>
+                    <td className="target highlight">{formatCurrency(data.conversion_upswing.additional_compensation)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      {/* BOTTOM ROW: Funding Totals (full width) */}
       <section className="scorecard-section yellow-section">
         <div className="section-header yellow-header">
           <span className="indicator"></span>
           Funding Totals
+        </div>
+        <div className="section-subheader">
+          {period.start_date} - {period.end_date}
         </div>
 
         <div className="funding-grid">
