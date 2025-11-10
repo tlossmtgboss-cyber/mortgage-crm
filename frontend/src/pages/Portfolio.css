@@ -95,11 +95,14 @@
 }
 
 .stat-value {
-  font-size: 32px;
+  font-size: 20px;
   font-weight: 700;
   color: #000000;
   margin-bottom: 8px;
   line-height: 1.2;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
 }
 
 .stat-label {
