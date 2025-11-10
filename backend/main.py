@@ -1126,6 +1126,7 @@ class LoanUpdate(BaseModel):
     stage: Optional[LoanStage] = None
     rate: Optional[float] = None
     closing_date: Optional[datetime] = None
+    funded_date: Optional[datetime] = None
     processor: Optional[str] = None
 
 class LoanResponse(BaseModel):
@@ -1137,6 +1138,7 @@ class LoanResponse(BaseModel):
     amount: float
     rate: Optional[float]
     closing_date: Optional[datetime]
+    funded_date: Optional[datetime] = None
     days_in_stage: int
     sla_status: str
     created_at: datetime
