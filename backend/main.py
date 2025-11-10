@@ -3546,8 +3546,9 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     Get dashboard data with real metrics from database.
     All values are server-computed from CRM database.
     """
-    from datetime import date, timedelta
-    from sqlalchemy import func, extract
+    try:
+        from datetime import date, timedelta
+        from sqlalchemy import func, extract
 
     # Get current date ranges
     today = date.today()
@@ -3829,23 +3830,26 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
         "insights": []
     }
 
-    # ============================================================================
-    # MESSAGES (placeholder for now)
-    # ============================================================================
+        # ============================================================================
+        # MESSAGES (placeholder for now)
+        # ============================================================================
 
-    messages = []
+        messages = []
 
-    return {
-        "prioritized_tasks": prioritized_tasks,
-        "pipeline_stats": pipeline_stats,
-        "production": production,
-        "lead_metrics": lead_metrics,
-        "loan_issues": [],
-        "ai_tasks": {"pending": [], "waiting": []},
-        "referral_stats": referral_stats,
-        "team_stats": team_stats,
-        "messages": messages
-    }
+        return {
+            "prioritized_tasks": prioritized_tasks,
+            "pipeline_stats": pipeline_stats,
+            "production": production,
+            "lead_metrics": lead_metrics,
+            "loan_issues": [],
+            "ai_tasks": {"pending": [], "waiting": []},
+            "referral_stats": referral_stats,
+            "team_stats": team_stats,
+            "messages": messages
+        }
+    except Exception as e:
+        logger.error(f"Dashboard error: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Dashboard error: {str(e)}")
 
 # ============================================================================
 # LOAN SCORECARD REPORT
