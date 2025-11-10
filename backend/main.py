@@ -3536,6 +3536,16 @@ async def delete_user(
 
     return {"message": "User deleted successfully"}
 
+@app.get("/api/v1/health-check")
+async def health_check():
+    """Health check endpoint to verify deployment version"""
+    return {
+        "status": "healthy",
+        "commit": "7981c99",
+        "timestamp": "2025-11-10T18:41:33Z"
+    }
+
+
 # ============================================================================
 # DASHBOARD
 # ============================================================================
