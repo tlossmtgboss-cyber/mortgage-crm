@@ -79,15 +79,15 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
           >
             AI Underwriter
           </Link>
+        </div>
+
+        <div className="nav-actions">
           <button
             className={`nav-link coach-link ${coachOpen ? 'active' : ''}`}
             onClick={onToggleCoach}
           >
             🏆 Coach
           </button>
-        </div>
-
-        <div className="nav-actions">
           <Link
             to="/settings"
             className={`settings-link ${isActive('/settings') ? 'active' : ''}`}
