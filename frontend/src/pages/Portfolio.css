@@ -95,18 +95,20 @@
 }
 
 .stat-value {
-  font-size: 28px;
+  font-size: 32px;
   font-weight: 700;
-  color: #18a0a6;
+  color: #000000;
   margin-bottom: 8px;
+  line-height: 1.2;
 }
 
 .stat-label {
-  font-size: 12px;
+  font-size: 13px;
   color: #6b7280;
   font-weight: 600;
   letter-spacing: 0.5px;
   text-transform: uppercase;
+  line-height: 1.4;
 }
 
 /* MUM Tasks Widget */
