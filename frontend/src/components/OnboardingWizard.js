@@ -831,17 +831,6 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
 
       <div className="form-section">
         <div className="form-field">
-          <label>Team Name (Branch)</label>
-          <input
-            type="text"
-            value={formData.teamName}
-            onChange={(e) => updateField('teamName', e.target.value)}
-            placeholder="e.g., West Coast Branch"
-            className="input-field"
-          />
-        </div>
-
-        <div className="form-field">
           <label>Timezone</label>
           <select
             value={formData.timezone}
@@ -895,6 +884,7 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
                 <option value="">Select Role</option>
                 <option value="loan_officer">Loan Officer</option>
                 <option value="processor">Processor</option>
+                <option value="processing_assistant">Processing Assistant</option>
                 <option value="analyst">Analyst</option>
                 <option value="concierge">Concierge</option>
                 <option value="admin">Admin</option>
@@ -1058,7 +1048,7 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
   // SCREEN 3: Confirm "Who Does What, When"
   const renderProcessTree = () => {
     const currentMilestone = formData.milestones[activeMilestone];
-    const availableRoles = ['Loan Officer', 'Processor', 'Analyst', 'Concierge', 'Admin'];
+    const availableRoles = ['Loan Officer', 'Processor', 'Processing Assistant', 'Analyst', 'Concierge', 'Admin'];
 
     // Show message if no milestones exist
     if (formData.milestones.length === 0) {
@@ -1693,10 +1683,10 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
         <div className="requirements-check">
           <h4>Requirements</h4>
           <div className="requirement-item">
-            <span className={formData.teamName ? 'check-pass' : 'check-fail'}>
-              {formData.teamName ? '✓' : '○'}
+            <span className={formData.members?.length > 0 && formData.members[0].email ? 'check-pass' : 'check-fail'}>
+              {formData.members?.length > 0 && formData.members[0].email ? '✓' : '○'}
             </span>
-            Team configured
+            Team members configured
           </div>
           <div className="requirement-item">
             <span className={formData.dncAccepted ? 'check-pass' : 'check-fail'}>
