@@ -549,3 +549,205 @@
 .form-actions .btn-primary:hover {
   background: #1a7070;
 }
+
+/* MUM Dashboard Styles */
+.mum-dashboard {
+  background: #f8f9fa;
+  padding: 24px;
+  border-radius: 8px;
+}
+
+.dashboard-section-header {
+  text-align: center;
+  margin: 32px 0 24px 0;
+  padding: 16px 0;
+  border-bottom: 2px solid #18a0a6;
+}
+
+.dashboard-section-header h2 {
+  margin: 0 0 4px 0;
+  color: #18a0a6;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.dashboard-section-header p {
+  margin: 0;
+  color: #666;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.dashboard-section-header:first-child {
+  margin-top: 0;
+}
+
+/* MUM Stats Grid */
+.mum-stats-grid {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.mum-stats-row {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.mum-opportunities-row {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.mum-revenue-row {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.mum-health-row {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.mum-segments-row {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+@media (max-width: 1200px) {
+  .mum-stats-row,
+  .mum-segments-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .mum-opportunities-row,
+  .mum-revenue-row,
+  .mum-health-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .mum-stats-row,
+  .mum-opportunities-row,
+  .mum-revenue-row,
+  .mum-health-row,
+  .mum-segments-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* MUM Stat Card */
+.mum-stat-card {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 120px;
+}
+
+.mum-stat-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+.mum-stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #000000;
+  margin-bottom: 4px;
+  line-height: 1.2;
+}
+
+.mum-stat-sublabel {
+  font-size: 12px;
+  color: #666;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.mum-stat-label {
+  font-size: 11px;
+  color: #6b7280;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+
+/* Opportunity Cards */
+.opportunity-card {
+  border-left: 4px solid #218D8D;
+  background: linear-gradient(135deg, #ffffff 0%, #f0fdfa 100%);
+}
+
+.opportunity-highlight {
+  margin-top: 8px;
+  padding: 4px 12px;
+  background: #218D8D;
+  color: white;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  display: inline-block;
+}
+
+/* Segment Cards */
+.segment-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.segment-card .mum-stat-value {
+  color: white;
+  font-size: 36px;
+}
+
+.segment-card .mum-stat-label {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+}
+
+/* AI Suggestions */
+.ai-suggestions-container {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  border-left: 4px solid #667eea;
+}
+
+.ai-suggestion-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.ai-suggestion-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.ai-bullet {
+  color: #667eea;
+  font-size: 20px;
+  font-weight: bold;
+  line-height: 1.5;
+}
+
+.ai-suggestion-text {
+  font-size: 15px;
+  color: #333;
+  line-height: 1.6;
+}
+
+.ai-suggestion-text strong {
+  color: #18a0a6;
+  font-weight: 700;
+}

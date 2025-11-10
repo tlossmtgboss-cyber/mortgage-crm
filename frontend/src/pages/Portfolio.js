@@ -187,7 +187,7 @@ const generateMockMumClients = () => {
 
 function Portfolio() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('loans');
+  const [activeTab, setActiveTab] = useState('mum-dashboard');
   const [portfolioData, setPortfolioData] = useState({
     totalLoans: 0,
     totalVolume: 0,
@@ -371,6 +371,12 @@ function Portfolio() {
 
       <div className="portfolio-tabs">
         <button
+          className={activeTab === 'mum-dashboard' ? 'active' : ''}
+          onClick={() => setActiveTab('mum-dashboard')}
+        >
+          MUM Dashboard
+        </button>
+        <button
           className={activeTab === 'loans' ? 'active' : ''}
           onClick={() => setActiveTab('loans')}
         >
@@ -383,6 +389,196 @@ function Portfolio() {
           MUM Clients ({mumClients.length})
         </button>
       </div>
+
+      {activeTab === 'mum-dashboard' && (
+        <div className="mum-dashboard">
+          {/* Header */}
+          <div className="dashboard-section-header">
+            <h2>MORTGAGES UNDER MANAGEMENT</h2>
+            <p>Portfolio Performance</p>
+          </div>
+
+          {/* Top Row Stats */}
+          <div className="mum-stats-grid mum-stats-row">
+            <div className="mum-stat-card">
+              <div className="mum-stat-value">$184,250,000</div>
+              <div className="mum-stat-label">TOTAL UPB UNDER MGT</div>
+            </div>
+            <div className="mum-stat-card">
+              <div className="mum-stat-value">+$3.4M</div>
+              <div className="mum-stat-sublabel">(MoM)</div>
+              <div className="mum-stat-label">NET MUM GROWTH</div>
+            </div>
+            <div className="mum-stat-card">
+              <div className="mum-stat-value">1.82%</div>
+              <div className="mum-stat-sublabel">Annual Yield</div>
+              <div className="mum-stat-label">PORTFOLIO REVENUE YIELD</div>
+            </div>
+            <div className="mum-stat-card">
+              <div className="mum-stat-value">$12,480</div>
+              <div className="mum-stat-sublabel">Avg. per Client</div>
+              <div className="mum-stat-label">CLIENT LIFETIME VALUE</div>
+            </div>
+          </div>
+
+          {/* Second Row Stats */}
+          <div className="mum-stats-grid mum-stats-row">
+            <div className="mum-stat-card">
+              <div className="mum-stat-value">487</div>
+              <div className="mum-stat-sublabel">Active Clients</div>
+              <div className="mum-stat-label">CLIENT COUNT</div>
+            </div>
+            <div className="mum-stat-card">
+              <div className="mum-stat-value">+22 / -5</div>
+              <div className="mum-stat-sublabel">Added / Lost</div>
+              <div className="mum-stat-label">LOANS ADDED VS LOST</div>
+            </div>
+            <div className="mum-stat-card">
+              <div className="mum-stat-value">+41%</div>
+              <div className="mum-stat-sublabel">Above Industry Avg</div>
+              <div className="mum-stat-label">CAPTURE RATE ALPHA</div>
+            </div>
+            <div className="mum-stat-card">
+              <div className="mum-stat-value">12.4%</div>
+              <div className="mum-stat-sublabel">At-Risk Clients</div>
+              <div className="mum-stat-label">ATTRITION RISK INDEX</div>
+            </div>
+          </div>
+
+          {/* Portfolio Opportunities */}
+          <div className="dashboard-section-header">
+            <h2>PORTFOLIO OPPORTUNITIES</h2>
+          </div>
+
+          <div className="mum-stats-grid mum-opportunities-row">
+            <div className="mum-stat-card opportunity-card">
+              <div className="mum-stat-value">74</div>
+              <div className="mum-stat-sublabel">Clients Eligible</div>
+              <div className="mum-stat-label">RATE REBOUND OPPS</div>
+              <div className="opportunity-highlight">18 High-Priority</div>
+            </div>
+            <div className="mum-stat-card opportunity-card">
+              <div className="mum-stat-value">112</div>
+              <div className="mum-stat-sublabel">Clients > $150K Equity</div>
+              <div className="mum-stat-label">EQUITY ACCESS OPPS</div>
+              <div className="opportunity-highlight">37 Ready Now</div>
+            </div>
+            <div className="mum-stat-card opportunity-card">
+              <div className="mum-stat-value">32</div>
+              <div className="mum-stat-sublabel">High-Priority Files</div>
+              <div className="mum-stat-label">HELOC / REFI HEATMAP</div>
+              <div className="opportunity-highlight">rate drop + equity + LTV</div>
+            </div>
+          </div>
+
+          {/* Annual Revenue Performance */}
+          <div className="dashboard-section-header">
+            <h2>ANNUAL REVENUE PERFORMANCE</h2>
+          </div>
+
+          <div className="mum-stats-grid mum-revenue-row">
+            <div className="mum-stat-card">
+              <div className="mum-stat-value">$2,180</div>
+              <div className="mum-stat-sublabel">per Client</div>
+              <div className="mum-stat-label">ANNUAL REVENUE / CL</div>
+            </div>
+            <div className="mum-stat-card">
+              <div className="mum-stat-value">0.64</div>
+              <div className="mum-stat-sublabel">Referrals/yr</div>
+              <div className="mum-stat-label">REFERRAL RATE / CLIENT</div>
+            </div>
+            <div className="mum-stat-card">
+              <div className="mum-stat-value">21%</div>
+              <div className="mum-stat-sublabel">5-Yr Rolling</div>
+              <div className="mum-stat-label">REPEAT PURCHASE RATE</div>
+            </div>
+          </div>
+
+          {/* Portfolio Health */}
+          <div className="dashboard-section-header">
+            <h2>PORTFOLIO HEALTH</h2>
+          </div>
+
+          <div className="mum-stats-grid mum-health-row">
+            <div className="mum-stat-card">
+              <div className="mum-stat-value">89/100</div>
+              <div className="mum-stat-label">PORTFOLIO STABILITY</div>
+            </div>
+            <div className="mum-stat-card">
+              <div className="mum-stat-value">±14%</div>
+              <div className="mum-stat-sublabel">Month-to-Month</div>
+              <div className="mum-stat-label">VARIANCE IN VOLUME</div>
+            </div>
+            <div className="mum-stat-card">
+              <div className="mum-stat-value">-28%</div>
+              <div className="mum-stat-sublabel">Last 12 Months</div>
+              <div className="mum-stat-label">PIPELINE MAX DRAWDOWN</div>
+            </div>
+          </div>
+
+          {/* Client Segments */}
+          <div className="dashboard-section-header">
+            <h2>CLIENT SEGMENTS</h2>
+          </div>
+
+          <div className="mum-stats-grid mum-segments-row">
+            <div className="mum-stat-card segment-card">
+              <div className="mum-stat-value">62%</div>
+              <div className="mum-stat-label">PRIMARY RESIDENCE</div>
+            </div>
+            <div className="mum-stat-card segment-card">
+              <div className="mum-stat-value">18%</div>
+              <div className="mum-stat-label">INVESTORS</div>
+            </div>
+            <div className="mum-stat-card segment-card">
+              <div className="mum-stat-value">12%</div>
+              <div className="mum-stat-label">BUILDERS / RTO</div>
+            </div>
+            <div className="mum-stat-card segment-card">
+              <div className="mum-stat-value">8%</div>
+              <div className="mum-stat-label">REFINANCE / OTHER</div>
+            </div>
+          </div>
+
+          {/* AI-Driven Suggestions */}
+          <div className="dashboard-section-header">
+            <h2>AI-DRIVEN SUGGESTIONS</h2>
+          </div>
+
+          <div className="ai-suggestions-container">
+            <div className="ai-suggestion-item">
+              <span className="ai-bullet">•</span>
+              <span className="ai-suggestion-text">
+                <strong>18 clients</strong> qualify for refinance now based on Rate Rebound
+              </span>
+            </div>
+            <div className="ai-suggestion-item">
+              <span className="ai-bullet">•</span>
+              <span className="ai-suggestion-text">
+                <strong>37 clients</strong> should be contacted for HELOC/cash-out education
+              </span>
+            </div>
+            <div className="ai-suggestion-item">
+              <span className="ai-bullet">•</span>
+              <span className="ai-suggestion-text">
+                <strong>12 high-risk attrition clients</strong> need immediate outreach
+              </span>
+            </div>
+            <div className="ai-suggestion-item">
+              <span className="ai-bullet">•</span>
+              <span className="ai-suggestion-text">
+                <strong>4 clients</strong> have homes listed—trigger Purchase-Next call
+              </span>
+            </div>
+            <div className="ai-suggestion-item">
+              <span className="ai-bullet">•</span>
+              <span className="ai-suggestion-text">
+                <strong>89 clients</strong> are 6–12 months from next mortgage event
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {activeTab === 'loans' && (
         <div className="loans-table-container">
