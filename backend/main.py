@@ -3781,7 +3781,7 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     high_intent_leads = db.query(func.count(Lead.id)).filter(
         Lead.owner_id == current_user.id,
         Lead.ai_score >= 75,
-        Lead.stage == LeadStage.CONTACTED
+        Lead.stage == LeadStage.PROSPECT
     ).scalar() or 0
 
     if high_intent_leads > 0:
