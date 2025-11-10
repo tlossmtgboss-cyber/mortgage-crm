@@ -1,10 +1,10 @@
 import axios from 'axios';
 
-// Use relative URL for Vercel deployments (proxied via vercel.json)
-// Otherwise use environment variable or localhost
-const isVercel = window.location.hostname.includes('vercel.app');
-const API_BASE_URL = isVercel
-  ? '' // Relative URL - uses vercel.json proxy
+// Use direct Railway URL for production, localhost for development
+// Bypassing Vercel proxy due to POST request issues
+const isProduction = window.location.hostname.includes('vercel.app');
+const API_BASE_URL = isProduction
+  ? 'https://mortgage-crm-production-7a9a.up.railway.app' // Direct Railway URL
   : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
 // Create axios instance
