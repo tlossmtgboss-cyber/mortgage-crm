@@ -303,11 +303,16 @@ function Portfolio() {
     <div className="portfolio-container">
       <div className="portfolio-header">
         <h1 className="portfolio-title">Portfolio</h1>
-        {activeTab === 'mum' && (
-          <button className="btn-add" onClick={() => setShowAddModal(true)}>
-            + Add MUM Client
+        <div className="header-actions">
+          <button className="btn-totals" onClick={() => navigate('/portfolio/year-over-year')}>
+            Totals
           </button>
-        )}
+          {activeTab === 'mum' && (
+            <button className="btn-add" onClick={() => setShowAddModal(true)}>
+              + Add MUM Client
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="portfolio-stats">

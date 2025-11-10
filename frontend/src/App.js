@@ -13,6 +13,7 @@ import Leads from './pages/Leads';
 import LeadDetail from './pages/LeadDetail';
 import Loans from './pages/Loans';
 import Portfolio from './pages/Portfolio';
+import YearOverYear from './pages/YearOverYear';
 import Tasks from './pages/Tasks';
 import Calendar from './pages/Calendar';
 import Scorecard from './pages/Scorecard';
@@ -258,6 +259,23 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <Portfolio />
+                  </main>
+                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/portfolio/year-over-year"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    assistantOpen={assistantOpen}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <YearOverYear />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                 </div>
