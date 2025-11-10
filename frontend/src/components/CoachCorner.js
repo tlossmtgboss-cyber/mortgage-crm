@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import './CoachCorner.css';
 
-const CoachCorner = () => {
+const CoachCorner = ({ isOpen, onClose }) => {
   const [mode, setMode] = useState(null);
   const [loading, setLoading] = useState(false);
   const [response, setResponse] = useState(null);
   const [customMessage, setCustomMessage] = useState('');
   const [showCustomInput, setShowCustomInput] = useState(false);
+
+  if (!isOpen) return null;
 
   const coachModes = [
     {
@@ -106,7 +108,7 @@ const CoachCorner = () => {
       <div className="coach-corner">
         <div className="coach-header">
           <h2>🏆 The Process Coach</h2>
-          <p className="coach-subtitle">High-Performance Guidance System</p>
+          <button className="close-button" onClick={onClose}>×</button>
         </div>
         <div className="coach-loading">
           <div className="loading-spinner"></div>
@@ -121,9 +123,12 @@ const CoachCorner = () => {
       <div className="coach-corner">
         <div className="coach-header">
           <h2>🏆 The Process Coach</h2>
-          <button className="btn-back" onClick={() => setResponse(null)}>
-            ← Back
-          </button>
+          <div className="coach-header-actions">
+            <button className="btn-back" onClick={() => setResponse(null)}>
+              ← Back
+            </button>
+            <button className="close-button" onClick={onClose}>×</button>
+          </div>
         </div>
 
         <div className="coach-response-container">
@@ -189,8 +194,9 @@ const CoachCorner = () => {
     <div className="coach-corner">
       <div className="coach-header">
         <h2>🏆 The Process Coach</h2>
-        <p className="coach-subtitle">Elite Performance Guidance for Mortgage Professionals</p>
+        <button className="close-button" onClick={onClose}>×</button>
       </div>
+      <p className="coach-subtitle">Elite Performance Guidance for Mortgage Professionals</p>
 
       <div className="coach-intro">
         <p><strong>Philosophy:</strong> Process over outcome. Standards over feelings. Execution over excuses.</p>

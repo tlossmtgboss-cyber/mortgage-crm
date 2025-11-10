@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { isAuthenticated } from './utils/auth';
 import Navigation from './components/Navigation';
 import AIAssistant from './components/AIAssistant';
+import CoachCorner from './components/CoachCorner';
 import OnboardingWizard from './components/OnboardingWizard';
 import LandingPage from './pages/LandingPage';
 import Registration from './pages/Registration';
@@ -39,6 +40,7 @@ function PrivateRoute({ children }) {
 
 function App() {
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [coachOpen, setCoachOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
 
@@ -53,6 +55,10 @@ function App() {
 
   const toggleAssistant = () => {
     setAssistantOpen(!assistantOpen);
+  };
+
+  const toggleCoach = () => {
+    setCoachOpen(!coachOpen);
   };
 
   const handleOnboardingComplete = () => {
@@ -169,13 +175,16 @@ function App() {
                   <div className="app-layout">
                     <Navigation
                       onToggleAssistant={toggleAssistant}
+                      onToggleCoach={toggleCoach}
                       assistantOpen={assistantOpen}
+                      coachOpen={coachOpen}
                       taskCounts={taskCounts}
                     />
                     <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                       <Dashboard />
                     </main>
                     <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                    <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                   </div>
                 </>
               </PrivateRoute>
@@ -188,12 +197,15 @@ function App() {
                 <div className="app-layout">
                   <Navigation
                     onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
                     assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <Leads />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
             }
@@ -205,12 +217,15 @@ function App() {
                 <div className="app-layout">
                   <Navigation
                     onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
                     assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LeadDetail />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
             }
@@ -222,12 +237,15 @@ function App() {
                 <div className="app-layout">
                   <Navigation
                     onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
                     assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <Loans />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
             }
@@ -239,12 +257,15 @@ function App() {
                 <div className="app-layout">
                   <Navigation
                     onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
                     assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LeadDetail />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
             }
@@ -256,12 +277,15 @@ function App() {
                 <div className="app-layout">
                   <Navigation
                     onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
                     assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <Portfolio />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
             }
@@ -273,12 +297,15 @@ function App() {
                 <div className="app-layout">
                   <Navigation
                     onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
                     assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <YearOverYear />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
             }
@@ -290,12 +317,15 @@ function App() {
                 <div className="app-layout">
                   <Navigation
                     onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
                     assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LeadDetail />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
             }
@@ -307,12 +337,15 @@ function App() {
                 <div className="app-layout">
                   <Navigation
                     onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
                     assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <Tasks />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
             }
@@ -324,12 +357,15 @@ function App() {
                 <div className="app-layout">
                   <Navigation
                     onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
                     assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <Calendar />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
             }
@@ -341,12 +377,15 @@ function App() {
                 <div className="app-layout">
                   <Navigation
                     onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
                     assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <Scorecard />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
             }
@@ -358,12 +397,15 @@ function App() {
                 <div className="app-layout">
                   <Navigation
                     onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
                     assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <Assistant />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
             }
@@ -375,12 +417,15 @@ function App() {
                 <div className="app-layout">
                   <Navigation
                     onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
                     assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <ClientProfile />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
             }
@@ -392,12 +437,15 @@ function App() {
                 <div className="app-layout">
                   <Navigation
                     onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
                     assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <ReferralPartners />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
             }
@@ -409,12 +457,15 @@ function App() {
                 <div className="app-layout">
                   <Navigation
                     onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
                     assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <ReferralPartnerDetail />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
             }
@@ -426,12 +477,15 @@ function App() {
                 <div className="app-layout">
                   <Navigation
                     onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
                     assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <AIUnderwriter />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
             }
@@ -443,12 +497,15 @@ function App() {
                 <div className="app-layout">
                   <Navigation
                     onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
                     assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <GoalTracker />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
             }
@@ -460,12 +517,15 @@ function App() {
                 <div className="app-layout">
                   <Navigation
                     onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
                     assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <Coach />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
             }
@@ -477,12 +537,15 @@ function App() {
                 <div className="app-layout">
                   <Navigation
                     onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
                     assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <ReconciliationCenter />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
             }
@@ -494,12 +557,15 @@ function App() {
                 <div className="app-layout">
                   <Navigation
                     onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
                     assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <Settings />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
             }
@@ -511,12 +577,15 @@ function App() {
                 <div className="app-layout">
                   <Navigation
                     onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
                     assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <UserProfile />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
             }
@@ -528,12 +597,15 @@ function App() {
                 <div className="app-layout">
                   <Navigation
                     onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
                     assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <Users />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
             }
@@ -545,12 +617,15 @@ function App() {
                 <div className="app-layout">
                   <Navigation
                     onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
                     assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <UserProfile />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
             }
@@ -562,12 +637,15 @@ function App() {
                 <div className="app-layout">
                   <Navigation
                     onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
                     assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <ProcessTemplates />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
             }

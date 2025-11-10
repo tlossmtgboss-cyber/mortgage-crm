@@ -1,16 +1,25 @@
 .coach-corner {
+  position: fixed;
+  right: 0;
+  top: 60px;
+  bottom: 0;
+  width: 450px;
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-  border-radius: 16px;
-  padding: 24px;
   color: #fff;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.3);
+  z-index: 99;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
 }
 
 .coach-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
+  padding: 20px 24px;
+  border-bottom: 2px solid rgba(255, 215, 0, 0.2);
+  flex-shrink: 0;
 }
 
 .coach-header h2 {
@@ -24,8 +33,10 @@
 .coach-subtitle {
   font-size: 14px;
   color: #a8b2d1;
-  margin: 4px 0 0 0;
+  margin: 0;
+  padding: 0 24px 16px 24px;
   font-weight: 400;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .btn-back {
@@ -48,7 +59,8 @@
   border-left: 4px solid #ffd700;
   padding: 16px;
   border-radius: 8px;
-  margin-bottom: 24px;
+  margin: 24px;
+  margin-bottom: 16px;
 }
 
 .coach-intro p {
@@ -63,8 +75,9 @@
 
 .coach-modes-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  padding: 0 24px;
   margin-bottom: 24px;
 }
 
@@ -126,6 +139,7 @@
 
 .coach-response-container {
   animation: fadeIn 0.4s ease;
+  padding: 24px;
 }
 
 @keyframes fadeIn {
@@ -320,14 +334,13 @@
 
 .coach-quick-actions {
   display: flex;
+  flex-direction: column;
   gap: 12px;
-  margin-top: 24px;
-  flex-wrap: wrap;
+  padding: 0 24px 24px 24px;
 }
 
 .quick-action-btn {
-  flex: 1;
-  min-width: 150px;
+  width: 100%;
   background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
   border: none;
   border-radius: 10px;
@@ -428,4 +441,38 @@
 .btn-primary:hover {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(255, 215, 0, 0.4);
+}
+
+.close-button {
+  background: none;
+  border: none;
+  font-size: 28px;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 150ms ease;
+}
+
+.close-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.coach-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+@media (max-width: 768px) {
+  .coach-corner {
+    width: 100%;
+  }
 }

@@ -2,7 +2,7 @@ import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import './Navigation.css';
 
-function Navigation({ onToggleAssistant, assistantOpen, taskCounts = {} }) {
+function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen, taskCounts = {} }) {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -80,8 +80,8 @@ function Navigation({ onToggleAssistant, assistantOpen, taskCounts = {} }) {
             AI Underwriter
           </Link>
           <button
-            className={`nav-link coach-link ${assistantOpen ? 'active' : ''}`}
-            onClick={onToggleAssistant}
+            className={`nav-link coach-link ${coachOpen ? 'active' : ''}`}
+            onClick={onToggleCoach}
           >
             🏆 Coach
           </button>
