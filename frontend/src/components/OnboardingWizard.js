@@ -1652,12 +1652,14 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
         <div className="step-indicators">
           {[
             { num: 1, label: 'Process' },
-            { num: 2, label: 'Team' },
-            { num: 3, label: 'Ownership' },
-            { num: 4, label: 'Integrations' },
-            { num: 5, label: 'Compliance' },
-            { num: 6, label: 'AI Agent' },
-            { num: 7, label: 'Go-Live' }
+            { num: 2, label: 'Roles' },
+            { num: 3, label: 'Tasks' },
+            { num: 4, label: 'Team' },
+            { num: 5, label: 'Ownership' },
+            { num: 6, label: 'Integrations' },
+            { num: 7, label: 'Compliance' },
+            { num: 8, label: 'AI Agent' },
+            { num: 9, label: 'Go-Live' }
           ].map((step) => (
             <div
               key={step.num}
