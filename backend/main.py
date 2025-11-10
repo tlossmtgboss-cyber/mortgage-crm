@@ -3759,7 +3759,7 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     hot_leads = db.query(func.count(Lead.id)).filter(
         Lead.owner_id == current_user.id,
         Lead.ai_score >= 80,
-        Lead.stage.in_([LeadStage.NEW, LeadStage.CONTACTED])
+        Lead.stage.in_([LeadStage.NEW, LeadStage.ATTEMPTED_CONTACT, LeadStage.PROSPECT])
     ).scalar() or 0
 
     # Calculate conversion rate (leads -> applications)
