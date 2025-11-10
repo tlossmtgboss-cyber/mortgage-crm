@@ -3735,6 +3735,7 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     tasks_today = db.query(Task).filter(
         Task.owner_id == current_user.id,
         Task.status.in_(["pending", "in_progress"]),
+        Task.due_date.isnot(None),
         Task.due_date <= today + timedelta(days=1)
     ).order_by(Task.priority.desc(), Task.due_date).limit(10).all()
 
