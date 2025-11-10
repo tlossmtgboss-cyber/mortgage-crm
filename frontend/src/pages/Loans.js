@@ -63,13 +63,48 @@ function Loans() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [activeFilter, setActiveFilter] = useState(initialFilter);
-  const [formData, setFormData] = useState({
+  const [activeBorrower, setActiveBorrower] = useState(0);
+
+  // Borrowers array - each borrower has their own contact info
+  const [borrowers, setBorrowers] = useState([
+    {
+      first_name: '',
+      last_name: '',
+      email: '',
+      phone: '',
+      credit_score: '',
+      employment_status: '',
+      annual_income: '',
+      monthly_debts: '',
+    }
+  ]);
+
+  // Shared property data
+  const [propertyData, setPropertyData] = useState({
+    address: '',
+    city: '',
+    state: '',
+    zip_code: '',
+    property_type: '',
+    property_value: '',
+    down_payment: '',
+  });
+
+  // Loan-specific data
+  const [loanData, setLoanData] = useState({
     loan_number: '',
-    borrower_name: '',
     amount: '',
-    program: '',
-    rate: '',
+    product_type: '',  // Maps to backend 'program'
+    loan_type: '',     // Purchase, Refinance, etc.
+    interest_rate: '',
+    term: 360,
     closing_date: '',
+    lock_date: '',
+    processor: '',
+    underwriter: '',
+    realtor_agent: '',
+    title_company: '',
+    notes: '',
   });
 
   const filters = [
@@ -109,11 +144,54 @@ function Loans() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      // Convert date to datetime format for backend
-      const submitData = { ...formData };
-      if (submitData.closing_date) {
-        submitData.closing_date = `${submitData.closing_date}T00:00:00`;
+      // Combine primary borrower data with property and loan data
+      const primaryBorrower = borrowers[0];
+
+      // Validate required fields
+      const fullName = `${primaryBorrower.first_name || ''} ${primaryBorrower.last_name || ''}`.trim();
+      if (!fullName) {
+        alert('Please enter borrower first name and last name');
+        return;
       }
+
+      if (!loanData.loan_number) {
+        alert('Please enter a loan number');
+        return;
+      }
+
+      if (!loanData.amount) {
+        alert('Please enter a loan amount');
+        return;
+      }
+
+      // Build submit data matching backend LoanCreate model
+      const submitData = {
+        loan_number: loanData.loan_number,
+        borrower_name: fullName,
+        borrower_email: primaryBorrower.email || null,
+        borrower_phone: primaryBorrower.phone || null,
+        coborrower_name: borrowers.length > 1
+          ? `${borrowers[1].first_name || ''} ${borrowers[1].last_name || ''}`.trim() || null
+          : null,
+        amount: parseFloat(loanData.amount),
+        product_type: loanData.product_type || null,
+        loan_type: loanData.loan_type || null,
+        interest_rate: loanData.interest_rate ? parseFloat(loanData.interest_rate) : null,
+        term: loanData.term || 360,
+        purchase_price: propertyData.property_value ? parseFloat(propertyData.property_value) : null,
+        down_payment: propertyData.down_payment ? parseFloat(propertyData.down_payment) : null,
+        property_address: propertyData.address || null,
+        property_city: propertyData.city || null,
+        property_state: propertyData.state || null,
+        property_zip: propertyData.zip_code || null,
+        lock_date: loanData.lock_date ? `${loanData.lock_date}T00:00:00` : null,
+        closing_date: loanData.closing_date ? `${loanData.closing_date}T00:00:00` : null,
+        processor: loanData.processor || null,
+        underwriter: loanData.underwriter || null,
+        realtor_agent: loanData.realtor_agent || null,
+        title_company: loanData.title_company || null,
+        notes: loanData.notes || null,
+      };
 
       console.log('Submitting loan data:', submitData);
       console.log('Auth token exists:', !!localStorage.getItem('token'));
@@ -164,19 +242,81 @@ function Loans() {
   };
 
   const resetForm = () => {
-    setFormData({
-      loan_number: '',
-      borrower_name: '',
-      amount: '',
-      program: '',
-      rate: '',
-      closing_date: '',
+    setBorrowers([{
+      first_name: '',
+      last_name: '',
+      email: '',
+      phone: '',
+      credit_score: '',
+      employment_status: '',
+      annual_income: '',
+      monthly_debts: '',
+    }]);
+
+    setPropertyData({
+      address: '',
+      city: '',
+      state: '',
+      zip_code: '',
+      property_type: '',
+      property_value: '',
+      down_payment: '',
     });
+
+    setLoanData({
+      loan_number: '',
+      amount: '',
+      product_type: '',
+      loan_type: '',
+      interest_rate: '',
+      term: 360,
+      closing_date: '',
+      lock_date: '',
+      processor: '',
+      underwriter: '',
+      realtor_agent: '',
+      title_company: '',
+      notes: '',
+    });
+
+    setActiveBorrower(0);
   };
 
   const handleExport = () => {
     alert('Export functionality coming soon');
   };
+
+  // Borrower management functions
+  const addBorrower = () => {
+    setBorrowers([...borrowers, {
+      first_name: '',
+      last_name: '',
+      email: '',
+      phone: '',
+      credit_score: '',
+      employment_status: '',
+      annual_income: '',
+      monthly_debts: '',
+    }]);
+    setActiveBorrower(borrowers.length);
+  };
+
+  const removeBorrower = (index) => {
+    if (borrowers.length > 1 && window.confirm('Remove this borrower?')) {
+      const newBorrowers = borrowers.filter((_, i) => i !== index);
+      setBorrowers(newBorrowers);
+      setActiveBorrower(Math.max(0, index - 1));
+    }
+  };
+
+  const updateBorrower = (index, field, value) => {
+    const newBorrowers = [...borrowers];
+    newBorrowers[index] = { ...newBorrowers[index], [field]: value };
+    setBorrowers(newBorrowers);
+  };
+
+  // Get current borrower for the form
+  const currentBorrower = borrowers[activeBorrower] || borrowers[0];
 
   // Ensure loans is always an array before filtering
   const safeLoans = Array.isArray(loans) ? loans : [];
@@ -372,39 +512,265 @@ function Loans() {
               <button className="close-btn" onClick={() => setShowModal(false)}>×</button>
             </div>
             <form onSubmit={handleSubmit}>
-              <div className="form-group">
-                <label>Loan Number *</label>
-                <input
-                  type="text"
-                  value={formData.loan_number}
-                  onChange={(e) => setFormData({ ...formData, loan_number: e.target.value })}
-                  required
-                />
+              {/* Borrower Tabs */}
+              <div className="borrower-tabs">
+                <div className="tabs-row">
+                  {borrowers.map((borrower, index) => (
+                    <div
+                      key={index}
+                      className={`borrower-tab ${activeBorrower === index ? 'active' : ''}`}
+                      onClick={() => setActiveBorrower(index)}
+                    >
+                      <span>Borrower {index + 1}</span>
+                      {index > 0 && (
+                        <button
+                          type="button"
+                          className="remove-borrower-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeBorrower(index);
+                          }}
+                          title="Remove borrower"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="add-borrower-btn"
+                    onClick={addBorrower}
+                    title="Add another borrower"
+                  >
+                    +
+                  </button>
+                </div>
               </div>
-              <div className="form-group">
-                <label>Borrower Name *</label>
-                <input
-                  type="text"
-                  value={formData.borrower_name}
-                  onChange={(e) => setFormData({ ...formData, borrower_name: e.target.value })}
-                  required
-                />
-              </div>
-              <div className="form-group">
-                <label>Loan Amount *</label>
-                <input
-                  type="number"
-                  value={formData.amount}
-                  onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                  required
-                />
-              </div>
+
+              {/* Borrower Information */}
+              <div className="form-section-title">Borrower {activeBorrower + 1} Information</div>
+
               <div className="form-row">
+                <div className="form-group">
+                  <label>First Name *</label>
+                  <input
+                    type="text"
+                    value={currentBorrower.first_name}
+                    onChange={(e) => updateBorrower(activeBorrower, 'first_name', e.target.value)}
+                    required={activeBorrower === 0}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Last Name *</label>
+                  <input
+                    type="text"
+                    value={currentBorrower.last_name}
+                    onChange={(e) => updateBorrower(activeBorrower, 'last_name', e.target.value)}
+                    required={activeBorrower === 0}
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Email</label>
+                  <input
+                    type="email"
+                    value={currentBorrower.email}
+                    onChange={(e) => updateBorrower(activeBorrower, 'email', e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Phone</label>
+                  <input
+                    type="tel"
+                    value={currentBorrower.phone}
+                    onChange={(e) => updateBorrower(activeBorrower, 'phone', e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Credit Score</label>
+                  <input
+                    type="number"
+                    value={currentBorrower.credit_score}
+                    onChange={(e) => updateBorrower(activeBorrower, 'credit_score', e.target.value)}
+                    min="300"
+                    max="850"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Employment Status</label>
+                  <select
+                    value={currentBorrower.employment_status}
+                    onChange={(e) => updateBorrower(activeBorrower, 'employment_status', e.target.value)}
+                  >
+                    <option value="">Select...</option>
+                    <option value="Full-Time">Full-Time</option>
+                    <option value="Part-Time">Part-Time</option>
+                    <option value="Self-Employed">Self-Employed</option>
+                    <option value="Retired">Retired</option>
+                    <option value="Unemployed">Unemployed</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Annual Income</label>
+                  <input
+                    type="number"
+                    value={currentBorrower.annual_income}
+                    onChange={(e) => updateBorrower(activeBorrower, 'annual_income', e.target.value)}
+                    placeholder="$"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Monthly Debts</label>
+                  <input
+                    type="number"
+                    value={currentBorrower.monthly_debts}
+                    onChange={(e) => updateBorrower(activeBorrower, 'monthly_debts', e.target.value)}
+                    placeholder="$"
+                  />
+                </div>
+              </div>
+
+              {/* Property Information */}
+              <div className="form-section-title">Property Information</div>
+
+              <div className="form-group">
+                <label>Property Address</label>
+                <input
+                  type="text"
+                  value={propertyData.address}
+                  onChange={(e) => setPropertyData({ ...propertyData, address: e.target.value })}
+                  placeholder="Street address"
+                />
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>City</label>
+                  <input
+                    type="text"
+                    value={propertyData.city}
+                    onChange={(e) => setPropertyData({ ...propertyData, city: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>State</label>
+                  <input
+                    type="text"
+                    value={propertyData.state}
+                    onChange={(e) => setPropertyData({ ...propertyData, state: e.target.value })}
+                    maxLength="2"
+                    placeholder="CA"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>ZIP Code</label>
+                  <input
+                    type="text"
+                    value={propertyData.zip_code}
+                    onChange={(e) => setPropertyData({ ...propertyData, zip_code: e.target.value })}
+                    maxLength="10"
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Property Type</label>
+                  <select
+                    value={propertyData.property_type}
+                    onChange={(e) => setPropertyData({ ...propertyData, property_type: e.target.value })}
+                  >
+                    <option value="">Select...</option>
+                    <option value="Single Family">Single Family</option>
+                    <option value="Condo">Condo</option>
+                    <option value="Townhouse">Townhouse</option>
+                    <option value="Multi-Family">Multi-Family</option>
+                    <option value="Manufactured">Manufactured</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label>Property Value</label>
+                  <input
+                    type="number"
+                    value={propertyData.property_value}
+                    onChange={(e) => setPropertyData({ ...propertyData, property_value: e.target.value })}
+                    placeholder="$"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Down Payment</label>
+                  <input
+                    type="number"
+                    value={propertyData.down_payment}
+                    onChange={(e) => setPropertyData({ ...propertyData, down_payment: e.target.value })}
+                    placeholder="$"
+                  />
+                </div>
+              </div>
+
+              {/* Loan Details */}
+              <div className="form-section-title">Loan Details</div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Loan Number *</label>
+                  <input
+                    type="text"
+                    value={loanData.loan_number}
+                    onChange={(e) => setLoanData({ ...loanData, loan_number: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Loan Amount *</label>
+                  <input
+                    type="number"
+                    value={loanData.amount}
+                    onChange={(e) => setLoanData({ ...loanData, amount: e.target.value })}
+                    placeholder="$"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Loan Type</label>
+                  <select
+                    value={loanData.loan_type}
+                    onChange={(e) => setLoanData({ ...loanData, loan_type: e.target.value })}
+                  >
+                    <option value="">Select...</option>
+                    <option value="Purchase">Purchase</option>
+                    <option value="Refinance">Refinance</option>
+                    <option value="Cash-Out Refi">Cash-Out Refi</option>
+                    <option value="HELOC">HELOC</option>
+                  </select>
+                </div>
+
                 <div className="form-group">
                   <label>Program</label>
                   <select
-                    value={formData.program}
-                    onChange={(e) => setFormData({ ...formData, program: e.target.value })}
+                    value={loanData.product_type}
+                    onChange={(e) => setLoanData({ ...loanData, product_type: e.target.value })}
                   >
                     <option value="">Select...</option>
                     <option value="Conventional">Conventional</option>
@@ -414,24 +780,108 @@ function Loans() {
                     <option value="Jumbo">Jumbo</option>
                   </select>
                 </div>
+              </div>
+
+              <div className="form-row">
                 <div className="form-group">
                   <label>Interest Rate %</label>
                   <input
                     type="number"
                     step="0.001"
-                    value={formData.rate}
-                    onChange={(e) => setFormData({ ...formData, rate: e.target.value })}
+                    value={loanData.interest_rate}
+                    onChange={(e) => setLoanData({ ...loanData, interest_rate: e.target.value })}
+                    placeholder="6.500"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Term (months)</label>
+                  <input
+                    type="number"
+                    value={loanData.term}
+                    onChange={(e) => setLoanData({ ...loanData, term: e.target.value })}
+                    placeholder="360"
                   />
                 </div>
               </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Lock Date</label>
+                  <input
+                    type="date"
+                    value={loanData.lock_date}
+                    onChange={(e) => setLoanData({ ...loanData, lock_date: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Closing Date</label>
+                  <input
+                    type="date"
+                    value={loanData.closing_date}
+                    onChange={(e) => setLoanData({ ...loanData, closing_date: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              {/* Team Members */}
+              <div className="form-section-title">Team Members</div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Processor</label>
+                  <input
+                    type="text"
+                    value={loanData.processor}
+                    onChange={(e) => setLoanData({ ...loanData, processor: e.target.value })}
+                    placeholder="Processor name"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Underwriter</label>
+                  <input
+                    type="text"
+                    value={loanData.underwriter}
+                    onChange={(e) => setLoanData({ ...loanData, underwriter: e.target.value })}
+                    placeholder="Underwriter name"
+                  />
+                </div>
+              </div>
+
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Realtor/Agent</label>
+                  <input
+                    type="text"
+                    value={loanData.realtor_agent}
+                    onChange={(e) => setLoanData({ ...loanData, realtor_agent: e.target.value })}
+                    placeholder="Realtor name"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Title Company</label>
+                  <input
+                    type="text"
+                    value={loanData.title_company}
+                    onChange={(e) => setLoanData({ ...loanData, title_company: e.target.value })}
+                    placeholder="Title company name"
+                  />
+                </div>
+              </div>
+
               <div className="form-group">
-                <label>Closing Date</label>
-                <input
-                  type="date"
-                  value={formData.closing_date}
-                  onChange={(e) => setFormData({ ...formData, closing_date: e.target.value })}
+                <label>Notes</label>
+                <textarea
+                  rows="3"
+                  value={loanData.notes}
+                  onChange={(e) => setLoanData({ ...loanData, notes: e.target.value })}
+                  placeholder="Additional notes..."
                 />
               </div>
+
               <div className="modal-actions">
                 <button type="button" className="btn-secondary" onClick={() => setShowModal(false)}>
                   Cancel
