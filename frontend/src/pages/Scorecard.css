@@ -2,7 +2,7 @@
   padding: 32px 40px;
   max-width: 1400px;
   margin: 0 auto;
-  background: #ffffff;
+  background: #f5f5f5;
   min-height: 100vh;
 }
 
@@ -11,19 +11,19 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 40px;
+  margin-bottom: 32px;
   background: transparent;
-  padding: 0 0 24px 0;
-  border-bottom: 2px solid #e2e8f0;
+  padding: 0;
+  border-bottom: none;
   box-shadow: none;
 }
 
 .scorecard-header h1 {
-  font-size: 32px;
+  font-size: 24px;
   font-weight: 600;
   color: #1a202c;
   margin: 0;
-  letter-spacing: -0.5px;
+  letter-spacing: -0.3px;
 }
 
 .btn-export {
@@ -46,23 +46,20 @@
 
 /* Sections */
 .metrics-section {
-  margin-bottom: 60px;
+  margin-bottom: 48px;
 }
 
 .metrics-section h2 {
   font-size: 16px;
-  font-weight: 700;
+  font-weight: 600;
   color: #1a202c;
-  margin-bottom: 28px;
+  margin-bottom: 16px;
   padding-left: 0;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  text-align: center;
-  border-bottom: 3px solid #218D8D;
-  padding-bottom: 12px;
-  max-width: 800px;
-  margin-left: auto;
-  margin-right: auto;
+  text-transform: none;
+  letter-spacing: 0;
+  text-align: left;
+  border-bottom: none;
+  padding-bottom: 0;
 }
 
 /* Conversion Metrics Grid */
@@ -76,22 +73,22 @@
 
 .conversion-card {
   background: #ffffff;
-  border: 2px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 28px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 24px;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.2s;
   position: relative;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-  min-height: 200px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  min-height: 160px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
 }
 
 .conversion-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
   border-color: #cbd5e0;
 }
 
@@ -105,7 +102,7 @@
 }
 
 .conversion-card .metric-value-large {
-  font-size: 48px;
+  font-size: 42px;
   font-weight: 700;
   color: #1a202c;
   margin-bottom: 8px;
@@ -121,9 +118,9 @@
 /* Progress Bar */
 .progress-bar {
   width: 100%;
-  height: 6px;
-  background: #cbd5e0;
-  border-radius: 3px;
+  height: 4px;
+  background: #e2e8f0;
+  border-radius: 2px;
   overflow: hidden;
   margin-top: 12px;
 }
@@ -149,21 +146,21 @@
 
 .volume-card {
   background: #ffffff;
-  border: 2px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 28px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 24px;
   cursor: pointer;
-  transition: all 0.3s;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-  min-height: 200px;
+  transition: all 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  min-height: 160px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
 }
 
 .volume-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
   border-color: #cbd5e0;
 }
 
@@ -177,7 +174,7 @@
 }
 
 .volume-card .metric-value-large {
-  font-size: 48px;
+  font-size: 42px;
   font-weight: 700;
   color: #1a202c;
   margin-bottom: 8px;
@@ -200,21 +197,21 @@
 
 .timeline-card {
   background: #ffffff;
-  border: 2px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 28px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 24px;
   cursor: pointer;
-  transition: all 0.3s;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-  min-height: 200px;
+  transition: all 0.2s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  min-height: 160px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
 }
 
 .timeline-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
   border-color: #cbd5e0;
 }
 
@@ -228,7 +225,7 @@
 }
 
 .timeline-card .metric-value-large {
-  font-size: 48px;
+  font-size: 42px;
   font-weight: 700;
   color: #1a202c;
   margin-bottom: 8px;
@@ -246,7 +243,7 @@
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
 
 .metrics-table {
@@ -540,7 +537,7 @@
   .conversion-card .metric-value-large,
   .volume-card .metric-value-large,
   .timeline-card .metric-value-large {
-    font-size: 28px;
+    font-size: 32px;
   }
 
   .drill-down-modal {
