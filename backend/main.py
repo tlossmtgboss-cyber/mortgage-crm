@@ -3565,24 +3565,28 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     annual_actual = db.query(func.count(Loan.id)).filter(
         Loan.loan_officer_id == current_user.id,
         Loan.stage == LoanStage.FUNDED,
+        Loan.funded_date.isnot(None),
         extract('year', Loan.funded_date) == today.year
     ).scalar() or 0
 
     monthly_actual = db.query(func.count(Loan.id)).filter(
         Loan.loan_officer_id == current_user.id,
         Loan.stage == LoanStage.FUNDED,
+        Loan.funded_date.isnot(None),
         Loan.funded_date >= start_of_month
     ).scalar() or 0
 
     weekly_actual = db.query(func.count(Loan.id)).filter(
         Loan.loan_officer_id == current_user.id,
         Loan.stage == LoanStage.FUNDED,
+        Loan.funded_date.isnot(None),
         Loan.funded_date >= start_of_week
     ).scalar() or 0
 
     daily_actual = db.query(func.count(Loan.id)).filter(
         Loan.loan_officer_id == current_user.id,
         Loan.stage == LoanStage.FUNDED,
+        Loan.funded_date.isnot(None),
         Loan.funded_date == today
     ).scalar() or 0
 
