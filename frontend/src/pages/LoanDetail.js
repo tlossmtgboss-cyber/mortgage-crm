@@ -163,8 +163,8 @@ function LoanDetail() {
             <input
               type="number"
               step="0.001"
-              value={formData.interest_rate || ''}
-              onChange={(e) => handleFieldChange('interest_rate', parseFloat(e.target.value))}
+              value={formData.rate || ''}
+              onChange={(e) => handleFieldChange('rate', parseFloat(e.target.value))}
               placeholder="%"
             />
           </div>
@@ -183,8 +183,8 @@ function LoanDetail() {
             <label>Loan Type</label>
             <input
               type="text"
-              value={formData.product_type || ''}
-              onChange={(e) => handleFieldChange('product_type', e.target.value)}
+              value={formData.program || formData.loan_type || ''}
+              onChange={(e) => handleFieldChange('program', e.target.value)}
             />
           </div>
 

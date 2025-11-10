@@ -1123,25 +1123,51 @@ class LoanCreate(BaseModel):
     notes: Optional[str] = None
 
 class LoanUpdate(BaseModel):
+    borrower_name: Optional[str] = None
+    coborrower_name: Optional[str] = None
     stage: Optional[LoanStage] = None
+    program: Optional[str] = None
+    loan_type: Optional[str] = None
+    amount: Optional[float] = None
+    purchase_price: Optional[float] = None
+    down_payment: Optional[float] = None
     rate: Optional[float] = None
+    term: Optional[int] = None
+    property_address: Optional[str] = None
+    lock_date: Optional[datetime] = None
     closing_date: Optional[datetime] = None
     funded_date: Optional[datetime] = None
     processor: Optional[str] = None
+    underwriter: Optional[str] = None
+    realtor_agent: Optional[str] = None
+    title_company: Optional[str] = None
 
 class LoanResponse(BaseModel):
     id: int
     loan_number: str
     borrower_name: str
+    coborrower_name: Optional[str] = None
     stage: LoanStage
-    program: Optional[str]
+    program: Optional[str] = None
+    loan_type: Optional[str] = None
     amount: float
-    rate: Optional[float]
-    closing_date: Optional[datetime]
+    purchase_price: Optional[float] = None
+    down_payment: Optional[float] = None
+    rate: Optional[float] = None
+    term: Optional[int] = None
+    property_address: Optional[str] = None
+    lock_date: Optional[datetime] = None
+    closing_date: Optional[datetime] = None
     funded_date: Optional[datetime] = None
+    loan_officer_id: Optional[int] = None
+    processor: Optional[str] = None
+    underwriter: Optional[str] = None
+    realtor_agent: Optional[str] = None
+    title_company: Optional[str] = None
     days_in_stage: int
     sla_status: str
     created_at: datetime
+    updated_at: Optional[datetime] = None
     class Config:
         from_attributes = True
 
