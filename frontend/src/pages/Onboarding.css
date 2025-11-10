@@ -1,0 +1,45 @@
+.onboarding-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+}
+
+/* Override wizard styles for full page experience */
+.onboarding-page .onboarding-overlay {
+  position: static;
+  background: transparent;
+  backdrop-filter: none;
+  padding: 0;
+  animation: none;
+}
+
+.onboarding-page .onboarding-wizard-v2 {
+  animation: fadeInUp 0.6s ease-out;
+  margin: 0 auto;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .onboarding-page {
+    padding: 20px 10px;
+  }
+
+  .onboarding-page .onboarding-wizard-v2 {
+    width: 95%;
+    max-height: 95vh;
+  }
+}

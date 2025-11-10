@@ -4,11 +4,12 @@ import { isAuthenticated } from './utils/auth';
 import Navigation from './components/Navigation';
 import AIAssistant from './components/AIAssistant';
 import CoachCorner from './components/CoachCorner';
-import OnboardingWizard from './components/OnboardingWizard';
+import OnboardingPrompt from './components/OnboardingPrompt';
 import LandingPage from './pages/LandingPage';
 import Registration from './pages/Registration';
 import EmailVerificationSent from './pages/EmailVerificationSent';
 import Login from './pages/Login';
+import Onboarding from './pages/Onboarding';
 import Dashboard from './pages/Dashboard';
 import Leads from './pages/Leads';
 import LeadDetail from './pages/LeadDetail';
@@ -61,33 +62,8 @@ function App() {
     setCoachOpen(!coachOpen);
   };
 
-  const handleOnboardingComplete = () => {
-    // Update localStorage to mark onboarding as completed
-    try {
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        const user = JSON.parse(userStr);
-        user.onboarding_completed = true;
-        localStorage.setItem('user', JSON.stringify(user));
-      }
-    } catch (error) {
-      console.error('Error updating user data:', error);
-    }
-    setShowOnboarding(false);
-  };
-
-  const handleOnboardingSkip = () => {
-    // Also mark as completed when skipped
-    try {
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        const user = JSON.parse(userStr);
-        user.onboarding_completed = true;
-        localStorage.setItem('user', JSON.stringify(user));
-      }
-    } catch (error) {
-      console.error('Error updating user data:', error);
-    }
+  const handleDismissOnboardingPrompt = () => {
+    // Temporarily dismiss the onboarding prompt (until next login)
     setShowOnboarding(false);
   };
 
@@ -153,40 +129,45 @@ function App() {
     <Router>
       <div className="app">
         <Routes>
-          {/* Public routes - NO WIZARD HERE */}
+          {/* Public routes */}
           <Route path="/" element={<LandingPage />} />
           <Route path="/register" element={<Registration />} />
           <Route path="/verify-email-sent" element={<EmailVerificationSent />} />
           <Route path="/login" element={<Login />} />
+
+          {/* Onboarding Page */}
+          <Route
+            path="/onboarding"
+            element={
+              <PrivateRoute>
+                <Onboarding />
+              </PrivateRoute>
+            }
+          />
 
           {/* Protected routes */}
           <Route
             path="/dashboard"
             element={
               <PrivateRoute>
-                <>
-                  {/* Show onboarding wizard for authenticated users who haven't completed it */}
-                  {showOnboarding && !checkingOnboarding && (
-                    <OnboardingWizard
-                      onComplete={handleOnboardingComplete}
-                      onSkip={handleOnboardingSkip}
-                    />
-                  )}
-                  <div className="app-layout">
-                    <Navigation
-                      onToggleAssistant={toggleAssistant}
-                      onToggleCoach={toggleCoach}
-                      assistantOpen={assistantOpen}
-                      coachOpen={coachOpen}
-                      taskCounts={taskCounts}
-                    />
-                    <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                      <Dashboard />
-                    </main>
-                    <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
-                    <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
-                  </div>
-                </>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    {/* Show onboarding prompt for users who haven't completed it */}
+                    {showOnboarding && !checkingOnboarding && (
+                      <OnboardingPrompt onDismiss={handleDismissOnboardingPrompt} />
+                    )}
+                    <Dashboard />
+                  </main>
+                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
               </PrivateRoute>
             }
           />
