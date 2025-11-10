@@ -4236,16 +4236,25 @@ async def create_loan(loan: LoanCreate, db: Session = Depends(get_db), current_u
         # Convert LoanCreate fields to Loan model fields
         loan_data = loan.dict(exclude_unset=True)
 
+        # Initialize user_metadata if not exists
+        if not loan_data.get('user_metadata'):
+            loan_data['user_metadata'] = {}
+
         # Map field names from API to database model
         if 'product_type' in loan_data:
             loan_data['program'] = loan_data.pop('product_type')
         if 'interest_rate' in loan_data:
             loan_data['rate'] = loan_data.pop('interest_rate')
-        if 'notes' in loan_data:
-            # Store notes in user_metadata for now since there's no notes field
-            if not loan_data.get('user_metadata'):
-                loan_data['user_metadata'] = {}
-            loan_data['user_metadata']['notes'] = loan_data.pop('notes')
+
+        # Store additional borrower/property fields in user_metadata
+        metadata_fields = [
+            'borrower_email', 'borrower_phone',
+            'property_city', 'property_state', 'property_zip',
+            'notes'
+        ]
+        for field in metadata_fields:
+            if field in loan_data:
+                loan_data['user_metadata'][field] = loan_data.pop(field)
 
         db_loan = Loan(**loan_data, loan_officer_id=current_user.id)
         db_loan.ai_insights = generate_ai_insights(db_loan)
