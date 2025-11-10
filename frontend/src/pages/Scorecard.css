@@ -75,12 +75,12 @@
   background: #ffffff;
   border: 1px solid #eeeeee;
   border-radius: 8px;
-  padding: 24px;
+  padding: 20px 24px;
   cursor: pointer;
   transition: all 0.2s;
   position: relative;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  min-height: 160px;
+  min-height: 120px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -96,23 +96,23 @@
   font-size: 12px;
   font-weight: 600;
   color: #718096;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .conversion-card .metric-value-large {
-  font-size: 42px;
+  font-size: 36px;
   font-weight: 700;
   color: #1a202c;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   line-height: 1;
 }
 
 .conversion-card .metric-goal {
   font-size: 11px;
   color: #a0aec0;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 /* Progress Bar */
@@ -163,11 +163,11 @@
   background: #ffffff;
   border: 1px solid #eeeeee;
   border-radius: 8px;
-  padding: 24px;
+  padding: 20px 24px;
   cursor: pointer;
   transition: all 0.2s;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  min-height: 160px;
+  min-height: 120px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -183,16 +183,16 @@
   font-size: 12px;
   font-weight: 600;
   color: #718096;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .volume-card .metric-value-large {
-  font-size: 42px;
+  font-size: 36px;
   font-weight: 700;
   color: #1a202c;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   line-height: 1;
 }
 
@@ -214,11 +214,11 @@
   background: #ffffff;
   border: 1px solid #eeeeee;
   border-radius: 8px;
-  padding: 24px;
+  padding: 20px 24px;
   cursor: pointer;
   transition: all 0.2s;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-  min-height: 160px;
+  min-height: 120px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -234,16 +234,16 @@
   font-size: 12px;
   font-weight: 600;
   color: #718096;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .timeline-card .metric-value-large {
-  font-size: 42px;
+  font-size: 36px;
   font-weight: 700;
   color: #1a202c;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   line-height: 1;
 }
 
