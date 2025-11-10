@@ -5245,81 +5245,86 @@ async def get_scorecard_metrics(db: Session = Depends(get_db), current_user: Use
         "funded": funded_count
     }
 
+    # Determine status based on goal achievement
+    def get_status(current_pct, goal_pct):
+        if current_pct >= goal_pct:
+            return "good"
+        elif current_pct >= goal_pct * 0.75:
+            return "warning"
+        else:
+            return "critical"
+
+    # Calculate period dates (YTD)
+    start_of_year = datetime(current_year, 1, 1)
+    now = datetime.now()
+
     return {
-        "conversionMetrics": [
+        "conversion_metrics": [
             {
-                "id": "starts-to-apps",
-                "title": "Starts to Apps (LE)",
-                "value": conversion_metrics["starts_to_apps"],
-                "goal": 75,
+                "metric": "Starts to Apps (LE)",
+                "total": total_leads,
                 "current": app_started,
-                "total": total_leads,
-                "isPercentage": True
+                "mot_pct": conversion_metrics["starts_to_apps"],
+                "goal_pct": 75,
+                "status": get_status(conversion_metrics["starts_to_apps"], 75)
             },
             {
-                "id": "apps-to-funded",
-                "title": "Apps (LE) to Funded",
-                "value": conversion_metrics["apps_to_funded"],
-                "goal": 80,
-                "current": funded_count,
+                "metric": "Apps (LE) to Funded",
                 "total": app_started,
-                "isPercentage": True
+                "current": funded_count,
+                "mot_pct": conversion_metrics["apps_to_funded"],
+                "goal_pct": 80,
+                "status": get_status(conversion_metrics["apps_to_funded"], 80)
             },
             {
-                "id": "starts-to-funded",
-                "title": "Starts to Funded Pull-thru",
-                "value": conversion_metrics["starts_to_funded"],
-                "goal": 50,
-                "current": funded_count,
+                "metric": "Starts to Funded Pull-thru",
                 "total": total_leads,
-                "isPercentage": True
-            },
-            {
-                "id": "credit-to-funded",
-                "title": "Credit Pull to Funded",
-                "value": conversion_metrics["credit_to_funded"],
-                "goal": 70,
                 "current": funded_count,
+                "mot_pct": conversion_metrics["starts_to_funded"],
+                "goal_pct": 50,
+                "status": get_status(conversion_metrics["starts_to_funded"], 50)
+            },
+            {
+                "metric": "Credit Pull to Funded",
                 "total": pre_approved,
-                "isPercentage": True
+                "current": funded_count,
+                "mot_pct": conversion_metrics["credit_to_funded"],
+                "goal_pct": 70,
+                "status": get_status(conversion_metrics["credit_to_funded"], 70)
             }
         ],
-        "volumeRevenue": [
-            {
-                "id": "total-loans",
-                "title": "Total Loans",
-                "value": volume_revenue["total_loans"],
-                "subtitle": "Year to Date"
-            },
-            {
-                "id": "total-volume",
-                "title": "Total Volume",
-                "value": f"${volume_revenue['total_volume']:,.0f}",
-                "subtitle": "Year to Date"
-            },
-            {
-                "id": "referrals",
-                "title": "Referrals",
-                "value": volume_revenue["referrals"],
-                "subtitle": "Active Referral Partners"
-            },
-            {
-                "id": "commission",
-                "title": "Commission Earned",
-                "value": f"${volume_revenue['commission_earned']:,.0f}",
-                "subtitle": "Year to Date"
-            },
-            {
-                "id": "portfolio-value",
-                "title": "Portfolio Value",
-                "value": f"${volume_revenue['portfolio_value']:,.0f}",
-                "subtitle": "Total Active Loans"
-            }
-        ],
-        "loanTypes": loan_type_distribution,
-        "referralSources": referral_sources_list,
-        "processTimeline": process_timeline,
-        "pipelineStatus": pipeline_status
+        "conversion_upswing": {
+            "current_starts": total_leads,
+            "current_pull_thru_pct": conversion_metrics["starts_to_funded"],
+            "target_pull_thru_pct": round(conversion_metrics["starts_to_funded"] * 1.10, 1),  # 10% improvement
+            "current_avg_amount": avg_loan_amount,
+            "target_avg_amount": avg_loan_amount * 1.10,  # 10% higher
+            "current_volume": total_volume,
+            "volume_increase": total_volume * 0.10,  # 10% increase potential
+            "current_bps": 185,  # Average basis points
+            "target_bps": 200,  # Target basis points
+            "current_compensation": commission_earned,
+            "additional_compensation": total_volume * 0.10 * 0.02  # 10% more volume at 200 bps
+        },
+        "funding_totals": {
+            "total_units": funded_count,
+            "total_volume": total_volume,
+            "avg_loan_amount": avg_loan_amount,
+            "loan_types": loan_type_distribution,
+            "referral_sources": [
+                {
+                    "source": item["source"],
+                    "referrals": item["referrals"],
+                    "closed_volume": item["closedVolume"]
+                }
+                for item in referral_sources_list
+            ]
+        },
+        "period": {
+            "start_date": start_of_year.isoformat(),
+            "end_date": now.isoformat()
+        },
+        "generated_at": now.isoformat()
     }
 
 # ============================================================================
