@@ -191,8 +191,9 @@ function Portfolio() {
   const [portfolioData, setPortfolioData] = useState({
     totalLoans: 0,
     totalVolume: 0,
-    activeLoans: 0,
-    closedLoans: 0,
+    commissionGenerated: 0,
+    portfolioValue: 0,
+    annualReturn: 0,
     loans: []
   });
   const [mumClients, setMumClients] = useState([]);
@@ -213,11 +214,24 @@ function Portfolio() {
         mumAPI.getAll()
       ]);
 
+      const totalVolume = stats.total_volume || 0;
+      const totalLoans = stats.total_loans || 0;
+
+      // Calculate commission (1% of total volume)
+      const commission = totalVolume * 0.01;
+
+      // Calculate portfolio value (remaining balance, estimated at 90% of total volume)
+      const portfolioValue = totalVolume * 0.9;
+
+      // Calculate annual return % (commission / portfolio value * 100)
+      const annualReturn = portfolioValue > 0 ? (commission / portfolioValue * 100) : 0;
+
       setPortfolioData({
-        totalLoans: stats.total_loans || 0,
-        totalVolume: stats.total_volume || 0,
-        activeLoans: stats.active_loans || 0,
-        closedLoans: stats.closed_loans || 0,
+        totalLoans: totalLoans,
+        totalVolume: totalVolume,
+        commissionGenerated: commission,
+        portfolioValue: portfolioValue,
+        annualReturn: annualReturn,
         loans: Array.isArray(loans) ? loans.map(loan => ({
           id: loan.id,
           borrower: loan.client_name || loan.borrower_name || 'Unknown',
@@ -236,11 +250,17 @@ function Portfolio() {
       const mockLoans = generateMockPortfolioLoans();
       const mockMum = generateMockMumClients();
 
+      const totalVolume = mockLoans.reduce((sum, loan) => sum + loan.loanAmount, 0);
+      const commission = totalVolume * 0.01;
+      const portfolioValue = totalVolume * 0.9;
+      const annualReturn = portfolioValue > 0 ? (commission / portfolioValue * 100) : 0;
+
       setPortfolioData({
         totalLoans: mockLoans.length,
-        totalVolume: mockLoans.reduce((sum, loan) => sum + loan.loanAmount, 0),
-        activeLoans: mockLoans.filter(l => l.status === 'Active').length,
-        closedLoans: mockLoans.filter(l => l.status === 'Closed').length,
+        totalVolume: totalVolume,
+        commissionGenerated: commission,
+        portfolioValue: portfolioValue,
+        annualReturn: annualReturn,
         loans: mockLoans
       });
 
@@ -324,35 +344,28 @@ function Portfolio() {
 
       <div className="portfolio-stats">
         <div className="stat-card">
-          <div className="stat-icon">💼</div>
-          <div className="stat-info">
-            <div className="stat-value">{portfolioData.totalLoans}</div>
-            <div className="stat-label">Total Loans</div>
-          </div>
+          <div className="stat-value">{portfolioData.totalLoans}</div>
+          <div className="stat-label">TOTAL LOANS</div>
         </div>
 
         <div className="stat-card">
-          <div className="stat-icon">💰</div>
-          <div className="stat-info">
-            <div className="stat-value">{formatCurrency(portfolioData.totalVolume)}</div>
-            <div className="stat-label">Total Volume</div>
-          </div>
+          <div className="stat-value">{formatCurrency(portfolioData.totalVolume)}</div>
+          <div className="stat-label">TOTAL VOLUME</div>
         </div>
 
         <div className="stat-card">
-          <div className="stat-icon">🔄</div>
-          <div className="stat-info">
-            <div className="stat-value">{portfolioData.activeLoans}</div>
-            <div className="stat-label">Active Loans</div>
-          </div>
+          <div className="stat-value">{formatCurrency(portfolioData.commissionGenerated)}</div>
+          <div className="stat-label">COMMISSION GENERATED</div>
         </div>
 
         <div className="stat-card">
-          <div className="stat-icon">✅</div>
-          <div className="stat-info">
-            <div className="stat-value">{portfolioData.closedLoans}</div>
-            <div className="stat-label">Closed Loans</div>
-          </div>
+          <div className="stat-value">{formatCurrency(portfolioData.portfolioValue)}</div>
+          <div className="stat-label">PORTFOLIO VALUE</div>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-value">{portfolioData.annualReturn.toFixed(2)}%</div>
+          <div className="stat-label">ANNUAL RETURN %</div>
         </div>
       </div>
 
