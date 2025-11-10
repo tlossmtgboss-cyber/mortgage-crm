@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { teamAPI } from '../services/api';
 import './Settings.css';
 
 function Settings() {
@@ -42,12 +43,36 @@ function Settings() {
   });
   const [loadingMicrosoft, setLoadingMicrosoft] = useState(false);
 
+  // Team members state
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [availableRoles, setAvailableRoles] = useState([]);
+  const [loadingTeam, setLoadingTeam] = useState(false);
+
   const toggleSection = (section) => {
     setExpandedSections({
       ...expandedSections,
       [section]: !expandedSections[section]
     });
   };
+
+  const loadTeamMembers = async () => {
+    setLoadingTeam(true);
+    try {
+      const data = await teamAPI.getMembers();
+      setTeamMembers(data.team_members || []);
+      setAvailableRoles(data.available_roles || []);
+    } catch (error) {
+      console.error('Error loading team members:', error);
+    } finally {
+      setLoadingTeam(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeSection === 'team-members') {
+      loadTeamMembers();
+    }
+  }, [activeSection]);
 
   const leadStages = [
     { value: 'new', label: 'New Lead' },
@@ -1452,11 +1477,97 @@ function Settings() {
 
           {activeSection === 'team-members' && (
             <div className="team-members-section">
-              <h2>Team Members</h2>
-              <p className="section-description">
-                Add and manage your team members
-              </p>
-              <p>Coming soon...</p>
+              <div className="section-header">
+                <div>
+                  <h2>Team Members</h2>
+                  <p className="section-description">
+                    Manage your team members and their role assignments
+                  </p>
+                </div>
+              </div>
+
+              {loadingTeam ? (
+                <div className="loading-state">Loading team members...</div>
+              ) : (
+                <>
+                  {/* Available Roles Overview */}
+                  {availableRoles.length > 0 && (
+                    <div className="roles-overview">
+                      <h3>Available Roles</h3>
+                      <div className="roles-grid">
+                        {availableRoles.map(role => (
+                          <div key={role.id} className="role-overview-card">
+                            <div className="role-overview-header">
+                              <h4>{role.role_title}</h4>
+                              <span className="role-tasks-badge">{role.tasks_count} tasks</span>
+                            </div>
+                            <p className="role-overview-description">{role.responsibilities}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Team Members List */}
+                  <div className="team-members-list">
+                    <h3>Team Members ({teamMembers.length})</h3>
+                    <div className="members-grid">
+                      {teamMembers.map(member => (
+                        <div
+                          key={member.id}
+                          className={`member-card ${member.is_current ? 'current-user' : ''}`}
+                          onClick={() => navigate(`/team/${member.id}`)}
+                          style={{ cursor: 'pointer' }}
+                        >
+                          <div className="member-header">
+                            <div className="member-avatar">
+                              {member.full_name ? member.full_name.charAt(0).toUpperCase() : member.email.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="member-info">
+                              <h4>{member.full_name || member.email}</h4>
+                              <p className="member-email">{member.email}</p>
+                            </div>
+                            {member.is_current && (
+                              <span className="current-badge">You</span>
+                            )}
+                          </div>
+
+                          {member.role && (
+                            <div className="member-role">
+                              <span className="role-label">Role:</span>
+                              <span className="role-value">{member.role.role_title}</span>
+                            </div>
+                          )}
+
+                          {member.tasks_count > 0 && (
+                            <div className="member-stats">
+                              <span className="stat-item">📋 {member.tasks_count} tasks</span>
+                            </div>
+                          )}
+
+                          <div className="member-actions">
+                            <button
+                              className="btn-view-profile"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/team/${member.id}`);
+                              }}
+                            >
+                              View Profile →
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {teamMembers.length === 0 && (
+                      <div className="empty-state">
+                        <p>No team members found. Complete the onboarding process to set up your team.</p>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           )}
 

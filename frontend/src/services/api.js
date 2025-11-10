@@ -312,4 +312,96 @@ export const calendarAPI = {
   },
 };
 
+// Process Templates API
+export const processTemplatesAPI = {
+  getAll: async () => {
+    const response = await api.get('/api/v1/process-templates/');
+    return response.data;
+  },
+  getByRole: async (roleName) => {
+    const response = await api.get(`/api/v1/process-templates/?role_name=${encodeURIComponent(roleName)}`);
+    return response.data;
+  },
+  getRoles: async () => {
+    const response = await api.get('/api/v1/process-templates/roles');
+    return response.data;
+  },
+  create: async (data) => {
+    const response = await api.post('/api/v1/process-templates/', data);
+    return response.data;
+  },
+  update: async (id, data) => {
+    const response = await api.patch(`/api/v1/process-templates/${id}`, data);
+    return response.data;
+  },
+  delete: async (id) => {
+    await api.delete(`/api/v1/process-templates/${id}`);
+  },
+  analyzeEfficiency: async (roleName = null) => {
+    const url = roleName
+      ? `/api/v1/process-templates/analyze-efficiency?role_name=${encodeURIComponent(roleName)}`
+      : '/api/v1/process-templates/analyze-efficiency';
+    const response = await api.post(url);
+    return response.data;
+  },
+  seedDefaults: async () => {
+    const response = await api.post('/api/v1/process-templates/seed-defaults');
+    return response.data;
+  },
+};
+
+// Onboarding API
+export const onboardingAPI = {
+  parseDocuments: async (documentContent, documentName = null, documentType = null) => {
+    const response = await api.post('/api/v1/onboarding/parse-documents', {
+      document_content: documentContent,
+      document_name: documentName,
+      document_type: documentType
+    });
+    return response.data;
+  },
+  getRoles: async () => {
+    const response = await api.get('/api/v1/onboarding/roles');
+    return response.data;
+  },
+  getMilestones: async () => {
+    const response = await api.get('/api/v1/onboarding/milestones');
+    return response.data;
+  },
+  getTasks: async (roleId = null, milestoneId = null) => {
+    let url = '/api/v1/onboarding/tasks';
+    const params = new URLSearchParams();
+    if (roleId) params.append('role_id', roleId);
+    if (milestoneId) params.append('milestone_id', milestoneId);
+    if (params.toString()) url += `?${params.toString()}`;
+
+    const response = await api.get(url);
+    return response.data;
+  },
+  getProgress: async () => {
+    const response = await api.get('/api/v1/onboarding/progress');
+    return response.data;
+  },
+  updateProgress: async (data) => {
+    const response = await api.post('/api/v1/onboarding/progress', data);
+    return response.data;
+  },
+  complete: async () => {
+    const response = await api.post('/api/v1/onboarding/complete');
+    return response.data;
+  },
+};
+
+// Team API
+export const teamAPI = {
+  getMembers: async () => {
+    const response = await api.get('/api/v1/team/members');
+    return response.data;
+  },
+  getMemberDetail: async (userId) => {
+    const response = await api.get(`/api/v1/team/members/${userId}`);
+    return response.data;
+  },
+};
+
 export default api;

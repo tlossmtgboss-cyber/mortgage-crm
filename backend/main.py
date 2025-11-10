@@ -44,7 +44,8 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 # Fix Railway DATABASE_URL format (postgres:// -> postgresql://)
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost:5432/agentic_crm")
+# Use SQLite for local development if DATABASE_URL not set
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./mortgage_crm.db")
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
@@ -60,13 +61,20 @@ openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 Base = declarative_base()
 
 # Then create engine
-engine = create_engine(
-    DATABASE_URL, 
-    pool_pre_ping=True,
-    pool_size=5,
-    max_overflow=10,
-    pool_recycle=3600
-)
+# SQLite-specific settings
+if DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False}
+    )
+else:
+    engine = create_engine(
+        DATABASE_URL,
+        pool_pre_ping=True,
+        pool_size=5,
+        max_overflow=10,
+        pool_recycle=3600
+    )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_db():
@@ -829,6 +837,81 @@ class KPISnapshot(Base):
     # Relationships
     profile = relationship("ClientProfile", backref="kpi_history")
 
+class ProcessTemplate(Base):
+    __tablename__ = "process_templates"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    role_name = Column(String, nullable=False)  # Loan Officer, Processor, Underwriter, etc.
+    task_title = Column(String, nullable=False)
+    task_description = Column(Text)
+    sequence_order = Column(Integer, default=0)  # Order in the process
+    estimated_duration = Column(Integer)  # In minutes
+    dependencies = Column(JSON)  # Array of task IDs this depends on
+    is_required = Column(Boolean, default=True)
+    automation_potential = Column(String)  # AI suggestion: high, medium, low, none
+    efficiency_notes = Column(Text)  # AI-generated efficiency suggestions
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    user = relationship("User", backref="process_templates")
+
+class ProcessRole(Base):
+    """Stores AI-extracted roles from onboarding documents"""
+    __tablename__ = "process_roles"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    role_name = Column(String, nullable=False)
+    role_title = Column(String, nullable=False)  # Display title
+    responsibilities = Column(Text)  # AI-extracted responsibilities summary
+    skills_required = Column(JSON)  # Array of required skills
+    key_activities = Column(JSON)  # Array of key activities
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    user = relationship("User", backref="process_roles")
+
+class ProcessMilestone(Base):
+    """Stores milestones from parsed process documents"""
+    __tablename__ = "process_milestones"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    name = Column(String, nullable=False)
+    description = Column(Text)
+    sequence_order = Column(Integer, default=0)
+    estimated_duration = Column(Integer)  # Total duration in hours
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    user = relationship("User", backref="process_milestones")
+
+class ProcessTask(Base):
+    """Stores tasks extracted from process documents"""
+    __tablename__ = "process_tasks"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    milestone_id = Column(Integer, ForeignKey("process_milestones.id"))
+    role_id = Column(Integer, ForeignKey("process_roles.id"))
+    task_name = Column(String, nullable=False)
+    task_description = Column(Text)
+    sequence_order = Column(Integer, default=0)
+    estimated_duration = Column(Integer)  # In minutes
+    sla = Column(Integer)  # SLA in hours
+    sla_unit = Column(String, default="hours")  # hours, days, minutes
+    ai_automatable = Column(Boolean, default=False)
+    dependencies = Column(JSON)  # Array of task IDs
+    is_required = Column(Boolean, default=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    user = relationship("User", backref="process_tasks")
+    milestone = relationship("ProcessMilestone", backref="tasks")
+    role = relationship("ProcessRole", backref="assigned_tasks")
+
 # ============================================================================
 # PYDANTIC SCHEMAS
 # ============================================================================
@@ -1317,6 +1400,119 @@ class ActivityResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class ProcessTemplateCreate(BaseModel):
+    role_name: str
+    task_title: str
+    task_description: Optional[str] = None
+    sequence_order: int = 0
+    estimated_duration: Optional[int] = None
+    dependencies: Optional[List[int]] = None
+    is_required: bool = True
+
+class ProcessTemplateUpdate(BaseModel):
+    task_title: Optional[str] = None
+    task_description: Optional[str] = None
+    sequence_order: Optional[int] = None
+    estimated_duration: Optional[int] = None
+    dependencies: Optional[List[int]] = None
+    is_required: Optional[bool] = None
+    is_active: Optional[bool] = None
+
+class ProcessTemplateResponse(BaseModel):
+    id: int
+    role_name: str
+    task_title: str
+    task_description: Optional[str]
+    sequence_order: int
+    estimated_duration: Optional[int]
+    dependencies: Optional[List[int]]
+    is_required: bool
+    automation_potential: Optional[str]
+    efficiency_notes: Optional[str]
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    class Config:
+        from_attributes = True
+
+class ProcessRoleCreate(BaseModel):
+    role_name: str
+    role_title: str
+    responsibilities: Optional[str] = None
+    skills_required: Optional[List[str]] = None
+    key_activities: Optional[List[str]] = None
+
+class ProcessRoleResponse(BaseModel):
+    id: int
+    role_name: str
+    role_title: str
+    responsibilities: Optional[str]
+    skills_required: Optional[List[str]]
+    key_activities: Optional[List[str]]
+    is_active: bool
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
+class ProcessMilestoneCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    sequence_order: int = 0
+    estimated_duration: Optional[int] = None
+
+class ProcessMilestoneResponse(BaseModel):
+    id: int
+    name: str
+    description: Optional[str]
+    sequence_order: int
+    estimated_duration: Optional[int]
+    is_active: bool
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
+class ProcessTaskCreate(BaseModel):
+    milestone_id: int
+    role_id: int
+    task_name: str
+    task_description: Optional[str] = None
+    sequence_order: int = 0
+    estimated_duration: Optional[int] = None
+    sla: Optional[int] = None
+    sla_unit: str = "hours"
+    ai_automatable: bool = False
+    dependencies: Optional[List[int]] = None
+    is_required: bool = True
+
+class ProcessTaskResponse(BaseModel):
+    id: int
+    milestone_id: int
+    role_id: int
+    task_name: str
+    task_description: Optional[str]
+    sequence_order: int
+    estimated_duration: Optional[int]
+    sla: Optional[int]
+    sla_unit: str
+    ai_automatable: bool
+    dependencies: Optional[List[int]]
+    is_required: bool
+    is_active: bool
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
+class DocumentParseRequest(BaseModel):
+    document_content: str  # Base64 encoded document or text content
+    document_name: Optional[str] = None
+    document_type: Optional[str] = None  # pdf, docx, txt, etc.
+
+class DocumentParseResponse(BaseModel):
+    roles: List[ProcessRoleResponse]
+    milestones: List[ProcessMilestoneResponse]
+    tasks: List[ProcessTaskResponse]
+    summary: Dict[str, Any]
+
 class ConversationCreate(BaseModel):
     message: str
     lead_id: Optional[int] = None
@@ -1655,8 +1851,11 @@ def generate_ai_insights(loan: Loan) -> str:
     if loan.days_in_stage and loan.days_in_stage > 10:
         insights.append(f"⚠️ Loan has been in {loan.stage.value} stage for {loan.days_in_stage} days")
 
-    if loan.closing_date and (loan.closing_date - datetime.now(timezone.utc)).days < 7:
-        insights.append("🔥 Closing date approaching - prioritize tasks")
+    if loan.closing_date:
+        # Make closing_date timezone-aware if it's naive
+        closing_dt = loan.closing_date if loan.closing_date.tzinfo else loan.closing_date.replace(tzinfo=timezone.utc)
+        if (closing_dt - datetime.now(timezone.utc)).days < 7:
+            insights.append("🔥 Closing date approaching - prioritize tasks")
 
     if loan.rate and loan.rate > 7.0:
         insights.append("💰 Higher rate loan - consider rate lock strategies")
@@ -1879,7 +2078,7 @@ def apply_extracted_data(extracted_data: ExtractedData, db: Session) -> bool:
                 # Update stage based on milestone
                 milestone = fields["milestone"]["value"]
                 if "ClearToClose" in milestone or "CTC" in milestone:
-                    loan.stage = LoanStage.CLEAR_TO_CLOSE
+                    loan.stage = LoanStage.CTC
                 elif "Processing" in milestone:
                     loan.stage = LoanStage.PROCESSING
 
@@ -3440,7 +3639,7 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     # Loans in underwriting
     underwriting = db.query(Loan).filter(
         Loan.loan_officer_id == current_user.id,
-        Loan.stage == LoanStage.UNDERWRITING
+        Loan.stage == LoanStage.UW_RECEIVED
     ).all()
 
     underwriting_volume = sum(loan.amount for loan in underwriting if loan.amount)
@@ -3458,7 +3657,7 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     # Clear to close
     ctc = db.query(Loan).filter(
         Loan.loan_officer_id == current_user.id,
-        Loan.stage == LoanStage.CLEAR_TO_CLOSE
+        Loan.stage == LoanStage.CTC
     ).all()
 
     ctc_volume = sum(loan.amount for loan in ctc if loan.amount)
@@ -3699,14 +3898,14 @@ async def get_scorecard(
     # UW to TBDs (underwriting to clear to close)
     uw_count = db.query(func.count(Loan.id)).filter(
         Loan.loan_officer_id == current_user.id,
-        Loan.stage == LoanStage.UNDERWRITING,
+        Loan.stage == LoanStage.UW_RECEIVED,
         Loan.created_at >= start,
         Loan.created_at <= end
     ).scalar() or 0
 
     ctc_count = db.query(func.count(Loan.id)).filter(
         Loan.loan_officer_id == current_user.id,
-        Loan.stage == LoanStage.CLEAR_TO_CLOSE,
+        Loan.stage == LoanStage.CTC,
         Loan.created_at >= start,
         Loan.created_at <= end
     ).scalar() or 0
@@ -4447,8 +4646,9 @@ async def create_mum_client(client: MUMClientCreate, db: Session = Depends(get_d
     if existing:
         raise HTTPException(status_code=400, detail="Loan number already exists in MUM clients")
 
-    # Calculate days since funding
-    days_since = (datetime.now(timezone.utc) - client.original_close_date).days
+    # Calculate days since funding - make timezone-aware if needed
+    original_close_dt = client.original_close_date if client.original_close_date.tzinfo else client.original_close_date.replace(tzinfo=timezone.utc)
+    days_since = (datetime.now(timezone.utc) - original_close_dt).days
 
     db_client = MUMClient(
         **client.dict(),
@@ -4563,6 +4763,279 @@ async def delete_activity(activity_id: int, db: Session = Depends(get_db), curre
     return None
 
 # ============================================================================
+# PROCESS TEMPLATES - Role-Based Task Management
+# ============================================================================
+
+@app.get("/api/v1/process-templates/", response_model=List[ProcessTemplateResponse])
+async def get_process_templates(
+    role_name: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get all process templates, optionally filtered by role"""
+    query = db.query(ProcessTemplate).filter(
+        ProcessTemplate.user_id == current_user.id,
+        ProcessTemplate.is_active == True
+    )
+
+    if role_name:
+        query = query.filter(ProcessTemplate.role_name == role_name)
+
+    templates = query.order_by(ProcessTemplate.role_name, ProcessTemplate.sequence_order).all()
+    return templates
+
+@app.get("/api/v1/process-templates/roles", response_model=List[str])
+async def get_process_template_roles(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get all unique role names that have process templates"""
+    roles = db.query(ProcessTemplate.role_name).filter(
+        ProcessTemplate.user_id == current_user.id,
+        ProcessTemplate.is_active == True
+    ).distinct().all()
+
+    return [role[0] for role in roles]
+
+@app.post("/api/v1/process-templates/", response_model=ProcessTemplateResponse, status_code=201)
+async def create_process_template(
+    template: ProcessTemplateCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Create a new process template task"""
+    db_template = ProcessTemplate(**template.dict(), user_id=current_user.id)
+    db.add(db_template)
+    db.commit()
+    db.refresh(db_template)
+
+    logger.info(f"Process template created: {db_template.role_name} - {db_template.task_title}")
+    return db_template
+
+@app.patch("/api/v1/process-templates/{template_id}", response_model=ProcessTemplateResponse)
+async def update_process_template(
+    template_id: int,
+    template_update: ProcessTemplateUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update a process template (admin only)"""
+    db_template = db.query(ProcessTemplate).filter(
+        ProcessTemplate.id == template_id,
+        ProcessTemplate.user_id == current_user.id
+    ).first()
+
+    if not db_template:
+        raise HTTPException(status_code=404, detail="Process template not found")
+
+    update_data = template_update.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(db_template, field, value)
+
+    db_template.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(db_template)
+
+    logger.info(f"Process template updated: {db_template.id}")
+    return db_template
+
+@app.delete("/api/v1/process-templates/{template_id}", status_code=204)
+async def delete_process_template(
+    template_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete a process template (soft delete)"""
+    db_template = db.query(ProcessTemplate).filter(
+        ProcessTemplate.id == template_id,
+        ProcessTemplate.user_id == current_user.id
+    ).first()
+
+    if not db_template:
+        raise HTTPException(status_code=404, detail="Process template not found")
+
+    db_template.is_active = False
+    db.commit()
+
+    logger.info(f"Process template deleted: {db_template.id}")
+    return None
+
+@app.post("/api/v1/process-templates/analyze-efficiency")
+async def analyze_process_efficiency(
+    role_name: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """AI-powered efficiency analysis of process templates"""
+    query = db.query(ProcessTemplate).filter(
+        ProcessTemplate.user_id == current_user.id,
+        ProcessTemplate.is_active == True
+    )
+
+    if role_name:
+        query = query.filter(ProcessTemplate.role_name == role_name)
+
+    templates = query.order_by(ProcessTemplate.role_name, ProcessTemplate.sequence_order).all()
+
+    if not templates:
+        return {
+            "status": "no_data",
+            "message": "No process templates found for analysis",
+            "suggestions": []
+        }
+
+    # AI-powered efficiency analysis
+    suggestions = []
+    role_groups = {}
+
+    # Group by role
+    for template in templates:
+        if template.role_name not in role_groups:
+            role_groups[template.role_name] = []
+        role_groups[template.role_name].append(template)
+
+    # Analyze each role's process
+    for role, tasks in role_groups.items():
+        total_duration = sum(t.estimated_duration or 30 for t in tasks)
+        required_tasks = [t for t in tasks if t.is_required]
+        optional_tasks = [t for t in tasks if not t.is_required]
+
+        # Suggest automation opportunities
+        manual_tasks = [t for t in tasks if not t.automation_potential or t.automation_potential == "none"]
+        if len(manual_tasks) > len(tasks) * 0.6:
+            suggestions.append({
+                "role": role,
+                "type": "automation",
+                "severity": "high",
+                "title": f"{role}: High manual task load detected",
+                "description": f"{len(manual_tasks)} out of {len(tasks)} tasks are manual. Consider automating repetitive tasks.",
+                "impact": "Could reduce process time by 30-40%",
+                "tasks_affected": [t.task_title for t in manual_tasks[:3]]
+            })
+
+        # Check for bottlenecks (long duration tasks)
+        long_tasks = [t for t in tasks if (t.estimated_duration or 30) > 60]
+        if long_tasks:
+            suggestions.append({
+                "role": role,
+                "type": "bottleneck",
+                "severity": "medium",
+                "title": f"{role}: Time-intensive tasks identified",
+                "description": f"{len(long_tasks)} tasks take over 60 minutes. Consider breaking them down.",
+                "impact": "Could improve workflow parallelization",
+                "tasks_affected": [f"{t.task_title} ({t.estimated_duration}min)" for t in long_tasks]
+            })
+
+        # Check dependencies
+        tasks_with_deps = [t for t in tasks if t.dependencies and len(t.dependencies) > 0]
+        if len(tasks_with_deps) > len(tasks) * 0.7:
+            suggestions.append({
+                "role": role,
+                "type": "dependency",
+                "severity": "medium",
+                "title": f"{role}: High task dependency detected",
+                "description": f"{len(tasks_with_deps)} tasks have dependencies. This may slow down the process.",
+                "impact": "Review if some tasks can be parallelized",
+                "tasks_affected": []
+            })
+
+        # Check for missing required tasks
+        if len(required_tasks) < 3:
+            suggestions.append({
+                "role": role,
+                "type": "completeness",
+                "severity": "low",
+                "title": f"{role}: Process may be incomplete",
+                "description": f"Only {len(required_tasks)} required tasks defined. Review if process is complete.",
+                "impact": "Ensure all critical steps are documented",
+                "tasks_affected": []
+            })
+
+        # Overall efficiency score
+        efficiency_score = 100
+        if len(manual_tasks) > len(tasks) * 0.6:
+            efficiency_score -= 30
+        if long_tasks:
+            efficiency_score -= 20
+        if len(tasks_with_deps) > len(tasks) * 0.7:
+            efficiency_score -= 15
+
+        suggestions.append({
+            "role": role,
+            "type": "summary",
+            "severity": "info",
+            "title": f"{role}: Efficiency Score - {efficiency_score}%",
+            "description": f"Total tasks: {len(tasks)} | Est. time: {total_duration} min | Required: {len(required_tasks)}",
+            "impact": f"Process is {'efficient' if efficiency_score >= 70 else 'needs optimization'}",
+            "efficiency_score": efficiency_score
+        })
+
+    return {
+        "status": "success",
+        "total_templates": len(templates),
+        "roles_analyzed": list(role_groups.keys()),
+        "suggestions": suggestions
+    }
+
+@app.post("/api/v1/process-templates/seed-defaults")
+async def seed_default_templates(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Seed default process templates for common roles"""
+    # Check if user already has templates
+    existing = db.query(ProcessTemplate).filter(ProcessTemplate.user_id == current_user.id).first()
+    if existing:
+        return {"message": "Templates already exist", "count": 0}
+
+    default_templates = [
+        # Loan Officer Tasks
+        {"role_name": "Loan Officer", "task_title": "Initial Client Contact", "task_description": "Make first contact with borrower, introduce yourself and explain the loan process", "sequence_order": 1, "estimated_duration": 30, "is_required": True},
+        {"role_name": "Loan Officer", "task_title": "Gather Financial Documents", "task_description": "Request pay stubs, tax returns, bank statements, and employment verification", "sequence_order": 2, "estimated_duration": 20, "is_required": True},
+        {"role_name": "Loan Officer", "task_title": "Run Credit Report", "task_description": "Pull credit report and review credit score and history", "sequence_order": 3, "estimated_duration": 15, "is_required": True},
+        {"role_name": "Loan Officer", "task_title": "Calculate DTI and Pre-Approval Amount", "task_description": "Calculate debt-to-income ratio and determine pre-approval amount", "sequence_order": 4, "estimated_duration": 30, "is_required": True},
+        {"role_name": "Loan Officer", "task_title": "Send Pre-Approval Letter", "task_description": "Generate and send pre-approval letter to borrower", "sequence_order": 5, "estimated_duration": 15, "is_required": True},
+        {"role_name": "Loan Officer", "task_title": "Schedule Follow-Up", "task_description": "Schedule follow-up call to check on house hunting progress", "sequence_order": 6, "estimated_duration": 10, "is_required": False},
+
+        # Processor Tasks
+        {"role_name": "Processor", "task_title": "Receive Loan Application", "task_description": "Receive completed loan application from loan officer", "sequence_order": 1, "estimated_duration": 15, "is_required": True},
+        {"role_name": "Processor", "task_title": "Order Appraisal", "task_description": "Contact appraiser and schedule property appraisal", "sequence_order": 2, "estimated_duration": 20, "is_required": True},
+        {"role_name": "Processor", "task_title": "Order Title Report", "task_description": "Request title search and title commitment", "sequence_order": 3, "estimated_duration": 15, "is_required": True},
+        {"role_name": "Processor", "task_title": "Verify Employment", "task_description": "Contact employer to verify employment and income", "sequence_order": 4, "estimated_duration": 30, "is_required": True},
+        {"role_name": "Processor", "task_title": "Review Documentation", "task_description": "Review all submitted documentation for completeness and accuracy", "sequence_order": 5, "estimated_duration": 45, "is_required": True},
+        {"role_name": "Processor", "task_title": "Prepare Underwriting Package", "task_description": "Compile all documents and prepare file for underwriting", "sequence_order": 6, "estimated_duration": 60, "is_required": True},
+        {"role_name": "Processor", "task_title": "Submit to Underwriting", "task_description": "Submit completed file to underwriter for review", "sequence_order": 7, "estimated_duration": 15, "is_required": True},
+
+        # Underwriter Tasks
+        {"role_name": "Underwriter", "task_title": "Initial File Review", "task_description": "Perform initial review of loan file for completeness", "sequence_order": 1, "estimated_duration": 30, "is_required": True},
+        {"role_name": "Underwriter", "task_title": "Verify Income Documentation", "task_description": "Review and verify all income documentation", "sequence_order": 2, "estimated_duration": 45, "is_required": True},
+        {"role_name": "Underwriter", "task_title": "Review Credit Report", "task_description": "Analyze credit report and evaluate credit risk", "sequence_order": 3, "estimated_duration": 30, "is_required": True},
+        {"role_name": "Underwriter", "task_title": "Evaluate Collateral", "task_description": "Review appraisal and assess property value", "sequence_order": 4, "estimated_duration": 30, "is_required": True},
+        {"role_name": "Underwriter", "task_title": "Issue Conditions", "task_description": "Create list of conditions that must be satisfied for approval", "sequence_order": 5, "estimated_duration": 45, "is_required": True},
+        {"role_name": "Underwriter", "task_title": "Final Approval Decision", "task_description": "Make final loan approval decision once all conditions are met", "sequence_order": 6, "estimated_duration": 30, "is_required": True},
+
+        # Closer Tasks
+        {"role_name": "Closer", "task_title": "Receive Clear to Close", "task_description": "Receive clear to close notification from underwriting", "sequence_order": 1, "estimated_duration": 10, "is_required": True},
+        {"role_name": "Closer", "task_title": "Prepare Closing Disclosure", "task_description": "Generate closing disclosure with final loan terms and costs", "sequence_order": 2, "estimated_duration": 45, "is_required": True},
+        {"role_name": "Closer", "task_title": "Send Closing Disclosure", "task_description": "Send closing disclosure to borrower (3-day waiting period required)", "sequence_order": 3, "estimated_duration": 15, "is_required": True},
+        {"role_name": "Closer", "task_title": "Schedule Closing Appointment", "task_description": "Coordinate with all parties and schedule closing date/time", "sequence_order": 4, "estimated_duration": 30, "is_required": True},
+        {"role_name": "Closer", "task_title": "Prepare Closing Package", "task_description": "Prepare all closing documents and wire instructions", "sequence_order": 5, "estimated_duration": 60, "is_required": True},
+        {"role_name": "Closer", "task_title": "Coordinate Final Walk-Through", "task_description": "Ensure borrower completes final property walk-through", "sequence_order": 6, "estimated_duration": 20, "is_required": True},
+        {"role_name": "Closer", "task_title": "Attend Closing", "task_description": "Attend closing or coordinate with title company", "sequence_order": 7, "estimated_duration": 90, "is_required": True},
+    ]
+
+    templates_created = []
+    for template_data in default_templates:
+        db_template = ProcessTemplate(**template_data, user_id=current_user.id)
+        db.add(db_template)
+        templates_created.append(db_template)
+
+    db.commit()
+
+    logger.info(f"Seeded {len(templates_created)} default process templates for user {current_user.id}")
+    return {"message": "Default templates created successfully", "count": len(templates_created)}
+
+# ============================================================================
 # ANALYTICS
 # ============================================================================
 
@@ -4637,8 +5110,8 @@ async def get_scorecard_metrics(db: Session = Depends(get_db), current_user: Use
     
     # Active loans in different stages
     processing_loans = [l for l in ytd_loans if l.stage == LoanStage.PROCESSING]
-    underwriting_loans = [l for l in ytd_loans if l.stage == LoanStage.UNDERWRITING]
-    clear_to_close = [l for l in ytd_loans if l.stage == LoanStage.CLEAR_TO_CLOSE]
+    underwriting_loans = [l for l in ytd_loans if l.stage == LoanStage.UW_RECEIVED]
+    clear_to_close = [l for l in ytd_loans if l.stage == LoanStage.CTC]
     
     # Calculate conversion metrics from actual data
     conversion_metrics = {
@@ -4718,7 +5191,7 @@ async def get_scorecard_metrics(db: Session = Depends(get_db), current_user: Use
                         stage_transitions.append(days)
                 elif from_stage == "app" and to_stage == "underwriting":
                     # Days in processing
-                    if loan.stage in [LoanStage.UNDERWRITING, LoanStage.CLEAR_TO_CLOSE, LoanStage.FUNDED]:
+                    if loan.stage in [LoanStage.UW_RECEIVED, LoanStage.CTC, LoanStage.FUNDED]:
                         # Simplified calculation - would be better with activity timestamps
                         days = 5  # Default assumption
                         stage_transitions.append(days)
@@ -4752,7 +5225,7 @@ async def get_scorecard_metrics(db: Session = Depends(get_db), current_user: Use
     # Current pipeline status
     pipeline_status = {
         "prospect": len([l for l in ytd_leads if l.stage == LeadStage.PROSPECT]),
-        "application": len([l for l in ytd_loans if l.stage in [LoanStage.APPLICATION, LoanStage.PROCESSING]]),
+        "application": len([l for l in ytd_loans if l.stage in [LoanStage.DISCLOSED, LoanStage.PROCESSING]]),
         "underwriting": len(underwriting_loans),
         "clear_to_close": len(clear_to_close),
         "funded": funded_count
@@ -5607,25 +6080,28 @@ def init_db():
         Base.metadata.create_all(bind=engine)
         logger.info("✅ Database tables created successfully")
 
-        # Run schema migrations for existing tables
+        # Run schema migrations for existing tables (PostgreSQL only)
+        # Note: SQLite tables are already created with all columns via Base.metadata.create_all()
         try:
-            with engine.connect() as conn:
-                # Add email_verified column if it doesn't exist
-                conn.execute(text("""
-                    DO $$
-                    BEGIN
-                        IF NOT EXISTS (
-                            SELECT 1 FROM information_schema.columns
-                            WHERE table_name='users' AND column_name='email_verified'
-                        ) THEN
-                            ALTER TABLE users ADD COLUMN email_verified BOOLEAN DEFAULT FALSE;
-                        END IF;
-                    END $$;
-                """))
+            # Only run PostgreSQL-specific migrations if using PostgreSQL
+            if not DATABASE_URL.startswith("sqlite"):
+                with engine.connect() as conn:
+                    # Add email_verified column if it doesn't exist
+                    conn.execute(text("""
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (
+                                SELECT 1 FROM information_schema.columns
+                                WHERE table_name='users' AND column_name='email_verified'
+                            ) THEN
+                                ALTER TABLE users ADD COLUMN email_verified BOOLEAN DEFAULT FALSE;
+                            END IF;
+                        END $$;
+                    """))
 
-                # Add new Lead columns if they don't exist
-                conn.execute(text("""
-                    DO $$
+                    # Add new Lead columns if they don't exist
+                    conn.execute(text("""
+                        DO $$
                     BEGIN
                         -- Property Information
                         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='address') THEN
@@ -5713,26 +6189,26 @@ def init_db():
                             ALTER TABLE leads ADD COLUMN dti FLOAT;
                         END IF;
                     END $$;
-                """))
+                    """))
 
-                # Create api_keys table if it doesn't exist
-                conn.execute(text("""
-                    CREATE TABLE IF NOT EXISTS api_keys (
-                        id SERIAL PRIMARY KEY,
-                        key VARCHAR UNIQUE NOT NULL,
-                        name VARCHAR NOT NULL,
-                        user_id INTEGER NOT NULL REFERENCES users(id),
-                        is_active BOOLEAN DEFAULT TRUE,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        last_used_at TIMESTAMP
-                    );
-                """))
-                conn.execute(text("""
-                    CREATE INDEX IF NOT EXISTS ix_api_keys_key ON api_keys(key);
-                """))
+                    # Create api_keys table if it doesn't exist
+                    conn.execute(text("""
+                        CREATE TABLE IF NOT EXISTS api_keys (
+                            id SERIAL PRIMARY KEY,
+                            key VARCHAR UNIQUE NOT NULL,
+                            name VARCHAR NOT NULL,
+                            user_id INTEGER NOT NULL REFERENCES users(id),
+                            is_active BOOLEAN DEFAULT TRUE,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            last_used_at TIMESTAMP
+                        );
+                    """))
+                    conn.execute(text("""
+                        CREATE INDEX IF NOT EXISTS ix_api_keys_key ON api_keys(key);
+                    """))
 
-                conn.commit()
-                logger.info("✅ Schema migrations applied")
+                    conn.commit()
+                    logger.info("✅ Schema migrations applied (PostgreSQL)")
         except Exception as e:
             logger.warning(f"⚠️ Schema migration note: {e}")
 
@@ -7061,6 +7537,458 @@ async def complete_onboarding(
     except Exception as e:
         db.rollback()
         logger.error(f"Complete onboarding error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+def parse_document_basic(document_content: str, document_name: str = None):
+    """
+    Basic text-based document parser (fallback when OpenAI is not available).
+    Extracts roles, milestones, and tasks using keyword matching.
+    """
+    import re
+
+    lines = document_content.split('\n')
+
+    # Extract role from document name or content
+    role_name = "application_analyst" if "application" in document_content.lower()[:500] else "loan_specialist"
+    role_title = role_name.replace('_', ' ').title()
+
+    # Look for role indicators in first 1000 chars
+    content_start = document_content[:1000].lower()
+    if "application analysis" in content_start:
+        role_name = "application_analyst"
+        role_title = "Application Analyst"
+    elif "loan officer" in content_start:
+        role_name = "loan_officer"
+        role_title = "Loan Officer"
+    elif "processor" in content_start:
+        role_name = "loan_processor"
+        role_title = "Loan Processor"
+
+    # Extract milestones (sections with "Checklist" or major headings)
+    milestones = []
+    milestone_pattern = r'(Pre-Call|During|Post-Call|Before|After|Step \d+|Phase \d+).*?(Checklist|Process|Stage|Milestone)'
+
+    for i, line in enumerate(lines):
+        if re.search(milestone_pattern, line, re.IGNORECASE) or (line.isupper() and len(line) > 5 and len(line) < 50):
+            milestone_name = line.strip()
+            if milestone_name and len(milestone_name) > 3:
+                milestones.append({
+                    "name": milestone_name[:50],  # Limit length
+                    "description": f"Milestone extracted from document",
+                    "sequence_order": len(milestones),
+                    "estimated_duration": 2
+                })
+
+    # If no milestones found, create default ones
+    if not milestones:
+        milestones = [
+            {"name": "Preparation", "description": "Initial preparation phase", "sequence_order": 0, "estimated_duration": 1},
+            {"name": "Execution", "description": "Main execution phase", "sequence_order": 1, "estimated_duration": 2},
+            {"name": "Follow-up", "description": "Follow-up and completion", "sequence_order": 2, "estimated_duration": 1}
+        ]
+
+    # Extract tasks (numbered items or items starting with verbs)
+    tasks = []
+    task_pattern = r'^\s*(\d+\.|\d+\)|-|•|[a-z]\.|[a-z]\))\s*(.+)$'
+    current_milestone = milestones[0]["name"] if milestones else "General"
+
+    for line in lines:
+        # Check if line is a milestone header
+        for milestone in milestones:
+            if milestone["name"].lower() in line.lower() and len(line) < 100:
+                current_milestone = milestone["name"]
+                break
+
+        # Extract tasks
+        match = re.match(task_pattern, line.strip())
+        if match and len(match.group(2)) > 10:
+            task_text = match.group(2).strip()
+            # Only include substantial tasks
+            if len(task_text) > 15 and not task_text.endswith(':'):
+                tasks.append({
+                    "milestone": current_milestone,
+                    "role": role_name,
+                    "task_name": task_text[:100],  # First 100 chars as name
+                    "task_description": task_text,
+                    "sequence_order": len([t for t in tasks if t["milestone"] == current_milestone]),
+                    "estimated_duration": 15,
+                    "sla": 24,
+                    "ai_automatable": False,
+                    "is_required": True
+                })
+
+    # Ensure we have at least some tasks
+    if not tasks:
+        tasks = [
+            {
+                "milestone": milestones[0]["name"],
+                "role": role_name,
+                "task_name": "Review document requirements",
+                "task_description": "Review all requirements from the uploaded document",
+                "sequence_order": 0,
+                "estimated_duration": 30,
+                "sla": 24,
+                "ai_automatable": False,
+                "is_required": True
+            }
+        ]
+
+    return {
+        "roles": [{
+            "role_name": role_name,
+            "role_title": role_title,
+            "responsibilities": f"Responsibilities extracted from {document_name or 'uploaded document'}",
+            "skills_required": ["Document Analysis", "Process Management", "Attention to Detail"],
+            "key_activities": ["Document review", "Process execution", "Quality control"]
+        }],
+        "milestones": milestones,
+        "tasks": tasks
+    }
+
+@app.post("/api/v1/onboarding/parse-documents")
+async def parse_onboarding_documents(
+    request: DocumentParseRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Parse uploaded documents and extract roles, milestones, and tasks using AI"""
+    try:
+        # Clear existing parsed data for this user
+        db.query(ProcessTask).filter(ProcessTask.user_id == current_user.id).delete()
+        db.query(ProcessMilestone).filter(ProcessMilestone.user_id == current_user.id).delete()
+        db.query(ProcessRole).filter(ProcessRole.user_id == current_user.id).delete()
+        db.commit()
+
+        # Use AI to analyze the document content
+        analysis_prompt = f"""
+        Analyze the following mortgage loan process document and extract:
+        1. All unique roles/positions involved in the process
+        2. All major milestones in the mortgage loan process
+        3. All tasks for each milestone with role assignments
+
+        For each role, provide:
+        - role_name: Short identifier (e.g., "loan_officer", "processor")
+        - role_title: Display name (e.g., "Loan Officer", "Loan Processor")
+        - responsibilities: Brief description of their main responsibilities
+        - skills_required: List of required skills
+        - key_activities: List of their primary activities
+
+        For each milestone, provide:
+        - name: Milestone name
+        - description: Brief description
+        - sequence_order: Order in process (0, 1, 2...)
+        - estimated_duration: Estimated hours to complete
+
+        For each task, provide:
+        - milestone: Which milestone it belongs to
+        - role: Which role is responsible
+        - task_name: Task name
+        - task_description: Detailed description
+        - sequence_order: Order within milestone
+        - estimated_duration: Minutes to complete
+        - sla: Service level agreement in hours
+        - ai_automatable: Boolean if AI can automate this
+        - is_required: Boolean if required
+
+        Document content:
+        {request.document_content[:10000]}  # Limit to 10k chars
+
+        Return response as JSON with keys: roles, milestones, tasks
+        """
+
+        # Use OpenAI to actually parse the document, or fall back to basic parsing
+        if openai_client:
+            try:
+                completion = openai_client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[
+                        {"role": "system", "content": "You are an expert at analyzing process documents and extracting structured information."},
+                        {"role": "user", "content": analysis_prompt}
+                    ],
+                    response_format={"type": "json_object"}
+                )
+                ai_response = json.loads(completion.choices[0].message.content)
+
+                # Validate response structure
+                if not all(key in ai_response for key in ["roles", "milestones", "tasks"]):
+                    raise HTTPException(status_code=500, detail="AI response missing required keys (roles, milestones, tasks)")
+
+                if not ai_response["roles"]:
+                    raise HTTPException(status_code=400, detail="No roles found in document. Please upload a document containing role and responsibility information.")
+
+            except json.JSONDecodeError as e:
+                logger.error(f"JSON parsing error: {e}")
+                raise HTTPException(status_code=500, detail="AI returned invalid JSON")
+            except Exception as e:
+                logger.error(f"OpenAI parsing error: {e}")
+                raise HTTPException(status_code=500, detail=f"AI parsing failed: {str(e)}")
+        else:
+            # Fallback: Use basic text parsing when OpenAI is not available
+            logger.info("Using fallback text-based parsing (no OpenAI API key configured)")
+            ai_response = parse_document_basic(request.document_content, request.document_name)
+
+        # Create ProcessRole records
+        role_map = {}
+        for role_data in ai_response["roles"]:
+            role = ProcessRole(
+                user_id=current_user.id,
+                role_name=role_data["role_name"],
+                role_title=role_data["role_title"],
+                responsibilities=role_data.get("responsibilities"),
+                skills_required=role_data.get("skills_required", []),
+                key_activities=role_data.get("key_activities", [])
+            )
+            db.add(role)
+            db.flush()
+            role_map[role_data["role_name"]] = role.id
+
+        # Create ProcessMilestone records
+        milestone_map = {}
+        for milestone_data in ai_response["milestones"]:
+            milestone = ProcessMilestone(
+                user_id=current_user.id,
+                name=milestone_data["name"],
+                description=milestone_data.get("description"),
+                sequence_order=milestone_data.get("sequence_order", 0),
+                estimated_duration=milestone_data.get("estimated_duration")
+            )
+            db.add(milestone)
+            db.flush()
+            milestone_map[milestone_data["name"]] = milestone.id
+
+        # Create ProcessTask records
+        for task_data in ai_response["tasks"]:
+            milestone_id = milestone_map.get(task_data["milestone"])
+            role_id = role_map.get(task_data["role"])
+
+            if milestone_id and role_id:
+                task = ProcessTask(
+                    user_id=current_user.id,
+                    milestone_id=milestone_id,
+                    role_id=role_id,
+                    task_name=task_data["task_name"],
+                    task_description=task_data.get("task_description"),
+                    sequence_order=task_data.get("sequence_order", 0),
+                    estimated_duration=task_data.get("estimated_duration"),
+                    sla=task_data.get("sla"),
+                    sla_unit=task_data.get("sla_unit", "hours"),
+                    ai_automatable=task_data.get("ai_automatable", False),
+                    is_required=task_data.get("is_required", True)
+                )
+                db.add(task)
+
+        db.commit()
+
+        # Get created records
+        roles = db.query(ProcessRole).filter(ProcessRole.user_id == current_user.id).all()
+        milestones = db.query(ProcessMilestone).filter(ProcessMilestone.user_id == current_user.id).all()
+        tasks = db.query(ProcessTask).filter(ProcessTask.user_id == current_user.id).all()
+
+        return {
+            "roles": [ProcessRoleResponse.from_orm(r) for r in roles],
+            "milestones": [ProcessMilestoneResponse.from_orm(m) for m in milestones],
+            "tasks": [ProcessTaskResponse.from_orm(t) for t in tasks],
+            "summary": {
+                "total_roles": len(roles),
+                "total_milestones": len(milestones),
+                "total_tasks": len(tasks),
+                "document_name": request.document_name
+            }
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Parse documents error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/onboarding/roles")
+async def get_process_roles(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all AI-extracted roles for current user"""
+    try:
+        roles = db.query(ProcessRole).filter(
+            ProcessRole.user_id == current_user.id,
+            ProcessRole.is_active == True
+        ).order_by(ProcessRole.role_name).all()
+
+        return [ProcessRoleResponse.from_orm(role) for role in roles]
+
+    except Exception as e:
+        logger.error(f"Get roles error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/onboarding/milestones")
+async def get_process_milestones(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all AI-extracted milestones for current user"""
+    try:
+        milestones = db.query(ProcessMilestone).filter(
+            ProcessMilestone.user_id == current_user.id,
+            ProcessMilestone.is_active == True
+        ).order_by(ProcessMilestone.sequence_order).all()
+
+        return [ProcessMilestoneResponse.from_orm(milestone) for milestone in milestones]
+
+    except Exception as e:
+        logger.error(f"Get milestones error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/onboarding/tasks")
+async def get_process_tasks(
+    role_id: Optional[int] = None,
+    milestone_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all AI-extracted tasks for current user, optionally filtered by role or milestone"""
+    try:
+        query = db.query(ProcessTask).filter(
+            ProcessTask.user_id == current_user.id,
+            ProcessTask.is_active == True
+        )
+
+        if role_id:
+            query = query.filter(ProcessTask.role_id == role_id)
+
+        if milestone_id:
+            query = query.filter(ProcessTask.milestone_id == milestone_id)
+
+        tasks = query.order_by(ProcessTask.milestone_id, ProcessTask.sequence_order).all()
+
+        return [ProcessTaskResponse.from_orm(task) for task in tasks]
+
+    except Exception as e:
+        logger.error(f"Get tasks error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/team/members")
+async def get_team_members(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all team members with their assigned roles from onboarding"""
+    try:
+        # Get all users in the system
+        all_users = db.query(User).filter(User.id != current_user.id).all()
+
+        # Get all process roles for the current user (the admin who completed onboarding)
+        process_roles = db.query(ProcessRole).filter(
+            ProcessRole.user_id == current_user.id,
+            ProcessRole.is_active == True
+        ).all()
+
+        # Get tasks count for each role
+        team_members = []
+        for user in all_users:
+            # Try to find a matching role for this user (simplified - in production you'd have explicit user-role mapping)
+            member_data = {
+                "id": user.id,
+                "email": user.email,
+                "full_name": user.full_name,
+                "created_at": user.created_at.isoformat() if user.created_at else None,
+                "onboarding_completed": user.onboarding_completed,
+                "role": None,
+                "tasks_count": 0
+            }
+
+            # Add to list
+            team_members.append(member_data)
+
+        # Also include current user
+        current_member = {
+            "id": current_user.id,
+            "email": current_user.email,
+            "full_name": current_user.full_name,
+            "created_at": current_user.created_at.isoformat() if current_user.created_at else None,
+            "onboarding_completed": current_user.onboarding_completed,
+            "role": {"role_title": "Admin", "role_name": "admin"},
+            "tasks_count": 0,
+            "is_current": True
+        }
+
+        team_members.insert(0, current_member)
+
+        # Get role assignments and task counts
+        roles_data = []
+        for role in process_roles:
+            tasks_count = db.query(ProcessTask).filter(
+                ProcessTask.role_id == role.id,
+                ProcessTask.is_active == True
+            ).count()
+
+            roles_data.append({
+                "id": role.id,
+                "role_name": role.role_name,
+                "role_title": role.role_title,
+                "responsibilities": role.responsibilities,
+                "skills_required": role.skills_required,
+                "key_activities": role.key_activities,
+                "tasks_count": tasks_count
+            })
+
+        return {
+            "team_members": team_members,
+            "available_roles": roles_data
+        }
+
+    except Exception as e:
+        logger.error(f"Get team members error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/team/members/{user_id}")
+async def get_team_member_detail(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get detailed information about a specific team member"""
+    try:
+        # Get the user
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Get roles assigned to the admin
+        process_roles = db.query(ProcessRole).filter(
+            ProcessRole.user_id == current_user.id,
+            ProcessRole.is_active == True
+        ).all()
+
+        # Get tasks for this user's role
+        # In a real app, you'd have a user_role_assignments table
+        # For now, we'll just return all roles and tasks
+
+        roles_with_tasks = []
+        for role in process_roles:
+            tasks = db.query(ProcessTask).filter(
+                ProcessTask.role_id == role.id,
+                ProcessTask.is_active == True
+            ).order_by(ProcessTask.milestone_id, ProcessTask.sequence_order).all()
+
+            roles_with_tasks.append({
+                "role": ProcessRoleResponse.from_orm(role),
+                "tasks": [ProcessTaskResponse.from_orm(t) for t in tasks]
+            })
+
+        return {
+            "user": {
+                "id": user.id,
+                "email": user.email,
+                "full_name": user.full_name,
+                "created_at": user.created_at.isoformat() if user.created_at else None,
+                "onboarding_completed": user.onboarding_completed
+            },
+            "roles_with_tasks": roles_with_tasks
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get team member detail error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================================================

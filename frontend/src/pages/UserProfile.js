@@ -1,275 +1,211 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { teamAPI } from '../services/api';
 import './UserProfile.css';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-
 function UserProfile() {
-  const { id } = useParams();
+  const { userId, id } = useParams(); // Support both /team/:userId and legacy /user/:id routes
+  const actualUserId = userId || id;
   const navigate = useNavigate();
-  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [memberData, setMemberData] = useState(null);
   const [error, setError] = useState(null);
-  const [editMode, setEditMode] = useState(false);
-  const [formData, setFormData] = useState({});
 
   useEffect(() => {
-    loadUserProfile();
-  }, [id]);
+    loadMemberData();
+  }, [actualUserId]);
 
-  const loadUserProfile = async () => {
+  const loadMemberData = async () => {
+    setLoading(true);
+    setError(null);
     try {
-      setLoading(true);
-      setError(null);
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/api/v1/admin/users/${id}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to load user profile');
-      }
-
-      const data = await response.json();
-      setUser(data);
-      setFormData({
-        full_name: data.full_name || '',
-        email: data.email || '',
-        role: data.role || 'loan_officer',
-        is_active: data.is_active || false,
-        email_verified: data.email_verified || false
-      });
+      const data = await teamAPI.getMemberDetail(actualUserId);
+      setMemberData(data);
     } catch (err) {
-      console.error('Failed to load user:', err);
-      setError('Failed to load user profile. Please try again.');
+      console.error('Error loading member data:', err);
+      setError('Failed to load member profile');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleUpdate = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/api/v1/admin/users/${id}`, {
-        method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(formData)
-      });
+  const handleViewAsUser = () => {
+    // Store the original user context
+    const currentUser = localStorage.getItem('user');
+    localStorage.setItem('originalUser', currentUser);
+    localStorage.setItem('viewAsUserId', actualUserId);
 
-      if (!response.ok) {
-        throw new Error('Failed to update user');
-      }
-
-      alert('User updated successfully');
-      setEditMode(false);
-      await loadUserProfile();
-    } catch (err) {
-      console.error('Failed to update user:', err);
-      alert('Failed to update user. Please try again.');
-    }
+    // Navigate to dashboard to see it from this user's perspective
+    alert(`Switching to view as user ${memberData.user.email}. You will now see the CRM from their perspective.`);
+    navigate('/');
+    window.location.reload(); // Reload to apply the context
   };
 
-  const handleDelete = async () => {
-    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-
-    if (currentUser.id === parseInt(id)) {
-      alert('You cannot delete your own account.');
-      return;
+  const handleExitViewAsUser = () => {
+    // Restore original user context
+    const originalUser = localStorage.getItem('originalUser');
+    if (originalUser) {
+      localStorage.setItem('user', originalUser);
+      localStorage.removeItem('originalUser');
+      localStorage.removeItem('viewAsUserId');
+      alert('Returning to your own view');
+      navigate('/');
+      window.location.reload();
     }
-
-    if (!window.confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
-      return;
-    }
-
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/api/v1/admin/users/${id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || 'Failed to delete user');
-      }
-
-      alert('User deleted successfully');
-      navigate('/settings');
-    } catch (err) {
-      console.error('Failed to delete user:', err);
-      alert(err.message || 'Failed to delete user');
-    }
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
   };
 
   if (loading) {
     return (
-      <div className="user-profile-page">
-        <div className="loading">Loading user profile...</div>
+      <div className="user-profile-container">
+        <div className="loading-state">Loading profile...</div>
       </div>
     );
   }
 
-  if (error || !user) {
+  if (error || !memberData) {
     return (
-      <div className="user-profile-page">
-        <div className="error-message">{error || 'User not found'}</div>
-        <button className="btn-back" onClick={() => navigate('/settings')}>
-          ← Back to Settings
-        </button>
+      <div className="user-profile-container">
+        <div className="error-state">
+          <p>{error || 'User not found'}</p>
+          <button onClick={() => navigate('/settings')} className="btn-back">
+            ← Back to Settings
+          </button>
+        </div>
       </div>
     );
   }
 
-  const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-  const isCurrentUser = user.id === currentUser.id;
+  const { user, roles_with_tasks } = memberData;
+  const isViewingAsUser = localStorage.getItem('viewAsUserId') !== null;
 
   return (
-    <div className="user-profile-page">
-      <div className="profile-header">
-        <button className="btn-back" onClick={() => navigate('/settings')}>
-          ← Back to User Management
-        </button>
-        <h1>User Profile</h1>
-      </div>
+    <div className="user-profile-container">
+      {/* View As User Banner - at top if active */}
+      {isViewingAsUser && (
+        <div className="view-as-banner">
+          <span className="banner-icon">👁️</span>
+          <span className="banner-text">You are viewing the CRM as this user</span>
+          <button onClick={handleExitViewAsUser} className="banner-btn">
+            Exit View Mode
+          </button>
+        </div>
+      )}
 
-      <div className="profile-content">
-        <div className="profile-card">
-          <div className="profile-avatar-section">
-            <div className="profile-avatar-large">
-              {user.full_name?.charAt(0) || user.email.charAt(0)}
-            </div>
-            <div className="profile-name-section">
-              <h2>{user.full_name || 'Unnamed User'}</h2>
-              {isCurrentUser && <span className="current-user-badge">You</span>}
-              <p className="profile-email">{user.email}</p>
+      {/* Header */}
+      <div className="profile-header">
+        <button onClick={() => navigate('/settings')} className="btn-back">
+          ← Back to Team
+        </button>
+
+        <div className="header-content">
+          <div className="profile-avatar-large">
+            {user.full_name ? user.full_name.charAt(0).toUpperCase() : user.email.charAt(0).toUpperCase()}
+          </div>
+          <div className="profile-info">
+            <h1>{user.full_name || user.email}</h1>
+            <p className="profile-email">{user.email}</p>
+            <div className="profile-meta">
+              <span className="meta-item">
+                👤 User ID: {user.id}
+              </span>
+              {user.created_at && (
+                <span className="meta-item">
+                  📅 Joined: {new Date(user.created_at).toLocaleDateString()}
+                </span>
+              )}
+              {user.onboarding_completed && (
+                <span className="status-badge completed">✓ Onboarded</span>
+              )}
             </div>
           </div>
+        </div>
 
-          {!editMode ? (
-            <div className="profile-details">
-              <div className="detail-row">
-                <label>User ID:</label>
-                <span>{user.id}</span>
-              </div>
-              <div className="detail-row">
-                <label>Role:</label>
-                <span className="role-badge">{user.role || 'loan_officer'}</span>
-              </div>
-              <div className="detail-row">
-                <label>Status:</label>
-                <span className={`status-badge ${user.is_active ? 'active' : 'inactive'}`}>
-                  {user.is_active ? 'Active' : 'Inactive'}
-                </span>
-              </div>
-              <div className="detail-row">
-                <label>Email Verified:</label>
-                <span className={`verify-badge ${user.email_verified ? 'verified' : 'unverified'}`}>
-                  {user.email_verified ? '✓ Verified' : '✗ Not Verified'}
-                </span>
-              </div>
-              <div className="detail-row">
-                <label>Onboarding:</label>
-                <span className={`onboarding-badge ${user.onboarding_completed ? 'completed' : 'pending'}`}>
-                  {user.onboarding_completed ? 'Completed' : 'Pending'}
-                </span>
-              </div>
-              <div className="detail-row">
-                <label>Created:</label>
-                <span>{formatDate(user.created_at)}</span>
-              </div>
-              {user.updated_at && (
-                <div className="detail-row">
-                  <label>Last Updated:</label>
-                  <span>{formatDate(user.updated_at)}</span>
-                </div>
-              )}
-
-              <div className="profile-actions">
-                <button className="btn-edit" onClick={() => setEditMode(true)}>
-                  Edit Profile
-                </button>
-                {!isCurrentUser && (
-                  <button className="btn-delete" onClick={handleDelete}>
-                    Delete User
-                  </button>
-                )}
-              </div>
-            </div>
+        <div className="profile-actions">
+          {isViewingAsUser ? (
+            <button onClick={handleExitViewAsUser} className="btn-exit-view-as">
+              🔙 Exit View As User
+            </button>
           ) : (
-            <div className="profile-edit-form">
-              <div className="form-group">
-                <label>Full Name:</label>
-                <input
-                  type="text"
-                  value={formData.full_name}
-                  onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                  className="form-input"
-                />
-              </div>
-              <div className="form-group">
-                <label>Email:</label>
-                <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="form-input"
-                />
-              </div>
-              <div className="form-group">
-                <label>Role:</label>
-                <select
-                  value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                  className="form-select"
-                >
-                  <option value="loan_officer">Loan Officer</option>
-                  <option value="admin">Admin</option>
-                  <option value="processor">Processor</option>
-                  <option value="underwriter">Underwriter</option>
-                  <option value="manager">Manager</option>
-                </select>
-              </div>
-              <div className="form-group">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={formData.is_active}
-                    onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                  />
-                  <span>Active</span>
-                </label>
-              </div>
-              <div className="form-group">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={formData.email_verified}
-                    onChange={(e) => setFormData({ ...formData, email_verified: e.target.checked })}
-                  />
-                  <span>Email Verified</span>
-                </label>
-              </div>
-
-              <div className="profile-actions">
-                <button className="btn-save" onClick={handleUpdate}>
-                  Save Changes
-                </button>
-                <button className="btn-cancel" onClick={() => setEditMode(false)}>
-                  Cancel
-                </button>
-              </div>
-            </div>
+            <button onClick={handleViewAsUser} className="btn-view-as-user">
+              👁️ View as This User
+            </button>
           )}
         </div>
+      </div>
+
+      {/* Roles and Tasks */}
+      <div className="profile-content">
+        <h2>Assigned Roles & Tasks</h2>
+
+        {roles_with_tasks && roles_with_tasks.length > 0 ? (
+          <div className="roles-tasks-container">
+            {roles_with_tasks.map(({ role, tasks }) => (
+              <div key={role.id} className="role-task-section">
+                <div className="role-section-header">
+                  <div className="role-info-header">
+                    <h3>{role.role_title}</h3>
+                    <span className="role-badge">{role.role_name}</span>
+                    <span className="tasks-count-badge">{tasks.length} tasks</span>
+                  </div>
+                </div>
+
+                {role.responsibilities && (
+                  <div className="role-responsibilities">
+                    <h4>Responsibilities</h4>
+                    <p>{role.responsibilities}</p>
+                  </div>
+                )}
+
+                {role.skills_required && role.skills_required.length > 0 && (
+                  <div className="role-skills">
+                    <h4>Required Skills</h4>
+                    <div className="skills-tags">
+                      {role.skills_required.map((skill, idx) => (
+                        <span key={idx} className="skill-tag">{skill}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Tasks List */}
+                <div className="tasks-list">
+                  <h4>Tasks ({tasks.length})</h4>
+                  <div className="tasks-grid-profile">
+                    {tasks.map((task, idx) => (
+                      <div key={task.id} className="task-card-profile">
+                        <div className="task-card-header">
+                          <span className="task-index">{idx + 1}</span>
+                          <h5>{task.task_name}</h5>
+                        </div>
+                        {task.task_description && (
+                          <p className="task-description-profile">{task.task_description}</p>
+                        )}
+                        <div className="task-meta-badges">
+                          {task.estimated_duration && (
+                            <span className="task-meta-badge">⏱️ {task.estimated_duration}min</span>
+                          )}
+                          {task.sla && (
+                            <span className="task-meta-badge">⏰ {task.sla}{task.sla_unit}</span>
+                          )}
+                          {task.ai_automatable && (
+                            <span className="task-meta-badge ai">🤖 AI Auto</span>
+                          )}
+                          {task.is_required && (
+                            <span className="task-meta-badge required">Required</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-roles-state">
+            <p>No roles or tasks assigned yet. Complete the onboarding process to assign roles and tasks to team members.</p>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { onboardingAPI } from '../services/api';
 import './OnboardingWizard.css';
 
 const OnboardingWizard = ({ onComplete, onSkip }) => {
@@ -10,46 +11,53 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
   const [uploadedTestEmail, setUploadedTestEmail] = useState(null);
   const [draggedTask, setDraggedTask] = useState(null);
   const [formData, setFormData] = useState({
-    // Step 1: Team & Roles
+    // Step 1: Upload Documents
+    sopFiles: [],
+    processTree: null,
+
+    // Step 2: Role Review (new)
+    extractedRoles: [],
+
+    // Step 3: Task Review (new)
+    extractedTasks: [],
+    extractedMilestones: [],
+
+    // Step 4: Team & Roles
     teamName: '',
     members: [{ firstName: '', lastName: '', email: '', phone: '', role: '' }],
     manager: '',
     timezone: 'America/Los_Angeles',
 
-    // Step 2: Systems & Processes
-    sopFiles: [],
-    processTree: null,
-
-    // Step 3: Process Ownership (populated by AI or manually)
+    // Step 5: Process Tree (populated by AI or manually)
     milestones: [],
 
-    // Step 4: Integrations
+    // Step 6: Integrations
     calendly: { connected: false, eventTypes: [] },
     email: { provider: null, connected: false, mailboxes: [] },
     telephony: { provider: null, phoneNumbers: [] },
 
-    // Step 5: Compliance
+    // Step 7: Compliance
     quietHours: { start: '08:00', end: '20:00' },
     maxRetries: 3,
     maxDailyAttempts: 5,
     dncAccepted: false,
     recordingPolicy: {},
 
-    // Step 6: AI Agent
+    // Step 8: AI Agent
     agentName: 'Samantha',
     voiceProfile: 'elevenlabs-default',
     identityLine: '',
     purposePrompts: {},
     escalationNumber: '',
 
-    // Step 7: Test & Go-Live
+    // Step 9: Test & Go-Live
     testsPassed: {
       callTest: false,
       emailTest: false
     }
   });
 
-  const totalSteps = 7;
+  const totalSteps = 9;
 
   const handleNext = () => {
     if (currentStep < totalSteps) {
@@ -194,11 +202,69 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
   const handleAIProcessing = async () => {
     setIsProcessing(true);
 
-    // Simulate AI processing (replace with actual API call later)
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    try {
+      // Create document content from uploaded files
+      // For now, we'll use a simple text marker - in production you'd read actual file content
+      const documentContent = `Mortgage loan process documentation uploaded: ${formData.sopFiles.map(f => f.name).join(', ')}`;
 
-    // Sample milestones that would be extracted from documents - COMPREHENSIVE VERSION
-    const generatedMilestones = [
+      // Call the real API to parse documents
+      const parseResult = await onboardingAPI.parseDocuments(documentContent,
+        formData.sopFiles[0]?.name || 'process-document.pdf'
+      );
+
+      // Transform API response to match the existing data structure
+      const generatedMilestones = parseResult.milestones.map((milestone, mIndex) => {
+        // Get tasks for this milestone
+        const milestoneTasks = parseResult.tasks
+          .filter(task => task.milestone_id === milestone.id)
+          .map(task => {
+            // Find the role for this task
+            const role = parseResult.roles.find(r => r.id === task.role_id);
+            return {
+              name: task.task_name,
+              owner: role?.role_title || 'Unassigned',
+              sla: task.sla || 24,
+              slaUnit: task.sla_unit || 'hours',
+              aiAuto: task.ai_automatable || false
+            };
+          });
+
+        return {
+          name: milestone.name,
+          tasks: milestoneTasks
+        };
+      });
+
+      // Calculate stats
+      const totalTasks = parseResult.summary.total_tasks;
+
+      // Store all extracted data
+      setFormData(prevData => ({
+        ...prevData,
+        milestones: generatedMilestones,
+        extractedRoles: parseResult.roles,
+        extractedTasks: parseResult.tasks,
+        extractedMilestones: parseResult.milestones,
+        processTree: {
+          generated: true,
+          milestones: parseResult.summary.total_milestones,
+          tasks: totalTasks,
+          roles: parseResult.summary.total_roles
+        }
+      }));
+
+      setIsProcessing(false);
+
+      // Automatically advance to role review step
+      setCurrentStep(2);
+
+    } catch (error) {
+      console.error('Error parsing documents:', error);
+      setIsProcessing(false);
+      alert('Failed to parse documents. Please try again.');
+
+      // Fallback to sample data in case of error
+      const generatedMilestones = [
       {
         name: 'New Lead',
         tasks: [
@@ -379,19 +445,20 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
     // Calculate stats
     const totalTasks = generatedMilestones.reduce((total, m) => total + m.tasks.length, 0);
 
-    // Update BOTH milestones AND processTree in a single atomic update
-    setFormData(prevData => ({
-      ...prevData,
-      milestones: generatedMilestones,
-      processTree: {
-        generated: true,
-        milestones: generatedMilestones.length,
-        tasks: totalTasks,
-        roles: 5
-      }
-    }));
+      // Update BOTH milestones AND processTree in a single atomic update (fallback)
+      setFormData(prevData => ({
+        ...prevData,
+        milestones: generatedMilestones,
+        processTree: {
+          generated: true,
+          milestones: generatedMilestones.length,
+          tasks: totalTasks,
+          roles: 5
+        }
+      }));
 
-    setIsProcessing(false);
+      setIsProcessing(false);
+    }
   };
 
   // Milestone and task management
@@ -498,23 +565,161 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
       case 1:
         return renderProcessUpload();
       case 2:
-        return renderTeamRoles();
+        return renderRoleReview();
       case 3:
-        return renderProcessTree();
+        return renderTaskReview();
       case 4:
-        return renderIntegrations();
+        return renderTeamRoles();
       case 5:
-        return renderCompliance();
+        return renderProcessTree();
       case 6:
-        return renderAIAgent();
+        return renderIntegrations();
       case 7:
+        return renderCompliance();
+      case 8:
+        return renderAIAgent();
+      case 9:
         return renderTestGoLive();
       default:
         return null;
     }
   };
 
-  // SCREEN 2: Team & Roles
+  // SCREEN 2: Role Review
+  const renderRoleReview = () => (
+    <div className="step-content">
+      <div className="step-header">
+        <div className="step-icon">👥</div>
+        <h2>Review Roles & Responsibilities</h2>
+        <p className="step-description">
+          AI has identified {formData.extractedRoles?.length || 0} roles from your process documents. Review each role and their responsibilities.
+        </p>
+      </div>
+
+      <div className="roles-review-container">
+        {formData.extractedRoles && formData.extractedRoles.length > 0 ? (
+          formData.extractedRoles.map((role, index) => (
+            <div key={role.id} className="role-card">
+              <div className="role-header">
+                <div className="role-number">{index + 1}</div>
+                <div className="role-info">
+                  <h3>{role.role_title}</h3>
+                  <span className="role-badge">{role.role_name}</span>
+                </div>
+              </div>
+
+              <div className="role-details">
+                <div className="detail-section">
+                  <h4>Responsibilities</h4>
+                  <p>{role.responsibilities}</p>
+                </div>
+
+                {role.skills_required && role.skills_required.length > 0 && (
+                  <div className="detail-section">
+                    <h4>Required Skills</h4>
+                    <div className="skills-list">
+                      {role.skills_required.map((skill, idx) => (
+                        <span key={idx} className="skill-tag">{skill}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {role.key_activities && role.key_activities.length > 0 && (
+                  <div className="detail-section">
+                    <h4>Key Activities</h4>
+                    <ul className="activities-list">
+                      {role.key_activities.map((activity, idx) => (
+                        <li key={idx}>{activity}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="no-roles-message">
+            <p>No roles have been extracted yet. Please go back to Step 1 and generate the process tree.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // SCREEN 3: Task Review
+  const renderTaskReview = () => {
+    // Group tasks by role
+    const tasksByRole = {};
+    formData.extractedRoles?.forEach(role => {
+      tasksByRole[role.id] = {
+        role: role,
+        tasks: formData.extractedTasks?.filter(t => t.role_id === role.id) || []
+      };
+    });
+
+    return (
+      <div className="step-content">
+        <div className="step-header">
+          <div className="step-icon">📋</div>
+          <h2>Review Tasks by Role</h2>
+          <p className="step-description">
+            Review all {formData.extractedTasks?.length || 0} tasks organized by role. Each task has been assigned to the appropriate team member.
+          </p>
+        </div>
+
+        <div className="tasks-by-role-container">
+          {Object.values(tasksByRole).map(({ role, tasks }) => (
+            <div key={role.id} className="role-tasks-section">
+              <div className="role-tasks-header">
+                <h3>{role.role_title}</h3>
+                <span className="tasks-count">{tasks.length} tasks</span>
+              </div>
+
+              <div className="tasks-grid">
+                {tasks.map((task, index) => {
+                  const milestone = formData.extractedMilestones?.find(m => m.id === task.milestone_id);
+                  return (
+                    <div key={task.id} className="task-review-card">
+                      <div className="task-review-header">
+                        <span className="task-number">{index + 1}</span>
+                        <h4>{task.task_name}</h4>
+                      </div>
+
+                      {task.task_description && (
+                        <p className="task-description">{task.task_description}</p>
+                      )}
+
+                      <div className="task-meta-info">
+                        {milestone && (
+                          <span className="meta-badge milestone-badge">📍 {milestone.name}</span>
+                        )}
+                        {task.estimated_duration && (
+                          <span className="meta-badge time-badge">⏱️ {task.estimated_duration} min</span>
+                        )}
+                        {task.sla && (
+                          <span className="meta-badge sla-badge">⏰ SLA: {task.sla} {task.sla_unit}</span>
+                        )}
+                        {task.ai_automatable && (
+                          <span className="meta-badge ai-badge">🤖 AI Automatable</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {tasks.length === 0 && (
+                <p className="no-tasks-message">No tasks assigned to this role yet.</p>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  // SCREEN 4: Team & Roles
   const renderTeamRoles = () => (
     <div className="step-content">
       <div className="step-header">
