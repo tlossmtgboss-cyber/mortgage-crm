@@ -1099,10 +1099,28 @@ class LeadResponse(BaseModel):
 class LoanCreate(BaseModel):
     loan_number: str
     borrower_name: str
+    borrower_email: Optional[str] = None
+    borrower_phone: Optional[str] = None
+    coborrower_name: Optional[str] = None
     amount: float
-    program: Optional[str] = None
-    rate: Optional[float] = None
+    product_type: Optional[str] = None  # Program type (Conventional, FHA, VA, etc.)
+    loan_type: Optional[str] = None  # Purchase, Refinance, etc.
+    interest_rate: Optional[float] = None
+    term: Optional[int] = 360
+    purchase_price: Optional[float] = None
+    down_payment: Optional[float] = None
+    property_address: Optional[str] = None
+    property_city: Optional[str] = None
+    property_state: Optional[str] = None
+    property_zip: Optional[str] = None
+    lock_date: Optional[datetime] = None
     closing_date: Optional[datetime] = None
+    processor: Optional[str] = None
+    underwriter: Optional[str] = None
+    realtor_agent: Optional[str] = None
+    title_company: Optional[str] = None
+    stage: Optional[str] = None
+    notes: Optional[str] = None
 
 class LoanUpdate(BaseModel):
     stage: Optional[LoanStage] = None
@@ -4215,7 +4233,21 @@ async def create_loan(loan: LoanCreate, db: Session = Depends(get_db), current_u
         if existing:
             raise HTTPException(status_code=400, detail="Loan number already exists")
 
-        db_loan = Loan(**loan.dict(), loan_officer_id=current_user.id)
+        # Convert LoanCreate fields to Loan model fields
+        loan_data = loan.dict(exclude_unset=True)
+
+        # Map field names from API to database model
+        if 'product_type' in loan_data:
+            loan_data['program'] = loan_data.pop('product_type')
+        if 'interest_rate' in loan_data:
+            loan_data['rate'] = loan_data.pop('interest_rate')
+        if 'notes' in loan_data:
+            # Store notes in user_metadata for now since there's no notes field
+            if not loan_data.get('user_metadata'):
+                loan_data['user_metadata'] = {}
+            loan_data['user_metadata']['notes'] = loan_data.pop('notes')
+
+        db_loan = Loan(**loan_data, loan_officer_id=current_user.id)
         db_loan.ai_insights = generate_ai_insights(db_loan)
 
         db.add(db_loan)
