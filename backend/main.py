@@ -3836,17 +3836,25 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
 
     messages = []
 
-    return {
-        "prioritized_tasks": prioritized_tasks,
-        "pipeline_stats": pipeline_stats,
-        "production": production,
-        "lead_metrics": lead_metrics,
-        "loan_issues": [],
-        "ai_tasks": {"pending": [], "waiting": []},
-        "referral_stats": referral_stats,
-        "team_stats": team_stats,
-        "messages": messages
-    }
+    try:
+        return {
+            "prioritized_tasks": prioritized_tasks,
+            "pipeline_stats": pipeline_stats,
+            "production": production,
+            "lead_metrics": lead_metrics,
+            "loan_issues": [],
+            "ai_tasks": {"pending": [], "waiting": []},
+            "referral_stats": referral_stats,
+            "team_stats": team_stats,
+            "messages": messages
+        }
+    except Exception as e:
+        import traceback
+        return {
+            "error": str(e),
+            "traceback": traceback.format_exc(),
+            "type": type(e).__name__
+        }
 
 # ============================================================================
 # LOAN SCORECARD REPORT
