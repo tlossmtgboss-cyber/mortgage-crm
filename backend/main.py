@@ -3713,6 +3713,7 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     funded = db.query(Loan).filter(
         Loan.loan_officer_id == current_user.id,
         Loan.stage == LoanStage.FUNDED,
+        Loan.funded_date.isnot(None),
         Loan.funded_date >= start_of_month
     ).all()
 
