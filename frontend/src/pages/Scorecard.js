@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import './Scorecard.css';
 
 function Scorecard() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [drillDownModal, setDrillDownModal] = useState(null);
 
@@ -47,28 +49,39 @@ function Scorecard() {
     ],
     volumeRevenue: [
       {
-        id: 'funded-loans',
-        title: 'Funded Loans',
+        id: 'total-loans',
+        title: 'Total Loans',
         value: 60,
-        subtitle: 'Avg Monthly: 12.0',
+        subtitle: 'Year to Date',
+        route: '/portfolio',
       },
       {
         id: 'total-volume',
         title: 'Total Volume',
         value: '$21.3M',
-        subtitle: 'Avg Monthly: $4.26M',
+        subtitle: 'Year to Date',
+        route: '/portfolio',
       },
       {
-        id: 'avg-loan',
-        title: 'Avg Loan Amount',
-        value: '$355k',
-        subtitle: 'Current Period',
+        id: 'referrals',
+        title: 'Referrals',
+        value: 60,
+        subtitle: 'Active Referral Partners',
+        route: '/referral-partners',
       },
       {
-        id: 'avg-bps',
-        title: 'Current Avg BPS',
-        value: 100,
-        subtitle: 'Basis Points',
+        id: 'commission',
+        title: 'Commission Earned',
+        value: '$213,000',
+        subtitle: 'Year to Date',
+        route: '/portfolio',
+      },
+      {
+        id: 'portfolio-value',
+        title: 'Portfolio Value',
+        value: '$21.3M',
+        subtitle: 'Total Active Loans',
+        route: '/portfolio',
       },
     ],
     loanTypes: [
@@ -206,7 +219,7 @@ function Scorecard() {
             <div
               key={metric.id}
               className="volume-card clickable"
-              onClick={() => handleMetricClick(metric, 'volume')}
+              onClick={() => metric.route && navigate(metric.route)}
             >
               <div className="metric-title">{metric.title}</div>
               <div className="metric-value-large">{metric.value}</div>

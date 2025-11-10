@@ -138,10 +138,25 @@
 /* Volume & Revenue Grid */
 .volume-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 24px;
   max-width: 100%;
   margin: 0 auto;
+}
+
+.volume-grid > .volume-card:nth-child(4),
+.volume-grid > .volume-card:nth-child(5) {
+  max-width: 600px;
+}
+
+.volume-grid > .volume-card:nth-child(4) {
+  margin-left: auto;
+  margin-right: 12px;
+}
+
+.volume-grid > .volume-card:nth-child(5) {
+  margin-left: 12px;
+  margin-right: auto;
 }
 
 .volume-card {
@@ -494,9 +509,26 @@
 /* Responsive Design */
 @media (max-width: 1400px) {
   .conversion-grid,
-  .volume-grid,
   .timeline-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .volume-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .volume-grid > .volume-card:nth-child(4),
+  .volume-grid > .volume-card:nth-child(5) {
+    max-width: none;
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  .volume-grid > .volume-card:nth-child(5) {
+    grid-column: 1 / -1;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
   }
 }
 
@@ -523,6 +555,14 @@
   .volume-grid,
   .timeline-grid {
     grid-template-columns: 1fr;
+  }
+
+  .volume-grid > .volume-card:nth-child(4),
+  .volume-grid > .volume-card:nth-child(5) {
+    max-width: none;
+    margin-left: 0;
+    margin-right: 0;
+    grid-column: auto;
   }
 
   .metrics-table {
