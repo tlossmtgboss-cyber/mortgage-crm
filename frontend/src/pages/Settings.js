@@ -728,6 +728,14 @@ function Settings() {
       category: 'Automation'
     },
     {
+      id: 'synthflow',
+      name: 'Synthflow AI',
+      description: 'AI-powered voice agents for automated client calls and lead qualification',
+      icon: '🤖',
+      color: '#6366f1',
+      category: 'AI & Automation'
+    },
+    {
       id: 'stripe',
       name: 'Stripe',
       description: 'Collect payments and processing fees',
