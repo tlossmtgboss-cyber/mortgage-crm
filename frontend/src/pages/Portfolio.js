@@ -344,40 +344,6 @@ function Portfolio() {
         </div>
       </div>
 
-      {/* CLIENT FOR LIFE ENGINE (MUM) TASKS */}
-      <div className="mum-tasks-widget">
-        <div className="mum-widget-header">
-          <h3>♻️ Client for Life Engine (MUM)</h3>
-          <span className="mum-count-badge">3 actions</span>
-        </div>
-        <div className="mum-tasks-list">
-          <div className="mum-task-item">
-            <div className="mum-task-icon">📅</div>
-            <div className="mum-task-content">
-              <div className="mum-task-title">Annual review due</div>
-              <div className="mum-task-client">Tom Wilson</div>
-            </div>
-            <button className="btn-mum-action">Schedule</button>
-          </div>
-          <div className="mum-task-item">
-            <div className="mum-task-icon">📉</div>
-            <div className="mum-task-content">
-              <div className="mum-task-title">Rate drop opportunity</div>
-              <div className="mum-task-client">Lisa Brown</div>
-            </div>
-            <button className="btn-mum-action">Send alert</button>
-          </div>
-          <div className="mum-task-item">
-            <div className="mum-task-icon">🎂</div>
-            <div className="mum-task-content">
-              <div className="mum-task-title">Home anniversary</div>
-              <div className="mum-task-client">Mark Taylor</div>
-            </div>
-            <button className="btn-mum-action">Send card</button>
-          </div>
-        </div>
-      </div>
-
       <div className="portfolio-tabs">
         <button
           className={activeTab === 'loans' ? 'active' : ''}
