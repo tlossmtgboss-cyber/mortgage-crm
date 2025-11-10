@@ -1,7 +1,3 @@
-[build]
-# Don't require secrets at build time
-nixpacksPlan = "python"
-
 [deploy]
 startCommand = "uvicorn main:app --host 0.0.0.0 --port 8000"
 restartPolicyType = "on_failure"
