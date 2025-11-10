@@ -909,3 +909,89 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* MUM Client Detail Specific Styles */
+.stats-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.stats-overview .stat-card {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  text-align: center;
+}
+
+.stats-overview .stat-card.highlight {
+  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
+  color: white;
+  border: none;
+}
+
+.stats-overview .stat-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.stats-overview .stat-card.highlight .stat-label {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.stats-overview .stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.stats-overview .stat-card.highlight .stat-value {
+  color: white;
+}
+
+.opportunity-badge {
+  display: inline-block;
+  padding: 6px 12px;
+  background: #10b981;
+  color: white;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  margin-left: 12px;
+}
+
+.opportunity-alert {
+  background: #f0fdf4;
+  border: 2px solid #10b981;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.opportunity-alert h3 {
+  color: #059669;
+  margin: 0 0 8px 0;
+  font-size: 16px;
+}
+
+.opportunity-alert p {
+  color: #065f46;
+  margin: 0;
+  font-size: 14px;
+}
+
+.no-opportunity {
+  text-align: center;
+  padding: 40px;
+  color: #6b7280;
+}
+
+.no-opportunity p {
+  margin: 8px 0;
+  font-size: 14px;
+}

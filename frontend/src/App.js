@@ -16,6 +16,7 @@ import LeadDetail from './pages/LeadDetail';
 import Loans from './pages/Loans';
 import LoanDetail from './pages/LoanDetail';
 import Portfolio from './pages/Portfolio';
+import MumClientDetail from './pages/MumClientDetail';
 import YearOverYear from './pages/YearOverYear';
 import Tasks from './pages/Tasks';
 import Calendar from './pages/Calendar';
@@ -304,7 +305,7 @@ function App() {
                     coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <LeadDetail />
+                    <MumClientDetail />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />

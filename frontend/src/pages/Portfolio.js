@@ -402,7 +402,7 @@ function Portfolio() {
               {portfolioData.loans.map((loan) => (
                 <tr
                   key={loan.id}
-                  onClick={() => navigate(`/portfolio/${loan.id}`)}
+                  onClick={() => navigate(`/loans/${loan.id}`)}
                   style={{ cursor: 'pointer' }}
                 >
                   <td>{loan.borrower}</td>
