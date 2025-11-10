@@ -342,33 +342,6 @@ function Portfolio() {
         </div>
       </div>
 
-      <div className="portfolio-stats">
-        <div className="stat-card">
-          <div className="stat-value">{portfolioData.totalLoans}</div>
-          <div className="stat-label">TOTAL LOANS</div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-value">{formatCurrency(portfolioData.totalVolume)}</div>
-          <div className="stat-label">TOTAL VOLUME</div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-value">{formatCurrency(portfolioData.commissionGenerated)}</div>
-          <div className="stat-label">COMMISSION GENERATED</div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-value">{formatCurrency(portfolioData.portfolioValue)}</div>
-          <div className="stat-label">PORTFOLIO VALUE</div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-value">{portfolioData.annualReturn.toFixed(2)}%</div>
-          <div className="stat-label">ANNUAL RETURN %</div>
-        </div>
-      </div>
-
       <div className="portfolio-tabs">
         <button
           className={activeTab === 'mum-dashboard' ? 'active' : ''}
