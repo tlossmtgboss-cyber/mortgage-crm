@@ -32,6 +32,10 @@ export default function BuyerIntake() {
     householdIncome: "",
     liquidAssets: "",
     selfEmployed: "No",
+    dateOfBirth: "",
+    ssn: "",
+    employer: "",
+    yearsWithEmployer: "",
 
     // Co‑borrower (optional)
     hasCoborrower: "No",
@@ -70,6 +74,17 @@ export default function BuyerIntake() {
       setForm((f) => ({ ...f, softCreditOk: checked }));
     } else if (type === "checkbox" && name === "contactConsent") {
       setForm((f) => ({ ...f, contactConsent: checked }));
+    } else if (name === "ssn") {
+      // Format SSN as XXX-XX-XXXX
+      const digits = value.replace(/\D/g, "");
+      let formatted = digits;
+      if (digits.length > 3) {
+        formatted = digits.slice(0, 3) + "-" + digits.slice(3);
+      }
+      if (digits.length > 5) {
+        formatted = digits.slice(0, 3) + "-" + digits.slice(3, 5) + "-" + digits.slice(5, 9);
+      }
+      setForm((f) => ({ ...f, [name]: formatted }));
     } else {
       setForm((f) => ({ ...f, [name]: value }));
     }
@@ -128,6 +143,10 @@ export default function BuyerIntake() {
         household_income: Number(String(form.householdIncome).replace(/[^0-9.]/g, "")) || null,
         liquid_assets: Number(String(form.liquidAssets).replace(/[^0-9.]/g, "")) || null,
         self_employed: form.selfEmployed === "Yes",
+        date_of_birth: form.dateOfBirth || null,
+        ssn: form.ssn.replace(/[^0-9]/g, "") || null,
+        employer: form.employer.trim() || null,
+        years_with_employer: Number(form.yearsWithEmployer) || null,
       },
       coborrower: form.hasCoborrower === "Yes" ? {
         first_name: form.coFirstName.trim(),
@@ -273,6 +292,24 @@ export default function BuyerIntake() {
             <h2>Profile</h2>
             <div className="form-grid grid-3">
               <div className="form-field">
+                <label>Date of Birth</label>
+                <input type="date" name="dateOfBirth" value={form.dateOfBirth} onChange={handleChange} />
+              </div>
+              <div className="form-field">
+                <label>Social Security Number</label>
+                <input
+                  type="text"
+                  name="ssn"
+                  value={form.ssn}
+                  onChange={handleChange}
+                  placeholder="XXX-XX-XXXX"
+                  maxLength="11"
+                />
+                <small style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
+                  🔒 Encrypted and secure
+                </small>
+              </div>
+              <div className="form-field">
                 <label>Estimated credit</label>
                 <select name="creditRange" value={form.creditRange} onChange={handleChange}>
                   {creditRanges.map((c) => (<option key={c}>{c}</option>))}
@@ -300,6 +337,22 @@ export default function BuyerIntake() {
                   <option>1099/Contractor</option>
                   <option>Retired</option>
                 </select>
+              </div>
+              <div className="form-field">
+                <label>Employer name</label>
+                <input name="employer" value={form.employer} onChange={handleChange} placeholder="ABC Company Inc." />
+              </div>
+              <div className="form-field">
+                <label>Years with employer</label>
+                <input
+                  type="number"
+                  name="yearsWithEmployer"
+                  value={form.yearsWithEmployer}
+                  onChange={handleChange}
+                  placeholder="5"
+                  min="0"
+                  step="0.5"
+                />
               </div>
               <div className="form-field">
                 <label>Annual household income (pre‑tax)</label>

@@ -4435,6 +4435,10 @@ async def submit_buyer_intake(payload: dict, db: Session = Depends(get_db)):
         household_income = profile.get("household_income")
         liquid_assets = profile.get("liquid_assets")
         self_employed = profile.get("self_employed", False)
+        date_of_birth = profile.get("date_of_birth")
+        ssn = profile.get("ssn")
+        employer = profile.get("employer")
+        years_with_employer = profile.get("years_with_employer")
 
         # Extract co-borrower
         coborrower = payload.get("coborrower")
@@ -4522,6 +4526,10 @@ async def submit_buyer_intake(payload: dict, db: Session = Depends(get_db)):
                     "agent_name": agent_name,
                     "agent_email": agent_email,
                     "va_eligible": va_eligible,
+                    "date_of_birth": date_of_birth,
+                    "ssn_last_4": ssn[-4:] if ssn and len(ssn) >= 4 else None,
+                    "employer": employer,
+                    "years_with_employer": years_with_employer,
                 }
             }
         )
