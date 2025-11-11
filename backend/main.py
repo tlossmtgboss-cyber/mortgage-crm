@@ -8886,39 +8886,65 @@ async def parse_onboarding_documents(
 
         # Use AI to analyze the document content
         analysis_prompt = f"""
-        Analyze the following mortgage loan process document and extract:
-        1. All unique roles/positions involved in the process
-        2. All major milestones in the mortgage loan process
-        3. All tasks for each milestone with role assignments
+        Analyze this document and identify the PRIMARY role/position being described.
+
+        IMPORTANT: If the document describes ONE person's role and responsibilities:
+        - Extract ONLY the primary role that owns the described responsibilities
+        - Do NOT extract other roles that are merely mentioned or referenced (like "works with processor")
+        - Focus on the actual responsibilities and tasks of the PRIMARY role
+
+        If the document describes MULTIPLE distinct roles with their own separate responsibilities:
+        - Extract each role that has its own defined set of responsibilities
+        - A role only counts if it has dedicated tasks/responsibilities listed, not just mentioned
+
+        For the document "{request.document_name or 'uploaded'}":
+
+        Extract:
+        1. The PRIMARY role(s) with full responsibility descriptions (not just mentions)
+        2. Major workflow stages/milestones that this role goes through
+        3. Specific tasks the PRIMARY role performs in each stage
 
         For each role, provide:
-        - role_name: Short identifier (e.g., "loan_officer", "processor")
-        - role_title: Display name (e.g., "Loan Officer", "Loan Processor")
-        - responsibilities: Brief description of their main responsibilities
-        - skills_required: List of required skills
-        - key_activities: List of their primary activities
+        - role_name: Short identifier matching the document title if single role (e.g., "application_analysis", "processor")
+        - role_title: Display name from document (e.g., "Application Analysis", "Loan Processor")
+        - responsibilities: Detailed description of THEIR main responsibilities from the document
+        - skills_required: List of skills THEY need (from document)
+        - key_activities: List of activities THEY perform (from document)
 
         For each milestone, provide:
-        - name: Milestone name
-        - description: Brief description
-        - sequence_order: Order in process (0, 1, 2...)
-        - estimated_duration: Estimated hours to complete
+        - name: Stage/phase name that the PRIMARY role goes through
+        - description: What happens in this stage
+        - sequence_order: Order in workflow (0, 1, 2...)
+        - estimated_duration: Estimated hours for this stage
 
         For each task, provide:
-        - milestone: Which milestone it belongs to
-        - role: Which role is responsible
-        - task_name: Task name
-        - task_description: Detailed description
-        - sequence_order: Order within milestone
+        - milestone: Which workflow stage it belongs to
+        - role: The PRIMARY role_name responsible
+        - task_name: Specific task name from document
+        - task_description: What the task involves
+        - sequence_order: Order within the workflow stage
         - estimated_duration: Minutes to complete
-        - sla: Service level agreement in hours
-        - ai_automatable: Boolean if AI can automate this
-        - is_required: Boolean if required
+        - sla: Service level agreement in hours (estimate if not specified)
+        - ai_automatable: Boolean if this task could be automated by AI
+        - is_required: Boolean if this task is mandatory
 
         Document content:
         {request.document_content[:10000]}  # Limit to 10k chars
 
         Return response as JSON with keys: roles, milestones, tasks
+
+        Example for a single-role document:
+        {{
+          "roles": [
+            {{"role_name": "application_analysis", "role_title": "Application Analysis", "responsibilities": "...", "skills_required": [...], "key_activities": [...]}}
+          ],
+          "milestones": [
+            {{"name": "Initial Review", "description": "...", "sequence_order": 0, "estimated_duration": 2}}
+          ],
+          "tasks": [
+            {{"milestone": "Initial Review", "role": "application_analysis", "task_name": "Review application", "task_description": "...", "sequence_order": 0, "estimated_duration": 30, "sla": 4, "ai_automatable": false, "is_required": true}}
+          ]
+        }}
         """
 
         # Use OpenAI to actually parse the document, or fall back to basic parsing
