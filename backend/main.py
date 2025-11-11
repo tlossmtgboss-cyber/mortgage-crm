@@ -9301,16 +9301,35 @@ async def analyze_data_file(
         import io
         import pandas as pd
 
+        logger.info(f"Starting file analysis for: {file.filename}")
+
         # Read file content
         content = await file.read()
+        file_size_mb = len(content) / (1024 * 1024)
+        logger.info(f"File size: {file_size_mb:.2f} MB")
+
+        # Check file size (limit to 10MB)
+        if file_size_mb > 10:
+            raise HTTPException(status_code=400, detail="File too large. Maximum size is 10MB.")
 
         # Determine file type and parse
-        if file.filename.endswith('.csv'):
-            df = pd.read_csv(io.BytesIO(content))
-        elif file.filename.endswith(('.xlsx', '.xls')):
-            df = pd.read_excel(io.BytesIO(content))
-        else:
-            raise HTTPException(status_code=400, detail="Unsupported file type. Please upload CSV or Excel.")
+        logger.info(f"Parsing file type: {file.filename}")
+        try:
+            if file.filename.endswith('.csv'):
+                df = pd.read_csv(io.BytesIO(content))
+            elif file.filename.endswith(('.xlsx', '.xls')):
+                # Try to read Excel file with explicit engine
+                try:
+                    df = pd.read_excel(io.BytesIO(content), engine='openpyxl')
+                except Exception as excel_error:
+                    logger.error(f"Excel parsing error with openpyxl: {excel_error}")
+                    # Try alternative method
+                    df = pd.read_excel(io.BytesIO(content))
+            else:
+                raise HTTPException(status_code=400, detail="Unsupported file type. Please upload CSV or Excel (.csv, .xlsx, .xls)")
+        except Exception as parse_error:
+            logger.error(f"File parsing error: {parse_error}")
+            raise HTTPException(status_code=400, detail=f"Failed to parse file: {str(parse_error)}")
 
         # Get preview data
         headers = df.columns.tolist()
@@ -9453,9 +9472,17 @@ Respond with:
             "suggested_mappings": suggested_mappings
         }
 
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except Exception as e:
-        logger.error(f"File analysis error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        error_details = traceback.format_exc()
+        logger.error(f"File analysis error: {e}\n{error_details}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to analyze file: {str(e)}. Please ensure the file is a valid CSV or Excel file."
+        )
 
 @app.post("/api/v1/data-import/execute")
 async def execute_data_import(
@@ -9477,16 +9504,27 @@ async def execute_data_import(
 
         destination = answers_dict.get('destination', 'leads')
 
+        logger.info(f"Executing data import for: {file.filename}")
+
         # Read file content
         content = await file.read()
 
         # Parse file
-        if file.filename.endswith('.csv'):
-            df = pd.read_csv(io.BytesIO(content))
-        elif file.filename.endswith(('.xlsx', '.xls')):
-            df = pd.read_excel(io.BytesIO(content))
-        else:
-            raise HTTPException(status_code=400, detail="Unsupported file type")
+        try:
+            if file.filename.endswith('.csv'):
+                df = pd.read_csv(io.BytesIO(content))
+            elif file.filename.endswith(('.xlsx', '.xls')):
+                # Try to read Excel file with explicit engine
+                try:
+                    df = pd.read_excel(io.BytesIO(content), engine='openpyxl')
+                except Exception as excel_error:
+                    logger.error(f"Excel parsing error with openpyxl: {excel_error}")
+                    df = pd.read_excel(io.BytesIO(content))
+            else:
+                raise HTTPException(status_code=400, detail="Unsupported file type")
+        except Exception as parse_error:
+            logger.error(f"File parsing error during import: {parse_error}")
+            raise HTTPException(status_code=400, detail=f"Failed to parse file: {str(parse_error)}")
 
         # Import data
         imported = 0
