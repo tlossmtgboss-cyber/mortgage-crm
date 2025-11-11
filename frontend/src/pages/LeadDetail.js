@@ -25,8 +25,25 @@ function LeadDetail() {
   useEffect(() => {
     loadLeadData();
     loadEmails();
+    markLeadAsViewed();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  const markLeadAsViewed = () => {
+    try {
+      // Get viewed leads from localStorage
+      const stored = localStorage.getItem('viewedLeads');
+      const viewedLeads = stored ? new Set(JSON.parse(stored)) : new Set();
+
+      // Add current lead ID
+      viewedLeads.add(String(id));
+
+      // Save back to localStorage
+      localStorage.setItem('viewedLeads', JSON.stringify([...viewedLeads]));
+    } catch (error) {
+      console.error('Error marking lead as viewed:', error);
+    }
+  };
 
   const loadLeadData = async () => {
     try {

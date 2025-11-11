@@ -263,6 +263,11 @@ function Leads() {
   const [editingLead, setEditingLead] = useState(null);
   const [activeFilter, setActiveFilter] = useState('All');
   const [activeBorrower, setActiveBorrower] = useState(0);
+  const [viewedLeads, setViewedLeads] = useState(() => {
+    // Load viewed leads from localStorage
+    const stored = localStorage.getItem('viewedLeads');
+    return stored ? new Set(JSON.parse(stored)) : new Set();
+  });
 
   // Borrowers array - each borrower has their own contact info
   const [borrowers, setBorrowers] = useState([
@@ -551,6 +556,23 @@ function Leads() {
     return hoursDiff <= 48; // Lead is "new" if created within last 48 hours
   };
 
+  const isLeadUnviewed = (leadId) => {
+    return !viewedLeads.has(String(leadId));
+  };
+
+  const handleLeadClick = (leadId) => {
+    // Mark lead as viewed
+    const newViewedLeads = new Set(viewedLeads);
+    newViewedLeads.add(String(leadId));
+    setViewedLeads(newViewedLeads);
+
+    // Save to localStorage
+    localStorage.setItem('viewedLeads', JSON.stringify([...newViewedLeads]));
+
+    // Navigate to lead detail
+    navigate(`/leads/${leadId}`);
+  };
+
   if (loading) {
     return <div className="loading">Loading leads...</div>;
   }
@@ -596,10 +618,10 @@ function Leads() {
           </thead>
           <tbody>
             {filteredLeads.map((lead) => (
-              <tr key={lead.id} className={isNewLead(lead.created_at) ? 'new-lead-row' : ''}>
-                <td className="lead-name clickable" onClick={() => navigate(`/leads/${lead.id}`)}>
+              <tr key={lead.id} className={isNewLead(lead.created_at) && isLeadUnviewed(lead.id) ? 'new-lead-row' : ''}>
+                <td className="lead-name clickable" onClick={() => handleLeadClick(lead.id)}>
                   {lead.name}
-                  {isNewLead(lead.created_at) && <span className="new-lead-badge">NEW</span>}
+                  {isNewLead(lead.created_at) && isLeadUnviewed(lead.id) && <span className="new-lead-badge">NEW</span>}
                 </td>
                 <td><ClickableEmail email={lead.email} /></td>
                 <td><ClickablePhone phone={lead.phone} /></td>
