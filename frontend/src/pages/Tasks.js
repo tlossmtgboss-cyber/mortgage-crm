@@ -345,7 +345,7 @@ function Tasks() {
                       ✓ Approve
                     </button>
                     <button className="btn-fix">Fix</button>
-                    <button className="btn-coach" onClick={() => navigate('/coach')}>Steve Staben Performance Coach</button>
+                    <button className="btn-coach" onClick={() => navigate('/coach')}>Nick Saben Performance Coach</button>
                   </div>
                 </div>
               ))}
