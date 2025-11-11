@@ -9326,22 +9326,16 @@ async def analyze_data_file(
 
         # Determine file type and parse
         logger.info(f"Parsing file type: {file.filename}")
-        try:
-            if file.filename.endswith('.csv'):
-                df = pd.read_csv(io.BytesIO(content))
-            elif file.filename.endswith(('.xlsx', '.xls')):
-                # Try to read Excel file with explicit engine
-                try:
-                    df = pd.read_excel(io.BytesIO(content), engine='openpyxl')
-                except Exception as excel_error:
-                    logger.error(f"Excel parsing error with openpyxl: {excel_error}")
-                    # Try alternative method
-                    df = pd.read_excel(io.BytesIO(content))
-            else:
-                raise HTTPException(status_code=400, detail="Unsupported file type. Please upload CSV or Excel (.csv, .xlsx, .xls)")
-        except Exception as parse_error:
-            logger.error(f"File parsing error: {parse_error}")
-            raise HTTPException(status_code=400, detail=f"Failed to parse file: {str(parse_error)}")
+        if file.filename.endswith('.csv'):
+            logger.info("Parsing as CSV")
+            df = pd.read_csv(io.BytesIO(content))
+        elif file.filename.endswith(('.xlsx', '.xls')):
+            logger.info("Parsing as Excel")
+            # Read Excel file with explicit engine
+            df = pd.read_excel(io.BytesIO(content), engine='openpyxl')
+        else:
+            logger.error(f"Unsupported file type: {file.filename}")
+            raise HTTPException(status_code=400, detail="Unsupported file type. Please upload CSV or Excel (.csv, .xlsx, .xls)")
 
         # Get preview data
         headers = df.columns.tolist()
@@ -9522,21 +9516,14 @@ async def execute_data_import(
         content = await file.read()
 
         # Parse file
-        try:
-            if file.filename.endswith('.csv'):
-                df = pd.read_csv(io.BytesIO(content))
-            elif file.filename.endswith(('.xlsx', '.xls')):
-                # Try to read Excel file with explicit engine
-                try:
-                    df = pd.read_excel(io.BytesIO(content), engine='openpyxl')
-                except Exception as excel_error:
-                    logger.error(f"Excel parsing error with openpyxl: {excel_error}")
-                    df = pd.read_excel(io.BytesIO(content))
-            else:
-                raise HTTPException(status_code=400, detail="Unsupported file type")
-        except Exception as parse_error:
-            logger.error(f"File parsing error during import: {parse_error}")
-            raise HTTPException(status_code=400, detail=f"Failed to parse file: {str(parse_error)}")
+        if file.filename.endswith('.csv'):
+            logger.info("Parsing as CSV for import")
+            df = pd.read_csv(io.BytesIO(content))
+        elif file.filename.endswith(('.xlsx', '.xls')):
+            logger.info("Parsing as Excel for import")
+            df = pd.read_excel(io.BytesIO(content), engine='openpyxl')
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported file type")
 
         # Import data
         imported = 0
