@@ -8,6 +8,10 @@ function Tasks() {
   const [completedTasks, setCompletedTasks] = useState(new Set());
   const [activeTab, setActiveTab] = useState('outstanding');
   const [selectedTask, setSelectedTask] = useState(null);
+  const [editingMessage, setEditingMessage] = useState(false);
+  const [draftMessage, setDraftMessage] = useState('');
+  const [showHistory, setShowHistory] = useState(false);
+  const [taskOwner, setTaskOwner] = useState('');
 
   // Dashboard data states
   const [prioritizedTasks, setPrioritizedTasks] = useState([]);
@@ -30,6 +34,16 @@ function Tasks() {
       }
     }
   }, [loading]);
+
+  // Update draft message and owner when task changes
+  useEffect(() => {
+    if (selectedTask) {
+      setDraftMessage(selectedTask.ai_message || '');
+      setTaskOwner(selectedTask.owner || 'Loan Officer');
+      setEditingMessage(false);
+      setShowHistory(false);
+    }
+  }, [selectedTask]);
 
   const loadTasks = async () => {
     try {
@@ -333,16 +347,69 @@ function Tasks() {
                         <span className="detail-label">Source</span>
                         <span className="detail-value">{selectedTask.source}</span>
                       </div>
+                      <div className="detail-info-item">
+                        <span className="detail-label">Owner</span>
+                        <select
+                          className="detail-owner-select"
+                          value={taskOwner}
+                          onChange={(e) => setTaskOwner(e.target.value)}
+                        >
+                          <option value="Loan Officer">Loan Officer</option>
+                          <option value="Loan Processor">Loan Processor</option>
+                          <option value="Executive Assistant">Executive Assistant</option>
+                          <option value="Underwriter">Underwriter</option>
+                          <option value="Closer">Closer</option>
+                        </select>
+                      </div>
+                      <div className="detail-info-item">
+                        <span className="detail-label">Date Created</span>
+                        <span className="detail-value">
+                          {selectedTask.date_created ? new Date(selectedTask.date_created).toLocaleString() : 'N/A'}
+                        </span>
+                      </div>
+                      {selectedTask.preferred_contact_method && (
+                        <div className="detail-info-item">
+                          <span className="detail-label">Preferred Contact</span>
+                          <span className="detail-contact-badge">
+                            {selectedTask.preferred_contact_method === 'Email' && '📧'}
+                            {selectedTask.preferred_contact_method === 'Phone' && '📞'}
+                            {selectedTask.preferred_contact_method === 'Text' && '💬'}
+                            {' '}
+                            {selectedTask.preferred_contact_method}
+                          </span>
+                        </div>
+                      )}
                     </div>
 
-                    {selectedTask.ai_action && (
-                      <div className="detail-ai-section">
-                        <div className="ai-section-header">
-                          <span className="ai-icon-large">🤖</span>
-                          <span className="ai-section-title">AI Suggestion</span>
+                    {selectedTask.ai_message && (
+                      <div className="detail-ai-message-section">
+                        <div className="ai-message-header">
+                          <div className="ai-message-title-row">
+                            <span className="ai-icon-large">🤖</span>
+                            <span className="ai-message-title">AI-Drafted Message</span>
+                          </div>
+                          <button
+                            className="btn-edit-message"
+                            onClick={() => setEditingMessage(!editingMessage)}
+                          >
+                            {editingMessage ? '✓ Done Editing' : '✏️ Edit Message'}
+                          </button>
                         </div>
-                        <div className="ai-section-content">
-                          <p>{selectedTask.ai_action}</p>
+                        <div className="ai-message-body">
+                          {editingMessage ? (
+                            <textarea
+                              className="message-editor"
+                              value={draftMessage}
+                              onChange={(e) => setDraftMessage(e.target.value)}
+                              rows={12}
+                            />
+                          ) : (
+                            <div className="message-preview">
+                              {draftMessage.split('\n').map((line, idx) => (
+                                <p key={idx}>{line || '\u00A0'}</p>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
@@ -351,6 +418,45 @@ function Tasks() {
                       <div className="detail-action-section">
                         <h3>Recommended Action</h3>
                         <p>{selectedTask.action}</p>
+                      </div>
+                    )}
+
+                    {selectedTask.communication_history && selectedTask.communication_history.length > 0 && (
+                      <div className="communication-history-section">
+                        <button
+                          className="history-accordion-button"
+                          onClick={() => setShowHistory(!showHistory)}
+                        >
+                          <span className="history-icon">📋</span>
+                          <span className="history-title">Communication History ({selectedTask.communication_history.length})</span>
+                          <span className="history-toggle">{showHistory ? '▼' : '▶'}</span>
+                        </button>
+                        {showHistory && (
+                          <div className="history-content">
+                            {selectedTask.communication_history.map((comm, idx) => (
+                              <div key={idx} className="history-item">
+                                <div className="history-item-header">
+                                  <div className="history-type-date">
+                                    <span className="history-type-icon">
+                                      {comm.type === 'Email' && '📧'}
+                                      {comm.type === 'Phone' && '📞'}
+                                      {comm.type === 'Text' && '💬'}
+                                    </span>
+                                    <span className="history-type">{comm.type}</span>
+                                    <span className="history-date">{new Date(comm.date).toLocaleDateString()}</span>
+                                  </div>
+                                  <span className={`history-status ${comm.status.toLowerCase()}`}>
+                                    {comm.status}
+                                  </span>
+                                </div>
+                                <div className="history-item-body">
+                                  <div className="history-subject">{comm.subject}</div>
+                                  <div className="history-message">{comm.message}</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -581,21 +687,70 @@ const mockPrioritizedTasks = () => [
     borrower: 'Sarah Johnson',
     stage: 'Pre-Approved',
     urgency: 'high',
-    ai_action: 'AI can send follow-up email — approve?'
+    ai_action: 'AI can send follow-up email — approve?',
+    owner: 'Loan Officer',
+    date_created: '2025-11-09T10:30:00',
+    preferred_contact_method: 'Email',
+    ai_message: `Hi Sarah,
+
+I hope this message finds you well! I wanted to follow up on your pre-approval that we completed last week.
+
+Your pre-approval is valid for 90 days, expiring on February 8, 2025. I wanted to check in and see if you've had a chance to view any properties or if you have any questions about next steps.
+
+If you'd like to discuss your home search or need any assistance, I'm here to help. Feel free to reply to this email or give me a call at (555) 123-4567.
+
+Looking forward to hearing from you!
+
+Best regards,
+[Your Name]
+Loan Officer`,
+    communication_history: [
+      { date: '2025-11-08', type: 'Email', subject: 'Pre-approval completed', status: 'Sent', message: 'Sent pre-approval letter and next steps' },
+      { date: '2025-11-05', type: 'Phone', subject: 'Initial consultation', status: 'Completed', message: '30-minute call discussing loan options and requirements' },
+      { date: '2025-11-03', type: 'Email', subject: 'Welcome email', status: 'Sent', message: 'Introduced myself and requested initial documents' }
+    ]
   },
   {
     title: 'Upload missing documents',
     borrower: 'Mike Chen',
     stage: 'Processing',
     urgency: 'critical',
-    ai_action: null
+    ai_action: null,
+    owner: 'Loan Processor',
+    date_created: '2025-11-10T14:20:00',
+    preferred_contact_method: 'Text',
+    ai_message: null,
+    communication_history: [
+      { date: '2025-11-10', type: 'Text', subject: 'Document reminder', status: 'Sent', message: 'Reminded about missing W2s' },
+      { date: '2025-11-08', type: 'Email', subject: 'Document checklist', status: 'Sent', message: 'Sent list of required documents' }
+    ]
   },
   {
     title: 'Schedule appraisal',
     borrower: 'Emily Davis',
     stage: 'Application Complete',
     urgency: 'medium',
-    ai_action: 'AI can schedule appraisal — approve?'
+    ai_action: 'AI can schedule appraisal — approve?',
+    owner: 'Loan Officer',
+    date_created: '2025-11-10T09:15:00',
+    preferred_contact_method: 'Phone',
+    ai_message: `Hi Emily,
+
+Great news! Your loan application has been approved and we're ready to move forward with the appraisal.
+
+I have availability with our preferred appraiser for the following dates:
+- Thursday, November 14th at 10:00 AM
+- Friday, November 15th at 2:00 PM
+- Monday, November 18th at 9:00 AM
+
+The appraisal typically takes 45-60 minutes. Please let me know which time works best for you, and I'll get it scheduled right away.
+
+Thanks!
+[Your Name]`,
+    communication_history: [
+      { date: '2025-11-09', type: 'Email', subject: 'Application approved', status: 'Sent', message: 'Congratulations email sent with next steps' },
+      { date: '2025-11-07', type: 'Phone', subject: 'Application review', status: 'Completed', message: 'Reviewed application details' }
+    ]
   }
 ];
 
