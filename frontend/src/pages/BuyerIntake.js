@@ -41,6 +41,15 @@ export default function BuyerIntake() {
     hasCoborrower: "No",
     coFirstName: "",
     coLastName: "",
+    coEmail: "",
+    coPhone: "",
+    coPreferredContact: "Text",
+    coDateOfBirth: "",
+    coSSN: "",
+    coCreditRange: "700–739",
+    coEmploymentType: "W2",
+    coEmployer: "",
+    coYearsWithEmployer: "",
     coIncome: "",
 
     // Partners & preferences
@@ -74,7 +83,7 @@ export default function BuyerIntake() {
       setForm((f) => ({ ...f, softCreditOk: checked }));
     } else if (type === "checkbox" && name === "contactConsent") {
       setForm((f) => ({ ...f, contactConsent: checked }));
-    } else if (name === "ssn") {
+    } else if (name === "ssn" || name === "coSSN") {
       // Format SSN as XXX-XX-XXXX
       const digits = value.replace(/\D/g, "");
       let formatted = digits;
@@ -151,6 +160,15 @@ export default function BuyerIntake() {
       coborrower: form.hasCoborrower === "Yes" ? {
         first_name: form.coFirstName.trim(),
         last_name: form.coLastName.trim(),
+        email: form.coEmail.trim() || null,
+        phone: form.coPhone.trim() || null,
+        preferred_contact: form.coPreferredContact,
+        date_of_birth: form.coDateOfBirth || null,
+        ssn: form.coSSN.replace(/[^0-9]/g, "") || null,
+        credit_range: form.coCreditRange,
+        employment_type: form.coEmploymentType,
+        employer: form.coEmployer.trim() || null,
+        years_with_employer: Number(form.coYearsWithEmployer) || null,
         income: Number(String(form.coIncome).replace(/[^0-9.]/g, "")) || null,
       } : null,
       partners: form.hasAgent === "Yes" ? {
@@ -368,7 +386,7 @@ export default function BuyerIntake() {
           {/* Co‑borrower */}
           <section className="intake-section">
             <h2>Co‑Borrower (optional)</h2>
-            <div className="form-grid grid-4">
+            <div className="form-grid grid-1">
               <div className="form-field">
                 <label>Add a co‑borrower?</label>
                 <select name="hasCoborrower" value={form.hasCoborrower} onChange={handleChange}>
@@ -376,8 +394,12 @@ export default function BuyerIntake() {
                   <option>Yes</option>
                 </select>
               </div>
-              {form.hasCoborrower === "Yes" && (
-                <>
+            </div>
+
+            {form.hasCoborrower === "Yes" && (
+              <>
+                <h3 style={{ marginTop: '24px', marginBottom: '16px', fontSize: '16px', fontWeight: 600 }}>Contact Info</h3>
+                <div className="form-grid grid-2">
                   <div className="form-field">
                     <label>First name</label>
                     <input name="coFirstName" value={form.coFirstName} onChange={handleChange} placeholder="John" />
@@ -387,12 +409,81 @@ export default function BuyerIntake() {
                     <input name="coLastName" value={form.coLastName} onChange={handleChange} placeholder="Smith" />
                   </div>
                   <div className="form-field">
+                    <label>Email</label>
+                    <input type="email" name="coEmail" value={form.coEmail} onChange={handleChange} placeholder="john@example.com" />
+                  </div>
+                  <div className="form-field">
+                    <label>Mobile</label>
+                    <input name="coPhone" value={form.coPhone} onChange={handleChange} placeholder="(555) 555-5555" />
+                  </div>
+                  <div className="form-field">
+                    <label>Preferred contact</label>
+                    <select name="coPreferredContact" value={form.coPreferredContact} onChange={handleChange}>
+                      <option>Text</option>
+                      <option>Email</option>
+                      <option>Phone</option>
+                    </select>
+                  </div>
+                </div>
+
+                <h3 style={{ marginTop: '24px', marginBottom: '16px', fontSize: '16px', fontWeight: 600 }}>Profile</h3>
+                <div className="form-grid grid-3">
+                  <div className="form-field">
+                    <label>Date of Birth</label>
+                    <input type="date" name="coDateOfBirth" value={form.coDateOfBirth} onChange={handleChange} />
+                  </div>
+                  <div className="form-field">
+                    <label>Social Security Number</label>
+                    <input
+                      type="text"
+                      name="coSSN"
+                      value={form.coSSN}
+                      onChange={handleChange}
+                      placeholder="XXX-XX-XXXX"
+                      maxLength="11"
+                    />
+                    <small style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
+                      🔒 Encrypted and secure
+                    </small>
+                  </div>
+                  <div className="form-field">
+                    <label>Estimated credit</label>
+                    <select name="coCreditRange" value={form.coCreditRange} onChange={handleChange}>
+                      {creditRanges.map((c) => (<option key={c}>{c}</option>))}
+                    </select>
+                  </div>
+                  <div className="form-field">
+                    <label>Employment type</label>
+                    <select name="coEmploymentType" value={form.coEmploymentType} onChange={handleChange}>
+                      <option>W2</option>
+                      <option>Self‑Employed</option>
+                      <option>1099/Contractor</option>
+                      <option>Retired</option>
+                    </select>
+                  </div>
+                  <div className="form-field">
+                    <label>Employer name</label>
+                    <input name="coEmployer" value={form.coEmployer} onChange={handleChange} placeholder="XYZ Corp" />
+                  </div>
+                  <div className="form-field">
+                    <label>Years with employer</label>
+                    <input
+                      type="number"
+                      name="coYearsWithEmployer"
+                      value={form.coYearsWithEmployer}
+                      onChange={handleChange}
+                      placeholder="3"
+                      min="0"
+                      step="0.5"
+                    />
+                  </div>
+                  <div className="form-field">
                     <label>Annual income</label>
                     <input name="coIncome" value={form.coIncome} onChange={handleChange} placeholder="$75,000" />
                   </div>
-                </>
-              )}
-            </div>
+                </div>
+              </>
+            )}
           </section>
 
           {/* Partners & preferences */}
