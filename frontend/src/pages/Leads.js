@@ -263,6 +263,7 @@ function Leads() {
   const [editingLead, setEditingLead] = useState(null);
   const [activeFilter, setActiveFilter] = useState('All');
   const [activeBorrower, setActiveBorrower] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
   const [viewedLeads, setViewedLeads] = useState(() => {
     // Load viewed leads from localStorage
     const stored = localStorage.getItem('viewedLeads');
@@ -336,9 +337,22 @@ function Leads() {
 
   // Ensure leads is always an array before filtering
   const safeLeads = Array.isArray(leads) ? leads : [];
-  const filteredLeads = activeFilter === 'All'
+
+  // Filter by stage
+  let filteredLeads = activeFilter === 'All'
     ? safeLeads
     : safeLeads.filter(lead => lead.stage === activeFilter);
+
+  // Filter by search query
+  if (searchQuery.trim()) {
+    const query = searchQuery.toLowerCase();
+    filteredLeads = filteredLeads.filter(lead =>
+      lead.name?.toLowerCase().includes(query) ||
+      lead.email?.toLowerCase().includes(query) ||
+      lead.phone?.toLowerCase().includes(query) ||
+      lead.source?.toLowerCase().includes(query)
+    );
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -601,6 +615,21 @@ function Leads() {
             {filter}
           </button>
         ))}
+      </div>
+
+      <div className="search-bar-container">
+        <input
+          type="text"
+          className="search-bar"
+          placeholder="Search leads by name, email, phone, or source..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+        {searchQuery && (
+          <button className="clear-search" onClick={() => setSearchQuery('')}>
+            ×
+          </button>
+        )}
       </div>
 
       <div className="table-container">

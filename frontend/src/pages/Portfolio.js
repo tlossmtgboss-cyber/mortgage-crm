@@ -200,6 +200,7 @@ function Portfolio() {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [filterView, setFilterView] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     loadData();
@@ -306,11 +307,23 @@ function Portfolio() {
     }).format(amount);
   };
 
-  const filteredMumClients = filterView === 'all'
+  // Filter by view (all vs opportunities)
+  let filteredMumClients = filterView === 'all'
     ? mumClients
     : filterView === 'opportunities'
     ? mumClients.filter(c => c.refinance_opportunity)
     : mumClients;
+
+  // Filter by search query
+  if (searchQuery.trim()) {
+    const query = searchQuery.toLowerCase();
+    filteredMumClients = filteredMumClients.filter(client =>
+      client.name?.toLowerCase().includes(query) ||
+      client.email?.toLowerCase().includes(query) ||
+      client.phone?.toLowerCase().includes(query) ||
+      client.loan_amount?.toString().includes(query)
+    );
+  }
 
   const getDaysSinceFundingColor = (days) => {
     if (days < 180) return 'recent';
@@ -614,6 +627,21 @@ function Portfolio() {
                 Refinance Opportunities ({mumClients.filter(c => c.refinance_opportunity).length})
               </button>
             </div>
+          </div>
+
+          <div className="search-bar-container">
+            <input
+              type="text"
+              className="search-bar"
+              placeholder="Search clients by name, email, phone, or loan amount..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            {searchQuery && (
+              <button className="clear-search" onClick={() => setSearchQuery('')}>
+                ×
+              </button>
+            )}
           </div>
 
           <div className="clients-table">

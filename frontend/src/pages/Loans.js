@@ -64,6 +64,7 @@ function Loans() {
   const [showModal, setShowModal] = useState(false);
   const [activeFilter, setActiveFilter] = useState(initialFilter);
   const [activeBorrower, setActiveBorrower] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Borrowers array - each borrower has their own contact info
   const [borrowers, setBorrowers] = useState([
@@ -320,9 +321,23 @@ function Loans() {
 
   // Ensure loans is always an array before filtering
   const safeLoans = Array.isArray(loans) ? loans : [];
-  const filteredLoans = activeFilter === 'All'
+
+  // Filter by stage
+  let filteredLoans = activeFilter === 'All'
     ? safeLoans
     : safeLoans.filter(loan => loan.stage === activeFilter);
+
+  // Filter by search query
+  if (searchQuery.trim()) {
+    const query = searchQuery.toLowerCase();
+    filteredLoans = filteredLoans.filter(loan =>
+      loan.borrower_name?.toLowerCase().includes(query) ||
+      loan.borrower?.toLowerCase().includes(query) ||
+      loan.property_address?.toLowerCase().includes(query) ||
+      loan.loan_officer?.toLowerCase().includes(query) ||
+      loan.amount?.toString().includes(query)
+    );
+  }
 
   if (loading) return <div className="loading">Loading loans...</div>;
 
@@ -353,6 +368,21 @@ function Loans() {
             {filter}
           </button>
         ))}
+      </div>
+
+      <div className="search-bar-container">
+        <input
+          type="text"
+          className="search-bar"
+          placeholder="Search loans by borrower, property address, loan officer, or amount..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+        {searchQuery && (
+          <button className="clear-search" onClick={() => setSearchQuery('')}>
+            ×
+          </button>
+        )}
       </div>
 
       <div className="table-container">
