@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './DataUpload.css';
 
@@ -13,6 +13,11 @@ function DataUpload() {
   const [importResults, setImportResults] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
+
+  // Clear any initial errors on mount
+  useEffect(() => {
+    setError(null);
+  }, []);
 
   const handleFileSelect = (e) => {
     const selectedFile = e.target.files[0];
@@ -72,7 +77,8 @@ function DataUpload() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to analyze file');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Server error: ${response.status}`);
       }
 
       const data = await response.json();
@@ -82,7 +88,13 @@ function DataUpload() {
       setUploadState('questions');
     } catch (err) {
       console.error('Analysis error:', err);
-      setError(err.message || 'Failed to analyze file. Please try again.');
+      let errorMessage = 'Failed to analyze file. Please try again.';
+      if (err.message.includes('Failed to fetch')) {
+        errorMessage = 'Unable to connect to server. Please check your internet connection and try again.';
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      setError(errorMessage);
       setUploadState('select');
     } finally {
       setIsProcessing(false);
@@ -127,7 +139,8 @@ function DataUpload() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to import data');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Server error: ${response.status}`);
       }
 
       const result = await response.json();
@@ -135,7 +148,13 @@ function DataUpload() {
       setUploadState('complete');
     } catch (err) {
       console.error('Import error:', err);
-      setError(err.message || 'Failed to import data. Please try again.');
+      let errorMessage = 'Failed to import data. Please try again.';
+      if (err.message.includes('Failed to fetch')) {
+        errorMessage = 'Unable to connect to server. Please check your internet connection and try again.';
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+      setError(errorMessage);
       setUploadState('mapping');
     } finally {
       setIsProcessing(false);
