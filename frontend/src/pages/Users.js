@@ -117,6 +117,11 @@ function Users() {
     saveRoles(updatedRoles);
   };
 
+  const handleClearAllMembers = () => {
+    if (!window.confirm('Are you sure you want to remove all team members? This cannot be undone.')) return;
+    saveTeamMembers([]);
+  };
+
   if (loading) {
     return <div className="users-page"><div className="loading">Loading team members...</div></div>;
   }
@@ -166,9 +171,16 @@ function Users() {
       <div className="team-members-section">
         <div className="section-header">
           <h2>Team Members ({teamMembers.length})</h2>
-          <button className="btn-add-member" onClick={() => setShowAddMemberModal(true)}>
-            + Add Team Member
-          </button>
+          <div className="header-actions">
+            <button className="btn-add-member" onClick={() => setShowAddMemberModal(true)}>
+              + Add Team Member
+            </button>
+            {teamMembers.length > 0 && (
+              <button className="btn-clear-all" onClick={handleClearAllMembers}>
+                Clear All
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="members-grid">

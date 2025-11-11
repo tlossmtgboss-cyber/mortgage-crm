@@ -213,6 +213,12 @@
   text-decoration: underline;
 }
 
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
 .btn-add-member {
   background: #218D8D;
   color: white;
@@ -229,6 +235,24 @@
   background: #1a7070;
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(33, 141, 141, 0.3);
+}
+
+.btn-clear-all {
+  background: #dc2626;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-clear-all:hover {
+  background: #b91c1c;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(220, 38, 38, 0.3);
 }
 
 /* Empty State */
