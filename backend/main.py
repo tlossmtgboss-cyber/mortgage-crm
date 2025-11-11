@@ -318,6 +318,7 @@ class ReferralPartner(Base):
     loyalty_tier = Column(String, default="bronze")
     last_interaction = Column(DateTime)
     notes = Column(Text)
+    partner_category = Column(String, default="individual")
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     leads = relationship("Lead", back_populates="referral_partner")
 
@@ -1218,12 +1219,14 @@ class ReferralPartnerCreate(BaseModel):
     type: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
+    partner_category: Optional[str] = "individual"
 
 class ReferralPartnerUpdate(BaseModel):
     name: Optional[str] = None
     company: Optional[str] = None
     status: Optional[str] = None
     notes: Optional[str] = None
+    partner_category: Optional[str] = None
 
 class ReferralPartnerResponse(BaseModel):
     id: int
@@ -1234,6 +1237,7 @@ class ReferralPartnerResponse(BaseModel):
     closed_loans: int
     volume: float
     loyalty_tier: str
+    partner_category: Optional[str] = "individual"
     created_at: datetime
     class Config:
         from_attributes = True
