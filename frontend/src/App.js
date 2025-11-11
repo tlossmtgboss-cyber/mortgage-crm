@@ -30,6 +30,7 @@ import GoalTracker from './pages/GoalTracker';
 import Coach from './pages/Coach';
 import ReconciliationCenter from './pages/ReconciliationCenter';
 import Settings from './pages/Settings';
+import TeamMembers from './pages/TeamMembers';
 import DataUpload from './pages/DataUpload';
 import Users from './pages/Users';
 import UserProfile from './pages/UserProfile';
@@ -550,6 +551,26 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <Settings />
+                  </main>
+                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/team-members"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <TeamMembers />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />

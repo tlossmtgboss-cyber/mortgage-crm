@@ -432,6 +432,17 @@ export const teamAPI = {
     const response = await api.get(`/api/v1/team/members/${userId}`);
     return response.data;
   },
+  createMember: async (data) => {
+    const response = await api.post('/api/v1/team/members', data);
+    return response.data;
+  },
+  updateMember: async (memberId, data) => {
+    const response = await api.patch(`/api/v1/team/members/${memberId}`, data);
+    return response.data;
+  },
+  deleteMember: async (memberId) => {
+    await api.delete(`/api/v1/team/members/${memberId}`);
+  },
 };
 
 export default api;

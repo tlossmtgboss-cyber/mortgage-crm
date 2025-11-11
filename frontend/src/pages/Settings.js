@@ -1891,6 +1891,12 @@ function Settings() {
                     Team members involved in your loan workflow (processors, underwriters, loan officers, etc.)
                   </p>
                 </div>
+                <button
+                  className="btn-primary"
+                  onClick={() => navigate('/team-members')}
+                >
+                  Manage Team Members
+                </button>
               </div>
 
               {loadingTeam ? (
