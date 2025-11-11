@@ -25,15 +25,17 @@ function Tasks() {
     loadTasks();
   }, []);
 
-  // Auto-select first task when tasks load
+  // Auto-select first task when tasks load or tab changes
   useEffect(() => {
-    if (!loading && !selectedTask) {
-      const allTasks = getAggregatedTasks();
-      if (allTasks.length > 0) {
-        setSelectedTask(allTasks[0]);
+    if (!loading) {
+      const tasksForTab = getTasksForTab();
+      if (tasksForTab.length > 0) {
+        setSelectedTask(tasksForTab[0]);
+      } else {
+        setSelectedTask(null);
       }
     }
-  }, [loading]);
+  }, [loading, activeTab]);
 
   // Update draft message and owner when task changes
   useEffect(() => {
@@ -68,6 +70,26 @@ function Tasks() {
       setMessages(mockMessages());
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Get tasks filtered by active tab
+  const getTasksForTab = () => {
+    const allTasks = getAggregatedTasks();
+
+    switch (activeTab) {
+      case 'outstanding':
+        return allTasks;
+      case 'ai-approval':
+        return allTasks.filter(task => task.source === 'AI Engine');
+      case 'reconciliation':
+        return allTasks.filter(task => task.source === 'Milestone Risk');
+      case 'messages':
+        return allTasks.filter(task => task.source === 'Messages');
+      case 'mum':
+        return allTasks.filter(task => task.source === 'Client for Life');
+      default:
+        return allTasks;
     }
   };
 
@@ -224,11 +246,232 @@ function Tasks() {
   if (loading) return <div className="loading">Loading tasks...</div>;
 
   const allTasks = getAggregatedTasks();
-  const outstandingTasks = allTasks;
-  const completedTasksList = Array.from(completedTasks).map(id => {
-    // Return placeholder completed task data
-    return { id, title: 'Completed task', completed: true };
-  });
+  const tabTasks = getTasksForTab();
+
+  // Reusable Email Layout Component
+  const TaskEmailLayout = ({ tasks, emptyMessage = "No tasks" }) => (
+    <div className="email-layout">
+      {/* Task List (Left Side) */}
+      <div className="task-inbox">
+        <div className="inbox-header">
+          <h3>Tasks</h3>
+          <span className="task-count">{tasks.length}</span>
+        </div>
+        <div className="inbox-list">
+          {tasks.map((task) => (
+            <div
+              key={task.id}
+              className={`inbox-item ${selectedTask && selectedTask.id === task.id ? 'selected' : ''}`}
+              onClick={() => setSelectedTask(task)}
+            >
+              <div className="inbox-item-header">
+                <span className="source-icon">{task.sourceIcon}</span>
+                <span className="task-title-compact">{task.title}</span>
+              </div>
+              <div className="inbox-item-meta">
+                <span className="task-client-compact">{task.borrower || task.source}</span>
+                <span
+                  className="urgency-dot"
+                  style={{ backgroundColor: getUrgencyColor(task.urgency) }}
+                  title={task.urgency}
+                ></span>
+              </div>
+              <div className="task-preview">{task.stage}</div>
+            </div>
+          ))}
+          {tasks.length === 0 && (
+            <div className="empty-inbox">
+              <p>{emptyMessage}</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Task Detail (Right Side) */}
+      <div className="task-detail-pane">
+        {selectedTask ? (
+          <>
+            <div className="detail-header">
+              <div className="detail-title-section">
+                <div className="detail-source">
+                  <span className="source-icon-large">{selectedTask.sourceIcon}</span>
+                  <span className="source-name">{selectedTask.source}</span>
+                </div>
+                <h2 className="detail-title">{selectedTask.title}</h2>
+              </div>
+            </div>
+
+            <div className="detail-body">
+              <div className="detail-info-grid">
+                {selectedTask.borrower && (
+                  <div className="detail-info-item">
+                    <span className="detail-label">Client</span>
+                    <span className="detail-value">{selectedTask.borrower}</span>
+                  </div>
+                )}
+                <div className="detail-info-item">
+                  <span className="detail-label">Stage</span>
+                  <span className="detail-value">{selectedTask.stage}</span>
+                </div>
+                <div className="detail-info-item">
+                  <span className="detail-label">Priority</span>
+                  <span
+                    className="detail-urgency-badge"
+                    style={{ backgroundColor: getUrgencyColor(selectedTask.urgency) }}
+                  >
+                    {selectedTask.urgency}
+                  </span>
+                </div>
+                <div className="detail-info-item">
+                  <span className="detail-label">Source</span>
+                  <span className="detail-value">{selectedTask.source}</span>
+                </div>
+                <div className="detail-info-item">
+                  <span className="detail-label">Owner</span>
+                  <select
+                    className="detail-owner-select"
+                    value={taskOwner}
+                    onChange={(e) => setTaskOwner(e.target.value)}
+                  >
+                    <option value="Loan Officer">Loan Officer</option>
+                    <option value="Loan Processor">Loan Processor</option>
+                    <option value="Executive Assistant">Executive Assistant</option>
+                    <option value="Underwriter">Underwriter</option>
+                    <option value="Closer">Closer</option>
+                  </select>
+                </div>
+                <div className="detail-info-item">
+                  <span className="detail-label">Date Created</span>
+                  <span className="detail-value">
+                    {selectedTask.date_created ? new Date(selectedTask.date_created).toLocaleString() : 'N/A'}
+                  </span>
+                </div>
+                {selectedTask.preferred_contact_method && (
+                  <div className="detail-info-item">
+                    <span className="detail-label">Preferred Contact</span>
+                    <span className="detail-contact-badge">
+                      {selectedTask.preferred_contact_method === 'Email' && '📧'}
+                      {selectedTask.preferred_contact_method === 'Phone' && '📞'}
+                      {selectedTask.preferred_contact_method === 'Text' && '💬'}
+                      {' '}
+                      {selectedTask.preferred_contact_method}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {selectedTask.ai_message && (
+                <div className="detail-ai-message-section">
+                  <div className="ai-message-header">
+                    <div className="ai-message-title-row">
+                      <span className="ai-icon-large">🤖</span>
+                      <span className="ai-message-title">AI-Drafted Message</span>
+                    </div>
+                    <button
+                      className="btn-edit-message"
+                      onClick={() => setEditingMessage(!editingMessage)}
+                    >
+                      {editingMessage ? '✓ Done Editing' : '✏️ Edit Message'}
+                    </button>
+                  </div>
+                  <div className="ai-message-body">
+                    {editingMessage ? (
+                      <textarea
+                        className="message-editor"
+                        value={draftMessage}
+                        onChange={(e) => setDraftMessage(e.target.value)}
+                        rows={12}
+                      />
+                    ) : (
+                      <div className="message-preview">
+                        {draftMessage.split('\n').map((line, idx) => (
+                          <p key={idx}>{line || '\u00A0'}</p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {selectedTask.action && (
+                <div className="detail-action-section">
+                  <h3>Recommended Action</h3>
+                  <p>{selectedTask.action}</p>
+                </div>
+              )}
+
+              {selectedTask.communication_history && selectedTask.communication_history.length > 0 && (
+                <div className="communication-history-section">
+                  <button
+                    className="history-accordion-button"
+                    onClick={() => setShowHistory(!showHistory)}
+                  >
+                    <span className="history-icon">📋</span>
+                    <span className="history-title">Communication History ({selectedTask.communication_history.length})</span>
+                    <span className="history-toggle">{showHistory ? '▼' : '▶'}</span>
+                  </button>
+                  {showHistory && (
+                    <div className="history-content">
+                      {selectedTask.communication_history.map((comm, idx) => (
+                        <div key={idx} className="history-item">
+                          <div className="history-item-header">
+                            <div className="history-type-date">
+                              <span className="history-type-icon">
+                                {comm.type === 'Email' && '📧'}
+                                {comm.type === 'Phone' && '📞'}
+                                {comm.type === 'Text' && '💬'}
+                              </span>
+                              <span className="history-type">{comm.type}</span>
+                              <span className="history-date">{new Date(comm.date).toLocaleDateString()}</span>
+                            </div>
+                            <span className={`history-status ${comm.status.toLowerCase()}`}>
+                              {comm.status}
+                            </span>
+                          </div>
+                          <div className="history-item-body">
+                            <div className="history-subject">{comm.subject}</div>
+                            <div className="history-message">{comm.message}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="detail-footer">
+              <button
+                className="btn-detail-complete"
+                onClick={() => handleComplete(selectedTask.id)}
+              >
+                ✓ Mark Complete
+              </button>
+              {selectedTask.ai_action && (
+                <button
+                  className="btn-detail-approve"
+                  onClick={() => handleApproveAiTask(selectedTask.id)}
+                >
+                  Approve AI Action
+                </button>
+              )}
+              {selectedTask.action && (
+                <button className="btn-detail-action">
+                  {selectedTask.action}
+                </button>
+              )}
+              <button className="btn-detail-secondary">Snooze</button>
+              <button className="btn-detail-secondary">Delegate</button>
+            </div>
+          </>
+        ) : (
+          <div className="detail-empty">
+            <p>Select a task to view details</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
   return (
     <div className="tasks-page">
@@ -278,413 +521,35 @@ function Tasks() {
       {/* Outstanding Tasks Tab */}
       {activeTab === 'outstanding' && (
         <div className="tab-content">
-          <div className="email-layout">
-            {/* Task List (Left Side) */}
-            <div className="task-inbox">
-              <div className="inbox-header">
-                <h3>Tasks</h3>
-                <span className="task-count">{outstandingTasks.length}</span>
-              </div>
-              <div className="inbox-list">
-                {outstandingTasks.map((task) => (
-                  <div
-                    key={task.id}
-                    className={`inbox-item ${selectedTask && selectedTask.id === task.id ? 'selected' : ''}`}
-                    onClick={() => setSelectedTask(task)}
-                  >
-                    <div className="inbox-item-header">
-                      <span className="source-icon">{task.sourceIcon}</span>
-                      <span className="task-title-compact">{task.title}</span>
-                    </div>
-                    <div className="inbox-item-meta">
-                      <span className="task-client-compact">{task.borrower || task.source}</span>
-                      <span
-                        className="urgency-dot"
-                        style={{ backgroundColor: getUrgencyColor(task.urgency) }}
-                        title={task.urgency}
-                      ></span>
-                    </div>
-                    <div className="task-preview">{task.stage}</div>
-                  </div>
-                ))}
-                {outstandingTasks.length === 0 && (
-                  <div className="empty-inbox">
-                    <p>No tasks</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Task Detail (Right Side) */}
-            <div className="task-detail-pane">
-              {selectedTask ? (
-                <>
-                  <div className="detail-header">
-                    <div className="detail-title-section">
-                      <div className="detail-source">
-                        <span className="source-icon-large">{selectedTask.sourceIcon}</span>
-                        <span className="source-name">{selectedTask.source}</span>
-                      </div>
-                      <h2 className="detail-title">{selectedTask.title}</h2>
-                    </div>
-                  </div>
-
-                  <div className="detail-body">
-                    <div className="detail-info-grid">
-                      {selectedTask.borrower && (
-                        <div className="detail-info-item">
-                          <span className="detail-label">Client</span>
-                          <span className="detail-value">{selectedTask.borrower}</span>
-                        </div>
-                      )}
-                      <div className="detail-info-item">
-                        <span className="detail-label">Stage</span>
-                        <span className="detail-value">{selectedTask.stage}</span>
-                      </div>
-                      <div className="detail-info-item">
-                        <span className="detail-label">Priority</span>
-                        <span
-                          className="detail-urgency-badge"
-                          style={{ backgroundColor: getUrgencyColor(selectedTask.urgency) }}
-                        >
-                          {selectedTask.urgency}
-                        </span>
-                      </div>
-                      <div className="detail-info-item">
-                        <span className="detail-label">Source</span>
-                        <span className="detail-value">{selectedTask.source}</span>
-                      </div>
-                      <div className="detail-info-item">
-                        <span className="detail-label">Owner</span>
-                        <select
-                          className="detail-owner-select"
-                          value={taskOwner}
-                          onChange={(e) => setTaskOwner(e.target.value)}
-                        >
-                          <option value="Loan Officer">Loan Officer</option>
-                          <option value="Loan Processor">Loan Processor</option>
-                          <option value="Executive Assistant">Executive Assistant</option>
-                          <option value="Underwriter">Underwriter</option>
-                          <option value="Closer">Closer</option>
-                        </select>
-                      </div>
-                      <div className="detail-info-item">
-                        <span className="detail-label">Date Created</span>
-                        <span className="detail-value">
-                          {selectedTask.date_created ? new Date(selectedTask.date_created).toLocaleString() : 'N/A'}
-                        </span>
-                      </div>
-                      {selectedTask.preferred_contact_method && (
-                        <div className="detail-info-item">
-                          <span className="detail-label">Preferred Contact</span>
-                          <span className="detail-contact-badge">
-                            {selectedTask.preferred_contact_method === 'Email' && '📧'}
-                            {selectedTask.preferred_contact_method === 'Phone' && '📞'}
-                            {selectedTask.preferred_contact_method === 'Text' && '💬'}
-                            {' '}
-                            {selectedTask.preferred_contact_method}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    {selectedTask.ai_message && (
-                      <div className="detail-ai-message-section">
-                        <div className="ai-message-header">
-                          <div className="ai-message-title-row">
-                            <span className="ai-icon-large">🤖</span>
-                            <span className="ai-message-title">AI-Drafted Message</span>
-                          </div>
-                          <button
-                            className="btn-edit-message"
-                            onClick={() => setEditingMessage(!editingMessage)}
-                          >
-                            {editingMessage ? '✓ Done Editing' : '✏️ Edit Message'}
-                          </button>
-                        </div>
-                        <div className="ai-message-body">
-                          {editingMessage ? (
-                            <textarea
-                              className="message-editor"
-                              value={draftMessage}
-                              onChange={(e) => setDraftMessage(e.target.value)}
-                              rows={12}
-                            />
-                          ) : (
-                            <div className="message-preview">
-                              {draftMessage.split('\n').map((line, idx) => (
-                                <p key={idx}>{line || '\u00A0'}</p>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {selectedTask.action && (
-                      <div className="detail-action-section">
-                        <h3>Recommended Action</h3>
-                        <p>{selectedTask.action}</p>
-                      </div>
-                    )}
-
-                    {selectedTask.communication_history && selectedTask.communication_history.length > 0 && (
-                      <div className="communication-history-section">
-                        <button
-                          className="history-accordion-button"
-                          onClick={() => setShowHistory(!showHistory)}
-                        >
-                          <span className="history-icon">📋</span>
-                          <span className="history-title">Communication History ({selectedTask.communication_history.length})</span>
-                          <span className="history-toggle">{showHistory ? '▼' : '▶'}</span>
-                        </button>
-                        {showHistory && (
-                          <div className="history-content">
-                            {selectedTask.communication_history.map((comm, idx) => (
-                              <div key={idx} className="history-item">
-                                <div className="history-item-header">
-                                  <div className="history-type-date">
-                                    <span className="history-type-icon">
-                                      {comm.type === 'Email' && '📧'}
-                                      {comm.type === 'Phone' && '📞'}
-                                      {comm.type === 'Text' && '💬'}
-                                    </span>
-                                    <span className="history-type">{comm.type}</span>
-                                    <span className="history-date">{new Date(comm.date).toLocaleDateString()}</span>
-                                  </div>
-                                  <span className={`history-status ${comm.status.toLowerCase()}`}>
-                                    {comm.status}
-                                  </span>
-                                </div>
-                                <div className="history-item-body">
-                                  <div className="history-subject">{comm.subject}</div>
-                                  <div className="history-message">{comm.message}</div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="detail-footer">
-                    <button
-                      className="btn-detail-complete"
-                      onClick={() => handleComplete(selectedTask.id)}
-                    >
-                      ✓ Mark Complete
-                    </button>
-                    {selectedTask.ai_action && (
-                      <button
-                        className="btn-detail-approve"
-                        onClick={() => handleApproveAiTask(selectedTask.id)}
-                      >
-                        Approve AI Action
-                      </button>
-                    )}
-                    {selectedTask.action && (
-                      <button className="btn-detail-action">
-                        {selectedTask.action}
-                      </button>
-                    )}
-                    <button className="btn-detail-secondary">Snooze</button>
-                    <button className="btn-detail-secondary">Delegate</button>
-                  </div>
-                </>
-              ) : (
-                <div className="detail-empty">
-                  <p>Select a task to view details</p>
-                </div>
-              )}
-            </div>
-          </div>
+          <TaskEmailLayout tasks={tabTasks} emptyMessage="No outstanding tasks" />
         </div>
       )}
 
       {/* AI Task Engine Tab - Pending Your Approval */}
       {activeTab === 'ai-approval' && (
         <div className="tab-content">
-          <div className="ai-engine-section">
-            <h2 className="section-title">🤖 AI Task Engine</h2>
-            <div className="ai-engine-grid">
-              <div className="ai-engine-column">
-                <div className="ai-column-header">
-                  <h3>Pending Your Approval</h3>
-                  <span className="ai-count-badge">{aiTasks.pending.length}</span>
-                </div>
-                <div className="ai-tasks-list">
-                  {aiTasks.pending.filter(task => task && task.task).map((task, idx) => (
-                    <div key={idx} className="ai-task-card">
-                      <div className="ai-task-header">
-                        <span className="task-name">{task.task}</span>
-                        <span className="confidence-badge">{task.confidence}% confident</span>
-                      </div>
-                      <div className="ai-task-description">{task.what_ai_did}</div>
-                      <div className="ai-task-actions">
-                        <button className="btn-approve" onClick={() => handleApproveAiTask(task.id)}>
-                          ✓ Approve
-                        </button>
-                        <button className="btn-fix">Fix</button>
-                        <button className="btn-coach" onClick={() => navigate('/coach')}>Nick Saban Performance Coach</button>
-                      </div>
-                    </div>
-                  ))}
-                  {aiTasks.pending.length === 0 && (
-                    <div className="empty-state">
-                      <p>No tasks pending approval</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="ai-engine-column">
-                <div className="ai-column-header">
-                  <h3>Waiting for Your Input</h3>
-                  <span className="ai-count-badge">{aiTasks.waiting.length}</span>
-                </div>
-                <div className="ai-tasks-list">
-                  {aiTasks.waiting.filter(task => task && task.task).map((task, idx) => (
-                    <div key={idx} className="ai-task-simple">
-                      <span className="task-text">{task.task}</span>
-                      <div className="quick-actions">
-                        <button className="btn-quick-approve" title="Approve">✓</button>
-                        <button className="btn-quick-deny" title="Deny">✗</button>
-                        <button className="btn-quick-delegate" title="Delegate">→</button>
-                      </div>
-                    </div>
-                  ))}
-                  {aiTasks.waiting.length === 0 && (
-                    <div className="empty-state">
-                      <p>No tasks waiting for input</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
+          <TaskEmailLayout tasks={tabTasks} emptyMessage="No AI tasks pending approval" />
         </div>
       )}
 
       {/* Reconciliation Tab */}
       {activeTab === 'reconciliation' && (
         <div className="tab-content">
-          <div className="reconciliation-content">
-            <div className="reconciliation-section">
-              <h3>Reconciliation Center</h3>
-              <p className="section-description">
-                Reconcile your loan pipeline data, verify accuracy, and resolve discrepancies.
-              </p>
-              <div className="reconciliation-actions">
-                <button className="btn-reconcile">
-                  Run Monthly Reconciliation
-                </button>
-                <button className="btn-reconcile">
-                  View Past Reconciliations
-                </button>
-                <button className="btn-reconcile">
-                  Export Reconciliation Report
-                </button>
-              </div>
-              <div className="reconciliation-placeholder">
-                <p>Reconciliation features coming soon...</p>
-              </div>
-            </div>
-          </div>
+          <TaskEmailLayout tasks={tabTasks} emptyMessage="No reconciliation tasks" />
         </div>
       )}
 
       {/* Unified Messages Tab */}
       {activeTab === 'messages' && (
         <div className="tab-content">
-          <div className="unified-messages-section">
-            <div className="messages-header">
-              <h2>📬 Unified Messages</h2>
-              <span className="unread-count">{messages.filter(m => !m.read).length} unread</span>
-            </div>
-            <div className="messages-list">
-              {messages.filter(msg => msg && msg.from).map((msg, idx) => (
-                <div key={msg.id || idx} className={`message-item ${!msg.read ? 'unread' : ''} ${msg.requires_response ? 'needs-response' : ''}`}>
-                  <div className="message-left">
-                    <div className="message-type-icon">{msg.type_icon}</div>
-                    <div className="message-content">
-                      <div className="message-header">
-                        <div className="message-from-line">
-                          <span className="message-from">{msg.from}</span>
-                          <span className="message-client-type">{msg.client_type}</span>
-                        </div>
-                        <div className="message-meta">
-                          <span className="message-source">{msg.source}</span>
-                          <span className="message-timestamp">{msg.timestamp}</span>
-                        </div>
-                      </div>
-                      <div className="message-preview">{msg.preview}</div>
-                      {msg.ai_summary && (
-                        <div className="ai-summary">
-                          <span className="ai-icon">🤖</span>
-                          <span className="ai-text">{msg.ai_summary}</span>
-                        </div>
-                      )}
-                      {msg.task_created && (
-                        <div className="task-status">
-                          <span className="task-badge">✓ Task Created: {msg.task_id}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="message-actions">
-                    {msg.type === 'voicemail' && (
-                      <button className="btn-icon-sm" title="Play Voicemail">
-                        <span className="voicemail-duration">{msg.duration}</span> ▶️
-                      </button>
-                    )}
-                    {msg.type === 'email' && (
-                      <button className="btn-icon-sm" title="View in Outlook">📧</button>
-                    )}
-                    {msg.type === 'text' && (
-                      <button className="btn-icon-sm" title="View in Teams">💬</button>
-                    )}
-                    <button className="btn-icon-sm btn-reply" title="Reply">↩️</button>
-                    <button className="btn-icon-sm" title="AI Suggested Response">🤖</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <button className="btn-view-all" onClick={() => navigate('/assistant')}>
-              View All Messages →
-            </button>
-          </div>
+          <TaskEmailLayout tasks={tabTasks} emptyMessage="No unread messages" />
         </div>
       )}
 
       {/* Client for Life Engine (MUM) Tab */}
       {activeTab === 'mum' && (
         <div className="tab-content">
-          <div className="mum-section">
-            <div className="mum-header">
-              <h2>♻️ Client for Life Engine (MUM)</h2>
-              <span className="actions-badge">{mumAlerts.length} actions</span>
-            </div>
-            <div className="mum-alerts-list">
-              {mumAlerts.map((alert, idx) => (
-                <div key={idx} className="mum-alert-card">
-                  <div className="mum-alert-icon">{alert.icon}</div>
-                  <div className="mum-alert-content">
-                    <h4 className="mum-alert-title">{alert.title}</h4>
-                    <p className="mum-alert-client">{alert.client}</p>
-                  </div>
-                  <div className="mum-alert-action">
-                    <button className="btn-mum-action">{alert.action}</button>
-                  </div>
-                </div>
-              ))}
-              {mumAlerts.length === 0 && (
-                <div className="empty-state">
-                  <p>No client retention actions needed</p>
-                </div>
-              )}
-            </div>
-          </div>
+          <TaskEmailLayout tasks={tabTasks} emptyMessage="No client retention actions needed" />
         </div>
       )}
     </div>
