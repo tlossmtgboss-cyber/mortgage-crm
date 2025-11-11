@@ -894,12 +894,6 @@ function Settings() {
                 <span>Team Members</span>
               </button>
               <button
-                className={`sidebar-btn child ${activeSection === 'roles-permissions' ? 'active' : ''}`}
-                onClick={() => setActiveSection('roles-permissions')}
-              >
-                <span>Roles & Permissions</span>
-              </button>
-              <button
                 className={`sidebar-btn child ${activeSection === 'branding' ? 'active' : ''}`}
                 onClick={() => setActiveSection('branding')}
               >
@@ -1487,7 +1481,7 @@ function Settings() {
             <div className="team-members-section">
               <div className="section-header">
                 <div>
-                  <h2>CRM Workflow Team</h2>
+                  <h2>Team Members ({teamMembers.length})</h2>
                   <p className="section-description">
                     Team members involved in your loan workflow (processors, underwriters, loan officers, etc.)
                   </p>
@@ -1498,72 +1492,79 @@ function Settings() {
                 <div className="loading-state">Loading team members...</div>
               ) : (
                 <>
-                  {/* Team Members List */}
-                  <div className="team-members-list">
-                    <h3>Team Members ({teamMembers.length})</h3>
-                    <div className="members-grid">
-                      {teamMembers.map((member, index) => (
-                        <div
-                          key={`${member.name}-${member.role}-${index}`}
-                          className="member-card"
-                        >
-                          <div className="member-header">
-                            <div className="member-avatar">
-                              {member.name.charAt(0).toUpperCase()}
-                            </div>
-                            <div className="member-info">
-                              <h4>{member.name}</h4>
-                              {member.email && <p className="member-email">{member.email}</p>}
-                            </div>
-                          </div>
-
-                          <div className="member-role">
-                            <span className="role-label">Role:</span>
-                            <span className="role-value">{member.role}</span>
-                          </div>
-
-                          <div className="member-stats">
-                            <span className="stat-item">📋 {member.loan_count} {member.loan_count === 1 ? 'loan' : 'loans'}</span>
-                          </div>
-
-                          {member.loans && member.loans.length > 0 && (
-                            <div className="member-loans">
-                              <details>
-                                <summary>View Loans ({member.loans.length})</summary>
-                                <div className="loans-list">
-                                  {member.loans.map((loan, loanIndex) => (
-                                    <div key={loanIndex} className="loan-item">
-                                      <strong>{loan.loan_number}</strong> - {loan.borrower_name}
-                                      <br />
-                                      <small>Stage: {loan.stage}</small>
-                                    </div>
-                                  ))}
-                                </div>
-                              </details>
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                  {teamMembers.length === 0 ? (
+                    <div className="empty-state">
+                      <div className="empty-icon">👥</div>
+                      <p>No workflow team members found. Team members will appear once they are assigned to loans.</p>
                     </div>
-
-                    {teamMembers.length === 0 && (
-                      <div className="empty-state">
-                        <p>No workflow team members found. Team members will appear once they are assigned to loans.</p>
-                      </div>
-                    )}
-                  </div>
+                  ) : (
+                    <div className="team-members-table-container">
+                      <table className="team-members-table">
+                        <thead>
+                          <tr>
+                            <th>Member</th>
+                            <th>Role</th>
+                            <th>Email</th>
+                            <th>Loans</th>
+                            <th>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {teamMembers.map((member, index) => (
+                            <tr
+                              key={`${member.name}-${member.role}-${index}`}
+                              className="team-member-row"
+                              onClick={() => {
+                                // Navigate to team member profile if they have a user_id
+                                if (member.user_id) {
+                                  navigate(`/team/${member.user_id}`);
+                                }
+                              }}
+                              style={{ cursor: member.user_id ? 'pointer' : 'default' }}
+                            >
+                              <td>
+                                <div className="member-info-cell">
+                                  <div className="member-avatar-small">
+                                    {member.name.charAt(0).toUpperCase()}
+                                  </div>
+                                  <div>
+                                    <div className="member-name">{member.name}</div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td>
+                                <span className="role-badge-inline">{member.role}</span>
+                              </td>
+                              <td>
+                                <span className="member-email-text">{member.email || 'N/A'}</span>
+                              </td>
+                              <td>
+                                <span className="loan-count-badge">
+                                  📋 {member.loan_count} {member.loan_count === 1 ? 'loan' : 'loans'}
+                                </span>
+                              </td>
+                              <td>
+                                <button
+                                  className="btn-view-profile"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (member.user_id) {
+                                      navigate(`/team/${member.user_id}`);
+                                    }
+                                  }}
+                                  disabled={!member.user_id}
+                                >
+                                  View Profile
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </>
               )}
-            </div>
-          )}
-
-          {activeSection === 'roles-permissions' && (
-            <div className="roles-permissions-section">
-              <h2>Roles & Permissions</h2>
-              <p className="section-description">
-                Configure user roles and access levels
-              </p>
-              <p>Coming soon...</p>
             </div>
           )}
 

@@ -1751,8 +1751,141 @@ textarea.text-input {
   color: #6b7280;
 }
 
+/* Team Members Table Styles */
+.team-members-table-container {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.team-members-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.team-members-table thead {
+  background: #f9fafb;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.team-members-table th {
+  padding: 16px 20px;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.team-members-table tbody tr {
+  border-bottom: 1px solid #f3f4f6;
+  transition: all 0.2s ease;
+}
+
+.team-members-table tbody tr:hover {
+  background: #f9fafb;
+}
+
+.team-members-table tbody tr.team-member-row {
+  cursor: pointer;
+}
+
+.team-members-table tbody tr.team-member-row:hover {
+  background: #eff6ff;
+}
+
+.team-members-table td {
+  padding: 16px 20px;
+  font-size: 14px;
+  color: #1f2937;
+}
+
+.member-info-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.member-avatar-small {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.member-name {
+  font-weight: 600;
+  color: #111827;
+}
+
+.role-badge-inline {
+  display: inline-block;
+  padding: 4px 12px;
+  background: #eff6ff;
+  color: #2563eb;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.member-email-text {
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.loan-count-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: #f3f4f6;
+  color: #4b5563;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.btn-view-profile {
+  padding: 8px 16px;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-view-profile:hover:not(:disabled) {
+  background: #1d4ed8;
+  transform: translateY(-1px);
+}
+
+.btn-view-profile:disabled {
+  background: #d1d5db;
+  cursor: not-allowed;
+}
+
 @media (max-width: 768px) {
   .roles-grid, .members-grid {
     grid-template-columns: 1fr;
+  }
+
+  .team-members-table-container {
+    overflow-x: auto;
+  }
+
+  .team-members-table {
+    min-width: 800px;
   }
 }
