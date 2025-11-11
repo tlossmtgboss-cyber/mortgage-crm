@@ -52,6 +52,12 @@ function Settings() {
   const [calendlyApiKey, setCalendlyApiKey] = useState('');
   const [showCalendlyModal, setShowCalendlyModal] = useState(false);
 
+  // Debug: Log when component mounts
+  useEffect(() => {
+    console.log('Settings component mounted');
+    console.log('showCalendlyModal initial state:', showCalendlyModal);
+  }, []);
+
   const toggleSection = (section) => {
     setExpandedSections({
       ...expandedSections,
@@ -91,7 +97,10 @@ function Settings() {
   ];
 
   const connectCalendly = () => {
+    console.log('Connect Calendly button clicked!');
+    console.log('Current showCalendlyModal state:', showCalendlyModal);
     setShowCalendlyModal(true);
+    console.log('Modal should now be visible');
   };
 
   const saveCalendlyConnection = async () => {
@@ -1673,6 +1682,14 @@ function Settings() {
                     )}
                   </div>
                 </div>
+
+                {/* Debug info */}
+                <div style={{padding: '10px', background: '#f0f0f0', marginBottom: '10px', fontSize: '12px'}}>
+                  Debug: calendlyEventTypes.length = {calendlyEventTypes.length},
+                  loadingCalendly = {loadingCalendly ? 'true' : 'false'},
+                  showCalendlyModal = {showCalendlyModal ? 'true' : 'false'}
+                </div>
+
                 <div className="connection-actions">
                   {calendlyEventTypes.length > 0 ? (
                     <>
@@ -1688,13 +1705,25 @@ function Settings() {
                       </span>
                     </>
                   ) : (
-                    <button
-                      className="btn-connect-calendly"
-                      onClick={connectCalendly}
-                      disabled={loadingCalendly}
-                    >
-                      {loadingCalendly ? 'Connecting...' : 'Connect Calendly'}
-                    </button>
+                    <>
+                      <button
+                        className="btn-connect-calendly"
+                        onClick={(e) => {
+                          console.log('Button clicked!', e);
+                          connectCalendly();
+                        }}
+                        disabled={loadingCalendly}
+                        style={{position: 'relative', zIndex: 9999}}
+                      >
+                        {loadingCalendly ? 'Connecting...' : 'Connect Calendly'}
+                      </button>
+                      <button
+                        onClick={() => alert('Test button works!')}
+                        style={{marginLeft: '10px', padding: '10px', background: 'red', color: 'white', border: 'none', cursor: 'pointer'}}
+                      >
+                        TEST
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
