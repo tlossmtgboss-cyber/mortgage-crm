@@ -247,6 +247,13 @@ function Tasks() {
           <span className="tab-badge">{allTasks.length}</span>
         </button>
         <button
+          className={`tab-button ${activeTab === 'ai-approval' ? 'active' : ''}`}
+          onClick={() => setActiveTab('ai-approval')}
+        >
+          🤖 Pending Your Approval
+          <span className="tab-badge">{aiTasks.pending.length + aiTasks.waiting.length}</span>
+        </button>
+        <button
           className={`tab-button ${activeTab === 'reconciliation' ? 'active' : ''}`}
           onClick={() => setActiveTab('reconciliation')}
         >
@@ -492,65 +499,69 @@ function Tasks() {
               )}
             </div>
           </div>
-
-      {/* AI TASK ENGINE SECTION */}
-      <div className="ai-engine-section">
-        <h2 className="section-title">🤖 AI Task Engine</h2>
-        <div className="ai-engine-grid">
-          <div className="ai-engine-column">
-            <div className="ai-column-header">
-              <h3>Pending Your Approval</h3>
-              <span className="ai-count-badge">{aiTasks.pending.length}</span>
-            </div>
-            <div className="ai-tasks-list">
-              {aiTasks.pending.filter(task => task && task.task).map((task, idx) => (
-                <div key={idx} className="ai-task-card">
-                  <div className="ai-task-header">
-                    <span className="task-name">{task.task}</span>
-                    <span className="confidence-badge">{task.confidence}% confident</span>
-                  </div>
-                  <div className="ai-task-description">{task.what_ai_did}</div>
-                  <div className="ai-task-actions">
-                    <button className="btn-approve" onClick={() => handleApproveAiTask(task.id)}>
-                      ✓ Approve
-                    </button>
-                    <button className="btn-fix">Fix</button>
-                    <button className="btn-coach" onClick={() => navigate('/coach')}>Nick Saban Performance Coach</button>
-                  </div>
-                </div>
-              ))}
-              {aiTasks.pending.length === 0 && (
-                <div className="empty-state">
-                  <p>No tasks pending approval</p>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="ai-engine-column">
-            <div className="ai-column-header">
-              <h3>Waiting for Your Input</h3>
-              <span className="ai-count-badge">{aiTasks.waiting.length}</span>
-            </div>
-            <div className="ai-tasks-list">
-              {aiTasks.waiting.filter(task => task && task.task).map((task, idx) => (
-                <div key={idx} className="ai-task-simple">
-                  <span className="task-text">{task.task}</span>
-                  <div className="quick-actions">
-                    <button className="btn-quick-approve" title="Approve">✓</button>
-                    <button className="btn-quick-deny" title="Deny">✗</button>
-                    <button className="btn-quick-delegate" title="Delegate">→</button>
-                  </div>
-                </div>
-              ))}
-              {aiTasks.waiting.length === 0 && (
-                <div className="empty-state">
-                  <p>No tasks waiting for input</p>
-                </div>
-              )}
-            </div>
-          </div>
         </div>
+      )}
+
+      {/* AI Task Engine Tab - Pending Your Approval */}
+      {activeTab === 'ai-approval' && (
+        <div className="tab-content">
+          <div className="ai-engine-section">
+            <h2 className="section-title">🤖 AI Task Engine</h2>
+            <div className="ai-engine-grid">
+              <div className="ai-engine-column">
+                <div className="ai-column-header">
+                  <h3>Pending Your Approval</h3>
+                  <span className="ai-count-badge">{aiTasks.pending.length}</span>
+                </div>
+                <div className="ai-tasks-list">
+                  {aiTasks.pending.filter(task => task && task.task).map((task, idx) => (
+                    <div key={idx} className="ai-task-card">
+                      <div className="ai-task-header">
+                        <span className="task-name">{task.task}</span>
+                        <span className="confidence-badge">{task.confidence}% confident</span>
+                      </div>
+                      <div className="ai-task-description">{task.what_ai_did}</div>
+                      <div className="ai-task-actions">
+                        <button className="btn-approve" onClick={() => handleApproveAiTask(task.id)}>
+                          ✓ Approve
+                        </button>
+                        <button className="btn-fix">Fix</button>
+                        <button className="btn-coach" onClick={() => navigate('/coach')}>Nick Saban Performance Coach</button>
+                      </div>
+                    </div>
+                  ))}
+                  {aiTasks.pending.length === 0 && (
+                    <div className="empty-state">
+                      <p>No tasks pending approval</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="ai-engine-column">
+                <div className="ai-column-header">
+                  <h3>Waiting for Your Input</h3>
+                  <span className="ai-count-badge">{aiTasks.waiting.length}</span>
+                </div>
+                <div className="ai-tasks-list">
+                  {aiTasks.waiting.filter(task => task && task.task).map((task, idx) => (
+                    <div key={idx} className="ai-task-simple">
+                      <span className="task-text">{task.task}</span>
+                      <div className="quick-actions">
+                        <button className="btn-quick-approve" title="Approve">✓</button>
+                        <button className="btn-quick-deny" title="Deny">✗</button>
+                        <button className="btn-quick-delegate" title="Delegate">→</button>
+                      </div>
+                    </div>
+                  ))}
+                  {aiTasks.waiting.length === 0 && (
+                    <div className="empty-state">
+                      <p>No tasks waiting for input</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
