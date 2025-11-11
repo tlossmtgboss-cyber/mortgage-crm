@@ -5127,7 +5127,7 @@ async def create_referral_partner(partner: ReferralPartnerCreate, db: Session = 
     logger.info(f"Referral partner created: {db_partner.name}")
     return db_partner
 
-@app.get("/api/v1/referral-partners/", response_model=List[ReferralPartnerResponse])
+@app.get("/api/v1/referral-partners/")
 async def get_referral_partners(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     partners = db.query(ReferralPartner).order_by(ReferralPartner.created_at.desc()).offset(skip).limit(limit).all()
 
@@ -5139,13 +5139,20 @@ async def get_referral_partners(skip: int = 0, limit: int = 100, db: Session = D
             "name": partner.name,
             "company": partner.company,
             "type": partner.type,
+            "phone": partner.phone,
+            "email": partner.email,
             "referrals_in": partner.referrals_in,
+            "referrals_out": partner.referrals_out,
             "closed_loans": partner.closed_loans,
             "volume": partner.volume,
+            "reciprocity_score": partner.reciprocity_score,
+            "status": partner.status,
             "loyalty_tier": partner.loyalty_tier,
-            "partner_category": partner.partner_category,
+            "last_interaction": partner.last_interaction.isoformat() if partner.last_interaction else None,
+            "notes": partner.notes,
+            "partner_category": partner.partner_category or "individual",
             "parent_team_id": partner.parent_team_id,
-            "created_at": partner.created_at,
+            "created_at": partner.created_at.isoformat() if partner.created_at else None,
             "member_count": 0
         }
 
@@ -5167,7 +5174,7 @@ async def get_referral_partner(partner_id: int, db: Session = Depends(get_db), c
         raise HTTPException(status_code=404, detail="Referral partner not found")
     return partner
 
-@app.get("/api/v1/referral-partners/{team_id}/members", response_model=List[ReferralPartnerResponse])
+@app.get("/api/v1/referral-partners/{team_id}/members")
 async def get_team_members(team_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Get all members of a team.
@@ -5193,13 +5200,20 @@ async def get_team_members(team_id: int, db: Session = Depends(get_db), current_
             "name": member.name,
             "company": member.company,
             "type": member.type,
+            "phone": member.phone,
+            "email": member.email,
             "referrals_in": member.referrals_in,
+            "referrals_out": member.referrals_out,
             "closed_loans": member.closed_loans,
             "volume": member.volume,
+            "reciprocity_score": member.reciprocity_score,
+            "status": member.status,
             "loyalty_tier": member.loyalty_tier,
-            "partner_category": member.partner_category,
+            "last_interaction": member.last_interaction.isoformat() if member.last_interaction else None,
+            "notes": member.notes,
+            "partner_category": member.partner_category or "individual",
             "parent_team_id": member.parent_team_id,
-            "created_at": member.created_at,
+            "created_at": member.created_at.isoformat() if member.created_at else None,
             "member_count": 0
         })
 
