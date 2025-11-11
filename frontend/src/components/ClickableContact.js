@@ -17,7 +17,7 @@ export const ClickableEmail = ({ email, className = '' }) => {
 };
 
 // Clickable phone link
-export const ClickablePhone = ({ phone, className = '', showActions = false }) => {
+export const ClickablePhone = ({ phone, className = '', showActions = false, onSMSClick = null }) => {
   if (!phone) return <span className="no-value">N/A</span>;
 
   // Clean phone number for tel: link (remove formatting)
@@ -36,14 +36,27 @@ export const ClickablePhone = ({ phone, className = '', showActions = false }) =
           >
             📞
           </a>
-          <a
-            href={`sms:${cleanPhone}`}
-            className="phone-action-btn sms-btn"
-            title="Send SMS"
-            onClick={(e) => e.stopPropagation()}
-          >
-            💬
-          </a>
+          {onSMSClick ? (
+            <button
+              className="phone-action-btn sms-btn"
+              title="Send SMS in CRM"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSMSClick();
+              }}
+            >
+              💬
+            </button>
+          ) : (
+            <a
+              href={`sms:${cleanPhone}`}
+              className="phone-action-btn sms-btn"
+              title="Send SMS"
+              onClick={(e) => e.stopPropagation()}
+            >
+              💬
+            </a>
+          )}
         </div>
       </div>
     );

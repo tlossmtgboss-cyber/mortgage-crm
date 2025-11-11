@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { leadsAPI } from '../services/api';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
+import SMSModal from '../components/SMSModal';
 import './Leads.css';
 
 // Generate mock leads data
@@ -269,6 +270,8 @@ function Leads() {
     const stored = localStorage.getItem('viewedLeads');
     return stored ? new Set(JSON.parse(stored)) : new Set();
   });
+  const [showSMSModal, setShowSMSModal] = useState(false);
+  const [selectedLeadForSMS, setSelectedLeadForSMS] = useState(null);
 
   // Borrowers array - each borrower has their own contact info
   const [borrowers, setBorrowers] = useState([
@@ -660,7 +663,16 @@ function Leads() {
                   {isNewLead(lead.created_at) && isLeadUnviewed(lead.id) && <span className="new-lead-badge">NEW</span>}
                 </td>
                 <td><ClickableEmail email={lead.email} /></td>
-                <td><ClickablePhone phone={lead.phone} showActions={true} /></td>
+                <td>
+                  <ClickablePhone
+                    phone={lead.phone}
+                    showActions={true}
+                    onSMSClick={() => {
+                      setSelectedLeadForSMS(lead);
+                      setShowSMSModal(true);
+                    }}
+                  />
+                </td>
                 <td>
                   <span className={`status-badge status-${getStatusColor(lead.stage)}`}>
                     {lead.stage}
@@ -1006,6 +1018,18 @@ function Leads() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* SMS Modal */}
+      {selectedLeadForSMS && (
+        <SMSModal
+          isOpen={showSMSModal}
+          onClose={() => {
+            setShowSMSModal(false);
+            setSelectedLeadForSMS(null);
+          }}
+          lead={selectedLeadForSMS}
+        />
       )}
     </div>
   );
