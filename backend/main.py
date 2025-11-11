@@ -7646,6 +7646,12 @@ async def connect_calendly(
     if not api_key:
         raise HTTPException(status_code=400, detail="api_key is required")
 
+    # Strip whitespace and newlines from API key
+    api_key = api_key.strip().replace('\n', '').replace('\r', '')
+
+    if not api_key:
+        raise HTTPException(status_code=400, detail="api_key is required")
+
     # Check if connection already exists
     existing = db.query(CalendlyConnection).filter(
         CalendlyConnection.user_id == current_user.id

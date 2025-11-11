@@ -149,13 +149,32 @@ function Settings() {
       if (response.ok) {
         const data = await response.json();
         setCalendlyEventTypes(data.event_types || []);
+
+        // Update connected integrations status
+        const newConnected = new Set(connectedIntegrations);
+        if (data.event_types && data.event_types.length > 0) {
+          newConnected.add('calendly');
+        } else {
+          newConnected.delete('calendly');
+        }
+        setConnectedIntegrations(newConnected);
       } else {
         console.error('Failed to fetch event types');
         setCalendlyEventTypes([]);
+
+        // Mark as disconnected
+        const newConnected = new Set(connectedIntegrations);
+        newConnected.delete('calendly');
+        setConnectedIntegrations(newConnected);
       }
     } catch (error) {
       console.error('Error fetching Calendly event types:', error);
       setCalendlyEventTypes([]);
+
+      // Mark as disconnected on error
+      const newConnected = new Set(connectedIntegrations);
+      newConnected.delete('calendly');
+      setConnectedIntegrations(newConnected);
     } finally {
       setLoadingCalendly(false);
     }
@@ -886,6 +905,7 @@ function Settings() {
   useEffect(() => {
     if (activeSection === 'integrations') {
       checkMicrosoftStatus();
+      fetchCalendlyEventTypes(); // Also check Calendly connection status
     }
     if (activeSection === 'calendar-settings') {
       fetchCalendlyEventTypes();
