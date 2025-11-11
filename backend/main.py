@@ -5150,18 +5150,21 @@ async def get_referral_partners(skip: int = 0, limit: int = 100, db: Session = D
             "loyalty_tier": partner.loyalty_tier,
             "last_interaction": partner.last_interaction.isoformat() if partner.last_interaction else None,
             "notes": partner.notes,
-            "partner_category": partner.partner_category or "individual",
-            "parent_team_id": partner.parent_team_id,
+            "partner_category": getattr(partner, "partner_category", "individual") or "individual",
+            "parent_team_id": getattr(partner, "parent_team_id", None),
             "created_at": partner.created_at.isoformat() if partner.created_at else None,
             "member_count": 0
         }
 
-        # If this is a team, count its members
-        if partner.partner_category == "team":
-            member_count = db.query(ReferralPartner).filter(
-                ReferralPartner.parent_team_id == partner.id
-            ).count()
-            partner_dict["member_count"] = member_count
+        # If this is a team, count its members (only if parent_team_id column exists)
+        if hasattr(partner, "partner_category") and partner.partner_category == "team" and hasattr(ReferralPartner, "parent_team_id"):
+            try:
+                member_count = db.query(ReferralPartner).filter(
+                    ReferralPartner.parent_team_id == partner.id
+                ).count()
+                partner_dict["member_count"] = member_count
+            except:
+                pass  # Column doesn't exist yet in database
 
         result.append(partner_dict)
 
@@ -5180,18 +5183,26 @@ async def get_team_members(team_id: int, db: Session = Depends(get_db), current_
     Get all members of a team.
     Only works if the partner is a team (partner_category='team')
     """
+    # Check if team hierarchy columns exist
+    if not hasattr(ReferralPartner, "parent_team_id"):
+        raise HTTPException(status_code=501, detail="Team hierarchy feature not available - database migration required")
+
     # Verify the team exists and is actually a team
     team = db.query(ReferralPartner).filter(ReferralPartner.id == team_id).first()
     if not team:
         raise HTTPException(status_code=404, detail="Team not found")
 
-    if team.partner_category != "team":
+    if getattr(team, "partner_category", "individual") != "team":
         raise HTTPException(status_code=400, detail="This partner is not a team")
 
     # Get all members
-    members = db.query(ReferralPartner).filter(
-        ReferralPartner.parent_team_id == team_id
-    ).order_by(ReferralPartner.name).all()
+    try:
+        members = db.query(ReferralPartner).filter(
+            ReferralPartner.parent_team_id == team_id
+        ).order_by(ReferralPartner.name).all()
+    except:
+        # Column doesn't exist in database yet
+        return []
 
     result = []
     for member in members:
@@ -5211,8 +5222,8 @@ async def get_team_members(team_id: int, db: Session = Depends(get_db), current_
             "loyalty_tier": member.loyalty_tier,
             "last_interaction": member.last_interaction.isoformat() if member.last_interaction else None,
             "notes": member.notes,
-            "partner_category": member.partner_category or "individual",
-            "parent_team_id": member.parent_team_id,
+            "partner_category": getattr(member, "partner_category", "individual") or "individual",
+            "parent_team_id": getattr(member, "parent_team_id", None),
             "created_at": member.created_at.isoformat() if member.created_at else None,
             "member_count": 0
         })
@@ -10891,6 +10902,70 @@ async def clear_sample_data_endpoint(
         db.rollback()
         logger.error(f"Failed to clear sample data: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to clear data: {str(e)}")
+
+@app.post("/api/v1/admin/migrate-team-hierarchy")
+async def migrate_team_hierarchy(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Run database migration to add team hierarchy support.
+    Adds parent_team_id and partner_category columns if they don't exist.
+    """
+    try:
+        logger.info(f"User {current_user.email} is running team hierarchy migration")
+
+        # Check if partner_category column exists
+        result = db.execute(text("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name='referral_partners'
+            AND column_name='partner_category';
+        """))
+
+        partner_category_exists = result.fetchone() is not None
+
+        if not partner_category_exists:
+            logger.info("Adding partner_category column...")
+            db.execute(text("""
+                ALTER TABLE referral_partners
+                ADD COLUMN partner_category VARCHAR DEFAULT 'individual';
+            """))
+            db.commit()
+            logger.info("✅ partner_category column added")
+
+        # Check if parent_team_id column exists
+        result = db.execute(text("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name='referral_partners'
+            AND column_name='parent_team_id';
+        """))
+
+        parent_team_id_exists = result.fetchone() is not None
+
+        if not parent_team_id_exists:
+            logger.info("Adding parent_team_id column...")
+            db.execute(text("""
+                ALTER TABLE referral_partners
+                ADD COLUMN parent_team_id INTEGER REFERENCES referral_partners(id);
+            """))
+            db.commit()
+            logger.info("✅ parent_team_id column added")
+
+        return {
+            "success": True,
+            "message": "Team hierarchy migration completed",
+            "changes": {
+                "partner_category": "added" if not partner_category_exists else "already exists",
+                "parent_team_id": "added" if not parent_team_id_exists else "already exists"
+            }
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Migration failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 # ============================================================================
 # STARTUP EVENT
