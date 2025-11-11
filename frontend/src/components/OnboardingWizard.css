@@ -23,8 +23,8 @@
 .onboarding-wizard-v2 {
   background: white;
   border-radius: 16px;
-  width: 96%;
-  max-width: 1400px;
+  width: 98%;
+  max-width: 2800px;
   max-height: 90vh;
   box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
   position: relative;
@@ -1580,11 +1580,12 @@
 }
 
 .stat-label {
-  font-size: 13px;
-  color: #6b7280;
-  font-weight: 500;
+  font-size: 16px;
+  color: #374151;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
+  margin-top: 8px;
 }
 
 .btn-regenerate {

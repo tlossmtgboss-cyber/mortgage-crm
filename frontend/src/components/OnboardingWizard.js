@@ -85,12 +85,9 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
             extractedRoles: roles,
             extractedMilestones: milestones,
             extractedTasks: tasks,
-            processTree: tasks.length > 0 ? {
-              generated: true,
-              milestones: milestones.length,
-              tasks: tasks.length,
-              roles: roles.length
-            } : null
+            // Don't load processTree from database - should start fresh at 0,0,0
+            // processTree will only be set after user uploads documents and runs AI processing
+            processTree: null
           }));
         }
       } catch (error) {
