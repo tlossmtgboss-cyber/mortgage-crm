@@ -52,6 +52,16 @@ function Settings() {
   const [calendlyApiKey, setCalendlyApiKey] = useState('');
   const [showCalendlyModal, setShowCalendlyModal] = useState(false);
 
+  // Phone Integration state
+  const [twilioStatus, setTwilioStatus] = useState({
+    configured: false,
+    phone_number: null,
+    message: ''
+  });
+  const [loadingTwilio, setLoadingTwilio] = useState(false);
+  const [testPhoneNumber, setTestPhoneNumber] = useState('');
+  const [testResults, setTestResults] = useState([]);
+
   // Debug: Log when component mounts
   useEffect(() => {
     console.log('Settings component mounted');
@@ -748,6 +758,88 @@ function Settings() {
     return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
   };
 
+  // Phone Integration Functions
+  const checkTwilioStatus = async () => {
+    setLoadingTwilio(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/integrations/status`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const twilio = data.integrations?.find(i => i.name === 'Twilio SMS');
+        if (twilio) {
+          setTwilioStatus({
+            configured: twilio.status === 'Active',
+            phone_number: twilio.details?.from_number || null,
+            message: twilio.status === 'Active' ? 'Twilio is configured and ready' : 'Twilio is not configured'
+          });
+
+          // Update connected integrations
+          const newConnected = new Set(connectedIntegrations);
+          if (twilio.status === 'Active') {
+            newConnected.add('twilio');
+          } else {
+            newConnected.delete('twilio');
+          }
+          setConnectedIntegrations(newConnected);
+        }
+      }
+    } catch (error) {
+      console.error('Error checking Twilio status:', error);
+      setTwilioStatus({
+        configured: false,
+        phone_number: null,
+        message: 'Error checking Twilio status'
+      });
+    } finally {
+      setLoadingTwilio(false);
+    }
+  };
+
+  const testClickToCall = () => {
+    if (!testPhoneNumber) {
+      addTestResult('Click-to-Call', 'error', 'Please enter a phone number');
+      return;
+    }
+
+    try {
+      const cleanPhone = testPhoneNumber.replace(/[^0-9+]/g, '');
+      window.open(`tel:${cleanPhone}`, '_self');
+      addTestResult('Click-to-Call', 'success', `Dialer opened for ${testPhoneNumber}`);
+    } catch (error) {
+      addTestResult('Click-to-Call', 'error', `Failed: ${error.message}`);
+    }
+  };
+
+  const testSMS = () => {
+    if (!testPhoneNumber) {
+      addTestResult('SMS', 'error', 'Please enter a phone number');
+      return;
+    }
+
+    try {
+      const cleanPhone = testPhoneNumber.replace(/[^0-9+]/g, '');
+      window.open(`sms:${cleanPhone}`, '_blank');
+      addTestResult('SMS', 'success', `Messaging app opened for ${testPhoneNumber}`);
+    } catch (error) {
+      addTestResult('SMS', 'error', `Failed: ${error.message}`);
+    }
+  };
+
+  const addTestResult = (feature, status, message) => {
+    const result = {
+      feature,
+      status,
+      message,
+      timestamp: new Date().toLocaleTimeString()
+    };
+    setTestResults(prev => [result, ...prev].slice(0, 5)); // Keep last 5 results
+  };
+
   const availableIntegrations = [
     {
       id: 'outlook',
@@ -933,6 +1025,9 @@ function Settings() {
     if (activeSection === 'onboarding-update') {
       fetchOnboardingSteps();
     }
+    if (activeSection === 'phone-integration') {
+      checkTwilioStatus();
+    }
   }, [activeSection]);
 
   return (
@@ -951,6 +1046,14 @@ function Settings() {
           >
             <span className="icon">🔌</span>
             <span>Integrations</span>
+          </button>
+
+          <button
+            className={`sidebar-btn ${activeSection === 'phone-integration' ? 'active' : ''}`}
+            onClick={() => setActiveSection('phone-integration')}
+          >
+            <span className="icon">📱</span>
+            <span>Phone Integration</span>
           </button>
 
           <button
@@ -1227,6 +1330,214 @@ function Settings() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {activeSection === 'phone-integration' && (
+            <div className="phone-integration-section">
+              <h2>Phone Integration</h2>
+              <p className="section-description">
+                Manage phone, SMS, and calling features for your CRM
+              </p>
+
+              {/* Integration Status Card */}
+              <div className="phone-status-card">
+                <div className="card-header">
+                  <h3>Integration Status</h3>
+                  <button
+                    className="btn-refresh"
+                    onClick={checkTwilioStatus}
+                    disabled={loadingTwilio}
+                  >
+                    {loadingTwilio ? 'Checking...' : '🔄 Refresh'}
+                  </button>
+                </div>
+
+                <div className="status-grid">
+                  {/* Native Phone Features */}
+                  <div className="status-item">
+                    <div className="status-icon" style={{background: '#10b981'}}>📞</div>
+                    <div className="status-info">
+                      <h4>Click-to-Call</h4>
+                      <p>Native phone integration</p>
+                      <span className="status-badge connected">✓ Active</span>
+                    </div>
+                  </div>
+
+                  <div className="status-item">
+                    <div className="status-icon" style={{background: '#3b82f6'}}>💬</div>
+                    <div className="status-info">
+                      <h4>SMS/Text</h4>
+                      <p>Native messaging integration</p>
+                      <span className="status-badge connected">✓ Active</span>
+                    </div>
+                  </div>
+
+                  {/* Twilio SMS API */}
+                  <div className="status-item">
+                    <div className="status-icon" style={{background: twilioStatus.configured ? '#f22f46' : '#6b7280'}}>
+                      📱
+                    </div>
+                    <div className="status-info">
+                      <h4>Twilio SMS API</h4>
+                      <p>{twilioStatus.message || 'Advanced SMS features'}</p>
+                      <span className={`status-badge ${twilioStatus.configured ? 'connected' : 'disconnected'}`}>
+                        {twilioStatus.configured ? '✓ Active' : 'Not Configured'}
+                      </span>
+                      {twilioStatus.configured && twilioStatus.phone_number && (
+                        <p className="status-detail">From: {twilioStatus.phone_number}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Test Features Card */}
+              <div className="phone-test-card">
+                <h3>Test Phone Features</h3>
+                <p className="section-description">
+                  Test your phone integration to make sure everything is working
+                </p>
+
+                <div className="test-form">
+                  <div className="form-group">
+                    <label>Test Phone Number</label>
+                    <input
+                      type="tel"
+                      className="form-input"
+                      placeholder="Enter phone number (e.g., 555-123-4567)"
+                      value={testPhoneNumber}
+                      onChange={(e) => setTestPhoneNumber(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="test-actions">
+                    <button
+                      className="btn-test call"
+                      onClick={testClickToCall}
+                      disabled={!testPhoneNumber}
+                    >
+                      📞 Test Click-to-Call
+                    </button>
+                    <button
+                      className="btn-test sms"
+                      onClick={testSMS}
+                      disabled={!testPhoneNumber}
+                    >
+                      💬 Test SMS
+                    </button>
+                  </div>
+                </div>
+
+                {/* Test Results */}
+                {testResults.length > 0 && (
+                  <div className="test-results">
+                    <h4>Recent Tests</h4>
+                    <div className="results-list">
+                      {testResults.map((result, index) => (
+                        <div key={index} className={`result-item ${result.status}`}>
+                          <span className="result-icon">
+                            {result.status === 'success' ? '✅' : '❌'}
+                          </span>
+                          <div className="result-content">
+                            <div className="result-feature">{result.feature}</div>
+                            <div className="result-message">{result.message}</div>
+                          </div>
+                          <div className="result-time">{result.timestamp}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* How It Works Card */}
+              <div className="info-card">
+                <div className="info-icon">💡</div>
+                <div className="info-content">
+                  <h3>How Phone Integration Works</h3>
+                  <p><strong>Native Features (Always Active):</strong></p>
+                  <ul>
+                    <li><strong>Click-to-Call:</strong> Click any phone number in the CRM to open your phone dialer</li>
+                    <li><strong>SMS/Text:</strong> Click the 💬 button to open your messaging app</li>
+                    <li>Works with any carrier (Verizon, AT&T, T-Mobile, etc.)</li>
+                    <li>No configuration required - works immediately!</li>
+                  </ul>
+                  <p><strong>Twilio SMS API (Optional):</strong></p>
+                  <ul>
+                    <li>Send SMS directly from CRM without using your phone</li>
+                    <li>Bulk SMS campaigns to multiple leads</li>
+                    <li>SMS templates and automation</li>
+                    <li>Track delivery status and history</li>
+                    <li>Requires backend configuration (see setup guide)</li>
+                  </ul>
+                </div>
+              </div>
+
+              {/* Quick Links Card */}
+              <div className="quick-links-card">
+                <h3>Quick Links</h3>
+                <div className="links-grid">
+                  <a
+                    href="/verizon-test"
+                    className="link-item"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      navigate('/verizon-test');
+                    }}
+                  >
+                    <div className="link-icon">🧪</div>
+                    <div className="link-info">
+                      <h4>Full Test Page</h4>
+                      <p>Comprehensive testing interface</p>
+                    </div>
+                  </a>
+                  <a
+                    href="https://docs.claude.com"
+                    className="link-item"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <div className="link-icon">📚</div>
+                    <div className="link-info">
+                      <h4>Setup Guide</h4>
+                      <p>Step-by-step instructions</p>
+                    </div>
+                  </a>
+                  {twilioStatus.configured && (
+                    <a
+                      href="https://console.twilio.com"
+                      className="link-item"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <div className="link-icon">🗄️</div>
+                      <div className="link-info">
+                        <h4>Twilio Console</h4>
+                        <p>Manage your Twilio account</p>
+                      </div>
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              {/* Setup Instructions */}
+              {!twilioStatus.configured && (
+                <div className="setup-card">
+                  <h3>Want Advanced SMS Features?</h3>
+                  <p>To enable Twilio SMS API, add these environment variables to your Railway backend:</p>
+                  <div className="code-block">
+                    <code>
+                      TWILIO_ACCOUNT_SID=your_account_sid<br/>
+                      TWILIO_AUTH_TOKEN=your_auth_token<br/>
+                      TWILIO_PHONE_NUMBER=+15551234567
+                    </code>
+                  </div>
+                  <p className="help-text">
+                    See <strong>BACKEND_ENVIRONMENT_SETUP.md</strong> for detailed instructions.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
