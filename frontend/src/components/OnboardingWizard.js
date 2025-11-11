@@ -1076,16 +1076,16 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
             <h4>✓ Process Tree Generated</h4>
             <div className="preview-stats">
               <div className="stat-item">
-                <span className="stat-number">{formData.processTree.milestones}</span>
                 <span className="stat-label">Milestones</span>
+                <span className="stat-number">{formData.processTree.milestones}</span>
               </div>
               <div className="stat-item">
-                <span className="stat-number">{formData.processTree.tasks}</span>
                 <span className="stat-label">Tasks</span>
+                <span className="stat-number">{formData.processTree.tasks}</span>
               </div>
               <div className="stat-item">
-                <span className="stat-number">{formData.processTree.roles}</span>
                 <span className="stat-label">Roles</span>
+                <span className="stat-number">{formData.processTree.roles}</span>
               </div>
             </div>
             <button
