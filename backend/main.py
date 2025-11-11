@@ -10105,8 +10105,21 @@ async def execute_data_import(
                     if 'loan_term' in data and 'term' not in data:
                         data['term'] = data.pop('loan_term')
 
+                    # Ensure required fields
+                    if 'amount' not in data:
+                        data['amount'] = 0.0
+
+                    # Filter out fields that don't exist in Loan model (email, phone, etc.)
+                    valid_fields = {'loan_number', 'borrower_name', 'coborrower_name', 'stage', 'program',
+                                  'loan_type', 'amount', 'purchase_price', 'down_payment', 'rate', 'term',
+                                  'property_address', 'lock_date', 'closing_date', 'funded_date',
+                                  'processor', 'underwriter', 'realtor_agent', 'title_company',
+                                  'days_in_stage', 'sla_status', 'milestones', 'ai_insights',
+                                  'predicted_close_date', 'risk_score', 'user_metadata'}
+                    filtered_data = {k: v for k, v in data.items() if k in valid_fields}
+
                     loan = Loan(
-                        **data,
+                        **filtered_data,
                         loan_officer_id=current_user.id,
                         stage=LoanStage.DISCLOSED
                     )
@@ -10114,12 +10127,12 @@ async def execute_data_import(
 
                 elif destination == 'portfolio':
                     # Create MUM client - ensure required fields exist
-                    if 'borrower_name' not in data and 'name' in data:
-                        data['borrower_name'] = data.pop('name')
-                    if 'borrower_name' not in data and ('first_name' in data or 'last_name' in data):
+                    if 'name' not in data and ('first_name' in data or 'last_name' in data):
                         first = data.pop('first_name', '')
                         last = data.pop('last_name', '')
-                        data['borrower_name'] = f"{first} {last}".strip()
+                        data['name'] = f"{first} {last}".strip()
+                    elif 'name' not in data and 'borrower_name' in data:
+                        data['name'] = data.pop('borrower_name')
 
                     # Generate loan number if not provided
                     if 'loan_number' not in data:
@@ -10127,21 +10140,25 @@ async def execute_data_import(
                         data['loan_number'] = f"MUM-{secrets.token_hex(4).upper()}"
 
                     # Map common field variations
-                    if 'loan_amount' in data and 'original_loan_amount' not in data:
-                        data['original_loan_amount'] = data.pop('loan_amount')
+                    if 'loan_amount' in data and 'loan_balance' not in data:
+                        data['loan_balance'] = data.pop('loan_amount')
                     if 'interest_rate' in data and 'current_rate' not in data:
                         data['current_rate'] = data.pop('interest_rate')
+                    if 'close_date' in data and 'original_close_date' not in data:
+                        data['original_close_date'] = data.pop('close_date')
 
                     # Ensure required fields with defaults
-                    if 'name' not in data and 'borrower_name' in data:
-                        data['name'] = data['borrower_name']
                     if 'original_close_date' not in data:
                         data['original_close_date'] = datetime.now(timezone.utc)
 
-                    mum_client = MUMClient(
-                        **data,
-                        loan_officer_id=current_user.id
-                    )
+                    # Filter out fields that don't exist in MUMClient model (email, phone, etc.)
+                    valid_fields = {'name', 'loan_number', 'original_close_date', 'days_since_funding',
+                                  'original_rate', 'current_rate', 'loan_balance', 'refinance_opportunity',
+                                  'estimated_savings', 'engagement_score', 'status', 'last_contact'}
+                    filtered_data = {k: v for k, v in data.items() if k in valid_fields}
+
+                    # Note: MUMClient doesn't have loan_officer_id
+                    mum_client = MUMClient(**filtered_data)
                     db.add(mum_client)
 
                 elif destination == 'realtors' or destination == 'referral_partners':
