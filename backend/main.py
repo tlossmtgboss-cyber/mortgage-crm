@@ -1072,6 +1072,7 @@ class LeadResponse(BaseModel):
     co_applicant_phone: Optional[str] = None
     stage: LeadStage
     source: Optional[str]
+    referral_partner_id: Optional[int] = None
     ai_score: int
     sentiment: Optional[str]
     next_action: Optional[str]
