@@ -4385,10 +4385,16 @@ async def get_leads(
     skip: int = 0,
     limit: int = 100,
     stage: Optional[str] = None,
+    show_all: bool = True,  # Changed default to True to show all leads
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_flexible)
 ):
-    query = db.query(Lead).filter(Lead.owner_id == current_user.id)
+    # Show all leads by default (for CRM team view), or filter by owner
+    if show_all:
+        query = db.query(Lead)
+    else:
+        query = db.query(Lead).filter(Lead.owner_id == current_user.id)
+
     if stage:
         try:
             stage_enum = LeadStage(stage)
@@ -4447,9 +4453,14 @@ async def submit_buyer_intake(payload: dict, db: Session = Depends(get_db)):
     """
     try:
         # Get the first user (admin) to assign the lead to
-        default_user = db.query(User).first()
+        # Try to find a user with email containing "demo" or just get the first user
+        default_user = db.query(User).filter(User.email.like('%demo%')).first()
+        if not default_user:
+            default_user = db.query(User).first()
         if not default_user:
             raise HTTPException(status_code=500, detail="No users found in system")
+
+        logger.info(f"Assigning buyer intake lead to user: {default_user.email}")
 
         # Extract contact info
         contact = payload.get("contact", {})
@@ -4588,11 +4599,12 @@ async def submit_buyer_intake(payload: dict, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(new_lead)
 
-        logger.info(f"Buyer intake submitted: {new_lead.name} - {email} (Score: {new_lead.ai_score})")
+        logger.info(f"✅ Buyer intake submitted: {new_lead.name} - {email} (Lead ID: {new_lead.id}, Owner: {default_user.email}, Score: {new_lead.ai_score})")
 
         return {
             "success": True,
             "lead_id": new_lead.id,
+            "owner_email": default_user.email,
             "message": "Thank you! Your information has been received. We'll contact you soon."
         }
 
