@@ -6678,6 +6678,16 @@ def init_db():
                         END $$;
                     """))
 
+                    # Add partner_category column to referral_partners if it doesn't exist
+                    conn.execute(text("""
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='partner_category') THEN
+                                ALTER TABLE referral_partners ADD COLUMN partner_category VARCHAR DEFAULT 'individual';
+                            END IF;
+                        END $$;
+                    """))
+
                     conn.commit()
                     logger.info("✅ Schema migrations applied (PostgreSQL)")
         except Exception as e:
