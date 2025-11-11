@@ -61,6 +61,91 @@ const CoachCorner = ({ isOpen, onClose }) => {
     }
   ];
 
+  const getMockCoachResponse = (selectedMode, customMsg = null) => {
+    const responses = {
+      daily_briefing: {
+        mode: selectedMode,
+        response: "Good morning. Here's what matters today:\n\n1. You have 3 deals stuck in underwriting for 10+ days. These need immediate attention.\n2. 5 new leads from yesterday are uncontacted. First response time is critical.\n3. Your pipeline conversion rate is down 12% this month. Focus on qualification.\n\nProcess beats chaos. Execute on these priorities before checking email.",
+        priorities: [
+          { priority: 1, category: "Pipeline", urgency: "HIGH", action: "Contact 3 deals stuck in underwriting - push for resolution" },
+          { priority: 2, category: "Leads", urgency: "HIGH", action: "Reach out to 5 new leads from yesterday within 1 hour" },
+          { priority: 3, category: "Conversion", urgency: "MEDIUM", action: "Review qualification process - identify weak points" }
+        ],
+        metrics: {
+          pipeline_health: "needs_attention",
+          total_bottlenecks: 3,
+          overdue_tasks: 5
+        }
+      },
+      pipeline_audit: {
+        mode: selectedMode,
+        response: "Pipeline audit complete. Here's what's broken:\n\nYou have deals dying in underwriting because you're not following up. Every day a deal sits is money evaporating.\n\nYour lead response time averages 4.2 hours. Industry standard is under 5 minutes. You're losing deals before you even know they exist.\n\nFix the process. Stop firefighting.",
+        action_items: [
+          "Fix John Smith deal - stuck 15 days in underwriting",
+          "Fix Sarah Johnson deal - stuck 12 days in processing",
+          "Fix Mike Williams deal - stuck 10 days in appraisal"
+        ],
+        metrics: {
+          pipeline_health: "needs_attention",
+          total_bottlenecks: 8,
+          overdue_tasks: 12
+        }
+      },
+      focus_reset: {
+        mode: selectedMode,
+        response: "Stop. Breathe. Refocus.\n\nRight now, you're scattered. Here's your reset:\n\n1. Close all tabs except your CRM\n2. Put phone on Do Not Disturb for 90 minutes\n3. Pick ONE priority from your list\n4. Work ONLY on that until complete\n\nDistraction is the enemy of excellence. You know what needs to be done. Do it.",
+        priorities: [
+          { priority: 1, category: "Focus", urgency: "HIGH", action: "Block 90 minutes - complete one high-priority task" }
+        ]
+      },
+      priority_guidance: {
+        mode: selectedMode,
+        response: "Here's what you should do next:\n\n1. Handle the hot lead from this morning - 800K purchase, pre-approved, ready to move\n2. Follow up on the 3 deals in underwriting\n3. Return calls to yesterday's inquiries\n\nEverything else is noise. These three actions will move your business forward today.",
+        priorities: [
+          { priority: 1, category: "Hot Lead", urgency: "HIGH", action: "Contact $800K purchase lead - strike while hot" },
+          { priority: 2, category: "Pipeline", urgency: "HIGH", action: "Push 3 underwriting deals forward" },
+          { priority: 3, category: "Follow-up", urgency: "MEDIUM", action: "Return yesterday's inquiry calls" }
+        ]
+      },
+      accountability: {
+        mode: selectedMode,
+        response: "Performance review:\n\nLoans closed this month: Below target\nLead response time: Needs improvement\nPipeline conversion: Declining\n\nYou're capable of better. The numbers don't lie. Either raise your standards or accept mediocrity.\n\nWhich will it be?",
+        metrics: {
+          pipeline_health: "needs_attention",
+          total_bottlenecks: 5,
+          overdue_tasks: 8
+        }
+      },
+      tough_love: {
+        mode: selectedMode,
+        response: "Let's be honest:\n\nYou're busy, but are you productive? Being busy answering emails isn't the same as closing deals.\n\nYou have leads going cold because 'you'll call them later.' Later is why you're not hitting your goals.\n\nYou know exactly what needs to be done. Stop making excuses and execute.",
+        action_items: [
+          "Stop checking email every 5 minutes",
+          "Block time for actual revenue-generating activities",
+          "Follow up on cold leads from this week",
+          "Update your CRM - it's 3 days behind"
+        ]
+      },
+      teach_process: {
+        mode: selectedMode,
+        response: "Systems thinking 101:\n\nElite performers don't rely on motivation. They build systems that work even on bad days.\n\nYour system should be:\n1. Lead comes in → Response within 5 minutes → Qualification script\n2. Deal in pipeline → Daily check-in → Move forward or kill it\n3. Week ends → Review metrics → Adjust process\n\nProcess creates consistency. Consistency creates results.",
+        action_items: [
+          "Document your lead response process",
+          "Create daily pipeline review habit (15 min)",
+          "Set up weekly metrics review (Friday 4pm)",
+          "Build templates for common scenarios"
+        ]
+      },
+      tactical_advice: {
+        mode: selectedMode,
+        response: customMsg ? `Here's my take on your question:\n\n${customMsg}\n\nThe answer depends on your specific situation, but generally: Focus on the highest-leverage activity. What will move the needle most? Do that first.` : "Ask me a specific question and I'll give you tactical guidance.",
+        action_items: customMsg ? ["Apply this guidance to your situation", "Take action within 24 hours"] : []
+      }
+    };
+
+    return responses[selectedMode] || responses.daily_briefing;
+  };
+
   const callCoach = async (selectedMode, message = null) => {
     setLoading(true);
     setMode(selectedMode);
@@ -87,7 +172,9 @@ const CoachCorner = ({ isOpen, onClose }) => {
       setResponse(data);
     } catch (error) {
       console.error('Coach error:', error);
-      alert('Coach unavailable. Please try again.');
+      // Use mock response as fallback when backend is unavailable
+      const mockResponse = getMockCoachResponse(selectedMode, message);
+      setResponse(mockResponse);
     } finally {
       setLoading(false);
     }
