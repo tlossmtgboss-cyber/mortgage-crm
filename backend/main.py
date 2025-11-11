@@ -8,6 +8,7 @@
 # ✅ Authentication & Security (JWT + API Keys)
 # ✅ Sample data generation
 # ✅ AI Underwriter with Claude AI
+# ✅ Performance Coach with AI guidance
 # ✅ AI Assistant with OpenAI GPT
 # ✅ Zapier Integration via API Keys
 # ============================================================================
