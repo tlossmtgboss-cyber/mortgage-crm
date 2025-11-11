@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { leadsAPI, activitiesAPI, aiAPI } from '../services/api';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
+import SMSModal from '../components/SMSModal';
 import './LeadDetail.css';
 
 function LeadDetail() {
@@ -21,6 +22,7 @@ function LeadDetail() {
   const [borrowers, setBorrowers] = useState([]);
   const [activeBorrower, setActiveBorrower] = useState(0);
   const [saveTimeout, setSaveTimeout] = useState(null);
+  const [showSMSModal, setShowSMSModal] = useState(false);
 
   useEffect(() => {
     loadLeadData();
@@ -401,7 +403,7 @@ function LeadDetail() {
         window.open(`tel:${lead.phone}`, '_self');
         break;
       case 'sms':
-        window.open(`sms:${lead.phone}`, '_blank');
+        setShowSMSModal(true);
         break;
       case 'email':
         window.open(`mailto:${lead.email}`, '_blank');
@@ -1151,6 +1153,15 @@ function LeadDetail() {
           </div>
         </div>
       </div>
+
+      {/* SMS Modal */}
+      {lead && (
+        <SMSModal
+          isOpen={showSMSModal}
+          onClose={() => setShowSMSModal(false)}
+          lead={lead}
+        />
+      )}
     </div>
   );
 }
