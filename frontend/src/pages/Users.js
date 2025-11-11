@@ -37,7 +37,25 @@ function Users() {
       // Load team members from localStorage (saved during onboarding)
       const storedMembers = localStorage.getItem('teamMembers');
       if (storedMembers) {
-        setTeamMembers(JSON.parse(storedMembers));
+        const members = JSON.parse(storedMembers);
+
+        // Filter out dummy/mock data
+        const realMembers = members.filter(member => {
+          const isDummy =
+            member.email === 'demo@example.com' ||
+            member.email === 'N/A' ||
+            !member.email ||
+            member.firstName === 'Demo' ||
+            (member.email && member.email.includes('example.com'));
+          return !isDummy;
+        });
+
+        // Save cleaned data back
+        if (realMembers.length !== members.length) {
+          localStorage.setItem('teamMembers', JSON.stringify(realMembers));
+        }
+
+        setTeamMembers(realMembers);
       } else {
         // Initialize with empty array
         setTeamMembers([]);
