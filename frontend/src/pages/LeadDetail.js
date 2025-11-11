@@ -670,6 +670,12 @@ function LeadDetail() {
           Loan
         </button>
         <button
+          className={`tab-btn ${activeTab === 'team' ? 'active' : ''}`}
+          onClick={() => setActiveTab('team')}
+        >
+          Team Members
+        </button>
+        <button
           className={`tab-btn ${activeTab === 'conversation' ? 'active' : ''}`}
           onClick={() => setActiveTab('conversation')}
         >
@@ -881,6 +887,90 @@ function LeadDetail() {
                   type="number"
                   value={formData.credit_score || ''}
                   onChange={(e) => handleFieldChange('credit_score', parseInt(e.target.value))}
+                />
+              </div>
+            </div>
+          </div>
+          )}
+
+          {/* Team Members Tab */}
+          {activeTab === 'team' && (
+          <div className="info-section">
+            <h2>Team Members</h2>
+            <div className="team-description">
+              <p>Assign internal team members who are working on this lead/loan.</p>
+            </div>
+            <div className="info-grid compact">
+              <div className="info-field">
+                <label>Loan Officer</label>
+                <input
+                  type="text"
+                  value={formData.loan_officer || ''}
+                  onChange={(e) => handleFieldChange('loan_officer', e.target.value)}
+                  placeholder="Enter loan officer name"
+                />
+              </div>
+              <div className="info-field">
+                <label>Loan Officer Email</label>
+                <input
+                  type="email"
+                  value={formData.loan_officer_email || ''}
+                  onChange={(e) => handleFieldChange('loan_officer_email', e.target.value)}
+                  placeholder="email@example.com"
+                />
+              </div>
+              <div className="info-field">
+                <label>Processor</label>
+                <input
+                  type="text"
+                  value={formData.processor || ''}
+                  onChange={(e) => handleFieldChange('processor', e.target.value)}
+                  placeholder="Enter processor name"
+                />
+              </div>
+              <div className="info-field">
+                <label>Processor Email</label>
+                <input
+                  type="email"
+                  value={formData.processor_email || ''}
+                  onChange={(e) => handleFieldChange('processor_email', e.target.value)}
+                  placeholder="email@example.com"
+                />
+              </div>
+              <div className="info-field">
+                <label>Underwriter</label>
+                <input
+                  type="text"
+                  value={formData.underwriter || ''}
+                  onChange={(e) => handleFieldChange('underwriter', e.target.value)}
+                  placeholder="Enter underwriter name"
+                />
+              </div>
+              <div className="info-field">
+                <label>Underwriter Email</label>
+                <input
+                  type="email"
+                  value={formData.underwriter_email || ''}
+                  onChange={(e) => handleFieldChange('underwriter_email', e.target.value)}
+                  placeholder="email@example.com"
+                />
+              </div>
+              <div className="info-field">
+                <label>Closer</label>
+                <input
+                  type="text"
+                  value={formData.closer || ''}
+                  onChange={(e) => handleFieldChange('closer', e.target.value)}
+                  placeholder="Enter closer name"
+                />
+              </div>
+              <div className="info-field">
+                <label>Closer Email</label>
+                <input
+                  type="email"
+                  value={formData.closer_email || ''}
+                  onChange={(e) => handleFieldChange('closer_email', e.target.value)}
+                  placeholder="email@example.com"
                 />
               </div>
             </div>

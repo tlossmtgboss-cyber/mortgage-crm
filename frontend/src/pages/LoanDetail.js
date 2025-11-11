@@ -341,6 +341,12 @@ function LoanDetail() {
           Loan
         </button>
         <button
+          className={`tab-btn ${activeTab === 'team' ? 'active' : ''}`}
+          onClick={() => setActiveTab('team')}
+        >
+          Team Members
+        </button>
+        <button
           className={`tab-btn ${activeTab === 'conversation' ? 'active' : ''}`}
           onClick={() => setActiveTab('conversation')}
         >
@@ -467,6 +473,98 @@ function LoanDetail() {
                     value={formData.notes || ''}
                     onChange={(e) => handleFieldChange('notes', e.target.value)}
                     placeholder="Add notes about this loan..."
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Team Members Tab */}
+        {activeTab === 'team' && (
+          <div className="tab-content">
+            <h2>Team Members</h2>
+            <div className="team-description">
+              <p>Assign internal team members who are working on this loan.</p>
+            </div>
+            <div className="form-section">
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Loan Officer</label>
+                  <input
+                    type="text"
+                    value={formData.loan_officer_name || formData.loan_officer || ''}
+                    onChange={(e) => handleFieldChange('loan_officer_name', e.target.value)}
+                    placeholder="Enter loan officer name"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Loan Officer Email</label>
+                  <input
+                    type="email"
+                    value={formData.loan_officer_email || ''}
+                    onChange={(e) => handleFieldChange('loan_officer_email', e.target.value)}
+                    placeholder="email@example.com"
+                  />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Processor</label>
+                  <input
+                    type="text"
+                    value={formData.processor || ''}
+                    onChange={(e) => handleFieldChange('processor', e.target.value)}
+                    placeholder="Enter processor name"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Processor Email</label>
+                  <input
+                    type="email"
+                    value={formData.processor_email || ''}
+                    onChange={(e) => handleFieldChange('processor_email', e.target.value)}
+                    placeholder="email@example.com"
+                  />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Underwriter</label>
+                  <input
+                    type="text"
+                    value={formData.underwriter || ''}
+                    onChange={(e) => handleFieldChange('underwriter', e.target.value)}
+                    placeholder="Enter underwriter name"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Underwriter Email</label>
+                  <input
+                    type="email"
+                    value={formData.underwriter_email || ''}
+                    onChange={(e) => handleFieldChange('underwriter_email', e.target.value)}
+                    placeholder="email@example.com"
+                  />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Closer</label>
+                  <input
+                    type="text"
+                    value={formData.closer || ''}
+                    onChange={(e) => handleFieldChange('closer', e.target.value)}
+                    placeholder="Enter closer name"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Closer Email</label>
+                  <input
+                    type="email"
+                    value={formData.closer_email || ''}
+                    onChange={(e) => handleFieldChange('closer_email', e.target.value)}
+                    placeholder="email@example.com"
                   />
                 </div>
               </div>
