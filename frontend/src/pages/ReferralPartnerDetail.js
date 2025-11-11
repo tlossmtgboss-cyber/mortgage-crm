@@ -15,6 +15,17 @@ function ReferralPartnerDetail() {
   const [searchQuery, setSearchQuery] = useState('');
   const [allLeads, setAllLeads] = useState([]);
   const [searchResults, setSearchResults] = useState([]);
+  const [activeTab, setActiveTab] = useState('overview');
+
+  // ROI Calculator states
+  const [monthlyMarketingSpend, setMonthlyMarketingSpend] = useState(() => {
+    const saved = localStorage.getItem(`partner_${id}_marketing_spend`);
+    return saved ? parseFloat(saved) : 500;
+  });
+  const [avgCommission, setAvgCommission] = useState(() => {
+    const saved = localStorage.getItem(`partner_${id}_avg_commission`);
+    return saved ? parseFloat(saved) : 4000;
+  });
 
   useEffect(() => {
     loadPartnerData();
@@ -122,6 +133,57 @@ function ReferralPartnerDetail() {
     return categories;
   };
 
+  // ROI Calculator Functions
+  const handleMarketingSpendChange = (value) => {
+    setMonthlyMarketingSpend(value);
+    localStorage.setItem(`partner_${id}_marketing_spend`, value);
+  };
+
+  const handleCommissionChange = (value) => {
+    setAvgCommission(value);
+    localStorage.setItem(`partner_${id}_avg_commission`, value);
+  };
+
+  const calculateROIMetrics = () => {
+    const categories = categorizeReferrals();
+    const closedLoans = categories.closed.length;
+    const totalLeads = referrals.length;
+    const annualMarketingSpend = monthlyMarketingSpend * 12;
+
+    // Calculate conversion rate
+    const conversionRate = totalLeads > 0 ? (closedLoans / totalLeads) * 100 : 0;
+
+    // Calculate revenue
+    const totalRevenue = closedLoans * avgCommission;
+
+    // Calculate ROI
+    const roi = annualMarketingSpend > 0 ? ((totalRevenue - annualMarketingSpend) / annualMarketingSpend) * 100 : 0;
+
+    // Cost per closed loan
+    const costPerLoan = closedLoans > 0 ? annualMarketingSpend / closedLoans : 0;
+
+    // Annual profit
+    const annualProfit = totalRevenue - annualMarketingSpend;
+
+    return {
+      closedLoans,
+      totalLeads,
+      conversionRate: conversionRate.toFixed(1),
+      costPerLoan: Math.round(costPerLoan),
+      annualROI: Math.round(roi),
+      annualProfit: Math.round(annualProfit),
+      totalRevenue: Math.round(totalRevenue),
+      annualSpend: Math.round(annualMarketingSpend)
+    };
+  };
+
+  const getROIStatus = (roi) => {
+    if (roi >= 300) return { label: 'Excellent', color: '#10b981' };
+    if (roi >= 150) return { label: 'Strong', color: '#3b82f6' };
+    if (roi >= 50) return { label: 'Good', color: '#f59e0b' };
+    return { label: 'Needs Improvement', color: '#ef4444' };
+  };
+
   const getTierBadgeClass = (tier) => {
     const tierMap = {
       gold: 'tier-gold',
@@ -210,8 +272,27 @@ function ReferralPartnerDetail() {
         </div>
       </div>
 
-      {/* Referrals by Status */}
-      <div className="referrals-section">
+      {/* Tab Navigation */}
+      <div className="partner-tabs">
+        <button
+          className={`partner-tab ${activeTab === 'overview' ? 'active' : ''}`}
+          onClick={() => setActiveTab('overview')}
+        >
+          Overview
+        </button>
+        <button
+          className={`partner-tab ${activeTab === 'roi' ? 'active' : ''}`}
+          onClick={() => setActiveTab('roi')}
+        >
+          💰 ROI Calculator
+        </button>
+      </div>
+
+      {/* Overview Tab */}
+      {activeTab === 'overview' && (
+        <>
+          {/* Referrals by Status */}
+          <div className="referrals-section">
         <h2>Referrals by Status</h2>
 
         {/* Leads */}
@@ -409,6 +490,169 @@ function ReferralPartnerDetail() {
           )}
         </div>
       </div>
+        </>
+      )}
+
+      {/* ROI Calculator Tab */}
+      {activeTab === 'roi' && (
+        <div className="roi-calculator-section">
+          <div className="roi-header">
+            <h2>Partnership Profitability Calculator</h2>
+            <p>Track your marketing investment and measure ROI from this referral partnership</p>
+          </div>
+
+          <div className="roi-calculator-grid">
+            {/* Configuration Panel */}
+            <div className="roi-config-panel">
+              <h3>Configuration</h3>
+
+              {/* Monthly Marketing Spend */}
+              <div className="roi-input-group">
+                <label className="roi-label">
+                  Monthly Marketing Contribution
+                  <span className="info-tooltip" title="Amount you contribute monthly to partner's marketing">ⓘ</span>
+                </label>
+                <div className="input-with-slider">
+                  <input
+                    type="number"
+                    className="roi-input"
+                    value={monthlyMarketingSpend}
+                    onChange={(e) => handleMarketingSpendChange(parseFloat(e.target.value) || 0)}
+                    min="0"
+                    step="100"
+                  />
+                  <input
+                    type="range"
+                    className="roi-slider"
+                    value={monthlyMarketingSpend}
+                    onChange={(e) => handleMarketingSpendChange(parseFloat(e.target.value))}
+                    min="0"
+                    max="10000"
+                    step="100"
+                  />
+                  <div className="slider-labels">
+                    <span>$0</span>
+                    <span>$10,000</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Average Commission */}
+              <div className="roi-input-group">
+                <label className="roi-label">
+                  Average Commission Per Loan
+                  <span className="info-tooltip" title="Your average commission per closed loan">ⓘ</span>
+                </label>
+                <div className="input-with-slider">
+                  <input
+                    type="number"
+                    className="roi-input"
+                    value={avgCommission}
+                    onChange={(e) => handleCommissionChange(parseFloat(e.target.value) || 0)}
+                    min="0"
+                    step="100"
+                  />
+                  <input
+                    type="range"
+                    className="roi-slider"
+                    value={avgCommission}
+                    onChange={(e) => handleCommissionChange(parseFloat(e.target.value))}
+                    min="1000"
+                    max="15000"
+                    step="100"
+                  />
+                  <div className="slider-labels">
+                    <span>$1,000</span>
+                    <span>$15,000</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Live Data Indicator */}
+              <div className="live-data-indicator">
+                <span className="live-dot"></span>
+                <span className="live-text">Using live data from closed clients</span>
+              </div>
+            </div>
+
+            {/* Results Panel */}
+            <div className="roi-results-panel">
+              <h3>Performance Results</h3>
+
+              {(() => {
+                const metrics = calculateROIMetrics();
+                const roiStatus = getROIStatus(metrics.annualROI);
+
+                return (
+                  <>
+                    {/* Cost Per Funded Loan */}
+                    <div className="roi-metric-large">
+                      <div className="metric-label">COST PER FUNDED LOAN</div>
+                      <div className="metric-value-big" style={{ color: '#10b981' }}>
+                        ${metrics.costPerLoan.toLocaleString()}
+                      </div>
+                      <div className="metric-status" style={{ color: roiStatus.color }}>
+                        {roiStatus.label}
+                      </div>
+                    </div>
+
+                    {/* Key Metrics Grid */}
+                    <div className="roi-metrics-grid">
+                      <div className="roi-metric-box">
+                        <div className="metric-label-small">Annual Leads</div>
+                        <div className="metric-value-medium">{metrics.totalLeads}</div>
+                        <div className="metric-sublabel">Generated</div>
+                      </div>
+                      <div className="roi-metric-box">
+                        <div className="metric-label-small">Annual Loans</div>
+                        <div className="metric-value-medium">{metrics.closedLoans}</div>
+                        <div className="metric-sublabel">Closed</div>
+                      </div>
+                      <div className="roi-metric-box">
+                        <div className="metric-label-small">Conversion Rate</div>
+                        <div className="metric-value-medium">{metrics.conversionRate}%</div>
+                        <div className="metric-sublabel">Lead to Close</div>
+                      </div>
+                    </div>
+
+                    {/* ROI and Profit */}
+                    <div className="roi-bottom-metrics">
+                      <div className="roi-metric-box-large">
+                        <div className="metric-label-small">Annual ROI</div>
+                        <div className="metric-value-huge" style={{ color: '#10b981' }}>
+                          +{metrics.annualROI}%
+                        </div>
+                        <div className="metric-sublabel" style={{ color: roiStatus.color }}>
+                          {roiStatus.label} returns
+                        </div>
+                      </div>
+                      <div className="roi-metric-box-large">
+                        <div className="metric-label-small">Annual Profit</div>
+                        <div className="metric-value-huge" style={{ color: '#10b981' }}>
+                          +${metrics.annualProfit.toLocaleString()}
+                        </div>
+                        <div className="metric-sublabel">Annual profit</div>
+                      </div>
+                    </div>
+
+                    {/* Additional Info */}
+                    <div className="roi-info-boxes">
+                      <div className="roi-info-item">
+                        <span className="info-label">Annual Marketing Spend:</span>
+                        <span className="info-value">${metrics.annualSpend.toLocaleString()}</span>
+                      </div>
+                      <div className="roi-info-item">
+                        <span className="info-label">Total Revenue Generated:</span>
+                        <span className="info-value">${metrics.totalRevenue.toLocaleString()}</span>
+                      </div>
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Search Modal */}
       {showSearchModal && (

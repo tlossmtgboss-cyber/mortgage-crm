@@ -474,3 +474,333 @@
     align-items: flex-start;
   }
 }
+
+/* Partner Tabs */
+.partner-tabs {
+  display: flex;
+  gap: 8px;
+  margin: 24px 0;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.partner-tab {
+  padding: 12px 24px;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  font-size: 15px;
+  font-weight: 600;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: -2px;
+}
+
+.partner-tab:hover {
+  color: #218D8D;
+  background: #f0fdfa;
+}
+
+.partner-tab.active {
+  color: #218D8D;
+  border-bottom-color: #218D8D;
+}
+
+/* ROI Calculator */
+.roi-calculator-section {
+  margin-top: 32px;
+}
+
+.roi-header {
+  margin-bottom: 32px;
+}
+
+.roi-header h2 {
+  font-size: 24px;
+  color: #1f2937;
+  margin: 0 0 8px 0;
+}
+
+.roi-header p {
+  color: #6b7280;
+  margin: 0;
+  font-size: 15px;
+}
+
+.roi-calculator-grid {
+  display: grid;
+  grid-template-columns: 400px 1fr;
+  gap: 32px;
+}
+
+/* Configuration Panel */
+.roi-config-panel {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.roi-config-panel h3 {
+  font-size: 18px;
+  color: #1f2937;
+  margin: 0 0 24px 0;
+}
+
+.roi-input-group {
+  margin-bottom: 32px;
+}
+
+.roi-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 12px;
+}
+
+.info-tooltip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background: #e5e7eb;
+  border-radius: 50%;
+  font-size: 12px;
+  color: #6b7280;
+  cursor: help;
+}
+
+.input-with-slider {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.roi-input {
+  width: 100%;
+  padding: 12px 16px;
+  font-size: 18px;
+  font-weight: 600;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  color: #1f2937;
+}
+
+.roi-input:focus {
+  outline: none;
+  border-color: #218D8D;
+}
+
+.roi-slider {
+  width: 100%;
+  height: 8px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: linear-gradient(to right, #db2777 0%, #f59e0b 50%, #10b981 100%);
+  border-radius: 4px;
+  outline: none;
+}
+
+.roi-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  background: white;
+  border: 3px solid #218D8D;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.roi-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  background: white;
+  border: 3px solid #218D8D;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.slider-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.live-data-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  background: #ecfdf5;
+  border: 1px solid #10b981;
+  border-radius: 8px;
+  margin-top: 24px;
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  background: #10b981;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.live-text {
+  font-size: 13px;
+  color: #047857;
+  font-weight: 600;
+}
+
+/* Results Panel */
+.roi-results-panel {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 32px;
+}
+
+.roi-results-panel h3 {
+  font-size: 18px;
+  color: #1f2937;
+  margin: 0 0 24px 0;
+}
+
+.roi-metric-large {
+  text-align: center;
+  padding: 24px;
+  background: #f9fafb;
+  border-radius: 12px;
+  margin-bottom: 32px;
+}
+
+.metric-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+}
+
+.metric-value-big {
+  font-size: 48px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.metric-status {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.roi-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.roi-metric-box {
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+}
+
+.metric-label-small {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.metric-value-medium {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 4px;
+}
+
+.metric-sublabel {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.roi-bottom-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+.roi-metric-box-large {
+  background: linear-gradient(135deg, #f0fdfa 0%, #ccfbf1 100%);
+  border: 2px solid #10b981;
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+}
+
+.metric-value-huge {
+  font-size: 40px;
+  font-weight: 700;
+  margin: 8px 0;
+}
+
+.roi-info-boxes {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+
+.roi-info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.roi-info-item:last-child {
+  border-bottom: none;
+}
+
+.info-label {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.info-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+@media (max-width: 1200px) {
+  .roi-calculator-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .roi-bottom-metrics {
+    grid-template-columns: 1fr;
+  }
+}
