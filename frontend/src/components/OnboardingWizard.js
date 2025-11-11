@@ -1371,7 +1371,7 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
   ];
 
   const handleConnectIntegration = async (integration) => {
-    // Handle Salesforce OAuth flow differently
+    // Handle Salesforce OAuth flow
     if (integration.id === 'salesforce') {
       try {
         const token = localStorage.getItem('token');
@@ -1415,7 +1415,53 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
         console.error('Salesforce OAuth error:', error);
         alert('Failed to connect to Salesforce. Please ensure the integration is configured in your environment.');
       }
-    } else {
+    }
+    // Handle Microsoft 365 OAuth flow
+    else if (integration.id === 'outlook') {
+      try {
+        const token = localStorage.getItem('token');
+        const isVercel = window.location.hostname.includes('vercel.app');
+        const API_BASE_URL = isVercel ? '' : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
+
+        const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/oauth/start`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to initiate Microsoft 365 OAuth');
+        }
+
+        const data = await response.json();
+
+        // Open OAuth window
+        const width = 600;
+        const height = 700;
+        const left = (window.screen.width - width) / 2;
+        const top = (window.screen.height - height) / 2;
+
+        const popup = window.open(
+          data.auth_url,
+          'Microsoft 365 Login',
+          `width=${width},height=${height},left=${left},top=${top}`
+        );
+
+        // Monitor the popup for closing
+        const checkPopup = setInterval(() => {
+          if (popup && popup.closed) {
+            clearInterval(checkPopup);
+            // Check connection status after popup closes
+            checkMicrosoftConnection();
+          }
+        }, 1000);
+
+      } catch (error) {
+        console.error('Microsoft 365 OAuth error:', error);
+        alert('Microsoft 365 integration is being configured. Please go to Settings > Integrations to complete the connection with proper OAuth authentication.');
+      }
+    }
+    else {
       // For other integrations, show the modal
       setConnectionModal(integration);
     }
@@ -1446,6 +1492,34 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
       }
     } catch (error) {
       console.error('Error checking Salesforce status:', error);
+    }
+  };
+
+  const checkMicrosoftConnection = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const isVercel = window.location.hostname.includes('vercel.app');
+      const API_BASE_URL = isVercel ? '' : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
+
+      const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/status`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.connected) {
+          alert('✅ Microsoft 365 connected successfully! Your email: ' + data.email_address);
+          // Update formData to reflect connection
+          setFormData(prevData => ({
+            ...prevData,
+            microsoftConnected: true
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('Error checking Microsoft 365 status:', error);
     }
   };
 

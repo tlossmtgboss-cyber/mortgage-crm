@@ -2880,6 +2880,42 @@ async def connect_microsoft365(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/v1/microsoft/oauth/start")
+async def start_microsoft_oauth(current_user: User = Depends(get_current_user)):
+    """
+    Initiates Microsoft 365 OAuth flow.
+    Returns URL for user to authorize access to their Microsoft 365 account.
+    """
+    client_id = os.getenv("MICROSOFT_CLIENT_ID")
+    tenant_id = os.getenv("MICROSOFT_TENANT_ID", "common")
+    redirect_uri = os.getenv("MICROSOFT_REDIRECT_URI")
+
+    if not client_id or not redirect_uri:
+        raise HTTPException(
+            status_code=500,
+            detail="Microsoft 365 integration not configured. Please set MICROSOFT_CLIENT_ID and MICROSOFT_REDIRECT_URI in environment variables."
+        )
+
+    # Create state parameter with user ID for security
+    import secrets
+    state = f"{current_user.id}_{secrets.token_urlsafe(16)}"
+
+    # Build Microsoft OAuth URL
+    auth_url = (
+        f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/authorize?"
+        f"client_id={client_id}&"
+        f"response_type=code&"
+        f"redirect_uri={redirect_uri}&"
+        f"response_mode=query&"
+        f"scope=offline_access%20Mail.Read%20Mail.ReadWrite%20Mail.Send%20User.Read%20Contacts.Read&"
+        f"state={state}"
+    )
+
+    return {
+        "auth_url": auth_url,
+        "message": "Redirect user to this URL to authorize Microsoft 365 access"
+    }
+
 @app.get("/api/v1/microsoft/status")
 async def get_microsoft_status(
     current_user: User = Depends(get_current_user),
