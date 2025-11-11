@@ -23,8 +23,8 @@
 .onboarding-wizard-v2 {
   background: white;
   border-radius: 16px;
-  width: 90%;
-  max-width: 800px;
+  width: 96%;
+  max-width: 1400px;
   max-height: 90vh;
   box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
   position: relative;
