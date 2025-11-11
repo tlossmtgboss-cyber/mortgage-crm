@@ -10,6 +10,11 @@ function ReferralPartnerDetail() {
   const [partner, setPartner] = useState(null);
   const [referrals, setReferrals] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [searchCategory, setSearchCategory] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [allLeads, setAllLeads] = useState([]);
+  const [searchResults, setSearchResults] = useState([]);
 
   useEffect(() => {
     loadPartnerData();
@@ -19,15 +24,16 @@ function ReferralPartnerDetail() {
   const loadPartnerData = async () => {
     try {
       setLoading(true);
-      const [partnerData, allLeads] = await Promise.all([
+      const [partnerData, allLeadsData] = await Promise.all([
         partnersAPI.getById(id),
         leadsAPI.getAll()
       ]);
 
       setPartner(partnerData);
+      setAllLeads(allLeadsData);
 
       // Filter leads that were referred by this partner
-      const partnerReferrals = allLeads.filter(lead =>
+      const partnerReferrals = allLeadsData.filter(lead =>
         lead.referral_partner_id === parseInt(id) ||
         lead.source?.toLowerCase().includes(partnerData.name?.toLowerCase())
       );
@@ -38,6 +44,70 @@ function ReferralPartnerDetail() {
       alert('Failed to load referral partner details');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleOpenSearch = (category) => {
+    setSearchCategory(category);
+    setSearchQuery('');
+    setSearchResults([]);
+    setShowSearchModal(true);
+  };
+
+  const handleSearchChange = (e) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+
+    if (query.trim() === '') {
+      setSearchResults([]);
+      return;
+    }
+
+    // Filter leads that:
+    // 1. Are not already assigned to this partner
+    // 2. Match the search query
+    const filtered = allLeads.filter(lead => {
+      const isNotAssigned = lead.referral_partner_id !== parseInt(id);
+      const matchesQuery = lead.name?.toLowerCase().includes(query.toLowerCase());
+      return isNotAssigned && matchesQuery;
+    });
+
+    setSearchResults(filtered);
+  };
+
+  const handleAssignLead = async (lead) => {
+    const categoryNames = {
+      leads: 'Leads',
+      active: 'Active Clients',
+      closed: 'Closed Clients',
+      nurtured: 'Nurtured Clients',
+      disqualified: 'Do Not Qualify'
+    };
+
+    const confirmed = window.confirm(
+      `Add ${lead.name} to ${partner.name}'s ${categoryNames[searchCategory]}?`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      // Update the lead with the referral partner ID
+      await leadsAPI.update(lead.id, {
+        referral_partner_id: parseInt(id)
+      });
+
+      // Close modal and refresh data
+      setShowSearchModal(false);
+      setSearchQuery('');
+      setSearchResults([]);
+
+      // Reload partner data to show the newly assigned lead
+      await loadPartnerData();
+
+      alert(`${lead.name} has been added to ${partner.name}'s referrals!`);
+    } catch (error) {
+      console.error('Failed to assign lead:', error);
+      alert('Failed to assign lead to partner. Please try again.');
     }
   };
 
@@ -148,7 +218,16 @@ function ReferralPartnerDetail() {
         <div className="status-category">
           <div className="category-header">
             <h3>Leads ({categories.leads.length})</h3>
-            <span className="count-badge">{categories.leads.length}</span>
+            <div className="category-header-actions">
+              <span className="count-badge">{categories.leads.length}</span>
+              <button
+                className="btn-add-to-category"
+                onClick={() => handleOpenSearch('leads')}
+                title="Add lead to this category"
+              >
+                +
+              </button>
+            </div>
           </div>
           {categories.leads.length > 0 ? (
             <div className="referrals-list">
@@ -178,7 +257,16 @@ function ReferralPartnerDetail() {
         <div className="status-category">
           <div className="category-header">
             <h3>Active Clients ({categories.active.length})</h3>
-            <span className="count-badge">{categories.active.length}</span>
+            <div className="category-header-actions">
+              <span className="count-badge">{categories.active.length}</span>
+              <button
+                className="btn-add-to-category"
+                onClick={() => handleOpenSearch('active')}
+                title="Add lead to this category"
+              >
+                +
+              </button>
+            </div>
           </div>
           {categories.active.length > 0 ? (
             <div className="referrals-list">
@@ -208,7 +296,16 @@ function ReferralPartnerDetail() {
         <div className="status-category">
           <div className="category-header">
             <h3>Closed Clients ({categories.closed.length})</h3>
-            <span className="count-badge">{categories.closed.length}</span>
+            <div className="category-header-actions">
+              <span className="count-badge">{categories.closed.length}</span>
+              <button
+                className="btn-add-to-category"
+                onClick={() => handleOpenSearch('closed')}
+                title="Add lead to this category"
+              >
+                +
+              </button>
+            </div>
           </div>
           {categories.closed.length > 0 ? (
             <div className="referrals-list">
@@ -238,7 +335,16 @@ function ReferralPartnerDetail() {
         <div className="status-category">
           <div className="category-header">
             <h3>Nurtured Clients ({categories.nurtured.length})</h3>
-            <span className="count-badge">{categories.nurtured.length}</span>
+            <div className="category-header-actions">
+              <span className="count-badge">{categories.nurtured.length}</span>
+              <button
+                className="btn-add-to-category"
+                onClick={() => handleOpenSearch('nurtured')}
+                title="Add lead to this category"
+              >
+                +
+              </button>
+            </div>
           </div>
           {categories.nurtured.length > 0 ? (
             <div className="referrals-list">
@@ -268,7 +374,16 @@ function ReferralPartnerDetail() {
         <div className="status-category">
           <div className="category-header">
             <h3>Do Not Qualify ({categories.disqualified.length})</h3>
-            <span className="count-badge">{categories.disqualified.length}</span>
+            <div className="category-header-actions">
+              <span className="count-badge">{categories.disqualified.length}</span>
+              <button
+                className="btn-add-to-category"
+                onClick={() => handleOpenSearch('disqualified')}
+                title="Add lead to this category"
+              >
+                +
+              </button>
+            </div>
           </div>
           {categories.disqualified.length > 0 ? (
             <div className="referrals-list">
@@ -294,6 +409,57 @@ function ReferralPartnerDetail() {
           )}
         </div>
       </div>
+
+      {/* Search Modal */}
+      {showSearchModal && (
+        <div className="search-modal-overlay" onClick={() => setShowSearchModal(false)}>
+          <div className="search-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="search-modal-header">
+              <h3>Add Lead to {partner.name}</h3>
+              <button
+                className="btn-close-modal"
+                onClick={() => setShowSearchModal(false)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="search-modal-body">
+              <input
+                type="text"
+                className="search-input"
+                placeholder="Search for a lead by name..."
+                value={searchQuery}
+                onChange={handleSearchChange}
+                autoFocus
+              />
+              <div className="search-results">
+                {searchQuery.trim() === '' ? (
+                  <div className="search-hint">Start typing to search for leads...</div>
+                ) : searchResults.length > 0 ? (
+                  searchResults.map((lead) => (
+                    <div
+                      key={lead.id}
+                      className="search-result-item"
+                      onClick={() => handleAssignLead(lead)}
+                    >
+                      <div className="result-name">{lead.name}</div>
+                      <div className="result-details">
+                        <span>{lead.email || 'No email'}</span>
+                        <span className="separator">•</span>
+                        <span className={`status-badge status-${lead.stage?.toLowerCase().replace(/\s+/g, '-')}`}>
+                          {lead.stage}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="no-results">No leads found matching "{searchQuery}"</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
