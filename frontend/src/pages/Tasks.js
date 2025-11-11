@@ -12,6 +12,7 @@ function Tasks() {
   const [draftMessage, setDraftMessage] = useState('');
   const [showHistory, setShowHistory] = useState(false);
   const [taskOwner, setTaskOwner] = useState('');
+  const [commModal, setCommModal] = useState(null);
 
   // Dashboard data states
   const [prioritizedTasks, setPrioritizedTasks] = useState([]);
@@ -243,6 +244,68 @@ function Tasks() {
     return colors[urgency] || '#6b7280';
   };
 
+  const handleCommClick = (comm) => {
+    // Generate detailed content based on type
+    let detailedContent = null;
+
+    if (comm.type === 'Email') {
+      detailedContent = {
+        type: 'Email',
+        subject: comm.subject,
+        thread: [
+          {
+            from: 'You',
+            to: selectedTask?.borrower || 'Client',
+            date: comm.date,
+            body: comm.message
+          },
+          {
+            from: selectedTask?.borrower || 'Client',
+            to: 'You',
+            date: comm.date,
+            body: 'Thank you for reaching out! I appreciate the information. I have a few questions about the next steps...'
+          }
+        ]
+      };
+    } else if (comm.type === 'Phone') {
+      detailedContent = {
+        type: 'Phone',
+        subject: comm.subject,
+        duration: '30 minutes',
+        date: comm.date,
+        summary: comm.message,
+        details: `Call started at 2:30 PM and lasted 30 minutes.
+
+Key Discussion Points:
+• Reviewed loan options and interest rates
+• Discussed pre-qualification requirements
+• Explained the application process timeline
+• Answered questions about documentation needed
+• Scheduled follow-up for next week
+
+Next Steps:
+• Client will gather employment verification documents
+• Send detailed loan comparison email
+• Schedule property search consultation
+
+Client seemed very engaged and interested in moving forward with the pre-qualification process.`
+      };
+    } else if (comm.type === 'Text') {
+      detailedContent = {
+        type: 'Text',
+        subject: comm.subject,
+        messages: [
+          { from: 'You', text: comm.message, time: '10:30 AM' },
+          { from: selectedTask?.borrower || 'Client', text: 'Thanks for the reminder! I\'ll upload them today.', time: '10:45 AM' },
+          { from: 'You', text: 'Perfect! Let me know if you need any help.', time: '10:46 AM' },
+          { from: selectedTask?.borrower || 'Client', text: 'Will do 👍', time: '10:47 AM' }
+        ]
+      };
+    }
+
+    setCommModal(detailedContent);
+  };
+
   if (loading) return <div className="loading">Loading tasks...</div>;
 
   const allTasks = getAggregatedTasks();
@@ -413,7 +476,7 @@ function Tasks() {
                   {showHistory && (
                     <div className="history-content">
                       {selectedTask.communication_history.map((comm, idx) => (
-                        <div key={idx} className="history-item">
+                        <div key={idx} className="history-item clickable" onClick={() => handleCommClick(comm)}>
                           <div className="history-item-header">
                             <div className="history-type-date">
                               <span className="history-type-icon">
@@ -550,6 +613,78 @@ function Tasks() {
       {activeTab === 'mum' && (
         <div className="tab-content">
           <TaskEmailLayout tasks={tabTasks} emptyMessage="No client retention actions needed" />
+        </div>
+      )}
+
+      {/* Communication Detail Modal */}
+      {commModal && (
+        <div className="comm-modal-overlay" onClick={() => setCommModal(null)}>
+          <div className="comm-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="btn-close-comm-modal" onClick={() => setCommModal(null)}>×</button>
+
+            <div className="comm-modal-header">
+              <span className="comm-modal-icon">
+                {commModal.type === 'Email' && '📧'}
+                {commModal.type === 'Phone' && '📞'}
+                {commModal.type === 'Text' && '💬'}
+              </span>
+              <h2>{commModal.subject}</h2>
+            </div>
+
+            <div className="comm-modal-body">
+              {commModal.type === 'Email' && (
+                <div className="email-thread">
+                  {commModal.thread.map((email, idx) => (
+                    <div key={idx} className="email-message">
+                      <div className="email-message-header">
+                        <div className="email-from-to">
+                          <strong>From:</strong> {email.from}<br />
+                          <strong>To:</strong> {email.to}
+                        </div>
+                        <div className="email-date">{new Date(email.date).toLocaleString()}</div>
+                      </div>
+                      <div className="email-message-body">{email.body}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {commModal.type === 'Phone' && (
+                <div className="phone-summary">
+                  <div className="call-meta">
+                    <div className="call-info-item">
+                      <strong>Duration:</strong> {commModal.duration}
+                    </div>
+                    <div className="call-info-item">
+                      <strong>Date:</strong> {new Date(commModal.date).toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="call-summary-section">
+                    <h3>Summary</h3>
+                    <p>{commModal.summary}</p>
+                  </div>
+                  <div className="call-details-section">
+                    <h3>Call Notes</h3>
+                    <pre className="call-notes">{commModal.details}</pre>
+                  </div>
+                </div>
+              )}
+
+              {commModal.type === 'Text' && (
+                <div className="text-thread">
+                  {commModal.messages.map((msg, idx) => (
+                    <div key={idx} className={`text-message ${msg.from === 'You' ? 'sent' : 'received'}`}>
+                      <div className="text-message-bubble">
+                        <div className="text-message-sender">{msg.from}</div>
+                        <div className="text-message-text">{msg.text}</div>
+                        <div className="text-message-time">{msg.time}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
