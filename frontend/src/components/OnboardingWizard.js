@@ -242,14 +242,9 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
     setIsProcessing(true);
 
     try {
-      // Create document content from uploaded files
-      // For now, we'll use a simple text marker - in production you'd read actual file content
-      const documentContent = `Mortgage loan process documentation uploaded: ${formData.sopFiles.map(f => f.name).join(', ')}`;
-
-      // Call the real API to parse documents
-      const parseResult = await onboardingAPI.parseDocuments(documentContent,
-        formData.sopFiles[0]?.name || 'process-document.pdf'
-      );
+      // Upload actual files to be parsed by AI
+      // Each file will be read and parsed separately, then combined
+      const parseResult = await onboardingAPI.parseDocumentsUpload(formData.sopFiles);
 
       // Transform API response to match the existing data structure
       const generatedMilestones = parseResult.milestones.map((milestone, mIndex) => {

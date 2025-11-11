@@ -8870,6 +8870,240 @@ def parse_document_basic(document_content: str, document_name: str = None):
         "tasks": tasks
     }
 
+@app.post("/api/v1/onboarding/parse-documents-upload")
+async def parse_documents_upload(
+    files: List[UploadFile] = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Parse multiple uploaded documents (PDF, DOCX, TXT) and extract roles, milestones, and tasks.
+    Each document is parsed separately to extract its role/tasks, then combined into one process tree.
+    """
+    try:
+        # Import libraries for reading different file types
+        try:
+            import PyPDF2
+            import io
+            from docx import Document as DocxDocument
+        except ImportError as e:
+            logger.error(f"Missing required library for document parsing: {e}")
+            raise HTTPException(status_code=500, detail="Server missing document parsing libraries. Please contact support.")
+
+        # Clear existing parsed data for this user
+        db.query(ProcessTask).filter(ProcessTask.user_id == current_user.id).delete()
+        db.query(ProcessMilestone).filter(ProcessMilestone.user_id == current_user.id).delete()
+        db.query(ProcessRole).filter(ProcessRole.user_id == current_user.id).delete()
+        db.commit()
+
+        all_roles = []
+        all_milestones = []
+        all_tasks = []
+
+        # Process each uploaded file separately
+        for file_idx, file in enumerate(files):
+            logger.info(f"Processing file {file_idx + 1}/{len(files)}: {file.filename}")
+
+            # Read file content based on type
+            file_content = await file.read()
+            document_text = ""
+
+            if file.filename.endswith('.pdf'):
+                # Read PDF
+                try:
+                    pdf_reader = PyPDF2.PdfReader(io.BytesIO(file_content))
+                    for page in pdf_reader.pages:
+                        document_text += page.extract_text() + "\n"
+                except Exception as e:
+                    logger.error(f"Failed to read PDF {file.filename}: {e}")
+                    continue
+
+            elif file.filename.endswith(('.docx', '.doc')):
+                # Read DOCX
+                try:
+                    doc = DocxDocument(io.BytesIO(file_content))
+                    for paragraph in doc.paragraphs:
+                        document_text += paragraph.text + "\n"
+                except Exception as e:
+                    logger.error(f"Failed to read DOCX {file.filename}: {e}")
+                    continue
+
+            elif file.filename.endswith('.txt'):
+                # Read TXT
+                try:
+                    document_text = file_content.decode('utf-8')
+                except Exception as e:
+                    logger.error(f"Failed to read TXT {file.filename}: {e}")
+                    continue
+
+            else:
+                logger.warning(f"Unsupported file type: {file.filename}")
+                continue
+
+            if not document_text.strip():
+                logger.warning(f"No text extracted from {file.filename}")
+                continue
+
+            # Use the improved AI prompt for each document
+            analysis_prompt = f"""
+            Analyze this document and identify the PRIMARY role/position being described.
+
+            IMPORTANT: This is ONE document describing ONE person's role.
+            - Extract ONLY the primary role that owns the described responsibilities
+            - Do NOT extract other roles that are merely mentioned or referenced
+            - Focus on the actual responsibilities and tasks of this PRIMARY role
+
+            Document name: "{file.filename}"
+
+            Extract:
+            1. The PRIMARY role with full responsibility descriptions
+            2. Major workflow stages/milestones that this role goes through
+            3. Specific tasks the PRIMARY role performs in each stage
+
+            For the role, provide:
+            - role_name: Short identifier from filename (e.g., "application_analysis", "processor")
+            - role_title: Display name from document (e.g., "Application Analysis", "Loan Processor")
+            - responsibilities: Detailed description from the document
+            - skills_required: List of skills needed
+            - key_activities: List of activities performed
+
+            For each milestone, provide:
+            - name: Stage/phase name
+            - description: What happens in this stage
+            - sequence_order: Order in workflow (0, 1, 2...)
+            - estimated_duration: Estimated hours
+
+            For each task, provide:
+            - milestone: Which workflow stage it belongs to
+            - role: The role_name responsible
+            - task_name: Specific task name
+            - task_description: What the task involves
+            - sequence_order: Order within stage
+            - estimated_duration: Minutes to complete
+            - sla: Service level agreement in hours
+            - ai_automatable: Boolean if AI can automate this
+            - is_required: Boolean if mandatory
+
+            Document content:
+            {document_text[:10000]}
+
+            Return JSON with keys: roles (array with 1 role), milestones (array), tasks (array)
+            """
+
+            # Parse with AI
+            if openai_client:
+                try:
+                    completion = openai_client.chat.completions.create(
+                        model="gpt-4o",
+                        messages=[
+                            {"role": "system", "content": "You are an expert at analyzing job responsibility documents and extracting structured information. Focus on the PRIMARY role being described in each document."},
+                            {"role": "user", "content": analysis_prompt}
+                        ],
+                        response_format={"type": "json_object"}
+                    )
+                    ai_response = json.loads(completion.choices[0].message.content)
+
+                    # Collect results from this document
+                    if "roles" in ai_response:
+                        all_roles.extend(ai_response["roles"])
+                    if "milestones" in ai_response:
+                        all_milestones.extend(ai_response["milestones"])
+                    if "tasks" in ai_response:
+                        all_tasks.extend(ai_response["tasks"])
+
+                    logger.info(f"Parsed {file.filename}: {len(ai_response.get('roles', []))} roles, {len(ai_response.get('tasks', []))} tasks")
+
+                except Exception as e:
+                    logger.error(f"AI parsing failed for {file.filename}: {e}")
+                    continue
+            else:
+                # Fallback without AI
+                logger.warning("No OpenAI client available, using basic parsing")
+                fallback_result = parse_document_basic(document_text, file.filename)
+                all_roles.extend(fallback_result.get("roles", []))
+                all_milestones.extend(fallback_result.get("milestones", []))
+                all_tasks.extend(fallback_result.get("tasks", []))
+
+        # Now save all collected data to database
+        if not all_roles:
+            raise HTTPException(status_code=400, detail=f"No roles found in any of the {len(files)} uploaded documents. Please upload documents containing role and responsibility information.")
+
+        # Create ProcessRole records
+        role_map = {}
+        for role_idx, role_data in enumerate(all_roles):
+            role = ProcessRole(
+                user_id=current_user.id,
+                role_name=role_data["role_name"],
+                role_title=role_data["role_title"],
+                responsibilities=role_data.get("responsibilities"),
+                skills_required=role_data.get("skills_required", []),
+                key_activities=role_data.get("key_activities", [])
+            )
+            db.add(role)
+            db.flush()
+            role_map[role_data["role_name"]] = role.id
+
+        # Create ProcessMilestone records
+        milestone_map = {}
+        for milestone_idx, milestone_data in enumerate(all_milestones):
+            milestone = ProcessMilestone(
+                user_id=current_user.id,
+                name=milestone_data["name"],
+                description=milestone_data.get("description"),
+                sequence_order=milestone_data.get("sequence_order", milestone_idx),
+                estimated_duration=milestone_data.get("estimated_duration")
+            )
+            db.add(milestone)
+            db.flush()
+            milestone_map[milestone_data["name"]] = milestone.id
+
+        # Create ProcessTask records
+        for task_data in all_tasks:
+            milestone_id = milestone_map.get(task_data["milestone"])
+            role_id = role_map.get(task_data["role"])
+
+            if milestone_id and role_id:
+                task = ProcessTask(
+                    user_id=current_user.id,
+                    milestone_id=milestone_id,
+                    role_id=role_id,
+                    task_name=task_data["task_name"],
+                    task_description=task_data.get("task_description"),
+                    sequence_order=task_data.get("sequence_order", 0),
+                    estimated_duration=task_data.get("estimated_duration"),
+                    sla=task_data.get("sla"),
+                    sla_unit=task_data.get("sla_unit", "hours"),
+                    ai_automatable=task_data.get("ai_automatable", False),
+                    is_required=task_data.get("is_required", True)
+                )
+                db.add(task)
+
+        db.commit()
+
+        # Get created records
+        roles = db.query(ProcessRole).filter(ProcessRole.user_id == current_user.id).all()
+        milestones = db.query(ProcessMilestone).filter(ProcessMilestone.user_id == current_user.id).all()
+        tasks = db.query(ProcessTask).filter(ProcessTask.user_id == current_user.id).all()
+
+        logger.info(f"✅ Successfully parsed {len(files)} documents: {len(roles)} roles, {len(milestones)} milestones, {len(tasks)} tasks")
+
+        return {
+            "roles": [ProcessRoleResponse.from_orm(r) for r in roles],
+            "milestones": [ProcessMilestoneResponse.from_orm(m) for m in milestones],
+            "tasks": [ProcessTaskResponse.from_orm(t) for t in tasks],
+            "summary": {
+                "total_roles": len(roles),
+                "total_milestones": len(milestones),
+                "total_tasks": len(tasks),
+                "files_processed": len(files)
+            }
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Parse documents upload error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/v1/onboarding/parse-documents")
 async def parse_onboarding_documents(
     request: DocumentParseRequest,

@@ -352,6 +352,20 @@ export const processTemplatesAPI = {
 
 // Onboarding API
 export const onboardingAPI = {
+  parseDocumentsUpload: async (files) => {
+    // Upload actual files (PDFs, DOCX, etc.) to be parsed
+    const formData = new FormData();
+    for (const file of files) {
+      formData.append('files', file);
+    }
+
+    const response = await api.post('/api/v1/onboarding/parse-documents-upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    return response.data;
+  },
   parseDocuments: async (documentContent, documentName = null, documentType = null) => {
     const response = await api.post('/api/v1/onboarding/parse-documents', {
       document_content: documentContent,
