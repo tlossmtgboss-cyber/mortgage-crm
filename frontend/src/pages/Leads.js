@@ -575,6 +575,8 @@ function Leads() {
   };
 
   const handleLeadClick = (leadId) => {
+    console.log('Lead clicked:', leadId);
+
     // Mark lead as viewed
     const newViewedLeads = new Set(viewedLeads);
     newViewedLeads.add(String(leadId));
@@ -584,6 +586,7 @@ function Leads() {
     localStorage.setItem('viewedLeads', JSON.stringify([...newViewedLeads]));
 
     // Navigate to lead detail
+    console.log('Navigating to:', `/leads/${leadId}`);
     navigate(`/leads/${leadId}`);
   };
 
@@ -647,8 +650,12 @@ function Leads() {
           </thead>
           <tbody>
             {filteredLeads.map((lead) => (
-              <tr key={lead.id} className={isNewLead(lead.created_at) && isLeadUnviewed(lead.id) ? 'new-lead-row' : ''}>
-                <td className="lead-name clickable" onClick={() => handleLeadClick(lead.id)}>
+              <tr
+                key={lead.id}
+                className={isNewLead(lead.created_at) && isLeadUnviewed(lead.id) ? 'new-lead-row' : ''}
+                onClick={() => handleLeadClick(lead.id)}
+              >
+                <td className="lead-name">
                   {lead.name}
                   {isNewLead(lead.created_at) && isLeadUnviewed(lead.id) && <span className="new-lead-badge">NEW</span>}
                 </td>
