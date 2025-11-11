@@ -28,13 +28,16 @@ https://mortgage-crm-nine.vercel.app/apply
 - Comfortable Monthly Payment (PITI)
 
 ### 4. Profile
+- Date of Birth
+- Social Security Number (encrypted & secure)
 - Estimated Credit Range (760+, 740-759, 700-739, etc.)
 - First-time Buyer (Yes/No)
 - VA Eligible (Yes/No)
 - Employment Type (W2, Self-Employed, 1099, Retired)
+- Employer Name
+- Years with Employer
 - Annual Household Income
 - Liquid Assets for Closing
-- Self-Employed (Yes/No)
 
 ### 5. Co-Borrower (Optional)
 - Add Co-Borrower option
@@ -85,7 +88,8 @@ ALL form data is preserved in the lead's `user_metadata` JSON field under `buyer
 - Contact details
 - Scenario (timeline, location)
 - Budget (monthly comfort, down payment type)
-- Profile (credit range, VA status, self-employed, liquid assets)
+- Profile (credit range, VA status, self-employed, liquid assets, DOB, employer, years with employer)
+- SSN (last 4 digits only for security)
 - Co-borrower info
 - Agent/Realtor info
 - Communication preferences
@@ -141,6 +145,8 @@ https://mortgage-crm-nine.vercel.app/apply
 - ✅ Input validation
 - ✅ No authentication required (public form)
 - ✅ Consent checkboxes for credit pull and contact
+- ✅ SSN automatically formatted and only last 4 digits stored in metadata
+- ✅ All sensitive data encrypted in transit
 
 ### CRM Integration:
 - ✅ Automatic lead creation
