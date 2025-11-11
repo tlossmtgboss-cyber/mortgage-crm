@@ -931,12 +931,23 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
                 className="input-field input-md"
               >
                 <option value="">Select Role</option>
+                <option value="president">President</option>
+                <option value="regional_manager">Regional Manager</option>
+                <option value="area_manager">Area Manager</option>
+                <option value="sales_manager">Sales Manager</option>
+                <option value="team_leader">Team Leader</option>
                 <option value="loan_officer">Loan Officer</option>
-                <option value="processor">Processor</option>
-                <option value="processing_assistant">Processing Assistant</option>
-                <option value="analyst">Analyst</option>
+                <option value="executive_assistant">Executive Assistant</option>
+                <option value="production_assistant_1">Production Assistant 1</option>
+                <option value="production_assistant_2">Production Assistant 2</option>
+                <option value="application_analysis">Application Analysis</option>
                 <option value="concierge">Concierge</option>
-                <option value="admin">Admin</option>
+                <option value="processor">Processor</option>
+                <option value="processing_manager">Processing Manager</option>
+                <option value="processing_assistant">Processing Assistant</option>
+                <option value="closer">Closer</option>
+                <option value="funder">Funder</option>
+                <option value="underwriter">Underwriter</option>
               </select>
               {index > 0 && (
                 <button onClick={() => removeMember(index)} className="btn-remove">×</button>
@@ -966,8 +977,7 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
       </div>
 
       <div className="validation-requirements">
-        <p>✓ At least one Loan Officer required</p>
-        <p>✓ At least one Admin required</p>
+        <p>✓ At least one team member required</p>
         <p>✓ All emails must be unique and valid</p>
       </div>
     </div>
@@ -1097,7 +1107,7 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
   // SCREEN 3: Confirm "Who Does What, When"
   const renderProcessTree = () => {
     const currentMilestone = formData.milestones[activeMilestone];
-    const availableRoles = ['Loan Officer', 'Processor', 'Processing Assistant', 'Analyst', 'Concierge', 'Admin'];
+    const availableRoles = ['President', 'Regional Manager', 'Area Manager', 'Sales Manager', 'Team Leader', 'Loan Officer', 'Executive Assistant', 'Production Assistant 1', 'Production Assistant 2', 'Application Analysis', 'Concierge', 'Processor', 'Processing Manager', 'Processing Assistant', 'Closer', 'Funder', 'Underwriter'];
 
     // Show message if no milestones exist
     if (formData.milestones.length === 0) {
