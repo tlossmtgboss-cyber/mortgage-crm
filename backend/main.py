@@ -10258,6 +10258,71 @@ async def execute_data_import(
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================================================
+# DATA MANAGEMENT
+# ============================================================================
+
+@app.post("/api/v1/admin/clear-sample-data")
+async def clear_sample_data_endpoint(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Clear all sample/test data from the database.
+    This removes:
+    - All loans (which clears the "team members" list in settings)
+    - All leads
+    - All tasks
+    - All referral partners
+    - All MUM clients
+
+    Keeps: User accounts and company settings
+
+    ⚠️ WARNING: This action cannot be undone!
+    """
+    try:
+        # Count data before deletion
+        loans_count = db.query(Loan).count()
+        leads_count = db.query(Lead).count()
+        tasks_count = db.query(AITask).count()
+        partners_count = db.query(ReferralPartner).count()
+        mum_count = db.query(MUMClient).count()
+
+        logger.info(f"User {current_user.email} is clearing sample data")
+        logger.info(f"Deleting: {loans_count} loans, {leads_count} leads, {tasks_count} tasks, {partners_count} partners, {mum_count} MUM clients")
+
+        # Delete in order (tasks first since they reference loans)
+        deleted_tasks = db.query(AITask).delete()
+        deleted_loans = db.query(Loan).delete()
+        deleted_leads = db.query(Lead).delete()
+        deleted_partners = db.query(ReferralPartner).delete()
+        deleted_mum = db.query(MUMClient).delete()
+
+        db.commit()
+
+        logger.info("✅ Sample data cleared successfully")
+
+        return {
+            "success": True,
+            "message": "All sample data has been cleared",
+            "deleted": {
+                "tasks": deleted_tasks,
+                "loans": deleted_loans,
+                "leads": deleted_leads,
+                "referral_partners": deleted_partners,
+                "mum_clients": deleted_mum
+            },
+            "remaining": {
+                "users": db.query(User).count(),
+                "branches": db.query(Branch).count()
+            }
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to clear sample data: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to clear data: {str(e)}")
+
+# ============================================================================
 # STARTUP EVENT
 # ============================================================================
 
