@@ -1,6 +1,6 @@
 .buyer-intake-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%);
   padding: 40px 20px;
 }
 
@@ -14,7 +14,7 @@
 }
 
 .intake-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%);
   color: white;
   padding: 40px;
   text-align: center;
@@ -112,8 +112,8 @@
 .form-field select:focus,
 .form-field textarea:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: #217F8D;
+  box-shadow: 0 0 0 3px rgba(33, 127, 141, 0.1);
 }
 
 .form-field textarea {
@@ -162,13 +162,13 @@
 }
 
 .comm-btn:hover {
-  border-color: #667eea;
-  color: #667eea;
+  border-color: #217F8D;
+  color: #217F8D;
 }
 
 .comm-btn.active {
-  background: #667eea;
-  border-color: #667eea;
+  background: #217F8D;
+  border-color: #217F8D;
   color: white;
 }
 
@@ -216,7 +216,7 @@
 
 .submit-btn {
   padding: 14px 32px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #217F8D 0%, #1a6670 100%);
   color: white;
   border: none;
   border-radius: 8px;
@@ -224,12 +224,12 @@
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 4px 12px rgba(33, 127, 141, 0.3);
 }
 
 .submit-btn:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 6px 20px rgba(33, 127, 141, 0.4);
 }
 
 .submit-btn:disabled {
