@@ -13,7 +13,7 @@
 # ✅ Zapier Integration via API Keys
 # ============================================================================
 
-from fastapi import FastAPI, Depends, HTTPException, status, Request
+from fastapi import FastAPI, Depends, HTTPException, status, Request, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -1189,6 +1189,7 @@ class TaskUpdate(BaseModel):
     type: Optional[TaskType] = None
     priority: Optional[str] = None
     completed_action: Optional[str] = None
+    assigned_to_id: Optional[int] = None
 
 class TaskResponse(BaseModel):
     id: int
@@ -6592,6 +6593,19 @@ def init_db():
                         CREATE INDEX IF NOT EXISTS ix_api_keys_key ON api_keys(key);
                     """))
 
+                    # Add ProcessTask new columns if they don't exist
+                    conn.execute(text("""
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='process_tasks' AND column_name='assigned_user_id') THEN
+                                ALTER TABLE process_tasks ADD COLUMN assigned_user_id INTEGER REFERENCES users(id);
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='process_tasks' AND column_name='status') THEN
+                                ALTER TABLE process_tasks ADD COLUMN status VARCHAR DEFAULT 'pending';
+                            END IF;
+                        END $$;
+                    """))
+
                     conn.commit()
                     logger.info("✅ Schema migrations applied (PostgreSQL)")
         except Exception as e:
@@ -9088,6 +9102,274 @@ BOTTLENECKS:
     except Exception as e:
         logger.error(f"Performance Coach error: {e}")
         raise HTTPException(status_code=500, detail=f"Coach error: {str(e)}")
+
+# ============================================================================
+# DATA IMPORT ENDPOINTS
+# ============================================================================
+
+@app.post("/api/v1/data-import/analyze")
+async def analyze_data_file(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Analyze uploaded CSV/Excel file and generate AI questions"""
+    try:
+        import csv
+        import io
+        import pandas as pd
+
+        # Read file content
+        content = await file.read()
+
+        # Determine file type and parse
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(io.BytesIO(content))
+        elif file.filename.endswith(('.xlsx', '.xls')):
+            df = pd.read_excel(io.BytesIO(content))
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported file type. Please upload CSV or Excel.")
+
+        # Get preview data
+        headers = df.columns.tolist()
+        rows = df.head(100).values.tolist()
+        total_rows = len(df)
+
+        # Analyze data with AI to generate questions
+        if not openai_client:
+            # If no OpenAI, return basic questions
+            questions = [
+                {
+                    "id": "destination",
+                    "question": "Where should this data be imported?",
+                    "type": "choice",
+                    "options": [
+                        {
+                            "value": "leads",
+                            "label": "Leads",
+                            "description": "Prospect contacts who haven't started an application yet",
+                            "icon": "👤"
+                        },
+                        {
+                            "value": "loans",
+                            "label": "Active Clients (Loans)",
+                            "description": "Active loan applications in process",
+                            "icon": "📄"
+                        },
+                        {
+                            "value": "portfolio",
+                            "label": "Portfolio (MUM Clients)",
+                            "description": "Existing clients with closed loans (Client for Life Engine)",
+                            "icon": "💼"
+                        }
+                    ]
+                }
+            ]
+
+            # Generate basic suggested mappings based on column names
+            suggested_mappings = {}
+            for header in headers:
+                header_lower = header.lower()
+                if 'first' in header_lower and 'name' in header_lower:
+                    suggested_mappings[header] = 'first_name'
+                elif 'last' in header_lower and 'name' in header_lower:
+                    suggested_mappings[header] = 'last_name'
+                elif 'email' in header_lower:
+                    suggested_mappings[header] = 'email'
+                elif 'phone' in header_lower:
+                    suggested_mappings[header] = 'phone'
+                elif 'address' in header_lower:
+                    suggested_mappings[header] = 'address'
+                elif 'city' in header_lower:
+                    suggested_mappings[header] = 'city'
+                elif 'state' in header_lower:
+                    suggested_mappings[header] = 'state'
+                elif 'zip' in header_lower:
+                    suggested_mappings[header] = 'zip_code'
+                elif 'loan' in header_lower and 'amount' in header_lower:
+                    suggested_mappings[header] = 'loan_amount'
+                elif 'property' in header_lower and 'value' in header_lower:
+                    suggested_mappings[header] = 'property_value'
+        else:
+            # Use AI to analyze and generate questions
+            sample_data = df.head(5).to_dict('records')
+
+            analysis_prompt = f"""Analyze this data and help determine:
+1. What type of data is this? (leads, active loan clients, or portfolio/MUM clients)
+2. What columns should be mapped to which CRM fields?
+
+Column headers: {headers}
+Sample data (first 5 rows): {sample_data}
+
+Respond with:
+1. Your recommendation for where this data should go
+2. Any clarifying questions if the data type is ambiguous
+3. Suggested column mappings"""
+
+            response = openai_client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "You are a CRM data import assistant. Help users import their data correctly."},
+                    {"role": "user", "content": analysis_prompt}
+                ],
+                temperature=0.7,
+                max_tokens=800
+            )
+
+            ai_analysis = response.choices[0].message.content
+
+            # Generate questions (with AI recommendation)
+            questions = [
+                {
+                    "id": "destination",
+                    "question": "Where should this data be imported? AI suggests based on column analysis:",
+                    "type": "choice",
+                    "ai_recommendation": ai_analysis,
+                    "options": [
+                        {
+                            "value": "leads",
+                            "label": "Leads",
+                            "description": "Prospect contacts who haven't started an application yet",
+                            "icon": "👤"
+                        },
+                        {
+                            "value": "loans",
+                            "label": "Active Clients (Loans)",
+                            "description": "Active loan applications in process",
+                            "icon": "📄"
+                        },
+                        {
+                            "value": "portfolio",
+                            "label": "Portfolio (MUM Clients)",
+                            "description": "Existing clients with closed loans (Client for Life Engine)",
+                            "icon": "💼"
+                        }
+                    ]
+                }
+            ]
+
+            # AI-generated suggested mappings
+            suggested_mappings = {}
+            for header in headers:
+                header_lower = header.lower()
+                if 'first' in header_lower and 'name' in header_lower:
+                    suggested_mappings[header] = 'first_name'
+                elif 'last' in header_lower and 'name' in header_lower:
+                    suggested_mappings[header] = 'last_name'
+                elif 'email' in header_lower:
+                    suggested_mappings[header] = 'email'
+                elif 'phone' in header_lower:
+                    suggested_mappings[header] = 'phone'
+
+        return {
+            "preview": {
+                "headers": headers,
+                "rows": rows,
+                "total_rows": total_rows
+            },
+            "questions": questions,
+            "suggested_mappings": suggested_mappings
+        }
+
+    except Exception as e:
+        logger.error(f"File analysis error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/data-import/execute")
+async def execute_data_import(
+    file: UploadFile = File(...),
+    answers: str = Form(...),
+    mappings: str = Form(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Execute data import based on user answers and column mappings"""
+    try:
+        import json
+        import pandas as pd
+        import io
+
+        # Parse answers and mappings
+        answers_dict = json.loads(answers)
+        mappings_dict = json.loads(mappings)
+
+        destination = answers_dict.get('destination', 'leads')
+
+        # Read file content
+        content = await file.read()
+
+        # Parse file
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(io.BytesIO(content))
+        elif file.filename.endswith(('.xlsx', '.xls')):
+            df = pd.read_excel(io.BytesIO(content))
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported file type")
+
+        # Import data
+        imported = 0
+        failed = 0
+        errors = []
+
+        for index, row in df.iterrows():
+            try:
+                # Map row data to CRM fields
+                data = {}
+                for source_col, target_field in mappings_dict.items():
+                    if target_field and source_col in row:
+                        value = row[source_col]
+                        if pd.notna(value):  # Skip NaN values
+                            data[target_field] = value
+
+                # Import based on destination
+                if destination == 'leads':
+                    # Create lead
+                    lead = Lead(
+                        **data,
+                        loan_officer_id=current_user.id,
+                        status='new'
+                    )
+                    db.add(lead)
+
+                elif destination == 'loans':
+                    # Create loan
+                    loan = Loan(
+                        **data,
+                        loan_officer_id=current_user.id,
+                        stage='application'
+                    )
+                    db.add(loan)
+
+                elif destination == 'portfolio':
+                    # Create MUM client
+                    mum_client = MUMClient(
+                        **data,
+                        loan_officer_id=current_user.id
+                    )
+                    db.add(mum_client)
+
+                imported += 1
+
+            except Exception as e:
+                failed += 1
+                errors.append(f"Row {index + 1}: {str(e)}")
+
+        db.commit()
+
+        logger.info(f"Data import completed: {imported} imported, {failed} failed")
+
+        return {
+            "total": len(df),
+            "imported": imported,
+            "failed": failed,
+            "errors": errors,
+            "destination": destination
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Data import error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================================================
 # STARTUP EVENT

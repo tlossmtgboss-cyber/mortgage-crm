@@ -30,6 +30,7 @@ import GoalTracker from './pages/GoalTracker';
 import Coach from './pages/Coach';
 import ReconciliationCenter from './pages/ReconciliationCenter';
 import Settings from './pages/Settings';
+import DataUpload from './pages/DataUpload';
 import Users from './pages/Users';
 import UserProfile from './pages/UserProfile';
 import ProcessTemplates from './pages/ProcessTemplates';
@@ -548,6 +549,26 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <Settings />
+                  </main>
+                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/data-upload"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <DataUpload />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />

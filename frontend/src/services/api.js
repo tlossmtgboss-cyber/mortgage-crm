@@ -378,6 +378,18 @@ export const onboardingAPI = {
     const response = await api.get(url);
     return response.data;
   },
+  updateTask: async (taskId, data) => {
+    const response = await api.patch(`/api/v1/onboarding/tasks/${taskId}`, data);
+    return response.data;
+  },
+  bulkUpdateTasks: async (tasks) => {
+    const response = await api.patch('/api/v1/onboarding/tasks/bulk-update', tasks);
+    return response.data;
+  },
+  createTask: async (data) => {
+    const response = await api.post('/api/v1/onboarding/tasks', data);
+    return response.data;
+  },
   getProgress: async () => {
     const response = await api.get('/api/v1/onboarding/progress');
     return response.data;

@@ -1005,6 +1005,12 @@ function Settings() {
               >
                 <span>User Management</span>
               </button>
+              <button
+                className={`sidebar-btn child ${activeSection === 'data-upload' ? 'active' : ''}`}
+                onClick={() => navigate('/data-upload')}
+              >
+                <span>📊 Data Upload</span>
+              </button>
             </div>
           )}
         </div>

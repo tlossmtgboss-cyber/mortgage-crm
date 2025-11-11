@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { onboardingAPI } from '../services/api';
+import React, { useState, useEffect } from 'react';
+import { onboardingAPI, teamAPI } from '../services/api';
 import './OnboardingWizard.css';
 
 const OnboardingWizard = ({ onComplete, onSkip }) => {
@@ -13,6 +13,7 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
   const [taskEditModal, setTaskEditModal] = useState(null);
   const [roleAddModal, setRoleAddModal] = useState(false);
   const [newRoleForm, setNewRoleForm] = useState({ role_title: '', role_name: '', responsibilities: '', skills_required: [], key_activities: [] });
+  const [teamMembers, setTeamMembers] = useState([]);
   const [formData, setFormData] = useState({
     // Step 1: Upload Documents
     sopFiles: [],
@@ -61,6 +62,44 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
   });
 
   const totalSteps = 9;
+
+  // Load existing onboarding data when component mounts
+  useEffect(() => {
+    const loadExistingData = async () => {
+      try {
+        // Load existing roles, milestones, tasks, and team members if they exist
+        const [roles, milestones, tasks, members] = await Promise.all([
+          onboardingAPI.getRoles().catch(() => []),
+          onboardingAPI.getMilestones().catch(() => []),
+          onboardingAPI.getTasks().catch(() => []),
+          teamAPI.getMembers().catch(() => [])
+        ]);
+
+        if (members.length > 0) {
+          setTeamMembers(members);
+        }
+
+        if (roles.length > 0 || milestones.length > 0 || tasks.length > 0) {
+          setFormData(prevData => ({
+            ...prevData,
+            extractedRoles: roles,
+            extractedMilestones: milestones,
+            extractedTasks: tasks,
+            processTree: tasks.length > 0 ? {
+              generated: true,
+              milestones: milestones.length,
+              tasks: tasks.length,
+              roles: roles.length
+            } : null
+          }));
+        }
+      } catch (error) {
+        console.error('Error loading existing onboarding data:', error);
+      }
+    };
+
+    loadExistingData();
+  }, []);
 
   const handleNext = () => {
     if (currentStep < totalSteps) {
@@ -576,30 +615,40 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
     setTaskEditModal(null);
   };
 
-  const handleSaveTaskEdit = () => {
+  const handleSaveTaskEdit = async () => {
     if (!taskEditModal) return;
 
-    setFormData(prevData => {
-      const newTasks = prevData.extractedTasks.map(task => {
-        if (task.id === taskEditModal.id) {
-          return {
-            ...task,
-            task_name: taskEditModal.task_name,
-            task_description: taskEditModal.task_description,
-            role_id: taskEditModal.tempRoleId,
-            assigned_user_id: taskEditModal.tempUserId,
-            sla: taskEditModal.sla,
-            sla_unit: taskEditModal.sla_unit,
-            ai_automatable: taskEditModal.ai_automatable
-          };
-        }
-        return task;
+    try {
+      // Save to backend
+      const updateData = {
+        task_name: taskEditModal.task_name,
+        task_description: taskEditModal.task_description,
+        role_id: taskEditModal.tempRoleId || taskEditModal.role_id,
+        assigned_user_id: taskEditModal.tempUserId || taskEditModal.assigned_user_id,
+        sla: taskEditModal.sla,
+        sla_unit: taskEditModal.sla_unit,
+        ai_automatable: taskEditModal.ai_automatable
+      };
+
+      const updatedTask = await onboardingAPI.updateTask(taskEditModal.id, updateData);
+
+      // Update local state with the saved task
+      setFormData(prevData => {
+        const newTasks = prevData.extractedTasks.map(task => {
+          if (task.id === taskEditModal.id) {
+            return updatedTask;
+          }
+          return task;
+        });
+
+        return { ...prevData, extractedTasks: newTasks };
       });
 
-      return { ...prevData, extractedTasks: newTasks };
-    });
-
-    setTaskEditModal(null);
+      setTaskEditModal(null);
+    } catch (error) {
+      console.error('Failed to save task:', error);
+      alert('Failed to save task changes. Please try again.');
+    }
   };
 
   const handleUpdateTaskEditField = (field, value) => {
@@ -767,7 +816,7 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
               <div className="tasks-grid">
                 {tasks.map((task, index) => {
                   const milestone = formData.extractedMilestones?.find(m => m.id === task.milestone_id);
-                  const assignedUser = formData.members?.find(m => m.email === task.assigned_user_id);
+                  const assignedUser = teamMembers?.find(m => m.id === task.assigned_user_id);
 
                   return (
                     <div
@@ -789,7 +838,7 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
                           <span className="meta-badge milestone-badge">📍 {milestone.name}</span>
                         )}
                         {assignedUser && (
-                          <span className="meta-badge user-badge">👤 {assignedUser.firstName} {assignedUser.lastName}</span>
+                          <span className="meta-badge user-badge">👤 {assignedUser.full_name || assignedUser.email}</span>
                         )}
                         {task.estimated_duration && (
                           <span className="meta-badge time-badge">⏱️ {task.estimated_duration} min</span>
@@ -2143,12 +2192,12 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
                 <select
                   className="input-field"
                   value={taskEditModal.tempUserId || ''}
-                  onChange={(e) => handleUpdateTaskEditField('tempUserId', e.target.value)}
+                  onChange={(e) => handleUpdateTaskEditField('tempUserId', e.target.value ? parseInt(e.target.value) : null)}
                 >
                   <option value="">Select User</option>
-                  {formData.members?.filter(m => m.email).map((member, idx) => (
-                    <option key={idx} value={member.email}>
-                      {member.firstName} {member.lastName} ({member.role})
+                  {teamMembers.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {member.full_name || member.email}
                     </option>
                   ))}
                 </select>
