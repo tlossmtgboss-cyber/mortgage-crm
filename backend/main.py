@@ -9331,25 +9331,68 @@ async def execute_data_import(
 
                 # Import based on destination
                 if destination == 'leads':
-                    # Create lead
+                    # Create lead - ensure name field exists
+                    if 'name' not in data and ('first_name' in data or 'last_name' in data):
+                        first = data.pop('first_name', '')
+                        last = data.pop('last_name', '')
+                        data['name'] = f"{first} {last}".strip()
+
                     lead = Lead(
                         **data,
-                        loan_officer_id=current_user.id,
-                        status='new'
+                        owner_id=current_user.id,
+                        stage=LeadStage.NEW
                     )
                     db.add(lead)
 
                 elif destination == 'loans':
-                    # Create loan
+                    # Create loan - ensure required fields exist
+                    if 'borrower_name' not in data and 'name' in data:
+                        data['borrower_name'] = data.pop('name')
+                    if 'borrower_name' not in data and ('first_name' in data or 'last_name' in data):
+                        first = data.pop('first_name', '')
+                        last = data.pop('last_name', '')
+                        data['borrower_name'] = f"{first} {last}".strip()
+
+                    # Generate loan number if not provided
+                    if 'loan_number' not in data:
+                        import secrets
+                        data['loan_number'] = f"LOAN-{secrets.token_hex(4).upper()}"
+
+                    # Map common field variations
+                    if 'loan_amount' in data and 'amount' not in data:
+                        data['amount'] = data.pop('loan_amount')
+                    if 'interest_rate' in data and 'rate' not in data:
+                        data['rate'] = data.pop('interest_rate')
+                    if 'loan_term' in data and 'term' not in data:
+                        data['term'] = data.pop('loan_term')
+
                     loan = Loan(
                         **data,
                         loan_officer_id=current_user.id,
-                        stage='application'
+                        stage=LoanStage.DISCLOSED
                     )
                     db.add(loan)
 
                 elif destination == 'portfolio':
-                    # Create MUM client
+                    # Create MUM client - ensure required fields exist
+                    if 'borrower_name' not in data and 'name' in data:
+                        data['borrower_name'] = data.pop('name')
+                    if 'borrower_name' not in data and ('first_name' in data or 'last_name' in data):
+                        first = data.pop('first_name', '')
+                        last = data.pop('last_name', '')
+                        data['borrower_name'] = f"{first} {last}".strip()
+
+                    # Generate loan number if not provided
+                    if 'loan_number' not in data:
+                        import secrets
+                        data['loan_number'] = f"MUM-{secrets.token_hex(4).upper()}"
+
+                    # Map common field variations
+                    if 'loan_amount' in data and 'original_loan_amount' not in data:
+                        data['original_loan_amount'] = data.pop('loan_amount')
+                    if 'interest_rate' in data and 'current_rate' not in data:
+                        data['current_rate'] = data.pop('interest_rate')
+
                     mum_client = MUMClient(
                         **data,
                         loan_officer_id=current_user.id
