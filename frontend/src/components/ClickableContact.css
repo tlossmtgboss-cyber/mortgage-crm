@@ -52,3 +52,47 @@
   color: #999;
   font-style: italic;
 }
+
+/* Phone with action buttons */
+.phone-with-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.phone-number {
+  color: #333;
+  font-weight: 500;
+}
+
+.phone-action-buttons {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.phone-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: #f0f0f0;
+  text-decoration: none;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.phone-action-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.phone-action-btn.call-btn:hover {
+  background: #dcfce7;
+}
+
+.phone-action-btn.sms-btn:hover {
+  background: #dbeafe;
+}

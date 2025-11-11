@@ -397,6 +397,9 @@ function LeadDetail() {
 
   const handleAction = async (action) => {
     switch(action) {
+      case 'call':
+        window.open(`tel:${lead.phone}`, '_self');
+        break;
       case 'sms':
         window.open(`sms:${lead.phone}`, '_blank');
         break;
@@ -1079,19 +1082,22 @@ function LeadDetail() {
             <h3>Quick Actions</h3>
             <div className="action-buttons">
               <button
+                className="action-btn call"
+                onClick={() => handleAction('call')}
+                disabled={!lead.phone}
+                title="Click to call using your phone"
+              >
+                <span className="icon">📞</span>
+                <span>Call</span>
+              </button>
+              <button
                 className="action-btn sms"
                 onClick={() => handleAction('sms')}
                 disabled={!lead.phone}
+                title="Send SMS using your phone"
               >
                 <span className="icon">💬</span>
                 <span>SMS Text</span>
-              </button>
-              <button
-                className="action-btn task"
-                onClick={() => handleAction('task')}
-              >
-                <span className="icon">✓</span>
-                <span>Create Task</span>
               </button>
               <button
                 className="action-btn email"
@@ -1100,6 +1106,13 @@ function LeadDetail() {
               >
                 <span className="icon">✉️</span>
                 <span>Send Email</span>
+              </button>
+              <button
+                className="action-btn task"
+                onClick={() => handleAction('task')}
+              >
+                <span className="icon">✓</span>
+                <span>Create Task</span>
               </button>
               <button
                 className="action-btn calendar"

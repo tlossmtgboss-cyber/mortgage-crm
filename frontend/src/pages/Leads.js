@@ -660,7 +660,7 @@ function Leads() {
                   {isNewLead(lead.created_at) && isLeadUnviewed(lead.id) && <span className="new-lead-badge">NEW</span>}
                 </td>
                 <td><ClickableEmail email={lead.email} /></td>
-                <td><ClickablePhone phone={lead.phone} /></td>
+                <td><ClickablePhone phone={lead.phone} showActions={true} /></td>
                 <td>
                   <span className={`status-badge status-${getStatusColor(lead.stage)}`}>
                     {lead.stage}
