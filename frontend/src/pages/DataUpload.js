@@ -217,7 +217,7 @@ function DataUpload() {
           ← Back to Settings
         </button>
         <div>
-          <h1>Data Upload</h1>
+          <h1>Data Management</h1>
           <p>Upload CSV or Excel files to import data into your CRM</p>
         </div>
       </div>
