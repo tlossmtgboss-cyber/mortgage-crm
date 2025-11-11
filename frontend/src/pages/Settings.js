@@ -48,6 +48,10 @@ function Settings() {
   const [availableRoles, setAvailableRoles] = useState([]);
   const [loadingTeam, setLoadingTeam] = useState(false);
 
+  // Calendly integration state
+  const [calendlyApiKey, setCalendlyApiKey] = useState('');
+  const [showCalendlyModal, setShowCalendlyModal] = useState(false);
+
   const toggleSection = (section) => {
     setExpandedSections({
       ...expandedSections,
@@ -86,18 +90,63 @@ function Settings() {
     { value: 'lost', label: 'Lost' }
   ];
 
+  const connectCalendly = () => {
+    setShowCalendlyModal(true);
+  };
+
+  const saveCalendlyConnection = async () => {
+    if (!calendlyApiKey.trim()) {
+      alert('Please enter your Calendly API key');
+      return;
+    }
+
+    setLoadingCalendly(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/calendly/connect`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ api_key: calendlyApiKey })
+      });
+
+      if (response.ok) {
+        alert('Calendly connected successfully!');
+        setShowCalendlyModal(false);
+        setCalendlyApiKey('');
+        await fetchCalendlyEventTypes();
+      } else {
+        const error = await response.json();
+        alert(`Failed to connect Calendly: ${error.detail || 'Please check your API key'}`);
+      }
+    } catch (error) {
+      console.error('Error connecting Calendly:', error);
+      alert('Error connecting to Calendly');
+    } finally {
+      setLoadingCalendly(false);
+    }
+  };
+
   const fetchCalendlyEventTypes = async () => {
     setLoadingCalendly(true);
     try {
-      const response = await fetch('/api/v1/calendly/event-types', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/calendly/event-types`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
-      const data = await response.json();
-      setCalendlyEventTypes(data.event_types || []);
+
+      if (response.ok) {
+        const data = await response.json();
+        setCalendlyEventTypes(data.event_types || []);
+      } else {
+        console.error('Failed to fetch event types');
+        setCalendlyEventTypes([]);
+      }
     } catch (error) {
       console.error('Error fetching Calendly event types:', error);
+      setCalendlyEventTypes([]);
     } finally {
       setLoadingCalendly(false);
     }
@@ -105,7 +154,7 @@ function Settings() {
 
   const fetchCalendarMappings = async () => {
     try {
-      const response = await fetch('/api/v1/calendly/calendar-mappings', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/calendly/calendar-mappings`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -219,7 +268,7 @@ function Settings() {
     }
 
     try {
-      const response = await fetch('/api/v1/calendly/calendar-mappings', {
+      const response = await fetch(`${API_BASE_URL}/api/v1/calendly/calendar-mappings`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -1606,6 +1655,50 @@ function Settings() {
                 Map each lead stage to a specific Calendly event type for automatic AI scheduling
               </p>
 
+              {/* Calendly Connection Status */}
+              <div className="calendly-connection-card">
+                <div className="connection-header">
+                  <div className="connection-icon" style={{background: '#006bff'}}>
+                    🗓️
+                  </div>
+                  <div className="connection-info">
+                    <h3>Calendly Integration</h3>
+                    <p>Connect your Calendly account to sync event types</p>
+                  </div>
+                  <div className="connection-status">
+                    {calendlyEventTypes.length > 0 ? (
+                      <span className="status-badge connected">✓ Connected</span>
+                    ) : (
+                      <span className="status-badge disconnected">Not Connected</span>
+                    )}
+                  </div>
+                </div>
+                <div className="connection-actions">
+                  {calendlyEventTypes.length > 0 ? (
+                    <>
+                      <button
+                        className="btn-refresh"
+                        onClick={fetchCalendlyEventTypes}
+                        disabled={loadingCalendly}
+                      >
+                        {loadingCalendly ? 'Refreshing...' : '🔄 Refresh Event Types'}
+                      </button>
+                      <span className="connection-detail">
+                        {calendlyEventTypes.length} event types loaded
+                      </span>
+                    </>
+                  ) : (
+                    <button
+                      className="btn-connect-calendly"
+                      onClick={connectCalendly}
+                      disabled={loadingCalendly}
+                    >
+                      {loadingCalendly ? 'Connecting...' : 'Connect Calendly'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
               {/* Explanation Card */}
               <div className="info-card">
                 <div className="info-icon">🤖</div>
@@ -1907,6 +2000,52 @@ function Settings() {
           )}
         </div>
       </div>
+
+      {/* Calendly Connection Modal */}
+      {showCalendlyModal && (
+        <div className="connection-modal-overlay" onClick={() => setShowCalendlyModal(false)}>
+          <div className="connection-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="btn-close-modal" onClick={() => setShowCalendlyModal(false)}>×</button>
+            <div className="modal-header">
+              <span className="modal-icon">🗓️</span>
+              <h3>Connect Calendly</h3>
+              <p className="modal-description">Enter your Calendly API key to sync event types</p>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label>Calendly API Key</label>
+                <input
+                  type="password"
+                  className="form-input"
+                  placeholder="Enter your Calendly API key"
+                  value={calendlyApiKey}
+                  onChange={(e) => setCalendlyApiKey(e.target.value)}
+                />
+              </div>
+              <div className="help-text">
+                <h4>How to get your API key:</h4>
+                <ol>
+                  <li>Go to <a href="https://calendly.com/integrations/api_webhooks" target="_blank" rel="noopener noreferrer">Calendly Integrations</a></li>
+                  <li>Click "Generate New Token"</li>
+                  <li>Copy the token and paste it above</li>
+                </ol>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn-secondary" onClick={() => setShowCalendlyModal(false)}>
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                onClick={saveCalendlyConnection}
+                disabled={!calendlyApiKey.trim()}
+              >
+                Connect
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

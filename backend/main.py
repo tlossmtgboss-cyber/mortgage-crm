@@ -637,6 +637,15 @@ class SalesforceToken(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
+class CalendlyConnection(Base):
+    """Stores Calendly API key for a user"""
+    __tablename__ = "calendly_connections"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True)
+    api_key = Column(Text)  # Encrypted API key
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
 class CalendarMapping(Base):
     """Maps lead stages to Calendly event types for automatic scheduling"""
     __tablename__ = "calendar_mappings"
@@ -7562,6 +7571,103 @@ async def calendly_webhook(request: Request, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Calendly webhook error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/calendly/connect")
+async def connect_calendly(
+    request: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Save Calendly API key for the current user
+    """
+    api_key = request.get("api_key")
+
+    if not api_key:
+        raise HTTPException(status_code=400, detail="api_key is required")
+
+    # Check if connection already exists
+    existing = db.query(CalendlyConnection).filter(
+        CalendlyConnection.user_id == current_user.id
+    ).first()
+
+    if existing:
+        # Update existing connection
+        existing.api_key = api_key
+        existing.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        return {"message": "Calendly connection updated", "status": "connected"}
+    else:
+        # Create new connection
+        connection = CalendlyConnection(
+            user_id=current_user.id,
+            api_key=api_key
+        )
+        db.add(connection)
+        db.commit()
+        return {"message": "Calendly connected successfully", "status": "connected"}
+
+
+@app.get("/api/v1/calendly/event-types")
+async def get_calendly_event_types(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Fetch Calendly event types using the stored API key
+    """
+    # Get user's Calendly connection
+    connection = db.query(CalendlyConnection).filter(
+        CalendlyConnection.user_id == current_user.id
+    ).first()
+
+    if not connection:
+        raise HTTPException(status_code=404, detail="Calendly not connected. Please connect your Calendly account first.")
+
+    try:
+        # Get user info from Calendly to get the user URI
+        user_response = requests.get(
+            "https://api.calendly.com/users/me",
+            headers={
+                "Authorization": f"Bearer {connection.api_key}",
+                "Content-Type": "application/json"
+            }
+        )
+
+        if user_response.status_code != 200:
+            raise HTTPException(status_code=401, detail="Invalid Calendly API key")
+
+        user_data = user_response.json()
+        user_uri = user_data.get("resource", {}).get("uri")
+
+        if not user_uri:
+            raise HTTPException(status_code=500, detail="Could not get user URI from Calendly")
+
+        # Fetch event types
+        event_types_response = requests.get(
+            "https://api.calendly.com/event_types",
+            headers={
+                "Authorization": f"Bearer {connection.api_key}",
+                "Content-Type": "application/json"
+            },
+            params={
+                "user": user_uri,
+                "active": "true"
+            }
+        )
+
+        if event_types_response.status_code != 200:
+            raise HTTPException(status_code=500, detail="Failed to fetch event types from Calendly")
+
+        event_types_data = event_types_response.json()
+        event_types = event_types_data.get("collection", [])
+
+        return {"event_types": event_types, "count": len(event_types)}
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Calendly API error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to connect to Calendly API")
 
 
 @app.post("/api/v1/calendly/calendar-mappings")
