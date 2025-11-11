@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { analyticsAPI } from '../services/api';
+import GoalTracker from './GoalTracker';
 import './Scorecard.css';
 
 function Scorecard() {
+  const [activeTab, setActiveTab] = useState('scorecard');
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
   const [period, setPeriod] = useState({ start: null, end: null });
@@ -128,6 +130,26 @@ function Scorecard() {
           {formatDate(period.start_date)} | LO Scorecard
         </div>
       </div>
+
+      {/* Tab Navigation */}
+      <div className="scorecard-tabs">
+        <button
+          className={`tab-button ${activeTab === 'scorecard' ? 'active' : ''}`}
+          onClick={() => setActiveTab('scorecard')}
+        >
+          Scorecard Report
+        </button>
+        <button
+          className={`tab-button ${activeTab === 'goal-tracker' ? 'active' : ''}`}
+          onClick={() => setActiveTab('goal-tracker')}
+        >
+          Goal Tracker
+        </button>
+      </div>
+
+      {/* Conditional Tab Content */}
+      {activeTab === 'scorecard' ? (
+        <div className="scorecard-content">
 
       {/* TOP ROW: Loan Starts (left) and Conversion Upswing (right) */}
       <div className="scorecard-top-row">
@@ -342,6 +364,10 @@ function Scorecard() {
         <small>Last updated: {new Date(data.generated_at).toLocaleString()}</small>
         <small>Auto-refreshes every 60 seconds</small>
       </div>
+        </div>
+      ) : (
+        <GoalTracker />
+      )}
     </div>
   );
 }
