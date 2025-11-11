@@ -543,6 +543,14 @@ function Leads() {
     return colors[status] || 'gray';
   };
 
+  const isNewLead = (createdAt) => {
+    if (!createdAt) return false;
+    const leadDate = new Date(createdAt);
+    const now = new Date();
+    const hoursDiff = (now - leadDate) / (1000 * 60 * 60);
+    return hoursDiff <= 48; // Lead is "new" if created within last 48 hours
+  };
+
   if (loading) {
     return <div className="loading">Loading leads...</div>;
   }
@@ -588,9 +596,10 @@ function Leads() {
           </thead>
           <tbody>
             {filteredLeads.map((lead) => (
-              <tr key={lead.id}>
+              <tr key={lead.id} className={isNewLead(lead.created_at) ? 'new-lead-row' : ''}>
                 <td className="lead-name clickable" onClick={() => navigate(`/leads/${lead.id}`)}>
                   {lead.name}
+                  {isNewLead(lead.created_at) && <span className="new-lead-badge">NEW</span>}
                 </td>
                 <td><ClickableEmail email={lead.email} /></td>
                 <td><ClickablePhone phone={lead.phone} /></td>

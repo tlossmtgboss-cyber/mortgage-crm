@@ -82,6 +82,13 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
         </div>
 
         <div className="nav-actions">
+          <Link
+            to="/apply"
+            className={`nav-link application-link ${isActive('/apply') ? 'active' : ''}`}
+            title="Buyer Application"
+          >
+            📝 Application
+          </Link>
           <button
             className={`nav-link coach-link ${coachOpen ? 'active' : ''}`}
             onClick={onToggleCoach}
