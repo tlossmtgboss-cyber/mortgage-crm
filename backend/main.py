@@ -358,9 +358,13 @@ class ReferralPartner(Base):
     loyalty_tier = Column(String, default="bronze")
     last_interaction = Column(DateTime)
     notes = Column(Text)
-    partner_category = Column(String, default="individual")
+    partner_category = Column(String, default="individual")  # "individual" or "team"
+    parent_team_id = Column(Integer, ForeignKey("referral_partners.id"), nullable=True)  # Links agent to their team
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    # Relationships
     leads = relationship("Lead", back_populates="referral_partner")
+    team_members = relationship("ReferralPartner", backref="parent_team", remote_side=[id])  # Self-referential for team hierarchy
 
 class MUMClient(Base):
     __tablename__ = "mum_clients"
@@ -1288,7 +1292,8 @@ class ReferralPartnerCreate(BaseModel):
     type: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
-    partner_category: Optional[str] = "individual"
+    partner_category: Optional[str] = "individual"  # "individual" or "team"
+    parent_team_id: Optional[int] = None  # ID of parent team (if this is a team member)
 
 class ReferralPartnerUpdate(BaseModel):
     name: Optional[str] = None
@@ -1307,6 +1312,8 @@ class ReferralPartnerResponse(BaseModel):
     volume: float
     loyalty_tier: str
     partner_category: Optional[str] = "individual"
+    parent_team_id: Optional[int] = None
+    member_count: Optional[int] = 0  # Number of team members (for teams)
     created_at: datetime
     class Config:
         from_attributes = True
@@ -5123,7 +5130,35 @@ async def create_referral_partner(partner: ReferralPartnerCreate, db: Session = 
 @app.get("/api/v1/referral-partners/", response_model=List[ReferralPartnerResponse])
 async def get_referral_partners(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     partners = db.query(ReferralPartner).order_by(ReferralPartner.created_at.desc()).offset(skip).limit(limit).all()
-    return partners
+
+    # Add member_count for teams
+    result = []
+    for partner in partners:
+        partner_dict = {
+            "id": partner.id,
+            "name": partner.name,
+            "company": partner.company,
+            "type": partner.type,
+            "referrals_in": partner.referrals_in,
+            "closed_loans": partner.closed_loans,
+            "volume": partner.volume,
+            "loyalty_tier": partner.loyalty_tier,
+            "partner_category": partner.partner_category,
+            "parent_team_id": partner.parent_team_id,
+            "created_at": partner.created_at,
+            "member_count": 0
+        }
+
+        # If this is a team, count its members
+        if partner.partner_category == "team":
+            member_count = db.query(ReferralPartner).filter(
+                ReferralPartner.parent_team_id == partner.id
+            ).count()
+            partner_dict["member_count"] = member_count
+
+        result.append(partner_dict)
+
+    return result
 
 @app.get("/api/v1/referral-partners/{partner_id}", response_model=ReferralPartnerResponse)
 async def get_referral_partner(partner_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -5131,6 +5166,44 @@ async def get_referral_partner(partner_id: int, db: Session = Depends(get_db), c
     if not partner:
         raise HTTPException(status_code=404, detail="Referral partner not found")
     return partner
+
+@app.get("/api/v1/referral-partners/{team_id}/members", response_model=List[ReferralPartnerResponse])
+async def get_team_members(team_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """
+    Get all members of a team.
+    Only works if the partner is a team (partner_category='team')
+    """
+    # Verify the team exists and is actually a team
+    team = db.query(ReferralPartner).filter(ReferralPartner.id == team_id).first()
+    if not team:
+        raise HTTPException(status_code=404, detail="Team not found")
+
+    if team.partner_category != "team":
+        raise HTTPException(status_code=400, detail="This partner is not a team")
+
+    # Get all members
+    members = db.query(ReferralPartner).filter(
+        ReferralPartner.parent_team_id == team_id
+    ).order_by(ReferralPartner.name).all()
+
+    result = []
+    for member in members:
+        result.append({
+            "id": member.id,
+            "name": member.name,
+            "company": member.company,
+            "type": member.type,
+            "referrals_in": member.referrals_in,
+            "closed_loans": member.closed_loans,
+            "volume": member.volume,
+            "loyalty_tier": member.loyalty_tier,
+            "partner_category": member.partner_category,
+            "parent_team_id": member.parent_team_id,
+            "created_at": member.created_at,
+            "member_count": 0
+        })
+
+    return result
 
 @app.patch("/api/v1/referral-partners/{partner_id}", response_model=ReferralPartnerResponse)
 async def update_referral_partner(partner_id: int, partner_update: ReferralPartnerUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
