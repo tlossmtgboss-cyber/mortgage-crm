@@ -7690,12 +7690,15 @@ async def get_calendly_event_types(
     if not connection:
         raise HTTPException(status_code=404, detail="Calendly not connected. Please connect your Calendly account first.")
 
+    # Clean the API key (strip whitespace and newlines)
+    api_key = connection.api_key.strip().replace('\n', '').replace('\r', '')
+
     try:
         # Get user info from Calendly to get the user URI
         user_response = requests.get(
             "https://api.calendly.com/users/me",
             headers={
-                "Authorization": f"Bearer {connection.api_key}",
+                "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json"
             }
         )
@@ -7713,7 +7716,7 @@ async def get_calendly_event_types(
         event_types_response = requests.get(
             "https://api.calendly.com/event_types",
             headers={
-                "Authorization": f"Bearer {connection.api_key}",
+                "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json"
             },
             params={
