@@ -95,6 +95,15 @@ function ReferralPartnerDetail() {
       disqualified: 'Do Not Qualify'
     };
 
+    // Map category to appropriate stage
+    const categoryToStageMap = {
+      leads: 'New',
+      active: 'Application',
+      closed: 'Completed',
+      nurtured: 'Prospect',
+      disqualified: 'Does Not Qualify'
+    };
+
     const confirmed = window.confirm(
       `Add ${lead.name} to ${partner.name}'s ${categoryNames[searchCategory]}?`
     );
@@ -102,9 +111,10 @@ function ReferralPartnerDetail() {
     if (!confirmed) return;
 
     try {
-      // Update the lead with the referral partner ID
+      // Update the lead with the referral partner ID AND stage
       await leadsAPI.update(lead.id, {
-        referral_partner_id: parseInt(id)
+        referral_partner_id: parseInt(id),
+        stage: categoryToStageMap[searchCategory]
       });
 
       // Close modal and refresh data
@@ -115,7 +125,7 @@ function ReferralPartnerDetail() {
       // Reload partner data to show the newly assigned lead
       await loadPartnerData();
 
-      alert(`${lead.name} has been added to ${partner.name}'s referrals!`);
+      alert(`${lead.name} has been added to ${partner.name}'s ${categoryNames[searchCategory]}!`);
     } catch (error) {
       console.error('Failed to assign lead:', error);
       alert('Failed to assign lead to partner. Please try again.');
