@@ -9,6 +9,7 @@ function ReferralPartners() {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [filterStatus, setFilterStatus] = useState('all');
+  const [partnerCategory, setPartnerCategory] = useState('individual'); // 'individual' or 'team'
 
   useEffect(() => {
     loadPartners();
@@ -60,9 +61,17 @@ function ReferralPartners() {
 
   // Ensure partners is always an array before filtering
   const safePartners = Array.isArray(partners) ? partners : [];
+
+  // Filter by category first (individual vs team)
+  const categoryFiltered = safePartners.filter(p => {
+    const category = p.partner_category || 'individual'; // Default to individual if not set
+    return category === partnerCategory;
+  });
+
+  // Then filter by status
   const filteredPartners = filterStatus === 'all'
-    ? safePartners
-    : safePartners.filter(p => p.status === filterStatus);
+    ? categoryFiltered
+    : categoryFiltered.filter(p => p.status === filterStatus);
 
   const getTierBadgeClass = (tier) => {
     const tierMap = {
@@ -85,24 +94,46 @@ function ReferralPartners() {
         </button>
       </div>
 
+      {/* Category Toggle */}
+      <div className="category-toggle">
+        <button
+          className={`category-toggle-btn ${partnerCategory === 'individual' ? 'active' : ''}`}
+          onClick={() => setPartnerCategory('individual')}
+        >
+          👤 Individual Partners
+          <span className="category-count">
+            ({safePartners.filter(p => (p.partner_category || 'individual') === 'individual').length})
+          </span>
+        </button>
+        <button
+          className={`category-toggle-btn ${partnerCategory === 'team' ? 'active' : ''}`}
+          onClick={() => setPartnerCategory('team')}
+        >
+          👥 Team Partners
+          <span className="category-count">
+            ({safePartners.filter(p => p.partner_category === 'team').length})
+          </span>
+        </button>
+      </div>
+
       <div className="filter-bar">
         <button
           className={filterStatus === 'all' ? 'active' : ''}
           onClick={() => setFilterStatus('all')}
         >
-          All ({safePartners.length})
+          All ({categoryFiltered.length})
         </button>
         <button
           className={filterStatus === 'active' ? 'active' : ''}
           onClick={() => setFilterStatus('active')}
         >
-          Active ({safePartners.filter(p => p.status === 'active').length})
+          Active ({categoryFiltered.filter(p => p.status === 'active').length})
         </button>
         <button
           className={filterStatus === 'inactive' ? 'active' : ''}
           onClick={() => setFilterStatus('inactive')}
         >
-          Inactive ({safePartners.filter(p => p.status === 'inactive').length})
+          Inactive ({categoryFiltered.filter(p => p.status === 'inactive').length})
         </button>
       </div>
 
@@ -176,19 +207,21 @@ function ReferralPartners() {
         <AddPartnerModal
           onClose={() => setShowAddModal(false)}
           onAdd={handleAddPartner}
+          defaultCategory={partnerCategory}
         />
       )}
     </div>
   );
 }
 
-function AddPartnerModal({ onClose, onAdd }) {
+function AddPartnerModal({ onClose, onAdd, defaultCategory }) {
   const [formData, setFormData] = useState({
     name: '',
     company: '',
     type: '',
     phone: '',
     email: '',
+    partner_category: defaultCategory || 'individual',
   });
 
   const handleSubmit = (e) => {
@@ -232,6 +265,31 @@ function AddPartnerModal({ onClose, onAdd }) {
               <option value="Attorney">Attorney</option>
               <option value="Other">Other</option>
             </select>
+          </div>
+          <div className="form-group">
+            <label>Partner Category</label>
+            <div className="radio-group">
+              <label className="radio-label">
+                <input
+                  type="radio"
+                  name="partner_category"
+                  value="individual"
+                  checked={formData.partner_category === 'individual'}
+                  onChange={(e) => setFormData({ ...formData, partner_category: e.target.value })}
+                />
+                <span>👤 Individual Partner</span>
+              </label>
+              <label className="radio-label">
+                <input
+                  type="radio"
+                  name="partner_category"
+                  value="team"
+                  checked={formData.partner_category === 'team'}
+                  onChange={(e) => setFormData({ ...formData, partner_category: e.target.value })}
+                />
+                <span>👥 Team Partner</span>
+              </label>
+            </div>
           </div>
           <div className="form-group">
             <label>Email</label>
