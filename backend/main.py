@@ -10290,10 +10290,21 @@ async def clear_sample_data_endpoint(
         logger.info(f"User {current_user.email} is clearing sample data")
         logger.info(f"Deleting: {loans_count} loans, {leads_count} leads, {tasks_count} tasks, {partners_count} partners, {mum_count} MUM clients")
 
-        # Delete in order (tasks first since they reference loans)
+        # Delete in order (dependencies first):
+        # 1. Activities and Conversations (reference leads/loans)
+        deleted_activities = db.query(Activity).delete()
+        deleted_conversations = db.query(Conversation).delete()
+
+        # 2. Tasks (reference loans)
         deleted_tasks = db.query(AITask).delete()
+
+        # 3. Loans (no dependencies on them now)
         deleted_loans = db.query(Loan).delete()
+
+        # 4. Leads (no dependencies on them now)
         deleted_leads = db.query(Lead).delete()
+
+        # 5. Referral partners and MUM clients (independent)
         deleted_partners = db.query(ReferralPartner).delete()
         deleted_mum = db.query(MUMClient).delete()
 
@@ -10305,6 +10316,8 @@ async def clear_sample_data_endpoint(
             "success": True,
             "message": "All sample data has been cleared",
             "deleted": {
+                "activities": deleted_activities,
+                "conversations": deleted_conversations,
                 "tasks": deleted_tasks,
                 "loans": deleted_loans,
                 "leads": deleted_leads,
