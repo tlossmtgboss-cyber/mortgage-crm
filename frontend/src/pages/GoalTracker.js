@@ -386,9 +386,6 @@ function GoalTracker() {
   return (
     <div className="goal-tracker-page">
       <div className="page-header">
-        <h1>📊 High Trust Business Plan</h1>
-        <p className="plan-subtitle">Set your goals and see exactly what activities you need to hit them</p>
-
         {/* Action Buttons */}
         <div className="action-buttons">
           <button className="btn-primary" onClick={saveSnapshot}>
