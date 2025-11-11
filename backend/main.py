@@ -9312,7 +9312,18 @@ async def analyze_data_file(
     try:
         import csv
         import io
-        import pandas as pd
+
+        # Import dependencies with error handling
+        try:
+            import pandas as pd
+            import openpyxl  # Explicitly import openpyxl
+            logger.info(f"pandas version: {pd.__version__}, openpyxl version: {openpyxl.__version__}")
+        except ImportError as e:
+            logger.error(f"Failed to import required library: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail="Server configuration error: Missing required data processing libraries. Please contact support."
+            )
 
         logger.info(f"Starting file analysis for: {file.filename}")
 
@@ -9503,6 +9514,7 @@ async def execute_data_import(
     try:
         import json
         import pandas as pd
+        import openpyxl  # Explicitly import openpyxl
         import io
 
         # Parse answers and mappings
