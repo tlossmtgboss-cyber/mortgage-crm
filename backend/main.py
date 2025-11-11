@@ -9862,7 +9862,7 @@ async def analyze_data_file(
                         },
                         {
                             "value": "loans",
-                            "label": "Active Clients (Loans)",
+                            "label": "Active Loans",
                             "description": "Active loan applications in process",
                             "icon": "📄"
                         },
@@ -9871,6 +9871,18 @@ async def analyze_data_file(
                             "label": "Portfolio (MUM Clients)",
                             "description": "Existing clients with closed loans (Client for Life Engine)",
                             "icon": "💼"
+                        },
+                        {
+                            "value": "realtors",
+                            "label": "Realtors / Referral Partners",
+                            "description": "Real estate agents, lenders, and other referral sources",
+                            "icon": "🤝"
+                        },
+                        {
+                            "value": "team_members",
+                            "label": "Team Members",
+                            "description": "Loan officers and staff members",
+                            "icon": "👥"
                         }
                     ]
                 }
@@ -9944,7 +9956,7 @@ Respond with:
                         },
                         {
                             "value": "loans",
-                            "label": "Active Clients (Loans)",
+                            "label": "Active Loans",
                             "description": "Active loan applications in process",
                             "icon": "📄"
                         },
@@ -9953,6 +9965,18 @@ Respond with:
                             "label": "Portfolio (MUM Clients)",
                             "description": "Existing clients with closed loans (Client for Life Engine)",
                             "icon": "💼"
+                        },
+                        {
+                            "value": "realtors",
+                            "label": "Realtors / Referral Partners",
+                            "description": "Real estate agents, lenders, and other referral sources",
+                            "icon": "🤝"
+                        },
+                        {
+                            "value": "team_members",
+                            "label": "Team Members",
+                            "description": "Loan officers and staff members",
+                            "icon": "👥"
                         }
                     ]
                 }
@@ -10108,11 +10132,90 @@ async def execute_data_import(
                     if 'interest_rate' in data and 'current_rate' not in data:
                         data['current_rate'] = data.pop('interest_rate')
 
+                    # Ensure required fields with defaults
+                    if 'name' not in data and 'borrower_name' in data:
+                        data['name'] = data['borrower_name']
+                    if 'original_close_date' not in data:
+                        data['original_close_date'] = datetime.now(timezone.utc)
+
                     mum_client = MUMClient(
                         **data,
                         loan_officer_id=current_user.id
                     )
                     db.add(mum_client)
+
+                elif destination == 'realtors' or destination == 'referral_partners':
+                    # Create referral partner - ensure name exists
+                    if 'name' not in data and ('first_name' in data or 'last_name' in data):
+                        first = data.pop('first_name', '')
+                        last = data.pop('last_name', '')
+                        data['name'] = f"{first} {last}".strip()
+
+                    # Ensure name exists
+                    if 'name' not in data:
+                        raise ValueError("Name is required for referral partners")
+
+                    # Map common field variations
+                    if 'company_name' in data and 'company' not in data:
+                        data['company'] = data.pop('company_name')
+                    if 'partner_type' in data and 'type' not in data:
+                        data['type'] = data.pop('partner_type')
+
+                    # Set default partner category
+                    if 'partner_category' not in data:
+                        data['partner_category'] = 'individual'
+
+                    # Filter out fields that don't exist in ReferralPartner model
+                    valid_fields = {'name', 'company', 'type', 'phone', 'email', 'notes',
+                                  'referrals_in', 'referrals_out', 'closed_loans', 'volume',
+                                  'reciprocity_score', 'status', 'loyalty_tier', 'partner_category'}
+                    filtered_data = {k: v for k, v in data.items() if k in valid_fields}
+
+                    partner = ReferralPartner(**filtered_data)
+                    db.add(partner)
+
+                elif destination == 'team_members' or destination == 'users':
+                    # Create user/team member - ensure required fields
+                    if 'email' not in data:
+                        raise ValueError("Email is required for team members")
+
+                    # Build full name
+                    if 'full_name' not in data and ('first_name' in data or 'last_name' in data):
+                        first = data.pop('first_name', '')
+                        last = data.pop('last_name', '')
+                        data['full_name'] = f"{first} {last}".strip()
+
+                    # Set default password if not provided
+                    if 'password' not in data and 'hashed_password' not in data:
+                        from passlib.context import CryptContext
+                        pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+                        # Default password: change123 (user should change on first login)
+                        data['hashed_password'] = pwd_context.hash("change123")
+                    elif 'password' in data:
+                        from passlib.context import CryptContext
+                        pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+                        data['hashed_password'] = pwd_context.hash(data.pop('password'))
+
+                    # Set default role
+                    if 'role' not in data:
+                        data['role'] = 'loan_officer'
+
+                    # Filter out fields that don't exist in User model
+                    valid_fields = {'email', 'hashed_password', 'full_name', 'role',
+                                  'branch_id', 'is_active', 'email_verified',
+                                  'onboarding_completed', 'user_metadata'}
+                    filtered_data = {k: v for k, v in data.items() if k in valid_fields}
+
+                    # Check if user already exists
+                    existing_user = db.query(User).filter(User.email == filtered_data['email']).first()
+                    if existing_user:
+                        raise ValueError(f"User with email {filtered_data['email']} already exists")
+
+                    user = User(**filtered_data)
+                    db.add(user)
+
+                else:
+                    raise ValueError(f"Invalid destination: {destination}. Supported: leads, loans, portfolio, realtors, team_members")
 
                 imported += 1
 
