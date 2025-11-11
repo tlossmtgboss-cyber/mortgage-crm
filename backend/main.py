@@ -7493,7 +7493,30 @@ async def calendly_webhook(request: Request, db: Session = Depends(get_db)):
     3. Subscribe to events: invitee.created, invitee.canceled
     """
     try:
-        payload = await request.json()
+        # Verify webhook signature
+        webhook_key = os.getenv("CALENDLY_WEBHOOK_KEY")
+        body = await request.body()
+
+        if webhook_key:
+            signature = request.headers.get("Calendly-Webhook-Signature")
+
+            # Calendly uses HMAC-SHA256 for webhook signatures
+            import hmac
+            import hashlib
+
+            expected_signature = hmac.new(
+                webhook_key.encode('utf-8'),
+                body,
+                hashlib.sha256
+            ).hexdigest()
+
+            if signature != expected_signature:
+                logger.warning("Invalid Calendly webhook signature")
+                raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
+        # Parse JSON payload
+        import json
+        payload = json.loads(body.decode('utf-8'))
         event_type = payload.get("event")
 
         logger.info(f"Calendly webhook received: {event_type}")
