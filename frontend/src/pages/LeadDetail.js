@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { leadsAPI, activitiesAPI, aiAPI } from '../services/api';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import SMSModal from '../components/SMSModal';
+import TeamsModal from '../components/TeamsModal';
 import './LeadDetail.css';
 
 function LeadDetail() {
@@ -23,6 +24,7 @@ function LeadDetail() {
   const [activeBorrower, setActiveBorrower] = useState(0);
   const [saveTimeout, setSaveTimeout] = useState(null);
   const [showSMSModal, setShowSMSModal] = useState(false);
+  const [showTeamsModal, setShowTeamsModal] = useState(false);
 
   useEffect(() => {
     loadLeadData();
@@ -413,6 +415,9 @@ function LeadDetail() {
         break;
       case 'calendar':
         navigate('/calendar');
+        break;
+      case 'teams':
+        setShowTeamsModal(true);
         break;
       default:
         break;
@@ -1123,6 +1128,14 @@ function LeadDetail() {
                 <span className="icon">📅</span>
                 <span>Set Appointment</span>
               </button>
+              <button
+                className="action-btn teams"
+                onClick={() => handleAction('teams')}
+                title="Create Microsoft Teams meeting"
+              >
+                <span className="icon">👥</span>
+                <span>Teams Meeting</span>
+              </button>
             </div>
           </div>
 
@@ -1159,6 +1172,15 @@ function LeadDetail() {
         <SMSModal
           isOpen={showSMSModal}
           onClose={() => setShowSMSModal(false)}
+          lead={lead}
+        />
+      )}
+
+      {/* Teams Modal */}
+      {lead && (
+        <TeamsModal
+          isOpen={showTeamsModal}
+          onClose={() => setShowTeamsModal(false)}
           lead={lead}
         />
       )}

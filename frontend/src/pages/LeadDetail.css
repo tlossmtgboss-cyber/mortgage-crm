@@ -767,6 +767,19 @@
   color: #f59e0b;
 }
 
+.action-btn.teams {
+  background: linear-gradient(135deg, #5558AF 0%, #464775 100%);
+  color: white;
+}
+
+.action-btn.teams:hover:not(:disabled) {
+  background: linear-gradient(135deg, #464775 0%, #3a3b5f 100%);
+}
+
+.action-btn.teams .icon {
+  color: white;
+}
+
 /* Email History */
 .email-list {
   display: flex;
