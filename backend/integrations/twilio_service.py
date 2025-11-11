@@ -17,13 +17,26 @@ class TwilioSMSClient:
     def __init__(self):
         self.account_sid = os.getenv("TWILIO_ACCOUNT_SID", "")
         self.auth_token = os.getenv("TWILIO_AUTH_TOKEN", "")
+        self.api_key_sid = os.getenv("TWILIO_API_KEY_SID", "")
+        self.api_key_secret = os.getenv("TWILIO_API_KEY_SECRET", "")
         self.from_number = os.getenv("TWILIO_PHONE_NUMBER", "")
 
-        if self.account_sid and self.auth_token and self.from_number:
+        # Check if we have credentials (either Auth Token or API Key)
+        has_credentials = self.account_sid and self.from_number and (
+            self.auth_token or (self.api_key_sid and self.api_key_secret)
+        )
+
+        if has_credentials:
             try:
-                self.client = Client(self.account_sid, self.auth_token)
+                # Use Auth Token (primary method)
+                if self.auth_token:
+                    self.client = Client(self.account_sid, self.auth_token)
+                    logger.info("Twilio SMS initialized successfully with Auth Token")
+                # Fallback to API Key if no Auth Token
+                elif self.api_key_sid and self.api_key_secret:
+                    self.client = Client(self.api_key_sid, self.api_key_secret, self.account_sid)
+                    logger.info("Twilio SMS initialized successfully with API Key")
                 self.enabled = True
-                logger.info("Twilio SMS initialized successfully")
             except Exception as e:
                 self.client = None
                 self.enabled = False

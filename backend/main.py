@@ -28,6 +28,10 @@ from typing import List, Optional, Dict, Any
 import uvicorn
 import os
 import json
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 import enum
 import logging
 import random
@@ -7429,6 +7433,198 @@ async def disconnect_salesforce(
         logger.info(f"Salesforce disconnected for user {current_user.id}")
 
     return {"message": "Salesforce disconnected successfully"}
+
+# ============================================================================
+# SMS / TWILIO INTEGRATION
+# ============================================================================
+
+from integrations.twilio_service import sms_client, SMSTemplates
+
+class SMSSendRequest(BaseModel):
+    to_number: str
+    message: str
+    lead_id: Optional[int] = None
+    loan_id: Optional[int] = None
+    template: Optional[str] = None
+
+class SMSBulkRequest(BaseModel):
+    recipients: List[Dict[str, str]]  # [{"phone": "+1234567890", "name": "John"}]
+    message_template: str
+
+class SMSResponse(BaseModel):
+    id: int
+    to_number: str
+    from_number: str
+    message: str
+    direction: str
+    status: str
+    twilio_sid: Optional[str]
+    created_at: datetime
+    class Config:
+        from_attributes = True
+
+@app.post("/api/v1/sms/send", response_model=SMSResponse, status_code=201)
+async def send_sms(
+    sms_request: SMSSendRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Send SMS message to a single recipient"""
+    if not sms_client.enabled:
+        raise HTTPException(status_code=503, detail="SMS service not configured")
+
+    # Send via Twilio
+    twilio_sid = await sms_client.send_sms(
+        to_number=sms_request.to_number,
+        message=sms_request.message
+    )
+
+    # Save to database
+    db_sms = SMSMessage(
+        user_id=current_user.id,
+        lead_id=sms_request.lead_id,
+        loan_id=sms_request.loan_id,
+        to_number=sms_request.to_number,
+        from_number=sms_client.from_number,
+        message=sms_request.message,
+        direction="outbound",
+        status="sent" if twilio_sid else "failed",
+        twilio_sid=twilio_sid,
+        template_used=sms_request.template,
+        error_message=None if twilio_sid else "Failed to send SMS"
+    )
+    db.add(db_sms)
+    db.commit()
+    db.refresh(db_sms)
+
+    # Create activity if linked to lead
+    if sms_request.lead_id:
+        activity = Activity(
+            user_id=current_user.id,
+            lead_id=sms_request.lead_id,
+            loan_id=sms_request.loan_id,
+            type=ActivityType.SMS,
+            description=f"Sent SMS: {sms_request.message[:100]}...",
+            metadata={"sms_id": db_sms.id, "to": sms_request.to_number}
+        )
+        db.add(activity)
+
+        # Update last contact
+        lead = db.query(Lead).filter(Lead.id == sms_request.lead_id).first()
+        if lead:
+            lead.last_contact = datetime.now(timezone.utc)
+
+        db.commit()
+
+    logger.info(f"SMS sent to {sms_request.to_number}")
+    return db_sms
+
+@app.post("/api/v1/sms/send-bulk")
+async def send_bulk_sms(
+    bulk_request: SMSBulkRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Send SMS to multiple recipients"""
+    if not sms_client.enabled:
+        raise HTTPException(status_code=503, detail="SMS service not configured")
+
+    results = await sms_client.send_bulk_sms(
+        recipients=bulk_request.recipients,
+        message_template=bulk_request.message_template
+    )
+
+    # Save all messages to database
+    for recipient in bulk_request.recipients:
+        phone = recipient.get("phone")
+        name = recipient.get("name", "")
+        message = bulk_request.message_template.replace("{name}", name) if name else bulk_request.message_template
+
+        db_sms = SMSMessage(
+            user_id=current_user.id,
+            to_number=phone,
+            from_number=sms_client.from_number,
+            message=message,
+            direction="outbound",
+            status="sent"
+        )
+        db.add(db_sms)
+
+    db.commit()
+
+    logger.info(f"Bulk SMS sent: {results['sent']} succeeded, {results['failed']} failed")
+    return {
+        "sent": results["sent"],
+        "failed": results["failed"],
+        "total": len(bulk_request.recipients)
+    }
+
+@app.get("/api/v1/sms/history", response_model=List[SMSResponse])
+async def get_sms_history(
+    skip: int = 0,
+    limit: int = 50,
+    lead_id: Optional[int] = None,
+    loan_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get SMS message history"""
+    query = db.query(SMSMessage).filter(SMSMessage.user_id == current_user.id)
+
+    if lead_id:
+        query = query.filter(SMSMessage.lead_id == lead_id)
+    if loan_id:
+        query = query.filter(SMSMessage.loan_id == loan_id)
+
+    messages = query.order_by(SMSMessage.created_at.desc()).offset(skip).limit(limit).all()
+    return messages
+
+@app.get("/api/v1/sms/templates")
+async def get_sms_templates(current_user: User = Depends(get_current_user)):
+    """Get available SMS templates"""
+    return {
+        "templates": [
+            {
+                "id": "welcome",
+                "name": "Welcome Message",
+                "template": SMSTemplates.welcome_message("{name}", current_user.full_name),
+                "variables": ["name"]
+            },
+            {
+                "id": "status_update",
+                "name": "Status Update",
+                "template": SMSTemplates.status_update("{name}", "{status}"),
+                "variables": ["name", "status"]
+            },
+            {
+                "id": "appointment_reminder",
+                "name": "Appointment Reminder",
+                "template": SMSTemplates.appointment_reminder("{name}", "{time}"),
+                "variables": ["name", "time"]
+            },
+            {
+                "id": "document_request",
+                "name": "Document Request",
+                "template": SMSTemplates.document_request("{name}", "{document}"),
+                "variables": ["name", "document"]
+            },
+            {
+                "id": "closing_congratulations",
+                "name": "Closing Congratulations",
+                "template": SMSTemplates.closing_congratulations("{name}"),
+                "variables": ["name"]
+            }
+        ]
+    }
+
+@app.get("/api/v1/sms/status")
+async def get_sms_status(current_user: User = Depends(get_current_user)):
+    """Check if SMS service is enabled and configured"""
+    return {
+        "enabled": sms_client.enabled,
+        "configured": bool(sms_client.account_sid and sms_client.from_number),
+        "from_number": sms_client.from_number if sms_client.enabled else None
+    }
 
 # ============================================================================
 # CALENDLY INTEGRATION
