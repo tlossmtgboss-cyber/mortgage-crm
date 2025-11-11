@@ -423,6 +423,27 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
                 )}
               </div>
 
+              {selectedTask.missing_documents && selectedTask.missing_documents.length > 0 && (
+                <div className="detail-missing-docs-section">
+                  <div className="missing-docs-header">
+                    <span className="docs-icon">📄</span>
+                    <h3>Missing Documents Detected by AI</h3>
+                  </div>
+                  <div className="missing-docs-list">
+                    {selectedTask.missing_documents.map((doc, idx) => (
+                      <div key={idx} className="missing-doc-item">
+                        <span className="doc-bullet">•</span>
+                        <span className="doc-name">{doc}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="missing-docs-note">
+                    <span className="ai-badge">🤖 AI Analysis</span>
+                    <span className="analysis-text">Detected from email thread analysis</span>
+                  </div>
+                </div>
+              )}
+
               {selectedTask.ai_message && (
                 <div className="detail-ai-message-section">
                   <div className="ai-message-header">
@@ -726,14 +747,36 @@ Loan Officer`,
     borrower: 'Mike Chen',
     stage: 'Processing',
     urgency: 'critical',
-    ai_action: null,
+    ai_action: 'AI detected missing documents from email analysis',
     owner: 'Loan Processor',
     date_created: '2025-11-10T14:20:00',
     preferred_contact_method: 'Text',
-    ai_message: null,
+    missing_documents: [
+      '2024 W-2 forms (both employers)',
+      'Last 2 pay stubs from current job',
+      '2 months recent bank statements (checking account)'
+    ],
+    ai_message: `Hi Mike,
+
+Hope you're doing well! I've been reviewing your loan file and noticed we're still missing a few documents to move forward with processing:
+
+📄 Still Needed:
+• 2024 W-2 forms (both employers)
+• Last 2 pay stubs from current job
+• 2 months recent bank statements (checking)
+
+Can you upload these through the portal? Or you can reply with photos and I'll handle the upload for you.
+
+Once we have these, we can move to the next stage! Let me know if you have any questions.
+
+Thanks!
+[Your Name]
+Loan Processor`,
     communication_history: [
-      { date: '2025-11-10', type: 'Text', subject: 'Document reminder', status: 'Sent', message: 'Reminded about missing W2s' },
-      { date: '2025-11-08', type: 'Email', subject: 'Document checklist', status: 'Sent', message: 'Sent list of required documents' }
+      { date: '2025-11-10', type: 'Email', subject: 'Re: Document checklist', status: 'Received', message: 'Mike replied: "I uploaded the tax returns and my W-2 from my main job. Will send the other W-2 tomorrow."' },
+      { date: '2025-11-09', type: 'Text', subject: 'Quick check-in', status: 'Sent', message: 'Asked Mike about document upload progress' },
+      { date: '2025-11-08', type: 'Email', subject: 'Document checklist', status: 'Sent', message: 'Sent comprehensive list of all required documents for loan processing' },
+      { date: '2025-11-07', type: 'Email', subject: 'Welcome to processing', status: 'Sent', message: 'Introduced loan processing phase and set expectations' }
     ]
   },
   {

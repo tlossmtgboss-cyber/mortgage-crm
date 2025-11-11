@@ -1345,6 +1345,84 @@
   width: fit-content;
 }
 
+/* Missing Documents Section */
+.detail-missing-docs-section {
+  background: #fef3c7;
+  border: 2px solid #fbbf24;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.missing-docs-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.missing-docs-header .docs-icon {
+  font-size: 24px;
+}
+
+.missing-docs-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #92400e;
+  margin: 0;
+}
+
+.missing-docs-list {
+  background: white;
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin-bottom: 12px;
+}
+
+.missing-doc-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 0;
+  color: #1f2937;
+  font-size: 15px;
+}
+
+.missing-doc-item .doc-bullet {
+  color: #f59e0b;
+  font-weight: bold;
+  font-size: 18px;
+}
+
+.missing-doc-item .doc-name {
+  flex: 1;
+  line-height: 1.5;
+}
+
+.missing-docs-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: rgba(251, 191, 36, 0.2);
+  border-radius: 6px;
+}
+
+.missing-docs-note .ai-badge {
+  font-size: 13px;
+  font-weight: 600;
+  color: #92400e;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.missing-docs-note .analysis-text {
+  font-size: 13px;
+  color: #78350f;
+  font-style: italic;
+}
+
 /* AI-Drafted Message Section */
 .detail-ai-message-section {
   background: #f0f9ff;
