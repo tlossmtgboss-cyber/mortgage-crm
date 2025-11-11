@@ -109,6 +109,7 @@ function Settings() {
       return;
     }
 
+    console.log('[Calendly] Saving API key...');
     setLoadingCalendly(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/calendly/connect`, {
@@ -120,18 +121,26 @@ function Settings() {
         body: JSON.stringify({ api_key: calendlyApiKey })
       });
 
+      console.log('[Calendly] Save response status:', response.status);
+
       if (response.ok) {
-        alert('Calendly connected successfully!');
+        const result = await response.json();
+        console.log('[Calendly] Save result:', result);
+        alert('Calendly connected successfully! Fetching your event types...');
         setShowCalendlyModal(false);
         setCalendlyApiKey('');
+
+        console.log('[Calendly] Now fetching event types...');
         await fetchCalendlyEventTypes();
+        console.log('[Calendly] Done fetching event types');
       } else {
         const error = await response.json();
+        console.error('[Calendly] Save failed:', error);
         alert(`Failed to connect Calendly: ${error.detail || 'Please check your API key'}`);
       }
     } catch (error) {
-      console.error('Error connecting Calendly:', error);
-      alert('Error connecting to Calendly');
+      console.error('[Calendly] Error connecting:', error);
+      alert('Error connecting to Calendly: ' + error.message);
     } finally {
       setLoadingCalendly(false);
     }
@@ -140,26 +149,33 @@ function Settings() {
   const fetchCalendlyEventTypes = async () => {
     setLoadingCalendly(true);
     try {
+      console.log('[Calendly] Fetching event types...');
       const response = await fetch(`${API_BASE_URL}/api/v1/calendly/event-types`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
 
+      console.log('[Calendly] Response status:', response.status);
+
       if (response.ok) {
         const data = await response.json();
+        console.log('[Calendly] Event types data:', data);
         setCalendlyEventTypes(data.event_types || []);
 
         // Update connected integrations status
         const newConnected = new Set(connectedIntegrations);
         if (data.event_types && data.event_types.length > 0) {
           newConnected.add('calendly');
+          console.log('[Calendly] ✓ Connected! Found', data.event_types.length, 'event types');
         } else {
           newConnected.delete('calendly');
+          console.log('[Calendly] ✗ No event types found');
         }
         setConnectedIntegrations(newConnected);
       } else {
-        console.error('Failed to fetch event types');
+        const errorText = await response.text();
+        console.error('[Calendly] Failed to fetch event types. Status:', response.status, 'Error:', errorText);
         setCalendlyEventTypes([]);
 
         // Mark as disconnected
@@ -168,7 +184,7 @@ function Settings() {
         setConnectedIntegrations(newConnected);
       }
     } catch (error) {
-      console.error('Error fetching Calendly event types:', error);
+      console.error('[Calendly] Error fetching event types:', error);
       setCalendlyEventTypes([]);
 
       // Mark as disconnected on error
