@@ -1039,6 +1039,7 @@ class LeadUpdate(BaseModel):
     loan_type: Optional[str] = None
     preapproval_amount: Optional[float] = None
     source: Optional[str] = None
+    referral_partner_id: Optional[int] = None
     # Loan Details
     loan_amount: Optional[float] = None
     interest_rate: Optional[float] = None
