@@ -34,32 +34,9 @@ function Users() {
 
   const loadTeamMembers = () => {
     try {
-      // Load team members from localStorage (saved during onboarding)
-      const storedMembers = localStorage.getItem('teamMembers');
-      if (storedMembers) {
-        const members = JSON.parse(storedMembers);
-
-        // Filter out dummy/mock data
-        const realMembers = members.filter(member => {
-          const isDummy =
-            member.email === 'demo@example.com' ||
-            member.email === 'N/A' ||
-            !member.email ||
-            member.firstName === 'Demo' ||
-            (member.email && member.email.includes('example.com'));
-          return !isDummy;
-        });
-
-        // Save cleaned data back
-        if (realMembers.length !== members.length) {
-          localStorage.setItem('teamMembers', JSON.stringify(realMembers));
-        }
-
-        setTeamMembers(realMembers);
-      } else {
-        // Initialize with empty array
-        setTeamMembers([]);
-      }
+      // Clear all team members - start fresh
+      localStorage.setItem('teamMembers', JSON.stringify([]));
+      setTeamMembers([]);
     } catch (error) {
       console.error('Failed to load team members:', error);
       setTeamMembers([]);
@@ -135,11 +112,6 @@ function Users() {
     saveRoles(updatedRoles);
   };
 
-  const handleClearAllMembers = () => {
-    if (!window.confirm('Are you sure you want to remove all team members? This cannot be undone.')) return;
-    saveTeamMembers([]);
-  };
-
   if (loading) {
     return <div className="users-page"><div className="loading">Loading team members...</div></div>;
   }
@@ -193,44 +165,39 @@ function Users() {
             <button className="btn-add-member" onClick={() => setShowAddMemberModal(true)}>
               + Add Team Member
             </button>
-            {teamMembers.length > 0 && (
-              <button className="btn-clear-all" onClick={handleClearAllMembers}>
-                Clear All
-              </button>
-            )}
           </div>
         </div>
 
-        <div className="members-grid">
-          {teamMembers.map(member => (
-            <div key={member.id} className="member-card">
-              <div className="member-avatar">
-                {(member.firstName?.[0] || '') + (member.lastName?.[0] || '')}
+        {teamMembers.length > 0 ? (
+          <div className="members-grid">
+            {teamMembers.map(member => (
+              <div key={member.id} className="member-card">
+                <div className="member-avatar">
+                  {(member.firstName?.[0] || '') + (member.lastName?.[0] || '')}
+                </div>
+                <div className="member-info">
+                  <h3>{member.firstName} {member.lastName}</h3>
+                  <p className="member-email">{member.email}</p>
+                  {member.role && (
+                    <span className="role-badge-small">
+                      Role: {member.role}
+                    </span>
+                  )}
+                </div>
+                <div className="member-actions">
+                  <button
+                    className="btn-view-profile"
+                    onClick={() => setEditingMember(member)}
+                  >
+                    View Profile →
+                  </button>
+                </div>
               </div>
-              <div className="member-info">
-                <h3>{member.firstName} {member.lastName}</h3>
-                <p className="member-email">{member.email}</p>
-                {member.role && (
-                  <span className="role-badge-small">
-                    Role: {member.role}
-                  </span>
-                )}
-              </div>
-              <div className="member-actions">
-                <button
-                  className="btn-view-profile"
-                  onClick={() => setEditingMember(member)}
-                >
-                  View Profile →
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {teamMembers.length === 0 && (
+            ))}
+          </div>
+        ) : (
           <div className="empty-state">
-            <p>No team members found. Add your first team member to get started.</p>
+            <p>No team members added yet. Click "Add Team Member" to get started.</p>
           </div>
         )}
       </div>
