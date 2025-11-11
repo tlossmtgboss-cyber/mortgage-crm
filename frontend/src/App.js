@@ -33,6 +33,7 @@ import Settings from './pages/Settings';
 import Users from './pages/Users';
 import UserProfile from './pages/UserProfile';
 import ProcessTemplates from './pages/ProcessTemplates';
+import BuyerIntake from './pages/BuyerIntake';
 import './App.css';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
@@ -133,6 +134,7 @@ function App() {
         <Routes>
           {/* Public routes */}
           <Route path="/" element={<LandingPage />} />
+          <Route path="/apply" element={<BuyerIntake />} />
           <Route path="/register" element={<Registration />} />
           <Route path="/verify-email-sent" element={<EmailVerificationSent />} />
           <Route path="/login" element={<Login />} />

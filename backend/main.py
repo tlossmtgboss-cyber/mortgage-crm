@@ -910,6 +910,7 @@ class ProcessTask(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     milestone_id = Column(Integer, ForeignKey("process_milestones.id"))
     role_id = Column(Integer, ForeignKey("process_roles.id"))
+    assigned_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Optional specific user assignment
     task_name = Column(String, nullable=False)
     task_description = Column(Text)
     sequence_order = Column(Integer, default=0)
@@ -920,12 +921,14 @@ class ProcessTask(Base):
     dependencies = Column(JSON)  # Array of task IDs
     is_required = Column(Boolean, default=True)
     is_active = Column(Boolean, default=True)
+    status = Column(String, default="pending")  # pending, in_progress, completed
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
-    user = relationship("User", backref="process_tasks")
+    user = relationship("User", backref="process_tasks", foreign_keys=[user_id])
     milestone = relationship("ProcessMilestone", backref="tasks")
     role = relationship("ProcessRole", backref="assigned_tasks")
+    assigned_user = relationship("User", foreign_keys=[assigned_user_id])
 
 # ============================================================================
 # PYDANTIC SCHEMAS
@@ -1544,6 +1547,21 @@ class ProcessTaskCreate(BaseModel):
     ai_automatable: bool = False
     dependencies: Optional[List[int]] = None
     is_required: bool = True
+    assigned_user_id: Optional[int] = None
+    status: str = "pending"
+
+class ProcessTaskUpdate(BaseModel):
+    task_name: Optional[str] = None
+    task_description: Optional[str] = None
+    role_id: Optional[int] = None
+    assigned_user_id: Optional[int] = None
+    sequence_order: Optional[int] = None
+    estimated_duration: Optional[int] = None
+    sla: Optional[int] = None
+    sla_unit: Optional[str] = None
+    ai_automatable: Optional[bool] = None
+    is_required: Optional[bool] = None
+    status: Optional[str] = None
 
 class ProcessTaskResponse(BaseModel):
     id: int
@@ -1559,6 +1577,8 @@ class ProcessTaskResponse(BaseModel):
     dependencies: Optional[List[int]]
     is_required: bool
     is_active: bool
+    assigned_user_id: Optional[int]
+    status: str
     created_at: datetime
     class Config:
         from_attributes = True
@@ -3868,6 +3888,36 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     }
 
     # ============================================================================
+    # AI TASKS
+    # ============================================================================
+
+    # Get AI tasks for the current user
+    ai_tasks_pending = db.query(AITask).filter(
+        AITask.assigned_to_id == current_user.id,
+        AITask.type == TaskType.AWAITING_REVIEW
+    ).order_by(AITask.created_at.desc()).limit(10).all()
+
+    ai_tasks_waiting = db.query(AITask).filter(
+        AITask.assigned_to_id == current_user.id,
+        AITask.type == TaskType.HUMAN_NEEDED
+    ).order_by(AITask.created_at.desc()).limit(10).all()
+
+    ai_tasks = {
+        "pending": [{
+            "id": task.id,
+            "task": task.title,
+            "confidence": task.ai_confidence or 85,
+            "what_ai_did": task.suggested_action or task.description
+        } for task in ai_tasks_pending],
+        "waiting": [{
+            "id": task.id,
+            "task": task.title,
+            "urgency": task.priority,
+            "reason": task.ai_reasoning or task.description
+        } for task in ai_tasks_waiting]
+    }
+
+    # ============================================================================
     # MESSAGES (placeholder for now)
     # ============================================================================
 
@@ -3880,7 +3930,7 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
             "production": production,
             "lead_metrics": lead_metrics,
             "loan_issues": [],
-            "ai_tasks": {"pending": [], "waiting": []},
+            "ai_tasks": ai_tasks,
             "referral_stats": referral_stats,
             "team_stats": team_stats,
             "messages": messages
@@ -4338,6 +4388,164 @@ async def delete_lead(lead_id: int, db: Session = Depends(get_db), current_user:
     db.commit()
     logger.info(f"Lead deleted: {lead.name}")
     return None
+
+# ============================================================================
+# BUYER INTAKE (PUBLIC ENDPOINT)
+# ============================================================================
+
+@app.post("/api/v1/buyer-intake", status_code=201)
+async def submit_buyer_intake(payload: dict, db: Session = Depends(get_db)):
+    """
+    Public endpoint for buyer intake form submission.
+    No authentication required - creates a lead from buyer application.
+    """
+    try:
+        # Get the first user (admin) to assign the lead to
+        default_user = db.query(User).first()
+        if not default_user:
+            raise HTTPException(status_code=500, detail="No users found in system")
+
+        # Extract contact info
+        contact = payload.get("contact", {})
+        first_name = contact.get("first_name", "")
+        last_name = contact.get("last_name", "")
+        email = contact.get("email", "")
+        phone = contact.get("phone", "")
+
+        # Extract scenario
+        scenario = payload.get("scenario", {})
+        occupancy = scenario.get("occupancy", "")
+        timeframe = scenario.get("timeframe", "")
+        location = scenario.get("location", "")
+
+        # Extract budget
+        budget = payload.get("budget", {})
+        price_target = budget.get("price_target", 0)
+        down_payment_value = budget.get("down_payment_value", 0)
+        down_payment_type = budget.get("down_payment_type", "%")
+        monthly_comfort = budget.get("monthly_comfort")
+
+        # Extract profile
+        profile = payload.get("profile", {})
+        credit_range = profile.get("credit_range", "")
+        first_time_buyer = profile.get("first_time_buyer", False)
+        va_eligible = profile.get("va_eligible", False)
+        employment_type = profile.get("employment_type", "")
+        household_income = profile.get("household_income")
+        liquid_assets = profile.get("liquid_assets")
+        self_employed = profile.get("self_employed", False)
+
+        # Extract co-borrower
+        coborrower = payload.get("coborrower")
+        co_applicant_name = None
+        if coborrower:
+            co_first = coborrower.get("first_name", "")
+            co_last = coborrower.get("last_name", "")
+            if co_first or co_last:
+                co_applicant_name = f"{co_first} {co_last}".strip()
+
+        # Extract partners
+        partners = payload.get("partners", {})
+        agent_name = partners.get("agent_name") if partners else None
+        agent_email = partners.get("agent_email") if partners else None
+
+        # Extract preferences and consents
+        preferences = payload.get("preferences", {})
+        consents = payload.get("consents", {})
+        notes = payload.get("notes", "")
+
+        # Calculate down payment amount for storage
+        if down_payment_type == "%":
+            down_payment_amount = (down_payment_value / 100) * price_target if down_payment_value else 0
+        else:
+            down_payment_amount = down_payment_value
+
+        # Determine loan type based on profile
+        loan_type = "Conventional"
+        if va_eligible:
+            loan_type = "VA"
+        elif first_time_buyer and price_target < 500000:
+            loan_type = "FHA"
+
+        # Create lead with mapped fields
+        new_lead = Lead(
+            # Contact Info
+            name=f"{first_name} {last_name}".strip(),
+            email=email,
+            phone=phone,
+            co_applicant_name=co_applicant_name,
+
+            # Stage and Source
+            stage=LeadStage.NEW,
+            source="Buyer Intake Form",
+
+            # Loan Details
+            loan_type=loan_type,
+            loan_amount=price_target,
+            preapproval_amount=price_target,
+            property_value=price_target,
+            down_payment=down_payment_amount,
+
+            # Financial Info
+            annual_income=household_income,
+            employment_status=employment_type,
+            first_time_buyer=first_time_buyer,
+
+            # Property Info
+            property_type=occupancy,
+
+            # Notes
+            notes=notes,
+
+            # Owner
+            owner_id=default_user.id,
+
+            # Store all additional data in user_metadata
+            user_metadata={
+                "buyer_intake": {
+                    "contact": contact,
+                    "scenario": scenario,
+                    "budget": budget,
+                    "profile": profile,
+                    "coborrower": coborrower,
+                    "partners": partners,
+                    "preferences": preferences,
+                    "consents": consents,
+                    "submitted_at": datetime.now(timezone.utc).isoformat(),
+                    "credit_range": credit_range,
+                    "timeframe": timeframe,
+                    "location": location,
+                    "monthly_comfort": monthly_comfort,
+                    "liquid_assets": liquid_assets,
+                    "self_employed": self_employed,
+                    "agent_name": agent_name,
+                    "agent_email": agent_email,
+                    "va_eligible": va_eligible,
+                }
+            }
+        )
+
+        # Calculate AI score
+        new_lead.ai_score = calculate_lead_score(new_lead)
+        new_lead.sentiment = "positive" if new_lead.ai_score >= 75 else "neutral" if new_lead.ai_score >= 50 else "needs-attention"
+        new_lead.next_action = f"Contact within {timeframe} - Buyer interested in {occupancy}"
+
+        db.add(new_lead)
+        db.commit()
+        db.refresh(new_lead)
+
+        logger.info(f"Buyer intake submitted: {new_lead.name} - {email} (Score: {new_lead.ai_score})")
+
+        return {
+            "success": True,
+            "lead_id": new_lead.id,
+            "message": "Thank you! Your information has been received. We'll contact you soon."
+        }
+
+    except Exception as e:
+        logger.error(f"Buyer intake error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error processing intake: {str(e)}")
 
 # ============================================================================
 # LOANS CRUD
@@ -8180,6 +8388,101 @@ async def get_process_tasks(
 
     except Exception as e:
         logger.error(f"Get tasks error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.patch("/api/v1/onboarding/tasks/{task_id}", response_model=ProcessTaskResponse)
+async def update_process_task(
+    task_id: int,
+    task_update: ProcessTaskUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update a specific process task"""
+    try:
+        task = db.query(ProcessTask).filter(
+            ProcessTask.id == task_id,
+            ProcessTask.user_id == current_user.id
+        ).first()
+
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+
+        # Update fields
+        for key, value in task_update.dict(exclude_unset=True).items():
+            setattr(task, key, value)
+
+        db.commit()
+        db.refresh(task)
+
+        logger.info(f"Process task updated: {task.task_name}")
+        return ProcessTaskResponse.from_orm(task)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Update process task error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.patch("/api/v1/onboarding/tasks/bulk-update")
+async def bulk_update_process_tasks(
+    tasks: List[dict],
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Bulk update multiple process tasks"""
+    try:
+        updated_tasks = []
+        for task_data in tasks:
+            task_id = task_data.get('id')
+            if not task_id:
+                continue
+
+            task = db.query(ProcessTask).filter(
+                ProcessTask.id == task_id,
+                ProcessTask.user_id == current_user.id
+            ).first()
+
+            if task:
+                # Update allowed fields
+                for key in ['task_name', 'task_description', 'role_id', 'assigned_user_id',
+                           'sla', 'sla_unit', 'ai_automatable', 'status', 'sequence_order']:
+                    if key in task_data:
+                        setattr(task, key, task_data[key])
+                updated_tasks.append(task)
+
+        db.commit()
+
+        logger.info(f"Bulk updated {len(updated_tasks)} process tasks")
+        return {"updated_count": len(updated_tasks), "message": "Tasks updated successfully"}
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Bulk update process tasks error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/onboarding/tasks", response_model=ProcessTaskResponse, status_code=201)
+async def create_process_task(
+    task: ProcessTaskCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new process task"""
+    try:
+        db_task = ProcessTask(
+            **task.dict(),
+            user_id=current_user.id
+        )
+        db.add(db_task)
+        db.commit()
+        db.refresh(db_task)
+
+        logger.info(f"Process task created: {db_task.task_name}")
+        return ProcessTaskResponse.from_orm(db_task)
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Create process task error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/v1/team/members")
