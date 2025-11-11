@@ -363,12 +363,6 @@ function Portfolio() {
           MUM Dashboard
         </button>
         <button
-          className={activeTab === 'loans' ? 'active' : ''}
-          onClick={() => setActiveTab('loans')}
-        >
-          Loan History
-        </button>
-        <button
           className={activeTab === 'mum' ? 'active' : ''}
           onClick={() => setActiveTab('mum')}
         >
@@ -563,47 +557,6 @@ function Portfolio() {
               </span>
             </div>
           </div>
-        </div>
-      )}
-
-      {activeTab === 'loans' && (
-        <div className="loans-table-container">
-          <h2>Closed Loans</h2>
-          <table className="loans-table">
-            <thead>
-              <tr>
-                <th>Borrower</th>
-                <th>Loan Amount</th>
-                <th>Type</th>
-                <th>Rate</th>
-                <th>Status</th>
-                <th>Close Date</th>
-              </tr>
-            </thead>
-            <tbody>
-              {portfolioData.loans.map((loan) => (
-                <tr
-                  key={loan.id}
-                  onClick={() => navigate(`/loans/${loan.id}`)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <td>{loan.borrower}</td>
-                  <td>{formatCurrency(loan.loanAmount)}</td>
-                  <td>{loan.loanType}</td>
-                  <td>{loan.rate}%</td>
-                  <td>
-                    <span className={`status-badge status-${loan.status.toLowerCase()}`}>
-                      {loan.status}
-                    </span>
-                  </td>
-                  <td>{new Date(loan.closeDate).toLocaleDateString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {portfolioData.loans.length === 0 && (
-            <div className="empty-state">No closed loans found.</div>
-          )}
         </div>
       )}
 
