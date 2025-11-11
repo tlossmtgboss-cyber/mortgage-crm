@@ -68,7 +68,8 @@ function DataUpload() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/v1/data-import/analyze`, {
+      // Use relative URL to leverage Vercel proxy (see vercel.json)
+      const response = await fetch('/api/v1/data-import/analyze', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -130,7 +131,8 @@ function DataUpload() {
       formData.append('answers', JSON.stringify(answers));
       formData.append('mappings', JSON.stringify(columnMappings));
 
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/v1/data-import/execute`, {
+      // Use relative URL to leverage Vercel proxy (see vercel.json)
+      const response = await fetch('/api/v1/data-import/execute', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
