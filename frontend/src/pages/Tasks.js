@@ -7,6 +7,7 @@ function Tasks() {
   const [loading, setLoading] = useState(true);
   const [completedTasks, setCompletedTasks] = useState(new Set());
   const [activeTab, setActiveTab] = useState('outstanding');
+  const [selectedTask, setSelectedTask] = useState(null);
 
   // Dashboard data states
   const [prioritizedTasks, setPrioritizedTasks] = useState([]);
@@ -19,6 +20,16 @@ function Tasks() {
   useEffect(() => {
     loadTasks();
   }, []);
+
+  // Auto-select first task when tasks load
+  useEffect(() => {
+    if (!loading && !selectedTask) {
+      const allTasks = getAggregatedTasks();
+      if (allTasks.length > 0) {
+        setSelectedTask(allTasks[0]);
+      }
+    }
+  }, [loading]);
 
   const loadTasks = async () => {
     try {
@@ -171,6 +182,14 @@ function Tasks() {
       newCompleted.add(taskId);
       return newCompleted;
     });
+
+    // If the completed task is the selected one, select the next task
+    if (selectedTask && selectedTask.id === taskId) {
+      const allTasks = getAggregatedTasks();
+      const currentIndex = allTasks.findIndex(t => t.id === taskId);
+      const nextTask = allTasks[currentIndex + 1] || allTasks[currentIndex - 1] || null;
+      setSelectedTask(nextTask);
+    }
   };
 
   const handleApproveAiTask = async (taskId) => {
@@ -238,90 +257,135 @@ function Tasks() {
       {/* Outstanding Tasks Tab */}
       {activeTab === 'outstanding' && (
         <div className="tab-content">
-          <div className="tasks-sections">
-        <div className="task-section">
-          <div className="section-header">
-            <h2>Outstanding Tasks</h2>
-            <span className="task-count">{outstandingTasks.length}</span>
-          </div>
-          <div className="task-list">
-            {outstandingTasks.map((task) => (
-              <div key={task.id} className="task-item">
-                <div className="task-source-badge">
-                  <span className="source-icon">{task.sourceIcon}</span>
-                  <span className="source-text">{task.source}</span>
-                </div>
-                <div className="task-main">
-                  <div className="task-info">
-                    <h4 className="task-title">{task.title}</h4>
-                    {task.borrower && (
-                      <p className="task-client">Client: {task.borrower}</p>
-                    )}
-                    <div className="task-meta">
-                      <span className="task-stage">{task.stage}</span>
-                      <span
-                        className="urgency-badge"
-                        style={{ backgroundColor: getUrgencyColor(task.urgency) }}
-                      >
-                        {task.urgency}
-                      </span>
+          <div className="email-layout">
+            {/* Task List (Left Side) */}
+            <div className="task-inbox">
+              <div className="inbox-header">
+                <h3>Tasks</h3>
+                <span className="task-count">{outstandingTasks.length}</span>
+              </div>
+              <div className="inbox-list">
+                {outstandingTasks.map((task) => (
+                  <div
+                    key={task.id}
+                    className={`inbox-item ${selectedTask && selectedTask.id === task.id ? 'selected' : ''}`}
+                    onClick={() => setSelectedTask(task)}
+                  >
+                    <div className="inbox-item-header">
+                      <span className="source-icon">{task.sourceIcon}</span>
+                      <span className="task-title-compact">{task.title}</span>
                     </div>
+                    <div className="inbox-item-meta">
+                      <span className="task-client-compact">{task.borrower || task.source}</span>
+                      <span
+                        className="urgency-dot"
+                        style={{ backgroundColor: getUrgencyColor(task.urgency) }}
+                        title={task.urgency}
+                      ></span>
+                    </div>
+                    <div className="task-preview">{task.stage}</div>
                   </div>
-                </div>
-                {task.ai_action && (
-                  <div className="ai-suggestion">
-                    <span className="ai-icon">🤖</span>
-                    <span className="ai-text">{task.ai_action}</span>
-                    <button className="btn-approve-sm">Approve</button>
+                ))}
+                {outstandingTasks.length === 0 && (
+                  <div className="empty-inbox">
+                    <p>No tasks</p>
                   </div>
                 )}
-                <div className="task-actions">
-                  <button
-                    className="btn-complete"
-                    onClick={() => handleComplete(task.id)}
-                  >
-                    ✓ Complete
-                  </button>
-                  {task.action && (
-                    <button className="btn-task-action">{task.action}</button>
-                  )}
-                </div>
               </div>
-            ))}
-            {outstandingTasks.length === 0 && (
-              <div className="empty-state">
-                <p>No outstanding tasks</p>
-              </div>
-            )}
-          </div>
-        </div>
+            </div>
 
-        <div className="task-section">
-          <div className="section-header">
-            <h2>Completed Tasks</h2>
-            <span className="task-count">{completedTasksList.length}</span>
-          </div>
-          <div className="task-list">
-            {completedTasksList.map((task) => (
-              <div key={task.id} className="task-item completed">
-                <div className="task-main">
-                  <h4>{task.title}</h4>
-                  <div className="task-meta">
-                    <span className="completed-date">
-                      Completed: {new Date().toLocaleDateString()}
-                    </span>
+            {/* Task Detail (Right Side) */}
+            <div className="task-detail-pane">
+              {selectedTask ? (
+                <>
+                  <div className="detail-header">
+                    <div className="detail-title-section">
+                      <div className="detail-source">
+                        <span className="source-icon-large">{selectedTask.sourceIcon}</span>
+                        <span className="source-name">{selectedTask.source}</span>
+                      </div>
+                      <h2 className="detail-title">{selectedTask.title}</h2>
+                    </div>
                   </div>
+
+                  <div className="detail-body">
+                    <div className="detail-info-grid">
+                      {selectedTask.borrower && (
+                        <div className="detail-info-item">
+                          <span className="detail-label">Client</span>
+                          <span className="detail-value">{selectedTask.borrower}</span>
+                        </div>
+                      )}
+                      <div className="detail-info-item">
+                        <span className="detail-label">Stage</span>
+                        <span className="detail-value">{selectedTask.stage}</span>
+                      </div>
+                      <div className="detail-info-item">
+                        <span className="detail-label">Priority</span>
+                        <span
+                          className="detail-urgency-badge"
+                          style={{ backgroundColor: getUrgencyColor(selectedTask.urgency) }}
+                        >
+                          {selectedTask.urgency}
+                        </span>
+                      </div>
+                      <div className="detail-info-item">
+                        <span className="detail-label">Source</span>
+                        <span className="detail-value">{selectedTask.source}</span>
+                      </div>
+                    </div>
+
+                    {selectedTask.ai_action && (
+                      <div className="detail-ai-section">
+                        <div className="ai-section-header">
+                          <span className="ai-icon-large">🤖</span>
+                          <span className="ai-section-title">AI Suggestion</span>
+                        </div>
+                        <div className="ai-section-content">
+                          <p>{selectedTask.ai_action}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedTask.action && (
+                      <div className="detail-action-section">
+                        <h3>Recommended Action</h3>
+                        <p>{selectedTask.action}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="detail-footer">
+                    <button
+                      className="btn-detail-complete"
+                      onClick={() => handleComplete(selectedTask.id)}
+                    >
+                      ✓ Mark Complete
+                    </button>
+                    {selectedTask.ai_action && (
+                      <button
+                        className="btn-detail-approve"
+                        onClick={() => handleApproveAiTask(selectedTask.id)}
+                      >
+                        Approve AI Action
+                      </button>
+                    )}
+                    {selectedTask.action && (
+                      <button className="btn-detail-action">
+                        {selectedTask.action}
+                      </button>
+                    )}
+                    <button className="btn-detail-secondary">Snooze</button>
+                    <button className="btn-detail-secondary">Delegate</button>
+                  </div>
+                </>
+              ) : (
+                <div className="detail-empty">
+                  <p>Select a task to view details</p>
                 </div>
-              </div>
-            ))}
-            {completedTasksList.length === 0 && (
-              <div className="empty-state">
-                <p>No completed tasks</p>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
-      </div>
 
       {/* AI TASK ENGINE SECTION */}
       <div className="ai-engine-section">

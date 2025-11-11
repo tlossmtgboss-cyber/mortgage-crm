@@ -915,3 +915,393 @@
     width: 100%;
   }
 }
+
+/* Email-Style Layout */
+.email-layout {
+  display: grid;
+  grid-template-columns: 350px 1fr;
+  gap: 0;
+  height: calc(100vh - 300px);
+  min-height: 600px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 32px;
+}
+
+/* Task Inbox (Left Side) */
+.task-inbox {
+  border-right: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  background: #f9fafb;
+}
+
+.inbox-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #e5e7eb;
+  background: white;
+}
+
+.inbox-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.inbox-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.inbox-item {
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: white;
+}
+
+.inbox-item:hover {
+  background: #f3f4f6;
+}
+
+.inbox-item.selected {
+  background: #dbeafe;
+  border-left: 4px solid #218D8D;
+  padding-left: 16px;
+}
+
+.inbox-item-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.task-title-compact {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inbox-item-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.task-client-compact {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.urgency-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.task-preview {
+  font-size: 12px;
+  color: #9ca3af;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.empty-inbox {
+  padding: 40px 20px;
+  text-align: center;
+  color: #9ca3af;
+}
+
+/* Task Detail Pane (Right Side) */
+.task-detail-pane {
+  display: flex;
+  flex-direction: column;
+  background: white;
+  overflow-y: auto;
+}
+
+.detail-header {
+  padding: 24px 32px;
+  border-bottom: 1px solid #e5e7eb;
+  background: white;
+}
+
+.detail-title-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.detail-source {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.source-icon-large {
+  font-size: 24px;
+}
+
+.source-name {
+  font-size: 13px;
+  color: #6b7280;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.detail-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+  line-height: 1.3;
+}
+
+.detail-body {
+  flex: 1;
+  padding: 32px;
+  overflow-y: auto;
+}
+
+.detail-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+  margin-bottom: 32px;
+  padding-bottom: 32px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.detail-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.detail-label {
+  font-size: 12px;
+  color: #6b7280;
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.detail-value {
+  font-size: 16px;
+  color: #111827;
+  font-weight: 500;
+}
+
+.detail-urgency-badge {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: white;
+  font-weight: 600;
+  text-transform: uppercase;
+  width: fit-content;
+}
+
+.detail-ai-section {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.ai-section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.ai-icon-large {
+  font-size: 28px;
+}
+
+.ai-section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e3a8a;
+}
+
+.ai-section-content {
+  font-size: 15px;
+  color: #1e40af;
+  line-height: 1.6;
+}
+
+.ai-section-content p {
+  margin: 0;
+}
+
+.detail-action-section {
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.detail-action-section h3 {
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  color: #92400e;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.detail-action-section p {
+  margin: 0;
+  font-size: 15px;
+  color: #78350f;
+  font-weight: 500;
+}
+
+.detail-footer {
+  display: flex;
+  gap: 12px;
+  padding: 24px 32px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+  flex-wrap: wrap;
+}
+
+.btn-detail-complete {
+  padding: 12px 24px;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-detail-complete:hover {
+  background: #059669;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.btn-detail-approve {
+  padding: 12px 24px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-detail-approve:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.btn-detail-action {
+  padding: 12px 24px;
+  background: #f59e0b;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-detail-action:hover {
+  background: #d97706;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
+
+.btn-detail-secondary {
+  padding: 12px 24px;
+  background: white;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-detail-secondary:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+  color: #374151;
+}
+
+.detail-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #9ca3af;
+  font-size: 16px;
+}
+
+/* Responsive Email Layout */
+@media (max-width: 1024px) {
+  .email-layout {
+    grid-template-columns: 300px 1fr;
+  }
+
+  .detail-info-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .email-layout {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
+  .task-inbox {
+    border-right: none;
+    border-bottom: 1px solid #e5e7eb;
+    max-height: 400px;
+  }
+
+  .detail-footer {
+    flex-direction: column;
+  }
+
+  .btn-detail-complete,
+  .btn-detail-approve,
+  .btn-detail-action,
+  .btn-detail-secondary {
+    width: 100%;
+  }
+}
