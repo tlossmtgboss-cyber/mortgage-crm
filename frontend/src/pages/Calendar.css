@@ -228,7 +228,7 @@
 /* Calendar Content Layout */
 .calendar-content {
   display: grid;
-  grid-template-columns: 350px 1fr;
+  grid-template-columns: 700px 1fr;
   gap: var(--space-lg);
 }
 
@@ -447,7 +447,7 @@
 
 @media (max-width: 1200px) {
   .calendar-content {
-    grid-template-columns: 300px 1fr;
+    grid-template-columns: 600px 1fr;
   }
 
   .appointments-sidebar {
