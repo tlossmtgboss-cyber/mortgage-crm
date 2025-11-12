@@ -24,9 +24,11 @@ function TeamMembers() {
     try {
       setLoading(true);
       const data = await teamAPI.getMembers();
-      setMembers(data || []);
+      // API returns an array of team members directly
+      setMembers(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Failed to load team members:', error);
+      setMembers([]);
     } finally {
       setLoading(false);
     }

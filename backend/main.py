@@ -9571,79 +9571,80 @@ async def create_process_task(
         logger.error(f"Create process task error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/v1/team/members")
-async def get_team_members(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Get all team members with their assigned roles from onboarding"""
-    try:
-        # Get all users in the system
-        all_users = db.query(User).filter(User.id != current_user.id).all()
-
-        # Get all process roles for the current user (the admin who completed onboarding)
-        process_roles = db.query(ProcessRole).filter(
-            ProcessRole.user_id == current_user.id,
-            ProcessRole.is_active == True
-        ).all()
-
-        # Get tasks count for each role
-        team_members = []
-        for user in all_users:
-            # Try to find a matching role for this user (simplified - in production you'd have explicit user-role mapping)
-            member_data = {
-                "id": user.id,
-                "email": user.email,
-                "full_name": user.full_name,
-                "created_at": user.created_at.isoformat() if user.created_at else None,
-                "onboarding_completed": user.onboarding_completed,
-                "role": None,
-                "tasks_count": 0
-            }
-
-            # Add to list
-            team_members.append(member_data)
-
-        # Also include current user
-        current_member = {
-            "id": current_user.id,
-            "email": current_user.email,
-            "full_name": current_user.full_name,
-            "created_at": current_user.created_at.isoformat() if current_user.created_at else None,
-            "onboarding_completed": current_user.onboarding_completed,
-            "role": {"role_title": "Admin", "role_name": "admin"},
-            "tasks_count": 0,
-            "is_current": True
-        }
-
-        team_members.insert(0, current_member)
-
-        # Get role assignments and task counts
-        roles_data = []
-        for role in process_roles:
-            tasks_count = db.query(ProcessTask).filter(
-                ProcessTask.role_id == role.id,
-                ProcessTask.is_active == True
-            ).count()
-
-            roles_data.append({
-                "id": role.id,
-                "role_name": role.role_name,
-                "role_title": role.role_title,
-                "responsibilities": role.responsibilities,
-                "skills_required": role.skills_required,
-                "key_activities": role.key_activities,
-                "tasks_count": tasks_count
-            })
-
-        return {
-            "team_members": team_members,
-            "available_roles": roles_data
-        }
-
-    except Exception as e:
-        logger.error(f"Get team members error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+# COMMENTED OUT - Duplicate endpoint, using get_all_team_members below instead
+# @app.get("/api/v1/team/members")
+# async def get_team_members(
+#     current_user: User = Depends(get_current_user),
+#     db: Session = Depends(get_db)
+# ):
+#     """Get all team members with their assigned roles from onboarding"""
+#     try:
+#         # Get all users in the system
+#         all_users = db.query(User).filter(User.id != current_user.id).all()
+#
+#         # Get all process roles for the current user (the admin who completed onboarding)
+#         process_roles = db.query(ProcessRole).filter(
+#             ProcessRole.user_id == current_user.id,
+#             ProcessRole.is_active == True
+#         ).all()
+#
+#         # Get tasks count for each role
+#         team_members = []
+#         for user in all_users:
+#             # Try to find a matching role for this user (simplified - in production you'd have explicit user-role mapping)
+#             member_data = {
+#                 "id": user.id,
+#                 "email": user.email,
+#                 "full_name": user.full_name,
+#                 "created_at": user.created_at.isoformat() if user.created_at else None,
+#                 "onboarding_completed": user.onboarding_completed,
+#                 "role": None,
+#                 "tasks_count": 0
+#             }
+#
+#             # Add to list
+#             team_members.append(member_data)
+#
+#         # Also include current user
+#         current_member = {
+#             "id": current_user.id,
+#             "email": current_user.email,
+#             "full_name": current_user.full_name,
+#             "created_at": current_user.created_at.isoformat() if current_user.created_at else None,
+#             "onboarding_completed": current_user.onboarding_completed,
+#             "role": {"role_title": "Admin", "role_name": "admin"},
+#             "tasks_count": 0,
+#             "is_current": True
+#         }
+#
+#         team_members.insert(0, current_member)
+#
+#         # Get role assignments and task counts
+#         roles_data = []
+#         for role in process_roles:
+#             tasks_count = db.query(ProcessTask).filter(
+#                 ProcessTask.role_id == role.id,
+#                 ProcessTask.is_active == True
+#             ).count()
+#
+#             roles_data.append({
+#                 "id": role.id,
+#                 "role_name": role.role_name,
+#                 "role_title": role.role_title,
+#                 "responsibilities": role.responsibilities,
+#                 "skills_required": role.skills_required,
+#                 "key_activities": role.key_activities,
+#                 "tasks_count": tasks_count
+#             })
+#
+#         return {
+#             "team_members": team_members,
+#             "available_roles": roles_data
+#         }
+#
+#     except Exception as e:
+#         logger.error(f"Get team members error: {e}")
+#         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/v1/team/members/{user_id}")
 async def get_team_member_detail(
