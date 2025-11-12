@@ -27,10 +27,24 @@ class ErrorBoundary extends React.Component {
 
   componentDidCatch(error, errorInfo) {
     console.error('Error caught by boundary:', error, errorInfo);
-    this.setState({
-      error,
-      errorInfo
-    });
+
+    // Check if there's a pre-captured screenshot
+    const preErrorScreenshot = window.__preErrorScreenshot;
+    if (preErrorScreenshot) {
+      console.log('Using pre-captured screenshot');
+      this.setState({
+        error,
+        errorInfo,
+        screenshot: preErrorScreenshot
+      });
+      // Clear it so it doesn't get used again
+      window.__preErrorScreenshot = null;
+    } else {
+      this.setState({
+        error,
+        errorInfo
+      });
+    }
   }
 
   captureScreenshot = async () => {
@@ -51,20 +65,27 @@ class ErrorBoundary extends React.Component {
   };
 
   handleAutoFix = async () => {
-    this.setState({ isFixing: true, fixStatus: 'Capturing screenshot...' });
+    this.setState({ isFixing: true, fixStatus: 'Preparing error analysis...' });
 
-    const screenshot = await this.captureScreenshot();
+    // Use existing screenshot if already captured, otherwise capture now
+    let screenshot = this.state.screenshot;
 
     if (!screenshot) {
-      this.setState({
-        fixStatus: 'Failed to capture screenshot',
-        isFixing: false
-      });
-      return;
+      this.setState({ fixStatus: 'Capturing screenshot...' });
+      screenshot = await this.captureScreenshot();
+
+      if (!screenshot) {
+        this.setState({
+          fixStatus: 'Failed to capture screenshot',
+          isFixing: false
+        });
+        return;
+      }
+
+      this.setState({ screenshot });
     }
 
     this.setState({
-      screenshot,
       fixStatus: 'Sending error details to AI...',
       fixAttempts: this.state.fixAttempts + 1
     });

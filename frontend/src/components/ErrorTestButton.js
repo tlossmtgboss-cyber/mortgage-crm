@@ -1,10 +1,37 @@
 import React, { useState } from 'react';
+import html2canvas from 'html2canvas';
 
 function ErrorTestButton() {
   const [shouldError, setShouldError] = useState(false);
 
-  const triggerError = () => {
-    setShouldError(true);
+  const triggerError = async () => {
+    try {
+      // First, capture the screenshot of the current screen
+      console.log('Capturing screenshot before error...');
+      const canvas = await html2canvas(document.body, {
+        allowTaint: true,
+        useCORS: true,
+        logging: false,
+        width: window.innerWidth,
+        height: window.innerHeight
+      });
+
+      const screenshot = canvas.toDataURL('image/png');
+
+      // Store the screenshot so ErrorBoundary can access it
+      window.__preErrorScreenshot = screenshot;
+      console.log('Screenshot captured and stored!');
+
+      // Small delay to ensure screenshot is saved
+      setTimeout(() => {
+        // Now trigger the error
+        setShouldError(true);
+      }, 100);
+    } catch (error) {
+      console.error('Failed to capture screenshot:', error);
+      // Still trigger error even if screenshot fails
+      setShouldError(true);
+    }
   };
 
   // This will throw an error when shouldError is true
