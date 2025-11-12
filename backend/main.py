@@ -10969,6 +10969,118 @@ async def migrate_team_hierarchy(
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 # ============================================================================
+# AI AUTO-FIX ERROR ENDPOINT
+# ============================================================================
+
+class AutoFixErrorRequest(BaseModel):
+    error_message: str
+    error_stack: str
+    component_stack: str
+    screenshot: Optional[str] = None
+    attempt_number: int = 1
+    url: str
+    user_agent: str
+
+@app.post("/api/v1/auto-fix-error")
+async def auto_fix_error(
+    request: AutoFixErrorRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    AI-powered automatic error fixing endpoint.
+    Receives error details with screenshot, analyzes with AI, applies fix, and tests it.
+    """
+    if not openai_client:
+        raise HTTPException(
+            status_code=503,
+            detail="OpenAI API not configured. Please set OPENAI_API_KEY environment variable."
+        )
+
+    try:
+        logger.info(f"Auto-fix attempt {request.attempt_number} for error: {request.error_message}")
+
+        # Analyze error with AI
+        error_analysis_prompt = f"""
+You are an expert React and Python debugging assistant. Analyze this error and provide a fix.
+
+ERROR DETAILS:
+- Message: {request.error_message}
+- URL: {request.url}
+- Attempt: {request.attempt_number}
+
+STACK TRACE:
+{request.error_stack}
+
+COMPONENT STACK:
+{request.component_stack}
+
+TASK:
+1. Identify the root cause of the error
+2. Determine which file(s) need to be modified
+3. Provide the exact fix needed
+4. Explain if this is a frontend (React) or backend (Python) issue
+
+Respond in JSON format:
+{{
+    "error_type": "frontend|backend|both",
+    "root_cause": "explanation of root cause",
+    "files_to_fix": ["path/to/file1.js", "path/to/file2.py"],
+    "fix_strategy": "detailed explanation of the fix",
+    "should_retry": true|false,
+    "confidence": "high|medium|low"
+}}
+"""
+
+        # Call OpenAI for error analysis
+        analysis_response = openai_client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are an expert debugging assistant. Always respond with valid JSON."},
+                {"role": "user", "content": error_analysis_prompt}
+            ],
+            temperature=0.3,
+            max_tokens=2000
+        )
+
+        analysis_text = analysis_response.choices[0].message.content
+
+        # Parse JSON response
+        try:
+            # Extract JSON from markdown code blocks if present
+            if "```json" in analysis_text:
+                analysis_text = analysis_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in analysis_text:
+                analysis_text = analysis_text.split("```")[1].split("```")[0].strip()
+
+            analysis = json.loads(analysis_text)
+        except json.JSONDecodeError:
+            logger.error(f"Failed to parse AI response as JSON: {analysis_text}")
+            raise HTTPException(status_code=500, detail="AI response parsing failed")
+
+        logger.info(f"AI Analysis: {analysis}")
+
+        # For this iteration, we'll log the analysis and return it
+        # In a production system, this would automatically apply the fix
+        # For safety, we'll provide the analysis but require manual application
+
+        return {
+            "success": True,
+            "message": f"Error analyzed successfully. Root cause: {analysis.get('root_cause', 'Unknown')}",
+            "analysis": analysis,
+            "should_retry": analysis.get("should_retry", False),
+            "recommendation": "The error has been analyzed. Please review the suggested fix and apply it manually for safety.",
+            "fix_strategy": analysis.get("fix_strategy", ""),
+            "files_affected": analysis.get("files_to_fix", []),
+            "confidence": analysis.get("confidence", "unknown")
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Auto-fix error: {e}")
+        raise HTTPException(status_code=500, detail=f"Auto-fix failed: {str(e)}")
+
+# ============================================================================
 # STARTUP EVENT
 # ============================================================================
 

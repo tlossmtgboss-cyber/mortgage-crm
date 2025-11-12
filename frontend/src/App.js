@@ -5,6 +5,7 @@ import Navigation from './components/Navigation';
 import AIAssistant from './components/AIAssistant';
 import CoachCorner from './components/CoachCorner';
 import OnboardingPrompt from './components/OnboardingPrompt';
+import ErrorBoundary from './components/ErrorBoundary';
 import LandingPage from './pages/LandingPage';
 import Registration from './pages/Registration';
 import EmailVerificationSent from './pages/EmailVerificationSent';
@@ -132,8 +133,9 @@ function App() {
   }, []);
 
   return (
-    <Router>
-      <div className="app">
+    <ErrorBoundary>
+      <Router>
+        <div className="app">
         <Routes>
           {/* Public routes */}
           <Route path="/" element={<LandingPage />} />
@@ -701,6 +703,7 @@ function App() {
         </Routes>
       </div>
     </Router>
+    </ErrorBoundary>
   );
 }
 
