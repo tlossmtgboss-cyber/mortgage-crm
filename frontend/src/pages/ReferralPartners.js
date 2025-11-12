@@ -19,10 +19,20 @@ function ReferralPartners() {
     try {
       setLoading(true);
       const data = await partnersAPI.getAll();
+      console.log('Loaded partners data:', data);
+      console.log('Is array?', Array.isArray(data));
+      console.log('Type:', typeof data);
+
       // Ensure data is always an array
-      setPartners(Array.isArray(data) ? data : []);
+      if (Array.isArray(data)) {
+        setPartners(data);
+      } else {
+        console.error('API returned non-array data:', data);
+        setPartners([]);
+      }
     } catch (error) {
       console.error('Failed to load referral partners:', error);
+      console.error('Error details:', error.response?.data);
       // Set empty array on error
       setPartners([]);
     } finally {
