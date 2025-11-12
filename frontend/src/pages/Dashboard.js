@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import ErrorTestButton from '../components/ErrorTestButton';
 import './Dashboard.css';
 
 function Dashboard() {
@@ -689,9 +688,6 @@ function Dashboard() {
       <div className="draggable-containers-wrapper">
         {containerOrder.map((containerId, index) => renderDraggableContainer(containerId, index))}
       </div>
-
-      {/* Error Test Button - Only in development or for testing */}
-      <ErrorTestButton />
     </div>
   );
 }

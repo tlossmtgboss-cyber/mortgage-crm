@@ -6,6 +6,7 @@ import AIAssistant from './components/AIAssistant';
 import CoachCorner from './components/CoachCorner';
 import OnboardingPrompt from './components/OnboardingPrompt';
 import ErrorBoundary from './components/ErrorBoundary';
+import ErrorTestButton from './components/ErrorTestButton';
 import LandingPage from './pages/LandingPage';
 import Registration from './pages/Registration';
 import EmailVerificationSent from './pages/EmailVerificationSent';
@@ -32,6 +33,7 @@ import Coach from './pages/Coach';
 import ReconciliationCenter from './pages/ReconciliationCenter';
 import Settings from './pages/Settings';
 import TeamMembers from './pages/TeamMembers';
+import TeamMemberProfile from './pages/TeamMemberProfile';
 import DataUpload from './pages/DataUpload';
 import Users from './pages/Users';
 import UserProfile from './pages/UserProfile';
@@ -581,6 +583,26 @@ function App() {
             }
           />
           <Route
+            path="/team-members/:id"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <TeamMemberProfile />
+                  </main>
+                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
             path="/data-upload"
             element={
               <PrivateRoute>
@@ -701,6 +723,9 @@ function App() {
             }
           />
         </Routes>
+
+        {/* Global Error Test Button - appears on all pages */}
+        <ErrorTestButton />
       </div>
     </Router>
     </ErrorBoundary>
