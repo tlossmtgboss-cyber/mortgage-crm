@@ -6,12 +6,15 @@ function Calendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState('month');
   const [events, setEvents] = useState([]);
+  const [allEvents, setAllEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState(null);
+  const [calendarOffset, setCalendarOffset] = useState(0); // Month offset for mini calendar scrolling
 
   useEffect(() => {
     loadEvents();
+    loadAllEvents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentDate]);
 
@@ -34,10 +37,30 @@ function Calendar() {
     }
   };
 
+  const loadAllEvents = async () => {
+    try {
+      // Load all events (6 months past and 6 months future)
+      const startDate = new Date();
+      startDate.setMonth(startDate.getMonth() - 6);
+      const endDate = new Date();
+      endDate.setMonth(endDate.getMonth() + 6);
+
+      const data = await calendarAPI.getAll({
+        start_date: startDate.toISOString(),
+        end_date: endDate.toISOString(),
+      });
+      setAllEvents(data || []);
+    } catch (error) {
+      console.error('Failed to load all events:', error);
+      setAllEvents([]);
+    }
+  };
+
   const handleAddEvent = async (eventData) => {
     try {
       await calendarAPI.create(eventData);
       loadEvents();
+      loadAllEvents();
       setShowAddModal(false);
     } catch (error) {
       console.error('Failed to create event:', error);
@@ -50,8 +73,43 @@ function Calendar() {
     try {
       await calendarAPI.delete(eventId);
       loadEvents();
+      loadAllEvents();
     } catch (error) {
       console.error('Failed to delete event:', error);
+    }
+  };
+
+  // Sort and group events by date
+  const getSortedEvents = () => {
+    const sorted = [...allEvents].sort((a, b) => {
+      return new Date(a.start_time) - new Date(b.start_time);
+    });
+    return sorted;
+  };
+
+  const formatEventTime = (startTime, endTime) => {
+    const start = new Date(startTime);
+    const end = new Date(endTime);
+    const startStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    const endStr = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    const duration = Math.round((end - start) / (1000 * 60)); // duration in minutes
+    return { startStr, endStr, duration };
+  };
+
+  const formatEventDate = (dateStr) => {
+    const date = new Date(dateStr);
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    if (date.toDateString() === today.toDateString()) {
+      return 'Today';
+    } else if (date.toDateString() === tomorrow.toDateString()) {
+      return 'Tomorrow';
+    } else {
+      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+      return `${dayNames[date.getDay()]} • ${monthNames[date.getMonth()]} ${date.getDate()}`;
     }
   };
 
@@ -68,10 +126,25 @@ function Calendar() {
     const daysInMonth = lastDay.getDate();
     const startingDayOfWeek = firstDay.getDay();
 
-    return { daysInMonth, startingDayOfWeek };
+    return { daysInMonth, startingDayOfWeek, year, month };
   };
 
-  const { daysInMonth, startingDayOfWeek } = getDaysInMonth(currentDate);
+  // Get data for displayed months (based on offset)
+  const displayDate = new Date();
+  displayDate.setMonth(displayDate.getMonth() + calendarOffset);
+  const currentMonthData = getDaysInMonth(displayDate);
+
+  const nextMonthDate = new Date(displayDate.getFullYear(), displayDate.getMonth() + 1, 1);
+  const nextMonthData = getDaysInMonth(nextMonthDate);
+
+  // Scroll calendar months
+  const handleScrollUp = () => {
+    setCalendarOffset(calendarOffset - 1);
+  };
+
+  const handleScrollDown = () => {
+    setCalendarOffset(calendarOffset + 1);
+  };
 
   const handlePrevMonth = () => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1));
@@ -91,14 +164,70 @@ function Calendar() {
     setShowAddModal(true);
   };
 
-  const getEventsForDate = (day) => {
-    const dateStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
-    const dateEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), day, 23, 59, 59);
+  const getEventsForDate = (day, year, month) => {
+    const dateStart = new Date(year, month, day);
+    const dateEnd = new Date(year, month, day, 23, 59, 59);
 
-    return events.filter(event => {
+    return allEvents.filter(event => {
       const eventDate = new Date(event.start_time);
       return eventDate >= dateStart && eventDate <= dateEnd;
     });
+  };
+
+  // Render a mini calendar for a specific month
+  const renderMiniCalendar = (monthData, isNextMonth = false) => {
+    const { daysInMonth, startingDayOfWeek, year, month } = monthData;
+    const monthDate = new Date(year, month, 1);
+
+    return (
+      <div className="mini-calendar">
+        <div className="mini-calendar-header">
+          <h3>{monthNames[month]} {year}</h3>
+        </div>
+
+        <div className="mini-calendar-weekdays">
+          {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => (
+            <div key={idx} className="mini-weekday-label">{day}</div>
+          ))}
+        </div>
+
+        <div className="mini-calendar-days">
+          {[...Array(startingDayOfWeek)].map((_, index) => (
+            <div key={`empty-${index}`} className="mini-calendar-day empty" />
+          ))}
+
+          {[...Array(daysInMonth)].map((_, index) => {
+            const day = index + 1;
+            const dayEvents = getEventsForDate(day, year, month);
+            const dayDate = new Date(year, month, day);
+            const isToday = new Date().toDateString() === dayDate.toDateString();
+
+            return (
+              <div
+                key={day}
+                className={`mini-calendar-day ${isToday ? 'today' : ''} ${dayEvents.length > 0 ? 'has-events' : ''}`}
+                onClick={() => {
+                  setSelectedDate(dayDate);
+                  setShowAddModal(true);
+                }}
+              >
+                <div className="mini-day-number">{day}</div>
+                {dayEvents.length > 0 && (
+                  <div className="event-dots">
+                    {dayEvents.slice(0, 3).map((event, idx) => (
+                      <div
+                        key={idx}
+                        className={`event-dot event-dot-${event.event_type || 'meeting'}`}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -140,54 +269,92 @@ function Calendar() {
         </div>
       </div>
 
-      {loading ? (
-        <div className="loading">Loading events...</div>
-      ) : (
-        <div className="calendar-grid">
-        <div className="calendar-weekdays">
-          {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-            <div key={day} className="weekday-label">{day}</div>
-          ))}
-        </div>
-
-        <div className="calendar-days">
-          {[...Array(startingDayOfWeek)].map((_, index) => (
-            <div key={`empty-${index}`} className="calendar-day empty" />
-          ))}
-
-          {[...Array(daysInMonth)].map((_, index) => {
-            const day = index + 1;
-            const dayEvents = getEventsForDate(day);
-            const isToday = new Date().toDateString() === new Date(currentDate.getFullYear(), currentDate.getMonth(), day).toDateString();
-
-            return (
-              <div
-                key={day}
-                className={`calendar-day ${isToday ? 'today' : ''}`}
-                onClick={() => handleDayClick(day)}
-              >
-                <div className="day-number">{day}</div>
-                {dayEvents.map(event => (
-                  <div
-                    key={event.id}
-                    className={`event event-${event.event_type || 'meeting'}`}
-                    onClick={(e) => { e.stopPropagation(); }}
-                  >
-                    <span>{event.title}</span>
-                    <button
-                      className="delete-event"
-                      onClick={(e) => { e.stopPropagation(); handleDeleteEvent(event.id); }}
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
+      <div className="calendar-content">
+        {/* Appointments Sidebar */}
+        <div className="appointments-sidebar">
+          <h2>Appointments</h2>
+          <div className="appointments-list">
+            {getSortedEvents().length === 0 ? (
+              <div className="empty-appointments">
+                <p>No appointments scheduled</p>
               </div>
-            );
-          })}
+            ) : (
+              getSortedEvents().map((event, index) => {
+                const { startStr, duration } = formatEventTime(event.start_time, event.end_time);
+                const dateLabel = formatEventDate(event.start_time);
+                const showDateHeader = index === 0 || formatEventDate(getSortedEvents()[index - 1].start_time) !== dateLabel;
+
+                return (
+                  <div key={event.id}>
+                    {showDateHeader && (
+                      <div className="appointment-date-header">{dateLabel}</div>
+                    )}
+                    <div className={`appointment-item appointment-${event.event_type || 'meeting'}`}>
+                      <div className="appointment-time">
+                        <div className="time-start">{startStr}</div>
+                        <div className="time-duration">{duration}m</div>
+                      </div>
+                      <div className="appointment-details">
+                        <div className="appointment-title">{event.title}</div>
+                        {event.location && (
+                          <div className="appointment-location">{event.location}</div>
+                        )}
+                        {event.description && (
+                          <div className="appointment-description">{event.description}</div>
+                        )}
+                      </div>
+                      <button
+                        className="delete-appointment"
+                        onClick={() => handleDeleteEvent(event.id)}
+                        title="Delete event"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
+
+        {/* Two-Month Mini Calendar View */}
+        <div className="calendar-main">
+          {loading ? (
+            <div className="loading">Loading events...</div>
+          ) : (
+            <div className="calendar-scroll-container">
+              {/* Scroll Up Button */}
+              <button
+                className="calendar-scroll-btn scroll-up"
+                onClick={handleScrollUp}
+                title="Previous month"
+              >
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="18 15 12 9 6 15"></polyline>
+                </svg>
+              </button>
+
+              {/* Two Month View */}
+              <div className="two-month-view">
+                {renderMiniCalendar(currentMonthData)}
+                {renderMiniCalendar(nextMonthData, true)}
+              </div>
+
+              {/* Scroll Down Button */}
+              <button
+                className="calendar-scroll-btn scroll-down"
+                onClick={handleScrollDown}
+                title="Next month"
+              >
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {showAddModal && (
         <AddEventModal

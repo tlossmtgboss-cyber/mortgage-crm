@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { teamAPI } from '../services/api';
 import './Settings.css';
 import './Leads.css';
 
 function TeamMembers() {
+  const navigate = useNavigate();
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -250,7 +252,11 @@ function TeamMembers() {
             </thead>
             <tbody>
               {filteredMembers.map((member) => (
-                <tr key={member.id}>
+                <tr
+                  key={member.id}
+                  onClick={() => navigate(`/team-members/${member.id}`)}
+                  style={{ cursor: 'pointer' }}
+                >
                   <td className="lead-name">
                     <strong>
                       {member.first_name} {member.last_name}
@@ -266,14 +272,14 @@ function TeamMembers() {
                     <div className="table-actions">
                       <button
                         className="btn-icon"
-                        onClick={() => handleEditMember(member)}
+                        onClick={(e) => { e.stopPropagation(); handleEditMember(member); }}
                         title="Edit"
                       >
                         ✏️
                       </button>
                       <button
                         className="btn-icon"
-                        onClick={() => handleDeleteMember(member.id)}
+                        onClick={(e) => { e.stopPropagation(); handleDeleteMember(member.id); }}
                         title="Delete"
                       >
                         🗑️
