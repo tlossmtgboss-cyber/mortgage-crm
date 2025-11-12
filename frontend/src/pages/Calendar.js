@@ -272,7 +272,16 @@ function Calendar() {
       <div className="calendar-content">
         {/* Appointments Sidebar */}
         <div className="appointments-sidebar">
-          <h2>Appointments</h2>
+          <div className="appointments-sidebar-header">
+            <h2>Appointments</h2>
+            <button
+              className="btn-add-appointment"
+              onClick={() => { setSelectedDate(new Date()); setShowAddModal(true); }}
+              title="Add new appointment"
+            >
+              + Add
+            </button>
+          </div>
           <div className="appointments-list">
             {getSortedEvents().length === 0 ? (
               <div className="empty-appointments">
