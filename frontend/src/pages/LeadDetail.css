@@ -716,68 +716,169 @@
 .action-buttons {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+  gap: 14px;
 }
 
 .action-btn {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 18px;
-  background: #f8fafc;
-  border: 2px solid #e2e8f0;
-  border-radius: 8px;
+  justify-content: center;
+  gap: 10px;
+  padding: 20px 16px;
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.25s ease;
   font-size: 13px;
-  font-weight: 500;
-  color: #1a202c;
+  font-weight: 600;
+  color: #374151;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.action-btn::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, transparent 0%, rgba(0, 0, 0, 0.02) 100%);
+  opacity: 0;
+  transition: opacity 0.25s ease;
 }
 
 .action-btn:hover:not(:disabled) {
-  background: white;
-  border-color: #218D8D;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12);
+  border-color: currentColor;
+}
+
+.action-btn:hover:not(:disabled)::before {
+  opacity: 1;
+}
+
+.action-btn:active:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
 }
 
 .action-btn:disabled {
-  opacity: 0.4;
+  opacity: 0.35;
   cursor: not-allowed;
+  background: #f9fafb;
 }
 
 .action-btn .icon {
-  font-size: 24px;
+  font-size: 32px;
+  line-height: 1;
+  transition: transform 0.25s ease;
+}
+
+.action-btn:hover:not(:disabled) .icon {
+  transform: scale(1.15);
+}
+
+/* Call Button */
+.action-btn.call {
+  border-color: #e0f2fe;
+  background: linear-gradient(135deg, #f0f9ff 0%, #ffffff 100%);
+  color: #0284c7;
+}
+
+.action-btn.call:hover:not(:disabled) {
+  border-color: #38bdf8;
+  box-shadow: 0 8px 20px rgba(56, 189, 248, 0.25);
+}
+
+.action-btn.call .icon {
+  color: #0284c7;
+}
+
+/* SMS Button */
+.action-btn.sms {
+  border-color: #d1fae5;
+  background: linear-gradient(135deg, #ecfdf5 0%, #ffffff 100%);
+  color: #059669;
+}
+
+.action-btn.sms:hover:not(:disabled) {
+  border-color: #34d399;
+  box-shadow: 0 8px 20px rgba(52, 211, 153, 0.25);
 }
 
 .action-btn.sms .icon {
-  color: #10b981;
+  color: #059669;
 }
 
-.action-btn.task .icon {
-  color: #8b5cf6;
+/* Email Button */
+.action-btn.email {
+  border-color: #dbeafe;
+  background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%);
+  color: #2563eb;
+}
+
+.action-btn.email:hover:not(:disabled) {
+  border-color: #60a5fa;
+  box-shadow: 0 8px 20px rgba(96, 165, 250, 0.25);
 }
 
 .action-btn.email .icon {
-  color: #3b82f6;
+  color: #2563eb;
+}
+
+/* Task Button */
+.action-btn.task {
+  border-color: #e9d5ff;
+  background: linear-gradient(135deg, #f5f3ff 0%, #ffffff 100%);
+  color: #7c3aed;
+}
+
+.action-btn.task:hover:not(:disabled) {
+  border-color: #a78bfa;
+  box-shadow: 0 8px 20px rgba(167, 139, 250, 0.25);
+}
+
+.action-btn.task .icon {
+  color: #7c3aed;
+}
+
+/* Calendar Button */
+.action-btn.calendar {
+  border-color: #fed7aa;
+  background: linear-gradient(135deg, #fff7ed 0%, #ffffff 100%);
+  color: #ea580c;
+}
+
+.action-btn.calendar:hover:not(:disabled) {
+  border-color: #fb923c;
+  box-shadow: 0 8px 20px rgba(251, 146, 60, 0.25);
 }
 
 .action-btn.calendar .icon {
-  color: #f59e0b;
+  color: #ea580c;
 }
 
+/* Teams Button */
 .action-btn.teams {
-  background: linear-gradient(135deg, #5558AF 0%, #464775 100%);
+  background: linear-gradient(135deg, #5b5fc7 0%, #6366f1 100%);
+  border-color: #5b5fc7;
   color: white;
+  box-shadow: 0 2px 8px rgba(91, 95, 199, 0.3);
 }
 
 .action-btn.teams:hover:not(:disabled) {
-  background: linear-gradient(135deg, #464775 0%, #3a3b5f 100%);
+  background: linear-gradient(135deg, #4f46e5 0%, #5b5fc7 100%);
+  border-color: #4f46e5;
+  box-shadow: 0 8px 24px rgba(79, 70, 229, 0.4);
 }
 
 .action-btn.teams .icon {
   color: white;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
 }
 
 /* Email History */
