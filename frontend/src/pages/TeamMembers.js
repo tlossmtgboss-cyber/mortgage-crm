@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { teamAPI } from '../services/api';
 import './Settings.css';
+import './Leads.css';
 
 function TeamMembers() {
   const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
@@ -183,71 +185,106 @@ function TeamMembers() {
     return <div className="loading">Loading team members...</div>;
   }
 
+  // Filter by search query
+  let filteredMembers = members;
+  if (searchQuery.trim()) {
+    const query = searchQuery.toLowerCase();
+    filteredMembers = members.filter(member =>
+      `${member.first_name} ${member.last_name}`.toLowerCase().includes(query) ||
+      member.email?.toLowerCase().includes(query) ||
+      member.phone?.toLowerCase().includes(query) ||
+      member.role?.toLowerCase().includes(query) ||
+      member.title?.toLowerCase().includes(query)
+    );
+  }
+
   return (
-    <div className="settings-page">
-      <div className="settings-header">
-        <h1>Team Members</h1>
+    <div className="leads-page">
+      <div className="page-header">
+        <div>
+          <h1>Team Members</h1>
+          <p>{members.length} total team members</p>
+        </div>
         <button className="btn-primary" onClick={handleAddMember}>
           + Add Team Member
         </button>
       </div>
 
-      <div className="settings-content">
-        <div className="team-members-grid">
-          {members.length === 0 ? (
-            <div className="empty-state">
-              <h3>No Team Members Yet</h3>
-              <p>Add your first team member to get started</p>
+      <div className="search-bar-container">
+        <input
+          type="text"
+          className="search-bar"
+          placeholder="Search team members by name, email, phone, or role..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+        {searchQuery && (
+          <button className="clear-search" onClick={() => setSearchQuery('')}>
+            ×
+          </button>
+        )}
+      </div>
+
+      <div className="table-container">
+        {filteredMembers.length === 0 ? (
+          <div className="empty-state">
+            <h3>No Team Members Found</h3>
+            <p>{searchQuery ? 'Try adjusting your search' : 'Add your first team member to get started'}</p>
+            {!searchQuery && (
               <button className="btn-primary" onClick={handleAddMember}>
                 + Add Team Member
               </button>
-            </div>
-          ) : (
-            <table className="team-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Phone</th>
-                  <th>Role</th>
-                  <th>Title</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {members.map((member) => (
-                  <tr key={member.id}>
-                    <td>
-                      <strong>
-                        {member.first_name} {member.last_name}
-                      </strong>
-                    </td>
-                    <td>{member.email || '-'}</td>
-                    <td>{member.phone || '-'}</td>
-                    <td>
-                      <span className="role-badge">{member.role || 'Team Member'}</span>
-                    </td>
-                    <td>{member.title || '-'}</td>
-                    <td>
+            )}
+          </div>
+        ) : (
+          <table className="leads-table">
+            <thead>
+              <tr>
+                <th>NAME</th>
+                <th>EMAIL</th>
+                <th>PHONE</th>
+                <th>ROLE</th>
+                <th>TITLE</th>
+                <th>ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredMembers.map((member) => (
+                <tr key={member.id}>
+                  <td className="lead-name">
+                    <strong>
+                      {member.first_name} {member.last_name}
+                    </strong>
+                  </td>
+                  <td>{member.email || 'N/A'}</td>
+                  <td>{member.phone || 'N/A'}</td>
+                  <td>
+                    <span className="status-badge status-prospect">{member.role || 'Team Member'}</span>
+                  </td>
+                  <td>{member.title || 'N/A'}</td>
+                  <td>
+                    <div className="table-actions">
                       <button
-                        className="btn-edit"
+                        className="btn-icon"
                         onClick={() => handleEditMember(member)}
+                        title="Edit"
                       >
-                        Edit
+                        ✏️
                       </button>
                       <button
-                        className="btn-delete"
+                        className="btn-icon"
                         onClick={() => handleDeleteMember(member.id)}
+                        title="Delete"
                       >
-                        Delete
+                        🗑️
                       </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
       {/* Add/Edit Modal */}
@@ -330,13 +367,14 @@ function TeamMembers() {
                       required
                     >
                       <option value="">Select Role...</option>
-                      <option value="Loan Officer">Loan Officer</option>
-                      <option value="Processor">Processor</option>
-                      <option value="Underwriter">Underwriter</option>
-                      <option value="Closer">Closer</option>
-                      <option value="Manager">Manager</option>
-                      <option value="Admin">Admin</option>
-                      <option value="Other">Other</option>
+                      <option value="Application Analysis">Application Analysis</option>
+                      <option value="Production Assistant 1">Production Assistant 1</option>
+                      <option value="Production Assistant 2">Production Assistant 2</option>
+                      <option value="Processing Assistant">Processing Assistant</option>
+                      <option value="Jr. Processor">Jr. Processor</option>
+                      <option value="Jr. Loan Officer">Jr. Loan Officer</option>
+                      <option value="Loan Officer Assistant">Loan Officer Assistant</option>
+                      <option value="Concierge">Concierge</option>
                     </select>
                   </div>
                   <div className="form-group">
