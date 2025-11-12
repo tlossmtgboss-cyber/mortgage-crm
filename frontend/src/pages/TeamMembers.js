@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { teamAPI } from '../services/api';
 import './Settings.css';
 
@@ -15,10 +15,48 @@ function TeamMembers() {
     role: '',
     title: ''
   });
+  const [saveStatus, setSaveStatus] = useState(''); // 'saving', 'saved', or ''
+  const autoSaveTimerRef = useRef(null);
+  const initialFormDataRef = useRef(null);
 
   useEffect(() => {
     loadMembers();
   }, []);
+
+  // Auto-save effect - triggers 2 seconds after form data changes
+  useEffect(() => {
+    // Clear existing timer
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+
+    // Only auto-save if we're editing an existing member (not adding new)
+    if (!editingMember) {
+      return;
+    }
+
+    // Check if data has actually changed from initial values
+    if (initialFormDataRef.current && JSON.stringify(formData) === JSON.stringify(initialFormDataRef.current)) {
+      return;
+    }
+
+    // Don't auto-save if required fields are empty
+    if (!formData.first_name || !formData.last_name || !formData.role) {
+      return;
+    }
+
+    // Set up auto-save timer
+    autoSaveTimerRef.current = setTimeout(() => {
+      autoSave();
+    }, 2000);
+
+    // Cleanup function
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, [formData, editingMember]);
 
   const loadMembers = async () => {
     try {
@@ -34,6 +72,37 @@ function TeamMembers() {
     }
   };
 
+  const autoSave = async () => {
+    if (!editingMember) return;
+
+    try {
+      setSaveStatus('saving');
+      await teamAPI.updateMember(editingMember.id, formData);
+      setSaveStatus('saved');
+
+      // Update the initial form data to reflect the saved state
+      initialFormDataRef.current = { ...formData };
+
+      // Update the member in the list using functional update to avoid stale closure
+      setMembers(prevMembers => prevMembers.map(m =>
+        m.id === editingMember.id
+          ? { ...m, ...formData }
+          : m
+      ));
+
+      // Clear 'saved' status after 2 seconds
+      setTimeout(() => {
+        setSaveStatus('');
+      }, 2000);
+    } catch (error) {
+      console.error('Auto-save failed:', error);
+      setSaveStatus('error');
+      setTimeout(() => {
+        setSaveStatus('');
+      }, 3000);
+    }
+  };
+
   const handleAddMember = () => {
     setFormData({
       first_name: '',
@@ -44,39 +113,51 @@ function TeamMembers() {
       title: ''
     });
     setEditingMember(null);
+    setSaveStatus('');
+    initialFormDataRef.current = null;
     setShowAddModal(true);
   };
 
   const handleEditMember = (member) => {
-    setFormData({
+    const initialData = {
       first_name: member.first_name || '',
       last_name: member.last_name || '',
       email: member.email || '',
       phone: member.phone || '',
       role: member.role || '',
       title: member.title || ''
-    });
+    };
+    setFormData(initialData);
+    initialFormDataRef.current = { ...initialData };
     setEditingMember(member);
+    setSaveStatus('');
     setShowAddModal(true);
   };
 
   const handleSaveMember = async (e) => {
     e.preventDefault();
 
-    try {
-      if (editingMember) {
-        await teamAPI.updateMember(editingMember.id, formData);
-      } else {
+    // Only handle new member creation (editing is auto-saved)
+    if (!editingMember) {
+      try {
         await teamAPI.createMember(formData);
+        setShowAddModal(false);
+        loadMembers();
+        alert('Team member added!');
+      } catch (error) {
+        console.error('Failed to save team member:', error);
+        alert('Failed to save team member');
       }
-
-      setShowAddModal(false);
-      loadMembers();
-      alert(editingMember ? 'Team member updated!' : 'Team member added!');
-    } catch (error) {
-      console.error('Failed to save team member:', error);
-      alert('Failed to save team member');
     }
+  };
+
+  const handleCloseModal = () => {
+    // Clear any pending auto-save timers
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+    setShowAddModal(false);
+    setSaveStatus('');
   };
 
   const handleDeleteMember = async (memberId) => {
@@ -171,11 +252,29 @@ function TeamMembers() {
 
       {/* Add/Edit Modal */}
       {showAddModal && (
-        <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
+        <div className="modal-overlay" onClick={handleCloseModal}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>{editingMember ? 'Edit Team Member' : 'Add Team Member'}</h2>
-              <button className="modal-close" onClick={() => setShowAddModal(false)}>
+              <div>
+                <h2>{editingMember ? 'Edit Team Member' : 'Add Team Member'}</h2>
+                {editingMember && (
+                  <div style={{ fontSize: '12px', marginTop: '4px', color: '#666' }}>
+                    {saveStatus === 'saving' && (
+                      <span style={{ color: '#0066cc' }}>● Saving changes...</span>
+                    )}
+                    {saveStatus === 'saved' && (
+                      <span style={{ color: '#28a745' }}>✓ All changes saved</span>
+                    )}
+                    {saveStatus === 'error' && (
+                      <span style={{ color: '#dc3545' }}>✗ Failed to save</span>
+                    )}
+                    {!saveStatus && (
+                      <span style={{ color: '#999' }}>Auto-saves 2 seconds after changes</span>
+                    )}
+                  </div>
+                )}
+              </div>
+              <button className="modal-close" onClick={handleCloseModal}>
                 ×
               </button>
             </div>
@@ -256,13 +355,15 @@ function TeamMembers() {
                 <button
                   type="button"
                   className="btn-secondary"
-                  onClick={() => setShowAddModal(false)}
+                  onClick={handleCloseModal}
                 >
-                  Cancel
+                  {editingMember ? 'Close' : 'Cancel'}
                 </button>
-                <button type="submit" className="btn-primary">
-                  {editingMember ? 'Update' : 'Add'} Member
-                </button>
+                {!editingMember && (
+                  <button type="submit" className="btn-primary">
+                    Add Member
+                  </button>
+                )}
               </div>
             </form>
           </div>
