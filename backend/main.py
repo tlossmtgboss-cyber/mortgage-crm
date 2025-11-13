@@ -580,6 +580,37 @@ class EmailVerificationToken(Base):
     verified_at = Column(DateTime)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
+class RecallAIBot(Base):
+    """Stores information about Recall.ai bots and their recordings"""
+    __tablename__ = "recallai_bots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)  # Associated lead
+
+    # Recall.ai Bot Info
+    bot_id = Column(String, unique=True, index=True)  # Recall.ai bot ID
+    meeting_url = Column(String)  # Zoom/Teams/Meet URL
+    bot_name = Column(String, default="Mortgage CRM Assistant")
+
+    # Status
+    status = Column(String)  # joining, in_meeting, done, fatal, error
+    join_at = Column(DateTime)  # When bot joined
+    leave_at = Column(DateTime)  # When bot left
+
+    # Recording Data
+    video_url = Column(String)  # URL to download video
+    transcript_url = Column(String)  # URL to download transcript
+    transcript_text = Column(Text)  # Full transcript text
+    summary = Column(Text)  # AI-generated summary
+
+    # Metadata
+    meeting_metadata = Column(JSON)  # Additional meeting info
+    webhook_data = Column(JSON)  # Raw webhook data
+
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
 class Email(Base):
     """Stores emails fetched from Microsoft Graph API"""
     __tablename__ = "emails"
@@ -1877,6 +1908,10 @@ def create_access_token(data: dict):
 # Include public routes - Import AFTER defining functions it needs
 from public_routes import router as public_router
 app.include_router(public_router, tags=["Public"])
+
+# Include Recall.ai routes
+from recallai_integration import router as recallai_router
+app.include_router(recallai_router, tags=["Recall.ai"])
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
     credentials_exception = HTTPException(

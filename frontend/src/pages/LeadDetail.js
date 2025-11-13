@@ -4,6 +4,7 @@ import { leadsAPI, activitiesAPI, aiAPI, teamAPI } from '../services/api';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import SMSModal from '../components/SMSModal';
 import TeamsModal from '../components/TeamsModal';
+import RecordingModal from '../components/RecordingModal';
 import './LeadDetail.css';
 
 function LeadDetail() {
@@ -25,6 +26,7 @@ function LeadDetail() {
   const [saveTimeout, setSaveTimeout] = useState(null);
   const [showSMSModal, setShowSMSModal] = useState(false);
   const [showTeamsModal, setShowTeamsModal] = useState(false);
+  const [showRecordingModal, setShowRecordingModal] = useState(false);
   const [teamMembers, setTeamMembers] = useState([]);
   const [assignedTeamMembers, setAssignedTeamMembers] = useState({});
 
@@ -431,6 +433,9 @@ function LeadDetail() {
         break;
       case 'teams':
         setShowTeamsModal(true);
+        break;
+      case 'record':
+        setShowRecordingModal(true);
         break;
       default:
         break;
@@ -1263,6 +1268,14 @@ function LeadDetail() {
                 <span className="icon">👥</span>
                 <span>Teams Meeting</span>
               </button>
+              <button
+                className="action-btn record"
+                onClick={() => handleAction('record')}
+                title="Record meeting with Recall.ai bot"
+              >
+                <span className="icon">🎥</span>
+                <span>Record Meeting</span>
+              </button>
             </div>
           </div>
 
@@ -1308,6 +1321,15 @@ function LeadDetail() {
         <TeamsModal
           isOpen={showTeamsModal}
           onClose={() => setShowTeamsModal(false)}
+          lead={lead}
+        />
+      )}
+
+      {/* Recording Modal */}
+      {lead && (
+        <RecordingModal
+          isOpen={showRecordingModal}
+          onClose={() => setShowRecordingModal(false)}
           lead={lead}
         />
       )}
