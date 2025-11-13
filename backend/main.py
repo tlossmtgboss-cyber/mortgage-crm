@@ -11129,7 +11129,7 @@ except Exception as e:
 @app.post("/admin/run-ai-migration")
 async def run_ai_migration_endpoint(request: Request):
     """
-    Temporary endpoint to run AI migration remotely.
+    Temporary endpoint to build AI database schema (Phase 1 & 2).
     Usage: POST /admin/run-ai-migration with JSON body: {"secret": "migrate-ai-2024"}
     """
     import subprocess
@@ -11142,9 +11142,9 @@ async def run_ai_migration_endpoint(request: Request):
         raise HTTPException(status_code=403, detail="Invalid secret")
 
     try:
-        # Run migration script
+        # Run schema builder script
         result = subprocess.run(
-            ["python3", "run_ai_migration.py"],
+            ["python3", "build_schema_now.py"],
             capture_output=True,
             text=True,
             timeout=120
@@ -11159,7 +11159,7 @@ async def run_ai_migration_endpoint(request: Request):
     except subprocess.TimeoutExpired:
         return {
             "success": False,
-            "error": "Migration timed out after 120 seconds"
+            "error": "Schema build timed out after 120 seconds"
         }
     except Exception as e:
         return {
