@@ -8,8 +8,8 @@ import json
 import uuid
 import asyncio
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional, Callable
-from sqlalchemy import text
+from typing import List, Dict, Any, Optional, Callable, Union
+from sqlalchemy import text, Engine
 from sqlalchemy.orm import Session
 import openai
 
@@ -24,14 +24,34 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 
 
 # ============================================================================
+# DATABASE HELPER
+# ============================================================================
+
+def get_db_connection(db: Union[Engine, Session]):
+    """Helper to work with both Engine and Session objects"""
+    if hasattr(db, 'connect'):
+        # It's an Engine
+        return db.connect()
+    else:
+        # It's a Session, wrap it in a context manager
+        from contextlib import contextmanager
+
+        @contextmanager
+        def session_context():
+            yield db
+
+        return session_context()
+
+
+# ============================================================================
 # AGENT REGISTRY SERVICE
 # ============================================================================
 
 class AgentRegistry:
     """Central registry for all AI agents"""
 
-    def __init__(self, engine):
-        self.engine = engine
+    def __init__(self, db: Union[Engine, Session]):
+        self.db = db
 
     async def register_agent(self, config: AgentConfig) -> str:
         """Register a new agent"""
@@ -54,7 +74,7 @@ class AgentRegistry:
             RETURNING id
         """)
 
-        with self.engine.connect() as conn:
+        with get_db_connection(self.db) as conn:
             result = conn.execute(query, {
                 "id": config.id,
                 "name": config.name,
@@ -79,7 +99,7 @@ class AgentRegistry:
             WHERE id = :agent_id AND status = 'active'
         """)
 
-        with self.engine.connect() as conn:
+        with get_db_connection(self.db) as conn:
             result = conn.execute(query, {"agent_id": agent_id}).fetchone()
 
         if not result:
@@ -108,7 +128,7 @@ class AgentRegistry:
             AND triggers::jsonb ? :event_type
         """)
 
-        with self.engine.connect() as conn:
+        with get_db_connection(self.db) as conn:
             results = conn.execute(query, {"event_type": event_type}).fetchall()
 
         agents = []
@@ -136,8 +156,8 @@ class AgentRegistry:
 class ToolRegistry:
     """Central registry for all tools agents can call"""
 
-    def __init__(self, engine):
-        self.engine = engine
+    def __init__(self, db: Union[Engine, Session]):
+        self.db = db
         self.handlers: Dict[str, Callable] = {}
 
     async def register_tool(self, tool: ToolDefinition, handler: Callable) -> int:
@@ -159,7 +179,7 @@ class ToolRegistry:
             RETURNING id
         """)
 
-        with self.engine.connect() as conn:
+        with get_db_connection(self.db) as conn:
             result = conn.execute(query, {
                 "name": tool.name,
                 "description": tool.description,
@@ -187,7 +207,7 @@ class ToolRegistry:
             WHERE name = :tool_name AND is_active = TRUE
         """)
 
-        with self.engine.connect() as conn:
+        with get_db_connection(self.db) as conn:
             result = conn.execute(query, {"tool_name": tool_name}).fetchone()
 
         if not result:
