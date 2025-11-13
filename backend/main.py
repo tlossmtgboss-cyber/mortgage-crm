@@ -2431,7 +2431,11 @@ async def fetch_microsoft_emails(oauth_record: MicrosoftOAuthToken, db: Session,
 
         # Get emails from last sync or last 7 days
         if oauth_record.last_sync_at:
-            filter_date = oauth_record.last_sync_at.isoformat()
+            # Ensure last_sync_at is timezone-aware
+            last_sync = oauth_record.last_sync_at
+            if last_sync.tzinfo is None:
+                last_sync = last_sync.replace(tzinfo=timezone.utc)
+            filter_date = last_sync.isoformat()
             graph_url += f"?$filter=receivedDateTime gt {filter_date}&$top={limit}&$orderby=receivedDateTime desc"
         else:
             # First sync - get last 7 days
