@@ -12,6 +12,9 @@ function ReconciliationCenter() {
   const [syncingEmails, setSyncingEmails] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState(null);
   const [syncStatus, setSyncStatus] = useState('');
+  const [selectedItems, setSelectedItems] = useState(new Set());
+  const [bulkProcessing, setBulkProcessing] = useState(false);
+  const [approvalProgress, setApprovalProgress] = useState({ approved: 0, total: 20 });
 
   useEffect(() => {
     fetchPendingItems();
@@ -162,6 +165,127 @@ function ReconciliationCenter() {
     }));
   };
 
+  const toggleItemSelection = (itemId) => {
+    setSelectedItems(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(itemId)) {
+        newSet.delete(itemId);
+      } else {
+        // Limit to 20 items
+        if (newSet.size < 20) {
+          newSet.add(itemId);
+        }
+      }
+      return newSet;
+    });
+  };
+
+  const selectAll = () => {
+    const itemsToSelect = pendingItems.slice(0, 20).map(item => item.id);
+    setSelectedItems(new Set(itemsToSelect));
+  };
+
+  const deselectAll = () => {
+    setSelectedItems(new Set());
+  };
+
+  const bulkApprove = async () => {
+    if (selectedItems.size === 0) {
+      alert('Please select items to approve');
+      return;
+    }
+
+    if (!window.confirm(`Approve ${selectedItems.size} loan updates?`)) {
+      return;
+    }
+
+    setBulkProcessing(true);
+    let successCount = 0;
+
+    for (const itemId of selectedItems) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/v1/reconciliation/approve`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            extracted_data_id: itemId,
+            corrections: null
+          })
+        });
+
+        if (response.ok) {
+          successCount++;
+          setApprovalProgress(prev => ({
+            ...prev,
+            approved: prev.approved + 1
+          }));
+        }
+      } catch (error) {
+        console.error(`Error approving item ${itemId}:`, error);
+      }
+    }
+
+    // Refresh the list
+    await fetchPendingItems();
+
+    // Clear selections
+    setSelectedItems(new Set());
+    setBulkProcessing(false);
+
+    alert(`Successfully approved ${successCount} out of ${selectedItems.size} items`);
+  };
+
+  const bulkReject = async () => {
+    if (selectedItems.size === 0) {
+      alert('Please select items to reject');
+      return;
+    }
+
+    const reason = prompt('Enter reason for rejection:');
+    if (!reason) return;
+
+    if (!window.confirm(`Reject ${selectedItems.size} loan updates?`)) {
+      return;
+    }
+
+    setBulkProcessing(true);
+    let successCount = 0;
+
+    for (const itemId of selectedItems) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/v1/reconciliation/reject`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            extracted_data_id: itemId,
+            reason: reason
+          })
+        });
+
+        if (response.ok) {
+          successCount++;
+        }
+      } catch (error) {
+        console.error(`Error rejecting item ${itemId}:`, error);
+      }
+    }
+
+    // Refresh the list
+    await fetchPendingItems();
+
+    // Clear selections
+    setSelectedItems(new Set());
+    setBulkProcessing(false);
+
+    alert(`Successfully rejected ${successCount} out of ${selectedItems.size} items`);
+  };
+
   const getConfidenceColor = (confidence) => {
     if (confidence >= 0.85) return '#10b981'; // green
     if (confidence >= 0.65) return '#f59e0b'; // orange
@@ -258,8 +382,66 @@ function ReconciliationCenter() {
               <div className="stat-value">{pendingItems.length}</div>
               <div className="stat-label">Pending Review</div>
             </div>
+            <div className="stat-card">
+              <div className="stat-value">{selectedItems.size}/20</div>
+              <div className="stat-label">Selected</div>
+            </div>
+            <div className="stat-card progress-card">
+              <div className="stat-value">{approvalProgress.approved}/{approvalProgress.total}</div>
+              <div className="stat-label">Approved Today</div>
+            </div>
           </div>
         </div>
+
+        {/* Bulk Actions Bar */}
+        {pendingItems.length > 0 && (
+          <div className="bulk-actions-bar">
+            <div className="bulk-controls">
+              <button
+                className="btn-select-all"
+                onClick={selectAll}
+                disabled={pendingItems.length === 0}
+              >
+                Select All (20)
+              </button>
+              <button
+                className="btn-deselect"
+                onClick={deselectAll}
+                disabled={selectedItems.size === 0}
+              >
+                Deselect All
+              </button>
+              <span className="selection-count">
+                {selectedItems.size} item{selectedItems.size !== 1 ? 's' : ''} selected
+              </span>
+            </div>
+            <div className="bulk-buttons">
+              <button
+                className="btn-bulk-approve"
+                onClick={bulkApprove}
+                disabled={selectedItems.size === 0 || bulkProcessing}
+              >
+                {bulkProcessing ? (
+                  <>
+                    <span className="spinner-small"></span>
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    ✓ Approve Selected ({selectedItems.size})
+                  </>
+                )}
+              </button>
+              <button
+                className="btn-bulk-reject"
+                onClick={bulkReject}
+                disabled={selectedItems.size === 0 || bulkProcessing}
+              >
+                ✕ Reject Selected
+              </button>
+            </div>
+          </div>
+        )}
 
         {pendingItems.length === 0 ? (
           <div className="empty-state">
@@ -271,23 +453,34 @@ function ReconciliationCenter() {
           <div className="reconciliation-content">
             {/* Items List */}
             <div className="items-list">
-              {pendingItems.map((item) => (
+              {pendingItems.slice(0, 20).map((item) => (
                 <div
                   key={item.id}
-                  className={`reconciliation-item ${selectedItem?.id === item.id ? 'selected' : ''}`}
-                  onClick={() => setSelectedItem(item)}
+                  className={`reconciliation-item ${selectedItem?.id === item.id ? 'selected' : ''} ${selectedItems.has(item.id) ? 'checked' : ''}`}
                 >
-                  <div className="item-header">
-                    <div className="item-category">
-                      {item.category?.toUpperCase() || 'UNKNOWN'}
-                    </div>
-                    <div
-                      className="confidence-badge"
-                      style={{ backgroundColor: getConfidenceColor(item.ai_confidence) }}
-                    >
-                      {getConfidenceBadge(item.ai_confidence)}
-                    </div>
+                  <div className="item-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={selectedItems.has(item.id)}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        toggleItemSelection(item.id);
+                      }}
+                      disabled={!selectedItems.has(item.id) && selectedItems.size >= 20}
+                    />
                   </div>
+                  <div className="item-content" onClick={() => setSelectedItem(item)}>
+                    <div className="item-header">
+                      <div className="item-category">
+                        {item.category?.toUpperCase() || 'UNKNOWN'}
+                      </div>
+                      <div
+                        className="confidence-badge"
+                        style={{ backgroundColor: getConfidenceColor(item.ai_confidence) }}
+                      >
+                        {getConfidenceBadge(item.ai_confidence)}
+                      </div>
+                    </div>
                   <div className="item-subject">{item.email?.subject}</div>
                   <div className="item-meta">
                     <span className="meta-sender">From: {item.email?.sender}</span>
@@ -301,6 +494,7 @@ function ReconciliationCenter() {
                       {Math.round(item.match_confidence * 100)}%)
                     </div>
                   )}
+                  </div>
                 </div>
               ))}
             </div>
