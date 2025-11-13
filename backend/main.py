@@ -11170,7 +11170,7 @@ async def run_ai_migration_endpoint(request: Request):
 @app.post("/admin/initialize-ai-system")
 async def initialize_ai_system_endpoint(request: Request):
     """
-    Temporary endpoint to initialize AI system remotely.
+    Temporary endpoint to initialize AI system remotely (skips migration).
     Usage: POST /admin/initialize-ai-system with JSON body: {"secret": "migrate-ai-2024"}
     """
     import subprocess
@@ -11183,9 +11183,9 @@ async def initialize_ai_system_endpoint(request: Request):
         raise HTTPException(status_code=403, detail="Invalid secret")
 
     try:
-        # Run initialization script
+        # Run initialization script (skip migration version)
         result = subprocess.run(
-            ["python3", "initialize_ai_system.py"],
+            ["python3", "initialize_ai_only.py"],
             capture_output=True,
             text=True,
             timeout=120
