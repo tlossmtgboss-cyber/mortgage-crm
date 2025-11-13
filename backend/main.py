@@ -11123,6 +11123,92 @@ except Exception as e:
     logger.error(f"❌ Failed to load AI System: {e}")
 
 # ============================================================================
+# TEMPORARY ADMIN ENDPOINTS FOR REMOTE MIGRATION
+# ============================================================================
+
+@app.post("/admin/run-ai-migration")
+async def run_ai_migration_endpoint(request: Request):
+    """
+    Temporary endpoint to run AI migration remotely.
+    Usage: POST /admin/run-ai-migration with JSON body: {"secret": "migrate-ai-2024"}
+    """
+    import subprocess
+
+    body = await request.json()
+    secret = body.get("secret", "")
+
+    # Simple security check
+    if secret != "migrate-ai-2024":
+        raise HTTPException(status_code=403, detail="Invalid secret")
+
+    try:
+        # Run migration script
+        result = subprocess.run(
+            ["python3", "run_ai_migration.py"],
+            capture_output=True,
+            text=True,
+            timeout=120
+        )
+
+        return {
+            "success": result.returncode == 0,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "returncode": result.returncode
+        }
+    except subprocess.TimeoutExpired:
+        return {
+            "success": False,
+            "error": "Migration timed out after 120 seconds"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.post("/admin/initialize-ai-system")
+async def initialize_ai_system_endpoint(request: Request):
+    """
+    Temporary endpoint to initialize AI system remotely.
+    Usage: POST /admin/initialize-ai-system with JSON body: {"secret": "migrate-ai-2024"}
+    """
+    import subprocess
+
+    body = await request.json()
+    secret = body.get("secret", "")
+
+    # Simple security check
+    if secret != "migrate-ai-2024":
+        raise HTTPException(status_code=403, detail="Invalid secret")
+
+    try:
+        # Run initialization script
+        result = subprocess.run(
+            ["python3", "initialize_ai_system.py"],
+            capture_output=True,
+            text=True,
+            timeout=120
+        )
+
+        return {
+            "success": result.returncode == 0,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "returncode": result.returncode
+        }
+    except subprocess.TimeoutExpired:
+        return {
+            "success": False,
+            "error": "Initialization timed out after 120 seconds"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+# ============================================================================
 # MAIN
 # ============================================================================
 
