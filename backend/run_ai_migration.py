@@ -38,7 +38,7 @@ try:
 
     # Read migration SQL
     print("Reading migration SQL...")
-    with open("ai_architecture_schema.sql", "r") as f:
+    with open("ai_phase1_2_schema.sql", "r") as f:
         migration_sql = f.read()
 
     print(f"✅ Loaded {len(migration_sql)} characters of SQL")
