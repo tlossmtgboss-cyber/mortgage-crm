@@ -266,12 +266,20 @@ function ReferralPartnerDetail() {
             <div className="stat-label">Total Referrals</div>
           </div>
           <div className="stat-box">
+            <div className="stat-value">{categories.active.length}</div>
+            <div className="stat-label">Active Clients</div>
+          </div>
+          <div className="stat-box">
             <div className="stat-value">{categories.closed.length}</div>
             <div className="stat-label">Closed Loans</div>
           </div>
           <div className="stat-box">
-            <div className="stat-value">{categories.active.length}</div>
-            <div className="stat-label">Active Clients</div>
+            <div className="stat-value">
+              {referrals.length > 0
+                ? ((categories.closed.length / referrals.length) * 100).toFixed(1)
+                : '0.0'}%
+            </div>
+            <div className="stat-label">Conversion Rate</div>
           </div>
           <div className="stat-box">
             <div className="stat-value">
