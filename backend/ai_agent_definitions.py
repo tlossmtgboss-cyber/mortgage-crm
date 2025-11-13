@@ -335,6 +335,74 @@ FORECASTING_AGENT = AgentConfig(
     }
 )
 
+
+# ============================================================================
+# AGENT 8: EMAIL PROCESSOR & LOAN FILE MANAGER
+# ============================================================================
+
+EMAIL_PROCESSOR_AGENT = AgentConfig(
+    id="email_processor",
+    name="Email Processor & Loan File Manager",
+    description="Reviews emails from integrations, extracts loan data, updates files, tracks dates, and creates reconciliation tasks.",
+    agent_type=AgentType.SPECIALIZED,
+    status=AgentStatus.ACTIVE,
+    goals=[
+        "Process 100% of incoming emails within 2 minutes",
+        "Extract and update loan data with >90% accuracy",
+        "Create reconciliation tasks for all data conflicts",
+        "Automatically update loan status based on email content",
+        "Track critical dates (closing, appraisal, conditions due)",
+        "Maintain complete loan file audit trail",
+        "Flag missing documents and create chase tasks"
+    ],
+    tools=[
+        "getEmailById",
+        "parseEmailContent",
+        "extractLoanData",
+        "getLoanById",
+        "updateLoanStage",
+        "updateLoanFields",
+        "createTask",
+        "createReconciliationTask",
+        "trackDate",
+        "flagMissingDocument",
+        "updateFileAuditLog",
+        "sendMessage"
+    ],
+    triggers=[
+        "EmailReceived",
+        "EmailProcessed",
+        "DataExtracted",
+        "ReconciliationNeeded",
+        "DocumentReceived",
+        "StatusUpdateDetected"
+    ],
+    config={
+        "processing_sla_minutes": 2,
+        "confidence_threshold": 0.85,
+        "auto_apply_threshold": 0.95,
+        "date_keywords": [
+            "closing date",
+            "appraisal date",
+            "condition due",
+            "expiration",
+            "deadline",
+            "scheduled for"
+        ],
+        "status_keywords": {
+            "approved": ["approved", "clear to close", "ctc"],
+            "suspended": ["suspended", "on hold"],
+            "processing": ["in process", "under review"],
+            "funded": ["funded", "wire sent", "disbursed"]
+        },
+        "reconciliation_rules": {
+            "create_task_if_confidence_below": 0.85,
+            "flag_conflicting_data": True,
+            "require_human_review_for_status_changes": True
+        }
+    }
+)
+
 # ============================================================================
 # ALL AGENTS REGISTRY
 # ============================================================================
@@ -346,7 +414,8 @@ ALL_AGENTS = [
     CUSTOMER_ENGAGEMENT_AGENT,
     PORTFOLIO_ANALYST_AGENT,
     OPERATIONS_AGENT,
-    FORECASTING_AGENT
+    FORECASTING_AGENT,
+    EMAIL_PROCESSOR_AGENT
 ]
 
 
@@ -546,6 +615,150 @@ TOOL_DEFINITIONS = [
         output_schema={"type": "object"},
         handler_endpoint="/api/ai/tools/forecast-volume",
         allowed_agents=["forecasting_planner"],
+        risk_level=RiskLevel.LOW
+    ),
+    # Email Processing Tools
+    ToolDefinition(
+        name="getEmailById",
+        description="Retrieve email details from DRE by ID",
+        category=ToolCategory.DATA_READ,
+        input_schema={
+            "type": "object",
+            "properties": {
+                "email_id": {"type": "integer"}
+            },
+            "required": ["email_id"]
+        },
+        output_schema={"type": "object"},
+        handler_endpoint="/api/ai/tools/get-email",
+        allowed_agents=["email_processor"],
+        risk_level=RiskLevel.LOW
+    ),
+    ToolDefinition(
+        name="parseEmailContent",
+        description="Parse email content to extract structured data",
+        category=ToolCategory.ANALYSIS,
+        input_schema={
+            "type": "object",
+            "properties": {
+                "email_id": {"type": "integer"},
+                "content": {"type": "string"}
+            },
+            "required": ["content"]
+        },
+        output_schema={"type": "object"},
+        handler_endpoint="/api/ai/tools/parse-email",
+        allowed_agents=["email_processor"],
+        risk_level=RiskLevel.LOW
+    ),
+    ToolDefinition(
+        name="extractLoanData",
+        description="Extract loan-specific data from parsed email",
+        category=ToolCategory.ANALYSIS,
+        input_schema={
+            "type": "object",
+            "properties": {
+                "email_content": {"type": "string"},
+                "category": {"type": "string"}
+            },
+            "required": ["email_content"]
+        },
+        output_schema={"type": "object"},
+        handler_endpoint="/api/ai/tools/extract-loan-data",
+        allowed_agents=["email_processor"],
+        risk_level=RiskLevel.LOW
+    ),
+    ToolDefinition(
+        name="updateLoanFields",
+        description="Update specific loan fields with extracted data",
+        category=ToolCategory.DATA_WRITE,
+        input_schema={
+            "type": "object",
+            "properties": {
+                "loan_id": {"type": "integer"},
+                "fields": {"type": "object"}
+            },
+            "required": ["loan_id", "fields"]
+        },
+        output_schema={"type": "object"},
+        handler_endpoint="/api/ai/tools/update-loan-fields",
+        allowed_agents=["email_processor"],
+        risk_level=RiskLevel.HIGH,
+        requires_approval=True
+    ),
+    ToolDefinition(
+        name="createReconciliationTask",
+        description="Create a task for human review of data conflicts",
+        category=ToolCategory.TASK_MANAGEMENT,
+        input_schema={
+            "type": "object",
+            "properties": {
+                "loan_id": {"type": "integer"},
+                "conflict_description": {"type": "string"},
+                "extracted_value": {"type": "string"},
+                "current_value": {"type": "string"},
+                "confidence": {"type": "number"}
+            },
+            "required": ["loan_id", "conflict_description"]
+        },
+        output_schema={"type": "object"},
+        handler_endpoint="/api/ai/tools/create-reconciliation-task",
+        allowed_agents=["email_processor"],
+        risk_level=RiskLevel.LOW
+    ),
+    ToolDefinition(
+        name="trackDate",
+        description="Track critical dates extracted from emails",
+        category=ToolCategory.DATA_WRITE,
+        input_schema={
+            "type": "object",
+            "properties": {
+                "loan_id": {"type": "integer"},
+                "date_type": {"type": "string"},
+                "date_value": {"type": "string"},
+                "source": {"type": "string"}
+            },
+            "required": ["loan_id", "date_type", "date_value"]
+        },
+        output_schema={"type": "object"},
+        handler_endpoint="/api/ai/tools/track-date",
+        allowed_agents=["email_processor"],
+        risk_level=RiskLevel.MEDIUM
+    ),
+    ToolDefinition(
+        name="flagMissingDocument",
+        description="Flag a missing document and create chase task",
+        category=ToolCategory.TASK_MANAGEMENT,
+        input_schema={
+            "type": "object",
+            "properties": {
+                "loan_id": {"type": "integer"},
+                "document_type": {"type": "string"},
+                "due_date": {"type": "string"}
+            },
+            "required": ["loan_id", "document_type"]
+        },
+        output_schema={"type": "object"},
+        handler_endpoint="/api/ai/tools/flag-missing-document",
+        allowed_agents=["email_processor"],
+        risk_level=RiskLevel.LOW
+    ),
+    ToolDefinition(
+        name="updateFileAuditLog",
+        description="Add entry to loan file audit trail",
+        category=ToolCategory.DATA_WRITE,
+        input_schema={
+            "type": "object",
+            "properties": {
+                "loan_id": {"type": "integer"},
+                "action": {"type": "string"},
+                "details": {"type": "object"}
+            },
+            "required": ["loan_id", "action"]
+        },
+        output_schema={"type": "object"},
+        handler_endpoint="/api/ai/tools/update-audit-log",
+        allowed_agents=["email_processor"],
         risk_level=RiskLevel.LOW
     ),
     # Inter-agent communication

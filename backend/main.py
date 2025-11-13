@@ -2541,6 +2541,24 @@ async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Ses
                         db.commit()
                         logger.info(f"Auto-applied extraction from email {db_event.id}")
 
+                # 🤖 TRIGGER AI: Email Processor Agent reviews and enhances
+                await trigger_ai_event(
+                    event_type="EmailProcessed",
+                    payload={
+                        "entity_type": "email",
+                        "entity_id": str(db_event.id),
+                        "extracted_id": str(extracted.id),
+                        "category": classification["category"],
+                        "confidence": avg_confidence,
+                        "match_entity_type": entity_match["entity_type"],
+                        "match_entity_id": str(entity_match["entity_id"]) if entity_match["entity_id"] else None,
+                        "status": status,
+                        "subject": subject,
+                        "sender": sender
+                    },
+                    db=db
+                )
+
         return {"status": "success", "event_id": db_event.id}
 
     except Exception as e:
