@@ -9,9 +9,22 @@ function ReconciliationCenter() {
   const [selectedItem, setSelectedItem] = useState(null);
   const [editedFields, setEditedFields] = useState({});
   const [processingAction, setProcessingAction] = useState(false);
+  const [syncingEmails, setSyncingEmails] = useState(false);
+  const [lastSyncTime, setLastSyncTime] = useState(null);
+  const [syncStatus, setSyncStatus] = useState('');
 
   useEffect(() => {
     fetchPendingItems();
+
+    // Auto-sync emails every 5 minutes
+    const syncInterval = setInterval(() => {
+      syncEmails(true); // silent sync
+    }, 5 * 60 * 1000); // 5 minutes
+
+    // Initial sync on load
+    syncEmails(true);
+
+    return () => clearInterval(syncInterval);
   }, []);
 
   const fetchPendingItems = async () => {
@@ -31,6 +44,51 @@ function ReconciliationCenter() {
       console.error('Error fetching pending items:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const syncEmails = async (silent = false) => {
+    try {
+      if (!silent) {
+        setSyncingEmails(true);
+        setSyncStatus('Syncing emails...');
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/sync-now`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setLastSyncTime(new Date());
+
+        if (!silent) {
+          setSyncStatus(`✓ Synced ${data.processed_count} emails successfully`);
+          // Refresh pending items to show new data
+          fetchPendingItems();
+
+          // Clear status after 3 seconds
+          setTimeout(() => setSyncStatus(''), 3000);
+        }
+      } else {
+        if (!silent) {
+          setSyncStatus('⚠ Sync failed - please try again');
+          setTimeout(() => setSyncStatus(''), 3000);
+        }
+      }
+    } catch (error) {
+      console.error('Error syncing emails:', error);
+      if (!silent) {
+        setSyncStatus('⚠ Sync failed - please try again');
+        setTimeout(() => setSyncStatus(''), 3000);
+      }
+    } finally {
+      if (!silent) {
+        setSyncingEmails(false);
+      }
     }
   };
 
@@ -165,6 +223,35 @@ function ReconciliationCenter() {
           <div className="header-content">
             <h1>Data Reconciliation Center</h1>
             <p>Review and approve AI-extracted loan data from emails</p>
+          </div>
+          <div className="header-actions">
+            <button
+              className={`sync-button ${syncingEmails ? 'syncing' : ''}`}
+              onClick={() => syncEmails(false)}
+              disabled={syncingEmails}
+            >
+              {syncingEmails ? (
+                <>
+                  <span className="spinner-small"></span>
+                  Syncing...
+                </>
+              ) : (
+                <>
+                  <span className="sync-icon">⟳</span>
+                  Sync Emails Now
+                </>
+              )}
+            </button>
+            {syncStatus && (
+              <div className={`sync-status ${syncStatus.includes('✓') ? 'success' : 'error'}`}>
+                {syncStatus}
+              </div>
+            )}
+            {lastSyncTime && !syncStatus && (
+              <div className="last-sync">
+                Last synced: {lastSyncTime.toLocaleTimeString()}
+              </div>
+            )}
           </div>
           <div className="header-stats">
             <div className="stat-card">
