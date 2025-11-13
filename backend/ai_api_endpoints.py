@@ -10,7 +10,7 @@ from typing import List, Optional
 import uuid
 from datetime import datetime
 
-from database import get_db
+from main import get_db
 from ai_models import (
     AgentConfig, ExecuteAgentRequest, ExecuteAgentResponse,
     SendMessageRequest, ProvideExecutionFeedbackRequest,
