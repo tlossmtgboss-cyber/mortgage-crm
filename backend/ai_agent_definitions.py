@@ -565,7 +565,7 @@ TOOL_DEFINITIONS = [
         },
         output_schema={"type": "object"},
         handler_endpoint="/api/ai/tools/send-agent-message",
-        allowed_agents=ALL_AGENTS,  # All agents can message each other
+        allowed_agents=[agent.id for agent in ALL_AGENTS],  # All agents can message each other
         risk_level=RiskLevel.LOW
     )
 ]
