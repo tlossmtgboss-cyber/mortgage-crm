@@ -28,6 +28,7 @@ from typing import List, Optional, Dict, Any
 import uvicorn
 import os
 import json
+import uuid
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -124,6 +125,35 @@ def get_db():
         yield db
     finally:
         db.close()
+
+# ============================================================================
+# AI SYSTEM INTEGRATION HELPER
+# ============================================================================
+
+async def trigger_ai_event(event_type: str, payload: dict, db: Session):
+    """Trigger AI agents for an event - integrates with autonomous agent system"""
+    try:
+        from ai_services import AgentOrchestrator
+        from ai_models import AgentEvent, EventStatus
+
+        orchestrator = AgentOrchestrator(db)
+
+        event = AgentEvent(
+            event_id=str(uuid.uuid4()),
+            event_type=event_type,
+            source="crm_api",
+            payload=payload,
+            status=EventStatus.PENDING
+        )
+
+        # Dispatch to agents (async, won't block the response)
+        await orchestrator.dispatch_event(event)
+
+        logger.info(f"✅ AI event triggered: {event_type} for {payload.get('entity_type')} {payload.get('entity_id')}")
+
+    except Exception as e:
+        # Log but don't fail the main request
+        logger.error(f"⚠️  AI event failed ({event_type}): {e}")
 
 # ============================================================================
 # ENUMS
@@ -4494,6 +4524,23 @@ async def create_lead(lead: LeadCreate, db: Session = Depends(get_db), current_u
     db.refresh(db_lead)
 
     logger.info(f"Lead created: {db_lead.name} (Score: {db_lead.ai_score})")
+
+    # 🤖 TRIGGER AI: Lead Management Agent will qualify and assign
+    await trigger_ai_event(
+        event_type="LeadCreated",
+        payload={
+            "entity_type": "lead",
+            "entity_id": str(db_lead.id),
+            "first_name": db_lead.first_name,
+            "last_name": db_lead.last_name,
+            "email": db_lead.email,
+            "phone": db_lead.phone,
+            "source": db_lead.source,
+            "ai_score": db_lead.ai_score
+        },
+        db=db
+    )
+
     return db_lead
 
 @app.get("/api/v1/leads/", response_model=List[LeadResponse])
@@ -4813,6 +4860,9 @@ async def update_loan(loan_id: int, loan_update: LoanUpdate, db: Session = Depen
     if not loan:
         raise HTTPException(status_code=404, detail="Loan not found")
 
+    # Capture old stage for AI event
+    old_stage = loan.stage if hasattr(loan, 'stage') else None
+
     for key, value in loan_update.dict(exclude_unset=True).items():
         setattr(loan, key, value)
 
@@ -4822,6 +4872,23 @@ async def update_loan(loan_id: int, loan_update: LoanUpdate, db: Session = Depen
     db.commit()
     db.refresh(loan)
     logger.info(f"Loan updated: {loan.loan_number}")
+
+    # 🤖 TRIGGER AI: Pipeline Manager monitors stage changes
+    new_stage = loan.stage if hasattr(loan, 'stage') else None
+    if old_stage and new_stage and old_stage != new_stage:
+        await trigger_ai_event(
+            event_type="LoanStageChanged",
+            payload={
+                "entity_type": "loan",
+                "entity_id": str(loan.id),
+                "loan_number": loan.loan_number,
+                "old_stage": str(old_stage),
+                "new_stage": str(new_stage),
+                "borrower_name": f"{loan.borrower_first_name} {loan.borrower_last_name}"
+            },
+            db=db
+        )
+
     return loan
 
 @app.delete("/api/v1/loans/{loan_id}", status_code=204)
