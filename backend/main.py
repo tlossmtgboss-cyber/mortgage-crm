@@ -11109,6 +11109,20 @@ async def startup_event():
     logger.info("🔐 Demo Login: demo@example.com / demo123")
 
 # ============================================================================
+# AI SYSTEM INTEGRATION
+# ============================================================================
+
+# Import AI router (safe - no circular dependencies in this version)
+try:
+    from ai_api_endpoints import router as ai_router
+    app.include_router(ai_router)
+    logger.info("✅ AI System endpoints loaded at /api/ai/*")
+except ImportError as e:
+    logger.warning(f"⚠️ AI System not available: {e}")
+except Exception as e:
+    logger.error(f"❌ Failed to load AI System: {e}")
+
+# ============================================================================
 # MAIN
 # ============================================================================
 
