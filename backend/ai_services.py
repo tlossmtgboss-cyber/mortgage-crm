@@ -30,8 +30,8 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 class AgentRegistry:
     """Central registry for all AI agents"""
 
-    def __init__(self, db: Session):
-        self.db = db
+    def __init__(self, engine):
+        self.engine = engine
 
     async def register_agent(self, config: AgentConfig) -> str:
         """Register a new agent"""
@@ -54,21 +54,21 @@ class AgentRegistry:
             RETURNING id
         """)
 
-        result = self.db.execute(query, {
-            "id": config.id,
-            "name": config.name,
-            "description": config.description,
-            "agent_type": config.agent_type.value,
-            "status": config.status.value,
-            "goals": json.dumps(config.goals),
-            "tools": json.dumps(config.tools),
-            "triggers": json.dumps(config.triggers),
-            "config": json.dumps(config.config),
-            "version": config.version
-        })
-
-        self.db.commit()
-        return result.fetchone()[0]
+        with self.engine.connect() as conn:
+            result = conn.execute(query, {
+                "id": config.id,
+                "name": config.name,
+                "description": config.description,
+                "agent_type": config.agent_type.value,
+                "status": config.status.value,
+                "goals": json.dumps(config.goals),
+                "tools": json.dumps(config.tools),
+                "triggers": json.dumps(config.triggers),
+                "config": json.dumps(config.config),
+                "version": config.version
+            })
+            conn.commit()
+            return result.fetchone()[0]
 
     async def get_agent(self, agent_id: str) -> Optional[AgentConfig]:
         """Get agent configuration"""
@@ -79,7 +79,8 @@ class AgentRegistry:
             WHERE id = :agent_id AND status = 'active'
         """)
 
-        result = self.db.execute(query, {"agent_id": agent_id}).fetchone()
+        with self.engine.connect() as conn:
+            result = conn.execute(query, {"agent_id": agent_id}).fetchone()
 
         if not result:
             return None
@@ -107,7 +108,8 @@ class AgentRegistry:
             AND triggers::jsonb ? :event_type
         """)
 
-        results = self.db.execute(query, {"event_type": event_type}).fetchall()
+        with self.engine.connect() as conn:
+            results = conn.execute(query, {"event_type": event_type}).fetchall()
 
         agents = []
         for row in results:
@@ -134,8 +136,8 @@ class AgentRegistry:
 class ToolRegistry:
     """Central registry for all tools agents can call"""
 
-    def __init__(self, db: Session):
-        self.db = db
+    def __init__(self, engine):
+        self.engine = engine
         self.handlers: Dict[str, Callable] = {}
 
     async def register_tool(self, tool: ToolDefinition, handler: Callable) -> int:
@@ -157,24 +159,24 @@ class ToolRegistry:
             RETURNING id
         """)
 
-        result = self.db.execute(query, {
-            "name": tool.name,
-            "description": tool.description,
-            "category": tool.category.value,
-            "input_schema": json.dumps(tool.input_schema),
-            "output_schema": json.dumps(tool.output_schema),
-            "handler_endpoint": tool.handler_endpoint,
-            "allowed_agents": json.dumps(tool.allowed_agents),
-            "risk_level": tool.risk_level.value,
-            "requires_approval": tool.requires_approval
-        })
+        with self.engine.connect() as conn:
+            result = conn.execute(query, {
+                "name": tool.name,
+                "description": tool.description,
+                "category": tool.category.value,
+                "input_schema": json.dumps(tool.input_schema),
+                "output_schema": json.dumps(tool.output_schema),
+                "handler_endpoint": tool.handler_endpoint,
+                "allowed_agents": json.dumps(tool.allowed_agents),
+                "risk_level": tool.risk_level.value,
+                "requires_approval": tool.requires_approval
+            })
+            conn.commit()
 
-        self.db.commit()
+            # Store handler in memory
+            self.handlers[tool.name] = handler
 
-        # Store handler in memory
-        self.handlers[tool.name] = handler
-
-        return result.fetchone()[0]
+            return result.fetchone()[0]
 
     async def get_tool(self, tool_name: str) -> Optional[ToolDefinition]:
         """Get tool definition"""
@@ -185,7 +187,8 @@ class ToolRegistry:
             WHERE name = :tool_name AND is_active = TRUE
         """)
 
-        result = self.db.execute(query, {"tool_name": tool_name}).fetchone()
+        with self.engine.connect() as conn:
+            result = conn.execute(query, {"tool_name": tool_name}).fetchone()
 
         if not result:
             return None
