@@ -337,7 +337,7 @@ class StrategicInitiative(BaseModel):
     title: str
     description: str
     category: str  # 'efficiency', 'revenue', 'customer_experience'
-    priority: Priority = Priority.MEDIUM
+    priority: Priority = Priority.NORMAL
     estimated_impact: Dict[str, Any] = {}
     resources_required: Dict[str, Any] = {}
     timeline: Dict[str, Any] = {}
