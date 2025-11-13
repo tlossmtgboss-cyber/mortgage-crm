@@ -40,6 +40,7 @@ import UserProfile from './pages/UserProfile';
 import ProcessTemplates from './pages/ProcessTemplates';
 import BuyerIntake from './pages/BuyerIntake';
 import VerizonTest from './pages/VerizonTest';
+import PipelineEfficiency from './pages/PipelineEfficiency';
 import './App.css';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
@@ -175,6 +176,26 @@ function App() {
                       <OnboardingPrompt onDismiss={handleDismissOnboardingPrompt} />
                     )}
                     <Dashboard />
+                  </main>
+                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/dashboard/efficiency"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <PipelineEfficiency />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
