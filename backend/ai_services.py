@@ -27,20 +27,21 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 # DATABASE HELPER
 # ============================================================================
 
+from contextlib import contextmanager
+
+@contextmanager
 def get_db_connection(db: Union[Engine, Session]):
     """Helper to work with both Engine and Session objects"""
     if hasattr(db, 'connect'):
-        # It's an Engine
-        return db.connect()
+        # It's an Engine - create a connection
+        conn = db.connect()
+        try:
+            yield conn
+        finally:
+            conn.close()
     else:
-        # It's a Session, wrap it in a context manager
-        from contextlib import contextmanager
-
-        @contextmanager
-        def session_context():
-            yield db
-
-        return session_context()
+        # It's a Session - just yield it directly
+        yield db
 
 
 # ============================================================================
