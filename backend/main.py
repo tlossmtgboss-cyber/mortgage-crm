@@ -11113,13 +11113,20 @@ async def startup_event():
 # ============================================================================
 
 # Import AI router (safe - no circular dependencies in this version)
+AI_ROUTER_LOADED = False
+AI_ROUTER_ERROR = None
+ai_router = None
+
 try:
     from ai_api_endpoints import router as ai_router
     app.include_router(ai_router)
+    AI_ROUTER_LOADED = True
     logger.info("✅ AI System endpoints loaded at /api/ai/*")
 except ImportError as e:
+    AI_ROUTER_ERROR = f"ImportError: {str(e)}"
     logger.warning(f"⚠️ AI System not available: {e}")
 except Exception as e:
+    AI_ROUTER_ERROR = f"Exception: {str(e)}"
     logger.error(f"❌ Failed to load AI System: {e}")
 
 # ============================================================================
@@ -11207,6 +11214,15 @@ async def initialize_ai_system_endpoint(request: Request):
             "success": False,
             "error": str(e)
         }
+
+@app.get("/debug/ai-router-status")
+async def ai_router_status_endpoint():
+    """Debug endpoint to check AI router loading status"""
+    return {
+        "loaded": AI_ROUTER_LOADED,
+        "error": AI_ROUTER_ERROR,
+        "routes_count": len(ai_router.routes) if AI_ROUTER_LOADED and ai_router else 0
+    }
 
 # ============================================================================
 # MAIN
