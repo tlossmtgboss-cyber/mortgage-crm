@@ -3116,6 +3116,91 @@ async def add_external_message_id_migration(
             "error": str(e)
         }
 
+@app.get("/api/v1/debug/email-sync-status")
+async def email_sync_status(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Debug endpoint: Check email sync and reconciliation status
+    """
+    try:
+        # Check incoming emails
+        email_stats = db.execute(text("""
+            SELECT
+                COUNT(*) as total,
+                COUNT(CASE WHEN processed = true THEN 1 END) as processed,
+                COUNT(CASE WHEN processed = false THEN 1 END) as pending
+            FROM incoming_data_events
+            WHERE source = 'microsoft365'
+        """)).fetchone()
+
+        # Check reconciliation items
+        recon_stats = db.execute(text("""
+            SELECT
+                COUNT(*) as total,
+                COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending,
+                COUNT(CASE WHEN status = 'approved' THEN 1 END) as approved,
+                COUNT(CASE WHEN status = 'rejected' THEN 1 END) as rejected
+            FROM reconciliation_items
+        """)).fetchone()
+
+        # Get recent emails
+        recent_emails = db.execute(text("""
+            SELECT subject, sender, received_at, processed
+            FROM incoming_data_events
+            WHERE source = 'microsoft365'
+            ORDER BY received_at DESC
+            LIMIT 5
+        """)).fetchall()
+
+        # Get recent reconciliation items
+        recent_recon = db.execute(text("""
+            SELECT entity_type, confidence_score, status, created_at
+            FROM reconciliation_items
+            ORDER BY created_at DESC
+            LIMIT 5
+        """)).fetchall()
+
+        return {
+            "success": True,
+            "emails": {
+                "total": email_stats[0],
+                "processed": email_stats[1],
+                "pending": email_stats[2],
+                "recent": [
+                    {
+                        "subject": e[0],
+                        "sender": e[1],
+                        "received_at": e[2].isoformat() if e[2] else None,
+                        "processed": e[3]
+                    }
+                    for e in recent_emails
+                ]
+            },
+            "reconciliation": {
+                "total": recon_stats[0],
+                "pending": recon_stats[1],
+                "approved": recon_stats[2],
+                "rejected": recon_stats[3],
+                "recent": [
+                    {
+                        "entity_type": r[0],
+                        "confidence_score": float(r[1]) if r[1] else 0,
+                        "status": r[2],
+                        "created_at": r[3].isoformat() if r[3] else None
+                    }
+                    for r in recent_recon
+                ]
+            }
+        }
+    except Exception as e:
+        logger.error(f"Debug endpoint failed: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
 @app.post("/api/v1/auto-fix-error")
 async def auto_fix_error(
     request: ErrorFixRequest,
