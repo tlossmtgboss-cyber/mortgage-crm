@@ -3709,7 +3709,7 @@ async def create_microsoft_oauth_table(db: Session = Depends(get_db)):
             content={"status": "error", "message": str(e)}
         )
 
-@app.post("/admin/add-email-deletion-columns")
+@app.get("/admin/add-email-deletion-columns")
 async def add_email_deletion_columns(db: Session = Depends(get_db)):
     """Admin endpoint to add email auto-deletion columns"""
     try:
@@ -3746,7 +3746,7 @@ async def add_email_deletion_columns(db: Session = Depends(get_db)):
             content={"status": "error", "message": str(e)}
         )
 
-@app.post("/admin/add-process-type-to-calendar-mappings")
+@app.get("/admin/add-process-type-to-calendar-mappings")
 async def add_process_type_to_calendar_mappings(db: Session = Depends(get_db)):
     """Admin endpoint to add process_type column to calendar_mappings table"""
     try:
@@ -3785,7 +3785,7 @@ async def add_process_type_to_calendar_mappings(db: Session = Depends(get_db)):
             content={"status": "error", "message": str(e)}
         )
 
-@app.post("/admin/add-important-dates-columns")
+@app.get("/admin/add-important-dates-columns")
 async def add_important_dates_columns(db: Session = Depends(get_db)):
     """Admin endpoint to add important_dates JSON columns for AI date extraction"""
     try:
@@ -3835,7 +3835,7 @@ async def add_important_dates_columns(db: Session = Depends(get_db)):
             content={"status": "error", "message": str(e)}
         )
 
-@app.post("/admin/migrate-to-encrypted-fields")
+@app.get("/admin/migrate-to-encrypted-fields")
 async def migrate_to_encrypted_fields_endpoint(db: Session = Depends(get_db)):
     """
     Admin endpoint to migrate sensitive fields to encrypted storage
