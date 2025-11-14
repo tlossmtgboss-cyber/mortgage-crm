@@ -2559,6 +2559,27 @@ async def fetch_microsoft_emails(oauth_record: MicrosoftOAuthToken, db: Session,
         logger.error(f"Error fetching Microsoft emails: {e}")
         return {"error": str(e)}
 
+def extract_rca_number(text: str) -> Optional[str]:
+    """
+    Extract RCA number from email content.
+    Pattern: RCA followed by exactly 10 digits
+    Example: RCA1234567890
+    """
+    import re
+    if not text:
+        return None
+
+    # Pattern: RCA followed by exactly 10 digits
+    pattern = r'RCA(\d{10})'
+    match = re.search(pattern, text, re.IGNORECASE)
+
+    if match:
+        rca_number = f"RCA{match.group(1)}"
+        logger.info(f"Found RCA number in email: {rca_number}")
+        return rca_number
+
+    return None
+
 async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Session, oauth_record: MicrosoftOAuthToken = None):
     """Process a Microsoft Graph email and ingest into DRE"""
     try:
@@ -2573,6 +2594,11 @@ async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Ses
         body = email_data.get("body", {})
         raw_html = body.get("content", "") if body.get("contentType") == "html" else None
         raw_text = body.get("content", "") if body.get("contentType") == "text" else None
+
+        # Check for RCA number in subject or body
+        content = raw_text or raw_html or ""
+        full_text = f"{subject} {content}"
+        rca_number = extract_rca_number(full_text)
 
         # Create incoming data event
         db_event = IncomingDataEvent(
@@ -2597,6 +2623,20 @@ async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Ses
         content = raw_text or raw_html or ""
         classification = classify_email_content(content, subject)
 
+        # Check if RCA number found - prioritize this for automatic matching
+        rca_match = None
+        if rca_number:
+            # Search for loan by RCA number
+            rca_match = db.query(Loan).filter(
+                Loan.loan_number == rca_number,
+                Loan.loan_officer_id == user_id
+            ).first()
+
+            if rca_match:
+                logger.info(f"Auto-matched email to loan {rca_match.id} via RCA number {rca_number}")
+            else:
+                logger.warning(f"RCA number {rca_number} found in email but no matching loan in database")
+
         if classification["category"] != "unrelated" and classification["confidence"] >= 0.5:
             fields = extract_loan_fields(content, classification["category"])
 
@@ -2604,13 +2644,23 @@ async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Ses
                 confidences = [field.get("confidence", 0.0) for field in fields.values()]
                 avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
 
-                entity_match = match_entity(fields, db, user_id)
+                # Override entity match if RCA number found and matched
+                if rca_match:
+                    entity_match = {
+                        "entity_type": "loan",
+                        "entity_id": rca_match.id,
+                        "confidence": 1.0  # Perfect match via RCA number
+                    }
+                    status = "auto_approved"  # Auto-approve emails with RCA numbers
+                    logger.info(f"Auto-approving email with RCA number {rca_number}")
+                else:
+                    entity_match = match_entity(fields, db, user_id)
 
-                status = "pending_review"
-                if avg_confidence > 0.85 and entity_match["confidence"] > 0.90:
-                    status = "auto_approved"
-                elif avg_confidence < 0.60 or entity_match["confidence"] < 0.50:
-                    status = "needs_review"
+                    status = "pending_review"
+                    if avg_confidence > 0.85 and entity_match["confidence"] > 0.90:
+                        status = "auto_approved"
+                    elif avg_confidence < 0.60 or entity_match["confidence"] < 0.50:
+                        status = "needs_review"
 
                 extracted = ExtractedData(
                     event_id=db_event.id,
