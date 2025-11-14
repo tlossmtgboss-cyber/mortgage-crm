@@ -229,6 +229,58 @@ async def list_executions(
     }
 
 
+@router.get("/statistics")
+async def get_statistics(db: Session = Depends(get_db)):
+    """Get AI system statistics"""
+    # Get agent counts
+    agent_count_query = text("SELECT COUNT(*) as total, status FROM ai_agents GROUP BY status")
+    agent_counts = db.execute(agent_count_query).fetchall()
+
+    # Get execution stats
+    execution_stats_query = text("""
+        SELECT
+            COUNT(*) as total_executions,
+            COUNT(DISTINCT agent_id) as agents_executed,
+            AVG(duration_ms) as avg_duration_ms,
+            SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+            SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
+        FROM ai_agent_executions
+    """)
+    execution_stats = db.execute(execution_stats_query).fetchone()
+
+    # Get event stats
+    event_stats_query = text("""
+        SELECT COUNT(*) as total_events, COUNT(DISTINCT event_type) as unique_event_types
+        FROM ai_agent_events
+    """)
+    event_stats = db.execute(event_stats_query).fetchone()
+
+    # Get tool stats
+    tool_stats_query = text("SELECT COUNT(*) as total_tools FROM ai_tools WHERE is_active = true")
+    tool_stats = db.execute(tool_stats_query).fetchone()
+
+    return {
+        "agents": {
+            "total": sum(row.total for row in agent_counts),
+            "by_status": {row.status: row.total for row in agent_counts}
+        },
+        "executions": {
+            "total": execution_stats.total_executions or 0,
+            "completed": execution_stats.completed or 0,
+            "failed": execution_stats.failed or 0,
+            "avg_duration_ms": float(execution_stats.avg_duration_ms) if execution_stats.avg_duration_ms else 0,
+            "agents_executed": execution_stats.agents_executed or 0
+        },
+        "events": {
+            "total": event_stats.total_events or 0,
+            "unique_types": event_stats.unique_event_types or 0
+        },
+        "tools": {
+            "active": tool_stats.total_tools or 0
+        }
+    }
+
+
 @router.get("/executions/{execution_id}")
 async def get_execution(
     execution_id: str,
