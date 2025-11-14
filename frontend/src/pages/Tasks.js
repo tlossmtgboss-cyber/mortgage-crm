@@ -113,11 +113,11 @@ function Tasks() {
       return newCompleted;
     });
 
-    // Select next task
+    // Select next task from current tab only
     if (selectedTask && selectedTask.id === taskId) {
-      const allTasks = getAggregatedTasks();
-      const currentIndex = allTasks.findIndex(t => t.id === taskId);
-      const nextTask = allTasks[currentIndex + 1] || allTasks[currentIndex - 1] || null;
+      const tabTasks = getTasksForTab();
+      const currentIndex = tabTasks.findIndex(t => t.id === taskId);
+      const nextTask = tabTasks[currentIndex + 1] || tabTasks[currentIndex - 1] || null;
       setSelectedTask(nextTask);
     }
   };
@@ -138,11 +138,11 @@ function Tasks() {
       });
     }, 24 * 60 * 60 * 1000); // 24 hours
 
-    // Select next task
+    // Select next task from current tab only
     if (selectedTask && selectedTask.id === taskId) {
-      const allTasks = getAggregatedTasks();
-      const currentIndex = allTasks.findIndex(t => t.id === taskId);
-      const nextTask = allTasks[currentIndex + 1] || allTasks[currentIndex - 1] || null;
+      const tabTasks = getTasksForTab();
+      const currentIndex = tabTasks.findIndex(t => t.id === taskId);
+      const nextTask = tabTasks[currentIndex + 1] || tabTasks[currentIndex - 1] || null;
       setSelectedTask(nextTask);
     }
   };
@@ -295,11 +295,11 @@ function Tasks() {
       return newCompleted;
     });
 
-    // If the completed task is the selected one, select the next task
+    // If the completed task is the selected one, select the next task from current tab only
     if (selectedTask && selectedTask.id === taskId) {
-      const allTasks = getAggregatedTasks();
-      const currentIndex = allTasks.findIndex(t => t.id === taskId);
-      const nextTask = allTasks[currentIndex + 1] || allTasks[currentIndex - 1] || null;
+      const tabTasks = getTasksForTab();
+      const currentIndex = tabTasks.findIndex(t => t.id === taskId);
+      const nextTask = tabTasks[currentIndex + 1] || tabTasks[currentIndex - 1] || null;
       setSelectedTask(nextTask);
     }
   };
