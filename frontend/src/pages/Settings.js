@@ -693,6 +693,33 @@ function Settings() {
     }
   };
 
+  const createSampleTasks = async () => {
+    if (!window.confirm('Create 5 sample reconciliation tasks from emails?\n\nThese will appear in the Reconciliation tab for testing.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/create-sample-tasks`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert(`✅ Success!\n\n${data.message}\n\nGo to Reconciliation tab to see the tasks.`);
+      } else {
+        alert(`❌ Failed:\n\n${data.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Create tasks error:', error);
+      alert(`❌ Error:\n\n${error.message}`);
+    }
+  };
+
   const reprocessFailedEmails = async () => {
     setReprocessing(true);
     try {
@@ -1441,6 +1468,9 @@ function Settings() {
                     <div className="status-actions">
                       <button className="btn-sync" onClick={(e) => { e.stopPropagation(); syncMicrosoftNow(); }} disabled={loadingMicrosoft || reprocessing}>
                         {loadingMicrosoft ? 'Syncing...' : syncCompleted ? '✓ Synced' : '🔄 Sync Now'}
+                      </button>
+                      <button className="btn-sync" onClick={(e) => { e.stopPropagation(); createSampleTasks(); }} style={{background: '#8b5cf6'}}>
+                        ✨ Create 5 Sample Tasks
                       </button>
                       <button className="btn-sync" onClick={(e) => { e.stopPropagation(); runDatabaseMigration(); }} style={{background: '#10b981'}}>
                         🔧 Fix Database
