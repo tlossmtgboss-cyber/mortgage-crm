@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { teamAPI } from '../services/api';
-import MissionControl from './MissionControl';
+// import MissionControl from './MissionControl'; // Coming soon - requires database setup
 import './Settings.css';
 
 function Settings() {
@@ -1073,6 +1073,7 @@ function Settings() {
       <div className="settings-content">
         {/* Sidebar */}
         <div className="settings-sidebar">
+          {/* Mission Control - Coming Soon (requires database setup)
           <button
             className={`sidebar-btn ${activeSection === 'mission-control' ? 'active' : ''}`}
             onClick={() => setActiveSection('mission-control')}
@@ -1080,6 +1081,7 @@ function Settings() {
             <span className="icon">🎯</span>
             <span>Mission Control</span>
           </button>
+          */}
 
           <button
             className={`sidebar-btn ${activeSection === 'integrations' ? 'active' : ''}`}
@@ -1257,9 +1259,11 @@ function Settings() {
 
         {/* Main Content */}
         <div className="settings-main">
+          {/* Mission Control - Coming Soon
           {activeSection === 'mission-control' && (
             <MissionControl />
           )}
+          */}
 
           {activeSection === 'integrations' && (
             <div className="integrations-marketplace">
