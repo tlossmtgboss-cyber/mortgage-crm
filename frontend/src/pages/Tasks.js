@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { teamAPI } from '../services/api';
 import './Tasks.css';
 
 function Tasks() {
@@ -18,6 +19,7 @@ function Tasks() {
   const [showDelegateModal, setShowDelegateModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [snoozedTasks, setSnoozedTasks] = useState(new Set());
+  const [teamMembers, setTeamMembers] = useState([]);
 
   // Dashboard data states
   const [prioritizedTasks, setPrioritizedTasks] = useState([]);
@@ -29,6 +31,7 @@ function Tasks() {
 
   useEffect(() => {
     loadTasks();
+    loadTeamMembers();
   }, []);
 
   // Auto-select first task when tasks load or tab changes
@@ -78,6 +81,16 @@ function Tasks() {
       setMessages(mockMessages());
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadTeamMembers = async () => {
+    try {
+      const data = await teamAPI.getMembers();
+      setTeamMembers(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Failed to load team members:', error);
+      setTeamMembers([]);
     }
   };
 
@@ -766,15 +779,25 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
             <h2>Delegate Task</h2>
             <p>Select a team member to delegate this task to:</p>
             <div className="team-member-list">
-              {['Loan Officer', 'Loan Processor', 'Executive Assistant', 'Underwriter', 'Closer'].map((member) => (
-                <button
-                  key={member}
-                  className="team-member-btn"
-                  onClick={() => handleDelegate(member)}
-                >
-                  👤 {member}
-                </button>
-              ))}
+              {teamMembers.length > 0 ? (
+                teamMembers.map((member) => (
+                  <button
+                    key={member.id}
+                    className="team-member-btn"
+                    onClick={() => handleDelegate(`${member.first_name} ${member.last_name}`)}
+                  >
+                    👤 {member.first_name} {member.last_name}
+                    {member.role && <span style={{ fontSize: '12px', color: '#666', marginLeft: '8px' }}>({member.role})</span>}
+                  </button>
+                ))
+              ) : (
+                <div style={{ textAlign: 'center', padding: '20px', color: '#666' }}>
+                  <p>No team members available.</p>
+                  <p style={{ fontSize: '14px', marginTop: '8px' }}>
+                    Add team members in Settings → Team Members
+                  </p>
+                </div>
+              )}
             </div>
             <button
               className="btn-modal-cancel"
