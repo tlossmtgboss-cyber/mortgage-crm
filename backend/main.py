@@ -757,11 +757,12 @@ class CalendlyConnection(Base):
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 class CalendarMapping(Base):
-    """Maps lead stages to Calendly event types for automatic scheduling"""
+    """Maps stages from any process (Leads, Loans, MUM) to Calendly event types for automatic scheduling"""
     __tablename__ = "calendar_mappings"
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
-    stage = Column(String, index=True)  # Lead stage (new, qualified, meeting_scheduled, etc.)
+    process_type = Column(String, default="lead")  # "lead", "loan", or "mum"
+    stage = Column(String, index=True)  # Stage from any process (NEW, DISCLOSED, etc.)
     event_type_uuid = Column(String)  # Calendly event type UUID
     event_type_name = Column(String)  # Friendly name (e.g., "Discovery Call")
     event_type_url = Column(String)  # Calendly booking page URL
@@ -3737,6 +3738,45 @@ async def add_email_deletion_columns(db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         logger.error(f"❌ Failed to add email deletion columns: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
+
+@app.post("/admin/add-process-type-to-calendar-mappings")
+async def add_process_type_to_calendar_mappings(db: Session = Depends(get_db)):
+    """Admin endpoint to add process_type column to calendar_mappings table"""
+    try:
+        logger.info("Adding process_type column to calendar_mappings...")
+
+        # Add process_type column
+        db.execute(text("""
+            ALTER TABLE calendar_mappings
+            ADD COLUMN IF NOT EXISTS process_type VARCHAR DEFAULT 'lead'
+        """))
+
+        # Set existing mappings to 'lead' for backward compatibility
+        db.execute(text("""
+            UPDATE calendar_mappings
+            SET process_type = 'lead'
+            WHERE process_type IS NULL
+        """))
+
+        db.commit()
+
+        logger.info("✅ Process type column added successfully")
+        return {
+            "status": "success",
+            "message": "Calendar mappings now support Lead, Loan, and MUM stages",
+            "changes": {
+                "column_added": "calendar_mappings.process_type",
+                "default_value": "lead",
+                "existing_mappings_updated": "All set to 'lead'"
+            }
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Failed to add process_type column: {e}")
         return JSONResponse(
             status_code=500,
             content={"status": "error", "message": str(e)}
@@ -8850,9 +8890,13 @@ async def create_calendar_mapping(
     db: Session = Depends(get_db)
 ):
     """
-    Map a lead stage to a Calendly event type.
-    Example: map "new" stage to "Discovery Call" event type
+    Map any stage from any process (Lead, Loan, MUM) to a Calendly event type.
+
+    Example: map "New" lead stage to "Discovery Call" event type
+    Example: map "CTC" loan stage to "Pre-Closing Call" event type
+    Example: map "annual_review" MUM stage to "Annual Review Call" event type
     """
+    process_type = request.get("process_type", "lead")  # Default to "lead" for backward compatibility
     stage = request.get("stage")
     event_type_uuid = request.get("event_type_uuid")
     event_type_name = request.get("event_type_name")
@@ -8861,9 +8905,14 @@ async def create_calendar_mapping(
     if not all([stage, event_type_uuid, event_type_name]):
         raise HTTPException(status_code=400, detail="stage, event_type_uuid, and event_type_name required")
 
-    # Check if mapping already exists
+    # Validate process_type
+    if process_type not in ["lead", "loan", "mum"]:
+        raise HTTPException(status_code=400, detail="process_type must be 'lead', 'loan', or 'mum'")
+
+    # Check if mapping already exists for this process_type + stage combination
     existing = db.query(CalendarMapping).filter(
         CalendarMapping.user_id == current_user.id,
+        CalendarMapping.process_type == process_type,
         CalendarMapping.stage == stage
     ).first()
 
@@ -8874,11 +8923,12 @@ async def create_calendar_mapping(
         existing.event_type_url = event_type_url
         existing.is_active = True
         db.commit()
-        return {"message": "Calendar mapping updated", "mapping_id": existing.id}
+        return {"message": f"Calendar mapping updated for {process_type} stage '{stage}'", "mapping_id": existing.id}
     else:
         # Create new mapping
         mapping = CalendarMapping(
             user_id=current_user.id,
+            process_type=process_type,
             stage=stage,
             event_type_uuid=event_type_uuid,
             event_type_name=event_type_name,
@@ -8886,7 +8936,7 @@ async def create_calendar_mapping(
         )
         db.add(mapping)
         db.commit()
-        return {"message": "Calendar mapping created", "mapping_id": mapping.id}
+        return {"message": f"Calendar mapping created for {process_type} stage '{stage}'", "mapping_id": mapping.id}
 
 
 @app.get("/api/v1/calendly/calendar-mappings")
@@ -8904,6 +8954,7 @@ async def get_calendar_mappings(
         "mappings": [
             {
                 "id": m.id,
+                "process_type": m.process_type or "lead",  # Default to "lead" for backward compatibility
                 "stage": m.stage,
                 "event_type_uuid": m.event_type_uuid,
                 "event_type_name": m.event_type_name,
@@ -8911,6 +8962,45 @@ async def get_calendar_mappings(
             }
             for m in mappings
         ]
+    }
+
+@app.get("/api/v1/calendly/available-stages")
+async def get_available_stages(current_user: User = Depends(get_current_user)):
+    """
+    Get all available stages from all processes (Leads, Active Loans, MUM)
+    for calendar event mapping
+    """
+    return {
+        "stages": {
+            "lead": {
+                "label": "Lead Pipeline",
+                "description": "Stages for new leads and prospects",
+                "stages": [
+                    {"value": stage.value, "label": stage.value}
+                    for stage in LeadStage
+                ]
+            },
+            "loan": {
+                "label": "Active Loan Pipeline",
+                "description": "Stages for loans in progress",
+                "stages": [
+                    {"value": stage.value, "label": stage.value}
+                    for stage in LoanStage
+                ]
+            },
+            "mum": {
+                "label": "Post-Close / MUM",
+                "description": "Mortgages Under Management (closed loans)",
+                "stages": [
+                    {"value": "new_client", "label": "New Client (Just Closed)"},
+                    {"value": "active", "label": "Active (Regular Touch Points)"},
+                    {"value": "opportunity", "label": "Refinance Opportunity"},
+                    {"value": "annual_review", "label": "Annual Review"},
+                    {"value": "retention", "label": "Retention Campaign"},
+                    {"value": "referral_source", "label": "Referral Source"}
+                ]
+            }
+        }
     }
 
 
