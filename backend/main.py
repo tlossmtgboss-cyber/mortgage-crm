@@ -8664,6 +8664,95 @@ BOTTLENECKS:
         raise HTTPException(status_code=500, detail=f"Coach error: {str(e)}")
 
 # ============================================================================
+# AI SYSTEM INITIALIZATION ENDPOINT
+# ============================================================================
+
+@app.post("/api/admin/initialize-ai-system")
+async def initialize_ai_system(db: Session = Depends(get_db)):
+    """Initialize AI system tables and register agents/tools"""
+    try:
+        import os
+        from pathlib import Path
+
+        # Step 1: Run database migration
+        logger.info("Initializing AI system database schema...")
+        schema_path = Path(__file__).parent / "ai_architecture_schema.sql"
+
+        if not schema_path.exists():
+            raise HTTPException(status_code=500, detail="AI schema file not found")
+
+        with open(schema_path, "r") as f:
+            sql = f.read()
+
+        # Execute SQL statements one by one
+        from sqlalchemy import text
+        statements = [s.strip() for s in sql.split(';') if s.strip()]
+        for statement in statements:
+            if statement:
+                db.execute(text(statement))
+        db.commit()
+
+        logger.info("✅ AI database schema created")
+
+        # Step 2: Register agents
+        logger.info("Registering AI agents...")
+        from ai_agent_definitions import ALL_AGENTS
+        from ai_services import AgentRegistry
+
+        registry = AgentRegistry(db)
+        registered_agents = []
+
+        for agent in ALL_AGENTS:
+            try:
+                agent_id = await registry.register_agent(agent)
+                registered_agents.append(agent.name)
+                logger.info(f"✅ Registered agent: {agent.name}")
+            except Exception as e:
+                logger.error(f"Failed to register {agent.name}: {e}")
+
+        logger.info(f"✅ Registered {len(registered_agents)}/{len(ALL_AGENTS)} agents")
+
+        # Step 3: Register tools
+        logger.info("Registering AI tools...")
+        from ai_agent_definitions import TOOL_DEFINITIONS
+        from ai_services import ToolRegistry
+
+        tool_registry = ToolRegistry(db)
+        registered_tools = []
+
+        for tool in TOOL_DEFINITIONS:
+            try:
+                # Create a placeholder handler
+                async def placeholder_handler(input_data: dict, context):
+                    return {
+                        "success": True,
+                        "message": f"Tool {tool.name} executed",
+                        "data": input_data
+                    }
+
+                await tool_registry.register_tool(tool, placeholder_handler)
+                registered_tools.append(tool.name)
+                logger.info(f"✅ Registered tool: {tool.name}")
+            except Exception as e:
+                logger.error(f"Failed to register tool {tool.name}: {e}")
+
+        logger.info(f"✅ Registered {len(registered_tools)}/{len(TOOL_DEFINITIONS)} tools")
+
+        return {
+            "status": "success",
+            "message": "AI system initialized successfully",
+            "agents_registered": len(registered_agents),
+            "tools_registered": len(registered_tools),
+            "agents": registered_agents,
+            "tools": registered_tools
+        }
+
+    except Exception as e:
+        logger.error(f"AI system initialization failed: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Initialization failed: {str(e)}")
+
+# ============================================================================
 # STARTUP EVENT
 # ============================================================================
 
