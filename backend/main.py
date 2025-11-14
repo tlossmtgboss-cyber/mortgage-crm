@@ -2196,20 +2196,8 @@ async def fetch_microsoft_emails(oauth_record: MicrosoftOAuthToken, db: Session,
 
         # Microsoft Graph API endpoint
         folder = oauth_record.sync_folder or "Inbox"
-        graph_url = f"https://graph.microsoft.com/v1.0/me/mailFolders/{folder}/messages"
-
-        # Get emails from last sync or last 7 days
-        if oauth_record.last_sync_at:
-            # Ensure last_sync_at is timezone-aware
-            last_sync = oauth_record.last_sync_at
-            if last_sync.tzinfo is None:
-                last_sync = last_sync.replace(tzinfo=timezone.utc)
-            filter_date = last_sync.isoformat()
-            graph_url += f"?$filter=receivedDateTime gt {filter_date}&$top={limit}&$orderby=receivedDateTime desc"
-        else:
-            # First sync - get last 7 days
-            seven_days_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
-            graph_url += f"?$filter=receivedDateTime gt {seven_days_ago}&$top={limit}&$orderby=receivedDateTime desc"
+        # Simplified query - just get recent emails ordered by date
+        graph_url = f"https://graph.microsoft.com/v1.0/me/mailFolders/{folder}/messages?$top={limit}&$orderby=receivedDateTime desc"
 
         headers = {
             "Authorization": f"Bearer {access_token}",
@@ -2230,8 +2218,9 @@ async def fetch_microsoft_emails(oauth_record: MicrosoftOAuthToken, db: Session,
 
             return {"emails": emails, "count": len(emails)}
         else:
-            logger.error(f"Failed to fetch Microsoft emails: {response.status_code} - {response.text}")
-            return {"error": f"Microsoft API error: {response.status_code}"}
+            error_detail = response.text
+            logger.error(f"Failed to fetch Microsoft emails: {response.status_code} - {error_detail}")
+            return {"error": f"Microsoft API error: {response.status_code} - {error_detail[:200]}"}
 
     except Exception as e:
         logger.error(f"Error fetching Microsoft emails: {e}")
