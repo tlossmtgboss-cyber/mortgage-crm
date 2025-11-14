@@ -66,8 +66,8 @@ function TeamMembers() {
     try {
       setLoading(true);
       const data = await teamAPI.getMembers();
-      // API returns an array of team members directly
-      setMembers(Array.isArray(data) ? data : []);
+      // Backend returns { team_members: [...], available_roles: [...] }
+      setMembers(Array.isArray(data.team_members) ? data.team_members : Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Failed to load team members:', error);
       setMembers([]);
