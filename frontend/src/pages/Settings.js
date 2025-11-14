@@ -1371,33 +1371,6 @@ function Settings() {
                 </div>
               )}
 
-              {/* Featured Section */}
-              {featuredIntegrations.length > 0 && !searchTerm && (
-                <div className="featured-section">
-                  <h3>Featured</h3>
-                  <div className="featured-grid">
-                    {featuredIntegrations.slice(0, 2).map(integration => (
-                      <div
-                        key={integration.id}
-                        className="featured-card"
-                        onClick={() => toggleIntegration(integration.id)}
-                      >
-                        <div className="featured-icon" style={{background: integration.color}}>
-                          <span>{integration.icon}</span>
-                        </div>
-                        <div className="featured-info">
-                          <h4>{integration.name}</h4>
-                          <p>{integration.description}</p>
-                          <span className={`status-badge ${connectedIntegrations.has(integration.id) ? 'connected' : ''}`}>
-                            {connectedIntegrations.has(integration.id) ? 'Connected' : 'Connect'}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
               {/* All Integrations Grid */}
               <div className="all-integrations-section">
                 <div className="integrations-grid">
