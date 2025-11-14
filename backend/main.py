@@ -16,7 +16,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.responses import JSONResponse, RedirectResponse
-from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, DateTime, Text, ForeignKey, JSON, Enum as SQLEnum, func, text, or_
+from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, DateTime, Date, Text, ForeignKey, JSON, Enum as SQLEnum, func, text, or_
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
 from pydantic import BaseModel, EmailStr, validator
@@ -940,6 +940,94 @@ class ProcessTask(Base):
     user = relationship("User", backref="process_tasks")
     milestone = relationship("ProcessMilestone", backref="tasks")
     role = relationship("ProcessRole", backref="assigned_tasks")
+
+
+# ============================================================================
+# MISSION CONTROL MONITORING TABLES
+# ============================================================================
+
+class AIMetricsDaily(Base):
+    """Daily AI performance metrics for Mission Control"""
+    __tablename__ = "ai_metrics_daily"
+    id = Column(Integer, primary_key=True, index=True)
+    date = Column(Date, nullable=False, unique=True, index=True)
+    tasks_total = Column(Integer, default=0)
+    tasks_auto_completed = Column(Integer, default=0)
+    tasks_escalated_to_humans = Column(Integer, default=0)
+    automation_rate = Column(Float, default=0.0)  # Percentage
+    escalation_rate = Column(Float, default=0.0)  # Percentage
+    avg_ai_resolution_time_seconds = Column(Float, default=0.0)
+    total_time_saved_seconds = Column(Float, default=0.0)
+    ai_improvement_index = Column(Float, default=100.0)  # Composite score
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class IntegrationStatusLog(Base):
+    """Log of integration health checks for Mission Control"""
+    __tablename__ = "integration_status_log"
+    id = Column(Integer, primary_key=True, index=True)
+    integration_name = Column(String, nullable=False, index=True)
+    status = Column(String, nullable=False)  # 'connected', 'degraded', 'down'
+    last_success_at = Column(DateTime, nullable=True)
+    error_count_24h = Column(Integer, default=0)
+    latency_ms = Column(Integer, nullable=True)
+    last_error_message = Column(Text, nullable=True)
+    checked_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+
+class SystemAlert(Base):
+    """System alerts and recommended actions for Mission Control"""
+    __tablename__ = "system_alerts"
+    id = Column(Integer, primary_key=True, index=True)
+    alert_type = Column(String, nullable=False)  # 'integration', 'security', 'performance', etc.
+    severity = Column(String, nullable=False)  # 'critical', 'warning', 'info'
+    title = Column(String, nullable=False)
+    message = Column(Text, nullable=False)
+    suggested_action = Column(Text, nullable=True)
+    is_resolved = Column(Boolean, default=False, index=True)
+    resolved_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+
+class SystemJobsLog(Base):
+    """Log of system jobs (email sync, data pipelines, etc.) for Mission Control"""
+    __tablename__ = "system_jobs_log"
+    id = Column(Integer, primary_key=True, index=True)
+    job_name = Column(String, nullable=False, index=True)
+    job_type = Column(String, nullable=True)  # 'email_sync', 'data_pipeline', 'cleanup', etc.
+    status = Column(String, nullable=False)  # 'success', 'failed', 'running'
+    duration_ms = Column(Integer, nullable=True)
+    records_processed = Column(Integer, nullable=True)
+    error_message = Column(Text, nullable=True)
+    last_run_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+
+class SecuritySnapshotDaily(Base):
+    """Daily security metrics for Mission Control"""
+    __tablename__ = "security_snapshot_daily"
+    id = Column(Integer, primary_key=True, index=True)
+    date = Column(Date, nullable=False, unique=True, index=True)
+    active_users_with_2fa = Column(Integer, default=0)
+    active_users_total = Column(Integer, default=0)
+    high_privilege_actions_24h = Column(Integer, default=0)
+    failed_login_attempts_24h = Column(Integer, default=0)
+    password_changes_24h = Column(Integer, default=0)
+    last_permission_change_user = Column(String, nullable=True)
+    last_permission_change_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class AIChangelogDaily(Base):
+    """Daily AI improvements changelog for Mission Control"""
+    __tablename__ = "ai_changelog_daily"
+    id = Column(Integer, primary_key=True, index=True)
+    date = Column(Date, nullable=False, unique=True, index=True)
+    summary = Column(Text, nullable=True)
+    improvements = Column(JSON, nullable=True)  # Array of improvement descriptions
+    issues = Column(JSON, nullable=True)  # Array of issues identified
+    ai_generated = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
 
 # ============================================================================
 # PYDANTIC SCHEMAS
