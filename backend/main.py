@@ -49,6 +49,9 @@ except ImportError:
     MSAL_AVAILABLE = False
     print("⚠️  MSAL not installed. Install with: pip install msal")
 
+# Import encryption utilities for sensitive data
+from encryption_utils import EncryptedString, EncryptedInteger, EncryptedFloat
+
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -248,7 +251,7 @@ class Lead(Base):
     next_action = Column(Text)
     loan_type = Column(String)
     preapproval_amount = Column(Float)
-    credit_score = Column(Integer)
+    credit_score = Column(EncryptedInteger)  # Encrypted - sensitive PII
     debt_to_income = Column(Float)
     owner_id = Column(Integer, ForeignKey("users.id"))
     last_contact = Column(DateTime)
@@ -264,8 +267,8 @@ class Lead(Base):
     down_payment = Column(Float)
     # Financial Information
     employment_status = Column(String)
-    annual_income = Column(Float)
-    monthly_debts = Column(Float)
+    annual_income = Column(EncryptedFloat)  # Encrypted - sensitive financial data
+    monthly_debts = Column(EncryptedFloat)  # Encrypted - sensitive financial data
     first_time_buyer = Column(Boolean, default=False)
     # Loan Details
     loan_amount = Column(Float)
@@ -300,10 +303,10 @@ class Loan(Base):
     stage = Column(SQLEnum(LoanStage), default=LoanStage.DISCLOSED)
     program = Column(String)
     loan_type = Column(String)
-    amount = Column(Float, nullable=False)
-    purchase_price = Column(Float)
-    down_payment = Column(Float)
-    rate = Column(Float)
+    amount = Column(EncryptedFloat, nullable=False)  # Encrypted - sensitive financial data
+    purchase_price = Column(EncryptedFloat)  # Encrypted - sensitive financial data
+    down_payment = Column(EncryptedFloat)  # Encrypted - sensitive financial data
+    rate = Column(EncryptedFloat)  # Encrypted - sensitive financial data
     term = Column(Integer, default=360)
     property_address = Column(String)
     lock_date = Column(DateTime)
@@ -3734,6 +3737,156 @@ async def add_email_deletion_columns(db: Session = Depends(get_db)):
     except Exception as e:
         db.rollback()
         logger.error(f"❌ Failed to add email deletion columns: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
+
+@app.post("/admin/migrate-to-encrypted-fields")
+async def migrate_to_encrypted_fields_endpoint(db: Session = Depends(get_db)):
+    """
+    Admin endpoint to migrate sensitive fields to encrypted storage
+
+    IMPORTANT: This migration encrypts:
+    - Lead: annual_income, monthly_debts, credit_score
+    - Loan: amount, purchase_price, down_payment, rate
+
+    Required for GLBA and GDPR compliance
+    """
+    try:
+        from encryption_utils import encrypt_value
+
+        logger.info("=" * 60)
+        logger.info("STARTING ENCRYPTION MIGRATION VIA API")
+        logger.info("=" * 60)
+
+        # Phase 1: Add new encrypted columns
+        logger.info("\n📝 Phase 1: Adding new encrypted columns...")
+
+        db.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS annual_income_encrypted VARCHAR"))
+        db.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS monthly_debts_encrypted VARCHAR"))
+        db.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS credit_score_encrypted VARCHAR"))
+
+        db.execute(text("ALTER TABLE loans ADD COLUMN IF NOT EXISTS amount_encrypted VARCHAR"))
+        db.execute(text("ALTER TABLE loans ADD COLUMN IF NOT EXISTS purchase_price_encrypted VARCHAR"))
+        db.execute(text("ALTER TABLE loans ADD COLUMN IF NOT EXISTS down_payment_encrypted VARCHAR"))
+        db.execute(text("ALTER TABLE loans ADD COLUMN IF NOT EXISTS rate_encrypted VARCHAR"))
+
+        logger.info("✅ New columns added")
+
+        # Phase 2: Encrypt and migrate data
+        logger.info("\n🔐 Phase 2: Encrypting data...")
+
+        # Encrypt Lead records
+        leads_result = db.execute(text("SELECT id, annual_income, monthly_debts, credit_score FROM leads"))
+        leads = leads_result.fetchall()
+        lead_count = 0
+
+        for lead in leads:
+            lead_id, annual_income, monthly_debts, credit_score = lead
+
+            encrypted_income = encrypt_value(str(annual_income)) if annual_income is not None else None
+            encrypted_debts = encrypt_value(str(monthly_debts)) if monthly_debts is not None else None
+            encrypted_score = encrypt_value(str(credit_score)) if credit_score is not None else None
+
+            db.execute(text("""
+                UPDATE leads
+                SET annual_income_encrypted = :income,
+                    monthly_debts_encrypted = :debts,
+                    credit_score_encrypted = :score
+                WHERE id = :id
+            """), {
+                "income": encrypted_income,
+                "debts": encrypted_debts,
+                "score": encrypted_score,
+                "id": lead_id
+            })
+            lead_count += 1
+
+        # Encrypt Loan records
+        loans_result = db.execute(text("SELECT id, amount, purchase_price, down_payment, rate FROM loans"))
+        loans = loans_result.fetchall()
+        loan_count = 0
+
+        for loan in loans:
+            loan_id, amount, purchase_price, down_payment, rate = loan
+
+            encrypted_amount = encrypt_value(str(amount)) if amount is not None else None
+            encrypted_price = encrypt_value(str(purchase_price)) if purchase_price is not None else None
+            encrypted_down = encrypt_value(str(down_payment)) if down_payment is not None else None
+            encrypted_rate = encrypt_value(str(rate)) if rate is not None else None
+
+            db.execute(text("""
+                UPDATE loans
+                SET amount_encrypted = :amount,
+                    purchase_price_encrypted = :price,
+                    down_payment_encrypted = :down,
+                    rate_encrypted = :rate
+                WHERE id = :id
+            """), {
+                "amount": encrypted_amount,
+                "price": encrypted_price,
+                "down": encrypted_down,
+                "rate": encrypted_rate,
+                "id": loan_id
+            })
+            loan_count += 1
+
+        logger.info(f"  ✓ Encrypted {lead_count} leads, {loan_count} loans")
+
+        # Phase 3: Replace old columns
+        logger.info("\n🗑️  Phase 3: Replacing columns...")
+
+        # Lead columns
+        db.execute(text("ALTER TABLE leads DROP COLUMN IF EXISTS annual_income"))
+        db.execute(text("ALTER TABLE leads RENAME COLUMN annual_income_encrypted TO annual_income"))
+
+        db.execute(text("ALTER TABLE leads DROP COLUMN IF EXISTS monthly_debts"))
+        db.execute(text("ALTER TABLE leads RENAME COLUMN monthly_debts_encrypted TO monthly_debts"))
+
+        db.execute(text("ALTER TABLE leads DROP COLUMN IF EXISTS credit_score"))
+        db.execute(text("ALTER TABLE leads RENAME COLUMN credit_score_encrypted TO credit_score"))
+
+        # Loan columns
+        db.execute(text("ALTER TABLE loans DROP COLUMN IF EXISTS amount"))
+        db.execute(text("ALTER TABLE loans RENAME COLUMN amount_encrypted TO amount"))
+
+        db.execute(text("ALTER TABLE loans DROP COLUMN IF EXISTS purchase_price"))
+        db.execute(text("ALTER TABLE loans RENAME COLUMN purchase_price_encrypted TO purchase_price"))
+
+        db.execute(text("ALTER TABLE loans DROP COLUMN IF EXISTS down_payment"))
+        db.execute(text("ALTER TABLE loans RENAME COLUMN down_payment_encrypted TO down_payment"))
+
+        db.execute(text("ALTER TABLE loans DROP COLUMN IF EXISTS rate"))
+        db.execute(text("ALTER TABLE loans RENAME COLUMN rate_encrypted TO rate"))
+
+        db.commit()
+
+        logger.info("✅ Migration completed successfully!")
+
+        return {
+            "status": "success",
+            "message": "Sensitive data encrypted successfully",
+            "summary": {
+                "leads_encrypted": lead_count,
+                "loans_encrypted": loan_count,
+                "total_records": lead_count + loan_count,
+                "encrypted_fields": [
+                    "leads.annual_income",
+                    "leads.monthly_debts",
+                    "leads.credit_score",
+                    "loans.amount",
+                    "loans.purchase_price",
+                    "loans.down_payment",
+                    "loans.rate"
+                ]
+            },
+            "compliance": "GLBA and GDPR compliant - data encrypted at rest"
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Encryption migration failed: {e}")
         return JSONResponse(
             status_code=500,
             content={"status": "error", "message": str(e)}
