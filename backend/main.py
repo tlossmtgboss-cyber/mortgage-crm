@@ -11043,9 +11043,11 @@ async def clear_sample_data_endpoint(
     """
     Clear all sample/test data from the database.
     This removes:
-    - All loans (which clears the "team members" list in settings)
+    - All loans
     - All leads
-    - All tasks
+    - All tasks (AI tasks, regular tasks, process tasks)
+    - All reconciliation events (pending approvals)
+    - All unified messages (SMS, Email, Teams)
     - All referral partners
     - All MUM clients
 
@@ -11057,28 +11059,47 @@ async def clear_sample_data_endpoint(
         # Count data before deletion
         loans_count = db.query(Loan).count()
         leads_count = db.query(Lead).count()
-        tasks_count = db.query(AITask).count()
+        ai_tasks_count = db.query(AITask).count()
+        tasks_count = db.query(Task).count()
+        process_tasks_count = db.query(ProcessTask).count()
         partners_count = db.query(ReferralPartner).count()
         mum_count = db.query(MUMClient).count()
+        reconciliation_count = db.query(ReconciliationEvent).count()
+        sms_count = db.query(SMSMessage).count()
+        email_count = db.query(EmailMessage).count()
+        teams_count = db.query(TeamsMessage).count()
 
         logger.info(f"User {current_user.email} is clearing sample data")
-        logger.info(f"Deleting: {loans_count} loans, {leads_count} leads, {tasks_count} tasks, {partners_count} partners, {mum_count} MUM clients")
+        logger.info(f"Deleting: {loans_count} loans, {leads_count} leads, {ai_tasks_count} AI tasks, "
+                   f"{tasks_count} tasks, {process_tasks_count} process tasks, {partners_count} partners, "
+                   f"{mum_count} MUM clients, {reconciliation_count} reconciliation events, "
+                   f"{sms_count} SMS, {email_count} emails, {teams_count} Teams messages")
 
         # Delete in order (dependencies first):
         # 1. Activities and Conversations (reference leads/loans)
         deleted_activities = db.query(Activity).delete()
         deleted_conversations = db.query(Conversation).delete()
 
-        # 2. Tasks (reference loans)
-        deleted_tasks = db.query(AITask).delete()
+        # 2. Tasks (reference loans/leads)
+        deleted_ai_tasks = db.query(AITask).delete()
+        deleted_tasks = db.query(Task).delete()
+        deleted_process_tasks = db.query(ProcessTask).delete()
 
-        # 3. Loans (no dependencies on them now)
+        # 3. Reconciliation events (pending approvals)
+        deleted_reconciliation = db.query(ReconciliationEvent).delete()
+
+        # 4. Unified messages
+        deleted_sms = db.query(SMSMessage).delete()
+        deleted_emails = db.query(EmailMessage).delete()
+        deleted_teams = db.query(TeamsMessage).delete()
+
+        # 5. Loans (no dependencies on them now)
         deleted_loans = db.query(Loan).delete()
 
-        # 4. Leads (no dependencies on them now)
+        # 6. Leads (no dependencies on them now)
         deleted_leads = db.query(Lead).delete()
 
-        # 5. Referral partners and MUM clients (independent)
+        # 7. Referral partners and MUM clients (independent)
         deleted_partners = db.query(ReferralPartner).delete()
         deleted_mum = db.query(MUMClient).delete()
 
@@ -11092,7 +11113,13 @@ async def clear_sample_data_endpoint(
             "deleted": {
                 "activities": deleted_activities,
                 "conversations": deleted_conversations,
+                "ai_tasks": deleted_ai_tasks,
                 "tasks": deleted_tasks,
+                "process_tasks": deleted_process_tasks,
+                "reconciliation_events": deleted_reconciliation,
+                "sms_messages": deleted_sms,
+                "email_messages": deleted_emails,
+                "teams_messages": deleted_teams,
                 "loans": deleted_loans,
                 "leads": deleted_leads,
                 "referral_partners": deleted_partners,
