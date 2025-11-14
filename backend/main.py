@@ -795,6 +795,7 @@ class IncomingDataEvent(Base):
     sender = Column(String)
     recipients = Column(JSON)
     attachments = Column(JSON)
+    microsoft_message_id = Column(String)  # Microsoft Graph message ID for deletion
     received_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     processed = Column(Boolean, default=False)
     user_id = Column(Integer, ForeignKey("users.id"))
@@ -840,6 +841,7 @@ class MicrosoftOAuthToken(Base):
     last_sync_at = Column(DateTime)
     sync_folder = Column(String, default="Inbox")  # Which folder to sync
     sync_frequency_minutes = Column(Integer, default=15)  # How often to sync
+    auto_delete_imported_emails = Column(Boolean, default=False)  # Delete emails after importing to CRM
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
@@ -1881,6 +1883,7 @@ class MicrosoftSyncSettings(BaseModel):
     sync_enabled: Optional[bool] = None
     sync_folder: Optional[str] = None
     sync_frequency_minutes: Optional[int] = None
+    auto_delete_imported_emails: Optional[bool] = None
 
 # ============================================================================
 # FASTAPI APP
@@ -2556,7 +2559,7 @@ async def fetch_microsoft_emails(oauth_record: MicrosoftOAuthToken, db: Session,
         logger.error(f"Error fetching Microsoft emails: {e}")
         return {"error": str(e)}
 
-async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Session):
+async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Session, oauth_record: MicrosoftOAuthToken = None):
     """Process a Microsoft Graph email and ingest into DRE"""
     try:
         # Extract email data
@@ -2564,6 +2567,7 @@ async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Ses
         sender = email_data.get("from", {}).get("emailAddress", {}).get("address", "")
         recipients = [r.get("emailAddress", {}).get("address", "") for r in email_data.get("toRecipients", [])]
         received_at = email_data.get("receivedDateTime", "")
+        message_id = email_data.get("id", "")  # Microsoft message ID
 
         # Get body content
         body = email_data.get("body", {})
@@ -2578,6 +2582,7 @@ async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Ses
             subject=subject,
             sender=sender,
             recipients=recipients,
+            microsoft_message_id=message_id,  # Store for deletion
             received_at=datetime.fromisoformat(received_at.replace('Z', '+00:00')) if received_at else datetime.now(timezone.utc),
             user_id=user_id,
             processed=False
@@ -2646,6 +2651,27 @@ async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Ses
                     },
                     db=db
                 )
+
+        # Delete email from inbox if auto-delete is enabled and processing was successful
+        if oauth_record and oauth_record.auto_delete_imported_emails and message_id and db_event.processed:
+            try:
+                # Import the graph client
+                from integrations.microsoft_graph import graph_client
+
+                # Get access token
+                access_token = decrypt_token(oauth_record.access_token)
+
+                # Delete the email from Microsoft inbox
+                deleted = await graph_client.delete_email(access_token, message_id)
+
+                if deleted:
+                    logger.info(f"✅ Auto-deleted email '{subject}' from inbox after importing to CRM")
+                else:
+                    logger.warning(f"⚠️ Failed to auto-delete email '{subject}' from inbox")
+
+            except Exception as delete_error:
+                # Don't fail the whole process if deletion fails
+                logger.error(f"❌ Error auto-deleting email '{subject}': {delete_error}")
 
         return {"status": "success", "event_id": db_event.id}
 
@@ -3197,7 +3223,8 @@ async def get_microsoft_status(
             "sync_enabled": oauth_record.sync_enabled,
             "last_sync_at": oauth_record.last_sync_at,
             "sync_folder": oauth_record.sync_folder,
-            "sync_frequency_minutes": oauth_record.sync_frequency_minutes
+            "sync_frequency_minutes": oauth_record.sync_frequency_minutes,
+            "auto_delete_imported_emails": oauth_record.auto_delete_imported_emails or False
         }
 
     except Exception as e:
@@ -3263,7 +3290,7 @@ async def sync_microsoft_emails_now(
         processed_count = 0
 
         for email_data in emails:
-            process_result = await process_microsoft_email_to_dre(email_data, current_user.id, db)
+            process_result = await process_microsoft_email_to_dre(email_data, current_user.id, db, oauth_record)
             if process_result.get("status") == "success":
                 processed_count += 1
 
@@ -3309,6 +3336,9 @@ async def update_microsoft_settings(
             if settings.sync_frequency_minutes < 5 or settings.sync_frequency_minutes > 1440:
                 raise HTTPException(status_code=400, detail="Sync frequency must be between 5 and 1440 minutes")
             oauth_record.sync_frequency_minutes = settings.sync_frequency_minutes
+
+        if settings.auto_delete_imported_emails is not None:
+            oauth_record.auto_delete_imported_emails = settings.auto_delete_imported_emails
 
         oauth_record.updated_at = datetime.now(timezone.utc)
         db.commit()

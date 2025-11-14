@@ -228,6 +228,33 @@ class MicrosoftGraphClient:
             logger.error(f"Error getting emails: {e}")
             return []
 
+    async def delete_email(
+        self,
+        access_token: str,
+        message_id: str
+    ) -> bool:
+        """Delete an email from Outlook inbox"""
+        try:
+            headers = {
+                "Authorization": f"Bearer {access_token}"
+            }
+
+            response = requests.delete(
+                f"https://graph.microsoft.com/v1.0/me/messages/{message_id}",
+                headers=headers
+            )
+
+            if response.status_code in [200, 204]:
+                logger.info(f"Successfully deleted email {message_id} from inbox")
+                return True
+            else:
+                logger.error(f"Failed to delete email {message_id}: {response.status_code} - {response.text}")
+                return False
+
+        except Exception as e:
+            logger.error(f"Error deleting email {message_id}: {e}")
+            return False
+
     async def create_calendar_event(
         self,
         user_email: str,
