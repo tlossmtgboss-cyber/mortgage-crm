@@ -288,6 +288,7 @@ class Lead(Base):
     dti = Column(Float)
     # Metadata
     user_metadata = Column(JSON)
+    important_dates = Column(JSON)  # AI-extracted important dates with task triggers
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     owner = relationship("User", back_populates="leads")
@@ -324,6 +325,7 @@ class Loan(Base):
     predicted_close_date = Column(DateTime)
     risk_score = Column(Integer, default=0)
     user_metadata = Column(JSON)
+    important_dates = Column(JSON)  # AI-extracted important dates with task triggers
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     loan_officer = relationship("User", back_populates="loans")
@@ -415,6 +417,7 @@ class MUMClient(Base):
     engagement_score = Column(Integer)
     status = Column(String)
     last_contact = Column(DateTime)
+    important_dates = Column(JSON)  # AI-extracted important dates with task triggers
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 class Activity(Base):
