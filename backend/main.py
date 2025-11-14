@@ -8283,51 +8283,7 @@ async def check_teams_status(current_user: User = Depends(get_current_user)):
 # ============================================================================
 # CALENDLY INTEGRATION
 # ============================================================================
-
-@app.get("/api/v1/calendly/event-types")
-async def get_calendly_event_types(current_user: User = Depends(get_current_user)):
-    """
-    Get user's Calendly event types (available meeting types).
-    Uses Calendly Personal Access Token to fetch event types.
-    """
-    calendly_token = os.getenv("CALENDLY_API_TOKEN")
-    if not calendly_token:
-        raise HTTPException(status_code=500, detail="Calendly API not configured")
-
-    try:
-        # First, get the current user's URI
-        headers = {
-            "Authorization": f"Bearer {calendly_token}",
-            "Content-Type": "application/json"
-        }
-
-        # Get current user info
-        user_response = requests.get(
-            "https://api.calendly.com/users/me",
-            headers=headers
-        )
-        user_response.raise_for_status()
-        user_data = user_response.json()
-        user_uri = user_data["resource"]["uri"]
-
-        # Get event types for this user
-        event_types_response = requests.get(
-            f"https://api.calendly.com/event_types",
-            headers=headers,
-            params={"user": user_uri}
-        )
-        event_types_response.raise_for_status()
-        event_types_data = event_types_response.json()
-
-        return {
-            "event_types": event_types_data.get("collection", []),
-            "count": event_types_data.get("pagination", {}).get("count", 0)
-        }
-
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Calendly API error: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to fetch event types: {str(e)}")
-
+# OLD CALENDLY ENDPOINT REMOVED - Now using per-user API key from database (see line 8556)
 
 @app.post("/api/v1/calendly/scheduling-link")
 async def create_scheduling_link(
