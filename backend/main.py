@@ -38,6 +38,15 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 import asyncio
 
+# Import security middleware
+from security_middleware import (
+    RateLimitMiddleware,
+    SecurityHeadersMiddleware,
+    IPBlockingMiddleware,
+    RequestValidationMiddleware,
+    SecurityLoggingMiddleware
+)
+
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -1721,6 +1730,15 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add security middleware (order matters - first added is last executed)
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RequestValidationMiddleware)
+app.add_middleware(IPBlockingMiddleware)
+app.add_middleware(RateLimitMiddleware, requests_per_minute=100, requests_per_hour=2000)
+app.add_middleware(SecurityLoggingMiddleware)
+
+logger.info("✅ Security middleware enabled: Rate limiting, IP blocking, security headers, request validation, and logging")
 
 # Auth - Define BEFORE importing routes that use these functions
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
