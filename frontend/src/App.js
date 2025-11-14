@@ -135,6 +135,38 @@ function App() {
     checkOnboardingStatus();
   }, []);
 
+  // Fetch task counts for navigation badges
+  useEffect(() => {
+    const fetchTaskCounts = async () => {
+      if (!isAuthenticated()) return;
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/v1/tasks`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+
+        if (response.ok) {
+          const tasks = await response.json();
+          // Count outstanding tasks (not completed)
+          const outstandingTasks = tasks.filter(t => t.status !== 'completed' && t.status !== 'done').length;
+          setTaskCounts(prev => ({
+            ...prev,
+            tasks: outstandingTasks
+          }));
+        }
+      } catch (error) {
+        console.error('Error fetching task counts:', error);
+      }
+    };
+
+    fetchTaskCounts();
+    // Refresh task counts every 2 minutes
+    const interval = setInterval(fetchTaskCounts, 120000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <ErrorBoundary>
       <Router>

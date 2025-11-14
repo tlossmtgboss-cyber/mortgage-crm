@@ -42,6 +42,7 @@ function Settings() {
     last_sync_at: null
   });
   const [loadingMicrosoft, setLoadingMicrosoft] = useState(false);
+  const [syncCompleted, setSyncCompleted] = useState(false);
 
   // Team members state
   const [teamMembers, setTeamMembers] = useState([]);
@@ -595,6 +596,7 @@ function Settings() {
 
   const syncMicrosoftNow = async () => {
     setLoadingMicrosoft(true);
+    setSyncCompleted(false);
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/sync-now`, {
         method: 'POST',
@@ -607,14 +609,19 @@ function Settings() {
         const data = await response.json();
         alert(`Synced ${data.processed_count}/${data.fetched_count} emails successfully!`);
         await checkMicrosoftStatus();
+
+        // Show "Synced" status for 3 seconds
+        setLoadingMicrosoft(false);
+        setSyncCompleted(true);
+        setTimeout(() => setSyncCompleted(false), 3000);
       } else {
         const error = await response.json();
         alert(`Failed to sync emails: ${error.detail}`);
+        setLoadingMicrosoft(false);
       }
     } catch (error) {
       console.error('Error syncing emails:', error);
       alert('Error syncing emails');
-    } finally {
       setLoadingMicrosoft(false);
     }
   };
@@ -1264,7 +1271,7 @@ function Settings() {
                         }}
                         disabled={loadingMicrosoft}
                       >
-                        {loadingMicrosoft ? 'Syncing...' : '🔄 Sync Now'}
+                        {loadingMicrosoft ? 'Syncing...' : syncCompleted ? '✓ Synced' : '🔄 Sync Now'}
                       </button>
                       <button
                         className="btn-disconnect"
