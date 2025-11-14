@@ -1398,3 +1398,26 @@
   margin-top: 4px;
   margin-bottom: 8px;
 }
+
+/* Important Dates - Section Styles */
+.dates-section {
+  margin-bottom: 32px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.dates-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.dates-section-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #218D8D;
+  display: inline-block;
+}
