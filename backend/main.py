@@ -8831,20 +8831,25 @@ async def initialize_mission_control(db: Session = Depends(get_db)):
         from sqlalchemy import text
         statements = [s.strip() for s in sql.split(';') if s.strip()]
         tables_created = 0
+        errors = []
 
         for statement in statements:
             if statement and not statement.startswith('--'):
                 try:
+                    # Execute each statement in its own transaction
                     db.execute(text(statement))
+                    db.commit()  # Commit immediately after each statement
                     if 'CREATE TABLE' in statement.upper():
                         tables_created += 1
                 except Exception as e:
+                    db.rollback()  # Roll back failed statement
+                    error_str = str(e)
                     # Ignore "already exists" errors
-                    if 'already exists' not in str(e).lower():
-                        logger.error(f"Error executing statement: {e}")
+                    if 'already exists' not in error_str.lower():
+                        logger.error(f"Error executing statement: {error_str[:200]}")
+                        errors.append(error_str[:100])
 
-        db.commit()
-        logger.info(f"✅ Mission Control schema initialized ({tables_created} tables)")
+        logger.info(f"✅ Mission Control schema initialized ({tables_created} tables, {len(errors)} errors)")
 
         # Create initial data
         logger.info("Creating initial Mission Control data...")
@@ -8905,7 +8910,8 @@ async def initialize_mission_control(db: Session = Depends(get_db)):
         return {
             "status": "success",
             "message": "Mission Control initialized successfully",
-            "tables_created": tables_created
+            "tables_created": tables_created,
+            "errors": errors if errors else []
         }
 
     except Exception as e:
