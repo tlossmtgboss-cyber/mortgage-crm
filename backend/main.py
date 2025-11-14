@@ -2540,7 +2540,14 @@ async def fetch_microsoft_emails(oauth_record: MicrosoftOAuthToken, db: Session,
             return {"emails": emails, "count": len(emails)}
         else:
             logger.error(f"Failed to fetch Microsoft emails: {response.status_code} - {response.text}")
-            return {"error": f"Microsoft API error: {response.status_code}"}
+            # Include response details for better debugging
+            error_detail = response.text
+            try:
+                error_json = response.json()
+                error_detail = error_json.get("error", {}).get("message", response.text)
+            except:
+                pass
+            return {"error": f"Microsoft API error: {response.status_code} - {error_detail}"}
 
     except Exception as e:
         logger.error(f"Error fetching Microsoft emails: {e}")
