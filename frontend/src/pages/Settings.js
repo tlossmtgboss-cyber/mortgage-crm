@@ -1386,6 +1386,238 @@ function Settings() {
             <MissionControl />
           )}
 
+          {/* OUTLOOK EMAIL */}
+          {activeSection === 'outlook-email' && (
+            <div className="integration-detail-section">
+              <h2>📧 Outlook Email Integration</h2>
+              <p className="section-description">
+                Sync emails and automatically extract lead information with AI
+              </p>
+
+              {microsoftStatus.connected ? (
+                <div className="microsoft-status-panel">
+                  <div className="status-header">
+                    <div className="status-icon" style={{background: '#0078d4'}}>📧</div>
+                    <div className="status-info">
+                      <h3>Microsoft 365 Connected</h3>
+                      <p>{microsoftStatus.email_address}</p>
+                    </div>
+                    <div className="status-actions">
+                      <button className="btn-sync" onClick={(e) => { e.stopPropagation(); syncMicrosoftNow(); }} disabled={loadingMicrosoft || reprocessing}>
+                        {loadingMicrosoft ? 'Syncing...' : syncCompleted ? '✓ Synced' : '🔄 Sync Now'}
+                      </button>
+                      <button className="btn-sync" onClick={(e) => { e.stopPropagation(); reprocessFailedEmails(); }} disabled={loadingMicrosoft || reprocessing} style={{background: '#ff9800'}}>
+                        {reprocessing ? 'Processing...' : '🔄 Reprocess Failed'}
+                      </button>
+                      <button className="btn-disconnect" onClick={(e) => { e.stopPropagation(); disconnectMicrosoft365(); }} disabled={loadingMicrosoft || reprocessing}>
+                        Disconnect
+                      </button>
+                    </div>
+                  </div>
+                  {(loadingMicrosoft || syncCompleted) && syncProgress.total > 0 && (
+                    <div className="sync-progress-container">
+                      <div className="sync-progress-bar">
+                        <div className="sync-progress-fill" style={{ width: `${(syncProgress.current / syncProgress.total) * 100}%` }}></div>
+                      </div>
+                      <div className="sync-progress-text">
+                        {syncCompleted ? <span className="progress-complete">✓ {syncProgress.current}/{syncProgress.total} emails synced</span> : <span>Syncing {syncProgress.current}/{syncProgress.total} emails...</span>}
+                      </div>
+                    </div>
+                  )}
+                  {microsoftStatus.last_sync_at && <div className="status-meta">Last synced: {new Date(microsoftStatus.last_sync_at).toLocaleString()}</div>}
+                </div>
+              ) : (
+                <div className="integration-connect-card">
+                  <div className="connect-icon" style={{background: '#0078d4'}}>📧</div>
+                  <h3>Connect Outlook Email</h3>
+                  <p>Connect your Microsoft 365 account to sync emails and extract lead information automatically</p>
+                  <button className="btn-connect" onClick={() => connectMicrosoft365()}>Connect Outlook Email</button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* OUTLOOK CALENDAR */}
+          {activeSection === 'outlook-calendar' && (
+            <div className="integration-detail-section">
+              <h2>📅 Outlook Calendar Integration</h2>
+              <p className="section-description">Sync calendar events and schedule appointments</p>
+              {microsoftStatus.connected ? (
+                <div className="integration-status-card">
+                  <div className="status-icon-large" style={{background: '#0078d4'}}>📅</div>
+                  <h3>Calendar Connected</h3>
+                  <p>Your Outlook Calendar is connected and syncing</p>
+                  <p className="status-detail">Account: {microsoftStatus.email_address}</p>
+                </div>
+              ) : (
+                <div className="integration-connect-card">
+                  <div className="connect-icon" style={{background: '#0078d4'}}>📅</div>
+                  <h3>Connect Outlook Calendar</h3>
+                  <p>Connect your Microsoft 365 account to sync calendar events</p>
+                  <button className="btn-connect" onClick={() => connectMicrosoft365()}>Connect Outlook Calendar</button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* MICROSOFT TEAMS */}
+          {activeSection === 'teams' && (
+            <div className="integration-detail-section">
+              <h2>💬 Microsoft Teams Integration</h2>
+              <p className="section-description">Send messages, make calls, and collaborate with your team</p>
+              <div className="integration-coming-soon">
+                <div className="coming-soon-icon">💬</div>
+                <h3>Coming Soon</h3>
+                <p>Microsoft Teams integration is currently in development</p>
+              </div>
+            </div>
+          )}
+
+          {/* CALENDLY */}
+          {activeSection === 'calendly' && (
+            <div className="integration-detail-section">
+              <h2>🗓️ Calendly Integration</h2>
+              <p className="section-description">Automated scheduling for client meetings</p>
+              {calendlyEventTypes.length > 0 ? (
+                <div className="calendly-connected-section">
+                  <div className="integration-status-card">
+                    <div className="status-icon-large" style={{background: '#006bff'}}>🗓️</div>
+                    <h3>Calendly Connected</h3>
+                    <p>Found {calendlyEventTypes.length} event types</p>
+                  </div>
+                  <div className="calendar-mappings-section">
+                    <h3>Event Type Mappings</h3>
+                    <p className="section-description">Map Calendly event types to lead pipeline stages</p>
+                    {calendarMappings.length > 0 && (
+                      <div className="mappings-list">
+                        {calendarMappings.map((mapping, index) => (
+                          <div key={index} className="mapping-item">
+                            <div className="mapping-info">
+                              <span className="mapping-stage">{mapping.stage_name}</span>
+                              <span className="mapping-arrow">→</span>
+                              <span className="mapping-event">{mapping.event_type_name}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <div className="add-mapping-form">
+                      <select value={selectedStage} onChange={(e) => setSelectedStage(e.target.value)} className="form-select">
+                        <option value="">Select Lead Stage</option>
+                        {leadStages.map((stage) => (<option key={stage.value} value={stage.value}>{stage.label}</option>))}
+                      </select>
+                      <select value={selectedEventType} onChange={(e) => setSelectedEventType(e.target.value)} className="form-select">
+                        <option value="">Select Calendly Event Type</option>
+                        {calendlyEventTypes.map((eventType) => (<option key={eventType.uri} value={eventType.uri}>{eventType.name}</option>))}
+                      </select>
+                      <button onClick={saveCalendarMapping} disabled={!selectedStage || !selectedEventType} className="btn-primary">Add Mapping</button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="integration-connect-card">
+                  <div className="connect-icon" style={{background: '#006bff'}}>🗓️</div>
+                  <h3>Connect Calendly</h3>
+                  <p>Configure your Calendly API key in Settings → API Keys to enable scheduling integration</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TWILIO SMS */}
+          {activeSection === 'twilio-sms' && (
+            <div className="phone-integration-section">
+              <h2>📱 Twilio SMS Integration</h2>
+              <p className="section-description">Send SMS messages to leads and clients</p>
+              <div className="phone-status-card">
+                <div className="card-header">
+                  <h3>Integration Status</h3>
+                  <button className="btn-refresh" onClick={checkTwilioStatus} disabled={loadingTwilio}>{loadingTwilio ? 'Checking...' : '🔄 Refresh'}</button>
+                </div>
+                <div className="status-grid">
+                  <div className="status-item">
+                    <div className="status-icon" style={{background: twilioStatus.configured ? '#f22f46' : '#6b7280'}}>📱</div>
+                    <div className="status-info">
+                      <h4>Twilio SMS API</h4>
+                      <p>{twilioStatus.message || 'Advanced SMS features'}</p>
+                      <span className={`status-badge ${twilioStatus.configured ? 'connected' : 'disconnected'}`}>{twilioStatus.configured ? '✓ Active' : 'Not Configured'}</span>
+                      {twilioStatus.configured && twilioStatus.phone_number && <p className="status-detail">From: {twilioStatus.phone_number}</p>}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="phone-test-card">
+                <h3>Test SMS Features</h3>
+                <p className="section-description">Test your SMS integration to make sure everything is working</p>
+                <div className="test-form">
+                  <div className="form-group">
+                    <label>Test Phone Number</label>
+                    <input type="tel" className="form-input" placeholder="Enter phone number (e.g., 555-123-4567)" value={testPhoneNumber} onChange={(e) => setTestPhoneNumber(e.target.value)} />
+                  </div>
+                  <div className="test-actions">
+                    <button className="btn-test sms" onClick={testSMS} disabled={!testPhoneNumber}>💬 Test SMS</button>
+                  </div>
+                </div>
+                {testResults.length > 0 && (
+                  <div className="test-results">
+                    <h4>Recent Tests</h4>
+                    <div className="results-list">
+                      {testResults.map((result, index) => (
+                        <div key={index} className={`result-item ${result.status}`}>
+                          <span className="result-icon">{result.status === 'success' ? '✅' : '❌'}</span>
+                          <div className="result-content">
+                            <div className="result-feature">{result.feature}</div>
+                            <div className="result-message">{result.message}</div>
+                          </div>
+                          <div className="result-time">{result.timestamp}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="info-card">
+                <div className="info-icon">💡</div>
+                <div className="info-content">
+                  <h3>Twilio SMS Features</h3>
+                  <ul>
+                    <li>Send SMS directly from CRM without using your phone</li>
+                    <li>Bulk SMS campaigns to multiple leads</li>
+                    <li>SMS templates and automation</li>
+                    <li>Track delivery status and history</li>
+                    <li>Requires backend configuration (see setup guide)</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* DOCUSIGN */}
+          {activeSection === 'docusign' && (
+            <div className="integration-detail-section">
+              <h2>📝 DocuSign Integration</h2>
+              <p className="section-description">Send and sign loan documents electronically</p>
+              <div className="integration-coming-soon">
+                <div className="coming-soon-icon">📝</div>
+                <h3>Coming Soon</h3>
+                <p>DocuSign integration is currently in development</p>
+              </div>
+            </div>
+          )}
+
+          {/* ZOOM */}
+          {activeSection === 'zoom' && (
+            <div className="integration-detail-section">
+              <h2>📹 Zoom Integration</h2>
+              <p className="section-description">Host virtual meetings and consultations with clients</p>
+              <div className="integration-coming-soon">
+                <div className="coming-soon-icon">📹</div>
+                <h3>Coming Soon</h3>
+                <p>Zoom integration is currently in development</p>
+              </div>
+            </div>
+          )}
+
           {activeSection === 'integration-marketplace' && (
             <div className="integrations-marketplace">
               <div className="marketplace-header">
