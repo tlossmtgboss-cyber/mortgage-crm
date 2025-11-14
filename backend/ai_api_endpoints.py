@@ -13,7 +13,7 @@ from datetime import datetime
 from main import get_db
 from ai_models import (
     AgentConfig, ExecuteAgentRequest, ExecuteAgentResponse,
-    SendMessageRequest, ProvideExecutionFeedbackRequest,
+    DispatchEventRequest, SendMessageRequest, ProvideExecutionFeedbackRequest,
     ApproveAuditFindingRequest, CreatePromptVersionRequest
 )
 from ai_services import AgentOrchestrator, AgentRegistry, ToolRegistry, MessageBus
@@ -128,8 +128,7 @@ async def execute_agent_manually(
 
 @router.post("/events")
 async def dispatch_event(
-    event_type: str,
-    payload: dict,
+    request: DispatchEventRequest,
     db: Session = Depends(get_db)
 ):
     """Dispatch an event to appropriate agents"""
@@ -139,9 +138,9 @@ async def dispatch_event(
 
     event = AgentEvent(
         event_id=str(uuid.uuid4()),
-        event_type=event_type,
+        event_type=request.event_type,
         source="api",
-        payload=payload,
+        payload=request.payload,
         status=EventStatus.PENDING
     )
 

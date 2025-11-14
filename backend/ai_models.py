@@ -385,6 +385,12 @@ class ExecuteAgentResponse(BaseModel):
     confidence_score: Optional[float] = None
 
 
+class DispatchEventRequest(BaseModel):
+    """Request to dispatch an event to agents"""
+    event_type: str
+    payload: Dict[str, Any]
+
+
 class SendMessageRequest(BaseModel):
     """Request to send inter-agent message"""
     from_agent_id: str
