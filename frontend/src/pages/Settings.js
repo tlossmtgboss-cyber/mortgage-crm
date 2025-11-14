@@ -44,6 +44,7 @@ function Settings() {
   });
   const [loadingMicrosoft, setLoadingMicrosoft] = useState(false);
   const [syncCompleted, setSyncCompleted] = useState(false);
+  const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0 });
 
   // Team members state
   const [teamMembers, setTeamMembers] = useState([]);
@@ -598,6 +599,7 @@ function Settings() {
   const syncMicrosoftNow = async () => {
     setLoadingMicrosoft(true);
     setSyncCompleted(false);
+    setSyncProgress({ current: 0, total: 0 });
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/sync-now`, {
         method: 'POST',
@@ -608,13 +610,20 @@ function Settings() {
 
       if (response.ok) {
         const data = await response.json();
+
+        // Update progress with final counts
+        setSyncProgress({ current: data.processed_count, total: data.fetched_count });
+
         alert(`Synced ${data.processed_count}/${data.fetched_count} emails successfully!`);
         await checkMicrosoftStatus();
 
         // Show "Synced" status for 3 seconds
         setLoadingMicrosoft(false);
         setSyncCompleted(true);
-        setTimeout(() => setSyncCompleted(false), 3000);
+        setTimeout(() => {
+          setSyncCompleted(false);
+          setSyncProgress({ current: 0, total: 0 });
+        }, 3000);
       } else {
         let errorMessage = 'Failed to sync emails';
         try {
@@ -626,11 +635,13 @@ function Settings() {
         console.error('Sync error response:', errorMessage);
         alert(`Failed to sync emails: ${errorMessage}`);
         setLoadingMicrosoft(false);
+        setSyncProgress({ current: 0, total: 0 });
       }
     } catch (error) {
       console.error('Error syncing emails:', error);
       alert(`Error syncing emails: ${error.message || 'Network error'}`);
       setLoadingMicrosoft(false);
+      setSyncProgress({ current: 0, total: 0 });
     }
   };
 
@@ -1319,6 +1330,26 @@ function Settings() {
                       </button>
                     </div>
                   </div>
+
+                  {/* Sync Progress Bar */}
+                  {(loadingMicrosoft || syncCompleted) && syncProgress.total > 0 && (
+                    <div className="sync-progress-container">
+                      <div className="sync-progress-bar">
+                        <div
+                          className="sync-progress-fill"
+                          style={{ width: `${(syncProgress.current / syncProgress.total) * 100}%` }}
+                        ></div>
+                      </div>
+                      <div className="sync-progress-text">
+                        {syncCompleted ? (
+                          <span className="progress-complete">✓ {syncProgress.current}/{syncProgress.total} emails synced</span>
+                        ) : (
+                          <span>Syncing {syncProgress.current}/{syncProgress.total} emails...</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {microsoftStatus.last_sync_at && (
                     <div className="status-meta">
                       Last synced: {new Date(microsoftStatus.last_sync_at).toLocaleString()}
