@@ -452,6 +452,20 @@ class IntegrationLog(Base):
     loan_id = Column(Integer, ForeignKey("loans.id"))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
+class IntegrationCredential(Base):
+    __tablename__ = "integration_credentials"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    integration_type = Column(String, nullable=False)  # calendly, zoom, docusign, etc.
+    api_key = Column(String, nullable=False)  # Encrypted API key
+    refresh_token = Column(String)  # For OAuth integrations
+    access_token = Column(String)  # For OAuth integrations
+    token_expiry = Column(DateTime)  # When access token expires
+    metadata = Column(JSON)  # Additional integration-specific data
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
 class SubscriptionPlan(Base):
     __tablename__ = "subscription_plans"
     id = Column(Integer, primary_key=True, index=True)
@@ -6828,20 +6842,96 @@ async def get_valid_access_token(user_id: int, db: Session) -> Optional[str]:
 # CALENDLY INTEGRATION
 # ============================================================================
 
+@app.post("/api/v1/calendly/connect")
+async def connect_calendly(
+    request: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Save user's Calendly API key for integration.
+    """
+    api_key = request.get("api_key")
+    if not api_key:
+        raise HTTPException(status_code=400, detail="API key is required")
+
+    try:
+        # Verify the API key works by making a test call to Calendly
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        test_response = requests.get(
+            "https://api.calendly.com/users/me",
+            headers=headers
+        )
+
+        if test_response.status_code != 200:
+            raise HTTPException(status_code=400, detail="Invalid Calendly API key")
+
+        # Check if user already has a Calendly credential
+        existing_cred = db.query(IntegrationCredential).filter(
+            IntegrationCredential.user_id == current_user.id,
+            IntegrationCredential.integration_type == "calendly"
+        ).first()
+
+        if existing_cred:
+            # Update existing credential
+            existing_cred.api_key = api_key
+            existing_cred.is_active = True
+            existing_cred.updated_at = datetime.now(timezone.utc)
+        else:
+            # Create new credential
+            new_cred = IntegrationCredential(
+                user_id=current_user.id,
+                integration_type="calendly",
+                api_key=api_key,
+                is_active=True
+            )
+            db.add(new_cred)
+
+        db.commit()
+
+        return {
+            "message": "Calendly connected successfully",
+            "status": "connected"
+        }
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Calendly API test failed: {e}")
+        raise HTTPException(status_code=400, detail="Failed to verify Calendly API key")
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error connecting Calendly: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/v1/calendly/event-types")
-async def get_calendly_event_types(current_user: User = Depends(get_current_user)):
+async def get_calendly_event_types(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
     Get user's Calendly event types (available meeting types).
-    Uses Calendly Personal Access Token to fetch event types.
+    Uses user's stored Calendly API key.
     """
-    calendly_token = os.getenv("CALENDLY_API_TOKEN")
-    if not calendly_token:
-        raise HTTPException(status_code=500, detail="Calendly API not configured")
+    # Get user's Calendly credential from database
+    cred = db.query(IntegrationCredential).filter(
+        IntegrationCredential.user_id == current_user.id,
+        IntegrationCredential.integration_type == "calendly",
+        IntegrationCredential.is_active == True
+    ).first()
+
+    if not cred:
+        # Return empty list if not connected
+        return {
+            "event_types": [],
+            "count": 0
+        }
 
     try:
         # First, get the current user's URI
         headers = {
-            "Authorization": f"Bearer {calendly_token}",
+            "Authorization": f"Bearer {cred.api_key}",
             "Content-Type": "application/json"
         }
 
