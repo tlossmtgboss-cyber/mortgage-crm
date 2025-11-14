@@ -3785,6 +3785,56 @@ async def add_process_type_to_calendar_mappings(db: Session = Depends(get_db)):
             content={"status": "error", "message": str(e)}
         )
 
+@app.post("/admin/add-important-dates-columns")
+async def add_important_dates_columns(db: Session = Depends(get_db)):
+    """Admin endpoint to add important_dates JSON columns for AI date extraction"""
+    try:
+        logger.info("Adding important_dates columns...")
+
+        # Add important_dates to leads table
+        db.execute(text("""
+            ALTER TABLE leads
+            ADD COLUMN IF NOT EXISTS important_dates JSON
+        """))
+
+        # Add important_dates to loans table
+        db.execute(text("""
+            ALTER TABLE loans
+            ADD COLUMN IF NOT EXISTS important_dates JSON
+        """))
+
+        # Add important_dates to mum_clients table
+        db.execute(text("""
+            ALTER TABLE mum_clients
+            ADD COLUMN IF NOT EXISTS important_dates JSON
+        """))
+
+        db.commit()
+
+        logger.info("✅ Important dates columns added successfully")
+        return {
+            "status": "success",
+            "message": "AI Important Dates system enabled for all processes",
+            "changes": {
+                "tables_updated": ["leads", "loans", "mum_clients"],
+                "column_added": "important_dates (JSON)",
+                "date_categories": {
+                    "leads": 7,
+                    "loans": 15,
+                    "mum": 6
+                },
+                "total_date_types": 28
+            },
+            "next_steps": "AI will automatically extract dates from emails and trigger tasks"
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Failed to add important_dates columns: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
+
 @app.post("/admin/migrate-to-encrypted-fields")
 async def migrate_to_encrypted_fields_endpoint(db: Session = Depends(get_db)):
     """
