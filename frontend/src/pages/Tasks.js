@@ -986,14 +986,63 @@ const mockLoanIssues = () => [
     issue: 'Appraisal delay',
     time_remaining: '2 days',
     time_color: '#f59e0b',
-    action: 'Follow up'
+    action: 'Follow up with appraiser',
+    owner: 'Loan Officer',
+    stage: 'Underwriting',
+    urgency: 'high',
+    date_created: '2025-11-12T09:15:00',
+    preferred_contact_method: 'Phone',
+    ai_message: `Hi John,
+
+I wanted to give you a quick update on your loan application. We're currently waiting on the appraisal, which has been slightly delayed by 2 days.
+
+I've reached out to the appraiser this morning and they confirmed they'll complete the inspection by end of day Thursday. Once we receive the appraisal report, we can move forward to final underwriting approval.
+
+I know waiting can be frustrating, but we're doing everything we can to keep things moving quickly. I'll keep you posted on any updates.
+
+If you have any questions in the meantime, please don't hesitate to reach out!
+
+Best regards,
+[Your Name]
+Loan Officer`,
+    communication_history: [
+      { date: '2025-11-12', type: 'Phone', subject: 'Appraisal status update', status: 'Completed', message: 'Called appraiser to check on timeline' },
+      { date: '2025-11-10', type: 'Email', subject: 'Appraisal scheduled', status: 'Sent', message: 'Sent confirmation of appraisal appointment' },
+      { date: '2025-11-08', type: 'Email', subject: 'Moving to underwriting', status: 'Sent', message: 'Notified client that file is being sent to underwriting' }
+    ]
   },
   {
     borrower: 'Jane Doe',
     issue: 'Insurance missing',
     time_remaining: '5 hours',
     time_color: '#dc2626',
-    action: 'Send reminder'
+    action: 'Send urgent reminder',
+    owner: 'Loan Processor',
+    stage: 'Clear to Close',
+    urgency: 'critical',
+    date_created: '2025-11-13T08:00:00',
+    preferred_contact_method: 'Text',
+    ai_message: `Hi Jane,
+
+URGENT: We need your homeowner's insurance binder by 5 PM today to close on schedule tomorrow.
+
+📋 What we need:
+• Homeowner's insurance binder
+• Proof of paid first year premium
+• Lender named as mortgagee
+
+Your insurance agent can email this directly to us at docs@mortgagecrm.com or you can upload it to the portal.
+
+This is the last item we need before closing! Please let me know if you need help contacting your insurance agent.
+
+Thanks!
+[Your Name]
+Loan Processor`,
+    communication_history: [
+      { date: '2025-11-13', type: 'Text', subject: 'Insurance reminder', status: 'Sent', message: 'Sent text reminder about insurance deadline' },
+      { date: '2025-11-12', type: 'Email', subject: 'Closing checklist', status: 'Sent', message: 'Sent final items needed for closing' },
+      { date: '2025-11-11', type: 'Phone', subject: 'Closing date confirmed', status: 'Completed', message: '15-minute call confirming closing details' }
+    ]
   }
 ];
 
@@ -1002,26 +1051,234 @@ const mockAiTasks = () => ({
     {
       id: 1,
       task: 'Draft follow-up email to Sarah Johnson',
+      borrower: 'Sarah Johnson',
       confidence: 94,
-      what_ai_did: 'Composed personalized email based on last conversation'
+      what_ai_did: 'Composed personalized email based on last conversation',
+      owner: 'Loan Officer',
+      stage: 'Pre-Approved',
+      urgency: 'medium',
+      date_created: '2025-11-13T11:00:00',
+      preferred_contact_method: 'Email',
+      ai_message: `Hi Sarah,
+
+I hope you're doing well! I wanted to reach out and see how your property search is going.
+
+Your pre-approval is still active for another 75 days. If you've found a property you're interested in or have any questions about the home buying process, I'm here to help.
+
+Also, if your financial situation has changed at all (new income, credit changes, etc.), please let me know so we can make sure your pre-approval stays accurate.
+
+Looking forward to helping you find your dream home!
+
+Best regards,
+[Your Name]
+Loan Officer`,
+      communication_history: [
+        { date: '2025-11-08', type: 'Email', subject: 'Pre-approval completed', status: 'Sent', message: 'Sent pre-approval letter and congratulations' },
+        { date: '2025-11-05', type: 'Phone', subject: 'Pre-approval interview', status: 'Completed', message: 'Discussed loan options and gathered documentation' }
+      ]
     },
     {
       id: 2,
       task: 'Schedule appointment with Mike Chen',
+      borrower: 'Mike Chen',
       confidence: 87,
-      what_ai_did: 'Found mutual availability on calendar for Thursday 2pm'
+      what_ai_did: 'Found mutual availability on calendar for Thursday 2pm',
+      owner: 'Loan Officer',
+      stage: 'Processing',
+      urgency: 'medium',
+      date_created: '2025-11-13T13:30:00',
+      preferred_contact_method: 'Phone',
+      ai_message: `Hi Mike,
+
+I wanted to schedule a quick check-in call to review your loan application progress and answer any questions you might have.
+
+I have the following times available this week:
+• Thursday, Nov 14 at 2:00 PM
+• Thursday, Nov 14 at 4:00 PM
+• Friday, Nov 15 at 10:00 AM
+
+The call should only take about 15-20 minutes. We'll review your current status, discuss next steps, and I can answer any questions.
+
+Which time works best for you?
+
+Thanks!
+[Your Name]
+Loan Officer`,
+      communication_history: [
+        { date: '2025-11-10', type: 'Email', subject: 'Document status update', status: 'Sent', message: 'Confirmed receipt of W-2s and requested bank statements' },
+        { date: '2025-11-08', type: 'Text', subject: 'Quick question', status: 'Received', message: 'Mike asked about processing timeline' }
+      ]
     }
   ],
   waiting: [
-    { task: 'Approve rate lock for Emily Davis file' },
-    { task: 'Review updated credit report for John Smith' }
+    {
+      task: 'Approve rate lock for Emily Davis file',
+      borrower: 'Emily Davis',
+      owner: 'Loan Officer',
+      stage: 'Application Complete',
+      urgency: 'high',
+      date_created: '2025-11-12T16:00:00',
+      preferred_contact_method: 'Email',
+      ai_message: `Hi Emily,
+
+Good news! Interest rates have dropped slightly since we started your application.
+
+Current Rate Options:
+• 30-year fixed: 6.875% (down from 7.00%)
+• 15-year fixed: 6.125% (down from 6.25%)
+
+I recommend locking your rate today to secure this lower rate. The lock is good for 45 days, which gives us plenty of time to close.
+
+Would you like me to proceed with the rate lock? Please confirm and I'll lock it in right away.
+
+Best regards,
+[Your Name]
+Loan Officer`,
+      communication_history: [
+        { date: '2025-11-11', type: 'Email', subject: 'Application received', status: 'Sent', message: 'Confirmed application submission' },
+        { date: '2025-11-09', type: 'Phone', subject: 'Rate options discussion', status: 'Completed', message: 'Discussed rate lock strategy' }
+      ]
+    },
+    {
+      task: 'Review updated credit report for John Smith',
+      borrower: 'John Smith',
+      owner: 'Underwriter',
+      stage: 'Underwriting',
+      urgency: 'medium',
+      date_created: '2025-11-13T10:00:00',
+      preferred_contact_method: 'Email',
+      ai_message: `Hi John,
+
+I noticed your credit score has improved by 15 points since we pulled your initial credit report! This is great news.
+
+Your new score (735) may qualify you for a better interest rate. I'd like to re-run the numbers to see if we can save you money.
+
+Would you authorize me to pull an updated credit report? This will be a soft pull and won't affect your score.
+
+Let me know and I can have updated numbers for you within an hour!
+
+Best regards,
+[Your Name]
+Loan Officer`,
+      communication_history: [
+        { date: '2025-11-12', type: 'Email', subject: 'Credit report received', status: 'Sent', message: 'Sent initial credit report results' },
+        { date: '2025-11-10', type: 'Phone', subject: 'Credit discussion', status: 'Completed', message: 'Reviewed credit history and tradelines' }
+      ]
+    }
   ]
 });
 
 const mockMumAlerts = () => [
-  { icon: '📅', title: 'Annual review due', client: 'Tom Wilson', action: 'Schedule' },
-  { icon: '📉', title: 'Rate drop opportunity', client: 'Lisa Brown', action: 'Send alert' },
-  { icon: '🎂', title: 'Home anniversary', client: 'Mark Taylor', action: 'Send card' }
+  {
+    icon: '📅',
+    title: 'Annual review due',
+    client: 'Tom Wilson',
+    borrower: 'Tom Wilson',
+    action: 'Schedule annual mortgage review',
+    owner: 'Loan Officer',
+    stage: 'Client Retention',
+    urgency: 'medium',
+    date_created: '2025-11-13T09:00:00',
+    preferred_contact_method: 'Email',
+    ai_message: `Hi Tom,
+
+It's been a year since we closed on your home - congratulations on your home anniversary!
+
+I'd love to schedule a quick 15-minute call to review your mortgage and see if there are any opportunities to save you money:
+
+✅ Current interest rates (they may be lower now!)
+✅ Your home equity position
+✅ Refinance opportunities
+✅ Any questions you have
+
+I have the following times available:
+• Tuesday, Nov 19 at 10:00 AM
+• Wednesday, Nov 20 at 2:00 PM
+• Thursday, Nov 21 at 11:00 AM
+
+Which works best for you?
+
+Best regards,
+[Your Name]
+Loan Officer`,
+    communication_history: [
+      { date: '2024-11-13', type: 'Email', subject: 'Closing completed!', status: 'Sent', message: 'Sent congratulations on successful closing' },
+      { date: '2024-11-01', type: 'Phone', subject: 'Final walkthrough', status: 'Completed', message: 'Confirmed closing date and details' }
+    ]
+  },
+  {
+    icon: '📉',
+    title: 'Rate drop opportunity',
+    client: 'Lisa Brown',
+    borrower: 'Lisa Brown',
+    action: 'Send rate drop alert',
+    owner: 'Loan Officer',
+    stage: 'Client Retention',
+    urgency: 'high',
+    date_created: '2025-11-13T14:00:00',
+    preferred_contact_method: 'Phone',
+    ai_message: `Hi Lisa,
+
+Great news! Interest rates have dropped significantly since you closed on your mortgage.
+
+Your Current Loan:
+• Current Rate: 7.25%
+• Current Payment: $2,850/month
+
+Refinance Opportunity:
+• New Rate: 6.50%
+• New Payment: $2,540/month
+• Potential Savings: $310/month ($3,720/year!)
+
+You could break even on closing costs in just 18 months and start saving immediately.
+
+Would you like me to run the detailed numbers for you? I can have a full analysis ready within 24 hours.
+
+Let me know!
+
+Best regards,
+[Your Name]
+Loan Officer`,
+    communication_history: [
+      { date: '2025-06-15', type: 'Email', subject: '6-month check-in', status: 'Sent', message: 'Checked in on how home ownership is going' },
+      { date: '2025-01-10', type: 'Email', subject: 'First payment reminder', status: 'Sent', message: 'Reminded about first mortgage payment' }
+    ]
+  },
+  {
+    icon: '🎂',
+    title: 'Home anniversary',
+    client: 'Mark Taylor',
+    borrower: 'Mark Taylor',
+    action: 'Send anniversary message',
+    owner: 'Loan Officer',
+    stage: 'Client Retention',
+    urgency: 'low',
+    date_created: '2025-11-13T08:30:00',
+    preferred_contact_method: 'Email',
+    ai_message: `Hi Mark,
+
+Happy Home Anniversary! 🎉
+
+It's been exactly one year since you got the keys to your new home. I hope this past year has been filled with wonderful memories!
+
+As your mortgage professional, I wanted to check in and see how everything is going:
+
+• How's the home treating you?
+• Any questions about your mortgage?
+• Any friends or family looking to buy a home?
+
+Also, you've built up some equity this year! If you're curious about your current home value or have any questions, I'm always here to help.
+
+Wishing you many more happy years in your home!
+
+Best regards,
+[Your Name]
+Loan Officer`,
+    communication_history: [
+      { date: '2024-11-13', type: 'Email', subject: 'Welcome home!', status: 'Sent', message: 'Sent closing congratulations and next steps' },
+      { date: '2024-11-12', type: 'Phone', subject: 'Closing day!', status: 'Completed', message: 'Closing call and final documents review' }
+    ]
+  }
 ];
 
 const mockLeadMetrics = () => ({
@@ -1042,32 +1299,85 @@ const mockMessages = () => [
     type: 'email',
     type_icon: '📧',
     from: 'Sarah Johnson',
+    borrower: 'Sarah Johnson',
     client_type: 'Pre-Approved',
     source: 'Outlook',
     timestamp: '2 hours ago',
     preview: 'Quick question about my pre-approval...',
     ai_summary: 'Asking about pre-approval expiration date',
     read: false,
-    requires_response: true
+    requires_response: true,
+    owner: 'Loan Officer',
+    stage: 'Pre-Approved',
+    urgency: 'medium',
+    date_created: '2025-11-13T14:00:00',
+    preferred_contact_method: 'Email',
+    ai_message: `Hi Sarah,
+
+Great question! Your pre-approval is valid for 90 days from the date we completed it.
+
+Here are the details:
+• Approved Date: November 8, 2025
+• Expiration Date: February 8, 2026
+• Days Remaining: 87 days
+
+This gives you plenty of time to find the right home! If you need more time or if your financial situation changes, we can update or extend your pre-approval.
+
+Are you actively looking at properties? I'd love to hear how the search is going!
+
+Best regards,
+[Your Name]
+Loan Officer`,
+    communication_history: [
+      { date: '2025-11-08', type: 'Email', subject: 'Pre-approval completed', status: 'Sent', message: 'Sent pre-approval letter and congratulations' },
+      { date: '2025-11-05', type: 'Phone', subject: 'Pre-approval interview', status: 'Completed', message: '45-minute call gathering financial information' }
+    ]
   },
   {
     id: 2,
     type: 'text',
     type_icon: '💬',
     from: 'Mike Chen',
+    borrower: 'Mike Chen',
     client_type: 'Processing',
     source: 'Teams',
     timestamp: '5 hours ago',
     preview: 'Thanks for the update!',
-    ai_summary: null,
+    ai_summary: 'Acknowledged document receipt',
     read: true,
-    requires_response: false
+    requires_response: false,
+    owner: 'Loan Processor',
+    stage: 'Processing',
+    urgency: 'low',
+    date_created: '2025-11-13T09:00:00',
+    preferred_contact_method: 'Text',
+    ai_message: `Hi Mike,
+
+You're very welcome! I'm glad we received your documents.
+
+Quick update on your loan:
+✅ W-2s received
+✅ Tax returns verified
+⏳ Waiting on final bank statement (due Thursday)
+
+We're on track for your target closing date of December 5th. I'll keep you posted on next steps!
+
+Let me know if you have any questions.
+
+Best,
+[Your Name]
+Loan Processor`,
+    communication_history: [
+      { date: '2025-11-13', type: 'Text', subject: 'Document confirmation', status: 'Sent', message: 'Confirmed receipt of W-2s' },
+      { date: '2025-11-10', type: 'Email', subject: 'Document checklist', status: 'Sent', message: 'Sent list of required documents' }
+    ]
   },
   {
     id: 3,
     type: 'voicemail',
     type_icon: '🎙️',
     from: 'Emily Davis',
+    borrower: 'Emily Davis',
     client_type: 'Application Started',
     source: 'Voicemail',
     timestamp: '1 day ago',
@@ -1075,13 +1385,41 @@ const mockMessages = () => [
     ai_summary: 'Wants to know when appraisal will be scheduled',
     duration: '1:23',
     read: false,
-    requires_response: true
+    requires_response: true,
+    owner: 'Loan Officer',
+    stage: 'Application Complete',
+    urgency: 'high',
+    date_created: '2025-11-12T10:30:00',
+    preferred_contact_method: 'Phone',
+    ai_message: `Hi Emily,
+
+I got your voicemail about the appraisal timing - thanks for reaching out!
+
+Good news: The appraisal has been scheduled for this Thursday, November 14th at 2:00 PM. The appraiser will call you 30 minutes before arriving.
+
+What to expect:
+• The inspection takes about 30-45 minutes
+• You don't need to be home, but it's helpful if you are
+• Make sure they can access all areas (attic, basement, garage)
+• We should have the report within 2-3 business days
+
+I'll call you this afternoon to confirm you got this message and answer any questions!
+
+Best regards,
+[Your Name]
+Loan Officer`,
+    communication_history: [
+      { date: '2025-11-12', type: 'Voicemail', subject: 'Appraisal question', status: 'Received', message: 'Emily asked about appraisal timing' },
+      { date: '2025-11-10', type: 'Email', subject: 'Application received', status: 'Sent', message: 'Confirmed receipt of completed application' },
+      { date: '2025-11-08', type: 'Phone', subject: 'Initial consultation', status: 'Completed', message: 'Discussed loan options and process timeline' }
+    ]
   },
   {
     id: 4,
     type: 'email',
     type_icon: '📧',
     from: 'John Smith',
+    borrower: 'John Smith',
     client_type: 'Prospect',
     source: 'Outlook',
     timestamp: '3 days ago',
@@ -1090,7 +1428,44 @@ const mockMessages = () => [
     read: true,
     requires_response: false,
     task_created: true,
-    task_id: 'TASK-123'
+    task_id: 'TASK-123',
+    owner: 'Loan Officer',
+    stage: 'Lead',
+    urgency: 'medium',
+    date_created: '2025-11-10T11:00:00',
+    preferred_contact_method: 'Email',
+    ai_message: `Hi John,
+
+Thanks for your email! I'd be happy to provide you with rate quotes for your $450,000 home purchase.
+
+Based on today's rates, here are your options:
+
+**30-Year Fixed:**
+• Rate: 6.875%
+• Monthly Payment: $2,960
+• Total Interest: $615,600
+
+**15-Year Fixed:**
+• Rate: 6.125%
+• Monthly Payment: $3,850
+• Total Interest: $243,000
+
+**5/1 ARM:**
+• Rate: 6.250% (initial 5 years)
+• Monthly Payment: $2,770
+• Potential savings in first 5 years
+
+These rates assume 20% down ($90,000) and excellent credit (740+). Rates can change daily, so I'd recommend locking in soon if you're ready.
+
+Would you like to schedule a call to discuss which option is best for your situation?
+
+Best regards,
+[Your Name]
+Loan Officer`,
+    communication_history: [
+      { date: '2025-11-10', type: 'Email', subject: 'Rate quote request', status: 'Received', message: 'John requested rate information for $450k purchase' },
+      { date: '2025-11-05', type: 'Phone', subject: 'Initial inquiry', status: 'Completed', message: '20-minute call about home buying process' }
+    ]
   }
 ];
 
