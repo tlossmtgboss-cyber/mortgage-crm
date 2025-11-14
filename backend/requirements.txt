@@ -41,6 +41,7 @@ emails==0.6
 # Background Tasks
 celery==5.3.4
 redis==5.0.1
+apscheduler==3.10.4
 
 # Data Processing
 pandas==2.1.4

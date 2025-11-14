@@ -34,6 +34,9 @@ import secrets
 from openai import OpenAI
 import anthropic
 import requests
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+import asyncio
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -76,6 +79,9 @@ else:
         pool_recycle=3600
     )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Initialize background scheduler for auto-sync
+scheduler = AsyncIOScheduler()
 
 def get_db():
     db = SessionLocal()
@@ -2921,6 +2927,10 @@ async def sync_microsoft_emails_now(
             if process_result.get("status") == "success":
                 processed_count += 1
 
+        # Update last_sync_at timestamp
+        oauth_record.last_sync_at = datetime.now(timezone.utc)
+        db.commit()
+
         logger.info(f"Synced {processed_count}/{len(emails)} emails for user {current_user.id}")
 
         return {
@@ -2934,7 +2944,9 @@ async def sync_microsoft_emails_now(
         raise
     except Exception as e:
         logger.error(f"Microsoft sync error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Sync error: {str(e)}")
 
 @app.post("/api/v1/microsoft/reprocess-emails")
 async def reprocess_unextracted_emails(
@@ -8756,11 +8768,73 @@ async def initialize_ai_system(db: Session = Depends(get_db)):
 # STARTUP EVENT
 # ============================================================================
 
+async def auto_sync_emails():
+    """Background task to automatically sync emails for all users with sync enabled"""
+    try:
+        db = SessionLocal()
+
+        # Get all users with Microsoft sync enabled
+        oauth_tokens = db.query(MicrosoftOAuthToken).filter(
+            MicrosoftOAuthToken.sync_enabled == True
+        ).all()
+
+        logger.info(f"🔄 Auto-sync: Checking {len(oauth_tokens)} users for email sync")
+
+        for oauth_record in oauth_tokens:
+            try:
+                # Check if it's time to sync based on sync_frequency_minutes
+                if oauth_record.last_sync_at:
+                    last_sync = oauth_record.last_sync_at
+                    # Ensure timezone-aware comparison
+                    if last_sync.tzinfo is None:
+                        last_sync = last_sync.replace(tzinfo=timezone.utc)
+
+                    time_since_sync = datetime.now(timezone.utc) - last_sync
+                    minutes_since_sync = time_since_sync.total_seconds() / 60
+
+                    # Skip if synced recently (within sync_frequency_minutes)
+                    if minutes_since_sync < oauth_record.sync_frequency_minutes:
+                        continue
+
+                logger.info(f"📧 Auto-syncing emails for user {oauth_record.user_id} ({oauth_record.email_address})")
+
+                # Fetch emails
+                result = await fetch_microsoft_emails(oauth_record, db, limit=50)
+
+                if "error" in result:
+                    logger.error(f"Auto-sync error for user {oauth_record.user_id}: {result['error']}")
+                    continue
+
+                # Process each email through DRE
+                emails = result.get("emails", [])
+                processed_count = 0
+
+                for email_data in emails:
+                    process_result = await process_microsoft_email_to_dre(email_data, oauth_record.user_id, db)
+                    if process_result.get("status") == "success":
+                        processed_count += 1
+
+                # Update last_sync_at
+                oauth_record.last_sync_at = datetime.now(timezone.utc)
+                db.commit()
+
+                logger.info(f"✅ Auto-synced {processed_count}/{len(emails)} emails for user {oauth_record.user_id}")
+
+            except Exception as e:
+                logger.error(f"Error auto-syncing for user {oauth_record.user_id}: {e}")
+                db.rollback()
+                continue
+
+        db.close()
+
+    except Exception as e:
+        logger.error(f"Auto-sync task error: {e}")
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize database on startup"""
     logger.info("🚀 Starting Agentic AI Mortgage CRM...")
-    
+
     try:
         # Initialize database
         if init_db():
@@ -8776,9 +8850,32 @@ async def startup_event():
         logger.warning(f"⚠️ Startup initialization skipped: {e}")
         logger.info("Application will still start, database will be initialized on first request")
 
+    # Start auto-sync scheduler
+    try:
+        scheduler.add_job(
+            auto_sync_emails,
+            trigger=IntervalTrigger(minutes=5),
+            id='auto_sync_emails',
+            name='Auto-sync Microsoft 365 emails',
+            replace_existing=True
+        )
+        scheduler.start()
+        logger.info("✅ Auto-sync scheduler started (runs every 5 minutes)")
+    except Exception as e:
+        logger.error(f"Failed to start auto-sync scheduler: {e}")
+
     logger.info("✅ CRM is ready!")
     logger.info("📚 API Documentation: http://localhost:8000/docs")
     logger.info("🔐 Demo Login: demo@example.com / demo123")
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Cleanup on shutdown"""
+    try:
+        scheduler.shutdown()
+        logger.info("✅ Auto-sync scheduler stopped")
+    except Exception as e:
+        logger.error(f"Error stopping scheduler: {e}")
 
 # ============================================================================
 # MAIN
