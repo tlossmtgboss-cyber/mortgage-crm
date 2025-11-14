@@ -1962,7 +1962,15 @@ def classify_email_content(content: str, subject: str) -> Dict[str, Any]:
     """Use AI to classify email content and determine category"""
 
     if not openai_client:
-        return {"category": "unknown", "subcategory": "", "confidence": 0.0}
+        logger.warning("OpenAI client not initialized - using fallback classification")
+        # Fallback: Use keyword matching to classify
+        content_lower = content.lower()
+        subject_lower = subject.lower()
+
+        if any(word in subject_lower or word in content_lower for word in ['loan', 'mortgage', 'borrower', 'closing', 'rate lock']):
+            return {"category": "loan_update", "subcategory": "general", "confidence": 0.5}
+        else:
+            return {"category": "loan_update", "subcategory": "general", "confidence": 0.3}
 
     try:
         response = openai_client.chat.completions.create(
@@ -1999,12 +2007,14 @@ Return JSON: {"category": "...", "subcategory": "...", "confidence": 0.0-1.0}"""
         return result
     except Exception as e:
         logger.error(f"Email classification error: {e}")
-        return {"category": "error", "subcategory": "", "confidence": 0.0}
+        # Return loan_update with low confidence so email still gets processed
+        return {"category": "loan_update", "subcategory": "error", "confidence": 0.3}
 
 def extract_loan_fields(content: str, category: str) -> Dict[str, Dict[str, Any]]:
     """Extract structured loan fields from email content"""
 
     if not openai_client:
+        logger.warning("OpenAI client not initialized - cannot extract loan fields, returning empty")
         return {}
 
     try:

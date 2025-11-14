@@ -615,13 +615,20 @@ function Settings() {
         setSyncCompleted(true);
         setTimeout(() => setSyncCompleted(false), 3000);
       } else {
-        const error = await response.json();
-        alert(`Failed to sync emails: ${error.detail}`);
+        let errorMessage = 'Failed to sync emails';
+        try {
+          const error = await response.json();
+          errorMessage = error.detail || error.message || errorMessage;
+        } catch (e) {
+          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        }
+        console.error('Sync error response:', errorMessage);
+        alert(`Failed to sync emails: ${errorMessage}`);
         setLoadingMicrosoft(false);
       }
     } catch (error) {
       console.error('Error syncing emails:', error);
-      alert('Error syncing emails');
+      alert(`Error syncing emails: ${error.message || 'Network error'}`);
       setLoadingMicrosoft(false);
     }
   };
