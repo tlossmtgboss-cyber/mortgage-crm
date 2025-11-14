@@ -665,6 +665,33 @@ function Settings() {
     }
   };
 
+  const runDatabaseMigration = async () => {
+    if (!window.confirm('Run database migration to fix email sync?\n\nThis will add the missing external_message_id column.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/migrations/add-external-message-id`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert(`✅ Migration Successful!\n\n${data.message}\n\nNow click "Sync Now" to pull in emails.`);
+      } else {
+        alert(`❌ Migration Failed:\n\n${data.message || data.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Migration error:', error);
+      alert(`❌ Migration Error:\n\n${error.message}`);
+    }
+  };
+
   const reprocessFailedEmails = async () => {
     setReprocessing(true);
     try {
@@ -1401,6 +1428,9 @@ function Settings() {
                     <div className="status-actions">
                       <button className="btn-sync" onClick={(e) => { e.stopPropagation(); syncMicrosoftNow(); }} disabled={loadingMicrosoft || reprocessing}>
                         {loadingMicrosoft ? 'Syncing...' : syncCompleted ? '✓ Synced' : '🔄 Sync Now'}
+                      </button>
+                      <button className="btn-sync" onClick={(e) => { e.stopPropagation(); runDatabaseMigration(); }} style={{background: '#10b981'}}>
+                        🔧 Fix Database
                       </button>
                       <button className="btn-sync" onClick={(e) => { e.stopPropagation(); reprocessFailedEmails(); }} disabled={loadingMicrosoft || reprocessing} style={{background: '#ff9800'}}>
                         {reprocessing ? 'Processing...' : '🔄 Reprocess Failed'}
