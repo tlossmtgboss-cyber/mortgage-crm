@@ -3700,6 +3700,114 @@ async def add_external_message_id_migration(
             "error": str(e)
         }
 
+@app.post("/api/v1/migrations/add-conversation-memory")
+async def add_conversation_memory_migration(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Add conversation_memory table for AI Memory System
+    This table stores conversation metadata alongside Pinecone vectors
+    """
+    try:
+        logger.info(f"Running migration: add conversation_memory table (user: {current_user.id})")
+
+        # Check if table already exists
+        result = db.execute(text("""
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+            AND table_name = 'conversation_memory'
+        """))
+
+        if result.fetchone():
+            # Count existing rows
+            count_result = db.execute(text("SELECT COUNT(*) FROM conversation_memory"))
+            row_count = count_result.fetchone()[0]
+
+            return {
+                "success": True,
+                "message": "Table 'conversation_memory' already exists",
+                "already_exists": True,
+                "row_count": row_count
+            }
+
+        # Create the table
+        db.execute(text("""
+            CREATE TABLE conversation_memory (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                lead_id INTEGER REFERENCES leads(id) ON DELETE SET NULL,
+                loan_id INTEGER REFERENCES loans(id) ON DELETE SET NULL,
+                conversation_summary TEXT NOT NULL,
+                key_points JSONB,
+                sentiment VARCHAR(50),
+                intent VARCHAR(255),
+                pinecone_id VARCHAR(255) UNIQUE,
+                relevance_score FLOAT,
+                access_count INTEGER DEFAULT 0,
+                last_accessed_at TIMESTAMP WITH TIME ZONE,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+
+        # Create indexes
+        db.execute(text("""
+            CREATE INDEX idx_conversation_memory_user_id ON conversation_memory(user_id)
+        """))
+        db.execute(text("""
+            CREATE INDEX idx_conversation_memory_lead_id ON conversation_memory(lead_id)
+        """))
+        db.execute(text("""
+            CREATE INDEX idx_conversation_memory_loan_id ON conversation_memory(loan_id)
+        """))
+        db.execute(text("""
+            CREATE INDEX idx_conversation_memory_pinecone_id ON conversation_memory(pinecone_id)
+        """))
+        db.execute(text("""
+            CREATE INDEX idx_conversation_memory_created_at ON conversation_memory(created_at)
+        """))
+
+        # Create updated_at trigger function if it doesn't exist
+        db.execute(text("""
+            CREATE OR REPLACE FUNCTION update_updated_at_column()
+            RETURNS TRIGGER AS $$
+            BEGIN
+                NEW.updated_at = CURRENT_TIMESTAMP;
+                RETURN NEW;
+            END;
+            $$ language 'plpgsql'
+        """))
+
+        # Create trigger
+        db.execute(text("""
+            CREATE TRIGGER update_conversation_memory_updated_at
+                BEFORE UPDATE ON conversation_memory
+                FOR EACH ROW
+                EXECUTE FUNCTION update_updated_at_column()
+        """))
+
+        db.commit()
+
+        logger.info("Successfully created conversation_memory table with indexes and triggers")
+
+        return {
+            "success": True,
+            "message": "Successfully created conversation_memory table with indexes and triggers",
+            "already_exists": False,
+            "row_count": 0
+        }
+
+    except Exception as e:
+        logger.error(f"Migration failed: {e}")
+        db.rollback()
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e)
+        }
+
 @app.get("/api/v1/debug/email-sync-status")
 async def email_sync_status(
     current_user: User = Depends(get_current_user),
