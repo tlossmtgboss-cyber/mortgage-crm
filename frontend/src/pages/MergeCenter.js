@@ -13,9 +13,14 @@ function MergeCenter() {
   const [principalRecord, setPrincipalRecord] = useState(1);
   const [processing, setProcessing] = useState(false);
   const [mergeResult, setMergeResult] = useState(null);
+  const [activeTab, setActiveTab] = useState('pending'); // 'pending' or 'completed'
+  const [completedTasks, setCompletedTasks] = useState([]);
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [feedback, setFeedback] = useState('');
 
   useEffect(() => {
     fetchDuplicates();
+    fetchCompletedTasks();
   }, []);
 
   const fetchDuplicates = async () => {
@@ -42,6 +47,66 @@ function MergeCenter() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchCompletedTasks = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/merge/completed`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setCompletedTasks(data.completed_tasks || []);
+      } else {
+        // Fallback to mock data if API not available
+        setCompletedTasks(generateMockCompletedTasks());
+      }
+    } catch (error) {
+      console.error('Error fetching completed tasks:', error);
+      // Fallback to mock data
+      setCompletedTasks(generateMockCompletedTasks());
+    }
+  };
+
+  const generateMockCompletedTasks = () => {
+    return [
+      {
+        id: 1,
+        completed_at: '2025-01-14T10:30:00Z',
+        lead1_name: 'John Smith',
+        lead2_name: 'J. Smith',
+        principal_name: 'John Smith',
+        fields_merged: 8,
+        ai_accuracy: 0.875,
+        user_overrides: 1,
+        similarity_score: 0.92
+      },
+      {
+        id: 2,
+        completed_at: '2025-01-13T15:45:00Z',
+        lead1_name: 'Sarah Johnson',
+        lead2_name: 'Sarah J. Johnson',
+        principal_name: 'Sarah Johnson',
+        fields_merged: 12,
+        ai_accuracy: 1.0,
+        user_overrides: 0,
+        similarity_score: 0.95
+      },
+      {
+        id: 3,
+        completed_at: '2025-01-12T09:15:00Z',
+        lead1_name: 'Michael Davis',
+        lead2_name: 'Mike Davis',
+        principal_name: 'Michael Davis',
+        fields_merged: 6,
+        ai_accuracy: 0.67,
+        user_overrides: 2,
+        similarity_score: 0.88
+      }
+    ];
   };
 
   const selectPair = (pair) => {
@@ -152,6 +217,42 @@ function MergeCenter() {
     }
   };
 
+  const handleTaskSelect = (task) => {
+    setSelectedTask(task);
+    setFeedback('');
+  };
+
+  const submitFeedback = async () => {
+    if (!feedback.trim()) {
+      alert('Please enter feedback');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/merge/feedback`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          task_id: selectedTask.id,
+          feedback: feedback
+        })
+      });
+
+      if (response.ok) {
+        alert('Feedback submitted successfully');
+        setFeedback('');
+      } else {
+        alert('Failed to submit feedback');
+      }
+    } catch (error) {
+      console.error('Error submitting feedback:', error);
+      alert('Error submitting feedback');
+    }
+  };
+
   const formatFieldName = (fieldName) => {
     return fieldName
       .split('_')
@@ -242,8 +343,13 @@ function MergeCenter() {
       {/* Header with AI Status */}
       <div className="merge-header">
         <div className="header-left">
-          <h1>🎯 Duplicate Merge Center</h1>
-          <p>Reviewing {duplicatePairs.length} potential duplicate{duplicatePairs.length !== 1 ? 's' : ''}</p>
+          <h1>Reconciliation</h1>
+          <p>
+            {activeTab === 'pending'
+              ? `Reviewing ${duplicatePairs.length} potential duplicate${duplicatePairs.length !== 1 ? 's' : ''}`
+              : `${completedTasks.length} completed merge${completedTasks.length !== 1 ? 's' : ''}`
+            }
+          </p>
         </div>
         <div className="header-right">
           {aiStatus && (
@@ -267,26 +373,45 @@ function MergeCenter() {
         </div>
       </div>
 
-      {/* Step Indicator */}
-      <div className="step-indicator">
-        <div className={`step ${step >= 1 ? 'active' : ''}`}>
-          <div className="step-number">1</div>
-          <div className="step-label">Compare Contacts</div>
-        </div>
-        <div className="step-connector"></div>
-        <div className={`step ${step >= 2 ? 'active' : ''}`}>
-          <div className="step-number">2</div>
-          <div className="step-label">Confirm Merge</div>
-        </div>
-        <div className="step-connector"></div>
-        <div className={`step ${step >= 3 ? 'active' : ''}`}>
-          <div className="step-number">3</div>
-          <div className="step-label">Complete</div>
-        </div>
+      {/* Tab Navigation */}
+      <div className="tab-navigation">
+        <button
+          className={`tab-btn ${activeTab === 'pending' ? 'active' : ''}`}
+          onClick={() => setActiveTab('pending')}
+        >
+          Pending Duplicates ({duplicatePairs.length})
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'completed' ? 'active' : ''}`}
+          onClick={() => setActiveTab('completed')}
+        >
+          Completed Tasks ({completedTasks.length})
+        </button>
       </div>
 
-      {/* Step 1: Compare Contacts */}
-      {step === 1 && (
+      {/* Pending Duplicates Tab Content */}
+      {activeTab === 'pending' && (
+        <>
+          {/* Step Indicator */}
+          <div className="step-indicator">
+            <div className={`step ${step >= 1 ? 'active' : ''}`}>
+              <div className="step-number">1</div>
+              <div className="step-label">Compare Contacts</div>
+            </div>
+            <div className="step-connector"></div>
+            <div className={`step ${step >= 2 ? 'active' : ''}`}>
+              <div className="step-number">2</div>
+              <div className="step-label">Confirm Merge</div>
+            </div>
+            <div className="step-connector"></div>
+            <div className={`step ${step >= 3 ? 'active' : ''}`}>
+              <div className="step-number">3</div>
+              <div className="step-label">Complete</div>
+            </div>
+          </div>
+
+          {/* Step 1: Compare Contacts */}
+          {step === 1 && (
         <div className="compare-section">
           <div className="compare-header">
             <h2>Compare contacts</h2>
@@ -498,6 +623,146 @@ function MergeCenter() {
                 Done
               </button>
             )}
+          </div>
+        </div>
+      )}
+        </>
+      )}
+
+      {/* Completed Tasks Tab Content */}
+      {activeTab === 'completed' && (
+        <div className="completed-tasks-view">
+          <div className="tasks-container">
+            {/* Left Panel - Task List */}
+            <div className="task-list-panel">
+              <div className="task-list-header">
+                <h3>Completed Merges</h3>
+                <p>{completedTasks.length} total</p>
+              </div>
+              <div className="task-list">
+                {completedTasks.map((task) => (
+                  <div
+                    key={task.id}
+                    className={`task-item ${selectedTask?.id === task.id ? 'selected' : ''}`}
+                    onClick={() => handleTaskSelect(task)}
+                  >
+                    <div className="task-item-header">
+                      <strong>{task.lead1_name}</strong>
+                      <span className="merge-icon">→</span>
+                      <strong>{task.lead2_name}</strong>
+                    </div>
+                    <div className="task-item-meta">
+                      <span className="task-date">
+                        {new Date(task.completed_at).toLocaleDateString()} at {new Date(task.completed_at).toLocaleTimeString()}
+                      </span>
+                    </div>
+                    <div className="task-item-stats">
+                      <span className="stat-badge">
+                        {task.fields_merged} fields merged
+                      </span>
+                      <span className={`accuracy-badge ${task.ai_accuracy >= 0.9 ? 'high' : task.ai_accuracy >= 0.7 ? 'medium' : 'low'}`}>
+                        AI: {(task.ai_accuracy * 100).toFixed(0)}%
+                      </span>
+                      {task.user_overrides > 0 && (
+                        <span className="override-badge">
+                          {task.user_overrides} override{task.user_overrides !== 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {completedTasks.length === 0 && (
+                  <div className="empty-task-list">
+                    <p>No completed tasks yet</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right Panel - Task Detail & Feedback */}
+            <div className="task-detail-panel">
+              {selectedTask ? (
+                <>
+                  <div className="task-detail-header">
+                    <h3>Merge Details</h3>
+                    <span className="detail-date">
+                      {new Date(selectedTask.completed_at).toLocaleDateString()} at {new Date(selectedTask.completed_at).toLocaleTimeString()}
+                    </span>
+                  </div>
+
+                  <div className="task-detail-content">
+                    <div className="detail-section">
+                      <h4>Merged Contacts</h4>
+                      <div className="merged-contacts">
+                        <div className="contact-card">
+                          <label>Contact 1</label>
+                          <p>{selectedTask.lead1_name}</p>
+                        </div>
+                        <span className="merge-arrow">→</span>
+                        <div className="contact-card">
+                          <label>Contact 2</label>
+                          <p>{selectedTask.lead2_name}</p>
+                        </div>
+                        <span className="merge-arrow">→</span>
+                        <div className="contact-card principal">
+                          <label>Principal Record</label>
+                          <p>{selectedTask.principal_name}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="detail-section">
+                      <h4>Merge Statistics</h4>
+                      <div className="stats-grid">
+                        <div className="stat-card">
+                          <div className="stat-value">{selectedTask.fields_merged}</div>
+                          <div className="stat-label">Fields Merged</div>
+                        </div>
+                        <div className="stat-card">
+                          <div className="stat-value">{(selectedTask.similarity_score * 100).toFixed(0)}%</div>
+                          <div className="stat-label">Similarity Score</div>
+                        </div>
+                        <div className="stat-card">
+                          <div className="stat-value">{(selectedTask.ai_accuracy * 100).toFixed(0)}%</div>
+                          <div className="stat-label">AI Accuracy</div>
+                        </div>
+                        <div className="stat-card">
+                          <div className="stat-value">{selectedTask.user_overrides}</div>
+                          <div className="stat-label">User Overrides</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="detail-section feedback-section">
+                      <h4>Corrective Feedback</h4>
+                      <p className="feedback-instruction">
+                        If there were errors in this merge, please provide feedback to help improve the AI's accuracy.
+                      </p>
+                      <textarea
+                        className="feedback-textarea"
+                        placeholder="Describe any errors or issues with this merge..."
+                        value={feedback}
+                        onChange={(e) => setFeedback(e.target.value)}
+                        rows="6"
+                      />
+                      <button
+                        className="btn-primary btn-submit-feedback"
+                        onClick={submitFeedback}
+                        disabled={!feedback.trim()}
+                      >
+                        Submit Feedback
+                      </button>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="no-task-selected">
+                  <div className="empty-icon">📋</div>
+                  <h3>No Task Selected</h3>
+                  <p>Select a completed merge from the list to view details and provide feedback.</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

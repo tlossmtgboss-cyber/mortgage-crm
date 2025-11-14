@@ -83,7 +83,7 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
             to="/merge"
             className={`nav-link ${isActive('/merge') ? 'active' : ''}`}
           >
-            🎯 Merge Center
+            Reconciliation
           </Link>
         </div>
 
