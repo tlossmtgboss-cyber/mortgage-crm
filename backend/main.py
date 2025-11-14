@@ -2932,6 +2932,77 @@ async def sync_microsoft_emails_now(
         logger.error(f"Microsoft sync error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/v1/microsoft/reprocess-emails")
+async def reprocess_unextracted_emails(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Reprocess emails that were synced but not extracted (for fixing failed extractions)"""
+    try:
+        # Find all emails without extracted data for this user
+        unextracted = db.execute(text("""
+            SELECT ide.id, ide.subject, ide.sender, ide.raw_text, ide.raw_html, ide.received_at, ide.recipients
+            FROM incoming_data_events ide
+            LEFT JOIN extracted_data ed ON ide.id = ed.event_id
+            WHERE ed.id IS NULL AND ide.user_id = :user_id
+            ORDER BY ide.created_at DESC
+        """), {"user_id": current_user.id}).fetchall()
+
+        logger.info(f"Found {len(unextracted)} unextracted emails for user {current_user.id}")
+
+        if len(unextracted) == 0:
+            return {
+                "status": "success",
+                "reprocessed_count": 0,
+                "message": "No emails need reprocessing"
+            }
+
+        # Reprocess each email
+        success_count = 0
+
+        for email_id, subject, sender, raw_text, raw_html, received_at, recipients in unextracted:
+            # Get the full event
+            event = db.query(IncomingDataEvent).filter(IncomingDataEvent.id == email_id).first()
+
+            if not event:
+                continue
+
+            # Create email_data dict (mimicking Microsoft Graph format)
+            email_data = {
+                "subject": subject,
+                "from": {"emailAddress": {"address": sender}},
+                "toRecipients": [{"emailAddress": {"address": r}} for r in (recipients or [])],
+                "receivedDateTime": received_at.isoformat() if received_at else None,
+                "body": {
+                    "content": raw_text or raw_html or "",
+                    "contentType": "text" if raw_text else "html"
+                }
+            }
+
+            # Delete old event to avoid duplicates
+            db.delete(event)
+            db.commit()
+
+            # Reprocess with new extraction logic
+            result = await process_microsoft_email_to_dre(email_data, current_user.id, db)
+
+            if result.get("status") == "success":
+                success_count += 1
+
+        logger.info(f"Reprocessed {success_count}/{len(unextracted)} emails for user {current_user.id}")
+
+        return {
+            "status": "success",
+            "reprocessed_count": success_count,
+            "total_found": len(unextracted),
+            "message": f"Reprocessed {success_count} emails successfully"
+        }
+
+    except Exception as e:
+        logger.error(f"Email reprocessing error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.patch("/api/v1/microsoft/settings")
 async def update_microsoft_settings(
     settings: MicrosoftSyncSettings,
