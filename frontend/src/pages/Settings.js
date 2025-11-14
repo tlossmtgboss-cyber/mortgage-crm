@@ -777,17 +777,18 @@ function Settings() {
 
       if (response.ok) {
         const data = await response.json();
-        const twilio = data.integrations?.find(i => i.name === 'Twilio SMS');
-        if (twilio) {
+        const smsIntegration = data.sms;
+
+        if (smsIntegration) {
           setTwilioStatus({
-            configured: twilio.status === 'Active',
-            phone_number: twilio.details?.from_number || null,
-            message: twilio.status === 'Active' ? 'Twilio is configured and ready' : 'Twilio is not configured'
+            configured: smsIntegration.enabled,
+            phone_number: smsIntegration.from_number || null,
+            message: smsIntegration.enabled ? 'Twilio is configured and ready' : 'Twilio is not configured'
           });
 
           // Update connected integrations
           const newConnected = new Set(connectedIntegrations);
-          if (twilio.status === 'Active') {
+          if (smsIntegration.enabled) {
             newConnected.add('twilio');
           } else {
             newConnected.delete('twilio');
@@ -929,6 +930,14 @@ function Settings() {
       category: 'Communication'
     },
     {
+      id: 'ringcentral',
+      name: 'RingCentral',
+      description: 'Click-to-call and SMS via RingCentral phone system',
+      icon: '📞',
+      color: '#0073ae',
+      category: 'Communication'
+    },
+    {
       id: 'slack',
       name: 'Slack',
       description: 'Get notifications and updates in your Slack workspace',
@@ -1029,6 +1038,7 @@ function Settings() {
     if (activeSection === 'integrations') {
       checkMicrosoftStatus();
       fetchCalendlyEventTypes(); // Also check Calendly connection status
+      checkTwilioStatus(); // Check Twilio SMS integration status
     }
     if (activeSection === 'calendar-settings') {
       fetchCalendlyEventTypes();

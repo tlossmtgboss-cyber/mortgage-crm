@@ -403,7 +403,8 @@ async def get_integration_status():
     return {
         "sms": {
             "enabled": sms_client.enabled,
-            "provider": "Twilio"
+            "provider": "Twilio",
+            "from_number": sms_client.from_number if sms_client.enabled else None
         },
         "email": {
             "enabled": graph_client.enabled,
