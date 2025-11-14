@@ -18,6 +18,7 @@ function Tasks() {
   const [aiInstructions, setAiInstructions] = useState('');
   const [showDelegateModal, setShowDelegateModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [dontAskAgainDelete, setDontAskAgainDelete] = useState(false);
   const [snoozedTasks, setSnoozedTasks] = useState(new Set());
   const [teamMembers, setTeamMembers] = useState([]);
 
@@ -32,6 +33,9 @@ function Tasks() {
   useEffect(() => {
     loadTasks();
     loadTeamMembers();
+    // Load delete confirmation preference from localStorage
+    const skipConfirm = localStorage.getItem('skipDeleteConfirmation') === 'true';
+    setDontAskAgainDelete(skipConfirm);
   }, []);
 
   // Auto-select first task when tasks load or tab changes
@@ -649,7 +653,14 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
               </button>
               <button
                 className="btn-detail-danger"
-                onClick={() => setShowDeleteConfirm(true)}
+                onClick={() => {
+                  // Check if user has opted to skip confirmation
+                  if (localStorage.getItem('skipDeleteConfirmation') === 'true') {
+                    handleDelete(selectedTask.id);
+                  } else {
+                    setShowDeleteConfirm(true);
+                  }
+                }}
               >
                 🗑️ Delete
               </button>
@@ -750,6 +761,30 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
           <div className="modal-content delete-modal" onClick={(e) => e.stopPropagation()}>
             <h2>Delete Task</h2>
             <p>Are you sure you want to delete this task? This action cannot be undone.</p>
+
+            <label style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              marginTop: '16px',
+              marginBottom: '8px',
+              fontSize: '14px',
+              cursor: 'pointer',
+              userSelect: 'none'
+            }}>
+              <input
+                type="checkbox"
+                checked={dontAskAgainDelete}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setDontAskAgainDelete(checked);
+                  localStorage.setItem('skipDeleteConfirmation', checked.toString());
+                }}
+                style={{ cursor: 'pointer' }}
+              />
+              <span>Don't ask again</span>
+            </label>
+
             <div className="modal-buttons">
               <button
                 className="btn-modal-danger"
