@@ -1323,6 +1323,19 @@ class MUMClientResponse(BaseModel):
         from_attributes = True
 
 # ============================================================================
+# ERROR FIX REQUEST SCHEMAS
+# ============================================================================
+
+class ErrorFixRequest(BaseModel):
+    error_message: str
+    error_stack: Optional[str] = None
+    component_stack: Optional[str] = None
+    screenshot: Optional[str] = None
+    attempt_number: int = 1
+    url: Optional[str] = None
+    user_agent: Optional[str] = None
+
+# ============================================================================
 # CLIENT MANAGEMENT PROFILE (CMP) SCHEMAS
 # ============================================================================
 
@@ -3038,6 +3051,120 @@ async def get_system_diagnostics(current_user: User = Depends(get_current_user))
         "database_type": "postgresql" if "postgresql" in DATABASE_URL else "sqlite",
         "environment": os.getenv("RAILWAY_ENVIRONMENT", "local")
     }
+
+@app.post("/api/v1/auto-fix-error")
+async def auto_fix_error(
+    request: ErrorFixRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    AI-powered error analysis and fix recommendations
+    Uses Claude AI to analyze frontend errors and provide fix suggestions
+    """
+    try:
+        anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")
+
+        if not anthropic_api_key:
+            logger.warning("Anthropic API key not configured for error fix")
+            return {
+                "success": False,
+                "message": "AI error analysis is not configured. Please set ANTHROPIC_API_KEY.",
+                "analysis": None
+            }
+
+        # Initialize Anthropic client
+        client = anthropic.Anthropic(api_key=anthropic_api_key)
+
+        # Build the analysis prompt
+        prompt = f"""You are an expert software engineer debugging a React application error.
+
+Error Details:
+- Error Message: {request.error_message}
+- URL: {request.url}
+- Attempt Number: {request.attempt_number}
+
+Error Stack:
+{request.error_stack if request.error_stack else "Not provided"}
+
+Component Stack:
+{request.component_stack if request.component_stack else "Not provided"}
+
+User Agent:
+{request.user_agent if request.user_agent else "Not provided"}
+
+Please analyze this error and provide:
+1. The root cause of the error
+2. A step-by-step fix strategy
+3. Which files are likely affected
+4. Your confidence level (High/Medium/Low)
+5. A recommendation for preventing similar errors
+
+Respond in JSON format with these keys:
+{{
+  "root_cause": "description of what caused the error",
+  "fix_strategy": "step-by-step plan to fix it",
+  "files_affected": ["list", "of", "file", "paths"],
+  "confidence": "High/Medium/Low",
+  "recommendation": "how to prevent this in the future"
+}}"""
+
+        # Call Claude API
+        logger.info(f"Requesting error analysis from Claude for user {current_user.id}")
+
+        message = client.messages.create(
+            model="claude-3-5-sonnet-20241022",
+            max_tokens=2000,
+            messages=[{
+                "role": "user",
+                "content": prompt
+            }]
+        )
+
+        # Parse the response
+        response_text = message.content[0].text
+        logger.info(f"Received analysis from Claude: {response_text[:200]}...")
+
+        # Try to extract JSON from the response
+        import re
+        json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+
+        if json_match:
+            analysis = json.loads(json_match.group())
+        else:
+            # If no JSON found, structure the response manually
+            analysis = {
+                "root_cause": response_text,
+                "fix_strategy": "See root cause analysis",
+                "files_affected": [],
+                "confidence": "Medium",
+                "recommendation": "Review the error analysis above"
+            }
+
+        return {
+            "success": True,
+            "message": "Error analysis completed successfully",
+            "analysis": {
+                "root_cause": analysis.get("root_cause", "Analysis provided"),
+                "fix_strategy": analysis.get("fix_strategy", ""),
+                "files_affected": analysis.get("files_affected", []),
+                "confidence": analysis.get("confidence", "Medium"),
+                "recommendation": analysis.get("recommendation", "")
+            },
+            "fix_strategy": analysis.get("fix_strategy", ""),
+            "files_affected": analysis.get("files_affected", []),
+            "confidence": analysis.get("confidence", "Medium"),
+            "recommendation": analysis.get("recommendation", "")
+        }
+
+    except Exception as e:
+        logger.error(f"Error in auto_fix_error: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "success": False,
+            "message": f"Failed to analyze error: {str(e)}",
+            "analysis": None
+        }
 
 @app.post("/api/v1/microsoft/sync-now")
 async def sync_microsoft_emails_now(
