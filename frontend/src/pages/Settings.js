@@ -6,7 +6,7 @@ import './Settings.css';
 
 function Settings() {
   const navigate = useNavigate();
-  const [activeSection, setActiveSection] = useState('integrations');
+  const [activeSection, setActiveSection] = useState('integration-marketplace');
   const [expandedSections, setExpandedSections] = useState({
     integrations: false,
     organizational: false,
@@ -1160,66 +1160,62 @@ function Settings() {
             <span>Mission Control</span>
           </button>
 
-          {/* Integrations - Expandable */}
-          <button
-            className={`sidebar-btn parent ${expandedSections.integrations ? 'expanded' : ''}`}
-            onClick={() => toggleSection('integrations')}
-          >
-            <span className="icon">🔌</span>
-            <span>Integrations</span>
-            <span className="expand-icon">{expandedSections.integrations ? '▼' : '▶'}</span>
-          </button>
-          {expandedSections.integrations && (
-            <div className="sidebar-children">
+          {/* Integrations - Conditionally Expandable based on connected apps */}
+          {(microsoftStatus.connected || calendlyEventTypes.length > 0 || twilioStatus.configured) ? (
+            <>
               <button
-                className={`sidebar-btn child ${activeSection === 'outlook-email' ? 'active' : ''}`}
-                onClick={() => setActiveSection('outlook-email')}
+                className={`sidebar-btn parent ${expandedSections.integrations ? 'expanded' : ''}`}
+                onClick={() => toggleSection('integrations')}
               >
-                <span>📧 Outlook Email</span>
+                <span className="icon">🔌</span>
+                <span>Integrations</span>
+                <span className="expand-icon">{expandedSections.integrations ? '▼' : '▶'}</span>
               </button>
-              <button
-                className={`sidebar-btn child ${activeSection === 'outlook-calendar' ? 'active' : ''}`}
-                onClick={() => setActiveSection('outlook-calendar')}
-              >
-                <span>📅 Outlook Calendar</span>
-              </button>
-              <button
-                className={`sidebar-btn child ${activeSection === 'teams' ? 'active' : ''}`}
-                onClick={() => setActiveSection('teams')}
-              >
-                <span>💬 Microsoft Teams</span>
-              </button>
-              <button
-                className={`sidebar-btn child ${activeSection === 'calendly' ? 'active' : ''}`}
-                onClick={() => setActiveSection('calendly')}
-              >
-                <span>🗓️ Calendly</span>
-              </button>
-              <button
-                className={`sidebar-btn child ${activeSection === 'twilio-sms' ? 'active' : ''}`}
-                onClick={() => setActiveSection('twilio-sms')}
-              >
-                <span>📱 Twilio SMS</span>
-              </button>
-              <button
-                className={`sidebar-btn child ${activeSection === 'docusign' ? 'active' : ''}`}
-                onClick={() => setActiveSection('docusign')}
-              >
-                <span>📝 DocuSign</span>
-              </button>
-              <button
-                className={`sidebar-btn child ${activeSection === 'zoom' ? 'active' : ''}`}
-                onClick={() => setActiveSection('zoom')}
-              >
-                <span>📹 Zoom</span>
-              </button>
-              <button
-                className={`sidebar-btn child ${activeSection === 'integration-marketplace' ? 'active' : ''}`}
-                onClick={() => setActiveSection('integration-marketplace')}
-              >
-                <span>🏪 All Integrations</span>
-              </button>
-            </div>
+              {expandedSections.integrations && (
+                <div className="sidebar-children">
+                  {microsoftStatus.connected && (
+                    <>
+                      <button
+                        className={`sidebar-btn child ${activeSection === 'outlook-email' ? 'active' : ''}`}
+                        onClick={() => setActiveSection('outlook-email')}
+                      >
+                        <span>📧 Outlook Email</span>
+                      </button>
+                      <button
+                        className={`sidebar-btn child ${activeSection === 'outlook-calendar' ? 'active' : ''}`}
+                        onClick={() => setActiveSection('outlook-calendar')}
+                      >
+                        <span>📅 Outlook Calendar</span>
+                      </button>
+                    </>
+                  )}
+                  {calendlyEventTypes.length > 0 && (
+                    <button
+                      className={`sidebar-btn child ${activeSection === 'calendly' ? 'active' : ''}`}
+                      onClick={() => setActiveSection('calendly')}
+                    >
+                      <span>🗓️ Calendly</span>
+                    </button>
+                  )}
+                  {twilioStatus.configured && (
+                    <button
+                      className={`sidebar-btn child ${activeSection === 'twilio-sms' ? 'active' : ''}`}
+                      onClick={() => setActiveSection('twilio-sms')}
+                    >
+                      <span>📱 Twilio SMS</span>
+                    </button>
+                  )}
+                </div>
+              )}
+            </>
+          ) : (
+            <button
+              className={`sidebar-btn ${activeSection === 'integration-marketplace' ? 'active' : ''}`}
+              onClick={() => setActiveSection('integration-marketplace')}
+            >
+              <span className="icon">🔌</span>
+              <span>Integrations</span>
+            </button>
           )}
 
           <button
@@ -1637,90 +1633,6 @@ function Settings() {
                   />
                 </div>
               </div>
-
-              {/* Microsoft 365 Status Panel */}
-              {microsoftStatus.connected && (
-                <div className="microsoft-status-panel">
-                  <div className="status-header">
-                    <div className="status-icon" style={{background: '#0078d4'}}>
-                      📧
-                    </div>
-                    <div className="status-info">
-                      <h3>Microsoft 365 Connected</h3>
-                      <p>{microsoftStatus.email_address}</p>
-                    </div>
-                    <div className="status-actions">
-                      <button
-                        className="btn-sync"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          syncMicrosoftNow();
-                        }}
-                        disabled={loadingMicrosoft || reprocessing || syncingCalendar}
-                      >
-                        {loadingMicrosoft ? 'Syncing...' : syncCompleted ? '✓ Synced' : '🔄 Sync Now'}
-                      </button>
-                      <button
-                        className="btn-sync"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          reprocessFailedEmails();
-                        }}
-                        disabled={loadingMicrosoft || reprocessing || syncingCalendar}
-                        style={{background: '#ff9800'}}
-                      >
-                        {reprocessing ? 'Processing...' : '🔄 Reprocess Failed'}
-                      </button>
-                      <button
-                        className="btn-sync"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          syncMicrosoftCalendar();
-                        }}
-                        disabled={loadingMicrosoft || reprocessing || syncingCalendar}
-                        style={{background: '#9c27b0'}}
-                      >
-                        {syncingCalendar ? 'Syncing...' : '📅 Sync Calendar'}
-                      </button>
-                      <button
-                        className="btn-disconnect"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          disconnectMicrosoft365();
-                        }}
-                        disabled={loadingMicrosoft || reprocessing || syncingCalendar}
-                      >
-                        Disconnect
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Sync Progress Bar */}
-                  {(loadingMicrosoft || syncCompleted) && syncProgress.total > 0 && (
-                    <div className="sync-progress-container">
-                      <div className="sync-progress-bar">
-                        <div
-                          className="sync-progress-fill"
-                          style={{ width: `${(syncProgress.current / syncProgress.total) * 100}%` }}
-                        ></div>
-                      </div>
-                      <div className="sync-progress-text">
-                        {syncCompleted ? (
-                          <span className="progress-complete">✓ {syncProgress.current}/{syncProgress.total} emails synced</span>
-                        ) : (
-                          <span>Syncing {syncProgress.current}/{syncProgress.total} emails...</span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {microsoftStatus.last_sync_at && (
-                    <div className="status-meta">
-                      Last synced: {new Date(microsoftStatus.last_sync_at).toLocaleString()}
-                    </div>
-                  )}
-                </div>
-              )}
 
               {/* All Integrations Grid */}
               <div className="all-integrations-section">
