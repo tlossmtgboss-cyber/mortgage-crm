@@ -1918,6 +1918,107 @@ def create_access_token(data: dict):
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
+# ============================================================================
+# AI MEMORY / SMART CHAT ENDPOINT
+# ============================================================================
+
+@app.post("/api/v1/ai/smart-chat")
+async def smart_chat_with_memory(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Enhanced AI chat with conversation memory and context retrieval
+    Uses RAG (Retrieval-Augmented Generation) for personalized responses
+    """
+    try:
+        from ai_memory_service import context_ai
+
+        data = await request.json()
+        message = data.get("message", "")
+        lead_id = data.get("lead_id")
+        loan_id = data.get("loan_id")
+        include_context = data.get("include_context", True)
+
+        if not message:
+            raise HTTPException(status_code=400, detail="Message is required")
+
+        # Get intelligent response with memory
+        result = await context_ai.get_intelligent_response(
+            db=db,
+            user_id=current_user.id,
+            current_message=message,
+            lead_id=lead_id,
+            loan_id=loan_id,
+            include_context=include_context
+        )
+
+        return {
+            "success": True,
+            "response": result.get("response"),
+            "context_used": result.get("context_used", False),
+            "context_count": result.get("context_count", 0),
+            "has_memory": result.get("has_memory", False),
+            "metadata": result.get("metadata", {})
+        }
+
+    except Exception as e:
+        logger.error(f"Error in smart chat: {e}")
+        return {
+            "success": False,
+            "response": "I apologize, but I'm having trouble right now. Please try again.",
+            "error": str(e)
+        }
+
+
+@app.get("/api/v1/ai/memory-stats")
+async def get_memory_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Get AI memory statistics for the current user"""
+    try:
+        from integrations.pinecone_service import vector_memory
+
+        # Get conversation count from database
+        memory_count = db.query(ConversationMemory).filter(
+            ConversationMemory.user_id == current_user.id
+        ).count()
+
+        # Get vector count from Pinecone
+        vector_count = 0
+        if vector_memory.enabled:
+            vector_count = await vector_memory.get_conversation_count(current_user.id)
+
+        # Get most accessed memories
+        top_memories = db.query(ConversationMemory).filter(
+            ConversationMemory.user_id == current_user.id
+        ).order_by(
+            ConversationMemory.access_count.desc()
+        ).limit(5).all()
+
+        return {
+            "total_memories": memory_count,
+            "vector_count": vector_count,
+            "memory_enabled": vector_memory.enabled,
+            "top_memories": [{
+                "summary": m.conversation_summary[:100],
+                "access_count": m.access_count,
+                "last_accessed": m.last_accessed_at.isoformat() if m.last_accessed_at else None,
+                "sentiment": m.sentiment
+            } for m in top_memories]
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting memory stats: {e}")
+        return {
+            "total_memories": 0,
+            "vector_count": 0,
+            "memory_enabled": False,
+            "error": str(e)
+        }
+
 # Include public routes - Import AFTER defining functions it needs
 from public_routes import router as public_router
 app.include_router(public_router, tags=["Public"])
