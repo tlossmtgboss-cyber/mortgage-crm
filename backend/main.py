@@ -3201,6 +3201,134 @@ async def email_sync_status(
             "error": str(e)
         }
 
+@app.post("/api/v1/create-sample-tasks")
+async def create_sample_tasks(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Create 5 sample reconciliation tasks from emails for testing
+    """
+    try:
+        sample_emails = [
+            {
+                "subject": "RE: Johnson Loan - Appraisal Scheduled for Next Week",
+                "sender": "appraisal@titleco.com",
+                "content": "The appraisal for the Johnson property at 123 Oak Street has been scheduled for next Tuesday at 2 PM. Loan amount: $450,000",
+                "category": "loan_update",
+                "subcategory": "appraisal_scheduled",
+                "fields": {
+                    "borrower_name": {"value": "Johnson", "confidence": 0.85},
+                    "property_address": {"value": "123 Oak Street", "confidence": 0.90},
+                    "loan_amount": {"value": "$450,000", "confidence": 0.95}
+                }
+            },
+            {
+                "subject": "URGENT: Smith Closing - Title Issue Detected",
+                "sender": "title@escrow.com",
+                "content": "We've discovered a lien on the Smith property (456 Maple Avenue). Loan: $325,000. Outstanding HOA lien of $2,500",
+                "category": "loan_update",
+                "subcategory": "title_issue",
+                "fields": {
+                    "borrower_name": {"value": "Smith", "confidence": 0.92},
+                    "property_address": {"value": "456 Maple Avenue", "confidence": 0.95},
+                    "loan_amount": {"value": "$325,000", "confidence": 0.98}
+                }
+            },
+            {
+                "subject": "Williams Pre-Approval Request - $600K Budget",
+                "sender": "sarah.williams@email.com",
+                "content": "Name: Sarah Williams, Phone: (555) 123-4567, Budget: $600,000, Property Type: Single Family Home",
+                "category": "lead_update",
+                "subcategory": "new_lead",
+                "fields": {
+                    "borrower_name": {"value": "Sarah Williams", "confidence": 0.98},
+                    "phone": {"value": "(555) 123-4567", "confidence": 0.95},
+                    "loan_amount": {"value": "$600,000", "confidence": 0.92}
+                }
+            },
+            {
+                "subject": "RE: Martinez Loan - Rate Lock Expiring Soon",
+                "sender": "processor@lendingco.com",
+                "content": "Borrower: Carlos Martinez, Property: 789 Pine Boulevard, Loan: $280,000, Rate: 6.75%, Expires: December 1st",
+                "category": "loan_update",
+                "subcategory": "rate_lock_expiring",
+                "fields": {
+                    "borrower_name": {"value": "Carlos Martinez", "confidence": 0.96},
+                    "property_address": {"value": "789 Pine Boulevard", "confidence": 0.94},
+                    "loan_amount": {"value": "$280,000", "confidence": 0.97}
+                }
+            },
+            {
+                "subject": "Thompson Family - Clear to Close!",
+                "sender": "underwriting@mortgage.com",
+                "content": "Borrower: Michael & Jennifer Thompson, Property: 321 Birch Lane, Loan: $525,000, Closing: November 20th, Status: APPROVED",
+                "category": "loan_update",
+                "subcategory": "clear_to_close",
+                "fields": {
+                    "borrower_name": {"value": "Michael & Jennifer Thompson", "confidence": 0.97},
+                    "property_address": {"value": "321 Birch Lane", "confidence": 0.95},
+                    "loan_amount": {"value": "$525,000", "confidence": 0.98}
+                }
+            }
+        ]
+
+        created_tasks = []
+
+        for idx, email in enumerate(sample_emails, 1):
+            # Create incoming data event
+            db_event = IncomingDataEvent(
+                source="microsoft365",
+                external_message_id=f"sample_task_{idx}_{datetime.now().timestamp()}",
+                raw_text=email["content"],
+                subject=email["subject"],
+                sender=email["sender"],
+                received_at=datetime.now(timezone.utc),
+                user_id=current_user.id,
+                processed=True
+            )
+            db.add(db_event)
+            db.flush()
+
+            # Calculate average confidence
+            confidences = [field["confidence"] for field in email["fields"].values()]
+            avg_confidence = sum(confidences) / len(confidences)
+
+            # Create extracted data (reconciliation item)
+            extracted = ExtractedData(
+                event_id=db_event.id,
+                category=email["category"],
+                subcategory=email["subcategory"],
+                fields=email["fields"],
+                ai_confidence=avg_confidence,
+                status="pending_review"
+            )
+            db.add(extracted)
+            db.flush()
+
+            created_tasks.append({
+                "event_id": db_event.id,
+                "extracted_id": extracted.id,
+                "subject": email["subject"],
+                "category": email["category"]
+            })
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": f"Created {len(created_tasks)} reconciliation tasks",
+            "tasks": created_tasks
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to create sample tasks: {e}")
+        db.rollback()
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
 @app.post("/api/v1/auto-fix-error")
 async def auto_fix_error(
     request: ErrorFixRequest,
