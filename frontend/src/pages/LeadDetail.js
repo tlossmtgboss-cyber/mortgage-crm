@@ -1,3 +1,4 @@
+// VERSION: 2024-11-14-v2 - MOCK DATA FIX
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { leadsAPI, activitiesAPI, aiAPI, teamAPI } from '../services/api';
@@ -90,20 +91,26 @@ function LeadDetail() {
           leadsAPI.getById(id),
           activitiesAPI.getAll({ lead_id: id })
         ]);
+        console.log('✅ Loaded lead from API:', leadData);
       } catch (apiError) {
-        console.log('API failed, using mock data:', apiError);
+        console.log('⚠️ API failed, using mock data. Error:', apiError);
         // Fallback to mock data
         const mockLeads = generateMockLeads();
+        console.log('📦 Generated mock leads, total count:', mockLeads.length);
+        console.log('🔍 Looking for lead ID:', id, 'Type:', typeof id);
         leadData = mockLeads.find(lead => lead.id === parseInt(id));
+        console.log('🎯 Found mock lead:', leadData);
 
         if (!leadData) {
-          alert('Lead not found');
+          console.error('❌ Lead not found in mock data');
+          alert('Lead not found in mock data');
           navigate('/leads');
           return;
         }
         activitiesData = [];
       }
 
+      console.log('✨ Setting lead data:', leadData);
       setLead(leadData);
       setFormData(leadData);
       setActivities(activitiesData || []);
