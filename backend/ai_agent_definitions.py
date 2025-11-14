@@ -689,7 +689,7 @@ TOOL_DEFINITIONS = [
     ToolDefinition(
         name="createReconciliationTask",
         description="Create a task for human review of data conflicts",
-        category=ToolCategory.TASK_MANAGEMENT,
+        category=ToolCategory.WORKFLOW,
         input_schema={
             "type": "object",
             "properties": {
@@ -728,7 +728,7 @@ TOOL_DEFINITIONS = [
     ToolDefinition(
         name="flagMissingDocument",
         description="Flag a missing document and create chase task",
-        category=ToolCategory.TASK_MANAGEMENT,
+        category=ToolCategory.WORKFLOW,
         input_schema={
             "type": "object",
             "properties": {
