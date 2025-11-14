@@ -1506,7 +1506,7 @@ function Settings() {
                         <option value="">Select Calendly Event Type</option>
                         {calendlyEventTypes.map((eventType) => (<option key={eventType.uri} value={eventType.uri}>{eventType.name}</option>))}
                       </select>
-                      <button onClick={saveCalendarMapping} disabled={!selectedStage || !selectedEventType} className="btn-primary">Add Mapping</button>
+                      <button onClick={createCalendarMapping} disabled={!selectedStage || !selectedEventType} className="btn-primary">Add Mapping</button>
                     </div>
                   </div>
                 </div>

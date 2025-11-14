@@ -240,7 +240,7 @@ export const analyticsAPI = {
     return response.data;
   },
   getScorecard: async () => {
-    const response = await api.get('/api/v1/analytics/scorecard');
+    const response = await api.get('/api/v1/scorecard');
     return response.data;
   },
 };
