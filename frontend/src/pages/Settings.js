@@ -8,6 +8,7 @@ function Settings() {
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState('integrations');
   const [expandedSections, setExpandedSections] = useState({
+    integrations: false,
     organizational: false,
     scheduling: false,
     onboarding: false,
@@ -46,6 +47,7 @@ function Settings() {
   const [syncCompleted, setSyncCompleted] = useState(false);
   const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0 });
   const [reprocessing, setReprocessing] = useState(false);
+  const [syncingCalendar, setSyncingCalendar] = useState(false);
 
   // Team members state
   const [teamMembers, setTeamMembers] = useState([]);
@@ -688,6 +690,31 @@ function Settings() {
     }
   };
 
+  const syncMicrosoftCalendar = async () => {
+    setSyncingCalendar(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/sync-calendar`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(`Synced ${data.synced_count} calendar events successfully!\n\nGo to Calendar page to see them!`);
+      } else {
+        const error = await response.json();
+        alert(`Failed to sync calendar: ${error.detail || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Calendar sync error:', error);
+      alert(`Error: ${error.message}`);
+    } finally {
+      setSyncingCalendar(false);
+    }
+  };
+
   // User Management Functions
   const loadUsers = async () => {
     setLoadingUsers(true);
@@ -1097,23 +1124,21 @@ function Settings() {
   );
 
   useEffect(() => {
-    if (activeSection === 'integrations') {
+    if (activeSection === 'integration-marketplace' || activeSection === 'outlook-email' || activeSection === 'outlook-calendar') {
       checkMicrosoftStatus();
-      fetchCalendlyEventTypes(); // Also check Calendly connection status
-      checkTwilioStatus(); // Check Twilio SMS integration status
     }
-    if (activeSection === 'calendar-settings') {
+    if (activeSection === 'calendly' || activeSection === 'calendar-settings') {
       fetchCalendlyEventTypes();
       fetchCalendarMappings();
+    }
+    if (activeSection === 'twilio-sms') {
+      checkTwilioStatus();
     }
     if (activeSection === 'onboarding-current') {
       loadProcessTree();
     }
     if (activeSection === 'onboarding-update') {
       fetchOnboardingSteps();
-    }
-    if (activeSection === 'phone-integration') {
-      checkTwilioStatus();
     }
   }, [activeSection]);
 
@@ -1135,21 +1160,67 @@ function Settings() {
             <span>Mission Control</span>
           </button>
 
+          {/* Integrations - Expandable */}
           <button
-            className={`sidebar-btn ${activeSection === 'integrations' ? 'active' : ''}`}
-            onClick={() => setActiveSection('integrations')}
+            className={`sidebar-btn parent ${expandedSections.integrations ? 'expanded' : ''}`}
+            onClick={() => toggleSection('integrations')}
           >
             <span className="icon">🔌</span>
             <span>Integrations</span>
+            <span className="expand-icon">{expandedSections.integrations ? '▼' : '▶'}</span>
           </button>
-
-          <button
-            className={`sidebar-btn ${activeSection === 'phone-integration' ? 'active' : ''}`}
-            onClick={() => setActiveSection('phone-integration')}
-          >
-            <span className="icon">📱</span>
-            <span>Phone Integration</span>
-          </button>
+          {expandedSections.integrations && (
+            <div className="sidebar-children">
+              <button
+                className={`sidebar-btn child ${activeSection === 'outlook-email' ? 'active' : ''}`}
+                onClick={() => setActiveSection('outlook-email')}
+              >
+                <span>📧 Outlook Email</span>
+              </button>
+              <button
+                className={`sidebar-btn child ${activeSection === 'outlook-calendar' ? 'active' : ''}`}
+                onClick={() => setActiveSection('outlook-calendar')}
+              >
+                <span>📅 Outlook Calendar</span>
+              </button>
+              <button
+                className={`sidebar-btn child ${activeSection === 'teams' ? 'active' : ''}`}
+                onClick={() => setActiveSection('teams')}
+              >
+                <span>💬 Microsoft Teams</span>
+              </button>
+              <button
+                className={`sidebar-btn child ${activeSection === 'calendly' ? 'active' : ''}`}
+                onClick={() => setActiveSection('calendly')}
+              >
+                <span>🗓️ Calendly</span>
+              </button>
+              <button
+                className={`sidebar-btn child ${activeSection === 'twilio-sms' ? 'active' : ''}`}
+                onClick={() => setActiveSection('twilio-sms')}
+              >
+                <span>📱 Twilio SMS</span>
+              </button>
+              <button
+                className={`sidebar-btn child ${activeSection === 'docusign' ? 'active' : ''}`}
+                onClick={() => setActiveSection('docusign')}
+              >
+                <span>📝 DocuSign</span>
+              </button>
+              <button
+                className={`sidebar-btn child ${activeSection === 'zoom' ? 'active' : ''}`}
+                onClick={() => setActiveSection('zoom')}
+              >
+                <span>📹 Zoom</span>
+              </button>
+              <button
+                className={`sidebar-btn child ${activeSection === 'integration-marketplace' ? 'active' : ''}`}
+                onClick={() => setActiveSection('integration-marketplace')}
+              >
+                <span>🏪 All Integrations</span>
+              </button>
+            </div>
+          )}
 
           <button
             className={`sidebar-btn ${activeSection === 'api-keys' ? 'active' : ''}`}
@@ -1315,7 +1386,7 @@ function Settings() {
             <MissionControl />
           )}
 
-          {activeSection === 'integrations' && (
+          {activeSection === 'integration-marketplace' && (
             <div className="integrations-marketplace">
               <div className="marketplace-header">
                 <div className="header-text">
@@ -1353,7 +1424,7 @@ function Settings() {
                           e.stopPropagation();
                           syncMicrosoftNow();
                         }}
-                        disabled={loadingMicrosoft || reprocessing}
+                        disabled={loadingMicrosoft || reprocessing || syncingCalendar}
                       >
                         {loadingMicrosoft ? 'Syncing...' : syncCompleted ? '✓ Synced' : '🔄 Sync Now'}
                       </button>
@@ -1363,10 +1434,21 @@ function Settings() {
                           e.stopPropagation();
                           reprocessFailedEmails();
                         }}
-                        disabled={loadingMicrosoft || reprocessing}
+                        disabled={loadingMicrosoft || reprocessing || syncingCalendar}
                         style={{background: '#ff9800'}}
                       >
                         {reprocessing ? 'Processing...' : '🔄 Reprocess Failed'}
+                      </button>
+                      <button
+                        className="btn-sync"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          syncMicrosoftCalendar();
+                        }}
+                        disabled={loadingMicrosoft || reprocessing || syncingCalendar}
+                        style={{background: '#9c27b0'}}
+                      >
+                        {syncingCalendar ? 'Syncing...' : '📅 Sync Calendar'}
                       </button>
                       <button
                         className="btn-disconnect"
@@ -1374,7 +1456,7 @@ function Settings() {
                           e.stopPropagation();
                           disconnectMicrosoft365();
                         }}
-                        disabled={loadingMicrosoft || reprocessing}
+                        disabled={loadingMicrosoft || reprocessing || syncingCalendar}
                       >
                         Disconnect
                       </button>

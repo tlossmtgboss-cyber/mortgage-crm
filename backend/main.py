@@ -3153,6 +3153,124 @@ async def reprocess_unextracted_emails(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/v1/microsoft/sync-calendar")
+async def sync_microsoft_calendar(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Sync calendar events from Microsoft 365"""
+    try:
+        oauth_record = db.query(MicrosoftOAuthToken).filter(
+            MicrosoftOAuthToken.user_id == current_user.id
+        ).first()
+
+        if not oauth_record:
+            raise HTTPException(status_code=404, detail="Microsoft 365 not connected")
+
+        # Get access token
+        access_token = decrypt_token(oauth_record.access_token)
+
+        # Check if token needs refresh
+        if oauth_record.token_expires_at:
+            token_expiry = oauth_record.token_expires_at
+            if token_expiry.tzinfo is None:
+                token_expiry = token_expiry.replace(tzinfo=timezone.utc)
+
+            if token_expiry < datetime.now(timezone.utc) + timedelta(minutes=5):
+                if not await refresh_microsoft_token(oauth_record, db):
+                    raise HTTPException(status_code=401, detail="Failed to refresh token")
+                access_token = decrypt_token(oauth_record.access_token)
+
+        # Fetch calendar events from Microsoft Graph API
+        # Get events from next 30 days
+        start_date = datetime.now(timezone.utc).isoformat()
+        end_date = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json"
+        }
+
+        # Microsoft Graph API endpoint for calendar events
+        graph_url = f"https://graph.microsoft.com/v1.0/me/calendar/calendarView?startDateTime={start_date}&endDateTime={end_date}&$top=100"
+
+        response = requests.get(graph_url, headers=headers)
+
+        if response.status_code != 200:
+            logger.error(f"Microsoft Calendar API error: {response.status_code} - {response.text}")
+            raise HTTPException(status_code=500, detail=f"Microsoft Calendar API error: {response.status_code}")
+
+        events_data = response.json()
+        events = events_data.get("value", [])
+
+        # Store events in database
+        synced_count = 0
+        for event_data in events:
+            try:
+                # Parse event data
+                subject = event_data.get("subject", "No Subject")
+                start_dt = datetime.fromisoformat(event_data["start"]["dateTime"].replace('Z', '+00:00'))
+                end_dt = datetime.fromisoformat(event_data["end"]["dateTime"].replace('Z', '+00:00'))
+                location = event_data.get("location", {}).get("displayName", "")
+                body_content = event_data.get("body", {}).get("content", "")
+
+                # Check if event already exists (by microsoft event id in meta_data)
+                ms_event_id = event_data.get("id")
+                existing = db.query(CalendarEvent).filter(
+                    CalendarEvent.user_id == current_user.id,
+                    CalendarEvent.meta_data.contains({"microsoft_event_id": ms_event_id})
+                ).first()
+
+                if existing:
+                    # Update existing event
+                    existing.title = subject
+                    existing.description = body_content[:500] if body_content else None
+                    existing.start_time = start_dt
+                    existing.end_time = end_dt
+                    existing.location = location
+                    existing.all_day = event_data.get("isAllDay", False)
+                    existing.updated_at = datetime.now(timezone.utc)
+                else:
+                    # Create new event
+                    calendar_event = CalendarEvent(
+                        title=subject,
+                        description=body_content[:500] if body_content else None,
+                        start_time=start_dt,
+                        end_time=end_dt,
+                        all_day=event_data.get("isAllDay", False),
+                        location=location,
+                        event_type="meeting",
+                        user_id=current_user.id,
+                        attendees=[att.get("emailAddress", {}).get("address") for att in event_data.get("attendees", [])],
+                        status="scheduled",
+                        meta_data={"microsoft_event_id": ms_event_id, "source": "microsoft365"}
+                    )
+                    db.add(calendar_event)
+
+                synced_count += 1
+
+            except Exception as e:
+                logger.error(f"Error processing calendar event: {e}")
+                continue
+
+        db.commit()
+        logger.info(f"Synced {synced_count} calendar events for user {current_user.id}")
+
+        return {
+            "status": "success",
+            "synced_count": synced_count,
+            "total_events": len(events),
+            "message": f"Synced {synced_count} calendar events successfully"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Calendar sync error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Calendar sync error: {str(e)}")
+
 @app.patch("/api/v1/microsoft/settings")
 async def update_microsoft_settings(
     settings: MicrosoftSyncSettings,
