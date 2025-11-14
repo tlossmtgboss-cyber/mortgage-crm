@@ -45,6 +45,7 @@ function Settings() {
   const [loadingMicrosoft, setLoadingMicrosoft] = useState(false);
   const [syncCompleted, setSyncCompleted] = useState(false);
   const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0 });
+  const [reprocessing, setReprocessing] = useState(false);
 
   // Team members state
   const [teamMembers, setTeamMembers] = useState([]);
@@ -659,6 +660,31 @@ function Settings() {
       alert(`Error syncing emails: ${error.message || 'Network error'}`);
       setLoadingMicrosoft(false);
       setSyncProgress({ current: 0, total: 0 });
+    }
+  };
+
+  const reprocessFailedEmails = async () => {
+    setReprocessing(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/reprocess-emails`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(`Found ${data.total_found} unextracted emails\nReprocessed ${data.reprocessed_count} successfully!\n\nGo to Tasks → Reconciliation to see them!`);
+      } else {
+        const error = await response.json();
+        alert(`Failed to reprocess: ${error.detail || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Reprocessing error:', error);
+      alert(`Error: ${error.message}`);
+    } finally {
+      setReprocessing(false);
     }
   };
 
@@ -1327,9 +1353,20 @@ function Settings() {
                           e.stopPropagation();
                           syncMicrosoftNow();
                         }}
-                        disabled={loadingMicrosoft}
+                        disabled={loadingMicrosoft || reprocessing}
                       >
                         {loadingMicrosoft ? 'Syncing...' : syncCompleted ? '✓ Synced' : '🔄 Sync Now'}
+                      </button>
+                      <button
+                        className="btn-sync"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          reprocessFailedEmails();
+                        }}
+                        disabled={loadingMicrosoft || reprocessing}
+                        style={{background: '#ff9800'}}
+                      >
+                        {reprocessing ? 'Processing...' : '🔄 Reprocess Failed'}
                       </button>
                       <button
                         className="btn-disconnect"
@@ -1337,7 +1374,7 @@ function Settings() {
                           e.stopPropagation();
                           disconnectMicrosoft365();
                         }}
-                        disabled={loadingMicrosoft}
+                        disabled={loadingMicrosoft || reprocessing}
                       >
                         Disconnect
                       </button>
