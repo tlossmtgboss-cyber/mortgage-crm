@@ -445,4 +445,28 @@ export const teamAPI = {
   },
 };
 
+// Voice AI Receptionist
+export const voiceAPI = {
+  makeCall: async (data) => {
+    const response = await api.post('/api/v1/voice/make-call', data);
+    return response.data;
+  },
+  getCallHistory: async (params = {}) => {
+    const response = await api.get('/api/v1/voice/call-history', { params });
+    return response.data;
+  },
+  getCallStats: async () => {
+    const response = await api.get('/api/v1/voice/call-stats');
+    return response.data;
+  },
+  getConfig: async () => {
+    const response = await api.get('/api/v1/voice/ai-receptionist-config');
+    return response.data;
+  },
+  updateConfig: async (data) => {
+    const response = await api.post('/api/v1/voice/ai-receptionist-config', data);
+    return response.data;
+  },
+};
+
 export default api;

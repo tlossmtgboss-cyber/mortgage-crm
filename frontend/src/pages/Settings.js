@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { teamAPI } from '../services/api';
 import MissionControl from './MissionControl';
+import AIReceptionist from '../components/AIReceptionist';
 import './Settings.css';
 
 function Settings() {
@@ -1187,6 +1188,14 @@ function Settings() {
             <span>Mission Control</span>
           </button>
 
+          <button
+            className={`sidebar-btn ${activeSection === 'ai-receptionist' ? 'active' : ''}`}
+            onClick={() => setActiveSection('ai-receptionist')}
+          >
+            <span className="icon">🤖</span>
+            <span>AI Receptionist</span>
+          </button>
+
           {/* Integrations - Conditionally Expandable based on connected apps */}
           {(microsoftStatus.connected || calendlyEventTypes.length > 0 || twilioStatus.configured) ? (
             <>
@@ -1407,6 +1416,10 @@ function Settings() {
         <div className="settings-main">
           {activeSection === 'mission-control' && (
             <MissionControl />
+          )}
+
+          {activeSection === 'ai-receptionist' && (
+            <AIReceptionist />
           )}
 
           {/* OUTLOOK EMAIL */}

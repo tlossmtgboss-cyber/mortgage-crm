@@ -1870,6 +1870,10 @@ app.include_router(ai_router, tags=["AI System"])
 from mission_control_routes import router as mission_control_router
 app.include_router(mission_control_router, tags=["Mission Control"])
 
+# Include Voice AI Receptionist routes
+from voice_routes import router as voice_router
+app.include_router(voice_router, tags=["Voice AI"])
+
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,

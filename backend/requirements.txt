@@ -28,8 +28,9 @@ msal==1.24.1
 msgraph-sdk==1.0.0
 azure-identity==1.14.0
 
-# Twilio SMS Integration
+# Twilio SMS & Voice Integration
 twilio==8.10.0
+websockets==12.0
 
 # Stripe Payment Processing
 stripe==7.8.0
