@@ -190,14 +190,12 @@ function Tasks() {
       if (!completedTasks.has(`issue-${idx}`)) {
         tasks.push({
           id: `issue-${idx}`,
+          ...issue,
           title: issue.issue,
-          borrower: issue.borrower,
           stage: 'Milestone Alert',
           urgency: 'critical',
-          ai_action: null,
           source: 'Milestone Risk',
-          sourceIcon: '🔥',
-          action: issue.action
+          sourceIcon: '🔥'
         });
       }
     });
@@ -207,10 +205,10 @@ function Tasks() {
       if (!completedTasks.has(`ai-pending-${idx}`)) {
         tasks.push({
           id: `ai-pending-${idx}`,
+          ...task,
           title: task.task,
-          borrower: '',
           stage: 'AI Suggested',
-          urgency: 'medium',
+          urgency: task.urgency || 'medium',
           ai_action: `AI confidence: ${task.confidence}%`,
           source: 'AI Engine',
           sourceIcon: '🤖'
@@ -223,11 +221,10 @@ function Tasks() {
       if (!completedTasks.has(`ai-waiting-${idx}`)) {
         tasks.push({
           id: `ai-waiting-${idx}`,
+          ...task,
           title: task.task,
-          borrower: '',
           stage: 'Needs Approval',
-          urgency: 'low',
-          ai_action: null,
+          urgency: task.urgency || 'low',
           source: 'AI Engine',
           sourceIcon: '🤖'
         });
@@ -239,14 +236,12 @@ function Tasks() {
       if (!completedTasks.has(`mum-${idx}`)) {
         tasks.push({
           id: `mum-${idx}`,
-          title: alert.title,
+          ...alert,
           borrower: alert.client,
           stage: 'Client Retention',
-          urgency: 'medium',
-          ai_action: null,
+          urgency: alert.urgency || 'medium',
           source: 'Client for Life',
-          sourceIcon: '💎',
-          action: alert.action
+          sourceIcon: '💎'
         });
       }
     });
@@ -274,10 +269,11 @@ function Tasks() {
       if (!completedTasks.has(`message-${idx}`)) {
         tasks.push({
           id: `message-${idx}`,
+          ...msg,
           title: `Message from ${msg.from}`,
           borrower: msg.from,
           stage: 'Communication',
-          urgency: 'medium',
+          urgency: msg.urgency || 'medium',
           ai_action: msg.ai_summary ? `AI Summary: ${msg.ai_summary}` : null,
           source: 'Messages',
           sourceIcon: '💬'
