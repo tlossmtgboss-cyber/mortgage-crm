@@ -65,7 +65,8 @@ if DATABASE_URL.startswith("postgres://"):
 
 SECRET_KEY = os.getenv("SECRET_KEY", "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 30  # Short-lived access tokens
+REFRESH_TOKEN_EXPIRE_DAYS = 7  # Refresh tokens last 7 days
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 # Initialize OpenAI client
@@ -1893,7 +1894,27 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# CORS - Allow all Vercel deployments
+# ============================================================================
+# SECURITY MIDDLEWARE - PROTECT AGAINST EXTERNAL THREATS
+# ============================================================================
+
+# Import security middleware
+from security_middleware import (
+    RateLimitMiddleware,
+    SecurityHeadersMiddleware,
+    IPBlockingMiddleware,
+    RequestValidationMiddleware,
+    SecurityLoggingMiddleware
+)
+
+# Add security middleware (order matters - most critical first)
+app.add_middleware(SecurityLoggingMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RequestValidationMiddleware)
+app.add_middleware(IPBlockingMiddleware)
+app.add_middleware(RateLimitMiddleware, requests_per_minute=100, requests_per_hour=2000)
+
+# CORS - Secure configuration
 allowed_origins = [
     "http://localhost:3000",
     "http://localhost:3001",
@@ -1915,8 +1936,9 @@ app.add_middleware(
     allow_origin_regex=r"https://.*\.vercel\.app$",
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],  # Specific methods only
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],  # Specific headers only
+    max_age=3600  # Cache preflight requests for 1 hour
 )
 
 # Auth - Define BEFORE importing routes that use these functions
@@ -1930,9 +1952,25 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 def create_access_token(data: dict):
+    """Create short-lived JWT access token"""
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
+    to_encode.update({
+        "exp": expire,
+        "iat": datetime.now(timezone.utc),
+        "type": "access"
+    })
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+def create_refresh_token(data: dict):
+    """Create long-lived refresh token"""
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    to_encode.update({
+        "exp": expire,
+        "iat": datetime.now(timezone.utc),
+        "type": "refresh"
+    })
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 # Include public routes - Import AFTER defining functions it needs
@@ -1968,20 +2006,47 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         user = db.query(User).filter(User.id == api_key.user_id).first()
         if user is None:
             raise credentials_exception
+
+        # Security check: verify user is still active
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User account is inactive",
+            )
+
         return user
 
     # Otherwise, treat it as a JWT token
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+
+        # Verify it's an access token (not a refresh token)
+        if payload.get("type") == "refresh":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Cannot use refresh token for authentication. Use access token instead.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
         email: str = payload.get("sub")
         if email is None:
             raise credentials_exception
-    except JWTError:
+
+    except JWTError as e:
+        logger.warning(f"JWT validation failed: {str(e)}")
         raise credentials_exception
 
     user = db.query(User).filter(User.email == email).first()
     if user is None:
         raise credentials_exception
+
+    # Additional security: check if user is still active
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User account is inactive",
+        )
+
     return user
 
 async def get_current_user_flexible(
@@ -2418,7 +2483,12 @@ async def fetch_microsoft_emails(oauth_record: MicrosoftOAuthToken, db: Session,
     """Fetch emails from Microsoft Graph API"""
     try:
         # Check if token needs refresh
-        if oauth_record.token_expires_at < datetime.now(timezone.utc) + timedelta(minutes=5):
+        # Ensure token_expires_at is timezone-aware before comparison
+        token_expires = oauth_record.token_expires_at
+        if token_expires.tzinfo is None:
+            token_expires = token_expires.replace(tzinfo=timezone.utc)
+
+        if token_expires < datetime.now(timezone.utc) + timedelta(minutes=5):
             logger.info("Token expiring soon, refreshing...")
             if not await refresh_microsoft_token(oauth_record, db):
                 return {"error": "Failed to refresh token"}
@@ -3601,16 +3671,53 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    access_token = create_access_token(data={"sub": user.email})
+    # Create both access and refresh tokens
+    token_data = {"sub": user.email, "user_id": user.id}
+    access_token = create_access_token(data=token_data)
+    refresh_token = create_refresh_token(data=token_data)
+
     return {
         "access_token": access_token,
+        "refresh_token": refresh_token,
         "token_type": "bearer",
+        "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # seconds
         "user": {
             "email": user.email,
             "full_name": user.full_name,
             "role": user.role
         }
     }
+
+@app.post("/token/refresh")
+async def refresh_access_token(refresh_token: str, db: Session = Depends(get_db)):
+    """Refresh access token using refresh token"""
+    try:
+        payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+
+        # Verify it's a refresh token
+        if payload.get("type") != "refresh":
+            raise HTTPException(status_code=401, detail="Invalid token type")
+
+        email: str = payload.get("sub")
+        if email is None:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        # Verify user still exists and is active
+        user = db.query(User).filter(User.email == email).first()
+        if not user or not user.is_active:
+            raise HTTPException(status_code=401, detail="User not found or inactive")
+
+        # Create new access token
+        token_data = {"sub": user.email, "user_id": user.id}
+        new_access_token = create_access_token(data=token_data)
+
+        return {
+            "access_token": new_access_token,
+            "token_type": "bearer",
+            "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60
+        }
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
 
 @app.get("/api/v1/users/me")
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
