@@ -2509,15 +2509,18 @@ async def fetch_microsoft_emails(oauth_record: MicrosoftOAuthToken, db: Session,
 
         # Get emails from last sync or last 7 days
         if oauth_record.last_sync_at:
-            # Ensure last_sync_at is timezone-aware
+            # Ensure last_sync_at is timezone-aware and format for Microsoft Graph API
             last_sync = oauth_record.last_sync_at
             if last_sync.tzinfo is None:
                 last_sync = last_sync.replace(tzinfo=timezone.utc)
-            filter_date = last_sync.isoformat()
+            # Format with Z suffix for UTC (required by Microsoft Graph API)
+            filter_date = last_sync.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
             graph_url += f"?$filter=receivedDateTime gt {filter_date}&$top={limit}&$orderby=receivedDateTime desc"
         else:
             # First sync - get last 7 days
-            seven_days_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
+            seven_days_ago_dt = datetime.now(timezone.utc) - timedelta(days=7)
+            # Format with Z suffix for UTC (required by Microsoft Graph API)
+            seven_days_ago = seven_days_ago_dt.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
             graph_url += f"?$filter=receivedDateTime gt {seven_days_ago}&$top={limit}&$orderby=receivedDateTime desc"
 
         headers = {
