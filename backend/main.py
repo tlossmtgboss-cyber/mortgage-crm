@@ -2292,42 +2292,46 @@ async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Ses
         content = raw_text or raw_html or ""
         classification = classify_email_content(content, subject)
 
-        if classification["category"] != "unrelated" and classification["confidence"] >= 0.5:
+        # More lenient extraction - lower confidence threshold and allow emails with no fields
+        # This ensures all emails appear in Reconciliation for user review and AI learning
+        if classification["category"] != "unrelated" and classification["confidence"] >= 0.3:
             fields = extract_loan_fields(content, classification["category"])
 
-            if fields:
-                confidences = [field.get("confidence", 0.0) for field in fields.values()]
-                avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
+            # Create extracted_data even if no fields found - user can manually review
+            confidences = [field.get("confidence", 0.0) for field in fields.values()] if fields else []
+            avg_confidence = sum(confidences) / len(confidences) if confidences else classification["confidence"]
 
-                entity_match = match_entity(fields, db, user_id)
+            entity_match = match_entity(fields, db, user_id) if fields else {"entity_type": None, "entity_id": None, "confidence": 0.0}
 
+            # Determine status based on confidence
+            status = "needs_review"  # Default to needs_review for safety
+            if fields and avg_confidence > 0.85 and entity_match["confidence"] > 0.90:
+                status = "auto_approved"
+            elif fields and avg_confidence >= 0.60 and entity_match["confidence"] >= 0.50:
                 status = "pending_review"
-                if avg_confidence > 0.85 and entity_match["confidence"] > 0.90:
-                    status = "auto_approved"
-                elif avg_confidence < 0.60 or entity_match["confidence"] < 0.50:
-                    status = "needs_review"
+            # Everything else stays as needs_review
 
-                extracted = ExtractedData(
-                    event_id=db_event.id,
-                    category=classification["category"],
-                    subcategory=classification.get("subcategory"),
-                    fields=fields,
-                    match_entity_type=entity_match["entity_type"],
-                    match_entity_id=entity_match["entity_id"],
-                    match_confidence=entity_match["confidence"],
-                    ai_confidence=avg_confidence,
-                    status=status
-                )
-                db.add(extracted)
-                db_event.processed = True
-                db.commit()
+            extracted = ExtractedData(
+                event_id=db_event.id,
+                category=classification["category"],
+                subcategory=classification.get("subcategory"),
+                fields=fields or {},  # Use empty dict if no fields
+                match_entity_type=entity_match["entity_type"],
+                match_entity_id=entity_match["entity_id"],
+                match_confidence=entity_match["confidence"],
+                ai_confidence=avg_confidence,
+                status=status
+            )
+            db.add(extracted)
+            db_event.processed = True
+            db.commit()
 
-                # Auto-apply if high confidence
-                if status == "auto_approved":
-                    if apply_extracted_data(extracted, db):
-                        extracted.status = "applied"
-                        db.commit()
-                        logger.info(f"Auto-applied extraction from email {db_event.id}")
+            # Auto-apply if high confidence
+            if status == "auto_approved":
+                if apply_extracted_data(extracted, db):
+                    extracted.status = "applied"
+                    db.commit()
+                    logger.info(f"Auto-applied extraction from email {db_event.id}")
 
         return {"status": "success", "event_id": db_event.id}
 
