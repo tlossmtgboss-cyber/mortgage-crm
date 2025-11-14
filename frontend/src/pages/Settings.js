@@ -599,7 +599,20 @@ function Settings() {
   const syncMicrosoftNow = async () => {
     setLoadingMicrosoft(true);
     setSyncCompleted(false);
-    setSyncProgress({ current: 0, total: 0 });
+    setSyncProgress({ current: 0, total: 50 }); // Show immediately with expected total
+
+    // Simulate progress animation during sync (visual feedback)
+    let simulatedProgress = 0;
+    const progressInterval = setInterval(() => {
+      simulatedProgress += Math.random() * 8;
+      if (simulatedProgress < 45) { // Cap at 90% until real result
+        setSyncProgress(prev => ({
+          current: Math.floor(simulatedProgress),
+          total: prev.total
+        }));
+      }
+    }, 300);
+
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/sync-now`, {
         method: 'POST',
@@ -608,10 +621,12 @@ function Settings() {
         }
       });
 
+      clearInterval(progressInterval); // Stop simulation
+
       if (response.ok) {
         const data = await response.json();
 
-        // Update progress with final counts
+        // Update with actual final counts
         setSyncProgress({ current: data.processed_count, total: data.fetched_count });
 
         alert(`Synced ${data.processed_count}/${data.fetched_count} emails successfully!`);
@@ -625,6 +640,7 @@ function Settings() {
           setSyncProgress({ current: 0, total: 0 });
         }, 3000);
       } else {
+        clearInterval(progressInterval);
         let errorMessage = 'Failed to sync emails';
         try {
           const error = await response.json();
@@ -638,6 +654,7 @@ function Settings() {
         setSyncProgress({ current: 0, total: 0 });
       }
     } catch (error) {
+      clearInterval(progressInterval);
       console.error('Error syncing emails:', error);
       alert(`Error syncing emails: ${error.message || 'Network error'}`);
       setLoadingMicrosoft(false);
