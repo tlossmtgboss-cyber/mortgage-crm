@@ -3702,6 +3702,43 @@ async def create_microsoft_oauth_table(db: Session = Depends(get_db)):
             content={"status": "error", "message": str(e)}
         )
 
+@app.post("/admin/add-email-deletion-columns")
+async def add_email_deletion_columns(db: Session = Depends(get_db)):
+    """Admin endpoint to add email auto-deletion columns"""
+    try:
+        # Add auto_delete_imported_emails column to microsoft_oauth_tokens
+        logger.info("Adding auto_delete_imported_emails column...")
+        db.execute(text("""
+            ALTER TABLE microsoft_oauth_tokens
+            ADD COLUMN IF NOT EXISTS auto_delete_imported_emails BOOLEAN DEFAULT FALSE
+        """))
+
+        # Add microsoft_message_id column to incoming_data_events
+        logger.info("Adding microsoft_message_id column...")
+        db.execute(text("""
+            ALTER TABLE incoming_data_events
+            ADD COLUMN IF NOT EXISTS microsoft_message_id VARCHAR
+        """))
+
+        db.commit()
+
+        logger.info("✅ Email deletion columns added successfully")
+        return {
+            "status": "success",
+            "message": "Email auto-deletion columns added successfully",
+            "columns_added": [
+                "microsoft_oauth_tokens.auto_delete_imported_emails",
+                "incoming_data_events.microsoft_message_id"
+            ]
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Failed to add email deletion columns: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
+
 @app.post("/admin/create-zapier-api-key")
 async def create_zapier_api_key(db: Session = Depends(get_db)):
     """Admin endpoint to create the Zapier API key for integration"""
