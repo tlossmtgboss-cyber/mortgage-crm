@@ -10340,6 +10340,88 @@ async def startup_event():
     logger.info("📚 API Documentation: http://localhost:8000/docs")
     logger.info("🔐 Demo Login: demo@example.com / demo123")
 
+# ============================================================================
+# TEMPORARY MIGRATION ENDPOINTS (Remove after AI system is initialized)
+# ============================================================================
+
+@app.post("/admin/run-ai-migration")
+async def run_ai_migration_endpoint(request: dict):
+    """
+    Temporary endpoint to run AI migration remotely.
+    Usage: POST /admin/run-ai-migration with body: {"secret": "migrate-ai-2024"}
+    """
+    import subprocess
+
+    # Simple security check
+    if request.get("secret") != "migrate-ai-2024":
+        raise HTTPException(status_code=403, detail="Invalid secret")
+
+    try:
+        # Run migration script
+        result = subprocess.run(
+            ["python3", "run_ai_migration.py"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            cwd="/app"
+        )
+
+        return {
+            "success": result.returncode == 0,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "returncode": result.returncode
+        }
+    except subprocess.TimeoutExpired:
+        return {
+            "success": False,
+            "error": "Migration timed out after 120 seconds"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.post("/admin/initialize-ai-system")
+async def initialize_ai_system_endpoint(request: dict):
+    """
+    Temporary endpoint to initialize AI system remotely.
+    Usage: POST /admin/initialize-ai-system with body: {"secret": "migrate-ai-2024"}
+    """
+    import subprocess
+
+    # Simple security check
+    if request.get("secret") != "migrate-ai-2024":
+        raise HTTPException(status_code=403, detail="Invalid secret")
+
+    try:
+        # Run initialization script
+        result = subprocess.run(
+            ["python3", "initialize_ai_system.py"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            cwd="/app"
+        )
+
+        return {
+            "success": result.returncode == 0,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "returncode": result.returncode
+        }
+    except subprocess.TimeoutExpired:
+        return {
+            "success": False,
+            "error": "Initialization timed out after 120 seconds"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
