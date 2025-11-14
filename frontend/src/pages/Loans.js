@@ -131,8 +131,13 @@ function Loans() {
   const loadLoans = async () => {
     try {
       const data = await loansAPI.getAll();
-      // Ensure data is an array
-      setLoans(Array.isArray(data) ? data : []);
+      // Use API data if it has items, otherwise use mock data
+      if (Array.isArray(data) && data.length > 0) {
+        setLoans(data);
+      } else {
+        console.log('API returned empty/invalid data, using mock loans');
+        setLoans(generateMockLoans());
+      }
     } catch (err) {
       console.error('Failed to load loans:', err);
       // Use mock data on error

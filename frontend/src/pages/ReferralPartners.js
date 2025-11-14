@@ -45,12 +45,13 @@ function ReferralPartners() {
         console.log('Is array?', Array.isArray(data));
         console.log('Type:', typeof data);
 
-        // Ensure data is always an array
-        if (Array.isArray(data)) {
+        // If API returns data and it's an array with items, use it
+        if (Array.isArray(data) && data.length > 0) {
           setPartners(data);
         } else {
-          console.error('API returned non-array data:', data);
-          setPartners([]);
+          // If empty or invalid, use mock data
+          console.log('API returned empty/invalid data, using mock data');
+          setPartners(generateMockPartners());
         }
       } catch (apiError) {
         console.log('API failed, using mock data:', apiError);
@@ -60,8 +61,8 @@ function ReferralPartners() {
     } catch (error) {
       console.error('Failed to load referral partners:', error);
       console.error('Error details:', error.response?.data);
-      // Set empty array on error
-      setPartners([]);
+      // Use mock data on error
+      setPartners(generateMockPartners());
     } finally {
       setLoading(false);
     }

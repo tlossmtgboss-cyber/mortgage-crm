@@ -327,8 +327,13 @@ function Leads() {
   const loadLeads = async () => {
     try {
       const data = await leadsAPI.getAll();
-      // Ensure data is always an array
-      setLeads(Array.isArray(data) ? data : []);
+      // Use API data if it has items, otherwise use mock data
+      if (Array.isArray(data) && data.length > 0) {
+        setLeads(data);
+      } else {
+        console.log('API returned empty/invalid data, using mock leads');
+        setLeads(generateMockLeads());
+      }
     } catch (err) {
       console.error('Failed to load leads:', err);
       // Use mock data on error
