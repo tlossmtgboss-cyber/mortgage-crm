@@ -3052,6 +3052,65 @@ async def get_system_diagnostics(current_user: User = Depends(get_current_user))
         "environment": os.getenv("RAILWAY_ENVIRONMENT", "local")
     }
 
+@app.post("/api/v1/migrations/add-external-message-id")
+async def add_external_message_id_migration(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Add external_message_id column to incoming_data_events table
+    This column is needed for email deduplication
+    """
+    try:
+        # Check if user is admin (you can add admin check if needed)
+        logger.info(f"Running migration: add external_message_id column (user: {current_user.id})")
+
+        # Check if column already exists
+        result = db.execute(text("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = 'incoming_data_events'
+            AND column_name = 'external_message_id'
+        """))
+
+        if result.fetchone():
+            return {
+                "success": True,
+                "message": "Column 'external_message_id' already exists",
+                "already_exists": True
+            }
+
+        # Add the column
+        db.execute(text("""
+            ALTER TABLE incoming_data_events
+            ADD COLUMN external_message_id VARCHAR;
+        """))
+
+        # Add index for performance
+        db.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_incoming_data_events_external_message_id
+            ON incoming_data_events(external_message_id);
+        """))
+
+        db.commit()
+
+        logger.info("Successfully added 'external_message_id' column with index")
+
+        return {
+            "success": True,
+            "message": "Successfully added 'external_message_id' column with index",
+            "already_exists": False
+        }
+
+    except Exception as e:
+        logger.error(f"Migration failed: {e}")
+        db.rollback()
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e)
+        }
+
 @app.post("/api/v1/auto-fix-error")
 async def auto_fix_error(
     request: ErrorFixRequest,
