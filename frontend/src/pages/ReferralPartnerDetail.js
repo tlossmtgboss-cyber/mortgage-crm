@@ -4,6 +4,27 @@ import { partnersAPI, leadsAPI } from '../services/api';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import './ReferralPartnerDetail.css';
 
+// Mock referral partners data
+const generateMockPartners = () => {
+  return [
+    { id: 1, name: 'Amy Smith', email: 'amy.smith@realestate.com', phone: '(555) 123-4567', company: 'Smith Realty Group', title: 'Senior Realtor', partner_type: 'Realtor', tier: 'Gold', status: 'active', total_referrals: 24, closed_deals: 18, pipeline_value: 2850000, partner_category: 'individual' },
+    { id: 2, name: 'Bob Johnson', email: 'bob@johnsoninsurance.com', phone: '(555) 234-5678', company: 'Johnson Insurance Agency', title: 'Insurance Agent', partner_type: 'Insurance Agent', tier: 'Silver', status: 'active', total_referrals: 15, closed_deals: 12, pipeline_value: 1620000, partner_category: 'individual' },
+    { id: 3, name: 'Carol White', email: 'carol@elitehomes.com', phone: '(555) 345-6789', company: 'Elite Homes Realty', title: 'Broker', partner_type: 'Realtor', tier: 'Gold', status: 'active', total_referrals: 32, closed_deals: 25, pipeline_value: 4100000, partner_category: 'individual' },
+    { id: 4, name: 'David Chen', email: 'david@chenfinancial.com', phone: '(555) 456-7890', company: 'Chen Financial Planning', title: 'Financial Advisor', partner_type: 'Financial Advisor', tier: 'Bronze', status: 'active', total_referrals: 8, closed_deals: 6, pipeline_value: 980000, partner_category: 'individual' },
+    { id: 5, name: 'Emily Rodriguez', email: 'emily@coastalrealty.com', phone: '(555) 567-8901', company: 'Coastal Realty Partners', title: 'Managing Broker', partner_type: 'Realtor', tier: 'Gold', status: 'active', total_referrals: 28, closed_deals: 22, pipeline_value: 3650000, partner_category: 'individual' },
+    { id: 6, name: 'Frank Miller', email: 'frank@millerlegal.com', phone: '(555) 678-9012', company: 'Miller & Associates Law', title: 'Attorney', partner_type: 'Attorney', tier: 'Silver', status: 'active', total_referrals: 12, closed_deals: 10, pipeline_value: 1450000, partner_category: 'individual' },
+    { id: 7, name: 'Grace Lee', email: 'grace@premiumhomes.com', phone: '(555) 789-0123', company: 'Premium Homes Group', title: 'Realtor', partner_type: 'Realtor', tier: 'Silver', status: 'active', total_referrals: 18, closed_deals: 14, pipeline_value: 2180000, partner_category: 'individual' },
+    { id: 8, name: 'Henry Davis', email: 'henry@daviscpa.com', phone: '(555) 890-1234', company: 'Davis CPA Firm', title: 'CPA', partner_type: 'CPA', tier: 'Bronze', status: 'active', total_referrals: 6, closed_deals: 5, pipeline_value: 720000, partner_category: 'individual' },
+    { id: 9, name: 'Irene Martinez', email: 'irene@luxuryproperties.com', phone: '(555) 901-2345', company: 'Luxury Properties LLC', title: 'Luxury Realtor', partner_type: 'Realtor', tier: 'Gold', status: 'active', total_referrals: 21, closed_deals: 16, pipeline_value: 5200000, partner_category: 'individual' },
+    { id: 10, name: 'Jack Wilson', email: 'jack@wilsonbuilders.com', phone: '(555) 012-3456', company: 'Wilson Custom Builders', title: 'Builder', partner_type: 'Builder', tier: 'Silver', status: 'active', total_referrals: 14, closed_deals: 11, pipeline_value: 1890000, partner_category: 'individual' },
+    { id: 11, name: 'Karen Thompson', email: 'karen@thompsonrealty.com', phone: '(555) 111-2222', company: 'Thompson Realty', title: 'Broker', partner_type: 'Realtor', tier: 'Bronze', status: 'inactive', total_referrals: 5, closed_deals: 3, pipeline_value: 450000, partner_category: 'individual' },
+    { id: 12, name: 'Liam Brown', email: 'liam@brownfinancial.com', phone: '(555) 222-3333', company: 'Brown Financial Services', title: 'Wealth Manager', partner_type: 'Financial Advisor', tier: 'Silver', status: 'active', total_referrals: 11, closed_deals: 9, pipeline_value: 1340000, partner_category: 'individual' },
+    { id: 13, name: 'Maria Garcia', email: 'maria@garciahomes.com', phone: '(555) 333-4444', company: 'Garcia Homes Real Estate', title: 'Realtor', partner_type: 'Realtor', tier: 'Gold', status: 'active', total_referrals: 26, closed_deals: 20, pipeline_value: 3250000, partner_category: 'individual' },
+    { id: 14, name: 'Nathan Clark', email: 'nathan@clarklaw.com', phone: '(555) 444-5555', company: 'Clark Law Group', title: 'Real Estate Attorney', partner_type: 'Attorney', tier: 'Bronze', status: 'active', total_referrals: 7, closed_deals: 6, pipeline_value: 890000, partner_category: 'individual' },
+    { id: 15, name: 'Olivia Taylor', email: 'olivia@taylorproperties.com', phone: '(555) 555-6666', company: 'Taylor Properties', title: 'Senior Agent', partner_type: 'Realtor', tier: 'Gold', status: 'active', total_referrals: 30, closed_deals: 24, pipeline_value: 3920000, partner_category: 'individual' }
+  ];
+};
+
 function ReferralPartnerDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -35,10 +56,28 @@ function ReferralPartnerDetail() {
   const loadPartnerData = async () => {
     try {
       setLoading(true);
-      const [partnerData, allLeadsData] = await Promise.all([
-        partnersAPI.getById(id),
-        leadsAPI.getAll()
-      ]);
+      let partnerData = null;
+      let allLeadsData = [];
+
+      try {
+        // Try to fetch from API first
+        [partnerData, allLeadsData] = await Promise.all([
+          partnersAPI.getById(id),
+          leadsAPI.getAll()
+        ]);
+      } catch (apiError) {
+        console.log('API failed, using mock data:', apiError);
+        // Fallback to mock data
+        const mockPartners = generateMockPartners();
+        partnerData = mockPartners.find(p => p.id === parseInt(id));
+
+        if (!partnerData) {
+          alert('Referral partner not found');
+          navigate('/referral-partners');
+          return;
+        }
+        allLeadsData = [];
+      }
 
       setPartner(partnerData);
       setAllLeads(allLeadsData);
@@ -53,6 +92,7 @@ function ReferralPartnerDetail() {
     } catch (error) {
       console.error('Failed to load partner data:', error);
       alert('Failed to load referral partner details');
+      navigate('/referral-partners');
     } finally {
       setLoading(false);
     }
