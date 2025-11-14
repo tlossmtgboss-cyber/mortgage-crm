@@ -13,6 +13,11 @@ function Tasks() {
   const [showHistory, setShowHistory] = useState(false);
   const [taskOwner, setTaskOwner] = useState('');
   const [commModal, setCommModal] = useState(null);
+  const [communicationMethod, setCommunicationMethod] = useState('Email');
+  const [aiInstructions, setAiInstructions] = useState('');
+  const [showDelegateModal, setShowDelegateModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [snoozedTasks, setSnoozedTasks] = useState(new Set());
 
   // Dashboard data states
   const [prioritizedTasks, setPrioritizedTasks] = useState([]);
@@ -43,6 +48,8 @@ function Tasks() {
     if (selectedTask) {
       setDraftMessage(selectedTask.ai_message || '');
       setTaskOwner(selectedTask.owner || 'Loan Officer');
+      setCommunicationMethod(selectedTask.preferred_contact_method || 'Email');
+      setAiInstructions('');
       setEditingMessage(false);
       setShowHistory(false);
     }
@@ -74,23 +81,78 @@ function Tasks() {
     }
   };
 
+  // Handler functions
+  const handleSend = (taskId) => {
+    // TODO: Implement actual send logic based on communicationMethod
+    alert(`Task sent via ${communicationMethod}!`);
+    handleComplete(taskId);
+  };
+
+  const handleDelete = (taskId) => {
+    setShowDeleteConfirm(false);
+    setCompletedTasks(prev => {
+      const newCompleted = new Set(prev);
+      newCompleted.add(taskId);
+      return newCompleted;
+    });
+
+    // Select next task
+    if (selectedTask && selectedTask.id === taskId) {
+      const allTasks = getAggregatedTasks();
+      const currentIndex = allTasks.findIndex(t => t.id === taskId);
+      const nextTask = allTasks[currentIndex + 1] || allTasks[currentIndex - 1] || null;
+      setSelectedTask(nextTask);
+    }
+  };
+
+  const handleSnooze = (taskId) => {
+    setSnoozedTasks(prev => {
+      const newSnoozed = new Set(prev);
+      newSnoozed.add(taskId);
+      return newSnoozed;
+    });
+
+    // Remove from snoozed after 24 hours
+    setTimeout(() => {
+      setSnoozedTasks(prev => {
+        const newSnoozed = new Set(prev);
+        newSnoozed.delete(taskId);
+        return newSnoozed;
+      });
+    }, 24 * 60 * 60 * 1000); // 24 hours
+
+    // Select next task
+    if (selectedTask && selectedTask.id === taskId) {
+      const allTasks = getAggregatedTasks();
+      const currentIndex = allTasks.findIndex(t => t.id === taskId);
+      const nextTask = allTasks[currentIndex + 1] || allTasks[currentIndex - 1] || null;
+      setSelectedTask(nextTask);
+    }
+  };
+
+  const handleDelegate = (teamMember) => {
+    alert(`Task delegated to ${teamMember}`);
+    setShowDelegateModal(false);
+    handleComplete(selectedTask.id);
+  };
+
   // Get tasks filtered by active tab
   const getTasksForTab = () => {
     const allTasks = getAggregatedTasks();
 
     switch (activeTab) {
       case 'outstanding':
-        return allTasks;
+        return allTasks.filter(task => !snoozedTasks.has(task.id));
       case 'ai-approval':
-        return allTasks.filter(task => task.source === 'AI Engine');
+        return allTasks.filter(task => task.source === 'AI Engine' && !snoozedTasks.has(task.id));
       case 'reconciliation':
-        return allTasks.filter(task => task.source === 'Milestone Risk');
+        return allTasks.filter(task => task.source === 'Milestone Risk' && !snoozedTasks.has(task.id));
       case 'messages':
-        return allTasks.filter(task => task.source === 'Messages');
+        return allTasks.filter(task => task.source === 'Messages' && !snoozedTasks.has(task.id));
       case 'mum':
-        return allTasks.filter(task => task.source === 'Client for Life');
+        return allTasks.filter(task => task.source === 'Client for Life' && !snoozedTasks.has(task.id));
       default:
-        return allTasks;
+        return allTasks.filter(task => !snoozedTasks.has(task.id));
     }
   };
 
@@ -391,17 +453,7 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
                 </div>
                 <div className="detail-info-item">
                   <span className="detail-label">Owner</span>
-                  <select
-                    className="detail-owner-select"
-                    value={taskOwner}
-                    onChange={(e) => setTaskOwner(e.target.value)}
-                  >
-                    <option value="Loan Officer">Loan Officer</option>
-                    <option value="Loan Processor">Loan Processor</option>
-                    <option value="Executive Assistant">Executive Assistant</option>
-                    <option value="Underwriter">Underwriter</option>
-                    <option value="Closer">Closer</option>
-                  </select>
+                  <span className="detail-value">{taskOwner}</span>
                 </div>
                 <div className="detail-info-item">
                   <span className="detail-label">Date Created</span>
@@ -409,18 +461,35 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
                     {selectedTask.date_created ? new Date(selectedTask.date_created).toLocaleString() : 'N/A'}
                   </span>
                 </div>
-                {selectedTask.preferred_contact_method && (
-                  <div className="detail-info-item">
-                    <span className="detail-label">Preferred Contact</span>
-                    <span className="detail-contact-badge">
-                      {selectedTask.preferred_contact_method === 'Email' && '📧'}
-                      {selectedTask.preferred_contact_method === 'Phone' && '📞'}
-                      {selectedTask.preferred_contact_method === 'Text' && '💬'}
-                      {' '}
-                      {selectedTask.preferred_contact_method}
-                    </span>
+                <div className="detail-info-item detail-comm-method-item">
+                  <span className="detail-label">Send Via</span>
+                  <div className="comm-method-selector">
+                    <button
+                      className={`comm-method-btn ${communicationMethod === 'Email' ? 'active' : ''}`}
+                      onClick={() => setCommunicationMethod('Email')}
+                    >
+                      📧 Email
+                    </button>
+                    <button
+                      className={`comm-method-btn ${communicationMethod === 'Text' ? 'active' : ''}`}
+                      onClick={() => setCommunicationMethod('Text')}
+                    >
+                      💬 Text
+                    </button>
+                    <button
+                      className={`comm-method-btn ${communicationMethod === 'Phone' ? 'active' : ''}`}
+                      onClick={() => setCommunicationMethod('Phone')}
+                    >
+                      📞 Phone
+                    </button>
+                    <button
+                      className={`comm-method-btn ${communicationMethod === 'Voicemail' ? 'active' : ''}`}
+                      onClick={() => setCommunicationMethod('Voicemail')}
+                    >
+                      🎙️ Voicemail
+                    </button>
                   </div>
-                )}
+                </div>
               </div>
 
               {selectedTask.missing_documents && selectedTask.missing_documents.length > 0 && (
@@ -445,36 +514,54 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
               )}
 
               {selectedTask.ai_message && (
-                <div className="detail-ai-message-section">
-                  <div className="ai-message-header">
-                    <div className="ai-message-title-row">
-                      <span className="ai-icon-large">🤖</span>
-                      <span className="ai-message-title">AI-Drafted Message</span>
+                <>
+                  {/* AI Training Instructions Section */}
+                  <div className="detail-ai-training-section">
+                    <div className="ai-training-header">
+                      <span className="training-icon">🎓</span>
+                      <span className="training-title">Train AI (Optional)</span>
                     </div>
-                    <button
-                      className="btn-edit-message"
-                      onClick={() => setEditingMessage(!editingMessage)}
-                    >
-                      {editingMessage ? '✓ Done Editing' : '✏️ Edit Message'}
-                    </button>
+                    <textarea
+                      className="ai-training-input"
+                      placeholder="Type instructions to teach AI how to handle similar tasks in the future... (e.g., 'Always mention our competitive rates when following up on pre-approvals')"
+                      value={aiInstructions}
+                      onChange={(e) => setAiInstructions(e.target.value)}
+                      rows={3}
+                    />
                   </div>
-                  <div className="ai-message-body">
-                    {editingMessage ? (
-                      <textarea
-                        className="message-editor"
-                        value={draftMessage}
-                        onChange={(e) => setDraftMessage(e.target.value)}
-                        rows={12}
-                      />
-                    ) : (
-                      <div className="message-preview">
-                        {draftMessage.split('\n').map((line, idx) => (
-                          <p key={idx}>{line || '\u00A0'}</p>
-                        ))}
+
+                  {/* AI-Drafted Message Section */}
+                  <div className="detail-ai-message-section">
+                    <div className="ai-message-header">
+                      <div className="ai-message-title-row">
+                        <span className="ai-icon-large">🤖</span>
+                        <span className="ai-message-title">AI-Drafted Message</span>
                       </div>
-                    )}
+                      <button
+                        className="btn-edit-message"
+                        onClick={() => setEditingMessage(!editingMessage)}
+                      >
+                        {editingMessage ? '✓ Done Editing' : '✏️ Edit Message'}
+                      </button>
+                    </div>
+                    <div className="ai-message-body">
+                      {editingMessage ? (
+                        <textarea
+                          className="message-editor"
+                          value={draftMessage}
+                          onChange={(e) => setDraftMessage(e.target.value)}
+                          rows={12}
+                        />
+                      ) : (
+                        <div className="message-preview">
+                          {draftMessage.split('\n').map((line, idx) => (
+                            <p key={idx}>{line || '\u00A0'}</p>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
+                </>
               )}
 
               {selectedTask.action && (
@@ -526,10 +613,10 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
 
             <div className="detail-footer">
               <button
-                className="btn-detail-complete"
-                onClick={() => handleComplete(selectedTask.id)}
+                className="btn-detail-send"
+                onClick={() => handleSend(selectedTask.id)}
               >
-                ✓ Mark Complete
+                📤 Send via {communicationMethod}
               </button>
               {selectedTask.ai_action && (
                 <button
@@ -539,13 +626,24 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
                   Approve AI Action
                 </button>
               )}
-              {selectedTask.action && (
-                <button className="btn-detail-action">
-                  {selectedTask.action}
-                </button>
-              )}
-              <button className="btn-detail-secondary">Snooze</button>
-              <button className="btn-detail-secondary">Delegate</button>
+              <button
+                className="btn-detail-secondary"
+                onClick={() => handleSnooze(selectedTask.id)}
+              >
+                💤 Snooze
+              </button>
+              <button
+                className="btn-detail-secondary"
+                onClick={() => setShowDelegateModal(true)}
+              >
+                👥 Delegate
+              </button>
+              <button
+                className="btn-detail-danger"
+                onClick={() => setShowDeleteConfirm(true)}
+              >
+                🗑️ Delete
+              </button>
             </div>
           </>
         ) : (
@@ -634,6 +732,57 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
       {activeTab === 'mum' && (
         <div className="tab-content">
           <TaskEmailLayout tasks={tabTasks} emptyMessage="No client retention actions needed" />
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="modal-overlay" onClick={() => setShowDeleteConfirm(false)}>
+          <div className="modal-content delete-modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Delete Task</h2>
+            <p>Are you sure you want to delete this task? This action cannot be undone.</p>
+            <div className="modal-buttons">
+              <button
+                className="btn-modal-danger"
+                onClick={() => handleDelete(selectedTask.id)}
+              >
+                Yes, Delete
+              </button>
+              <button
+                className="btn-modal-cancel"
+                onClick={() => setShowDeleteConfirm(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delegate Modal */}
+      {showDelegateModal && (
+        <div className="modal-overlay" onClick={() => setShowDelegateModal(false)}>
+          <div className="modal-content delegate-modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Delegate Task</h2>
+            <p>Select a team member to delegate this task to:</p>
+            <div className="team-member-list">
+              {['Loan Officer', 'Loan Processor', 'Executive Assistant', 'Underwriter', 'Closer'].map((member) => (
+                <button
+                  key={member}
+                  className="team-member-btn"
+                  onClick={() => handleDelegate(member)}
+                >
+                  👤 {member}
+                </button>
+              ))}
+            </div>
+            <button
+              className="btn-modal-cancel"
+              onClick={() => setShowDelegateModal(false)}
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       )}
 
