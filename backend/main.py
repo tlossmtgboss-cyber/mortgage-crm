@@ -687,6 +687,7 @@ class IncomingDataEvent(Base):
     __tablename__ = "incoming_data_events"
     id = Column(Integer, primary_key=True, index=True)
     source = Column(String, nullable=False)  # 'outlook', 'calendar', 'dropbox', etc.
+    external_message_id = Column(String, index=True)  # Microsoft message ID, Gmail message ID, etc.
     raw_text = Column(Text)
     raw_html = Column(Text)
     subject = Column(String)
@@ -2390,10 +2391,22 @@ async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Ses
     """Process a Microsoft Graph email and ingest into DRE"""
     try:
         # Extract email data
+        message_id = email_data.get("id", "")  # Microsoft Graph message ID
         subject = email_data.get("subject", "")
         sender = email_data.get("from", {}).get("emailAddress", {}).get("address", "")
         recipients = [r.get("emailAddress", {}).get("address", "") for r in email_data.get("toRecipients", [])]
         received_at = email_data.get("receivedDateTime", "")
+
+        # Check if this email was already processed (deduplication)
+        if message_id:
+            existing_event = db.query(IncomingDataEvent).filter(
+                IncomingDataEvent.external_message_id == message_id,
+                IncomingDataEvent.user_id == user_id
+            ).first()
+
+            if existing_event:
+                logger.debug(f"Email {message_id} already processed (event {existing_event.id}), skipping")
+                return {"status": "skipped", "reason": "already_processed", "event_id": existing_event.id}
 
         # Get body content
         body = email_data.get("body", {})
@@ -2403,6 +2416,7 @@ async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Ses
         # Create incoming data event
         db_event = IncomingDataEvent(
             source="microsoft365",
+            external_message_id=message_id,
             raw_text=raw_text,
             raw_html=raw_html,
             subject=subject,
@@ -2416,7 +2430,7 @@ async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Ses
         db.commit()
         db.refresh(db_event)
 
-        logger.info(f"Ingested Microsoft email {db_event.id} from {sender}")
+        logger.info(f"Ingested NEW Microsoft email {db_event.id} from {sender} (msg_id: {message_id[:20]}...)")
 
         # Trigger extraction
         content = raw_text or raw_html or ""
