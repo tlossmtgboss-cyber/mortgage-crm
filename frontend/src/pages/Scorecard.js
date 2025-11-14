@@ -5,6 +5,7 @@ import './Scorecard.css';
 function Scorecard() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
+  const [error, setError] = useState(null);
   const [period, setPeriod] = useState({ start: null, end: null });
 
   useEffect(() => {
@@ -17,6 +18,7 @@ function Scorecard() {
   const loadScorecard = async () => {
     try {
       setLoading(true);
+      setError(null);
       // Fetch real data from API
       const apiData = await analyticsAPI.getScorecard();
       setData(apiData);
@@ -26,6 +28,7 @@ function Scorecard() {
       setLoading(false);
     } catch (error) {
       console.error('Failed to load scorecard:', error);
+      setError(error.response?.data?.detail || error.message || 'Failed to load scorecard');
       setLoading(false);
     }
   };
@@ -58,10 +61,36 @@ function Scorecard() {
     return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
   };
 
-  if (loading || !data) {
+  if (loading) {
     return (
       <div className="scorecard-page">
         <div className="loading">Loading scorecard...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="scorecard-page">
+        <div className="error-container" style={{ padding: '40px', textAlign: 'center' }}>
+          <h2 style={{ color: '#f44336' }}>Failed to Load Scorecard</h2>
+          <p style={{ marginBottom: '20px' }}>{error}</p>
+          <button
+            onClick={loadScorecard}
+            className="btn-primary"
+            style={{ padding: '10px 20px', cursor: 'pointer' }}
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="scorecard-page">
+        <div className="loading">No data available</div>
       </div>
     );
   }
