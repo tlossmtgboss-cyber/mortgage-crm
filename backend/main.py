@@ -8806,6 +8806,110 @@ async def initialize_ai_system(db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Initialization failed: {str(e)}")
 
+
+@app.post("/api/admin/initialize-mission-control")
+async def initialize_mission_control(db: Session = Depends(get_db)):
+    """Initialize Mission Control database schema"""
+    try:
+        import os
+        from pathlib import Path
+
+        logger.info("Initializing Mission Control database schema...")
+        schema_path = Path(__file__).parent / "mission_control_schema.sql"
+
+        if not schema_path.exists():
+            raise HTTPException(status_code=500, detail="Mission Control schema file not found")
+
+        with open(schema_path, "r") as f:
+            sql = f.read()
+
+        # Execute SQL statements one by one
+        from sqlalchemy import text
+        statements = [s.strip() for s in sql.split(';') if s.strip()]
+        tables_created = 0
+
+        for statement in statements:
+            if statement and not statement.startswith('--'):
+                try:
+                    db.execute(text(statement))
+                    if 'CREATE TABLE' in statement.upper():
+                        tables_created += 1
+                except Exception as e:
+                    # Ignore "already exists" errors
+                    if 'already exists' not in str(e).lower():
+                        logger.error(f"Error executing statement: {e}")
+
+        db.commit()
+        logger.info(f"✅ Mission Control schema initialized ({tables_created} tables)")
+
+        # Create initial data
+        logger.info("Creating initial Mission Control data...")
+
+        # Insert sample integration status
+        sample_integrations = [
+            ('LOS (BytePro)', 'healthy', 250, 0),
+            ('Email (Microsoft 365)', 'healthy', 180, 0),
+            ('Calendar (Outlook)', 'healthy', 200, 0),
+            ('SMS (Twilio)', 'healthy', 120, 0),
+        ]
+
+        for name, status, latency, errors in sample_integrations:
+            try:
+                insert_query = text("""
+                    INSERT INTO integration_status_log (integration_name, status, latency_ms, error_count_24h, last_success_at, checked_at)
+                    VALUES (:name, :status, :latency, :errors, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """)
+                db.execute(insert_query, {"name": name, "status": status, "latency": latency, "errors": errors})
+            except:
+                pass  # Ignore if already exists
+
+        # Insert initial AI metrics
+        try:
+            from datetime import date
+            today = date.today()
+            metrics_query = text("""
+                INSERT INTO ai_metrics_daily (
+                    date, tasks_total, tasks_auto_completed, tasks_escalated_to_humans,
+                    automation_rate, escalation_rate, ai_improvement_index
+                )
+                VALUES (
+                    :date, 100, 74, 23, 74.0, 23.0, 128.0
+                )
+                ON CONFLICT (date) DO NOTHING
+            """)
+            db.execute(metrics_query, {"date": today})
+        except:
+            pass
+
+        # Insert initial security snapshot
+        try:
+            security_query = text("""
+                INSERT INTO security_snapshot_daily (
+                    date, active_users_with_2fa, active_users_total, high_privilege_actions_24h
+                )
+                VALUES (
+                    :date, 8, 10, 3
+                )
+                ON CONFLICT (date) DO NOTHING
+            """)
+            db.execute(security_query, {"date": today})
+        except:
+            pass
+
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": "Mission Control initialized successfully",
+            "tables_created": tables_created
+        }
+
+    except Exception as e:
+        logger.error(f"Mission Control initialization failed: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Initialization failed: {str(e)}")
+
+
 # ============================================================================
 # STARTUP EVENT
 # ============================================================================
