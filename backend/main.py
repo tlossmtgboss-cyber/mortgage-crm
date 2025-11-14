@@ -10422,6 +10422,45 @@ async def initialize_ai_system_endpoint(request: dict):
             "error": str(e)
         }
 
+@app.post("/admin/initialize-ai-only")
+async def initialize_ai_only_endpoint(request: dict):
+    """
+    Initialize AI system (skip migration - for when tables already exist).
+    Usage: POST /admin/initialize-ai-only with body: {"secret": "migrate-ai-2024"}
+    """
+    import subprocess
+
+    # Simple security check
+    if request.get("secret") != "migrate-ai-2024":
+        raise HTTPException(status_code=403, detail="Invalid secret")
+
+    try:
+        # Run initialization script (skip migration)
+        result = subprocess.run(
+            ["python3", "initialize_ai_only.py"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            cwd="/app"
+        )
+
+        return {
+            "success": result.returncode == 0,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "returncode": result.returncode
+        }
+    except subprocess.TimeoutExpired:
+        return {
+            "success": False,
+            "error": "Initialization timed out after 120 seconds"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
