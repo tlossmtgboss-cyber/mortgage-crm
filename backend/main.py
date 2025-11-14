@@ -2430,8 +2430,12 @@ def encrypt_token(token: str) -> str:
 
 def decrypt_token(encrypted_token: str) -> str:
     """Decrypt a stored token"""
-    f = Fernet(get_encryption_key())
-    return f.decrypt(encrypted_token.encode()).decode()
+    try:
+        f = Fernet(get_encryption_key())
+        return f.decrypt(encrypted_token.encode()).decode()
+    except Exception as e:
+        logger.error(f"Token decryption failed: {e}")
+        raise ValueError(f"Failed to decrypt token: {str(e)}")
 
 async def refresh_microsoft_token(oauth_record: MicrosoftOAuthToken, db: Session) -> bool:
     """Refresh an expired Microsoft access token"""
@@ -2493,7 +2497,11 @@ async def fetch_microsoft_emails(oauth_record: MicrosoftOAuthToken, db: Session,
             if not await refresh_microsoft_token(oauth_record, db):
                 return {"error": "Failed to refresh token"}
 
-        access_token = decrypt_token(oauth_record.access_token)
+        try:
+            access_token = decrypt_token(oauth_record.access_token)
+        except Exception as decrypt_error:
+            logger.error(f"Failed to decrypt access token: {decrypt_error}")
+            return {"error": f"Token decryption failed: {str(decrypt_error)}"}
 
         # Microsoft Graph API endpoint
         folder = oauth_record.sync_folder or "Inbox"
