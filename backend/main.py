@@ -10361,13 +10361,70 @@ def build_coach_context(user: User, db: Session) -> Dict[str, Any]:
         if last_activity:
             days_in_stage = (datetime.now(timezone.utc) - last_activity).days
             if days_in_stage > 7:
-                bottlenecks.append({"type": "Lead", "name": lead.name, "stage": lead.stage.value, "days": days_in_stage})
+                bottlenecks.append({
+                    "type": "Lead",
+                    "name": lead.name,
+                    "stage": lead.stage.value,
+                    "days": days_in_stage,
+                    "email": lead.email,
+                    "phone": lead.phone
+                })
 
     for loan in loans:
         if loan.updated_at:
             days_in_stage = (datetime.now(timezone.utc) - loan.updated_at).days
             if days_in_stage > 7:
-                bottlenecks.append({"type": "Loan", "name": loan.loan_number, "stage": loan.stage.value, "days": days_in_stage})
+                bottlenecks.append({
+                    "type": "Loan",
+                    "loan_number": loan.loan_number,
+                    "borrower_name": loan.borrower_name,
+                    "stage": loan.stage.value,
+                    "days": days_in_stage
+                })
+
+    # Get specific loans by stage for detailed coaching
+    loans_by_stage_detailed = {}
+    for stage in LoanStage:
+        stage_loans = [l for l in loans if l.stage == stage]
+        loans_by_stage_detailed[stage.value] = [
+            {
+                "loan_number": loan.loan_number,
+                "borrower_name": loan.borrower_name,
+                "days_in_stage": (datetime.now(timezone.utc) - loan.updated_at).days if loan.updated_at else 0,
+                "amount": loan.amount if hasattr(loan, 'amount') else None
+            }
+            for loan in stage_loans[:5]  # Top 5 per stage
+        ]
+
+    # Get specific leads that need attention
+    leads_needing_attention = []
+    for lead in leads:
+        last_activity = lead.last_contact or lead.updated_at
+        if last_activity:
+            days_since_contact = (datetime.now(timezone.utc) - last_activity).days
+            if days_since_contact > 2:  # No contact in 2+ days
+                leads_needing_attention.append({
+                    "name": lead.name,
+                    "email": lead.email,
+                    "phone": lead.phone,
+                    "stage": lead.stage.value,
+                    "days_since_contact": days_since_contact,
+                    "source": lead.source
+                })
+
+    # Get new leads from yesterday
+    yesterday = datetime.now(timezone.utc) - timedelta(days=1)
+    new_leads = [
+        {
+            "name": lead.name,
+            "email": lead.email,
+            "phone": lead.phone,
+            "source": lead.source,
+            "stage": lead.stage.value
+        }
+        for lead in leads
+        if lead.created_at and lead.created_at >= yesterday
+    ]
 
     return {
         "user": {
@@ -10379,17 +10436,29 @@ def build_coach_context(user: User, db: Session) -> Dict[str, Any]:
             "total_leads": len(leads),
             "total_loans": len(loans),
             "leads_by_stage": leads_by_stage,
-            "loans_by_stage": loans_by_stage
+            "loans_by_stage": loans_by_stage,
+            "loans_by_stage_detailed": loans_by_stage_detailed,  # NEW: Specific loan details
+            "new_leads": new_leads,  # NEW: Yesterday's new leads with names
+            "leads_needing_attention": leads_needing_attention[:10]  # NEW: Specific leads to follow up
         },
         "tasks": {
             "total_open": len(open_tasks),
             "overdue": len(overdue_tasks),
-            "overdue_list": [{"title": t.title, "days_overdue": (datetime.now(timezone.utc) - t.due_date).days} for t in overdue_tasks[:5]]
+            "overdue_list": [
+                {
+                    "title": t.title,
+                    "days_overdue": (datetime.now(timezone.utc) - t.due_date).days,
+                    "loan_id": t.loan_id,
+                    "lead_id": t.lead_id,
+                    "borrower_name": t.borrower_name
+                }
+                for t in overdue_tasks[:5]
+            ]
         },
         "reconciliation": {
             "pending_review": pending_reconciliation
         },
-        "bottlenecks": bottlenecks[:10]  # Top 10 bottlenecks
+        "bottlenecks": bottlenecks[:10]  # Top 10 bottlenecks with names
     }
 
 def get_coach_system_prompt(mode: CoachMode) -> str:
@@ -10423,24 +10492,34 @@ MODE: Daily Briefing
 
 Your job: Review their pipeline and give them their top 3 priorities for today.
 
+CRITICAL REQUIREMENT: Always reference specific loan numbers, borrower names, and lead names from the context data.
+- DO NOT say "3 deals stuck in underwriting" - say "Loan #12345 (John Smith), Loan #67890 (Jane Doe), and Loan #11111 (Bob Johnson) stuck in underwriting"
+- DO NOT say "5 new leads" - say "Contact Sarah Williams, Mike Chen, Lisa Park, David Rodriguez, and Amy Thompson"
+- DO NOT give vague counts - give actual names and loan numbers
+- Use the LOANS BY STAGE and LEADS NEEDING ATTENTION sections to get specific details
+
 Important: If they have pending reconciliation items, prioritize those. Data accuracy is fundamental to The Process.
 
 Format:
-"Morning. Today we run The Process.
+"Morning. Here's what matters today:
 
-Top priorities:
-1. [High-leverage task]
-2. [High-leverage task]
-3. [High-leverage task]
+1. [SPECIFIC TASK with loan numbers/names]
+2. [SPECIFIC TASK with loan numbers/names]
+3. [SPECIFIC TASK with loan numbers/names]
 
-Eliminate distractions. Execute with pace."
+Process beats chaos. Execute on these priorities before checking email."
 
-Be specific. Use their actual pipeline data. If reconciliation.pending_review > 0, include reviewing those items as a priority.""",
+ALWAYS BE SPECIFIC. Reference actual loan numbers and borrower names from the context.""",
 
         CoachMode.pipeline_audit: base_personality + """
 MODE: Pipeline Audit
 
 Your job: Identify bottlenecks, stalled deals, and what needs immediate action.
+
+CRITICAL REQUIREMENT: Always reference specific loan numbers and borrower names.
+- Use the BOTTLENECKS section to get exact loan numbers and borrower names
+- Use the LOANS BY STAGE section to identify specific deals that are stuck
+- DO NOT give vague descriptions - cite actual loan numbers and names
 
 Include data reconciliation if pending. Unreviewed data = blind spots in your pipeline.
 
@@ -10448,12 +10527,13 @@ Format:
 "Pipeline audit complete.
 
 Bottlenecks:
-- [Specific deal/lead + issue]
-- [Specific deal/lead + issue]
+- Loan #[NUMBER] ([BORROWER NAME]): [SPECIFIC ISSUE]
+- Loan #[NUMBER] ([BORROWER NAME]): [SPECIFIC ISSUE]
+- Lead [NAME] ([CONTACT]): [SPECIFIC ISSUE]
 
 Fix these now. Nothing else matters until this is done."
 
-Be ruthless. Call out what's broken. If reconciliation.pending_review > 0, flag it as a data integrity issue.""",
+Be ruthless. Call out what's broken with SPECIFIC loan numbers and names. If reconciliation.pending_review > 0, flag it as a data integrity issue.""",
 
         CoachMode.focus_reset: base_personality + """
 MODE: Focus Reset
@@ -10767,25 +10847,33 @@ async def performance_coach(
         # Get system prompt for the mode
         system_prompt = get_coach_system_prompt(request.mode)
 
-        # Build user message with context
+        # Build user message with context - INCLUDING SPECIFIC DETAILS
         context_message = f"""
 USER CONTEXT:
 - Name: {context['user']['name']}
 - Role: {context['user']['role']}
 
-PIPELINE:
+PIPELINE SUMMARY:
 - Total Leads: {context['pipeline']['total_leads']}
 - Total Loans: {context['pipeline']['total_loans']}
-- Leads by Stage: {context['pipeline']['leads_by_stage']}
-- Loans by Stage: {context['pipeline']['loans_by_stage']}
 
-TASKS:
-- Total Open: {context['tasks']['total_open']}
-- Overdue: {context['tasks']['overdue']}
-- Top Overdue: {context['tasks']['overdue_list']}
+NEW LEADS (from yesterday):
+{chr(10).join([f"- {lead['name']} ({lead['email']}, {lead['phone']}) - Source: {lead['source']}, Stage: {lead['stage']}" for lead in context['pipeline']['new_leads']]) if context['pipeline']['new_leads'] else "- None"}
 
-BOTTLENECKS:
-{chr(10).join([f"- {b['type']}: {b['name']} ({b['days']} days in {b['stage']})" for b in context['bottlenecks']])}
+LEADS NEEDING ATTENTION (no contact in 2+ days):
+{chr(10).join([f"- {lead['name']} ({lead['email']}) - {lead['days_since_contact']} days, Stage: {lead['stage']}" for lead in context['pipeline']['leads_needing_attention']]) if context['pipeline']['leads_needing_attention'] else "- None"}
+
+LOANS BY STAGE (with specific loan numbers and borrowers):
+{chr(10).join([f"{stage}: {len(loans)} loans" + (chr(10) + chr(10).join([f"  • Loan #{loan['loan_number']} - {loan['borrower_name']} ({loan['days_in_stage']} days in stage)" for loan in loans]) if loans else "") for stage, loans in context['pipeline']['loans_by_stage_detailed'].items() if loans])}
+
+OVERDUE TASKS:
+{chr(10).join([f"- {task['title']} ({task['days_overdue']} days overdue)" + (f" - Borrower: {task['borrower_name']}" if task.get('borrower_name') else "") for task in context['tasks']['overdue_list']]) if context['tasks']['overdue_list'] else "- None"}
+
+BOTTLENECKS (loans/leads stuck 7+ days):
+{chr(10).join([f"- {b['type']}: {b.get('loan_number', b.get('name', 'Unknown'))} - {b.get('borrower_name', b.get('name', ''))} ({b['days']} days in {b['stage']})" for b in context['bottlenecks']]) if context['bottlenecks'] else "- None"}
+
+RECONCILIATION:
+- Pending Review Items: {context['reconciliation']['pending_review']}
 
 """
 
