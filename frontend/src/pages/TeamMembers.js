@@ -374,13 +374,15 @@ function TeamMembers() {
                     >
                       <option value="">Select Role...</option>
                       <option value="Application Analysis">Application Analysis</option>
+                      <option value="Concierge">Concierge</option>
+                      <option value="Jr. Loan Officer">Jr. Loan Officer</option>
+                      <option value="Jr. Processor">Jr. Processor</option>
+                      <option value="Loan Officer">Loan Officer</option>
+                      <option value="Loan Officer Assistant">Loan Officer Assistant</option>
+                      <option value="Processing Assistant">Processing Assistant</option>
+                      <option value="Processor">Processor</option>
                       <option value="Production Assistant 1">Production Assistant 1</option>
                       <option value="Production Assistant 2">Production Assistant 2</option>
-                      <option value="Processing Assistant">Processing Assistant</option>
-                      <option value="Jr. Processor">Jr. Processor</option>
-                      <option value="Jr. Loan Officer">Jr. Loan Officer</option>
-                      <option value="Loan Officer Assistant">Loan Officer Assistant</option>
-                      <option value="Concierge">Concierge</option>
                     </select>
                   </div>
                   <div className="form-group">

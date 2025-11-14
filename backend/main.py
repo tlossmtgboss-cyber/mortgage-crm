@@ -930,6 +930,22 @@ class UserResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class TeamMemberCreate(BaseModel):
+    first_name: str
+    last_name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    role: str
+    title: Optional[str] = None
+
+class TeamMemberUpdate(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    role: Optional[str] = None
+    title: Optional[str] = None
+
 class ApiKeyCreate(BaseModel):
     name: str
 
@@ -7883,14 +7899,21 @@ async def get_team_members(
         # Get tasks count for each role
         team_members = []
         for user in all_users:
+            # Extract metadata
+            metadata = user.user_metadata or {}
+
             # Try to find a matching role for this user (simplified - in production you'd have explicit user-role mapping)
             member_data = {
                 "id": user.id,
                 "email": user.email,
                 "full_name": user.full_name,
+                "first_name": metadata.get("first_name"),
+                "last_name": metadata.get("last_name"),
+                "phone": metadata.get("phone"),
+                "role": user.role,
+                "title": metadata.get("title"),
                 "created_at": user.created_at.isoformat() if user.created_at else None,
                 "onboarding_completed": user.onboarding_completed,
-                "role": None,
                 "tasks_count": 0
             }
 
@@ -7898,13 +7921,18 @@ async def get_team_members(
             team_members.append(member_data)
 
         # Also include current user
+        current_metadata = current_user.user_metadata or {}
         current_member = {
             "id": current_user.id,
             "email": current_user.email,
             "full_name": current_user.full_name,
+            "first_name": current_metadata.get("first_name"),
+            "last_name": current_metadata.get("last_name"),
+            "phone": current_metadata.get("phone"),
+            "role": current_user.role or "Admin",
+            "title": current_metadata.get("title"),
             "created_at": current_user.created_at.isoformat() if current_user.created_at else None,
             "onboarding_completed": current_user.onboarding_completed,
-            "role": {"role_title": "Admin", "role_name": "admin"},
             "tasks_count": 0,
             "is_current": True
         }
@@ -7988,6 +8016,144 @@ async def get_team_member_detail(
         raise
     except Exception as e:
         logger.error(f"Get team member detail error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/team/members")
+async def create_team_member(
+    member_data: TeamMemberCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new team member"""
+    try:
+        # Create a new user for the team member
+        # Generate a random password (they can reset it later)
+        import secrets
+        temp_password = secrets.token_urlsafe(16)
+        hashed_password = bcrypt.hashpw(temp_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+        # Create full_name from first and last name
+        full_name = f"{member_data.first_name} {member_data.last_name}"
+
+        # Store additional data in user_metadata
+        user_metadata = {
+            "first_name": member_data.first_name,
+            "last_name": member_data.last_name,
+            "phone": member_data.phone,
+            "title": member_data.title
+        }
+
+        new_user = User(
+            email=member_data.email or f"{member_data.first_name.lower()}.{member_data.last_name.lower()}@temp.com",
+            hashed_password=hashed_password,
+            full_name=full_name,
+            role=member_data.role,
+            user_metadata=user_metadata,
+            is_active=True,
+            email_verified=False,
+            onboarding_completed=False
+        )
+
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+
+        return {
+            "id": new_user.id,
+            "first_name": member_data.first_name,
+            "last_name": member_data.last_name,
+            "email": member_data.email,
+            "phone": member_data.phone,
+            "role": member_data.role,
+            "title": member_data.title
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Create team member error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.patch("/api/v1/team/members/{member_id}")
+async def update_team_member(
+    member_id: int,
+    member_data: TeamMemberUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update a team member"""
+    try:
+        user = db.query(User).filter(User.id == member_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="Team member not found")
+
+        # Update fields
+        user_metadata = user.user_metadata or {}
+
+        if member_data.first_name is not None:
+            user_metadata["first_name"] = member_data.first_name
+        if member_data.last_name is not None:
+            user_metadata["last_name"] = member_data.last_name
+        if member_data.phone is not None:
+            user_metadata["phone"] = member_data.phone
+        if member_data.title is not None:
+            user_metadata["title"] = member_data.title
+
+        # Update full_name if first or last name changed
+        if member_data.first_name or member_data.last_name:
+            first = member_data.first_name or user_metadata.get("first_name", "")
+            last = member_data.last_name or user_metadata.get("last_name", "")
+            user.full_name = f"{first} {last}"
+
+        if member_data.email is not None:
+            user.email = member_data.email
+        if member_data.role is not None:
+            user.role = member_data.role
+
+        user.user_metadata = user_metadata
+
+        db.commit()
+        db.refresh(user)
+
+        return {
+            "id": user.id,
+            "first_name": user_metadata.get("first_name"),
+            "last_name": user_metadata.get("last_name"),
+            "email": user.email,
+            "phone": user_metadata.get("phone"),
+            "role": user.role,
+            "title": user_metadata.get("title")
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Update team member error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/v1/team/members/{member_id}")
+async def delete_team_member(
+    member_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a team member"""
+    try:
+        user = db.query(User).filter(User.id == member_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="Team member not found")
+
+        # Soft delete - just mark as inactive
+        user.is_active = False
+        db.commit()
+
+        return {"message": "Team member deleted successfully"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Delete team member error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================================================
