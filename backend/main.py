@@ -2923,6 +2923,16 @@ async def disconnect_microsoft365(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/v1/system/diagnostics")
+async def get_system_diagnostics(current_user: User = Depends(get_current_user)):
+    """Get system configuration diagnostics"""
+    return {
+        "openai_configured": openai_client is not None,
+        "openai_api_key_set": bool(OPENAI_API_KEY),
+        "database_type": "postgresql" if "postgresql" in DATABASE_URL else "sqlite",
+        "environment": os.getenv("RAILWAY_ENVIRONMENT", "local")
+    }
+
 @app.post("/api/v1/microsoft/sync-now")
 async def sync_microsoft_emails_now(
     current_user: User = Depends(get_current_user),
@@ -2930,6 +2940,10 @@ async def sync_microsoft_emails_now(
 ):
     """Manually trigger email sync from Microsoft 365"""
     try:
+        # Log diagnostic info
+        logger.info(f"Sync triggered by user {current_user.id}")
+        logger.info(f"OpenAI client available: {openai_client is not None}")
+        logger.info(f"OpenAI API key set: {bool(OPENAI_API_KEY)}")
         oauth_record = db.query(MicrosoftOAuthToken).filter(
             MicrosoftOAuthToken.user_id == current_user.id
         ).first()
