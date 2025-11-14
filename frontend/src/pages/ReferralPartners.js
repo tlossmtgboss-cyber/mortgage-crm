@@ -20,7 +20,8 @@ const generateMockPartners = () => {
     { id: 12, name: 'Liam Brown', email: 'liam@brownfinancial.com', phone: '(555) 222-3333', company: 'Brown Financial Services', title: 'Wealth Manager', partner_type: 'Financial Advisor', tier: 'Silver', status: 'active', total_referrals: 11, closed_deals: 9, pipeline_value: 1340000, partner_category: 'individual' },
     { id: 13, name: 'Maria Garcia', email: 'maria@garciahomes.com', phone: '(555) 333-4444', company: 'Garcia Homes Real Estate', title: 'Realtor', partner_type: 'Realtor', tier: 'Gold', status: 'active', total_referrals: 26, closed_deals: 20, pipeline_value: 3250000, partner_category: 'individual' },
     { id: 14, name: 'Nathan Clark', email: 'nathan@clarklaw.com', phone: '(555) 444-5555', company: 'Clark Law Group', title: 'Real Estate Attorney', partner_type: 'Attorney', tier: 'Bronze', status: 'active', total_referrals: 7, closed_deals: 6, pipeline_value: 890000, partner_category: 'individual' },
-    { id: 15, name: 'Olivia Taylor', email: 'olivia@taylorproperties.com', phone: '(555) 555-6666', company: 'Taylor Properties', title: 'Senior Agent', partner_type: 'Realtor', tier: 'Gold', status: 'active', total_referrals: 30, closed_deals: 24, pipeline_value: 3920000, partner_category: 'individual' }
+    { id: 15, name: 'Olivia Taylor', email: 'olivia@taylorproperties.com', phone: '(555) 555-6666', company: 'Taylor Properties', title: 'Senior Agent', partner_type: 'Realtor', tier: 'Gold', status: 'active', total_referrals: 30, closed_deals: 24, pipeline_value: 3920000, partner_category: 'individual' },
+    { id: 16, name: 'Paul Anderson', email: 'paul@andersongroup.com', phone: '(555) 666-7777', company: 'Anderson Investment Group', title: 'Investment Advisor', partner_type: 'Financial Advisor', tier: 'Silver', status: 'active', total_referrals: 13, closed_deals: 10, pipeline_value: 1780000, partner_category: 'individual' }
   ];
 };
 
