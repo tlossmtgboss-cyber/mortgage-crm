@@ -31,6 +31,7 @@ import AIUnderwriter from './pages/AIUnderwriter';
 import GoalTracker from './pages/GoalTracker';
 import Coach from './pages/Coach';
 import ReconciliationCenter from './pages/ReconciliationCenter';
+import MergeCenter from './pages/MergeCenter';
 import Settings from './pages/Settings';
 import TeamMembers from './pages/TeamMembers';
 import TeamMemberProfile from './pages/TeamMemberProfile';
@@ -588,6 +589,26 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <ReconciliationCenter />
+                  </main>
+                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/merge"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <MergeCenter />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />

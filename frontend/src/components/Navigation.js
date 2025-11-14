@@ -79,6 +79,12 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
           >
             AI Underwriter
           </Link>
+          <Link
+            to="/merge"
+            className={`nav-link ${isActive('/merge') ? 'active' : ''}`}
+          >
+            🎯 Merge Center
+          </Link>
         </div>
 
         <div className="nav-actions">
