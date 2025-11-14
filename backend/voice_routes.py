@@ -11,10 +11,8 @@ import json
 import asyncio
 import base64
 
-from database import get_db
-from models import User, Lead, Task, Activity, IncomingDataEvent
+from main import get_db, User, Lead, Task, Activity, IncomingDataEvent, get_current_user_flexible
 from integrations.twilio_voice_service import voice_client, ai_config
-from auth import get_current_user_flexible
 import openai
 
 logger = logging.getLogger(__name__)
