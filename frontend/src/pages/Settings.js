@@ -946,6 +946,14 @@ function Settings() {
       category: 'AI & Automation'
     },
     {
+      id: 'recallai',
+      name: 'Recall.ai',
+      description: 'Record and transcribe meetings from Zoom, Teams, and Google Meet with AI',
+      icon: '🎙️',
+      color: '#8b5cf6',
+      category: 'AI & Automation'
+    },
+    {
       id: 'stripe',
       name: 'Stripe',
       description: 'Collect payments and processing fees',
