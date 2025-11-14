@@ -1421,3 +1421,17 @@
   border-bottom: 2px solid #218D8D;
   display: inline-block;
 }
+
+/* Smart AI Chat Card */
+.smart-chat-card {
+  margin-top: 24px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.smart-chat-card .smart-ai-chat {
+  box-shadow: none;
+  border-radius: 0;
+}

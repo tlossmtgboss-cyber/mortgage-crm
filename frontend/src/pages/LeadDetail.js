@@ -6,6 +6,7 @@ import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import SMSModal from '../components/SMSModal';
 import TeamsModal from '../components/TeamsModal';
 import RecordingModal from '../components/RecordingModal';
+import SmartAIChat from '../components/SmartAIChat';
 import './LeadDetail.css';
 
 // Mock lead data generator (same as Leads.js)
@@ -1491,6 +1492,11 @@ function LeadDetail() {
                 <div className="empty-state">No emails yet</div>
               )}
             </div>
+          </div>
+
+          {/* Smart AI Chat with Memory */}
+          <div className="smart-chat-card">
+            <SmartAIChat leadId={lead.id} />
           </div>
         </div>
       </div>

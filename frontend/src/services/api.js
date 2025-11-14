@@ -256,6 +256,19 @@ export const aiAPI = {
     });
     return response.data;
   },
+  smartChat: async (message, context = {}) => {
+    const response = await api.post('/api/v1/ai/smart-chat', {
+      message,
+      lead_id: context.lead_id,
+      loan_id: context.loan_id,
+      include_context: context.include_context !== false, // Default to true
+    });
+    return response.data;
+  },
+  getMemoryStats: async () => {
+    const response = await api.get('/api/v1/ai/memory-stats');
+    return response.data;
+  },
   completeTask: async (taskId) => {
     const response = await api.post(`/api/v1/ai/complete-task?task_id=${taskId}`);
     return response.data;

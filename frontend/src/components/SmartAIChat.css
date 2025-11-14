@@ -1,0 +1,296 @@
+.smart-ai-chat {
+  display: flex;
+  flex-direction: column;
+  height: 600px;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+
+.smart-ai-chat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--color-border-light);
+  background: var(--color-bg-secondary);
+}
+
+.smart-ai-chat-header .header-content {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.smart-ai-chat-header h3 {
+  font-size: var(--font-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-primary);
+  margin: 0;
+}
+
+.memory-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  background: var(--color-primary);
+  color: white;
+  border-radius: var(--radius-full);
+  font-size: var(--font-xs);
+  font-weight: var(--weight-medium);
+}
+
+.stats-toggle {
+  padding: 6px 12px;
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  font-size: var(--font-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.stats-toggle:hover {
+  background: var(--color-bg-base);
+  color: var(--color-text-primary);
+  border-color: var(--color-primary);
+}
+
+.memory-stats {
+  padding: var(--space-md) var(--space-lg);
+  background: var(--color-bg-base);
+  border-bottom: 1px solid var(--color-border-light);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.stat-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--font-sm);
+}
+
+.stat-label {
+  color: var(--color-text-secondary);
+  font-weight: var(--weight-medium);
+}
+
+.stat-value {
+  color: var(--color-text-primary);
+  font-weight: var(--weight-semibold);
+}
+
+.status-enabled {
+  color: var(--color-success);
+}
+
+.status-disabled {
+  color: var(--color-error);
+}
+
+.smart-ai-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  background: var(--color-bg-base);
+}
+
+.message {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  max-width: 85%;
+  animation: fadeIn 200ms ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message-user {
+  align-self: flex-end;
+}
+
+.message-assistant {
+  align-self: flex-start;
+}
+
+.message-content {
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-md);
+  font-size: var(--font-base);
+  line-height: var(--line-normal);
+  position: relative;
+}
+
+.message-user .message-content {
+  background: var(--color-primary);
+  color: white;
+}
+
+.message-assistant .message-content {
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-light);
+}
+
+.message-content.loading {
+  padding: var(--space-md);
+}
+
+.typing-indicator {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.typing-indicator span {
+  width: 8px;
+  height: 8px;
+  background: var(--color-text-tertiary);
+  border-radius: 50%;
+  animation: typing 1.4s infinite;
+}
+
+.typing-indicator span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-indicator span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typing {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-10px);
+    opacity: 1;
+  }
+}
+
+.context-indicator {
+  margin-top: var(--space-xs);
+  padding-top: var(--space-xs);
+  border-top: 1px solid var(--color-border-light);
+}
+
+.context-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: rgba(33, 127, 141, 0.1);
+  color: var(--color-primary);
+  border-radius: var(--radius-base);
+  font-size: var(--font-xs);
+  font-weight: var(--weight-medium);
+}
+
+.message-timestamp {
+  font-size: var(--font-xs);
+  color: var(--color-text-tertiary);
+  padding: 0 var(--space-sm);
+}
+
+.message-user .message-timestamp {
+  text-align: right;
+}
+
+.smart-ai-input {
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid var(--color-border-light);
+  background: var(--color-bg-surface);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.smart-ai-input textarea {
+  resize: none;
+  min-height: 80px;
+  width: 100%;
+  font-family: var(--font-family);
+  font-size: var(--font-base);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-base);
+  background: var(--color-bg-base);
+  color: var(--color-text-primary);
+  transition: all 150ms ease;
+}
+
+.smart-ai-input textarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(33, 127, 141, 0.1);
+}
+
+.smart-ai-input textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.input-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.input-hint {
+  font-size: var(--font-xs);
+  color: var(--color-text-tertiary);
+  font-weight: var(--weight-medium);
+}
+
+.send-button {
+  padding: var(--space-sm) var(--space-lg);
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-base);
+  font-weight: var(--weight-medium);
+  font-size: var(--font-base);
+  cursor: pointer;
+  transition: all 250ms ease;
+  min-width: 100px;
+}
+
+.send-button:hover:not(:disabled) {
+  background: var(--color-primary-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.send-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+@media (max-width: 768px) {
+  .smart-ai-chat {
+    height: 500px;
+  }
+
+  .message {
+    max-width: 90%;
+  }
+}
