@@ -461,7 +461,7 @@ class IntegrationCredential(Base):
     refresh_token = Column(String)  # For OAuth integrations
     access_token = Column(String)  # For OAuth integrations
     token_expiry = Column(DateTime)  # When access token expires
-    metadata = Column(JSON)  # Additional integration-specific data
+    integration_metadata = Column(JSON)  # Additional integration-specific data (renamed from metadata to avoid SQLAlchemy reserved word)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
