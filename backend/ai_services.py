@@ -112,10 +112,10 @@ class AgentRegistry:
             description=result.description,
             agent_type=result.agent_type,
             status=result.status,
-            goals=json.loads(result.goals) if result.goals else [],
-            tools=json.loads(result.tools) if result.tools else [],
-            triggers=json.loads(result.triggers) if result.triggers else [],
-            config=json.loads(result.config) if result.config else {},
+            goals=result.goals if isinstance(result.goals, list) else (json.loads(result.goals) if result.goals else []),
+            tools=result.tools if isinstance(result.tools, list) else (json.loads(result.tools) if result.tools else []),
+            triggers=result.triggers if isinstance(result.triggers, list) else (json.loads(result.triggers) if result.triggers else []),
+            config=result.config if isinstance(result.config, dict) else (json.loads(result.config) if result.config else {}),
             version=result.version
         )
 
@@ -140,10 +140,10 @@ class AgentRegistry:
                 description=row.description,
                 agent_type=row.agent_type,
                 status=row.status,
-                goals=json.loads(row.goals) if row.goals else [],
-                tools=json.loads(row.tools) if row.tools else [],
-                triggers=json.loads(row.triggers) if row.triggers else [],
-                config=json.loads(row.config) if row.config else {},
+                goals=row.goals if isinstance(row.goals, list) else (json.loads(row.goals) if row.goals else []),
+                tools=row.tools if isinstance(row.tools, list) else (json.loads(row.tools) if row.tools else []),
+                triggers=row.triggers if isinstance(row.triggers, list) else (json.loads(row.triggers) if row.triggers else []),
+                config=row.config if isinstance(row.config, dict) else (json.loads(row.config) if row.config else {}),
                 version=row.version
             ))
 
@@ -218,10 +218,10 @@ class ToolRegistry:
             name=result.name,
             description=result.description,
             category=result.category,
-            input_schema=json.loads(result.input_schema),
-            output_schema=json.loads(result.output_schema),
+            input_schema=result.input_schema if isinstance(result.input_schema, dict) else json.loads(result.input_schema),
+            output_schema=result.output_schema if isinstance(result.output_schema, dict) else json.loads(result.output_schema),
             handler_endpoint=result.handler_endpoint,
-            allowed_agents=json.loads(result.allowed_agents) if result.allowed_agents else [],
+            allowed_agents=result.allowed_agents if isinstance(result.allowed_agents, list) else (json.loads(result.allowed_agents) if result.allowed_agents else []),
             risk_level=result.risk_level,
             requires_approval=result.requires_approval
         )
@@ -357,7 +357,7 @@ class MessageBus:
                 message_type=row.message_type,
                 subject=row.subject,
                 content=row.content,
-                payload=json.loads(row.payload) if row.payload else {},
+                payload=row.payload if isinstance(row.payload, dict) else (json.loads(row.payload) if row.payload else {}),
                 priority=row.priority,
                 requires_human_review=row.requires_human_review
             ))
