@@ -799,6 +799,12 @@ function LeadDetail() {
         >
           Documents
         </button>
+        <button
+          className={`tab-btn ${activeTab === 'important-dates' ? 'active' : ''}`}
+          onClick={() => setActiveTab('important-dates')}
+        >
+          Important Dates
+        </button>
       </div>
 
       <div className="detail-content">
@@ -1241,6 +1247,137 @@ function LeadDetail() {
                   <div className="document-list">
                     <div className="empty-state">No documents uploaded yet</div>
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          )}
+
+          {/* Important Dates Tab */}
+          {activeTab === 'important-dates' && (
+          <div className="tab-content">
+            <div className="info-section">
+              <h2>Lead Stage Dates</h2>
+              <p className="section-subtitle">Track key milestone dates throughout the lead journey</p>
+
+              <div className="dates-grid">
+                <div className="date-field">
+                  <label>Lead Created Date</label>
+                  <input
+                    type="date"
+                    value={formData.lead_created_date || ''}
+                    onChange={(e) => handleFieldChange('lead_created_date', e.target.value)}
+                  />
+                </div>
+
+                <div className="date-field">
+                  <label>First Contact Attempt Date</label>
+                  <input
+                    type="date"
+                    value={formData.first_contact_attempt_date || ''}
+                    onChange={(e) => handleFieldChange('first_contact_attempt_date', e.target.value)}
+                  />
+                </div>
+
+                <div className="date-field">
+                  <label>First Contact Successful Date</label>
+                  <input
+                    type="date"
+                    value={formData.first_contact_successful_date || ''}
+                    onChange={(e) => handleFieldChange('first_contact_successful_date', e.target.value)}
+                  />
+                </div>
+
+                <div className="date-field">
+                  <label>Lead Qualification Date</label>
+                  <input
+                    type="date"
+                    value={formData.lead_qualification_date || ''}
+                    onChange={(e) => handleFieldChange('lead_qualification_date', e.target.value)}
+                  />
+                </div>
+
+                <div className="date-field">
+                  <label>Application Link Sent Date</label>
+                  <input
+                    type="date"
+                    value={formData.application_link_sent_date || ''}
+                    onChange={(e) => handleFieldChange('application_link_sent_date', e.target.value)}
+                  />
+                </div>
+
+                <div className="date-field">
+                  <label>Application Started Date</label>
+                  <input
+                    type="date"
+                    value={formData.application_started_date || ''}
+                    onChange={(e) => handleFieldChange('application_started_date', e.target.value)}
+                  />
+                </div>
+
+                <div className="date-field">
+                  <label>Application Completed Date</label>
+                  <input
+                    type="date"
+                    value={formData.application_completed_date || ''}
+                    onChange={(e) => handleFieldChange('application_completed_date', e.target.value)}
+                  />
+                </div>
+
+                <div className="date-field">
+                  <label>Credit Pulled Date</label>
+                  <input
+                    type="date"
+                    value={formData.credit_pulled_date || ''}
+                    onChange={(e) => handleFieldChange('credit_pulled_date', e.target.value)}
+                  />
+                </div>
+
+                <div className="date-field">
+                  <label>Pre-Approval Submission Date</label>
+                  <input
+                    type="date"
+                    value={formData.preapproval_submission_date || ''}
+                    onChange={(e) => handleFieldChange('preapproval_submission_date', e.target.value)}
+                  />
+                </div>
+
+                <div className="date-field">
+                  <label>Pre-Approval Issued Date</label>
+                  <input
+                    type="date"
+                    value={formData.preapproval_issued_date || ''}
+                    onChange={(e) => handleFieldChange('preapproval_issued_date', e.target.value)}
+                  />
+                </div>
+
+                <div className="date-field">
+                  <label>Realtor Referral Date</label>
+                  <input
+                    type="date"
+                    value={formData.realtor_referral_date || ''}
+                    onChange={(e) => handleFieldChange('realtor_referral_date', e.target.value)}
+                  />
+                </div>
+
+                <div className="date-field">
+                  <label>Pre-Approval Expiration Date</label>
+                  <input
+                    type="date"
+                    value={formData.preapproval_expiration_date || ''}
+                    onChange={(e) => handleFieldChange('preapproval_expiration_date', e.target.value)}
+                  />
+                  <small className="field-hint">Typically 90 days from credit pull</small>
+                </div>
+
+                <div className="date-field">
+                  <label>Rate Watch Enrollment Date</label>
+                  <input
+                    type="date"
+                    value={formData.rate_watch_enrollment_date || ''}
+                    onChange={(e) => handleFieldChange('rate_watch_enrollment_date', e.target.value)}
+                  />
+                  <small className="field-hint">For shopping-phase automation</small>
                 </div>
               </div>
             </div>

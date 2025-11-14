@@ -1344,3 +1344,57 @@
   font-size: 14px;
   color: #1e40af;
 }
+
+/* Important Dates Tab Styles */
+.dates-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 24px;
+  margin-top: 24px;
+}
+
+.date-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.date-field label {
+  font-weight: 500;
+  font-size: 14px;
+  color: #333;
+}
+
+.date-field input[type="date"] {
+  padding: 10px 12px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: all 0.2s;
+  background: white;
+}
+
+.date-field input[type="date"]:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
+}
+
+.date-field input[type="date"]:disabled {
+  background: #f5f5f5;
+  cursor: not-allowed;
+}
+
+.field-hint {
+  font-size: 12px;
+  color: #666;
+  font-style: italic;
+  margin-top: 4px;
+}
+
+.section-subtitle {
+  font-size: 14px;
+  color: #666;
+  margin-top: 4px;
+  margin-bottom: 8px;
+}
