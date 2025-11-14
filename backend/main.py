@@ -8,12 +8,11 @@
 # ✅ Authentication & Security (JWT + API Keys)
 # ✅ Sample data generation
 # ✅ AI Underwriter with Claude AI
-# ✅ Performance Coach with AI guidance
 # ✅ AI Assistant with OpenAI GPT
 # ✅ Zapier Integration via API Keys
 # ============================================================================
 
-from fastapi import FastAPI, Depends, HTTPException, status, Request, File, UploadFile, Form
+from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -28,11 +27,6 @@ from typing import List, Optional, Dict, Any
 import uvicorn
 import os
 import json
-import uuid
-from dotenv import load_dotenv
-
-# Load environment variables from .env file
-load_dotenv()
 import enum
 import logging
 import random
@@ -40,17 +34,6 @@ import secrets
 from openai import OpenAI
 import anthropic
 import requests
-
-# For Microsoft Teams Integration
-try:
-    from msal import ConfidentialClientApplication
-    MSAL_AVAILABLE = True
-except ImportError:
-    MSAL_AVAILABLE = False
-    print("⚠️  MSAL not installed. Install with: pip install msal")
-
-# Import encryption utilities for sensitive data
-from encryption_utils import EncryptedString, EncryptedInteger, EncryptedFloat
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -68,40 +51,11 @@ if DATABASE_URL.startswith("postgres://"):
 
 SECRET_KEY = os.getenv("SECRET_KEY", "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30  # Short-lived access tokens
-REFRESH_TOKEN_EXPIRE_DAYS = 7  # Refresh tokens last 7 days
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 # Initialize OpenAI client
 openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
-
-# Microsoft Graph API configuration
-MICROSOFT_CLIENT_ID = os.getenv("MICROSOFT_CLIENT_ID")
-MICROSOFT_CLIENT_SECRET = os.getenv("MICROSOFT_CLIENT_SECRET")
-MICROSOFT_TENANT_ID = os.getenv("MICROSOFT_TENANT_ID")
-
-MICROSOFT_AUTHORITY = f"https://login.microsoftonline.com/{MICROSOFT_TENANT_ID}"
-MICROSOFT_SCOPE = ["https://graph.microsoft.com/.default"]
-MICROSOFT_GRAPH_ENDPOINT = "https://graph.microsoft.com/v1.0"
-
-# Initialize MSAL client (only if credentials are configured)
-if MSAL_AVAILABLE and MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET and MICROSOFT_TENANT_ID:
-    try:
-        msal_app = ConfidentialClientApplication(
-            MICROSOFT_CLIENT_ID,
-            authority=MICROSOFT_AUTHORITY,
-            client_credential=MICROSOFT_CLIENT_SECRET,
-        )
-        logger.info("✅ Microsoft Graph client initialized successfully")
-    except Exception as e:
-        msal_app = None
-        logger.warning(f"⚠️  Failed to initialize Microsoft Graph client: {e}")
-else:
-    msal_app = None
-    if not MSAL_AVAILABLE:
-        logger.warning("⚠️  Microsoft Teams integration disabled: MSAL not installed")
-    else:
-        logger.warning("⚠️  Microsoft Teams integration disabled: Environment variables not configured")
 
 # Database - Create Base first
 Base = declarative_base()
@@ -129,35 +83,6 @@ def get_db():
         yield db
     finally:
         db.close()
-
-# ============================================================================
-# AI SYSTEM INTEGRATION HELPER
-# ============================================================================
-
-async def trigger_ai_event(event_type: str, payload: dict, db: Session):
-    """Trigger AI agents for an event - integrates with autonomous agent system"""
-    try:
-        from ai_services import AgentOrchestrator
-        from ai_models import AgentEvent, EventStatus
-
-        orchestrator = AgentOrchestrator(db)
-
-        event = AgentEvent(
-            event_id=str(uuid.uuid4()),
-            event_type=event_type,
-            source="crm_api",
-            payload=payload,
-            status=EventStatus.PENDING
-        )
-
-        # Dispatch to agents (async, won't block the response)
-        await orchestrator.dispatch_event(event)
-
-        logger.info(f"✅ AI event triggered: {event_type} for {payload.get('entity_type')} {payload.get('entity_id')}")
-
-    except Exception as e:
-        # Log but don't fail the main request
-        logger.error(f"⚠️  AI event failed ({event_type}): {e}")
 
 # ============================================================================
 # ENUMS
@@ -251,7 +176,7 @@ class Lead(Base):
     next_action = Column(Text)
     loan_type = Column(String)
     preapproval_amount = Column(Float)
-    credit_score = Column(EncryptedInteger)  # Encrypted - sensitive PII
+    credit_score = Column(Integer)
     debt_to_income = Column(Float)
     owner_id = Column(Integer, ForeignKey("users.id"))
     last_contact = Column(DateTime)
@@ -267,8 +192,8 @@ class Lead(Base):
     down_payment = Column(Float)
     # Financial Information
     employment_status = Column(String)
-    annual_income = Column(EncryptedFloat)  # Encrypted - sensitive financial data
-    monthly_debts = Column(EncryptedFloat)  # Encrypted - sensitive financial data
+    annual_income = Column(Float)
+    monthly_debts = Column(Float)
     first_time_buyer = Column(Boolean, default=False)
     # Loan Details
     loan_amount = Column(Float)
@@ -288,7 +213,6 @@ class Lead(Base):
     dti = Column(Float)
     # Metadata
     user_metadata = Column(JSON)
-    important_dates = Column(JSON)  # AI-extracted important dates with task triggers
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     owner = relationship("User", back_populates="leads")
@@ -304,10 +228,10 @@ class Loan(Base):
     stage = Column(SQLEnum(LoanStage), default=LoanStage.DISCLOSED)
     program = Column(String)
     loan_type = Column(String)
-    amount = Column(EncryptedFloat, nullable=False)  # Encrypted - sensitive financial data
-    purchase_price = Column(EncryptedFloat)  # Encrypted - sensitive financial data
-    down_payment = Column(EncryptedFloat)  # Encrypted - sensitive financial data
-    rate = Column(EncryptedFloat)  # Encrypted - sensitive financial data
+    amount = Column(Float, nullable=False)
+    purchase_price = Column(Float)
+    down_payment = Column(Float)
+    rate = Column(Float)
     term = Column(Integer, default=360)
     property_address = Column(String)
     lock_date = Column(DateTime)
@@ -325,7 +249,6 @@ class Loan(Base):
     predicted_close_date = Column(DateTime)
     risk_score = Column(Integer, default=0)
     user_metadata = Column(JSON)
-    important_dates = Column(JSON)  # AI-extracted important dates with task triggers
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     loan_officer = relationship("User", back_populates="loans")
@@ -394,13 +317,8 @@ class ReferralPartner(Base):
     loyalty_tier = Column(String, default="bronze")
     last_interaction = Column(DateTime)
     notes = Column(Text)
-    partner_category = Column(String, default="individual")  # "individual" or "team"
-    parent_team_id = Column(Integer, ForeignKey("referral_partners.id"), nullable=True)  # Links agent to their team
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-
-    # Relationships
     leads = relationship("Lead", back_populates="referral_partner")
-    team_members = relationship("ReferralPartner", backref="parent_team", remote_side=[id])  # Self-referential for team hierarchy
 
 class MUMClient(Base):
     __tablename__ = "mum_clients"
@@ -417,7 +335,6 @@ class MUMClient(Base):
     engagement_score = Column(Integer)
     status = Column(String)
     last_contact = Column(DateTime)
-    important_dates = Column(JSON)  # AI-extracted important dates with task triggers
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 class Activity(Base):
@@ -617,37 +534,6 @@ class EmailVerificationToken(Base):
     verified_at = Column(DateTime)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
-class RecallAIBot(Base):
-    """Stores information about Recall.ai bots and their recordings"""
-    __tablename__ = "recallai_bots"
-
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)  # Associated lead
-
-    # Recall.ai Bot Info
-    bot_id = Column(String, unique=True, index=True)  # Recall.ai bot ID
-    meeting_url = Column(String)  # Zoom/Teams/Meet URL
-    bot_name = Column(String, default="Mortgage CRM Assistant")
-
-    # Status
-    status = Column(String)  # joining, in_meeting, done, fatal, error
-    join_at = Column(DateTime)  # When bot joined
-    leave_at = Column(DateTime)  # When bot left
-
-    # Recording Data
-    video_url = Column(String)  # URL to download video
-    transcript_url = Column(String)  # URL to download transcript
-    transcript_text = Column(Text)  # Full transcript text
-    summary = Column(Text)  # AI-generated summary
-
-    # Metadata
-    meeting_metadata = Column(JSON)  # Additional meeting info
-    webhook_data = Column(JSON)  # Raw webhook data
-
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-
 class Email(Base):
     """Stores emails fetched from Microsoft Graph API"""
     __tablename__ = "emails"
@@ -736,36 +622,12 @@ class MicrosoftToken(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
-class SalesforceToken(Base):
-    """Stores Salesforce OAuth tokens for CRM integration"""
-    __tablename__ = "salesforce_tokens"
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), unique=True)
-    access_token = Column(Text)  # Encrypted
-    refresh_token = Column(Text)  # Encrypted
-    instance_url = Column(String)  # Salesforce instance URL
-    token_type = Column(String)
-    expires_at = Column(DateTime)
-    scope = Column(String)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-
-class CalendlyConnection(Base):
-    """Stores Calendly API key for a user"""
-    __tablename__ = "calendly_connections"
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), unique=True)
-    api_key = Column(Text)  # Encrypted API key
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-
 class CalendarMapping(Base):
-    """Maps stages from any process (Leads, Loans, MUM) to Calendly event types for automatic scheduling"""
+    """Maps lead stages to Calendly event types for automatic scheduling"""
     __tablename__ = "calendar_mappings"
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
-    process_type = Column(String, default="lead")  # "lead", "loan", or "mum"
-    stage = Column(String, index=True)  # Stage from any process (NEW, DISCLOSED, etc.)
+    stage = Column(String, index=True)  # Lead stage (new, qualified, meeting_scheduled, etc.)
     event_type_uuid = Column(String)  # Calendly event type UUID
     event_type_name = Column(String)  # Friendly name (e.g., "Discovery Call")
     event_type_url = Column(String)  # Calendly booking page URL
@@ -802,7 +664,6 @@ class IncomingDataEvent(Base):
     sender = Column(String)
     recipients = Column(JSON)
     attachments = Column(JSON)
-    microsoft_message_id = Column(String)  # Microsoft Graph message ID for deletion
     received_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     processed = Column(Boolean, default=False)
     user_id = Column(Integer, ForeignKey("users.id"))
@@ -848,7 +709,6 @@ class MicrosoftOAuthToken(Base):
     last_sync_at = Column(DateTime)
     sync_folder = Column(String, default="Inbox")  # Which folder to sync
     sync_frequency_minutes = Column(Integer, default=15)  # How often to sync
-    auto_delete_imported_emails = Column(Boolean, default=False)  # Delete emails after importing to CRM
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
@@ -1035,7 +895,6 @@ class ProcessTask(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     milestone_id = Column(Integer, ForeignKey("process_milestones.id"))
     role_id = Column(Integer, ForeignKey("process_roles.id"))
-    assigned_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Optional specific user assignment
     task_name = Column(String, nullable=False)
     task_description = Column(Text)
     sequence_order = Column(Integer, default=0)
@@ -1046,14 +905,12 @@ class ProcessTask(Base):
     dependencies = Column(JSON)  # Array of task IDs
     is_required = Column(Boolean, default=True)
     is_active = Column(Boolean, default=True)
-    status = Column(String, default="pending")  # pending, in_progress, completed
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
-    user = relationship("User", backref="process_tasks", foreign_keys=[user_id])
+    user = relationship("User", backref="process_tasks")
     milestone = relationship("ProcessMilestone", backref="tasks")
     role = relationship("ProcessRole", backref="assigned_tasks")
-    assigned_user = relationship("User", foreign_keys=[assigned_user_id])
 
 # ============================================================================
 # PYDANTIC SCHEMAS
@@ -1155,7 +1012,6 @@ class LeadUpdate(BaseModel):
     loan_type: Optional[str] = None
     preapproval_amount: Optional[float] = None
     source: Optional[str] = None
-    referral_partner_id: Optional[int] = None
     # Loan Details
     loan_amount: Optional[float] = None
     interest_rate: Optional[float] = None
@@ -1183,7 +1039,6 @@ class LeadResponse(BaseModel):
     co_applicant_phone: Optional[str] = None
     stage: LeadStage
     source: Optional[str]
-    referral_partner_id: Optional[int] = None
     ai_score: int
     sentiment: Optional[str]
     next_action: Optional[str]
@@ -1230,75 +1085,29 @@ class LeadResponse(BaseModel):
 class LoanCreate(BaseModel):
     loan_number: str
     borrower_name: str
-    borrower_email: Optional[str] = None
-    borrower_phone: Optional[str] = None
-    coborrower_name: Optional[str] = None
     amount: float
-    product_type: Optional[str] = None  # Program type (Conventional, FHA, VA, etc.)
-    loan_type: Optional[str] = None  # Purchase, Refinance, etc.
-    interest_rate: Optional[float] = None
-    term: Optional[int] = 360
-    purchase_price: Optional[float] = None
-    down_payment: Optional[float] = None
-    property_address: Optional[str] = None
-    property_city: Optional[str] = None
-    property_state: Optional[str] = None
-    property_zip: Optional[str] = None
-    lock_date: Optional[datetime] = None
+    program: Optional[str] = None
+    rate: Optional[float] = None
     closing_date: Optional[datetime] = None
-    processor: Optional[str] = None
-    underwriter: Optional[str] = None
-    realtor_agent: Optional[str] = None
-    title_company: Optional[str] = None
-    stage: Optional[str] = None
-    notes: Optional[str] = None
 
 class LoanUpdate(BaseModel):
-    borrower_name: Optional[str] = None
-    coborrower_name: Optional[str] = None
     stage: Optional[LoanStage] = None
-    program: Optional[str] = None
-    loan_type: Optional[str] = None
-    amount: Optional[float] = None
-    purchase_price: Optional[float] = None
-    down_payment: Optional[float] = None
     rate: Optional[float] = None
-    term: Optional[int] = None
-    property_address: Optional[str] = None
-    lock_date: Optional[datetime] = None
     closing_date: Optional[datetime] = None
-    funded_date: Optional[datetime] = None
     processor: Optional[str] = None
-    underwriter: Optional[str] = None
-    realtor_agent: Optional[str] = None
-    title_company: Optional[str] = None
 
 class LoanResponse(BaseModel):
     id: int
     loan_number: str
     borrower_name: str
-    coborrower_name: Optional[str] = None
     stage: LoanStage
-    program: Optional[str] = None
-    loan_type: Optional[str] = None
+    program: Optional[str]
     amount: float
-    purchase_price: Optional[float] = None
-    down_payment: Optional[float] = None
-    rate: Optional[float] = None
-    term: Optional[int] = None
-    property_address: Optional[str] = None
-    lock_date: Optional[datetime] = None
-    closing_date: Optional[datetime] = None
-    funded_date: Optional[datetime] = None
-    loan_officer_id: Optional[int] = None
-    processor: Optional[str] = None
-    underwriter: Optional[str] = None
-    realtor_agent: Optional[str] = None
-    title_company: Optional[str] = None
+    rate: Optional[float]
+    closing_date: Optional[datetime]
     days_in_stage: int
     sla_status: str
     created_at: datetime
-    updated_at: Optional[datetime] = None
     class Config:
         from_attributes = True
 
@@ -1316,7 +1125,6 @@ class TaskUpdate(BaseModel):
     type: Optional[TaskType] = None
     priority: Optional[str] = None
     completed_action: Optional[str] = None
-    assigned_to_id: Optional[int] = None
 
 class TaskResponse(BaseModel):
     id: int
@@ -1329,49 +1137,18 @@ class TaskResponse(BaseModel):
     class Config:
         from_attributes = True
 
-class TeamMemberCreate(BaseModel):
-    first_name: str
-    last_name: str
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    role: str
-    title: Optional[str] = None
-
-class TeamMemberUpdate(BaseModel):
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    role: Optional[str] = None
-    title: Optional[str] = None
-
-class TeamMemberResponse(BaseModel):
-    id: int
-    first_name: str
-    last_name: str
-    email: Optional[str]
-    phone: Optional[str]
-    role: str
-    title: Optional[str]
-    created_at: datetime
-    class Config:
-        from_attributes = True
-
 class ReferralPartnerCreate(BaseModel):
     name: str
     company: Optional[str] = None
     type: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
-    partner_category: Optional[str] = "individual"  # "individual" or "team"
-    parent_team_id: Optional[int] = None  # ID of parent team (if this is a team member)
 
 class ReferralPartnerUpdate(BaseModel):
     name: Optional[str] = None
     company: Optional[str] = None
     status: Optional[str] = None
     notes: Optional[str] = None
-    partner_category: Optional[str] = None
 
 class ReferralPartnerResponse(BaseModel):
     id: int
@@ -1382,9 +1159,6 @@ class ReferralPartnerResponse(BaseModel):
     closed_loans: int
     volume: float
     loyalty_tier: str
-    partner_category: Optional[str] = "individual"
-    parent_team_id: Optional[int] = None
-    member_count: Optional[int] = 0  # Number of team members (for teams)
     created_at: datetime
     class Config:
         from_attributes = True
@@ -1709,21 +1483,6 @@ class ProcessTaskCreate(BaseModel):
     ai_automatable: bool = False
     dependencies: Optional[List[int]] = None
     is_required: bool = True
-    assigned_user_id: Optional[int] = None
-    status: str = "pending"
-
-class ProcessTaskUpdate(BaseModel):
-    task_name: Optional[str] = None
-    task_description: Optional[str] = None
-    role_id: Optional[int] = None
-    assigned_user_id: Optional[int] = None
-    sequence_order: Optional[int] = None
-    estimated_duration: Optional[int] = None
-    sla: Optional[int] = None
-    sla_unit: Optional[str] = None
-    ai_automatable: Optional[bool] = None
-    is_required: Optional[bool] = None
-    status: Optional[str] = None
 
 class ProcessTaskResponse(BaseModel):
     id: int
@@ -1739,8 +1498,6 @@ class ProcessTaskResponse(BaseModel):
     dependencies: Optional[List[int]]
     is_required: bool
     is_active: bool
-    assigned_user_id: Optional[int]
-    status: str
     created_at: datetime
     class Config:
         from_attributes = True
@@ -1890,7 +1647,6 @@ class MicrosoftSyncSettings(BaseModel):
     sync_enabled: Optional[bool] = None
     sync_folder: Optional[str] = None
     sync_frequency_minutes: Optional[int] = None
-    auto_delete_imported_emails: Optional[bool] = None
 
 # ============================================================================
 # FASTAPI APP
@@ -1904,27 +1660,7 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# ============================================================================
-# SECURITY MIDDLEWARE - PROTECT AGAINST EXTERNAL THREATS
-# ============================================================================
-
-# Import security middleware
-from security_middleware import (
-    RateLimitMiddleware,
-    SecurityHeadersMiddleware,
-    IPBlockingMiddleware,
-    RequestValidationMiddleware,
-    SecurityLoggingMiddleware
-)
-
-# Add security middleware (order matters - most critical first)
-app.add_middleware(SecurityLoggingMiddleware)
-app.add_middleware(SecurityHeadersMiddleware)
-app.add_middleware(RequestValidationMiddleware)
-app.add_middleware(IPBlockingMiddleware)
-app.add_middleware(RateLimitMiddleware, requests_per_minute=100, requests_per_hour=2000)
-
-# CORS - Secure configuration
+# CORS - Allow all Vercel deployments
 allowed_origins = [
     "http://localhost:3000",
     "http://localhost:3001",
@@ -1946,9 +1682,8 @@ app.add_middleware(
     allow_origin_regex=r"https://.*\.vercel\.app$",
     allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],  # Specific methods only
-    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],  # Specific headers only
-    max_age=3600  # Cache preflight requests for 1 hour
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Auth - Define BEFORE importing routes that use these functions
@@ -1962,34 +1697,14 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 def create_access_token(data: dict):
-    """Create short-lived JWT access token"""
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({
-        "exp": expire,
-        "iat": datetime.now(timezone.utc),
-        "type": "access"
-    })
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-
-def create_refresh_token(data: dict):
-    """Create long-lived refresh token"""
-    to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
-    to_encode.update({
-        "exp": expire,
-        "iat": datetime.now(timezone.utc),
-        "type": "refresh"
-    })
+    to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 # Include public routes - Import AFTER defining functions it needs
 from public_routes import router as public_router
 app.include_router(public_router, tags=["Public"])
-
-# Include Recall.ai routes
-from recallai_integration import router as recallai_router
-app.include_router(recallai_router, tags=["Recall.ai"])
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
     credentials_exception = HTTPException(
@@ -2016,47 +1731,20 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         user = db.query(User).filter(User.id == api_key.user_id).first()
         if user is None:
             raise credentials_exception
-
-        # Security check: verify user is still active
-        if not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="User account is inactive",
-            )
-
         return user
 
     # Otherwise, treat it as a JWT token
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-
-        # Verify it's an access token (not a refresh token)
-        if payload.get("type") == "refresh":
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Cannot use refresh token for authentication. Use access token instead.",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-
         email: str = payload.get("sub")
         if email is None:
             raise credentials_exception
-
-    except JWTError as e:
-        logger.warning(f"JWT validation failed: {str(e)}")
+    except JWTError:
         raise credentials_exception
 
     user = db.query(User).filter(User.email == email).first()
     if user is None:
         raise credentials_exception
-
-    # Additional security: check if user is still active
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User account is inactive",
-        )
-
     return user
 
 async def get_current_user_flexible(
@@ -2440,12 +2128,8 @@ def encrypt_token(token: str) -> str:
 
 def decrypt_token(encrypted_token: str) -> str:
     """Decrypt a stored token"""
-    try:
-        f = Fernet(get_encryption_key())
-        return f.decrypt(encrypted_token.encode()).decode()
-    except Exception as e:
-        logger.error(f"Token decryption failed: {e}")
-        raise ValueError(f"Failed to decrypt token: {str(e)}")
+    f = Fernet(get_encryption_key())
+    return f.decrypt(encrypted_token.encode()).decode()
 
 async def refresh_microsoft_token(oauth_record: MicrosoftOAuthToken, db: Session) -> bool:
     """Refresh an expired Microsoft access token"""
@@ -2497,21 +2181,12 @@ async def fetch_microsoft_emails(oauth_record: MicrosoftOAuthToken, db: Session,
     """Fetch emails from Microsoft Graph API"""
     try:
         # Check if token needs refresh
-        # Ensure token_expires_at is timezone-aware before comparison
-        token_expires = oauth_record.token_expires_at
-        if token_expires.tzinfo is None:
-            token_expires = token_expires.replace(tzinfo=timezone.utc)
-
-        if token_expires < datetime.now(timezone.utc) + timedelta(minutes=5):
+        if oauth_record.token_expires_at < datetime.now(timezone.utc) + timedelta(minutes=5):
             logger.info("Token expiring soon, refreshing...")
             if not await refresh_microsoft_token(oauth_record, db):
                 return {"error": "Failed to refresh token"}
 
-        try:
-            access_token = decrypt_token(oauth_record.access_token)
-        except Exception as decrypt_error:
-            logger.error(f"Failed to decrypt access token: {decrypt_error}")
-            return {"error": f"Token decryption failed: {str(decrypt_error)}"}
+        access_token = decrypt_token(oauth_record.access_token)
 
         # Microsoft Graph API endpoint
         folder = oauth_record.sync_folder or "Inbox"
@@ -2519,18 +2194,11 @@ async def fetch_microsoft_emails(oauth_record: MicrosoftOAuthToken, db: Session,
 
         # Get emails from last sync or last 7 days
         if oauth_record.last_sync_at:
-            # Ensure last_sync_at is timezone-aware and format for Microsoft Graph API
-            last_sync = oauth_record.last_sync_at
-            if last_sync.tzinfo is None:
-                last_sync = last_sync.replace(tzinfo=timezone.utc)
-            # Format with Z suffix for UTC (required by Microsoft Graph API)
-            filter_date = last_sync.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+            filter_date = oauth_record.last_sync_at.isoformat()
             graph_url += f"?$filter=receivedDateTime gt {filter_date}&$top={limit}&$orderby=receivedDateTime desc"
         else:
             # First sync - get last 7 days
-            seven_days_ago_dt = datetime.now(timezone.utc) - timedelta(days=7)
-            # Format with Z suffix for UTC (required by Microsoft Graph API)
-            seven_days_ago = seven_days_ago_dt.strftime('%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z'
+            seven_days_ago = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
             graph_url += f"?$filter=receivedDateTime gt {seven_days_ago}&$top={limit}&$orderby=receivedDateTime desc"
 
         headers = {
@@ -2553,41 +2221,13 @@ async def fetch_microsoft_emails(oauth_record: MicrosoftOAuthToken, db: Session,
             return {"emails": emails, "count": len(emails)}
         else:
             logger.error(f"Failed to fetch Microsoft emails: {response.status_code} - {response.text}")
-            # Include response details for better debugging
-            error_detail = response.text
-            try:
-                error_json = response.json()
-                error_detail = error_json.get("error", {}).get("message", response.text)
-            except:
-                pass
-            return {"error": f"Microsoft API error: {response.status_code} - {error_detail}"}
+            return {"error": f"Microsoft API error: {response.status_code}"}
 
     except Exception as e:
         logger.error(f"Error fetching Microsoft emails: {e}")
         return {"error": str(e)}
 
-def extract_rca_number(text: str) -> Optional[str]:
-    """
-    Extract RCA number from email content.
-    Pattern: RCA followed by exactly 10 digits
-    Example: RCA1234567890
-    """
-    import re
-    if not text:
-        return None
-
-    # Pattern: RCA followed by exactly 10 digits
-    pattern = r'RCA(\d{10})'
-    match = re.search(pattern, text, re.IGNORECASE)
-
-    if match:
-        rca_number = f"RCA{match.group(1)}"
-        logger.info(f"Found RCA number in email: {rca_number}")
-        return rca_number
-
-    return None
-
-async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Session, oauth_record: MicrosoftOAuthToken = None):
+async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Session):
     """Process a Microsoft Graph email and ingest into DRE"""
     try:
         # Extract email data
@@ -2595,17 +2235,11 @@ async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Ses
         sender = email_data.get("from", {}).get("emailAddress", {}).get("address", "")
         recipients = [r.get("emailAddress", {}).get("address", "") for r in email_data.get("toRecipients", [])]
         received_at = email_data.get("receivedDateTime", "")
-        message_id = email_data.get("id", "")  # Microsoft message ID
 
         # Get body content
         body = email_data.get("body", {})
         raw_html = body.get("content", "") if body.get("contentType") == "html" else None
         raw_text = body.get("content", "") if body.get("contentType") == "text" else None
-
-        # Check for RCA number in subject or body
-        content = raw_text or raw_html or ""
-        full_text = f"{subject} {content}"
-        rca_number = extract_rca_number(full_text)
 
         # Create incoming data event
         db_event = IncomingDataEvent(
@@ -2615,7 +2249,6 @@ async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Ses
             subject=subject,
             sender=sender,
             recipients=recipients,
-            microsoft_message_id=message_id,  # Store for deletion
             received_at=datetime.fromisoformat(received_at.replace('Z', '+00:00')) if received_at else datetime.now(timezone.utc),
             user_id=user_id,
             processed=False
@@ -2630,20 +2263,6 @@ async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Ses
         content = raw_text or raw_html or ""
         classification = classify_email_content(content, subject)
 
-        # Check if RCA number found - prioritize this for automatic matching
-        rca_match = None
-        if rca_number:
-            # Search for loan by RCA number
-            rca_match = db.query(Loan).filter(
-                Loan.loan_number == rca_number,
-                Loan.loan_officer_id == user_id
-            ).first()
-
-            if rca_match:
-                logger.info(f"Auto-matched email to loan {rca_match.id} via RCA number {rca_number}")
-            else:
-                logger.warning(f"RCA number {rca_number} found in email but no matching loan in database")
-
         if classification["category"] != "unrelated" and classification["confidence"] >= 0.5:
             fields = extract_loan_fields(content, classification["category"])
 
@@ -2651,23 +2270,13 @@ async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Ses
                 confidences = [field.get("confidence", 0.0) for field in fields.values()]
                 avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
 
-                # Override entity match if RCA number found and matched
-                if rca_match:
-                    entity_match = {
-                        "entity_type": "loan",
-                        "entity_id": rca_match.id,
-                        "confidence": 1.0  # Perfect match via RCA number
-                    }
-                    status = "auto_approved"  # Auto-approve emails with RCA numbers
-                    logger.info(f"Auto-approving email with RCA number {rca_number}")
-                else:
-                    entity_match = match_entity(fields, db, user_id)
+                entity_match = match_entity(fields, db, user_id)
 
-                    status = "pending_review"
-                    if avg_confidence > 0.85 and entity_match["confidence"] > 0.90:
-                        status = "auto_approved"
-                    elif avg_confidence < 0.60 or entity_match["confidence"] < 0.50:
-                        status = "needs_review"
+                status = "pending_review"
+                if avg_confidence > 0.85 and entity_match["confidence"] > 0.90:
+                    status = "auto_approved"
+                elif avg_confidence < 0.60 or entity_match["confidence"] < 0.50:
+                    status = "needs_review"
 
                 extracted = ExtractedData(
                     event_id=db_event.id,
@@ -2690,45 +2299,6 @@ async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Ses
                         extracted.status = "applied"
                         db.commit()
                         logger.info(f"Auto-applied extraction from email {db_event.id}")
-
-                # 🤖 TRIGGER AI: Email Processor Agent reviews and enhances
-                await trigger_ai_event(
-                    event_type="EmailProcessed",
-                    payload={
-                        "entity_type": "email",
-                        "entity_id": str(db_event.id),
-                        "extracted_id": str(extracted.id),
-                        "category": classification["category"],
-                        "confidence": avg_confidence,
-                        "match_entity_type": entity_match["entity_type"],
-                        "match_entity_id": str(entity_match["entity_id"]) if entity_match["entity_id"] else None,
-                        "status": status,
-                        "subject": subject,
-                        "sender": sender
-                    },
-                    db=db
-                )
-
-        # Delete email from inbox if auto-delete is enabled and processing was successful
-        if oauth_record and oauth_record.auto_delete_imported_emails and message_id and db_event.processed:
-            try:
-                # Import the graph client
-                from integrations.microsoft_graph import graph_client
-
-                # Get access token
-                access_token = decrypt_token(oauth_record.access_token)
-
-                # Delete the email from Microsoft inbox
-                deleted = await graph_client.delete_email(access_token, message_id)
-
-                if deleted:
-                    logger.info(f"✅ Auto-deleted email '{subject}' from inbox after importing to CRM")
-                else:
-                    logger.warning(f"⚠️ Failed to auto-delete email '{subject}' from inbox")
-
-            except Exception as delete_error:
-                # Don't fail the whole process if deletion fails
-                logger.error(f"❌ Error auto-deleting email '{subject}': {delete_error}")
 
         return {"status": "success", "event_id": db_event.id}
 
@@ -3219,42 +2789,6 @@ async def connect_microsoft365(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/v1/microsoft/oauth/start")
-async def start_microsoft_oauth(current_user: User = Depends(get_current_user)):
-    """
-    Initiates Microsoft 365 OAuth flow.
-    Returns URL for user to authorize access to their Microsoft 365 account.
-    """
-    client_id = os.getenv("MICROSOFT_CLIENT_ID")
-    tenant_id = os.getenv("MICROSOFT_TENANT_ID", "common")
-    redirect_uri = os.getenv("MICROSOFT_REDIRECT_URI")
-
-    if not client_id or not redirect_uri:
-        raise HTTPException(
-            status_code=500,
-            detail="Microsoft 365 integration not configured. Please set MICROSOFT_CLIENT_ID and MICROSOFT_REDIRECT_URI in environment variables."
-        )
-
-    # Create state parameter with user ID for security
-    import secrets
-    state = f"{current_user.id}_{secrets.token_urlsafe(16)}"
-
-    # Build Microsoft OAuth URL
-    auth_url = (
-        f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/authorize?"
-        f"client_id={client_id}&"
-        f"response_type=code&"
-        f"redirect_uri={redirect_uri}&"
-        f"response_mode=query&"
-        f"scope=offline_access%20Mail.Read%20Mail.ReadWrite%20Mail.Send%20User.Read%20Contacts.Read&"
-        f"state={state}"
-    )
-
-    return {
-        "auth_url": auth_url,
-        "message": "Redirect user to this URL to authorize Microsoft 365 access"
-    }
-
 @app.get("/api/v1/microsoft/status")
 async def get_microsoft_status(
     current_user: User = Depends(get_current_user),
@@ -3280,8 +2814,7 @@ async def get_microsoft_status(
             "sync_enabled": oauth_record.sync_enabled,
             "last_sync_at": oauth_record.last_sync_at,
             "sync_folder": oauth_record.sync_folder,
-            "sync_frequency_minutes": oauth_record.sync_frequency_minutes,
-            "auto_delete_imported_emails": oauth_record.auto_delete_imported_emails or False
+            "sync_frequency_minutes": oauth_record.sync_frequency_minutes
         }
 
     except Exception as e:
@@ -3347,7 +2880,7 @@ async def sync_microsoft_emails_now(
         processed_count = 0
 
         for email_data in emails:
-            process_result = await process_microsoft_email_to_dre(email_data, current_user.id, db, oauth_record)
+            process_result = await process_microsoft_email_to_dre(email_data, current_user.id, db)
             if process_result.get("status") == "success":
                 processed_count += 1
 
@@ -3393,9 +2926,6 @@ async def update_microsoft_settings(
             if settings.sync_frequency_minutes < 5 or settings.sync_frequency_minutes > 1440:
                 raise HTTPException(status_code=400, detail="Sync frequency must be between 5 and 1440 minutes")
             oauth_record.sync_frequency_minutes = settings.sync_frequency_minutes
-
-        if settings.auto_delete_imported_emails is not None:
-            oauth_record.auto_delete_imported_emails = settings.auto_delete_imported_emails
 
         oauth_record.updated_at = datetime.now(timezone.utc)
         db.commit()
@@ -3709,282 +3239,6 @@ async def create_microsoft_oauth_table(db: Session = Depends(get_db)):
             content={"status": "error", "message": str(e)}
         )
 
-@app.get("/admin/add-email-deletion-columns")
-async def add_email_deletion_columns(db: Session = Depends(get_db)):
-    """Admin endpoint to add email auto-deletion columns"""
-    try:
-        # Add auto_delete_imported_emails column to microsoft_oauth_tokens
-        logger.info("Adding auto_delete_imported_emails column...")
-        db.execute(text("""
-            ALTER TABLE microsoft_oauth_tokens
-            ADD COLUMN IF NOT EXISTS auto_delete_imported_emails BOOLEAN DEFAULT FALSE
-        """))
-
-        # Add microsoft_message_id column to incoming_data_events
-        logger.info("Adding microsoft_message_id column...")
-        db.execute(text("""
-            ALTER TABLE incoming_data_events
-            ADD COLUMN IF NOT EXISTS microsoft_message_id VARCHAR
-        """))
-
-        db.commit()
-
-        logger.info("✅ Email deletion columns added successfully")
-        return {
-            "status": "success",
-            "message": "Email auto-deletion columns added successfully",
-            "columns_added": [
-                "microsoft_oauth_tokens.auto_delete_imported_emails",
-                "incoming_data_events.microsoft_message_id"
-            ]
-        }
-    except Exception as e:
-        db.rollback()
-        logger.error(f"❌ Failed to add email deletion columns: {e}")
-        return JSONResponse(
-            status_code=500,
-            content={"status": "error", "message": str(e)}
-        )
-
-@app.get("/admin/add-process-type-to-calendar-mappings")
-async def add_process_type_to_calendar_mappings(db: Session = Depends(get_db)):
-    """Admin endpoint to add process_type column to calendar_mappings table"""
-    try:
-        logger.info("Adding process_type column to calendar_mappings...")
-
-        # Add process_type column
-        db.execute(text("""
-            ALTER TABLE calendar_mappings
-            ADD COLUMN IF NOT EXISTS process_type VARCHAR DEFAULT 'lead'
-        """))
-
-        # Set existing mappings to 'lead' for backward compatibility
-        db.execute(text("""
-            UPDATE calendar_mappings
-            SET process_type = 'lead'
-            WHERE process_type IS NULL
-        """))
-
-        db.commit()
-
-        logger.info("✅ Process type column added successfully")
-        return {
-            "status": "success",
-            "message": "Calendar mappings now support Lead, Loan, and MUM stages",
-            "changes": {
-                "column_added": "calendar_mappings.process_type",
-                "default_value": "lead",
-                "existing_mappings_updated": "All set to 'lead'"
-            }
-        }
-    except Exception as e:
-        db.rollback()
-        logger.error(f"❌ Failed to add process_type column: {e}")
-        return JSONResponse(
-            status_code=500,
-            content={"status": "error", "message": str(e)}
-        )
-
-@app.get("/admin/add-important-dates-columns")
-async def add_important_dates_columns(db: Session = Depends(get_db)):
-    """Admin endpoint to add important_dates JSON columns for AI date extraction"""
-    try:
-        logger.info("Adding important_dates columns...")
-
-        # Add important_dates to leads table
-        db.execute(text("""
-            ALTER TABLE leads
-            ADD COLUMN IF NOT EXISTS important_dates JSON
-        """))
-
-        # Add important_dates to loans table
-        db.execute(text("""
-            ALTER TABLE loans
-            ADD COLUMN IF NOT EXISTS important_dates JSON
-        """))
-
-        # Add important_dates to mum_clients table
-        db.execute(text("""
-            ALTER TABLE mum_clients
-            ADD COLUMN IF NOT EXISTS important_dates JSON
-        """))
-
-        db.commit()
-
-        logger.info("✅ Important dates columns added successfully")
-        return {
-            "status": "success",
-            "message": "AI Important Dates system enabled for all processes",
-            "changes": {
-                "tables_updated": ["leads", "loans", "mum_clients"],
-                "column_added": "important_dates (JSON)",
-                "date_categories": {
-                    "leads": 7,
-                    "loans": 15,
-                    "mum": 6
-                },
-                "total_date_types": 28
-            },
-            "next_steps": "AI will automatically extract dates from emails and trigger tasks"
-        }
-    except Exception as e:
-        db.rollback()
-        logger.error(f"❌ Failed to add important_dates columns: {e}")
-        return JSONResponse(
-            status_code=500,
-            content={"status": "error", "message": str(e)}
-        )
-
-@app.get("/admin/migrate-to-encrypted-fields")
-async def migrate_to_encrypted_fields_endpoint(db: Session = Depends(get_db)):
-    """
-    Admin endpoint to migrate sensitive fields to encrypted storage
-
-    IMPORTANT: This migration encrypts:
-    - Lead: annual_income, monthly_debts, credit_score
-    - Loan: amount, purchase_price, down_payment, rate
-
-    Required for GLBA and GDPR compliance
-    """
-    try:
-        from encryption_utils import encrypt_value
-
-        logger.info("=" * 60)
-        logger.info("STARTING ENCRYPTION MIGRATION VIA API")
-        logger.info("=" * 60)
-
-        # Phase 1: Add new encrypted columns
-        logger.info("\n📝 Phase 1: Adding new encrypted columns...")
-
-        db.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS annual_income_encrypted VARCHAR"))
-        db.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS monthly_debts_encrypted VARCHAR"))
-        db.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS credit_score_encrypted VARCHAR"))
-
-        db.execute(text("ALTER TABLE loans ADD COLUMN IF NOT EXISTS amount_encrypted VARCHAR"))
-        db.execute(text("ALTER TABLE loans ADD COLUMN IF NOT EXISTS purchase_price_encrypted VARCHAR"))
-        db.execute(text("ALTER TABLE loans ADD COLUMN IF NOT EXISTS down_payment_encrypted VARCHAR"))
-        db.execute(text("ALTER TABLE loans ADD COLUMN IF NOT EXISTS rate_encrypted VARCHAR"))
-
-        logger.info("✅ New columns added")
-
-        # Phase 2: Encrypt and migrate data
-        logger.info("\n🔐 Phase 2: Encrypting data...")
-
-        # Encrypt Lead records
-        leads_result = db.execute(text("SELECT id, annual_income, monthly_debts, credit_score FROM leads"))
-        leads = leads_result.fetchall()
-        lead_count = 0
-
-        for lead in leads:
-            lead_id, annual_income, monthly_debts, credit_score = lead
-
-            encrypted_income = encrypt_value(str(annual_income)) if annual_income is not None else None
-            encrypted_debts = encrypt_value(str(monthly_debts)) if monthly_debts is not None else None
-            encrypted_score = encrypt_value(str(credit_score)) if credit_score is not None else None
-
-            db.execute(text("""
-                UPDATE leads
-                SET annual_income_encrypted = :income,
-                    monthly_debts_encrypted = :debts,
-                    credit_score_encrypted = :score
-                WHERE id = :id
-            """), {
-                "income": encrypted_income,
-                "debts": encrypted_debts,
-                "score": encrypted_score,
-                "id": lead_id
-            })
-            lead_count += 1
-
-        # Encrypt Loan records
-        loans_result = db.execute(text("SELECT id, amount, purchase_price, down_payment, rate FROM loans"))
-        loans = loans_result.fetchall()
-        loan_count = 0
-
-        for loan in loans:
-            loan_id, amount, purchase_price, down_payment, rate = loan
-
-            encrypted_amount = encrypt_value(str(amount)) if amount is not None else None
-            encrypted_price = encrypt_value(str(purchase_price)) if purchase_price is not None else None
-            encrypted_down = encrypt_value(str(down_payment)) if down_payment is not None else None
-            encrypted_rate = encrypt_value(str(rate)) if rate is not None else None
-
-            db.execute(text("""
-                UPDATE loans
-                SET amount_encrypted = :amount,
-                    purchase_price_encrypted = :price,
-                    down_payment_encrypted = :down,
-                    rate_encrypted = :rate
-                WHERE id = :id
-            """), {
-                "amount": encrypted_amount,
-                "price": encrypted_price,
-                "down": encrypted_down,
-                "rate": encrypted_rate,
-                "id": loan_id
-            })
-            loan_count += 1
-
-        logger.info(f"  ✓ Encrypted {lead_count} leads, {loan_count} loans")
-
-        # Phase 3: Replace old columns
-        logger.info("\n🗑️  Phase 3: Replacing columns...")
-
-        # Lead columns
-        db.execute(text("ALTER TABLE leads DROP COLUMN IF EXISTS annual_income"))
-        db.execute(text("ALTER TABLE leads RENAME COLUMN annual_income_encrypted TO annual_income"))
-
-        db.execute(text("ALTER TABLE leads DROP COLUMN IF EXISTS monthly_debts"))
-        db.execute(text("ALTER TABLE leads RENAME COLUMN monthly_debts_encrypted TO monthly_debts"))
-
-        db.execute(text("ALTER TABLE leads DROP COLUMN IF EXISTS credit_score"))
-        db.execute(text("ALTER TABLE leads RENAME COLUMN credit_score_encrypted TO credit_score"))
-
-        # Loan columns
-        db.execute(text("ALTER TABLE loans DROP COLUMN IF EXISTS amount"))
-        db.execute(text("ALTER TABLE loans RENAME COLUMN amount_encrypted TO amount"))
-
-        db.execute(text("ALTER TABLE loans DROP COLUMN IF EXISTS purchase_price"))
-        db.execute(text("ALTER TABLE loans RENAME COLUMN purchase_price_encrypted TO purchase_price"))
-
-        db.execute(text("ALTER TABLE loans DROP COLUMN IF EXISTS down_payment"))
-        db.execute(text("ALTER TABLE loans RENAME COLUMN down_payment_encrypted TO down_payment"))
-
-        db.execute(text("ALTER TABLE loans DROP COLUMN IF EXISTS rate"))
-        db.execute(text("ALTER TABLE loans RENAME COLUMN rate_encrypted TO rate"))
-
-        db.commit()
-
-        logger.info("✅ Migration completed successfully!")
-
-        return {
-            "status": "success",
-            "message": "Sensitive data encrypted successfully",
-            "summary": {
-                "leads_encrypted": lead_count,
-                "loans_encrypted": loan_count,
-                "total_records": lead_count + loan_count,
-                "encrypted_fields": [
-                    "leads.annual_income",
-                    "leads.monthly_debts",
-                    "leads.credit_score",
-                    "loans.amount",
-                    "loans.purchase_price",
-                    "loans.down_payment",
-                    "loans.rate"
-                ]
-            },
-            "compliance": "GLBA and GDPR compliant - data encrypted at rest"
-        }
-
-    except Exception as e:
-        db.rollback()
-        logger.error(f"❌ Encryption migration failed: {e}")
-        return JSONResponse(
-            status_code=500,
-            content={"status": "error", "message": str(e)}
-        )
-
 @app.post("/admin/create-zapier-api-key")
 async def create_zapier_api_key(db: Session = Depends(get_db)):
     """Admin endpoint to create the Zapier API key for integration"""
@@ -4052,53 +3306,16 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Create both access and refresh tokens
-    token_data = {"sub": user.email, "user_id": user.id}
-    access_token = create_access_token(data=token_data)
-    refresh_token = create_refresh_token(data=token_data)
-
+    access_token = create_access_token(data={"sub": user.email})
     return {
         "access_token": access_token,
-        "refresh_token": refresh_token,
         "token_type": "bearer",
-        "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # seconds
         "user": {
             "email": user.email,
             "full_name": user.full_name,
             "role": user.role
         }
     }
-
-@app.post("/token/refresh")
-async def refresh_access_token(refresh_token: str, db: Session = Depends(get_db)):
-    """Refresh access token using refresh token"""
-    try:
-        payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
-
-        # Verify it's a refresh token
-        if payload.get("type") != "refresh":
-            raise HTTPException(status_code=401, detail="Invalid token type")
-
-        email: str = payload.get("sub")
-        if email is None:
-            raise HTTPException(status_code=401, detail="Invalid token")
-
-        # Verify user still exists and is active
-        user = db.query(User).filter(User.email == email).first()
-        if not user or not user.is_active:
-            raise HTTPException(status_code=401, detail="User not found or inactive")
-
-        # Create new access token
-        token_data = {"sub": user.email, "user_id": user.id}
-        new_access_token = create_access_token(data=token_data)
-
-        return {
-            "access_token": new_access_token,
-            "token_type": "bearer",
-            "expires_in": ACCESS_TOKEN_EXPIRE_MINUTES * 60
-        }
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid or expired refresh token")
 
 @app.get("/api/v1/users/me")
 async def get_current_user_info(current_user: User = Depends(get_current_user)):
@@ -4285,16 +3502,6 @@ async def delete_user(
 
     return {"message": "User deleted successfully"}
 
-@app.get("/api/v1/health-check")
-async def health_check():
-    """Health check endpoint to verify deployment version"""
-    return {
-        "status": "healthy",
-        "commit": "7981c99",
-        "timestamp": "2025-11-10T18:41:33Z"
-    }
-
-
 # ============================================================================
 # DASHBOARD
 # ============================================================================
@@ -4305,7 +3512,7 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     Get dashboard data with real metrics from database.
     All values are server-computed from CRM database.
     """
-    from datetime import date, datetime, timedelta, timezone
+    from datetime import date, timedelta
     from sqlalchemy import func, extract
 
     # Get current date ranges
@@ -4326,28 +3533,24 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     annual_actual = db.query(func.count(Loan.id)).filter(
         Loan.loan_officer_id == current_user.id,
         Loan.stage == LoanStage.FUNDED,
-        Loan.funded_date.isnot(None),
         extract('year', Loan.funded_date) == today.year
     ).scalar() or 0
 
     monthly_actual = db.query(func.count(Loan.id)).filter(
         Loan.loan_officer_id == current_user.id,
         Loan.stage == LoanStage.FUNDED,
-        Loan.funded_date.isnot(None),
         Loan.funded_date >= start_of_month
     ).scalar() or 0
 
     weekly_actual = db.query(func.count(Loan.id)).filter(
         Loan.loan_officer_id == current_user.id,
         Loan.stage == LoanStage.FUNDED,
-        Loan.funded_date.isnot(None),
         Loan.funded_date >= start_of_week
     ).scalar() or 0
 
     daily_actual = db.query(func.count(Loan.id)).filter(
         Loan.loan_officer_id == current_user.id,
         Loan.stage == LoanStage.FUNDED,
-        Loan.funded_date.isnot(None),
         Loan.funded_date == today
     ).scalar() or 0
 
@@ -4440,7 +3643,7 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     ).all()
 
     underwriting_volume = sum(loan.amount for loan in underwriting if loan.amount)
-    underwriting_alerts = sum(1 for loan in underwriting if loan.sla_status == "suspended")
+    underwriting_alerts = sum(1 for loan in underwriting if loan.status == "suspended")
 
     pipeline_stats.append({
         "id": "underwriting",
@@ -4472,7 +3675,6 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     funded = db.query(Loan).filter(
         Loan.loan_officer_id == current_user.id,
         Loan.stage == LoanStage.FUNDED,
-        Loan.funded_date.isnot(None),
         Loan.funded_date >= start_of_month
     ).all()
 
@@ -4494,7 +3696,6 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     tasks_today = db.query(Task).filter(
         Task.owner_id == current_user.id,
         Task.status.in_(["pending", "in_progress"]),
-        Task.due_date.isnot(None),
         Task.due_date <= today + timedelta(days=1)
     ).order_by(Task.priority.desc(), Task.due_date).limit(10).all()
 
@@ -4520,7 +3721,7 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     hot_leads = db.query(func.count(Lead.id)).filter(
         Lead.owner_id == current_user.id,
         Lead.ai_score >= 80,
-        Lead.stage.in_([LeadStage.NEW, LeadStage.ATTEMPTED_CONTACT, LeadStage.PROSPECT])
+        Lead.stage.in_([LeadStage.NEW, LeadStage.CONTACTED])
     ).scalar() or 0
 
     # Calculate conversion rate (leads -> applications)
@@ -4542,7 +3743,7 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     high_intent_leads = db.query(func.count(Lead.id)).filter(
         Lead.owner_id == current_user.id,
         Lead.ai_score >= 75,
-        Lead.stage == LeadStage.PROSPECT
+        Lead.stage == LeadStage.CONTACTED
     ).scalar() or 0
 
     if high_intent_leads > 0:
@@ -4561,6 +3762,7 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     # ============================================================================
 
     partners = db.query(ReferralPartner).filter(
+        ReferralPartner.owner_id == current_user.id,
         ReferralPartner.status == "active"
     ).limit(5).all()
 
@@ -4590,125 +3792,22 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     }
 
     # ============================================================================
-    # AI TASKS
-    # ============================================================================
-
-    # Get AI tasks for the current user
-    ai_tasks_pending = db.query(AITask).filter(
-        AITask.assigned_to_id == current_user.id,
-        AITask.type == TaskType.AWAITING_REVIEW
-    ).order_by(AITask.created_at.desc()).limit(10).all()
-
-    ai_tasks_waiting = db.query(AITask).filter(
-        AITask.assigned_to_id == current_user.id,
-        AITask.type == TaskType.HUMAN_NEEDED
-    ).order_by(AITask.created_at.desc()).limit(10).all()
-
-    ai_tasks = {
-        "pending": [{
-            "id": task.id,
-            "task": task.title,
-            "confidence": task.ai_confidence or 85,
-            "what_ai_did": task.suggested_action or task.description
-        } for task in ai_tasks_pending],
-        "waiting": [{
-            "id": task.id,
-            "task": task.title,
-            "urgency": task.priority,
-            "reason": task.ai_reasoning or task.description
-        } for task in ai_tasks_waiting]
-    }
-
-    # ============================================================================
     # MESSAGES (placeholder for now)
     # ============================================================================
 
     messages = []
 
-    try:
-        return {
-            "prioritized_tasks": prioritized_tasks,
-            "pipeline_stats": pipeline_stats,
-            "production": production,
-            "lead_metrics": lead_metrics,
-            "loan_issues": [],
-            "ai_tasks": ai_tasks,
-            "referral_stats": referral_stats,
-            "team_stats": team_stats,
-            "messages": messages
-        }
-    except Exception as e:
-        import traceback
-        return {
-            "error": str(e),
-            "traceback": traceback.format_exc(),
-            "type": type(e).__name__
-        }
-
-# ============================================================================
-# DEBUG ENDPOINT - TEMPORARY
-# ============================================================================
-
-@app.get("/api/v1/dashboard-debug")
-async def get_dashboard_debug(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Temporary debug endpoint to test dashboard sections"""
-    import traceback
-    results = {}
-
-    try:
-        from datetime import date, timedelta
-        from sqlalchemy import func, extract
-
-        today = date.today()
-        start_of_month = today.replace(day=1)
-        results["step1"] = "imports_ok"
-
-        # Test production metrics
-        user_metadata = current_user.user_metadata or {}
-        goals = user_metadata.get('goals', {})
-        annual_actual = db.query(func.count(Loan.id)).filter(
-            Loan.loan_officer_id == current_user.id,
-            Loan.stage == LoanStage.FUNDED,
-            Loan.funded_date.isnot(None),
-            extract('year', Loan.funded_date) == today.year
-        ).scalar() or 0
-        results["step2_production"] = f"annual_actual={annual_actual}"
-
-        # Test pipeline stats
-        new_leads = db.query(func.count(Lead.id)).filter(
-            Lead.owner_id == current_user.id,
-            Lead.stage == LeadStage.NEW
-        ).scalar() or 0
-        results["step3_pipeline"] = f"new_leads={new_leads}"
-
-        # Test tasks
-        tasks_today = db.query(Task).filter(
-            Task.owner_id == current_user.id,
-            Task.status.in_(["pending", "in_progress"]),
-            Task.due_date <= today + timedelta(days=1)
-        ).order_by(Task.priority.desc(), Task.due_date).limit(10).all()
-        results["step4_tasks"] = f"tasks_count={len(tasks_today)}"
-
-        # Test prioritized_tasks list comprehension
-        prioritized_tasks = [{
-            "title": task.title,
-            "borrower": task.related_contact_name,
-            "stage": task.related_type,
-            "urgency": task.priority,
-            "ai_action": None
-        } for task in tasks_today]
-        results["step5_prioritized"] = f"prioritized_count={len(prioritized_tasks)}"
-
-        return {"status": "all_ok", "results": results}
-
-    except Exception as e:
-        return {
-            "status": "error",
-            "results": results,
-            "error": str(e),
-            "type": type(e).__name__,
-            "traceback": traceback.format_exc()
-        }
+    return {
+        "prioritized_tasks": prioritized_tasks,
+        "pipeline_stats": pipeline_stats,
+        "production": production,
+        "lead_metrics": lead_metrics,
+        "loan_issues": [],
+        "ai_tasks": {"pending": [], "waiting": []},
+        "referral_stats": referral_stats,
+        "team_stats": team_stats,
+        "messages": messages
+    }
 
 # ============================================================================
 # LOAN SCORECARD REPORT
@@ -5034,23 +4133,6 @@ async def create_lead(lead: LeadCreate, db: Session = Depends(get_db), current_u
     db.refresh(db_lead)
 
     logger.info(f"Lead created: {db_lead.name} (Score: {db_lead.ai_score})")
-
-    # 🤖 TRIGGER AI: Lead Management Agent will qualify and assign
-    await trigger_ai_event(
-        event_type="LeadCreated",
-        payload={
-            "entity_type": "lead",
-            "entity_id": str(db_lead.id),
-            "first_name": db_lead.first_name,
-            "last_name": db_lead.last_name,
-            "email": db_lead.email,
-            "phone": db_lead.phone,
-            "source": db_lead.source,
-            "ai_score": db_lead.ai_score
-        },
-        db=db
-    )
-
     return db_lead
 
 @app.get("/api/v1/leads/", response_model=List[LeadResponse])
@@ -5058,16 +4140,10 @@ async def get_leads(
     skip: int = 0,
     limit: int = 100,
     stage: Optional[str] = None,
-    show_all: bool = True,  # Changed default to True to show all leads
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_flexible)
 ):
-    # Show all leads by default (for CRM team view), or filter by owner
-    if show_all:
-        query = db.query(Lead)
-    else:
-        query = db.query(Lead).filter(Lead.owner_id == current_user.id)
-
+    query = db.query(Lead).filter(Lead.owner_id == current_user.id)
     if stage:
         try:
             stage_enum = LeadStage(stage)
@@ -5080,16 +4156,14 @@ async def get_leads(
 
 @app.get("/api/v1/leads/{lead_id}", response_model=LeadResponse)
 async def get_lead(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
-    # Allow viewing any lead (team view), not just owned leads
-    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    lead = db.query(Lead).filter(Lead.id == lead_id, Lead.owner_id == current_user.id).first()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
     return lead
 
 @app.patch("/api/v1/leads/{lead_id}", response_model=LeadResponse)
 async def update_lead(lead_id: int, lead_update: LeadUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
-    # Allow updating any lead (team view), not just owned leads
-    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    lead = db.query(Lead).filter(Lead.id == lead_id, Lead.owner_id == current_user.id).first()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
@@ -5117,178 +4191,6 @@ async def delete_lead(lead_id: int, db: Session = Depends(get_db), current_user:
     return None
 
 # ============================================================================
-# BUYER INTAKE (PUBLIC ENDPOINT)
-# ============================================================================
-
-@app.post("/api/v1/buyer-intake", status_code=201)
-async def submit_buyer_intake(payload: dict, db: Session = Depends(get_db)):
-    """
-    Public endpoint for buyer intake form submission.
-    No authentication required - creates a lead from buyer application.
-    """
-    try:
-        # Get the first user (admin) to assign the lead to
-        # Try to find a user with email containing "demo" or just get the first user
-        default_user = db.query(User).filter(User.email.like('%demo%')).first()
-        if not default_user:
-            default_user = db.query(User).first()
-        if not default_user:
-            raise HTTPException(status_code=500, detail="No users found in system")
-
-        logger.info(f"Assigning buyer intake lead to user: {default_user.email}")
-
-        # Extract contact info
-        contact = payload.get("contact", {})
-        first_name = contact.get("first_name", "")
-        last_name = contact.get("last_name", "")
-        email = contact.get("email", "")
-        phone = contact.get("phone", "")
-
-        # Extract scenario
-        scenario = payload.get("scenario", {})
-        occupancy = scenario.get("occupancy", "")
-        timeframe = scenario.get("timeframe", "")
-        location = scenario.get("location", "")
-
-        # Extract budget
-        budget = payload.get("budget", {})
-        price_target = budget.get("price_target", 0)
-        down_payment_value = budget.get("down_payment_value", 0)
-        down_payment_type = budget.get("down_payment_type", "%")
-        monthly_comfort = budget.get("monthly_comfort")
-
-        # Extract profile
-        profile = payload.get("profile", {})
-        credit_range = profile.get("credit_range", "")
-        first_time_buyer = profile.get("first_time_buyer", False)
-        va_eligible = profile.get("va_eligible", False)
-        employment_type = profile.get("employment_type", "")
-        household_income = profile.get("household_income")
-        liquid_assets = profile.get("liquid_assets")
-        self_employed = profile.get("self_employed", False)
-        date_of_birth = profile.get("date_of_birth")
-        ssn = profile.get("ssn")
-        employer = profile.get("employer")
-        years_with_employer = profile.get("years_with_employer")
-
-        # Extract co-borrower
-        coborrower = payload.get("coborrower")
-        co_applicant_name = None
-        if coborrower:
-            co_first = coborrower.get("first_name", "")
-            co_last = coborrower.get("last_name", "")
-            if co_first or co_last:
-                co_applicant_name = f"{co_first} {co_last}".strip()
-
-        # Extract partners
-        partners = payload.get("partners", {})
-        agent_name = partners.get("agent_name") if partners else None
-        agent_email = partners.get("agent_email") if partners else None
-
-        # Extract preferences and consents
-        preferences = payload.get("preferences", {})
-        consents = payload.get("consents", {})
-        notes = payload.get("notes", "")
-
-        # Calculate down payment amount for storage
-        if down_payment_type == "%":
-            down_payment_amount = (down_payment_value / 100) * price_target if down_payment_value else 0
-        else:
-            down_payment_amount = down_payment_value
-
-        # Determine loan type based on profile
-        loan_type = "Conventional"
-        if va_eligible:
-            loan_type = "VA"
-        elif first_time_buyer and price_target < 500000:
-            loan_type = "FHA"
-
-        # Create lead with mapped fields
-        new_lead = Lead(
-            # Contact Info
-            name=f"{first_name} {last_name}".strip(),
-            email=email,
-            phone=phone,
-            co_applicant_name=co_applicant_name,
-
-            # Stage and Source
-            stage=LeadStage.NEW,
-            source="Buyer Intake Form",
-
-            # Loan Details
-            loan_type=loan_type,
-            loan_amount=price_target,
-            preapproval_amount=price_target,
-            property_value=price_target,
-            down_payment=down_payment_amount,
-
-            # Financial Info
-            annual_income=household_income,
-            employment_status=employment_type,
-            first_time_buyer=first_time_buyer,
-
-            # Property Info
-            property_type=occupancy,
-
-            # Notes
-            notes=notes,
-
-            # Owner
-            owner_id=default_user.id,
-
-            # Store all additional data in user_metadata
-            user_metadata={
-                "buyer_intake": {
-                    "contact": contact,
-                    "scenario": scenario,
-                    "budget": budget,
-                    "profile": profile,
-                    "coborrower": coborrower,
-                    "partners": partners,
-                    "preferences": preferences,
-                    "consents": consents,
-                    "submitted_at": datetime.now(timezone.utc).isoformat(),
-                    "credit_range": credit_range,
-                    "timeframe": timeframe,
-                    "location": location,
-                    "monthly_comfort": monthly_comfort,
-                    "liquid_assets": liquid_assets,
-                    "self_employed": self_employed,
-                    "agent_name": agent_name,
-                    "agent_email": agent_email,
-                    "va_eligible": va_eligible,
-                    "date_of_birth": date_of_birth,
-                    "ssn_last_4": ssn[-4:] if ssn and len(ssn) >= 4 else None,
-                    "employer": employer,
-                    "years_with_employer": years_with_employer,
-                }
-            }
-        )
-
-        # Calculate AI score
-        new_lead.ai_score = calculate_lead_score(new_lead)
-        new_lead.sentiment = "positive" if new_lead.ai_score >= 75 else "neutral" if new_lead.ai_score >= 50 else "needs-attention"
-        new_lead.next_action = f"Contact within {timeframe} - Buyer interested in {occupancy}"
-
-        db.add(new_lead)
-        db.commit()
-        db.refresh(new_lead)
-
-        logger.info(f"✅ Buyer intake submitted: {new_lead.name} - {email} (Lead ID: {new_lead.id}, Owner: {default_user.email}, Score: {new_lead.ai_score})")
-
-        return {
-            "success": True,
-            "lead_id": new_lead.id,
-            "owner_email": default_user.email,
-            "message": "Thank you! Your information has been received. We'll contact you soon."
-        }
-
-    except Exception as e:
-        logger.error(f"Buyer intake error: {e}")
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error processing intake: {str(e)}")
-
-# ============================================================================
 # LOANS CRUD
 # ============================================================================
 
@@ -5299,30 +4201,7 @@ async def create_loan(loan: LoanCreate, db: Session = Depends(get_db), current_u
         if existing:
             raise HTTPException(status_code=400, detail="Loan number already exists")
 
-        # Convert LoanCreate fields to Loan model fields
-        loan_data = loan.dict(exclude_unset=True)
-
-        # Initialize user_metadata if not exists
-        if not loan_data.get('user_metadata'):
-            loan_data['user_metadata'] = {}
-
-        # Map field names from API to database model
-        if 'product_type' in loan_data:
-            loan_data['program'] = loan_data.pop('product_type')
-        if 'interest_rate' in loan_data:
-            loan_data['rate'] = loan_data.pop('interest_rate')
-
-        # Store additional borrower/property fields in user_metadata
-        metadata_fields = [
-            'borrower_email', 'borrower_phone',
-            'property_city', 'property_state', 'property_zip',
-            'notes'
-        ]
-        for field in metadata_fields:
-            if field in loan_data:
-                loan_data['user_metadata'][field] = loan_data.pop(field)
-
-        db_loan = Loan(**loan_data, loan_officer_id=current_user.id)
+        db_loan = Loan(**loan.dict(), loan_officer_id=current_user.id)
         db_loan.ai_insights = generate_ai_insights(db_loan)
 
         db.add(db_loan)
@@ -5370,9 +4249,6 @@ async def update_loan(loan_id: int, loan_update: LoanUpdate, db: Session = Depen
     if not loan:
         raise HTTPException(status_code=404, detail="Loan not found")
 
-    # Capture old stage for AI event
-    old_stage = loan.stage if hasattr(loan, 'stage') else None
-
     for key, value in loan_update.dict(exclude_unset=True).items():
         setattr(loan, key, value)
 
@@ -5382,23 +4258,6 @@ async def update_loan(loan_id: int, loan_update: LoanUpdate, db: Session = Depen
     db.commit()
     db.refresh(loan)
     logger.info(f"Loan updated: {loan.loan_number}")
-
-    # 🤖 TRIGGER AI: Pipeline Manager monitors stage changes
-    new_stage = loan.stage if hasattr(loan, 'stage') else None
-    if old_stage and new_stage and old_stage != new_stage:
-        await trigger_ai_event(
-            event_type="LoanStageChanged",
-            payload={
-                "entity_type": "loan",
-                "entity_id": str(loan.id),
-                "loan_number": loan.loan_number,
-                "old_stage": str(old_stage),
-                "new_stage": str(new_stage),
-                "borrower_name": f"{loan.borrower_first_name} {loan.borrower_last_name}"
-            },
-            db=db
-        )
-
     return loan
 
 @app.delete("/api/v1/loans/{loan_id}", status_code=204)
@@ -5739,48 +4598,10 @@ async def create_referral_partner(partner: ReferralPartnerCreate, db: Session = 
     logger.info(f"Referral partner created: {db_partner.name}")
     return db_partner
 
-@app.get("/api/v1/referral-partners/")
+@app.get("/api/v1/referral-partners/", response_model=List[ReferralPartnerResponse])
 async def get_referral_partners(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     partners = db.query(ReferralPartner).order_by(ReferralPartner.created_at.desc()).offset(skip).limit(limit).all()
-
-    # Add member_count for teams
-    result = []
-    for partner in partners:
-        partner_dict = {
-            "id": partner.id,
-            "name": partner.name,
-            "company": partner.company,
-            "type": partner.type,
-            "phone": partner.phone,
-            "email": partner.email,
-            "referrals_in": partner.referrals_in,
-            "referrals_out": partner.referrals_out,
-            "closed_loans": partner.closed_loans,
-            "volume": partner.volume,
-            "reciprocity_score": partner.reciprocity_score,
-            "status": partner.status,
-            "loyalty_tier": partner.loyalty_tier,
-            "last_interaction": partner.last_interaction.isoformat() if partner.last_interaction else None,
-            "notes": partner.notes,
-            "partner_category": getattr(partner, "partner_category", "individual") or "individual",
-            "parent_team_id": getattr(partner, "parent_team_id", None),
-            "created_at": partner.created_at.isoformat() if partner.created_at else None,
-            "member_count": 0
-        }
-
-        # If this is a team, count its members (only if parent_team_id column exists)
-        if hasattr(partner, "partner_category") and partner.partner_category == "team" and hasattr(ReferralPartner, "parent_team_id"):
-            try:
-                member_count = db.query(ReferralPartner).filter(
-                    ReferralPartner.parent_team_id == partner.id
-                ).count()
-                partner_dict["member_count"] = member_count
-            except:
-                pass  # Column doesn't exist yet in database
-
-        result.append(partner_dict)
-
-    return result
+    return partners
 
 @app.get("/api/v1/referral-partners/{partner_id}", response_model=ReferralPartnerResponse)
 async def get_referral_partner(partner_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -5788,59 +4609,6 @@ async def get_referral_partner(partner_id: int, db: Session = Depends(get_db), c
     if not partner:
         raise HTTPException(status_code=404, detail="Referral partner not found")
     return partner
-
-@app.get("/api/v1/referral-partners/{team_id}/members")
-async def get_team_members(team_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """
-    Get all members of a team.
-    Only works if the partner is a team (partner_category='team')
-    """
-    # Check if team hierarchy columns exist
-    if not hasattr(ReferralPartner, "parent_team_id"):
-        raise HTTPException(status_code=501, detail="Team hierarchy feature not available - database migration required")
-
-    # Verify the team exists and is actually a team
-    team = db.query(ReferralPartner).filter(ReferralPartner.id == team_id).first()
-    if not team:
-        raise HTTPException(status_code=404, detail="Team not found")
-
-    if getattr(team, "partner_category", "individual") != "team":
-        raise HTTPException(status_code=400, detail="This partner is not a team")
-
-    # Get all members
-    try:
-        members = db.query(ReferralPartner).filter(
-            ReferralPartner.parent_team_id == team_id
-        ).order_by(ReferralPartner.name).all()
-    except:
-        # Column doesn't exist in database yet
-        return []
-
-    result = []
-    for member in members:
-        result.append({
-            "id": member.id,
-            "name": member.name,
-            "company": member.company,
-            "type": member.type,
-            "phone": member.phone,
-            "email": member.email,
-            "referrals_in": member.referrals_in,
-            "referrals_out": member.referrals_out,
-            "closed_loans": member.closed_loans,
-            "volume": member.volume,
-            "reciprocity_score": member.reciprocity_score,
-            "status": member.status,
-            "loyalty_tier": member.loyalty_tier,
-            "last_interaction": member.last_interaction.isoformat() if member.last_interaction else None,
-            "notes": member.notes,
-            "partner_category": getattr(member, "partner_category", "individual") or "individual",
-            "parent_team_id": getattr(member, "parent_team_id", None),
-            "created_at": member.created_at.isoformat() if member.created_at else None,
-            "member_count": 0
-        })
-
-    return result
 
 @app.patch("/api/v1/referral-partners/{partner_id}", response_model=ReferralPartnerResponse)
 async def update_referral_partner(partner_id: int, partner_update: ReferralPartnerUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -6372,7 +5140,7 @@ async def get_scorecard_metrics(db: Session = Depends(get_db), current_user: Use
     # Calculate loan type distribution from real data
     loan_types = {}
     for loan in funded_loans:
-        loan_type = loan.program or "Conventional"
+        loan_type = loan.product_type or "Conventional"
         if loan_type not in loan_types:
             loan_types[loan_type] = {"count": 0, "volume": 0}
         loan_types[loan_type]["count"] += 1
@@ -6463,86 +5231,81 @@ async def get_scorecard_metrics(db: Session = Depends(get_db), current_user: Use
         "funded": funded_count
     }
 
-    # Determine status based on goal achievement
-    def get_status(current_pct, goal_pct):
-        if current_pct >= goal_pct:
-            return "good"
-        elif current_pct >= goal_pct * 0.75:
-            return "warning"
-        else:
-            return "critical"
-
-    # Calculate period dates (YTD)
-    start_of_year = datetime(current_year, 1, 1)
-    now = datetime.now()
-
     return {
-        "conversion_metrics": [
+        "conversionMetrics": [
             {
-                "metric": "Starts to Apps (LE)",
-                "total": total_leads,
+                "id": "starts-to-apps",
+                "title": "Starts to Apps (LE)",
+                "value": conversion_metrics["starts_to_apps"],
+                "goal": 75,
                 "current": app_started,
-                "mot_pct": conversion_metrics["starts_to_apps"],
-                "goal_pct": 75,
-                "status": get_status(conversion_metrics["starts_to_apps"], 75)
-            },
-            {
-                "metric": "Apps (LE) to Funded",
-                "total": app_started,
-                "current": funded_count,
-                "mot_pct": conversion_metrics["apps_to_funded"],
-                "goal_pct": 80,
-                "status": get_status(conversion_metrics["apps_to_funded"], 80)
-            },
-            {
-                "metric": "Starts to Funded Pull-thru",
                 "total": total_leads,
-                "current": funded_count,
-                "mot_pct": conversion_metrics["starts_to_funded"],
-                "goal_pct": 50,
-                "status": get_status(conversion_metrics["starts_to_funded"], 50)
+                "isPercentage": True
             },
             {
-                "metric": "Credit Pull to Funded",
-                "total": pre_approved,
+                "id": "apps-to-funded",
+                "title": "Apps (LE) to Funded",
+                "value": conversion_metrics["apps_to_funded"],
+                "goal": 80,
                 "current": funded_count,
-                "mot_pct": conversion_metrics["credit_to_funded"],
-                "goal_pct": 70,
-                "status": get_status(conversion_metrics["credit_to_funded"], 70)
+                "total": app_started,
+                "isPercentage": True
+            },
+            {
+                "id": "starts-to-funded",
+                "title": "Starts to Funded Pull-thru",
+                "value": conversion_metrics["starts_to_funded"],
+                "goal": 50,
+                "current": funded_count,
+                "total": total_leads,
+                "isPercentage": True
+            },
+            {
+                "id": "credit-to-funded",
+                "title": "Credit Pull to Funded",
+                "value": conversion_metrics["credit_to_funded"],
+                "goal": 70,
+                "current": funded_count,
+                "total": pre_approved,
+                "isPercentage": True
             }
         ],
-        "conversion_upswing": {
-            "current_starts": total_leads,
-            "current_pull_thru_pct": conversion_metrics["starts_to_funded"],
-            "target_pull_thru_pct": round(conversion_metrics["starts_to_funded"] * 1.10, 1),  # 10% improvement
-            "current_avg_amount": avg_loan_amount,
-            "target_avg_amount": avg_loan_amount * 1.10,  # 10% higher
-            "current_volume": total_volume,
-            "volume_increase": total_volume * 0.10,  # 10% increase potential
-            "current_bps": 185,  # Average basis points
-            "target_bps": 200,  # Target basis points
-            "current_compensation": commission_earned,
-            "additional_compensation": total_volume * 0.10 * 0.02  # 10% more volume at 200 bps
-        },
-        "funding_totals": {
-            "total_units": funded_count,
-            "total_volume": total_volume,
-            "avg_loan_amount": avg_loan_amount,
-            "loan_types": loan_type_distribution,
-            "referral_sources": [
-                {
-                    "source": item["source"],
-                    "referrals": item["referrals"],
-                    "closed_volume": item["closedVolume"]
-                }
-                for item in referral_sources_list
-            ]
-        },
-        "period": {
-            "start_date": start_of_year.isoformat(),
-            "end_date": now.isoformat()
-        },
-        "generated_at": now.isoformat()
+        "volumeRevenue": [
+            {
+                "id": "total-loans",
+                "title": "Total Loans",
+                "value": volume_revenue["total_loans"],
+                "subtitle": "Year to Date"
+            },
+            {
+                "id": "total-volume",
+                "title": "Total Volume",
+                "value": f"${volume_revenue['total_volume']:,.0f}",
+                "subtitle": "Year to Date"
+            },
+            {
+                "id": "referrals",
+                "title": "Referrals",
+                "value": volume_revenue["referrals"],
+                "subtitle": "Active Referral Partners"
+            },
+            {
+                "id": "commission",
+                "title": "Commission Earned",
+                "value": f"${volume_revenue['commission_earned']:,.0f}",
+                "subtitle": "Year to Date"
+            },
+            {
+                "id": "portfolio-value",
+                "title": "Portfolio Value",
+                "value": f"${volume_revenue['portfolio_value']:,.0f}",
+                "subtitle": "Total Active Loans"
+            }
+        ],
+        "loanTypes": loan_type_distribution,
+        "referralSources": referral_sources_list,
+        "processTimeline": process_timeline,
+        "pipelineStatus": pipeline_status
     }
 
 # ============================================================================
@@ -7444,29 +6207,6 @@ def init_db():
                         CREATE INDEX IF NOT EXISTS ix_api_keys_key ON api_keys(key);
                     """))
 
-                    # Add ProcessTask new columns if they don't exist
-                    conn.execute(text("""
-                        DO $$
-                        BEGIN
-                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='process_tasks' AND column_name='assigned_user_id') THEN
-                                ALTER TABLE process_tasks ADD COLUMN assigned_user_id INTEGER REFERENCES users(id);
-                            END IF;
-                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='process_tasks' AND column_name='status') THEN
-                                ALTER TABLE process_tasks ADD COLUMN status VARCHAR DEFAULT 'pending';
-                            END IF;
-                        END $$;
-                    """))
-
-                    # Add partner_category column to referral_partners if it doesn't exist
-                    conn.execute(text("""
-                        DO $$
-                        BEGIN
-                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='partner_category') THEN
-                                ALTER TABLE referral_partners ADD COLUMN partner_category VARCHAR DEFAULT 'individual';
-                            END IF;
-                        END $$;
-                    """))
-
                     conn.commit()
                     logger.info("✅ Schema migrations applied (PostgreSQL)")
         except Exception as e:
@@ -8002,7 +6742,7 @@ async def disconnect_email(
 # EMAIL INTEGRATION - HELPER FUNCTIONS
 # ============================================================================
 
-async def refresh_microsoft_token(user_id: int, db: Session) -> Optional[str]:
+async def refresh_microsoft_token_by_user(user_id: int, db: Session) -> Optional[str]:
     """
     Refresh an expired Microsoft access token using refresh token.
     Returns new access token or None if refresh fails.
@@ -8064,589 +6804,59 @@ async def get_valid_access_token(user_id: int, db: Session) -> Optional[str]:
         time_until_expiry = token_record.expires_at - datetime.now(timezone.utc)
         if time_until_expiry.total_seconds() < 300:  # Less than 5 minutes
             # Try to refresh
-            new_token = await refresh_microsoft_token(user_id, db)
+            new_token = await refresh_microsoft_token_by_user(user_id, db)
             return new_token if new_token else token_record.access_token
 
     return token_record.access_token
 
 # ============================================================================
-# SALESFORCE INTEGRATION
-# ============================================================================
-
-from integrations.salesforce_service import salesforce_client
-
-@app.get("/api/v1/salesforce/oauth/start")
-async def start_salesforce_oauth(current_user: User = Depends(get_current_user)):
-    """
-    Initiates Salesforce OAuth flow for CRM integration.
-    Returns URL for user to authorize access to Salesforce.
-    """
-    if not salesforce_client.enabled:
-        raise HTTPException(status_code=500, detail="Salesforce API not configured")
-
-    # Store user ID in state parameter to retrieve after callback
-    state = f"{current_user.id}_{secrets.token_urlsafe(32)}"
-
-    # Get Salesforce authorization URL
-    auth_url = salesforce_client.get_authorization_url(state)
-
-    return {
-        "auth_url": auth_url,
-        "message": "Redirect user to this URL to authorize Salesforce access"
-    }
-
-@app.get("/api/v1/salesforce/oauth/callback")
-async def salesforce_oauth_callback(code: str, state: str, db: Session = Depends(get_db)):
-    """
-    OAuth callback endpoint. Salesforce redirects here after user authorizes.
-    Exchanges authorization code for access token and stores it.
-    """
-    try:
-        # Extract user ID from state parameter
-        user_id = int(state.split("_")[0])
-
-        # Exchange code for tokens
-        token_data = salesforce_client.exchange_code_for_token(code)
-
-        if not token_data:
-            raise HTTPException(status_code=500, detail="Failed to exchange code for token")
-
-        # Calculate token expiration (Salesforce tokens don't expire by default,
-        # but we'll set a reasonable time for refresh)
-        expires_at = datetime.now(timezone.utc) + timedelta(days=90)  # Refresh every 90 days
-
-        # Store or update tokens in database
-        existing_token = db.query(SalesforceToken).filter(
-            SalesforceToken.user_id == user_id
-        ).first()
-
-        if existing_token:
-            existing_token.access_token = token_data["access_token"]
-            existing_token.refresh_token = token_data.get("refresh_token")
-            existing_token.instance_url = token_data.get("instance_url")
-            existing_token.token_type = token_data.get("token_type", "Bearer")
-            existing_token.expires_at = expires_at
-            existing_token.updated_at = datetime.now(timezone.utc)
-        else:
-            new_token = SalesforceToken(
-                user_id=user_id,
-                access_token=token_data["access_token"],
-                refresh_token=token_data.get("refresh_token"),
-                instance_url=token_data.get("instance_url"),
-                token_type=token_data.get("token_type", "Bearer"),
-                expires_at=expires_at,
-                scope="api refresh_token offline_access"
-            )
-            db.add(new_token)
-
-        db.commit()
-        logger.info(f"✅ Salesforce connected for user {user_id}")
-
-        # Redirect back to settings page with success message
-        return RedirectResponse(
-            url="https://mortgage-crm-nine.vercel.app/settings?salesforce=connected",
-            status_code=302
-        )
-
-    except Exception as e:
-        logger.error(f"❌ Salesforce OAuth callback error: {e}")
-        return RedirectResponse(
-            url="https://mortgage-crm-nine.vercel.app/settings?salesforce=error",
-            status_code=302
-        )
-
-@app.get("/api/v1/salesforce/status")
-async def get_salesforce_connection_status(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Check if user has connected their Salesforce and if token is valid.
-    """
-    token = db.query(SalesforceToken).filter(
-        SalesforceToken.user_id == current_user.id
-    ).first()
-
-    if not token:
-        return {
-            "connected": False,
-            "message": "Salesforce not connected"
-        }
-
-    # Check if token is expired (if we had an expiration, but SF tokens don't expire)
-    is_expired = False
-    if token.expires_at and token.expires_at < datetime.now(timezone.utc):
-        is_expired = True
-
-    return {
-        "connected": True,
-        "instance_url": token.instance_url,
-        "expires_at": token.expires_at.isoformat() if token.expires_at else None,
-        "is_expired": is_expired,
-        "connected_at": token.created_at.isoformat()
-    }
-
-@app.delete("/api/v1/salesforce/disconnect")
-async def disconnect_salesforce(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Disconnect Salesforce integration by deleting stored tokens.
-    """
-    token = db.query(SalesforceToken).filter(
-        SalesforceToken.user_id == current_user.id
-    ).first()
-
-    if token:
-        # Attempt to revoke the token with Salesforce
-        salesforce_client.revoke_token(token.access_token)
-
-        # Delete from database
-        db.delete(token)
-        db.commit()
-        logger.info(f"Salesforce disconnected for user {current_user.id}")
-
-    return {"message": "Salesforce disconnected successfully"}
-
-# ============================================================================
-# SMS / TWILIO INTEGRATION
-# ============================================================================
-
-from integrations.twilio_service import sms_client, SMSTemplates
-
-class SMSSendRequest(BaseModel):
-    to_number: str
-    message: str
-    lead_id: Optional[int] = None
-    loan_id: Optional[int] = None
-    template: Optional[str] = None
-
-class SMSBulkRequest(BaseModel):
-    recipients: List[Dict[str, str]]  # [{"phone": "+1234567890", "name": "John"}]
-    message_template: str
-
-class SMSResponse(BaseModel):
-    id: int
-    to_number: str
-    from_number: str
-    message: str
-    direction: str
-    status: str
-    twilio_sid: Optional[str]
-    created_at: datetime
-    class Config:
-        from_attributes = True
-
-@app.post("/api/v1/sms/send", response_model=SMSResponse, status_code=201)
-async def send_sms(
-    sms_request: SMSSendRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Send SMS message to a single recipient"""
-    if not sms_client.enabled:
-        raise HTTPException(status_code=503, detail="SMS service not configured")
-
-    # Send via Twilio
-    twilio_sid = await sms_client.send_sms(
-        to_number=sms_request.to_number,
-        message=sms_request.message
-    )
-
-    # Save to database
-    db_sms = SMSMessage(
-        user_id=current_user.id,
-        lead_id=sms_request.lead_id,
-        loan_id=sms_request.loan_id,
-        to_number=sms_request.to_number,
-        from_number=sms_client.from_number,
-        message=sms_request.message,
-        direction="outbound",
-        status="sent" if twilio_sid else "failed",
-        twilio_sid=twilio_sid,
-        template_used=sms_request.template,
-        error_message=None if twilio_sid else "Failed to send SMS"
-    )
-    db.add(db_sms)
-    db.commit()
-    db.refresh(db_sms)
-
-    # Create activity if linked to lead
-    if sms_request.lead_id:
-        activity = Activity(
-            user_id=current_user.id,
-            lead_id=sms_request.lead_id,
-            loan_id=sms_request.loan_id,
-            type=ActivityType.SMS,
-            description=f"Sent SMS: {sms_request.message[:100]}...",
-            metadata={"sms_id": db_sms.id, "to": sms_request.to_number}
-        )
-        db.add(activity)
-
-        # Update last contact
-        lead = db.query(Lead).filter(Lead.id == sms_request.lead_id).first()
-        if lead:
-            lead.last_contact = datetime.now(timezone.utc)
-
-        db.commit()
-
-    logger.info(f"SMS sent to {sms_request.to_number}")
-    return db_sms
-
-@app.post("/api/v1/sms/send-bulk")
-async def send_bulk_sms(
-    bulk_request: SMSBulkRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Send SMS to multiple recipients"""
-    if not sms_client.enabled:
-        raise HTTPException(status_code=503, detail="SMS service not configured")
-
-    results = await sms_client.send_bulk_sms(
-        recipients=bulk_request.recipients,
-        message_template=bulk_request.message_template
-    )
-
-    # Save all messages to database
-    for recipient in bulk_request.recipients:
-        phone = recipient.get("phone")
-        name = recipient.get("name", "")
-        message = bulk_request.message_template.replace("{name}", name) if name else bulk_request.message_template
-
-        db_sms = SMSMessage(
-            user_id=current_user.id,
-            to_number=phone,
-            from_number=sms_client.from_number,
-            message=message,
-            direction="outbound",
-            status="sent"
-        )
-        db.add(db_sms)
-
-    db.commit()
-
-    logger.info(f"Bulk SMS sent: {results['sent']} succeeded, {results['failed']} failed")
-    return {
-        "sent": results["sent"],
-        "failed": results["failed"],
-        "total": len(bulk_request.recipients)
-    }
-
-@app.get("/api/v1/sms/history", response_model=List[SMSResponse])
-async def get_sms_history(
-    skip: int = 0,
-    limit: int = 50,
-    lead_id: Optional[int] = None,
-    loan_id: Optional[int] = None,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Get SMS message history"""
-    query = db.query(SMSMessage).filter(SMSMessage.user_id == current_user.id)
-
-    if lead_id:
-        query = query.filter(SMSMessage.lead_id == lead_id)
-    if loan_id:
-        query = query.filter(SMSMessage.loan_id == loan_id)
-
-    messages = query.order_by(SMSMessage.created_at.desc()).offset(skip).limit(limit).all()
-    return messages
-
-@app.get("/api/v1/sms/templates")
-async def get_sms_templates(current_user: User = Depends(get_current_user)):
-    """Get available SMS templates"""
-    return {
-        "templates": [
-            {
-                "id": "welcome",
-                "name": "Welcome Message",
-                "template": SMSTemplates.welcome_message("{name}", current_user.full_name),
-                "variables": ["name"]
-            },
-            {
-                "id": "status_update",
-                "name": "Status Update",
-                "template": SMSTemplates.status_update("{name}", "{status}"),
-                "variables": ["name", "status"]
-            },
-            {
-                "id": "appointment_reminder",
-                "name": "Appointment Reminder",
-                "template": SMSTemplates.appointment_reminder("{name}", "{time}"),
-                "variables": ["name", "time"]
-            },
-            {
-                "id": "document_request",
-                "name": "Document Request",
-                "template": SMSTemplates.document_request("{name}", "{document}"),
-                "variables": ["name", "document"]
-            },
-            {
-                "id": "closing_congratulations",
-                "name": "Closing Congratulations",
-                "template": SMSTemplates.closing_congratulations("{name}"),
-                "variables": ["name"]
-            }
-        ]
-    }
-
-@app.get("/api/v1/sms/status")
-async def get_sms_status(current_user: User = Depends(get_current_user)):
-    """Check if SMS service is enabled and configured"""
-    return {
-        "enabled": sms_client.enabled,
-        "configured": bool(sms_client.account_sid and sms_client.from_number),
-        "from_number": sms_client.from_number if sms_client.enabled else None
-    }
-
-# ============================================================================
-# MICROSOFT TEAMS INTEGRATION
-# ============================================================================
-
-class TeamsMeetingRequest(BaseModel):
-    """Request model for creating Teams meeting"""
-    subject: str
-    start_time: str  # ISO 8601 format: "2025-11-12T10:00:00"
-    duration_minutes: int
-    attendees: List[str] = []
-    lead_id: Optional[int] = None
-    notes: Optional[str] = None
-
-
-class TeamsMeetingResponse(BaseModel):
-    """Response model for Teams meeting"""
-    id: str
-    subject: str
-    start_time: str
-    end_time: str
-    join_url: Optional[str]
-    web_link: str
-    meeting_id: str
-
-
-def get_microsoft_access_token():
-    """Get Microsoft Graph API access token"""
-    if not msal_app:
-        raise HTTPException(
-            status_code=503,
-            detail="Microsoft Teams integration not configured"
-        )
-
-    try:
-        # Try to get cached token
-        result = msal_app.acquire_token_silent(MICROSOFT_SCOPE, account=None)
-
-        # If no cached token, get a new one
-        if not result:
-            result = msal_app.acquire_token_for_client(scopes=MICROSOFT_SCOPE)
-
-        if "access_token" not in result:
-            error_description = result.get("error_description", "Unknown error")
-            raise HTTPException(
-                status_code=503,
-                detail=f"Failed to authenticate with Microsoft: {error_description}"
-            )
-
-        return result["access_token"]
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Microsoft authentication error: {str(e)}"
-        )
-
-
-@app.post("/api/v1/teams/create-meeting", response_model=TeamsMeetingResponse)
-async def create_teams_meeting(
-    request: TeamsMeetingRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Create a Microsoft Teams meeting
-
-    This endpoint:
-    1. Authenticates with Microsoft Graph API
-    2. Creates a calendar event with Teams meeting
-    3. Returns the meeting details including join URL
-
-    Requires environment variables:
-    - MICROSOFT_CLIENT_ID
-    - MICROSOFT_CLIENT_SECRET
-    - MICROSOFT_TENANT_ID
-    """
-
-    # Get access token
-    access_token = get_microsoft_access_token()
-
-    # Parse start time
-    try:
-        start_dt = datetime.fromisoformat(request.start_time.replace('Z', '+00:00'))
-    except ValueError:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid start_time format. Use ISO 8601 format: YYYY-MM-DDTHH:MM:SS"
-        )
-
-    # Calculate end time
-    end_dt = start_dt + timedelta(minutes=request.duration_minutes)
-
-    # Build attendees list
-    attendees_list = []
-    for email in request.attendees:
-        if email.strip():  # Only add non-empty emails
-            attendees_list.append({
-                "emailAddress": {
-                    "address": email.strip(),
-                    "name": email.strip().split('@')[0]  # Use email prefix as name
-                },
-                "type": "required"
-            })
-
-    # Build meeting body
-    meeting_body_html = f"<div>{request.notes or ''}</div>"
-    if request.lead_id:
-        meeting_body_html += f"<p><strong>Lead ID:</strong> {request.lead_id}</p>"
-
-    # Build meeting request for Microsoft Graph
-    meeting_data = {
-        "subject": request.subject,
-        "start": {
-            "dateTime": start_dt.strftime("%Y-%m-%dT%H:%M:%S"),
-            "timeZone": "UTC"
-        },
-        "end": {
-            "dateTime": end_dt.strftime("%Y-%m-%dT%H:%M:%S"),
-            "timeZone": "UTC"
-        },
-        "isOnlineMeeting": True,
-        "onlineMeetingProvider": "teamsForBusiness",
-        "attendees": attendees_list,
-        "body": {
-            "contentType": "HTML",
-            "content": meeting_body_html
-        },
-        "allowNewTimeProposals": True
-    }
-
-    # Create calendar event with Teams meeting
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json"
-    }
-
-    try:
-        response = requests.post(
-            f"{MICROSOFT_GRAPH_ENDPOINT}/me/events",
-            json=meeting_data,
-            headers=headers,
-            timeout=30
-        )
-
-        if response.status_code != 201:
-            error_data = response.json() if response.content else {}
-            error_message = error_data.get("error", {}).get("message", "Unknown error")
-            raise HTTPException(
-                status_code=response.status_code,
-                detail=f"Failed to create Teams meeting: {error_message}"
-            )
-
-        meeting_result = response.json()
-
-        # Extract meeting details
-        online_meeting = meeting_result.get("onlineMeeting", {})
-        join_url = online_meeting.get("joinUrl")
-
-        # Create activity if linked to lead
-        if request.lead_id:
-            activity = Activity(
-                user_id=current_user.id,
-                lead_id=request.lead_id,
-                type=ActivityType.MEETING,
-                description=f"Teams Meeting Scheduled: {request.subject}",
-                metadata={
-                    "meeting_id": meeting_result["id"],
-                    "join_url": join_url,
-                    "start_time": request.start_time,
-                    "duration": request.duration_minutes
-                }
-            )
-            db.add(activity)
-            db.commit()
-
-        logger.info(f"Teams meeting created: {meeting_result['id']}")
-
-        return TeamsMeetingResponse(
-            id=meeting_result["id"],
-            subject=meeting_result["subject"],
-            start_time=meeting_result["start"]["dateTime"],
-            end_time=meeting_result["end"]["dateTime"],
-            join_url=join_url,
-            web_link=meeting_result.get("webLink", ""),
-            meeting_id=online_meeting.get("conferenceId", "")
-        )
-
-    except requests.RequestException as e:
-        raise HTTPException(
-            status_code=503,
-            detail=f"Network error creating Teams meeting: {str(e)}"
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error creating Teams meeting: {str(e)}"
-        )
-
-
-@app.get("/api/v1/teams/status")
-async def check_teams_status(current_user: User = Depends(get_current_user)):
-    """
-    Check Microsoft Teams integration status
-    Returns whether Teams integration is configured and working
-    """
-
-    status = {
-        "configured": False,
-        "msal_available": MSAL_AVAILABLE,
-        "client_id_set": bool(MICROSOFT_CLIENT_ID),
-        "client_secret_set": bool(MICROSOFT_CLIENT_SECRET),
-        "tenant_id_set": bool(MICROSOFT_TENANT_ID),
-        "message": ""
-    }
-
-    if not MSAL_AVAILABLE:
-        status["message"] = "MSAL library not installed. Run: pip install msal"
-        return status
-
-    if not all([MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET, MICROSOFT_TENANT_ID]):
-        missing = []
-        if not MICROSOFT_CLIENT_ID:
-            missing.append("MICROSOFT_CLIENT_ID")
-        if not MICROSOFT_CLIENT_SECRET:
-            missing.append("MICROSOFT_CLIENT_SECRET")
-        if not MICROSOFT_TENANT_ID:
-            missing.append("MICROSOFT_TENANT_ID")
-
-        status["message"] = f"Missing environment variables: {', '.join(missing)}"
-        return status
-
-    # Try to get access token to verify configuration
-    try:
-        token = get_microsoft_access_token()
-        if token:
-            status["configured"] = True
-            status["message"] = "Microsoft Teams integration is configured and ready"
-    except Exception as e:
-        status["message"] = f"Configuration error: {str(e)}"
-
-    return status
-
-# ============================================================================
 # CALENDLY INTEGRATION
 # ============================================================================
-# OLD CALENDLY ENDPOINT REMOVED - Now using per-user API key from database (see line 8556)
+
+@app.get("/api/v1/calendly/event-types")
+async def get_calendly_event_types(current_user: User = Depends(get_current_user)):
+    """
+    Get user's Calendly event types (available meeting types).
+    Uses Calendly Personal Access Token to fetch event types.
+    """
+    calendly_token = os.getenv("CALENDLY_API_TOKEN")
+    if not calendly_token:
+        raise HTTPException(status_code=500, detail="Calendly API not configured")
+
+    try:
+        # First, get the current user's URI
+        headers = {
+            "Authorization": f"Bearer {calendly_token}",
+            "Content-Type": "application/json"
+        }
+
+        # Get current user info
+        user_response = requests.get(
+            "https://api.calendly.com/users/me",
+            headers=headers
+        )
+        user_response.raise_for_status()
+        user_data = user_response.json()
+        user_uri = user_data["resource"]["uri"]
+
+        # Get event types for this user
+        event_types_response = requests.get(
+            f"https://api.calendly.com/event_types",
+            headers=headers,
+            params={"user": user_uri}
+        )
+        event_types_response.raise_for_status()
+        event_types_data = event_types_response.json()
+
+        return {
+            "event_types": event_types_data.get("collection", []),
+            "count": event_types_data.get("pagination", {}).get("count", 0)
+        }
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Calendly API error: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch event types: {str(e)}")
+
 
 @app.post("/api/v1/calendly/scheduling-link")
 async def create_scheduling_link(
@@ -8727,30 +6937,7 @@ async def calendly_webhook(request: Request, db: Session = Depends(get_db)):
     3. Subscribe to events: invitee.created, invitee.canceled
     """
     try:
-        # Verify webhook signature
-        webhook_key = os.getenv("CALENDLY_WEBHOOK_KEY")
-        body = await request.body()
-
-        if webhook_key:
-            signature = request.headers.get("Calendly-Webhook-Signature")
-
-            # Calendly uses HMAC-SHA256 for webhook signatures
-            import hmac
-            import hashlib
-
-            expected_signature = hmac.new(
-                webhook_key.encode('utf-8'),
-                body,
-                hashlib.sha256
-            ).hexdigest()
-
-            if signature != expected_signature:
-                logger.warning("Invalid Calendly webhook signature")
-                raise HTTPException(status_code=401, detail="Invalid webhook signature")
-
-        # Parse JSON payload
-        import json
-        payload = json.loads(body.decode('utf-8'))
+        payload = await request.json()
         event_type = payload.get("event")
 
         logger.info(f"Calendly webhook received: {event_type}")
@@ -8830,112 +7017,6 @@ async def calendly_webhook(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/v1/calendly/connect")
-async def connect_calendly(
-    request: dict,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Save Calendly API key for the current user
-    """
-    api_key = request.get("api_key")
-
-    if not api_key:
-        raise HTTPException(status_code=400, detail="api_key is required")
-
-    # Strip whitespace and newlines from API key
-    api_key = api_key.strip().replace('\n', '').replace('\r', '')
-
-    if not api_key:
-        raise HTTPException(status_code=400, detail="api_key is required")
-
-    # Check if connection already exists
-    existing = db.query(CalendlyConnection).filter(
-        CalendlyConnection.user_id == current_user.id
-    ).first()
-
-    if existing:
-        # Update existing connection
-        existing.api_key = api_key
-        existing.updated_at = datetime.now(timezone.utc)
-        db.commit()
-        return {"message": "Calendly connection updated", "status": "connected"}
-    else:
-        # Create new connection
-        connection = CalendlyConnection(
-            user_id=current_user.id,
-            api_key=api_key
-        )
-        db.add(connection)
-        db.commit()
-        return {"message": "Calendly connected successfully", "status": "connected"}
-
-
-@app.get("/api/v1/calendly/event-types")
-async def get_calendly_event_types(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Fetch Calendly event types using the stored API key
-    """
-    # Get user's Calendly connection
-    connection = db.query(CalendlyConnection).filter(
-        CalendlyConnection.user_id == current_user.id
-    ).first()
-
-    if not connection:
-        raise HTTPException(status_code=404, detail="Calendly not connected. Please connect your Calendly account first.")
-
-    # Clean the API key (strip whitespace and newlines)
-    api_key = connection.api_key.strip().replace('\n', '').replace('\r', '')
-
-    try:
-        # Get user info from Calendly to get the user URI
-        user_response = requests.get(
-            "https://api.calendly.com/users/me",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json"
-            }
-        )
-
-        if user_response.status_code != 200:
-            raise HTTPException(status_code=401, detail="Invalid Calendly API key")
-
-        user_data = user_response.json()
-        user_uri = user_data.get("resource", {}).get("uri")
-
-        if not user_uri:
-            raise HTTPException(status_code=500, detail="Could not get user URI from Calendly")
-
-        # Fetch event types
-        event_types_response = requests.get(
-            "https://api.calendly.com/event_types",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json"
-            },
-            params={
-                "user": user_uri,
-                "active": "true"
-            }
-        )
-
-        if event_types_response.status_code != 200:
-            raise HTTPException(status_code=500, detail="Failed to fetch event types from Calendly")
-
-        event_types_data = event_types_response.json()
-        event_types = event_types_data.get("collection", [])
-
-        return {"event_types": event_types, "count": len(event_types)}
-
-    except requests.exceptions.RequestException as e:
-        logger.error(f"Calendly API error: {e}")
-        raise HTTPException(status_code=500, detail="Failed to connect to Calendly API")
-
-
 @app.post("/api/v1/calendly/calendar-mappings")
 async def create_calendar_mapping(
     request: dict,
@@ -8943,13 +7024,9 @@ async def create_calendar_mapping(
     db: Session = Depends(get_db)
 ):
     """
-    Map any stage from any process (Lead, Loan, MUM) to a Calendly event type.
-
-    Example: map "New" lead stage to "Discovery Call" event type
-    Example: map "CTC" loan stage to "Pre-Closing Call" event type
-    Example: map "annual_review" MUM stage to "Annual Review Call" event type
+    Map a lead stage to a Calendly event type.
+    Example: map "new" stage to "Discovery Call" event type
     """
-    process_type = request.get("process_type", "lead")  # Default to "lead" for backward compatibility
     stage = request.get("stage")
     event_type_uuid = request.get("event_type_uuid")
     event_type_name = request.get("event_type_name")
@@ -8958,14 +7035,9 @@ async def create_calendar_mapping(
     if not all([stage, event_type_uuid, event_type_name]):
         raise HTTPException(status_code=400, detail="stage, event_type_uuid, and event_type_name required")
 
-    # Validate process_type
-    if process_type not in ["lead", "loan", "mum"]:
-        raise HTTPException(status_code=400, detail="process_type must be 'lead', 'loan', or 'mum'")
-
-    # Check if mapping already exists for this process_type + stage combination
+    # Check if mapping already exists
     existing = db.query(CalendarMapping).filter(
         CalendarMapping.user_id == current_user.id,
-        CalendarMapping.process_type == process_type,
         CalendarMapping.stage == stage
     ).first()
 
@@ -8976,12 +7048,11 @@ async def create_calendar_mapping(
         existing.event_type_url = event_type_url
         existing.is_active = True
         db.commit()
-        return {"message": f"Calendar mapping updated for {process_type} stage '{stage}'", "mapping_id": existing.id}
+        return {"message": "Calendar mapping updated", "mapping_id": existing.id}
     else:
         # Create new mapping
         mapping = CalendarMapping(
             user_id=current_user.id,
-            process_type=process_type,
             stage=stage,
             event_type_uuid=event_type_uuid,
             event_type_name=event_type_name,
@@ -8989,7 +7060,7 @@ async def create_calendar_mapping(
         )
         db.add(mapping)
         db.commit()
-        return {"message": f"Calendar mapping created for {process_type} stage '{stage}'", "mapping_id": mapping.id}
+        return {"message": "Calendar mapping created", "mapping_id": mapping.id}
 
 
 @app.get("/api/v1/calendly/calendar-mappings")
@@ -9007,7 +7078,6 @@ async def get_calendar_mappings(
         "mappings": [
             {
                 "id": m.id,
-                "process_type": m.process_type or "lead",  # Default to "lead" for backward compatibility
                 "stage": m.stage,
                 "event_type_uuid": m.event_type_uuid,
                 "event_type_name": m.event_type_name,
@@ -9015,45 +7085,6 @@ async def get_calendar_mappings(
             }
             for m in mappings
         ]
-    }
-
-@app.get("/api/v1/calendly/available-stages")
-async def get_available_stages(current_user: User = Depends(get_current_user)):
-    """
-    Get all available stages from all processes (Leads, Active Loans, MUM)
-    for calendar event mapping
-    """
-    return {
-        "stages": {
-            "lead": {
-                "label": "Lead Pipeline",
-                "description": "Stages for new leads and prospects",
-                "stages": [
-                    {"value": stage.value, "label": stage.value}
-                    for stage in LeadStage
-                ]
-            },
-            "loan": {
-                "label": "Active Loan Pipeline",
-                "description": "Stages for loans in progress",
-                "stages": [
-                    {"value": stage.value, "label": stage.value}
-                    for stage in LoanStage
-                ]
-            },
-            "mum": {
-                "label": "Post-Close / MUM",
-                "description": "Mortgages Under Management (closed loans)",
-                "stages": [
-                    {"value": "new_client", "label": "New Client (Just Closed)"},
-                    {"value": "active", "label": "Active (Regular Touch Points)"},
-                    {"value": "opportunity", "label": "Refinance Opportunity"},
-                    {"value": "annual_review", "label": "Annual Review"},
-                    {"value": "retention", "label": "Retention Campaign"},
-                    {"value": "referral_source", "label": "Referral Source"}
-                ]
-            }
-        }
     }
 
 
@@ -9614,240 +7645,6 @@ def parse_document_basic(document_content: str, document_name: str = None):
         "tasks": tasks
     }
 
-@app.post("/api/v1/onboarding/parse-documents-upload")
-async def parse_documents_upload(
-    files: List[UploadFile] = File(...),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Parse multiple uploaded documents (PDF, DOCX, TXT) and extract roles, milestones, and tasks.
-    Each document is parsed separately to extract its role/tasks, then combined into one process tree.
-    """
-    try:
-        # Import libraries for reading different file types
-        try:
-            import PyPDF2
-            import io
-            from docx import Document as DocxDocument
-        except ImportError as e:
-            logger.error(f"Missing required library for document parsing: {e}")
-            raise HTTPException(status_code=500, detail="Server missing document parsing libraries. Please contact support.")
-
-        # Clear existing parsed data for this user
-        db.query(ProcessTask).filter(ProcessTask.user_id == current_user.id).delete()
-        db.query(ProcessMilestone).filter(ProcessMilestone.user_id == current_user.id).delete()
-        db.query(ProcessRole).filter(ProcessRole.user_id == current_user.id).delete()
-        db.commit()
-
-        all_roles = []
-        all_milestones = []
-        all_tasks = []
-
-        # Process each uploaded file separately
-        for file_idx, file in enumerate(files):
-            logger.info(f"Processing file {file_idx + 1}/{len(files)}: {file.filename}")
-
-            # Read file content based on type
-            file_content = await file.read()
-            document_text = ""
-
-            if file.filename.endswith('.pdf'):
-                # Read PDF
-                try:
-                    pdf_reader = PyPDF2.PdfReader(io.BytesIO(file_content))
-                    for page in pdf_reader.pages:
-                        document_text += page.extract_text() + "\n"
-                except Exception as e:
-                    logger.error(f"Failed to read PDF {file.filename}: {e}")
-                    continue
-
-            elif file.filename.endswith(('.docx', '.doc')):
-                # Read DOCX
-                try:
-                    doc = DocxDocument(io.BytesIO(file_content))
-                    for paragraph in doc.paragraphs:
-                        document_text += paragraph.text + "\n"
-                except Exception as e:
-                    logger.error(f"Failed to read DOCX {file.filename}: {e}")
-                    continue
-
-            elif file.filename.endswith('.txt'):
-                # Read TXT
-                try:
-                    document_text = file_content.decode('utf-8')
-                except Exception as e:
-                    logger.error(f"Failed to read TXT {file.filename}: {e}")
-                    continue
-
-            else:
-                logger.warning(f"Unsupported file type: {file.filename}")
-                continue
-
-            if not document_text.strip():
-                logger.warning(f"No text extracted from {file.filename}")
-                continue
-
-            # Use the improved AI prompt for each document
-            analysis_prompt = f"""
-            Analyze this document and identify the PRIMARY role/position being described.
-
-            IMPORTANT: This is ONE document describing ONE person's role.
-            - Extract ONLY the primary role that owns the described responsibilities
-            - Do NOT extract other roles that are merely mentioned or referenced
-            - Focus on the actual responsibilities and tasks of this PRIMARY role
-
-            Document name: "{file.filename}"
-
-            Extract:
-            1. The PRIMARY role with full responsibility descriptions
-            2. Major workflow stages/milestones that this role goes through
-            3. Specific tasks the PRIMARY role performs in each stage
-
-            For the role, provide:
-            - role_name: Short identifier from filename (e.g., "application_analysis", "processor")
-            - role_title: Display name from document (e.g., "Application Analysis", "Loan Processor")
-            - responsibilities: Detailed description from the document
-            - skills_required: List of skills needed
-            - key_activities: List of activities performed
-
-            For each milestone, provide:
-            - name: Stage/phase name
-            - description: What happens in this stage
-            - sequence_order: Order in workflow (0, 1, 2...)
-            - estimated_duration: Estimated hours
-
-            For each task, provide:
-            - milestone: Which workflow stage it belongs to
-            - role: The role_name responsible
-            - task_name: Specific task name
-            - task_description: What the task involves
-            - sequence_order: Order within stage
-            - estimated_duration: Minutes to complete
-            - sla: Service level agreement in hours
-            - ai_automatable: Boolean if AI can automate this
-            - is_required: Boolean if mandatory
-
-            Document content:
-            {document_text[:10000]}
-
-            Return JSON with keys: roles (array with 1 role), milestones (array), tasks (array)
-            """
-
-            # Parse with AI
-            if openai_client:
-                try:
-                    completion = openai_client.chat.completions.create(
-                        model="gpt-4o",
-                        messages=[
-                            {"role": "system", "content": "You are an expert at analyzing job responsibility documents and extracting structured information. Focus on the PRIMARY role being described in each document."},
-                            {"role": "user", "content": analysis_prompt}
-                        ],
-                        response_format={"type": "json_object"}
-                    )
-                    ai_response = json.loads(completion.choices[0].message.content)
-
-                    # Collect results from this document
-                    if "roles" in ai_response:
-                        all_roles.extend(ai_response["roles"])
-                    if "milestones" in ai_response:
-                        all_milestones.extend(ai_response["milestones"])
-                    if "tasks" in ai_response:
-                        all_tasks.extend(ai_response["tasks"])
-
-                    logger.info(f"Parsed {file.filename}: {len(ai_response.get('roles', []))} roles, {len(ai_response.get('tasks', []))} tasks")
-
-                except Exception as e:
-                    logger.error(f"AI parsing failed for {file.filename}: {e}")
-                    continue
-            else:
-                # Fallback without AI
-                logger.warning("No OpenAI client available, using basic parsing")
-                fallback_result = parse_document_basic(document_text, file.filename)
-                all_roles.extend(fallback_result.get("roles", []))
-                all_milestones.extend(fallback_result.get("milestones", []))
-                all_tasks.extend(fallback_result.get("tasks", []))
-
-        # Now save all collected data to database
-        if not all_roles:
-            raise HTTPException(status_code=400, detail=f"No roles found in any of the {len(files)} uploaded documents. Please upload documents containing role and responsibility information.")
-
-        # Create ProcessRole records
-        role_map = {}
-        for role_idx, role_data in enumerate(all_roles):
-            role = ProcessRole(
-                user_id=current_user.id,
-                role_name=role_data["role_name"],
-                role_title=role_data["role_title"],
-                responsibilities=role_data.get("responsibilities"),
-                skills_required=role_data.get("skills_required", []),
-                key_activities=role_data.get("key_activities", [])
-            )
-            db.add(role)
-            db.flush()
-            role_map[role_data["role_name"]] = role.id
-
-        # Create ProcessMilestone records
-        milestone_map = {}
-        for milestone_idx, milestone_data in enumerate(all_milestones):
-            milestone = ProcessMilestone(
-                user_id=current_user.id,
-                name=milestone_data["name"],
-                description=milestone_data.get("description"),
-                sequence_order=milestone_data.get("sequence_order", milestone_idx),
-                estimated_duration=milestone_data.get("estimated_duration")
-            )
-            db.add(milestone)
-            db.flush()
-            milestone_map[milestone_data["name"]] = milestone.id
-
-        # Create ProcessTask records
-        for task_data in all_tasks:
-            milestone_id = milestone_map.get(task_data["milestone"])
-            role_id = role_map.get(task_data["role"])
-
-            if milestone_id and role_id:
-                task = ProcessTask(
-                    user_id=current_user.id,
-                    milestone_id=milestone_id,
-                    role_id=role_id,
-                    task_name=task_data["task_name"],
-                    task_description=task_data.get("task_description"),
-                    sequence_order=task_data.get("sequence_order", 0),
-                    estimated_duration=task_data.get("estimated_duration"),
-                    sla=task_data.get("sla"),
-                    sla_unit=task_data.get("sla_unit", "hours"),
-                    ai_automatable=task_data.get("ai_automatable", False),
-                    is_required=task_data.get("is_required", True)
-                )
-                db.add(task)
-
-        db.commit()
-
-        # Get created records
-        roles = db.query(ProcessRole).filter(ProcessRole.user_id == current_user.id).all()
-        milestones = db.query(ProcessMilestone).filter(ProcessMilestone.user_id == current_user.id).all()
-        tasks = db.query(ProcessTask).filter(ProcessTask.user_id == current_user.id).all()
-
-        logger.info(f"✅ Successfully parsed {len(files)} documents: {len(roles)} roles, {len(milestones)} milestones, {len(tasks)} tasks")
-
-        return {
-            "roles": [ProcessRoleResponse.from_orm(r) for r in roles],
-            "milestones": [ProcessMilestoneResponse.from_orm(m) for m in milestones],
-            "tasks": [ProcessTaskResponse.from_orm(t) for t in tasks],
-            "summary": {
-                "total_roles": len(roles),
-                "total_milestones": len(milestones),
-                "total_tasks": len(tasks),
-                "files_processed": len(files)
-            }
-        }
-
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Parse documents upload error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
 @app.post("/api/v1/onboarding/parse-documents")
 async def parse_onboarding_documents(
     request: DocumentParseRequest,
@@ -9864,65 +7661,39 @@ async def parse_onboarding_documents(
 
         # Use AI to analyze the document content
         analysis_prompt = f"""
-        Analyze this document and identify the PRIMARY role/position being described.
-
-        IMPORTANT: If the document describes ONE person's role and responsibilities:
-        - Extract ONLY the primary role that owns the described responsibilities
-        - Do NOT extract other roles that are merely mentioned or referenced (like "works with processor")
-        - Focus on the actual responsibilities and tasks of the PRIMARY role
-
-        If the document describes MULTIPLE distinct roles with their own separate responsibilities:
-        - Extract each role that has its own defined set of responsibilities
-        - A role only counts if it has dedicated tasks/responsibilities listed, not just mentioned
-
-        For the document "{request.document_name or 'uploaded'}":
-
-        Extract:
-        1. The PRIMARY role(s) with full responsibility descriptions (not just mentions)
-        2. Major workflow stages/milestones that this role goes through
-        3. Specific tasks the PRIMARY role performs in each stage
+        Analyze the following mortgage loan process document and extract:
+        1. All unique roles/positions involved in the process
+        2. All major milestones in the mortgage loan process
+        3. All tasks for each milestone with role assignments
 
         For each role, provide:
-        - role_name: Short identifier matching the document title if single role (e.g., "application_analysis", "processor")
-        - role_title: Display name from document (e.g., "Application Analysis", "Loan Processor")
-        - responsibilities: Detailed description of THEIR main responsibilities from the document
-        - skills_required: List of skills THEY need (from document)
-        - key_activities: List of activities THEY perform (from document)
+        - role_name: Short identifier (e.g., "loan_officer", "processor")
+        - role_title: Display name (e.g., "Loan Officer", "Loan Processor")
+        - responsibilities: Brief description of their main responsibilities
+        - skills_required: List of required skills
+        - key_activities: List of their primary activities
 
         For each milestone, provide:
-        - name: Stage/phase name that the PRIMARY role goes through
-        - description: What happens in this stage
-        - sequence_order: Order in workflow (0, 1, 2...)
-        - estimated_duration: Estimated hours for this stage
+        - name: Milestone name
+        - description: Brief description
+        - sequence_order: Order in process (0, 1, 2...)
+        - estimated_duration: Estimated hours to complete
 
         For each task, provide:
-        - milestone: Which workflow stage it belongs to
-        - role: The PRIMARY role_name responsible
-        - task_name: Specific task name from document
-        - task_description: What the task involves
-        - sequence_order: Order within the workflow stage
+        - milestone: Which milestone it belongs to
+        - role: Which role is responsible
+        - task_name: Task name
+        - task_description: Detailed description
+        - sequence_order: Order within milestone
         - estimated_duration: Minutes to complete
-        - sla: Service level agreement in hours (estimate if not specified)
-        - ai_automatable: Boolean if this task could be automated by AI
-        - is_required: Boolean if this task is mandatory
+        - sla: Service level agreement in hours
+        - ai_automatable: Boolean if AI can automate this
+        - is_required: Boolean if required
 
         Document content:
         {request.document_content[:10000]}  # Limit to 10k chars
 
         Return response as JSON with keys: roles, milestones, tasks
-
-        Example for a single-role document:
-        {{
-          "roles": [
-            {{"role_name": "application_analysis", "role_title": "Application Analysis", "responsibilities": "...", "skills_required": [...], "key_activities": [...]}}
-          ],
-          "milestones": [
-            {{"name": "Initial Review", "description": "...", "sequence_order": 0, "estimated_duration": 2}}
-          ],
-          "tasks": [
-            {{"milestone": "Initial Review", "role": "application_analysis", "task_name": "Review application", "task_description": "...", "sequence_order": 0, "estimated_duration": 30, "sla": 4, "ai_automatable": false, "is_required": true}}
-          ]
-        }}
         """
 
         # Use OpenAI to actually parse the document, or fall back to basic parsing
@@ -10094,175 +7865,79 @@ async def get_process_tasks(
         logger.error(f"Get tasks error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.patch("/api/v1/onboarding/tasks/{task_id}", response_model=ProcessTaskResponse)
-async def update_process_task(
-    task_id: int,
-    task_update: ProcessTaskUpdate,
+@app.get("/api/v1/team/members")
+async def get_team_members(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Update a specific process task"""
+    """Get all team members with their assigned roles from onboarding"""
     try:
-        task = db.query(ProcessTask).filter(
-            ProcessTask.id == task_id,
-            ProcessTask.user_id == current_user.id
-        ).first()
+        # Get all users in the system
+        all_users = db.query(User).filter(User.id != current_user.id).all()
 
-        if not task:
-            raise HTTPException(status_code=404, detail="Task not found")
+        # Get all process roles for the current user (the admin who completed onboarding)
+        process_roles = db.query(ProcessRole).filter(
+            ProcessRole.user_id == current_user.id,
+            ProcessRole.is_active == True
+        ).all()
 
-        # Update fields
-        for key, value in task_update.dict(exclude_unset=True).items():
-            setattr(task, key, value)
+        # Get tasks count for each role
+        team_members = []
+        for user in all_users:
+            # Try to find a matching role for this user (simplified - in production you'd have explicit user-role mapping)
+            member_data = {
+                "id": user.id,
+                "email": user.email,
+                "full_name": user.full_name,
+                "created_at": user.created_at.isoformat() if user.created_at else None,
+                "onboarding_completed": user.onboarding_completed,
+                "role": None,
+                "tasks_count": 0
+            }
 
-        db.commit()
-        db.refresh(task)
+            # Add to list
+            team_members.append(member_data)
 
-        logger.info(f"Process task updated: {task.task_name}")
-        return ProcessTaskResponse.from_orm(task)
+        # Also include current user
+        current_member = {
+            "id": current_user.id,
+            "email": current_user.email,
+            "full_name": current_user.full_name,
+            "created_at": current_user.created_at.isoformat() if current_user.created_at else None,
+            "onboarding_completed": current_user.onboarding_completed,
+            "role": {"role_title": "Admin", "role_name": "admin"},
+            "tasks_count": 0,
+            "is_current": True
+        }
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Update process task error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        team_members.insert(0, current_member)
 
-@app.patch("/api/v1/onboarding/tasks/bulk-update")
-async def bulk_update_process_tasks(
-    tasks: List[dict],
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Bulk update multiple process tasks"""
-    try:
-        updated_tasks = []
-        for task_data in tasks:
-            task_id = task_data.get('id')
-            if not task_id:
-                continue
+        # Get role assignments and task counts
+        roles_data = []
+        for role in process_roles:
+            tasks_count = db.query(ProcessTask).filter(
+                ProcessTask.role_id == role.id,
+                ProcessTask.is_active == True
+            ).count()
 
-            task = db.query(ProcessTask).filter(
-                ProcessTask.id == task_id,
-                ProcessTask.user_id == current_user.id
-            ).first()
+            roles_data.append({
+                "id": role.id,
+                "role_name": role.role_name,
+                "role_title": role.role_title,
+                "responsibilities": role.responsibilities,
+                "skills_required": role.skills_required,
+                "key_activities": role.key_activities,
+                "tasks_count": tasks_count
+            })
 
-            if task:
-                # Update allowed fields
-                for key in ['task_name', 'task_description', 'role_id', 'assigned_user_id',
-                           'sla', 'sla_unit', 'ai_automatable', 'status', 'sequence_order']:
-                    if key in task_data:
-                        setattr(task, key, task_data[key])
-                updated_tasks.append(task)
-
-        db.commit()
-
-        logger.info(f"Bulk updated {len(updated_tasks)} process tasks")
-        return {"updated_count": len(updated_tasks), "message": "Tasks updated successfully"}
-
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Bulk update process tasks error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/v1/onboarding/tasks", response_model=ProcessTaskResponse, status_code=201)
-async def create_process_task(
-    task: ProcessTaskCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Create a new process task"""
-    try:
-        db_task = ProcessTask(
-            **task.dict(),
-            user_id=current_user.id
-        )
-        db.add(db_task)
-        db.commit()
-        db.refresh(db_task)
-
-        logger.info(f"Process task created: {db_task.task_name}")
-        return ProcessTaskResponse.from_orm(db_task)
+        return {
+            "team_members": team_members,
+            "available_roles": roles_data
+        }
 
     except Exception as e:
-        db.rollback()
-        logger.error(f"Create process task error: {e}")
+        logger.error(f"Get team members error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-# COMMENTED OUT - Duplicate endpoint, using get_all_team_members below instead
-# @app.get("/api/v1/team/members")
-# async def get_team_members(
-#     current_user: User = Depends(get_current_user),
-#     db: Session = Depends(get_db)
-# ):
-#     """Get all team members with their assigned roles from onboarding"""
-#     try:
-#         # Get all users in the system
-#         all_users = db.query(User).filter(User.id != current_user.id).all()
-#
-#         # Get all process roles for the current user (the admin who completed onboarding)
-#         process_roles = db.query(ProcessRole).filter(
-#             ProcessRole.user_id == current_user.id,
-#             ProcessRole.is_active == True
-#         ).all()
-#
-#         # Get tasks count for each role
-#         team_members = []
-#         for user in all_users:
-#             # Try to find a matching role for this user (simplified - in production you'd have explicit user-role mapping)
-#             member_data = {
-#                 "id": user.id,
-#                 "email": user.email,
-#                 "full_name": user.full_name,
-#                 "created_at": user.created_at.isoformat() if user.created_at else None,
-#                 "onboarding_completed": user.onboarding_completed,
-#                 "role": None,
-#                 "tasks_count": 0
-#             }
-#
-#             # Add to list
-#             team_members.append(member_data)
-#
-#         # Also include current user
-#         current_member = {
-#             "id": current_user.id,
-#             "email": current_user.email,
-#             "full_name": current_user.full_name,
-#             "created_at": current_user.created_at.isoformat() if current_user.created_at else None,
-#             "onboarding_completed": current_user.onboarding_completed,
-#             "role": {"role_title": "Admin", "role_name": "admin"},
-#             "tasks_count": 0,
-#             "is_current": True
-#         }
-#
-#         team_members.insert(0, current_member)
-#
-#         # Get role assignments and task counts
-#         roles_data = []
-#         for role in process_roles:
-#             tasks_count = db.query(ProcessTask).filter(
-#                 ProcessTask.role_id == role.id,
-#                 ProcessTask.is_active == True
-#             ).count()
-#
-#             roles_data.append({
-#                 "id": role.id,
-#                 "role_name": role.role_name,
-#                 "role_title": role.role_title,
-#                 "responsibilities": role.responsibilities,
-#                 "skills_required": role.skills_required,
-#                 "key_activities": role.key_activities,
-#                 "tasks_count": tasks_count
-#             })
-#
-#         return {
-#             "team_members": team_members,
-#             "available_roles": roles_data
-#         }
-#
-#     except Exception as e:
-#         logger.error(f"Get team members error: {e}")
-#         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/v1/team/members/{user_id}")
 async def get_team_member_detail(
@@ -10316,146 +7991,6 @@ async def get_team_member_detail(
         logger.error(f"Get team member detail error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/v1/team/workflow-members")
-async def get_workflow_team_members(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Get CRM workflow team members (processors, underwriters, loan officers, etc.)"""
-    try:
-        # Get all loans for the current user's organization
-        loans = db.query(Loan).all()
-
-        # Aggregate team members by role
-        processors = {}
-        underwriters = {}
-        loan_officers = {}
-        realtors = {}
-        title_companies = {}
-
-        for loan in loans:
-            # Count processors
-            if loan.processor and loan.processor.strip():
-                processor_name = loan.processor.strip()
-                if processor_name not in processors:
-                    processors[processor_name] = {
-                        "name": processor_name,
-                        "role": "Processor",
-                        "loan_count": 0,
-                        "loans": []
-                    }
-                processors[processor_name]["loan_count"] += 1
-                processors[processor_name]["loans"].append({
-                    "id": loan.id,
-                    "loan_number": loan.loan_number,
-                    "borrower_name": loan.borrower_name,
-                    "stage": loan.stage.value
-                })
-
-            # Count underwriters
-            if loan.underwriter and loan.underwriter.strip():
-                underwriter_name = loan.underwriter.strip()
-                if underwriter_name not in underwriters:
-                    underwriters[underwriter_name] = {
-                        "name": underwriter_name,
-                        "role": "Underwriter",
-                        "loan_count": 0,
-                        "loans": []
-                    }
-                underwriters[underwriter_name]["loan_count"] += 1
-                underwriters[underwriter_name]["loans"].append({
-                    "id": loan.id,
-                    "loan_number": loan.loan_number,
-                    "borrower_name": loan.borrower_name,
-                    "stage": loan.stage.value
-                })
-
-            # Count loan officers
-            if loan.loan_officer:
-                officer_name = loan.loan_officer.full_name
-                if officer_name not in loan_officers:
-                    loan_officers[officer_name] = {
-                        "name": officer_name,
-                        "role": "Loan Officer",
-                        "loan_count": 0,
-                        "loans": [],
-                        "email": loan.loan_officer.email
-                    }
-                loan_officers[officer_name]["loan_count"] += 1
-                loan_officers[officer_name]["loans"].append({
-                    "id": loan.id,
-                    "loan_number": loan.loan_number,
-                    "borrower_name": loan.borrower_name,
-                    "stage": loan.stage.value
-                })
-
-            # Count realtors
-            if loan.realtor_agent and loan.realtor_agent.strip():
-                realtor_name = loan.realtor_agent.strip()
-                if realtor_name not in realtors:
-                    realtors[realtor_name] = {
-                        "name": realtor_name,
-                        "role": "Realtor",
-                        "loan_count": 0,
-                        "loans": []
-                    }
-                realtors[realtor_name]["loan_count"] += 1
-                realtors[realtor_name]["loans"].append({
-                    "id": loan.id,
-                    "loan_number": loan.loan_number,
-                    "borrower_name": loan.borrower_name,
-                    "stage": loan.stage.value
-                })
-
-            # Count title companies
-            if loan.title_company and loan.title_company.strip():
-                title_name = loan.title_company.strip()
-                if title_name not in title_companies:
-                    title_companies[title_name] = {
-                        "name": title_name,
-                        "role": "Title Company",
-                        "loan_count": 0,
-                        "loans": []
-                    }
-                title_companies[title_name]["loan_count"] += 1
-                title_companies[title_name]["loans"].append({
-                    "id": loan.id,
-                    "loan_number": loan.loan_number,
-                    "borrower_name": loan.borrower_name,
-                    "stage": loan.stage.value
-                })
-
-        # Combine all team members
-        all_members = []
-        all_members.extend(processors.values())
-        all_members.extend(underwriters.values())
-        all_members.extend(loan_officers.values())
-        all_members.extend(realtors.values())
-        all_members.extend(title_companies.values())
-
-        # Sort by loan count descending
-        all_members.sort(key=lambda x: x["loan_count"], reverse=True)
-
-        # Get role statistics
-        role_stats = {
-            "processors": len(processors),
-            "underwriters": len(underwriters),
-            "loan_officers": len(loan_officers),
-            "realtors": len(realtors),
-            "title_companies": len(title_companies),
-            "total_members": len(all_members)
-        }
-
-        return {
-            "team_members": all_members,
-            "role_stats": role_stats,
-            "total_loans": len(loans)
-        }
-
-    except Exception as e:
-        logger.error(f"Get workflow team members error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
 # ============================================================================
 # AGENTIC AI PERFORMANCE COACH ("THE PROCESS COACH")
 # ============================================================================
@@ -10504,70 +8039,13 @@ def build_coach_context(user: User, db: Session) -> Dict[str, Any]:
         if last_activity:
             days_in_stage = (datetime.now(timezone.utc) - last_activity).days
             if days_in_stage > 7:
-                bottlenecks.append({
-                    "type": "Lead",
-                    "name": lead.name,
-                    "stage": lead.stage.value,
-                    "days": days_in_stage,
-                    "email": lead.email,
-                    "phone": lead.phone
-                })
+                bottlenecks.append({"type": "Lead", "name": lead.name, "stage": lead.stage.value, "days": days_in_stage})
 
     for loan in loans:
         if loan.updated_at:
             days_in_stage = (datetime.now(timezone.utc) - loan.updated_at).days
             if days_in_stage > 7:
-                bottlenecks.append({
-                    "type": "Loan",
-                    "loan_number": loan.loan_number,
-                    "borrower_name": loan.borrower_name,
-                    "stage": loan.stage.value,
-                    "days": days_in_stage
-                })
-
-    # Get specific loans by stage for detailed coaching
-    loans_by_stage_detailed = {}
-    for stage in LoanStage:
-        stage_loans = [l for l in loans if l.stage == stage]
-        loans_by_stage_detailed[stage.value] = [
-            {
-                "loan_number": loan.loan_number,
-                "borrower_name": loan.borrower_name,
-                "days_in_stage": (datetime.now(timezone.utc) - loan.updated_at).days if loan.updated_at else 0,
-                "amount": loan.amount if hasattr(loan, 'amount') else None
-            }
-            for loan in stage_loans[:5]  # Top 5 per stage
-        ]
-
-    # Get specific leads that need attention
-    leads_needing_attention = []
-    for lead in leads:
-        last_activity = lead.last_contact or lead.updated_at
-        if last_activity:
-            days_since_contact = (datetime.now(timezone.utc) - last_activity).days
-            if days_since_contact > 2:  # No contact in 2+ days
-                leads_needing_attention.append({
-                    "name": lead.name,
-                    "email": lead.email,
-                    "phone": lead.phone,
-                    "stage": lead.stage.value,
-                    "days_since_contact": days_since_contact,
-                    "source": lead.source
-                })
-
-    # Get new leads from yesterday
-    yesterday = datetime.now(timezone.utc) - timedelta(days=1)
-    new_leads = [
-        {
-            "name": lead.name,
-            "email": lead.email,
-            "phone": lead.phone,
-            "source": lead.source,
-            "stage": lead.stage.value
-        }
-        for lead in leads
-        if lead.created_at and lead.created_at >= yesterday
-    ]
+                bottlenecks.append({"type": "Loan", "name": loan.loan_number, "stage": loan.stage.value, "days": days_in_stage})
 
     return {
         "user": {
@@ -10579,29 +8057,17 @@ def build_coach_context(user: User, db: Session) -> Dict[str, Any]:
             "total_leads": len(leads),
             "total_loans": len(loans),
             "leads_by_stage": leads_by_stage,
-            "loans_by_stage": loans_by_stage,
-            "loans_by_stage_detailed": loans_by_stage_detailed,  # NEW: Specific loan details
-            "new_leads": new_leads,  # NEW: Yesterday's new leads with names
-            "leads_needing_attention": leads_needing_attention[:10]  # NEW: Specific leads to follow up
+            "loans_by_stage": loans_by_stage
         },
         "tasks": {
             "total_open": len(open_tasks),
             "overdue": len(overdue_tasks),
-            "overdue_list": [
-                {
-                    "title": t.title,
-                    "days_overdue": (datetime.now(timezone.utc) - t.due_date).days,
-                    "loan_id": t.loan_id,
-                    "lead_id": t.lead_id,
-                    "borrower_name": t.borrower_name
-                }
-                for t in overdue_tasks[:5]
-            ]
+            "overdue_list": [{"title": t.title, "days_overdue": (datetime.now(timezone.utc) - t.due_date).days} for t in overdue_tasks[:5]]
         },
         "reconciliation": {
             "pending_review": pending_reconciliation
         },
-        "bottlenecks": bottlenecks[:10]  # Top 10 bottlenecks with names
+        "bottlenecks": bottlenecks[:10]  # Top 10 bottlenecks
     }
 
 def get_coach_system_prompt(mode: CoachMode) -> str:
@@ -10635,34 +8101,24 @@ MODE: Daily Briefing
 
 Your job: Review their pipeline and give them their top 3 priorities for today.
 
-CRITICAL REQUIREMENT: Always reference specific loan numbers, borrower names, and lead names from the context data.
-- DO NOT say "3 deals stuck in underwriting" - say "Loan #12345 (John Smith), Loan #67890 (Jane Doe), and Loan #11111 (Bob Johnson) stuck in underwriting"
-- DO NOT say "5 new leads" - say "Contact Sarah Williams, Mike Chen, Lisa Park, David Rodriguez, and Amy Thompson"
-- DO NOT give vague counts - give actual names and loan numbers
-- Use the LOANS BY STAGE and LEADS NEEDING ATTENTION sections to get specific details
-
 Important: If they have pending reconciliation items, prioritize those. Data accuracy is fundamental to The Process.
 
 Format:
-"Morning. Here's what matters today:
+"Morning. Today we run The Process.
 
-1. [SPECIFIC TASK with loan numbers/names]
-2. [SPECIFIC TASK with loan numbers/names]
-3. [SPECIFIC TASK with loan numbers/names]
+Top priorities:
+1. [High-leverage task]
+2. [High-leverage task]
+3. [High-leverage task]
 
-Process beats chaos. Execute on these priorities before checking email."
+Eliminate distractions. Execute with pace."
 
-ALWAYS BE SPECIFIC. Reference actual loan numbers and borrower names from the context.""",
+Be specific. Use their actual pipeline data. If reconciliation.pending_review > 0, include reviewing those items as a priority.""",
 
         CoachMode.pipeline_audit: base_personality + """
 MODE: Pipeline Audit
 
 Your job: Identify bottlenecks, stalled deals, and what needs immediate action.
-
-CRITICAL REQUIREMENT: Always reference specific loan numbers and borrower names.
-- Use the BOTTLENECKS section to get exact loan numbers and borrower names
-- Use the LOANS BY STAGE section to identify specific deals that are stuck
-- DO NOT give vague descriptions - cite actual loan numbers and names
 
 Include data reconciliation if pending. Unreviewed data = blind spots in your pipeline.
 
@@ -10670,13 +8126,12 @@ Format:
 "Pipeline audit complete.
 
 Bottlenecks:
-- Loan #[NUMBER] ([BORROWER NAME]): [SPECIFIC ISSUE]
-- Loan #[NUMBER] ([BORROWER NAME]): [SPECIFIC ISSUE]
-- Lead [NAME] ([CONTACT]): [SPECIFIC ISSUE]
+- [Specific deal/lead + issue]
+- [Specific deal/lead + issue]
 
 Fix these now. Nothing else matters until this is done."
 
-Be ruthless. Call out what's broken with SPECIFIC loan numbers and names. If reconciliation.pending_review > 0, flag it as a data integrity issue.""",
+Be ruthless. Call out what's broken. If reconciliation.pending_review > 0, flag it as a data integrity issue.""",
 
         CoachMode.focus_reset: base_personality + """
 MODE: Focus Reset
@@ -10790,188 +8245,6 @@ def generate_priorities(context: Dict[str, Any]) -> List[Dict[str, Any]]:
 
     return priorities
 
-# Team Member CRUD Endpoints
-@app.post("/api/v1/team/members", response_model=TeamMemberResponse)
-async def create_team_member(
-    member_data: TeamMemberCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Create a new team member"""
-    try:
-        # Create full name from first + last
-        full_name = f"{member_data.first_name} {member_data.last_name}"
-
-        # Store additional fields in meta_data
-        meta_data = {
-            "first_name": member_data.first_name,
-            "last_name": member_data.last_name,
-            "phone": member_data.phone,
-            "title": member_data.title
-        }
-
-        # Create team member
-        team_member = TeamMember(
-            user_id=current_user.id,
-            name=full_name,
-            email=member_data.email or "",
-            role=member_data.role,
-            status="active",
-            meta_data=meta_data
-        )
-
-        db.add(team_member)
-        db.commit()
-        db.refresh(team_member)
-
-        # Return response with fields from meta_data
-        response_data = {
-            "id": team_member.id,
-            "first_name": meta_data.get("first_name", ""),
-            "last_name": meta_data.get("last_name", ""),
-            "email": team_member.email,
-            "phone": meta_data.get("phone"),
-            "role": team_member.role,
-            "title": meta_data.get("title"),
-            "created_at": team_member.created_at
-        }
-
-        return response_data
-
-    except Exception as e:
-        logger.error(f"Create team member error: {e}")
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.patch("/api/v1/team/members/{member_id}", response_model=TeamMemberResponse)
-async def update_team_member(
-    member_id: int,
-    member_data: TeamMemberUpdate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Update a team member"""
-    try:
-        # Get existing team member
-        team_member = db.query(TeamMember).filter(
-            TeamMember.id == member_id,
-            TeamMember.user_id == current_user.id
-        ).first()
-
-        if not team_member:
-            raise HTTPException(status_code=404, detail="Team member not found")
-
-        # Get existing meta_data or create new
-        meta_data = team_member.meta_data or {}
-
-        # Update fields
-        if member_data.first_name is not None:
-            meta_data["first_name"] = member_data.first_name
-        if member_data.last_name is not None:
-            meta_data["last_name"] = member_data.last_name
-        if member_data.phone is not None:
-            meta_data["phone"] = member_data.phone
-        if member_data.title is not None:
-            meta_data["title"] = member_data.title
-
-        # Update name if first or last name changed
-        if member_data.first_name or member_data.last_name:
-            first_name = meta_data.get("first_name", "")
-            last_name = meta_data.get("last_name", "")
-            team_member.name = f"{first_name} {last_name}".strip()
-
-        if member_data.email is not None:
-            team_member.email = member_data.email
-        if member_data.role is not None:
-            team_member.role = member_data.role
-
-        team_member.meta_data = meta_data
-
-        db.commit()
-        db.refresh(team_member)
-
-        # Return response with fields from meta_data
-        response_data = {
-            "id": team_member.id,
-            "first_name": meta_data.get("first_name", ""),
-            "last_name": meta_data.get("last_name", ""),
-            "email": team_member.email,
-            "phone": meta_data.get("phone"),
-            "role": team_member.role,
-            "title": meta_data.get("title"),
-            "created_at": team_member.created_at
-        }
-
-        return response_data
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Update team member error: {e}")
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.delete("/api/v1/team/members/{member_id}")
-async def delete_team_member(
-    member_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Delete a team member"""
-    try:
-        # Get existing team member
-        team_member = db.query(TeamMember).filter(
-            TeamMember.id == member_id,
-            TeamMember.user_id == current_user.id
-        ).first()
-
-        if not team_member:
-            raise HTTPException(status_code=404, detail="Team member not found")
-
-        db.delete(team_member)
-        db.commit()
-
-        return {"message": "Team member deleted successfully"}
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Delete team member error: {e}")
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-
-# Override the existing GET /api/v1/team/members to return TeamMember records
-@app.get("/api/v1/team/members", response_model=list)
-async def get_all_team_members(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Get all team members created by the user"""
-    try:
-        team_members = db.query(TeamMember).filter(
-            TeamMember.user_id == current_user.id
-        ).order_by(TeamMember.created_at.desc()).all()
-
-        response_list = []
-        for member in team_members:
-            meta_data = member.meta_data or {}
-            response_list.append({
-                "id": member.id,
-                "first_name": meta_data.get("first_name", ""),
-                "last_name": meta_data.get("last_name", ""),
-                "email": member.email,
-                "phone": meta_data.get("phone"),
-                "role": member.role,
-                "title": meta_data.get("title"),
-                "created_at": member.created_at
-            })
-
-        return response_list
-
-    except Exception as e:
-        logger.error(f"Get team members error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
 @app.post("/api/v1/coach", response_model=CoachResponse)
 async def performance_coach(
     request: CoachRequest,
@@ -10990,33 +8263,25 @@ async def performance_coach(
         # Get system prompt for the mode
         system_prompt = get_coach_system_prompt(request.mode)
 
-        # Build user message with context - INCLUDING SPECIFIC DETAILS
+        # Build user message with context
         context_message = f"""
 USER CONTEXT:
 - Name: {context['user']['name']}
 - Role: {context['user']['role']}
 
-PIPELINE SUMMARY:
+PIPELINE:
 - Total Leads: {context['pipeline']['total_leads']}
 - Total Loans: {context['pipeline']['total_loans']}
+- Leads by Stage: {context['pipeline']['leads_by_stage']}
+- Loans by Stage: {context['pipeline']['loans_by_stage']}
 
-NEW LEADS (from yesterday):
-{chr(10).join([f"- {lead['name']} ({lead['email']}, {lead['phone']}) - Source: {lead['source']}, Stage: {lead['stage']}" for lead in context['pipeline']['new_leads']]) if context['pipeline']['new_leads'] else "- None"}
+TASKS:
+- Total Open: {context['tasks']['total_open']}
+- Overdue: {context['tasks']['overdue']}
+- Top Overdue: {context['tasks']['overdue_list']}
 
-LEADS NEEDING ATTENTION (no contact in 2+ days):
-{chr(10).join([f"- {lead['name']} ({lead['email']}) - {lead['days_since_contact']} days, Stage: {lead['stage']}" for lead in context['pipeline']['leads_needing_attention']]) if context['pipeline']['leads_needing_attention'] else "- None"}
-
-LOANS BY STAGE (with specific loan numbers and borrowers):
-{chr(10).join([f"{stage}: {len(loans)} loans" + (chr(10) + chr(10).join([f"  • Loan #{loan['loan_number']} - {loan['borrower_name']} ({loan['days_in_stage']} days in stage)" for loan in loans]) if loans else "") for stage, loans in context['pipeline']['loans_by_stage_detailed'].items() if loans])}
-
-OVERDUE TASKS:
-{chr(10).join([f"- {task['title']} ({task['days_overdue']} days overdue)" + (f" - Borrower: {task['borrower_name']}" if task.get('borrower_name') else "") for task in context['tasks']['overdue_list']]) if context['tasks']['overdue_list'] else "- None"}
-
-BOTTLENECKS (loans/leads stuck 7+ days):
-{chr(10).join([f"- {b['type']}: {b.get('loan_number', b.get('name', 'Unknown'))} - {b.get('borrower_name', b.get('name', ''))} ({b['days']} days in {b['stage']})" for b in context['bottlenecks']]) if context['bottlenecks'] else "- None"}
-
-RECONCILIATION:
-- Pending Review Items: {context['reconciliation']['pending_review']}
+BOTTLENECKS:
+{chr(10).join([f"- {b['type']}: {b['name']} ({b['days']} days in {b['stage']})" for b in context['bottlenecks']])}
 
 """
 
@@ -11065,755 +8330,6 @@ RECONCILIATION:
         raise HTTPException(status_code=500, detail=f"Coach error: {str(e)}")
 
 # ============================================================================
-# DATA IMPORT ENDPOINTS
-# ============================================================================
-
-@app.post("/api/v1/data-import/analyze")
-async def analyze_data_file(
-    file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Analyze uploaded CSV/Excel file and generate AI questions"""
-    try:
-        import csv
-        import io
-
-        # Import dependencies with error handling
-        try:
-            import pandas as pd
-            import openpyxl  # Explicitly import openpyxl
-            logger.info(f"pandas version: {pd.__version__}, openpyxl version: {openpyxl.__version__}")
-        except ImportError as e:
-            logger.error(f"Failed to import required library: {e}")
-            raise HTTPException(
-                status_code=500,
-                detail="Server configuration error: Missing required data processing libraries. Please contact support."
-            )
-
-        logger.info(f"Starting file analysis for: {file.filename}")
-
-        # Read file content
-        content = await file.read()
-        file_size_mb = len(content) / (1024 * 1024)
-        logger.info(f"File size: {file_size_mb:.2f} MB")
-
-        # Check file size (limit to 10MB)
-        if file_size_mb > 10:
-            raise HTTPException(status_code=400, detail="File too large. Maximum size is 10MB.")
-
-        # Determine file type and parse
-        logger.info(f"Parsing file type: {file.filename}")
-        if file.filename.endswith('.csv'):
-            logger.info("Parsing as CSV")
-            df = pd.read_csv(io.BytesIO(content))
-        elif file.filename.endswith(('.xlsx', '.xls')):
-            logger.info("Parsing as Excel")
-            # Read Excel file with explicit engine
-            df = pd.read_excel(io.BytesIO(content), engine='openpyxl')
-        else:
-            logger.error(f"Unsupported file type: {file.filename}")
-            raise HTTPException(status_code=400, detail="Unsupported file type. Please upload CSV or Excel (.csv, .xlsx, .xls)")
-
-        # Get preview data
-        headers = df.columns.tolist()
-        rows = df.head(100).values.tolist()
-        total_rows = len(df)
-
-        # Analyze data with AI to generate questions
-        if not openai_client:
-            # If no OpenAI, return basic questions
-            questions = [
-                {
-                    "id": "destination",
-                    "question": "Where should this data be imported?",
-                    "type": "choice",
-                    "options": [
-                        {
-                            "value": "leads",
-                            "label": "Leads",
-                            "description": "Prospect contacts who haven't started an application yet",
-                            "icon": "👤"
-                        },
-                        {
-                            "value": "loans",
-                            "label": "Active Loans",
-                            "description": "Active loan applications in process",
-                            "icon": "📄"
-                        },
-                        {
-                            "value": "portfolio",
-                            "label": "Portfolio (MUM Clients)",
-                            "description": "Existing clients with closed loans (Client for Life Engine)",
-                            "icon": "💼"
-                        },
-                        {
-                            "value": "realtors",
-                            "label": "Realtors / Referral Partners",
-                            "description": "Real estate agents, lenders, and other referral sources",
-                            "icon": "🤝"
-                        },
-                        {
-                            "value": "team_members",
-                            "label": "Team Members",
-                            "description": "Loan officers and staff members",
-                            "icon": "👥"
-                        }
-                    ]
-                }
-            ]
-
-            # Generate basic suggested mappings based on column names
-            suggested_mappings = {}
-            for header in headers:
-                header_lower = header.lower()
-                if 'first' in header_lower and 'name' in header_lower:
-                    suggested_mappings[header] = 'first_name'
-                elif 'last' in header_lower and 'name' in header_lower:
-                    suggested_mappings[header] = 'last_name'
-                elif 'email' in header_lower:
-                    suggested_mappings[header] = 'email'
-                elif 'phone' in header_lower:
-                    suggested_mappings[header] = 'phone'
-                elif 'address' in header_lower:
-                    suggested_mappings[header] = 'address'
-                elif 'city' in header_lower:
-                    suggested_mappings[header] = 'city'
-                elif 'state' in header_lower:
-                    suggested_mappings[header] = 'state'
-                elif 'zip' in header_lower:
-                    suggested_mappings[header] = 'zip_code'
-                elif 'loan' in header_lower and 'amount' in header_lower:
-                    suggested_mappings[header] = 'loan_amount'
-                elif 'property' in header_lower and 'value' in header_lower:
-                    suggested_mappings[header] = 'property_value'
-        else:
-            # Use AI to analyze and generate questions
-            sample_data = df.head(5).to_dict('records')
-
-            analysis_prompt = f"""Analyze this data and help determine:
-1. What type of data is this? (leads, active loan clients, or portfolio/MUM clients)
-2. What columns should be mapped to which CRM fields?
-
-Column headers: {headers}
-Sample data (first 5 rows): {sample_data}
-
-Respond with:
-1. Your recommendation for where this data should go
-2. Any clarifying questions if the data type is ambiguous
-3. Suggested column mappings"""
-
-            response = openai_client.chat.completions.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "You are a CRM data import assistant. Help users import their data correctly."},
-                    {"role": "user", "content": analysis_prompt}
-                ],
-                temperature=0.7,
-                max_tokens=800
-            )
-
-            ai_analysis = response.choices[0].message.content
-
-            # Generate questions (with AI recommendation)
-            questions = [
-                {
-                    "id": "destination",
-                    "question": "Where should this data be imported? AI suggests based on column analysis:",
-                    "type": "choice",
-                    "ai_recommendation": ai_analysis,
-                    "options": [
-                        {
-                            "value": "leads",
-                            "label": "Leads",
-                            "description": "Prospect contacts who haven't started an application yet",
-                            "icon": "👤"
-                        },
-                        {
-                            "value": "loans",
-                            "label": "Active Loans",
-                            "description": "Active loan applications in process",
-                            "icon": "📄"
-                        },
-                        {
-                            "value": "portfolio",
-                            "label": "Portfolio (MUM Clients)",
-                            "description": "Existing clients with closed loans (Client for Life Engine)",
-                            "icon": "💼"
-                        },
-                        {
-                            "value": "realtors",
-                            "label": "Realtors / Referral Partners",
-                            "description": "Real estate agents, lenders, and other referral sources",
-                            "icon": "🤝"
-                        },
-                        {
-                            "value": "team_members",
-                            "label": "Team Members",
-                            "description": "Loan officers and staff members",
-                            "icon": "👥"
-                        }
-                    ]
-                }
-            ]
-
-            # AI-generated suggested mappings
-            suggested_mappings = {}
-            for header in headers:
-                header_lower = header.lower()
-                if 'first' in header_lower and 'name' in header_lower:
-                    suggested_mappings[header] = 'first_name'
-                elif 'last' in header_lower and 'name' in header_lower:
-                    suggested_mappings[header] = 'last_name'
-                elif 'email' in header_lower:
-                    suggested_mappings[header] = 'email'
-                elif 'phone' in header_lower:
-                    suggested_mappings[header] = 'phone'
-
-        return {
-            "preview": {
-                "headers": headers,
-                "rows": rows,
-                "total_rows": total_rows
-            },
-            "questions": questions,
-            "suggested_mappings": suggested_mappings
-        }
-
-    except HTTPException:
-        # Re-raise HTTP exceptions as-is
-        raise
-    except Exception as e:
-        import traceback
-        error_details = traceback.format_exc()
-        logger.error(f"File analysis error: {e}\n{error_details}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to analyze file: {str(e)}. Please ensure the file is a valid CSV or Excel file."
-        )
-
-@app.post("/api/v1/data-import/execute")
-async def execute_data_import(
-    file: UploadFile = File(...),
-    answers: str = Form(...),
-    mappings: str = Form(...),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Execute data import based on user answers and column mappings"""
-    try:
-        import json
-        import pandas as pd
-        import openpyxl  # Explicitly import openpyxl
-        import io
-
-        # Parse answers and mappings
-        answers_dict = json.loads(answers)
-        mappings_dict = json.loads(mappings)
-
-        destination = answers_dict.get('destination', 'leads')
-
-        logger.info(f"Executing data import for: {file.filename}")
-
-        # Read file content
-        content = await file.read()
-
-        # Parse file
-        if file.filename.endswith('.csv'):
-            logger.info("Parsing as CSV for import")
-            df = pd.read_csv(io.BytesIO(content))
-        elif file.filename.endswith(('.xlsx', '.xls')):
-            logger.info("Parsing as Excel for import")
-            df = pd.read_excel(io.BytesIO(content), engine='openpyxl')
-        else:
-            raise HTTPException(status_code=400, detail="Unsupported file type")
-
-        # Import data
-        imported = 0
-        failed = 0
-        errors = []
-
-        for index, row in df.iterrows():
-            try:
-                # Map row data to CRM fields
-                data = {}
-                for source_col, target_field in mappings_dict.items():
-                    if target_field and source_col in row:
-                        value = row[source_col]
-                        if pd.notna(value):  # Skip NaN values
-                            data[target_field] = value
-
-                # Import based on destination
-                if destination == 'leads':
-                    # Create lead - ensure name field exists
-                    if 'name' not in data and ('first_name' in data or 'last_name' in data):
-                        first = data.pop('first_name', '')
-                        last = data.pop('last_name', '')
-                        data['name'] = f"{first} {last}".strip()
-
-                    lead = Lead(
-                        **data,
-                        owner_id=current_user.id,
-                        stage=LeadStage.NEW
-                    )
-                    db.add(lead)
-
-                elif destination == 'loans':
-                    # Create loan - ensure required fields exist
-                    if 'borrower_name' not in data and 'name' in data:
-                        data['borrower_name'] = data.pop('name')
-                    if 'borrower_name' not in data and ('first_name' in data or 'last_name' in data):
-                        first = data.pop('first_name', '')
-                        last = data.pop('last_name', '')
-                        data['borrower_name'] = f"{first} {last}".strip()
-
-                    # Generate loan number if not provided
-                    if 'loan_number' not in data:
-                        import secrets
-                        data['loan_number'] = f"LOAN-{secrets.token_hex(4).upper()}"
-
-                    # Map common field variations
-                    if 'loan_amount' in data and 'amount' not in data:
-                        data['amount'] = data.pop('loan_amount')
-                    if 'interest_rate' in data and 'rate' not in data:
-                        data['rate'] = data.pop('interest_rate')
-                    if 'loan_term' in data and 'term' not in data:
-                        data['term'] = data.pop('loan_term')
-
-                    # Ensure required fields
-                    if 'amount' not in data:
-                        data['amount'] = 0.0
-
-                    # Filter out fields that don't exist in Loan model (email, phone, etc.)
-                    valid_fields = {'loan_number', 'borrower_name', 'coborrower_name', 'stage', 'program',
-                                  'loan_type', 'amount', 'purchase_price', 'down_payment', 'rate', 'term',
-                                  'property_address', 'lock_date', 'closing_date', 'funded_date',
-                                  'processor', 'underwriter', 'realtor_agent', 'title_company',
-                                  'days_in_stage', 'sla_status', 'milestones', 'ai_insights',
-                                  'predicted_close_date', 'risk_score', 'user_metadata'}
-                    filtered_data = {k: v for k, v in data.items() if k in valid_fields}
-
-                    loan = Loan(
-                        **filtered_data,
-                        loan_officer_id=current_user.id,
-                        stage=LoanStage.DISCLOSED
-                    )
-                    db.add(loan)
-
-                elif destination == 'portfolio':
-                    # Create MUM client - ensure required fields exist
-                    if 'name' not in data and ('first_name' in data or 'last_name' in data):
-                        first = data.pop('first_name', '')
-                        last = data.pop('last_name', '')
-                        data['name'] = f"{first} {last}".strip()
-                    elif 'name' not in data and 'borrower_name' in data:
-                        data['name'] = data.pop('borrower_name')
-
-                    # Generate loan number if not provided
-                    if 'loan_number' not in data:
-                        import secrets
-                        data['loan_number'] = f"MUM-{secrets.token_hex(4).upper()}"
-
-                    # Map common field variations
-                    if 'loan_amount' in data and 'loan_balance' not in data:
-                        data['loan_balance'] = data.pop('loan_amount')
-                    if 'interest_rate' in data and 'current_rate' not in data:
-                        data['current_rate'] = data.pop('interest_rate')
-                    if 'close_date' in data and 'original_close_date' not in data:
-                        data['original_close_date'] = data.pop('close_date')
-
-                    # Ensure required fields with defaults
-                    if 'original_close_date' not in data:
-                        data['original_close_date'] = datetime.now(timezone.utc)
-
-                    # Filter out fields that don't exist in MUMClient model (email, phone, etc.)
-                    valid_fields = {'name', 'loan_number', 'original_close_date', 'days_since_funding',
-                                  'original_rate', 'current_rate', 'loan_balance', 'refinance_opportunity',
-                                  'estimated_savings', 'engagement_score', 'status', 'last_contact'}
-                    filtered_data = {k: v for k, v in data.items() if k in valid_fields}
-
-                    # Note: MUMClient doesn't have loan_officer_id
-                    mum_client = MUMClient(**filtered_data)
-                    db.add(mum_client)
-
-                elif destination == 'realtors' or destination == 'referral_partners':
-                    # Create referral partner - ensure name exists
-                    if 'name' not in data and ('first_name' in data or 'last_name' in data):
-                        first = data.pop('first_name', '')
-                        last = data.pop('last_name', '')
-                        data['name'] = f"{first} {last}".strip()
-
-                    # Ensure name exists
-                    if 'name' not in data:
-                        raise ValueError("Name is required for referral partners")
-
-                    # Map common field variations
-                    if 'company_name' in data and 'company' not in data:
-                        data['company'] = data.pop('company_name')
-                    if 'partner_type' in data and 'type' not in data:
-                        data['type'] = data.pop('partner_type')
-
-                    # Set default partner category
-                    if 'partner_category' not in data:
-                        data['partner_category'] = 'individual'
-
-                    # Filter out fields that don't exist in ReferralPartner model
-                    valid_fields = {'name', 'company', 'type', 'phone', 'email', 'notes',
-                                  'referrals_in', 'referrals_out', 'closed_loans', 'volume',
-                                  'reciprocity_score', 'status', 'loyalty_tier', 'partner_category'}
-                    filtered_data = {k: v for k, v in data.items() if k in valid_fields}
-
-                    partner = ReferralPartner(**filtered_data)
-                    db.add(partner)
-
-                elif destination == 'team_members' or destination == 'users':
-                    # Create user/team member - ensure required fields
-                    if 'email' not in data:
-                        raise ValueError("Email is required for team members")
-
-                    # Build full name
-                    if 'full_name' not in data and ('first_name' in data or 'last_name' in data):
-                        first = data.pop('first_name', '')
-                        last = data.pop('last_name', '')
-                        data['full_name'] = f"{first} {last}".strip()
-
-                    # Set default password if not provided
-                    if 'password' not in data and 'hashed_password' not in data:
-                        from passlib.context import CryptContext
-                        pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-                        # Default password: change123 (user should change on first login)
-                        data['hashed_password'] = pwd_context.hash("change123")
-                    elif 'password' in data:
-                        from passlib.context import CryptContext
-                        pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-                        data['hashed_password'] = pwd_context.hash(data.pop('password'))
-
-                    # Set default role
-                    if 'role' not in data:
-                        data['role'] = 'loan_officer'
-
-                    # Filter out fields that don't exist in User model
-                    valid_fields = {'email', 'hashed_password', 'full_name', 'role',
-                                  'branch_id', 'is_active', 'email_verified',
-                                  'onboarding_completed', 'user_metadata'}
-                    filtered_data = {k: v for k, v in data.items() if k in valid_fields}
-
-                    # Check if user already exists
-                    existing_user = db.query(User).filter(User.email == filtered_data['email']).first()
-                    if existing_user:
-                        raise ValueError(f"User with email {filtered_data['email']} already exists")
-
-                    user = User(**filtered_data)
-                    db.add(user)
-
-                else:
-                    raise ValueError(f"Invalid destination: {destination}. Supported: leads, loans, portfolio, realtors, team_members")
-
-                imported += 1
-
-            except Exception as e:
-                failed += 1
-                errors.append(f"Row {index + 1}: {str(e)}")
-
-        db.commit()
-
-        logger.info(f"Data import completed: {imported} imported, {failed} failed")
-
-        return {
-            "total": len(df),
-            "imported": imported,
-            "failed": failed,
-            "errors": errors,
-            "destination": destination
-        }
-
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Data import error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-# ============================================================================
-# DATA MANAGEMENT
-# ============================================================================
-
-@app.post("/api/v1/admin/clear-sample-data")
-async def clear_sample_data_endpoint(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Clear all sample/test data from the database.
-    This removes:
-    - All loans
-    - All leads
-    - All tasks (AI tasks, regular tasks, process tasks)
-    - All reconciliation events (pending approvals)
-    - All unified messages (SMS, Email, Teams)
-    - All referral partners
-    - All MUM clients
-
-    Keeps: User accounts and company settings
-
-    ⚠️ WARNING: This action cannot be undone!
-    """
-    try:
-        # Count data before deletion
-        loans_count = db.query(Loan).count()
-        leads_count = db.query(Lead).count()
-        ai_tasks_count = db.query(AITask).count()
-        tasks_count = db.query(Task).count()
-        process_tasks_count = db.query(ProcessTask).count()
-        partners_count = db.query(ReferralPartner).count()
-        mum_count = db.query(MUMClient).count()
-        reconciliation_count = db.query(ReconciliationEvent).count()
-        sms_count = db.query(SMSMessage).count()
-        email_count = db.query(EmailMessage).count()
-        teams_count = db.query(TeamsMessage).count()
-
-        logger.info(f"User {current_user.email} is clearing sample data")
-        logger.info(f"Deleting: {loans_count} loans, {leads_count} leads, {ai_tasks_count} AI tasks, "
-                   f"{tasks_count} tasks, {process_tasks_count} process tasks, {partners_count} partners, "
-                   f"{mum_count} MUM clients, {reconciliation_count} reconciliation events, "
-                   f"{sms_count} SMS, {email_count} emails, {teams_count} Teams messages")
-
-        # Delete in order (dependencies first):
-        # 1. Activities and Conversations (reference leads/loans)
-        deleted_activities = db.query(Activity).delete()
-        deleted_conversations = db.query(Conversation).delete()
-
-        # 2. Tasks (reference loans/leads)
-        deleted_ai_tasks = db.query(AITask).delete()
-        deleted_tasks = db.query(Task).delete()
-        deleted_process_tasks = db.query(ProcessTask).delete()
-
-        # 3. Reconciliation events (pending approvals)
-        deleted_reconciliation = db.query(ReconciliationEvent).delete()
-
-        # 4. Unified messages
-        deleted_sms = db.query(SMSMessage).delete()
-        deleted_emails = db.query(EmailMessage).delete()
-        deleted_teams = db.query(TeamsMessage).delete()
-
-        # 5. Loans (no dependencies on them now)
-        deleted_loans = db.query(Loan).delete()
-
-        # 6. Leads (no dependencies on them now)
-        deleted_leads = db.query(Lead).delete()
-
-        # 7. Referral partners and MUM clients (independent)
-        deleted_partners = db.query(ReferralPartner).delete()
-        deleted_mum = db.query(MUMClient).delete()
-
-        db.commit()
-
-        logger.info("✅ Sample data cleared successfully")
-
-        return {
-            "success": True,
-            "message": "All sample data has been cleared",
-            "deleted": {
-                "activities": deleted_activities,
-                "conversations": deleted_conversations,
-                "ai_tasks": deleted_ai_tasks,
-                "tasks": deleted_tasks,
-                "process_tasks": deleted_process_tasks,
-                "reconciliation_events": deleted_reconciliation,
-                "sms_messages": deleted_sms,
-                "email_messages": deleted_emails,
-                "teams_messages": deleted_teams,
-                "loans": deleted_loans,
-                "leads": deleted_leads,
-                "referral_partners": deleted_partners,
-                "mum_clients": deleted_mum
-            },
-            "remaining": {
-                "users": db.query(User).count(),
-                "branches": db.query(Branch).count()
-            }
-        }
-
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Failed to clear sample data: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to clear data: {str(e)}")
-
-@app.post("/api/v1/admin/migrate-team-hierarchy")
-async def migrate_team_hierarchy(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Run database migration to add team hierarchy support.
-    Adds parent_team_id and partner_category columns if they don't exist.
-    """
-    try:
-        logger.info(f"User {current_user.email} is running team hierarchy migration")
-
-        # Check if partner_category column exists
-        result = db.execute(text("""
-            SELECT column_name
-            FROM information_schema.columns
-            WHERE table_name='referral_partners'
-            AND column_name='partner_category';
-        """))
-
-        partner_category_exists = result.fetchone() is not None
-
-        if not partner_category_exists:
-            logger.info("Adding partner_category column...")
-            db.execute(text("""
-                ALTER TABLE referral_partners
-                ADD COLUMN partner_category VARCHAR DEFAULT 'individual';
-            """))
-            db.commit()
-            logger.info("✅ partner_category column added")
-
-        # Check if parent_team_id column exists
-        result = db.execute(text("""
-            SELECT column_name
-            FROM information_schema.columns
-            WHERE table_name='referral_partners'
-            AND column_name='parent_team_id';
-        """))
-
-        parent_team_id_exists = result.fetchone() is not None
-
-        if not parent_team_id_exists:
-            logger.info("Adding parent_team_id column...")
-            db.execute(text("""
-                ALTER TABLE referral_partners
-                ADD COLUMN parent_team_id INTEGER REFERENCES referral_partners(id);
-            """))
-            db.commit()
-            logger.info("✅ parent_team_id column added")
-
-        return {
-            "success": True,
-            "message": "Team hierarchy migration completed",
-            "changes": {
-                "partner_category": "added" if not partner_category_exists else "already exists",
-                "parent_team_id": "added" if not parent_team_id_exists else "already exists"
-            }
-        }
-
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Migration failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
-
-# ============================================================================
-# AI AUTO-FIX ERROR ENDPOINT
-# ============================================================================
-
-class AutoFixErrorRequest(BaseModel):
-    error_message: str
-    error_stack: str
-    component_stack: str
-    screenshot: Optional[str] = None
-    attempt_number: int = 1
-    url: str
-    user_agent: str
-
-@app.post("/api/v1/auto-fix-error")
-async def auto_fix_error(
-    request: AutoFixErrorRequest,
-    current_user: User = Depends(get_current_user)
-):
-    """
-    AI-powered automatic error fixing endpoint.
-    Receives error details with screenshot, analyzes with AI, applies fix, and tests it.
-    """
-    if not openai_client:
-        raise HTTPException(
-            status_code=503,
-            detail="OpenAI API not configured. Please set OPENAI_API_KEY environment variable."
-        )
-
-    try:
-        logger.info(f"Auto-fix attempt {request.attempt_number} for error: {request.error_message}")
-
-        # Analyze error with AI
-        error_analysis_prompt = f"""
-You are an expert React and Python debugging assistant. Analyze this error and provide a fix.
-
-ERROR DETAILS:
-- Message: {request.error_message}
-- URL: {request.url}
-- Attempt: {request.attempt_number}
-
-STACK TRACE:
-{request.error_stack}
-
-COMPONENT STACK:
-{request.component_stack}
-
-TASK:
-1. Identify the root cause of the error
-2. Determine which file(s) need to be modified
-3. Provide the exact fix needed
-4. Explain if this is a frontend (React) or backend (Python) issue
-
-Respond in JSON format:
-{{
-    "error_type": "frontend|backend|both",
-    "root_cause": "explanation of root cause",
-    "files_to_fix": ["path/to/file1.js", "path/to/file2.py"],
-    "fix_strategy": "detailed explanation of the fix",
-    "should_retry": true|false,
-    "confidence": "high|medium|low"
-}}
-"""
-
-        # Call OpenAI for error analysis
-        analysis_response = openai_client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are an expert debugging assistant. Always respond with valid JSON."},
-                {"role": "user", "content": error_analysis_prompt}
-            ],
-            temperature=0.3,
-            max_tokens=2000
-        )
-
-        analysis_text = analysis_response.choices[0].message.content
-
-        # Parse JSON response
-        try:
-            # Extract JSON from markdown code blocks if present
-            if "```json" in analysis_text:
-                analysis_text = analysis_text.split("```json")[1].split("```")[0].strip()
-            elif "```" in analysis_text:
-                analysis_text = analysis_text.split("```")[1].split("```")[0].strip()
-
-            analysis = json.loads(analysis_text)
-        except json.JSONDecodeError:
-            logger.error(f"Failed to parse AI response as JSON: {analysis_text}")
-            raise HTTPException(status_code=500, detail="AI response parsing failed")
-
-        logger.info(f"AI Analysis: {analysis}")
-
-        # For this iteration, we'll log the analysis and return it
-        # In a production system, this would automatically apply the fix
-        # For safety, we'll provide the analysis but require manual application
-
-        return {
-            "success": True,
-            "message": f"Error analyzed successfully. Root cause: {analysis.get('root_cause', 'Unknown')}",
-            "analysis": analysis,
-            "should_retry": analysis.get("should_retry", False),
-            "recommendation": "The error has been analyzed. Please review the suggested fix and apply it manually for safety.",
-            "fix_strategy": analysis.get("fix_strategy", ""),
-            "files_affected": analysis.get("files_to_fix", []),
-            "confidence": analysis.get("confidence", "unknown")
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Auto-fix error: {e}")
-        raise HTTPException(status_code=500, detail=f"Auto-fix failed: {str(e)}")
-
-# ============================================================================
 # STARTUP EVENT
 # ============================================================================
 
@@ -11840,122 +8356,6 @@ async def startup_event():
     logger.info("✅ CRM is ready!")
     logger.info("📚 API Documentation: http://localhost:8000/docs")
     logger.info("🔐 Demo Login: demo@example.com / demo123")
-
-# ============================================================================
-# AI SYSTEM INTEGRATION
-# ============================================================================
-
-# Import AI router (safe - no circular dependencies in this version)
-AI_ROUTER_LOADED = False
-AI_ROUTER_ERROR = None
-ai_router = None
-
-try:
-    from ai_api_endpoints import router as ai_router
-    app.include_router(ai_router)
-    AI_ROUTER_LOADED = True
-    logger.info("✅ AI System endpoints loaded at /api/ai/*")
-except ImportError as e:
-    AI_ROUTER_ERROR = f"ImportError: {str(e)}"
-    logger.warning(f"⚠️ AI System not available: {e}")
-except Exception as e:
-    AI_ROUTER_ERROR = f"Exception: {str(e)}"
-    logger.error(f"❌ Failed to load AI System: {e}")
-
-# ============================================================================
-# TEMPORARY ADMIN ENDPOINTS FOR REMOTE MIGRATION
-# ============================================================================
-
-@app.post("/admin/run-ai-migration")
-async def run_ai_migration_endpoint(request: Request):
-    """
-    Temporary endpoint to build AI database schema (Phase 1 & 2).
-    Usage: POST /admin/run-ai-migration with JSON body: {"secret": "migrate-ai-2024"}
-    """
-    import subprocess
-
-    body = await request.json()
-    secret = body.get("secret", "")
-
-    # Simple security check
-    if secret != "migrate-ai-2024":
-        raise HTTPException(status_code=403, detail="Invalid secret")
-
-    try:
-        # Run schema builder script
-        result = subprocess.run(
-            ["python3", "build_schema_now.py"],
-            capture_output=True,
-            text=True,
-            timeout=120
-        )
-
-        return {
-            "success": result.returncode == 0,
-            "stdout": result.stdout,
-            "stderr": result.stderr,
-            "returncode": result.returncode
-        }
-    except subprocess.TimeoutExpired:
-        return {
-            "success": False,
-            "error": "Schema build timed out after 120 seconds"
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
-
-@app.post("/admin/initialize-ai-system")
-async def initialize_ai_system_endpoint(request: Request):
-    """
-    Temporary endpoint to initialize AI system remotely (skips migration).
-    Usage: POST /admin/initialize-ai-system with JSON body: {"secret": "migrate-ai-2024"}
-    """
-    import subprocess
-
-    body = await request.json()
-    secret = body.get("secret", "")
-
-    # Simple security check
-    if secret != "migrate-ai-2024":
-        raise HTTPException(status_code=403, detail="Invalid secret")
-
-    try:
-        # Run initialization script (skip migration version)
-        result = subprocess.run(
-            ["python3", "initialize_ai_only.py"],
-            capture_output=True,
-            text=True,
-            timeout=120
-        )
-
-        return {
-            "success": result.returncode == 0,
-            "stdout": result.stdout,
-            "stderr": result.stderr,
-            "returncode": result.returncode
-        }
-    except subprocess.TimeoutExpired:
-        return {
-            "success": False,
-            "error": "Initialization timed out after 120 seconds"
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e)
-        }
-
-@app.get("/debug/ai-router-status")
-async def ai_router_status_endpoint():
-    """Debug endpoint to check AI router loading status"""
-    return {
-        "loaded": AI_ROUTER_LOADED,
-        "error": AI_ROUTER_ERROR,
-        "routes_count": len(ai_router.routes) if AI_ROUTER_LOADED and ai_router else 0
-    }
 
 # ============================================================================
 # MAIN
