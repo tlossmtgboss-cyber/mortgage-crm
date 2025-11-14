@@ -379,6 +379,24 @@ class Conversation(Base):
     meta_data = Column(JSON)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
+class ConversationMemory(Base):
+    """Stores conversation summaries with vector embeddings for AI context retrieval"""
+    __tablename__ = "conversation_memory"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"), index=True)
+    loan_id = Column(Integer, ForeignKey("loans.id"), index=True)
+    conversation_summary = Column(Text, nullable=False)  # Summary of the conversation
+    key_points = Column(JSON)  # Extracted entities, preferences, issues
+    sentiment = Column(String)  # positive, neutral, negative
+    intent = Column(String)  # The user's intent in the conversation
+    pinecone_id = Column(String, unique=True, index=True)  # Reference to vector in Pinecone
+    relevance_score = Column(Float)  # How relevant this memory is (updated over time)
+    access_count = Column(Integer, default=0)  # How many times this memory was retrieved
+    last_accessed_at = Column(DateTime)  # When this memory was last used
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
 class CalendarEvent(Base):
     __tablename__ = "calendar_events"
     id = Column(Integer, primary_key=True, index=True)
