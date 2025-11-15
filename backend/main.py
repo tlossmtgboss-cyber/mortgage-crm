@@ -2277,6 +2277,108 @@ async def get_current_user_flexible(
     return user
 
 # ============================================================================
+# MISSION CONTROL - AI ACTION LOGGING HELPER
+# ============================================================================
+
+async def log_ai_action_to_mission_control(
+    db: Session,
+    agent_name: str,
+    action_type: str,
+    lead_id: Optional[int] = None,
+    loan_id: Optional[int] = None,
+    user_id: Optional[int] = None,
+    context: Optional[dict] = None,
+    reasoning: Optional[str] = None,
+    confidence_score: Optional[float] = None,
+    autonomy_level: str = "assisted",
+    required_approval: bool = False,
+    status: str = "pending",
+    outcome: Optional[str] = None,
+    metadata: Optional[dict] = None
+) -> Optional[str]:
+    """
+    Helper function to log AI actions to Mission Control for tracking
+    Returns the action_id if successful, None if failed
+    """
+    try:
+        import time
+
+        # Generate unique action ID
+        action_id = f"{agent_name.lower().replace(' ', '_')}_{int(time.time() * 1000)}"
+
+        # Create action record
+        action = AIColleagueAction(
+            action_id=action_id,
+            agent_name=agent_name,
+            action_type=action_type,
+            lead_id=lead_id,
+            loan_id=loan_id,
+            user_id=user_id,
+            context=context,
+            trigger_type="user_request",
+            confidence_score=confidence_score,
+            reasoning=reasoning,
+            autonomy_level=autonomy_level,
+            required_approval=required_approval,
+            status=status,
+            outcome=outcome,
+            executed_at=datetime.now(timezone.utc) if status == "completed" else None,
+            completed_at=datetime.now(timezone.utc) if outcome else None,
+            metadata=metadata
+        )
+
+        db.add(action)
+        db.commit()
+
+        logger.info(f"✅ Mission Control: Logged {agent_name} action {action_id}")
+        return action_id
+
+    except Exception as e:
+        logger.error(f"❌ Failed to log AI action to Mission Control: {e}")
+        db.rollback()
+        return None
+
+async def update_ai_action_outcome(
+    db: Session,
+    action_id: str,
+    outcome: str,
+    impact_score: Optional[float] = None,
+    customer_response: Optional[str] = None,
+    metadata: Optional[dict] = None
+) -> bool:
+    """
+    Update the outcome of a Mission Control action
+    """
+    try:
+        action = db.query(AIColleagueAction).filter(
+            AIColleagueAction.action_id == action_id
+        ).first()
+
+        if action:
+            action.outcome = outcome
+            action.completed_at = datetime.now(timezone.utc)
+            action.status = "completed"
+
+            if impact_score is not None:
+                action.impact_score = impact_score
+            if customer_response:
+                action.customer_response = customer_response
+            if metadata:
+                action.metadata = {**(action.metadata or {}), **metadata}
+
+            db.commit()
+            logger.info(f"✅ Mission Control: Updated action {action_id} outcome to {outcome}")
+            return True
+        else:
+            logger.warning(f"⚠️  Mission Control: Action {action_id} not found")
+            return False
+
+    except Exception as e:
+        logger.error(f"❌ Failed to update AI action outcome: {e}")
+        db.rollback()
+        return False
+
+# ============================================================================
 # AI MEMORY / SMART CHAT ENDPOINT
 # ============================================================================
 
@@ -2302,6 +2404,19 @@ async def smart_chat_with_memory(
         if not message:
             raise HTTPException(status_code=400, detail="Message is required")
 
+        # Log AI action to Mission Control
+        action_id = await log_ai_action_to_mission_control(
+            db=db,
+            agent_name="Smart AI Chat",
+            action_type="conversation",
+            lead_id=lead_id,
+            loan_id=loan_id,
+            user_id=current_user.id,
+            context={"message": message[:100], "include_context": include_context},
+            autonomy_level="assisted",
+            status="pending"
+        )
+
         # Get intelligent response with memory
         result = await context_ai.get_intelligent_response(
             db=db,
@@ -2311,6 +2426,20 @@ async def smart_chat_with_memory(
             loan_id=loan_id,
             include_context=include_context
         )
+
+        # Update outcome in Mission Control
+        if action_id:
+            await update_ai_action_outcome(
+                db=db,
+                action_id=action_id,
+                outcome="success",
+                impact_score=0.7,  # Medium impact for conversation
+                metadata={
+                    "context_used": result.get("context_used", False),
+                    "context_count": result.get("context_count", 0),
+                    "has_memory": result.get("has_memory", False)
+                }
+            )
 
         return {
             "success": True,
@@ -2323,6 +2452,10 @@ async def smart_chat_with_memory(
 
     except Exception as e:
         logger.error(f"Error in smart chat: {e}")
+
+        # Log failure to Mission Control if action was started
+        # (action_id won't exist in this scope, so we'll skip update)
+
         return {
             "success": False,
             "response": "I apologize, but I'm having trouble right now. Please try again.",
@@ -2407,6 +2540,20 @@ async def execute_autonomous_task(
 
         # Activity log to track what AI does
         activity_log = []
+
+        # Log autonomous task to Mission Control
+        action_id = await log_ai_action_to_mission_control(
+            db=db,
+            agent_name="Autonomous AI Agent",
+            action_type="autonomous_task",
+            lead_id=lead_id,
+            user_id=current_user.id,
+            context={"task": task[:200], "lead_name": lead_name},
+            reasoning=f"Executing autonomous task: {task}",
+            autonomy_level="full",  # This is fully autonomous!
+            required_approval=False,
+            status="pending"
+        )
 
         # Define tools available to AI
         tools = [
@@ -2646,6 +2793,20 @@ When scheduling appointments, confirm the time first via SMS before creating the
         # Get final response
         final_message = messages[-1].content if hasattr(messages[-1], 'content') else "Task completed"
 
+        # Update Mission Control with success
+        if action_id:
+            await update_ai_action_outcome(
+                db=db,
+                action_id=action_id,
+                outcome="success",
+                impact_score=0.9,  # High impact for autonomous actions!
+                metadata={
+                    "activity_log": activity_log,
+                    "tools_used": len(activity_log),
+                    "iterations": iteration + 1
+                }
+            )
+
         return {
             "success": True,
             "message": "Autonomous task executed successfully",
@@ -2655,6 +2816,20 @@ When scheduling appointments, confirm the time first via SMS before creating the
 
     except Exception as e:
         logger.error(f"Error in autonomous task: {e}")
+
+        # Update Mission Control with failure
+        # Note: action_id might not be in scope here, but we'll try
+        try:
+            if 'action_id' in locals() and action_id:
+                await update_ai_action_outcome(
+                    db=db,
+                    action_id=action_id,
+                    outcome="failure",
+                    metadata={"error": str(e)}
+                )
+        except:
+            pass
+
         raise HTTPException(status_code=500, detail=str(e))
 
 
