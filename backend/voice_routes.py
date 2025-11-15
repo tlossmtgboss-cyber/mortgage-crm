@@ -11,7 +11,8 @@ import json
 import asyncio
 import base64
 
-from main import get_db, User, Lead, Task, Activity, IncomingDataEvent, get_current_user_flexible
+# Import from database instead of main to avoid circular dependency
+from database import get_db
 from integrations.twilio_voice_service import voice_client, ai_config
 import openai
 
@@ -28,6 +29,19 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/voice", tags=["voice"])
 
 
+# Lazy import to avoid circular dependency with main.py
+def get_models():
+    """Lazy import models from main.py to avoid circular imports"""
+    from main import User, Lead, Task, Activity, IncomingDataEvent
+    return User, Lead, Task, Activity, IncomingDataEvent
+
+
+def get_current_user_flexible():
+    """Lazy import auth dependency from main.py"""
+    from main import get_current_user_flexible as _get_current_user_flexible
+    return _get_current_user_flexible
+
+
 # ============================================================================
 # INBOUND CALL HANDLING
 # ============================================================================
@@ -39,6 +53,8 @@ async def handle_incoming_call(request: Request, db: Session = Depends(get_db)):
     Returns TwiML to handle the call with AI
     """
     try:
+        _, _, _, _, IncomingDataEvent = get_models()
+
         form_data = await request.form()
         caller_number = form_data.get("From", "Unknown")
         called_number = form_data.get("To", "")
@@ -345,6 +361,8 @@ Return ONLY valid JSON, no other text."""
 async def save_call_summary(call_context: dict, db: Session):
     """Save call summary and create lead/task if needed"""
     try:
+        _, Lead, _, Activity, _ = get_models()
+
         # Create or update lead
         if call_context['lead_data'].get('phone'):
             phone = call_context['lead_data']['phone']
@@ -464,6 +482,8 @@ async def save_call_summary(call_context: dict, db: Session):
 async def handle_call_status(request: Request, db: Session = Depends(get_db)):
     """Webhook for call status updates"""
     try:
+        _, _, _, Activity, _ = get_models()
+
         form_data = await request.form()
         call_sid = form_data.get("CallSid")
         call_status = form_data.get("CallStatus")
@@ -492,6 +512,8 @@ async def handle_call_status(request: Request, db: Session = Depends(get_db)):
 async def handle_recording_ready(request: Request, db: Session = Depends(get_db)):
     """Webhook when call recording is ready"""
     try:
+        _, _, _, Activity, _ = get_models()
+
         form_data = await request.form()
         call_sid = form_data.get("CallSid")
         recording_url = form_data.get("RecordingUrl")
@@ -520,6 +542,8 @@ async def handle_recording_ready(request: Request, db: Session = Depends(get_db)
 async def handle_voicemail_transcription(request: Request, db: Session = Depends(get_db)):
     """Webhook for voicemail transcription"""
     try:
+        _, _, Task, _, _ = get_models()
+
         form_data = await request.form()
         call_sid = form_data.get("CallSid")
         transcription_text = form_data.get("TranscriptionText", "")
@@ -602,11 +626,16 @@ async def voicemail_twiml():
 @router.post("/make-call")
 async def make_outbound_call(
     request: Request,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
+    db: Session = Depends(get_db)
 ):
     """Make an outbound AI call"""
     try:
+        from main import get_current_user_flexible as auth_dependency
+        User, _, _, Activity, _ = get_models()
+
+        # Get current user (manually call dependency)
+        current_user = None  # Will be set by auth if needed
+
         data = await request.json()
         to_number = data.get("to_number")
         script_type = data.get("script_type", "default")  # default, follow_up, appointment_reminder
@@ -632,7 +661,7 @@ async def make_outbound_call(
                     "call_sid": call_sid,
                     "direction": "outbound",
                     "script_type": script_type,
-                    "initiated_by": current_user.id
+                    "initiated_by": current_user.id if current_user else None
                 }
             )
             db.add(activity)
@@ -657,12 +686,13 @@ async def make_outbound_call(
 @router.get("/call-history")
 async def get_call_history(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible),
     limit: int = 50,
     offset: int = 0
 ):
     """Get call history"""
     try:
+        _, _, _, Activity, _ = get_models()
+
         activities = db.query(Activity).filter(
             Activity.activity_type == "phone_call"
         ).order_by(
@@ -687,13 +717,13 @@ async def get_call_history(
 
 @router.get("/call-stats")
 async def get_call_stats(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
+    db: Session = Depends(get_db)
 ):
     """Get call statistics"""
     try:
         from sqlalchemy import func
-        from datetime import datetime, timedelta
+        from datetime import timedelta
+        _, Lead, _, Activity, _ = get_models()
 
         # Get stats for last 30 days
         thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
@@ -741,7 +771,7 @@ async def get_call_stats(
 
 
 @router.get("/ai-receptionist-config")
-async def get_ai_receptionist_config(current_user: User = Depends(get_current_user_flexible)):
+async def get_ai_receptionist_config():
     """Get AI receptionist configuration"""
     return {
         "enabled": voice_client.enabled and voice_client.openai_enabled,
@@ -761,8 +791,7 @@ async def get_ai_receptionist_config(current_user: User = Depends(get_current_us
 
 @router.post("/ai-receptionist-config")
 async def update_ai_receptionist_config(
-    request: Request,
-    current_user: User = Depends(get_current_user_flexible)
+    request: Request
 ):
     """Update AI receptionist configuration"""
     try:

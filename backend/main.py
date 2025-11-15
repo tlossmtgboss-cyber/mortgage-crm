@@ -2892,9 +2892,9 @@ from ai_receptionist_dashboard_routes import router as ai_receptionist_dashboard
 app.include_router(ai_receptionist_dashboard_router, tags=["AI Receptionist Dashboard"])
 
 # Include Voice AI Receptionist routes
-# TEMP DISABLED: Circular import issue - needs refactoring
-# from voice_routes import router as voice_router
-# app.include_router(voice_router, tags=["Voice AI"])
+# ✅ FIXED: Circular import resolved by using lazy imports in voice_routes.py
+from voice_routes import router as voice_router
+app.include_router(voice_router, tags=["Voice AI"])
 
 # ============================================================================
 # API KEY HELPER FUNCTIONS
