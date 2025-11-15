@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
-from database import Base, get_db_url
+from database import Base
 
 # Import all models to ensure they're registered with Base
 from models.lead_profile import LeadProfile
@@ -35,7 +35,10 @@ def run_migration():
     print("=" * 70)
 
     # Get database URL
-    DATABASE_URL = get_db_url()
+    DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./mortgage_crm.db")
+    # Fix postgres:// to postgresql:// for SQLAlchemy
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
     print(f"\nConnecting to database...")
     print(f"Database: {DATABASE_URL.split('@')[1] if '@' in DATABASE_URL else 'local'}")
