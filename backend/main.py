@@ -6684,7 +6684,7 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     Get dashboard data with real metrics from database.
     All values are server-computed from CRM database.
     """
-    from datetime import date, timedelta
+    from datetime import date, timedelta, datetime, timezone
     from sqlalchemy import func, extract
 
     # Get current date ranges
