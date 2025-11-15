@@ -5412,14 +5412,14 @@ async def get_scorecard(
     Get comprehensive loan scorecard metrics matching the Loan Scorecard Report format.
     Includes conversion metrics, funding totals, and referral source breakdown.
     """
-    from datetime import date, timedelta
+    from datetime import date, datetime as dt, timedelta, timezone
     from sqlalchemy import func, extract, case
     from decimal import Decimal
 
     # Date range setup
     if start_date and end_date:
-        start = datetime.strptime(start_date, "%Y-%m-%d").date()
-        end = datetime.strptime(end_date, "%Y-%m-%d").date()
+        start = dt.strptime(start_date, "%Y-%m-%d").date()
+        end = dt.strptime(end_date, "%Y-%m-%d").date()
     else:
         # Default to current month
         today = date.today()
@@ -5697,7 +5697,7 @@ async def get_scorecard(
         "conversion_metrics": conversion_metrics,
         "conversion_upswing": conversion_upswing,
         "funding_totals": funding_totals,
-        "generated_at": datetime.now(timezone.utc).isoformat()
+        "generated_at": dt.now(timezone.utc).isoformat()
     }
 
 # ============================================================================
