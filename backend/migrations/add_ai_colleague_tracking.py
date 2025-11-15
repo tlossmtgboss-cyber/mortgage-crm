@@ -69,7 +69,7 @@ def run_migration():
             -- Metadata
             created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-            metadata JSONB
+            action_metadata JSONB
         );
         """,
 
@@ -94,7 +94,7 @@ def run_migration():
             period_end TIMESTAMP WITH TIME ZONE,
 
             -- Metadata
-            metadata JSONB
+            metric_metadata JSONB
         );
         """,
 
@@ -173,7 +173,7 @@ def run_migration():
             -- Metadata
             discovered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
             expires_at TIMESTAMP WITH TIME ZONE,
-            metadata JSONB
+            insight_metadata JSONB
         );
         """,
 
@@ -210,7 +210,7 @@ def run_migration():
             score_change FLOAT,
 
             -- Metadata
-            metadata JSONB
+            health_metadata JSONB
         );
         """,
 

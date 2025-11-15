@@ -746,7 +746,7 @@ class AIColleagueAction(Base):
     # Metadata
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-    metadata = Column(JSON)
+    action_metadata = Column(JSON)
 
 class AIColleagueLearningMetric(Base):
     """Tracks AI learning and improvement metrics"""
@@ -769,7 +769,7 @@ class AIColleagueLearningMetric(Base):
     period_end = Column(DateTime)
 
     # Metadata
-    metadata = Column(JSON)
+    metric_metadata = Column(JSON)
 
 class AIPerformanceDaily(Base):
     """Daily rollup of AI performance metrics"""
@@ -842,7 +842,7 @@ class AIJourneyInsight(Base):
     # Metadata
     discovered_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     expires_at = Column(DateTime)
-    metadata = Column(JSON)
+    insight_metadata = Column(JSON)
 
 class AIHealthScore(Base):
     """Overall AI health calculations"""
@@ -877,7 +877,7 @@ class AIHealthScore(Base):
     score_change = Column(Float)
 
     # Metadata
-    metadata = Column(JSON)
+    health_metadata = Column(JSON)
 
 # ============================================================================
 # DATA RECONCILIATION ENGINE (DRE) MODELS
@@ -2324,7 +2324,7 @@ async def log_ai_action_to_mission_control(
             outcome=outcome,
             executed_at=datetime.now(timezone.utc) if status == "completed" else None,
             completed_at=datetime.now(timezone.utc) if outcome else None,
-            metadata=metadata
+            action_metadata=metadata
         )
 
         db.add(action)
@@ -2364,7 +2364,7 @@ async def update_ai_action_outcome(
             if customer_response:
                 action.customer_response = customer_response
             if metadata:
-                action.metadata = {**(action.metadata or {}), **metadata}
+                action.action_metadata = {**(action.action_metadata or {}), **metadata}
 
             db.commit()
             logger.info(f"✅ Mission Control: Updated action {action_id} outcome to {outcome}")
