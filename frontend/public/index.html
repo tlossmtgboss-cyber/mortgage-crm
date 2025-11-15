@@ -5,9 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#000000" />
     <meta name="description" content="Agentic AI Mortgage CRM" />
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
+    <meta name="cache-control" content="no-cache, no-store, must-revalidate, max-age=0, post-check=0, pre-check=0" />
     <title>Mortgage CRM</title>
     <style>
       * {
@@ -31,6 +32,26 @@
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
     <script>
+      // Unregister all service workers and clear storage on load
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for (let registration of registrations) {
+            registration.unregister();
+            console.log('Service worker unregistered');
+          }
+        });
+      }
+
+      // Clear all caches
+      if ('caches' in window) {
+        caches.keys().then(function(names) {
+          for (let name of names) {
+            caches.delete(name);
+            console.log('Cache cleared:', name);
+          }
+        });
+      }
+
       // Global error handler to prevent blank pages
       window.addEventListener('error', function(event) {
         console.error('Global error caught:', event.error);
@@ -47,4 +68,4 @@
     </script>
   </body>
 </html>
-/* Force Vercel rebuild - 1763212476 */
+/* Force cache-busting rebuild - 1763213000 */
