@@ -67,7 +67,7 @@ function TeamMemberProfile() {
     <div className="team-member-profile-page">
       {/* Header */}
       <div className="profile-header">
-        <button className="btn-back" onClick={() => navigate('/settings/team-members')}>
+        <button className="btn-back" onClick={() => navigate('/team-members')}>
           ← Back to Team Members
         </button>
         <div className="header-actions">
