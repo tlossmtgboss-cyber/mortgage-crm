@@ -53,8 +53,6 @@ async def handle_incoming_call(request: Request, db: Session = Depends(get_db)):
     Returns TwiML to handle the call with AI
     """
     try:
-        _, _, _, _, IncomingDataEvent = get_models()
-
         form_data = await request.form()
         caller_number = form_data.get("From", "Unknown")
         called_number = form_data.get("To", "")
@@ -62,21 +60,10 @@ async def handle_incoming_call(request: Request, db: Session = Depends(get_db)):
 
         logger.info(f"Incoming call from {caller_number} (SID: {call_sid})")
 
-        # Log the call in database
-        call_event = IncomingDataEvent(
-            source="phone_call",
-            external_message_id=call_sid,
-            raw_text=f"Incoming call from {caller_number}",
-            processed=False,
-            metadata={
-                "caller": caller_number,
-                "direction": "inbound",
-                "call_sid": call_sid
-            }
-        )
-        db.add(call_event)
+        # Note: Not logging to IncomingDataEvent because it requires user_id
+        # Instead, we log directly to AI Receptionist Dashboard which is better for voice
 
-        # ✅ NEW: Log to AI Receptionist Dashboard
+        # ✅ Log to AI Receptionist Dashboard
         dashboard_activity = AIReceptionistActivity(
             id=str(uuid.uuid4()),
             timestamp=datetime.now(timezone.utc),
@@ -482,24 +469,32 @@ async def save_call_summary(call_context: dict, db: Session):
 async def handle_call_status(request: Request, db: Session = Depends(get_db)):
     """Webhook for call status updates"""
     try:
-        _, _, _, Activity, _ = get_models()
-
         form_data = await request.form()
         call_sid = form_data.get("CallSid")
         call_status = form_data.get("CallStatus")
         duration = form_data.get("CallDuration", "0")
+        from_number = form_data.get("From", "")
+        to_number = form_data.get("To", "")
 
         logger.info(f"Call {call_sid} status: {call_status}, duration: {duration}s")
 
-        # Update activity with duration
-        activity = db.query(Activity).filter(
-            Activity.metadata['call_sid'].astext == call_sid
-        ).first()
+        # Update AI Receptionist Dashboard activity if it exists
+        try:
+            activity = db.query(AIReceptionistActivity).filter(
+                AIReceptionistActivity.conversation_id == call_sid
+            ).first()
 
-        if activity:
-            activity.metadata['duration'] = int(duration)
-            activity.metadata['status'] = call_status
-            db.commit()
+            if activity:
+                # Update with final status
+                activity.outcome_status = 'completed' if call_status == 'completed' else call_status
+                if activity.extra_data is None:
+                    activity.extra_data = {}
+                activity.extra_data['duration'] = int(duration)
+                activity.extra_data['final_status'] = call_status
+                db.commit()
+                logger.info(f"Updated AI Receptionist activity for call {call_sid}")
+        except Exception as update_error:
+            logger.warning(f"Could not update activity for call {call_sid}: {update_error}")
 
         return {"status": "ok"}
 
@@ -512,8 +507,6 @@ async def handle_call_status(request: Request, db: Session = Depends(get_db)):
 async def handle_recording_ready(request: Request, db: Session = Depends(get_db)):
     """Webhook when call recording is ready"""
     try:
-        _, _, _, Activity, _ = get_models()
-
         form_data = await request.form()
         call_sid = form_data.get("CallSid")
         recording_url = form_data.get("RecordingUrl")
@@ -521,15 +514,21 @@ async def handle_recording_ready(request: Request, db: Session = Depends(get_db)
 
         logger.info(f"Recording ready for call {call_sid}: {recording_url}")
 
-        # Update activity with recording URL
-        activity = db.query(Activity).filter(
-            Activity.metadata['call_sid'].astext == call_sid
-        ).first()
+        # Update AI Receptionist Dashboard activity with recording URL
+        try:
+            activity = db.query(AIReceptionistActivity).filter(
+                AIReceptionistActivity.conversation_id == call_sid
+            ).first()
 
-        if activity:
-            activity.metadata['recording_url'] = recording_url
-            activity.metadata['recording_sid'] = recording_sid
-            db.commit()
+            if activity:
+                if activity.extra_data is None:
+                    activity.extra_data = {}
+                activity.extra_data['recording_url'] = recording_url
+                activity.extra_data['recording_sid'] = recording_sid
+                db.commit()
+                logger.info(f"Updated activity with recording for call {call_sid}")
+        except Exception as update_error:
+            logger.warning(f"Could not update recording for call {call_sid}: {update_error}")
 
         return {"status": "ok"}
 
