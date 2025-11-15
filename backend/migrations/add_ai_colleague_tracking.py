@@ -75,7 +75,7 @@ def run_migration():
 
         # 2. AI Learning Metrics table
         """
-        CREATE TABLE IF NOT EXISTS ai_learning_metrics (
+        CREATE TABLE IF NOT EXISTS ai_colleague_learning_metrics (
             id SERIAL PRIMARY KEY,
             action_id VARCHAR(100) REFERENCES ai_colleague_actions(action_id) ON DELETE CASCADE,
             metric_type VARCHAR(100) NOT NULL,
@@ -223,9 +223,9 @@ def run_migration():
         "CREATE INDEX IF NOT EXISTS idx_ai_actions_created ON ai_colleague_actions(created_at);",
         "CREATE INDEX IF NOT EXISTS idx_ai_actions_autonomy ON ai_colleague_actions(autonomy_level);",
 
-        "CREATE INDEX IF NOT EXISTS idx_ai_metrics_action ON ai_learning_metrics(action_id);",
-        "CREATE INDEX IF NOT EXISTS idx_ai_metrics_type ON ai_learning_metrics(metric_type);",
-        "CREATE INDEX IF NOT EXISTS idx_ai_metrics_measured ON ai_learning_metrics(measured_at);",
+        "CREATE INDEX IF NOT EXISTS idx_ai_metrics_action ON ai_colleague_learning_metrics(action_id);",
+        "CREATE INDEX IF NOT EXISTS idx_ai_metrics_type ON ai_colleague_learning_metrics(metric_type);",
+        "CREATE INDEX IF NOT EXISTS idx_ai_metrics_measured ON ai_colleague_learning_metrics(measured_at);",
 
         "CREATE INDEX IF NOT EXISTS idx_ai_daily_date ON ai_performance_daily(date);",
         "CREATE INDEX IF NOT EXISTS idx_ai_daily_agent ON ai_performance_daily(agent_name);",
@@ -315,7 +315,7 @@ def run_migration():
             -- Calculate learning velocity (improvement over time)
             SELECT COALESCE(AVG(improvement_percentage), 0)
             INTO v_learning_velocity
-            FROM ai_learning_metrics
+            FROM ai_colleague_learning_metrics
             WHERE measured_at BETWEEN p_period_start AND p_period_end;
 
             -- Return calculated scores

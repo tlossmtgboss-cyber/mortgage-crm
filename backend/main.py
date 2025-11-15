@@ -750,7 +750,7 @@ class AIColleagueAction(Base):
 
 class AIColleagueLearningMetric(Base):
     """Tracks AI learning and improvement metrics"""
-    __tablename__ = "ai_learning_metrics"
+    __tablename__ = "ai_colleague_learning_metrics"
     id = Column(Integer, primary_key=True, index=True)
     action_id = Column(String(100), ForeignKey("ai_colleague_actions.action_id", ondelete="CASCADE"))
     metric_type = Column(String(100), nullable=False, index=True)
