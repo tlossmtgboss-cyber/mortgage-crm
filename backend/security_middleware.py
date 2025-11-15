@@ -15,6 +15,31 @@ import time
 logger = logging.getLogger(__name__)
 
 # ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+def is_websocket_request(request: Request) -> bool:
+    """
+    Check if the request is a WebSocket upgrade request
+    WebSocket connections should bypass HTTP-only middleware
+    """
+    # Check for WebSocket upgrade header
+    connection = request.headers.get("connection", "").lower()
+    upgrade = request.headers.get("upgrade", "").lower()
+
+    # Check if it's a WebSocket path
+    websocket_paths = [
+        "/api/v1/voice/ws/voice-stream",
+        "/ws/",
+        "/websocket/"
+    ]
+
+    is_ws_path = any(path in str(request.url.path) for path in websocket_paths)
+    is_ws_upgrade = "upgrade" in connection and upgrade == "websocket"
+
+    return is_ws_path or is_ws_upgrade
+
+# ============================================================================
 # RATE LIMITING MIDDLEWARE
 # ============================================================================
 
@@ -32,6 +57,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.request_history: Dict[str, list] = defaultdict(list)
 
     async def dispatch(self, request: Request, call_next):
+        # Skip rate limiting for WebSocket connections
+        if is_websocket_request(request):
+            logger.info(f"Bypassing rate limit for WebSocket: {request.url.path}")
+            return await call_next(request)
+
         client_ip = self._get_client_ip(request)
         current_time = time.time()
 
@@ -103,6 +133,11 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next):
+        # Skip security headers for WebSocket connections
+        if is_websocket_request(request):
+            logger.info(f"Bypassing security headers for WebSocket: {request.url.path}")
+            return await call_next(request)
+
         response = await call_next(request)
 
         # Content Security Policy - Prevents XSS attacks
@@ -160,6 +195,11 @@ class IPBlockingMiddleware(BaseHTTPMiddleware):
         self.blocked_ips: set = set()
 
     async def dispatch(self, request: Request, call_next):
+        # Skip IP blocking for WebSocket connections (but still check for blocked IPs)
+        if is_websocket_request(request):
+            logger.info(f"Bypassing IP blocking checks for WebSocket: {request.url.path}")
+            return await call_next(request)
+
         client_ip = self._get_client_ip(request)
 
         # Check if IP is blocked
@@ -253,6 +293,11 @@ class RequestValidationMiddleware(BaseHTTPMiddleware):
     MAX_REQUEST_SIZE = 10 * 1024 * 1024  # 10 MB
 
     async def dispatch(self, request: Request, call_next):
+        # Skip request validation for WebSocket connections
+        if is_websocket_request(request):
+            logger.info(f"Bypassing request validation for WebSocket: {request.url.path}")
+            return await call_next(request)
+
         # Check request size
         content_length = request.headers.get("content-length")
         if content_length and int(content_length) > self.MAX_REQUEST_SIZE:
@@ -290,6 +335,11 @@ class SecurityLoggingMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next):
+        # Log WebSocket connections but don't apply HTTP-specific logging
+        if is_websocket_request(request):
+            logger.info(f"WebSocket connection: {request.url.path}")
+            return await call_next(request)
+
         client_ip = request.headers.get("X-Forwarded-For", request.client.host)
 
         # Log authentication attempts
