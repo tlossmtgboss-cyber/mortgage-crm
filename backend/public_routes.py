@@ -399,6 +399,7 @@ async def register_user(registration: UserRegistration, db: Session = Depends(ge
             status_code=500,
             detail="We encountered an error creating your account. Please try again or contact support if the issue persists."
         )
+    """
 
 
 @router.post("/api/v1/verify-email")
