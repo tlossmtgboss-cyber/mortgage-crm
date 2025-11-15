@@ -11986,6 +11986,45 @@ async def initialize_ai_system_endpoint(request: dict):
             "error": str(e)
         }
 
+@app.post("/admin/run-mission-control-migration")
+async def run_mission_control_migration_endpoint(request: dict):
+    """
+    Run Mission Control database migration remotely.
+    Usage: POST /admin/run-mission-control-migration with body: {"secret": "migrate-ai-2024"}
+    """
+    import subprocess
+
+    # Simple security check
+    if request.get("secret") != "migrate-ai-2024":
+        raise HTTPException(status_code=403, detail="Invalid secret")
+
+    try:
+        # Run migration script
+        result = subprocess.run(
+            ["python3", "run_ai_colleague_migration.py"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            cwd="/app"
+        )
+
+        return {
+            "success": result.returncode == 0,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "returncode": result.returncode
+        }
+    except subprocess.TimeoutExpired:
+        return {
+            "success": False,
+            "error": "Migration timed out after 120 seconds"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
 @app.post("/admin/initialize-ai-only")
 async def initialize_ai_only_endpoint(request: dict):
     """
