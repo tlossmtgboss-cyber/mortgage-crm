@@ -802,6 +802,58 @@ class MicrosoftOAuthToken(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
+class ITHelpdeskTicket(Base):
+    __tablename__ = "it_helpdesk_tickets"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    title = Column(String)
+    description = Column(Text)
+    category = Column(String)  # dev_env, build_deploy, git, vscode, os, network, saas_config
+    urgency = Column(String, default="normal")  # low, normal, high, critical
+    status = Column(String, default="analyzing")  # analyzing, awaiting_approval, fixing, resolved, failed
+
+    # AI Analysis
+    ai_diagnosis = Column(Text)  # AI's understanding of the problem
+    root_cause = Column(String)  # Short summary of root cause
+    proposed_fix = Column(JSON)  # {steps: [], commands: [], risk_level: "low|medium|high"}
+
+    # Execution
+    approved_at = Column(DateTime)  # When user approved the fix
+    executed_at = Column(DateTime)  # When fix was executed
+    execution_log = Column(JSON)  # {commands_run: [], outputs: [], errors: []}
+    resolution_notes = Column(Text)  # Final outcome
+
+    # Metadata
+    affected_system = Column(String)  # vercel, railway, local, github, vscode, etc.
+    affected_project = Column(String)  # Project/repo name if applicable
+    logs_attached = Column(JSON)  # Screenshots, error logs, stack traces
+    auto_resolved = Column(Boolean, default=False)  # Was it auto-fixed or manual?
+
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    resolved_at = Column(DateTime)
+
+class ITHelpdeskTool(Base):
+    __tablename__ = "it_helpdesk_tools"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, unique=True)  # e.g., "fix_vercel_output_dir"
+    description = Column(Text)  # What this tool does
+    category = Column(String)  # build_deploy, git, vscode, etc.
+    risk_level = Column(String)  # low, medium, high
+    requires_approval = Column(Boolean, default=True)  # Does it need user approval?
+
+    # Tool definition
+    parameters_schema = Column(JSON)  # OpenAI function calling schema
+    implementation = Column(Text)  # Code/script to run (or API endpoint)
+
+    # Stats
+    times_used = Column(Integer, default=0)
+    success_count = Column(Integer, default=0)
+    failure_count = Column(Integer, default=0)
+
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
 # ============================================================================
 # CLIENT MANAGEMENT PROFILE (CMP) - MASTER SUBSCRIBER PROFILE
 # ============================================================================
@@ -3929,6 +3981,302 @@ async def get_system_diagnostics(current_user: User = Depends(get_current_user))
         "database_type": "postgresql" if "postgresql" in DATABASE_URL else "sqlite",
         "environment": os.getenv("RAILWAY_ENVIRONMENT", "local")
     }
+
+# ============================================================================
+# IT HELPDESK ENDPOINTS
+# ============================================================================
+
+@app.post("/api/v1/it-helpdesk/submit")
+async def submit_it_ticket(
+    ticket_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Submit a new IT helpdesk ticket for AI diagnosis"""
+    try:
+        title = ticket_data.get("title", "").strip()
+        description = ticket_data.get("description", "").strip()
+        category = ticket_data.get("category", "general")
+        urgency = ticket_data.get("urgency", "normal")
+        affected_system = ticket_data.get("affected_system", "")
+        affected_project = ticket_data.get("affected_project", "")
+        logs_attached = ticket_data.get("logs_attached", [])
+
+        if not description:
+            raise HTTPException(status_code=400, detail="Description is required")
+
+        # Create ticket
+        ticket = ITHelpdeskTicket(
+            user_id=current_user.id,
+            title=title or description[:100],
+            description=description,
+            category=category,
+            urgency=urgency,
+            affected_system=affected_system,
+            affected_project=affected_project,
+            logs_attached=logs_attached,
+            status="analyzing"
+        )
+        db.add(ticket)
+        db.flush()
+
+        # Use AI to diagnose the issue
+        diagnosis_result = await diagnose_it_issue(ticket, description, logs_attached)
+
+        # Update ticket with AI analysis
+        ticket.ai_diagnosis = diagnosis_result.get("diagnosis", "")
+        ticket.root_cause = diagnosis_result.get("root_cause", "")
+        ticket.proposed_fix = diagnosis_result.get("proposed_fix", {})
+        ticket.status = "awaiting_approval" if diagnosis_result.get("proposed_fix") else "analyzed"
+
+        db.commit()
+
+        logger.info(f"IT ticket {ticket.id} created and analyzed for user {current_user.id}")
+
+        return {
+            "success": True,
+            "ticket_id": ticket.id,
+            "diagnosis": ticket.ai_diagnosis,
+            "root_cause": ticket.root_cause,
+            "proposed_fix": ticket.proposed_fix,
+            "status": ticket.status
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error submitting IT ticket: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def diagnose_it_issue(ticket, description, logs_attached):
+    """Use AI to diagnose the IT issue and propose a fix"""
+    try:
+        # Build context for AI
+        context = f"""You are an expert IT support AI helping diagnose and fix technical issues.
+
+Issue Description:
+{description}
+
+Category: {ticket.category}
+Affected System: {ticket.affected_system or 'Not specified'}
+Affected Project: {ticket.affected_project or 'Not specified'}
+
+"""
+
+        if logs_attached:
+            context += f"\nError Logs/Screenshots:\n"
+            for log in logs_attached[:3]:  # Limit to 3 logs
+                context += f"- {log}\n"
+
+        context += """
+Based on this issue, please:
+1. Diagnose the root cause
+2. Suggest a step-by-step fix
+3. Provide any commands that should be run
+4. Assess the risk level (low/medium/high)
+
+Format your response as JSON:
+{
+  "root_cause": "Brief description of root cause",
+  "diagnosis": "Detailed explanation of what's wrong",
+  "proposed_fix": {
+    "risk_level": "low|medium|high",
+    "steps": ["Step 1", "Step 2", ...],
+    "commands": [{"description": "What this does", "command": "actual command", "platform": "bash|powershell|api"}]
+  }
+}"""
+
+        # Call OpenAI
+        response = openai_client.chat.completions.create(
+            model="gpt-4-turbo-preview",
+            messages=[
+                {"role": "system", "content": "You are an expert IT support assistant. Always respond with valid JSON."},
+                {"role": "user", "content": context}
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.3
+        )
+
+        result = json.loads(response.choices[0].message.content)
+        return result
+
+    except Exception as e:
+        logger.error(f"Error diagnosing IT issue: {e}")
+        return {
+            "root_cause": "Unable to diagnose automatically",
+            "diagnosis": f"AI diagnosis failed: {str(e)}. Please review the issue manually.",
+            "proposed_fix": None
+        }
+
+@app.get("/api/v1/it-helpdesk/tickets")
+async def get_it_tickets(
+    status: str = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all IT helpdesk tickets for the current user"""
+    try:
+        query = db.query(ITHelpdeskTicket).filter(
+            ITHelpdeskTicket.user_id == current_user.id
+        )
+
+        if status:
+            query = query.filter(ITHelpdeskTicket.status == status)
+
+        tickets = query.order_by(ITHelpdeskTicket.created_at.desc()).limit(50).all()
+
+        ticket_list = []
+        for ticket in tickets:
+            ticket_list.append({
+                "id": ticket.id,
+                "title": ticket.title,
+                "description": ticket.description,
+                "category": ticket.category,
+                "urgency": ticket.urgency,
+                "status": ticket.status,
+                "root_cause": ticket.root_cause,
+                "ai_diagnosis": ticket.ai_diagnosis,
+                "proposed_fix": ticket.proposed_fix,
+                "affected_system": ticket.affected_system,
+                "affected_project": ticket.affected_project,
+                "auto_resolved": ticket.auto_resolved,
+                "created_at": ticket.created_at.isoformat() if ticket.created_at else None,
+                "resolved_at": ticket.resolved_at.isoformat() if ticket.resolved_at else None
+            })
+
+        return {
+            "success": True,
+            "tickets": ticket_list,
+            "total": len(ticket_list)
+        }
+
+    except Exception as e:
+        logger.error(f"Error fetching IT tickets: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/it-helpdesk/tickets/{ticket_id}")
+async def get_it_ticket(
+    ticket_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get detailed information about a specific IT ticket"""
+    try:
+        ticket = db.query(ITHelpdeskTicket).filter(
+            ITHelpdeskTicket.id == ticket_id,
+            ITHelpdeskTicket.user_id == current_user.id
+        ).first()
+
+        if not ticket:
+            raise HTTPException(status_code=404, detail="Ticket not found")
+
+        return {
+            "success": True,
+            "ticket": {
+                "id": ticket.id,
+                "title": ticket.title,
+                "description": ticket.description,
+                "category": ticket.category,
+                "urgency": ticket.urgency,
+                "status": ticket.status,
+                "ai_diagnosis": ticket.ai_diagnosis,
+                "root_cause": ticket.root_cause,
+                "proposed_fix": ticket.proposed_fix,
+                "affected_system": ticket.affected_system,
+                "affected_project": ticket.affected_project,
+                "logs_attached": ticket.logs_attached,
+                "execution_log": ticket.execution_log,
+                "resolution_notes": ticket.resolution_notes,
+                "auto_resolved": ticket.auto_resolved,
+                "created_at": ticket.created_at.isoformat() if ticket.created_at else None,
+                "approved_at": ticket.approved_at.isoformat() if ticket.approved_at else None,
+                "executed_at": ticket.executed_at.isoformat() if ticket.executed_at else None,
+                "resolved_at": ticket.resolved_at.isoformat() if ticket.resolved_at else None
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching IT ticket {ticket_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/it-helpdesk/tickets/{ticket_id}/approve")
+async def approve_it_fix(
+    ticket_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Approve and mark a fix as ready for manual execution"""
+    try:
+        ticket = db.query(ITHelpdeskTicket).filter(
+            ITHelpdeskTicket.id == ticket_id,
+            ITHelpdeskTicket.user_id == current_user.id
+        ).first()
+
+        if not ticket:
+            raise HTTPException(status_code=404, detail="Ticket not found")
+
+        ticket.approved_at = datetime.now(timezone.utc)
+        ticket.status = "approved"
+
+        db.commit()
+
+        logger.info(f"IT ticket {ticket_id} approved by user {current_user.id}")
+
+        return {
+            "success": True,
+            "message": "Fix approved. Execute the commands manually and update the ticket when complete.",
+            "ticket_id": ticket.id,
+            "proposed_fix": ticket.proposed_fix
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error approving IT ticket {ticket_id}: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/it-helpdesk/tickets/{ticket_id}/resolve")
+async def resolve_it_ticket(
+    ticket_id: int,
+    resolution_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Mark a ticket as resolved with notes"""
+    try:
+        ticket = db.query(ITHelpdeskTicket).filter(
+            ITHelpdeskTicket.id == ticket_id,
+            ITHelpdeskTicket.user_id == current_user.id
+        ).first()
+
+        if not ticket:
+            raise HTTPException(status_code=404, detail="Ticket not found")
+
+        ticket.status = "resolved"
+        ticket.resolved_at = datetime.now(timezone.utc)
+        ticket.resolution_notes = resolution_data.get("notes", "")
+        ticket.execution_log = resolution_data.get("execution_log", {})
+
+        db.commit()
+
+        logger.info(f"IT ticket {ticket_id} resolved by user {current_user.id}")
+
+        return {
+            "success": True,
+            "message": "Ticket marked as resolved",
+            "ticket_id": ticket.id
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error resolving IT ticket {ticket_id}: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/v1/migrations/add-external-message-id")
 async def add_external_message_id_migration(
