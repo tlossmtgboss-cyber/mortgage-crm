@@ -3737,6 +3737,189 @@ async def disconnect_microsoft365(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/v1/microsoft/sync-diagnostics")
+async def get_email_sync_diagnostics(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Comprehensive email sync diagnostics - shows connection status, recent emails, and sync history"""
+    try:
+        # Check Microsoft 365 connection
+        oauth_record = db.query(MicrosoftOAuthToken).filter(
+            MicrosoftOAuthToken.user_id == current_user.id
+        ).first()
+
+        connection_status = {
+            "connected": False,
+            "email_address": None,
+            "sync_enabled": False,
+            "last_sync_at": None,
+            "sync_frequency_minutes": None,
+            "minutes_since_last_sync": None
+        }
+
+        if oauth_record:
+            connection_status = {
+                "connected": True,
+                "email_address": oauth_record.email_address,
+                "sync_enabled": oauth_record.sync_enabled,
+                "last_sync_at": oauth_record.last_sync_at.isoformat() if oauth_record.last_sync_at else None,
+                "sync_frequency_minutes": oauth_record.sync_frequency_minutes,
+                "sync_folder": oauth_record.sync_folder
+            }
+
+            # Calculate time since last sync
+            if oauth_record.last_sync_at:
+                last_sync = oauth_record.last_sync_at
+                if last_sync.tzinfo is None:
+                    last_sync = last_sync.replace(tzinfo=timezone.utc)
+                time_diff = datetime.now(timezone.utc) - last_sync
+                connection_status["minutes_since_last_sync"] = round(time_diff.total_seconds() / 60, 1)
+
+        # Check recent incoming emails
+        recent_emails = db.query(IncomingDataEvent).filter(
+            IncomingDataEvent.user_id == current_user.id,
+            IncomingDataEvent.source == "microsoft365"
+        ).order_by(IncomingDataEvent.received_at.desc()).limit(10).all()
+
+        email_data = []
+        for email in recent_emails:
+            email_data.append({
+                "id": email.id,
+                "subject": email.subject,
+                "sender": email.sender,
+                "received_at": email.received_at.isoformat() if email.received_at else None,
+                "processed": email.processed,
+                "created_at": email.created_at.isoformat() if email.created_at else None
+            })
+
+        # Check reconciliation items (extracted data)
+        reconciliation_count = db.query(ExtractedData).filter(
+            ExtractedData.status == "pending_review"
+        ).join(IncomingDataEvent).filter(
+            IncomingDataEvent.user_id == current_user.id
+        ).count()
+
+        # Auto-sync scheduler status
+        scheduler_info = {
+            "scheduler_running": scheduler.running,
+            "next_auto_sync": "Every 5 minutes (when scheduler is running)"
+        }
+
+        return {
+            "connection": connection_status,
+            "recent_emails": {
+                "count": len(email_data),
+                "emails": email_data
+            },
+            "reconciliation_queue": {
+                "pending_count": reconciliation_count
+            },
+            "scheduler": scheduler_info,
+            "recommendations": get_sync_recommendations(connection_status, len(email_data))
+        }
+
+    except Exception as e:
+        logger.error(f"Sync diagnostics error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+def get_sync_recommendations(connection_status, email_count):
+    """Generate helpful recommendations based on sync status"""
+    recommendations = []
+
+    if not connection_status["connected"]:
+        recommendations.append({
+            "type": "error",
+            "message": "Microsoft 365 not connected",
+            "action": "Go to Settings → Integrations → Connect Microsoft 365"
+        })
+    elif not connection_status["sync_enabled"]:
+        recommendations.append({
+            "type": "warning",
+            "message": "Email sync is disabled",
+            "action": "Enable sync in Settings → Integrations"
+        })
+    elif connection_status["last_sync_at"] is None:
+        recommendations.append({
+            "type": "info",
+            "message": "No sync has occurred yet",
+            "action": "Click 'Sync Now' in Settings or wait for auto-sync (every 5 min)"
+        })
+    elif email_count == 0:
+        recommendations.append({
+            "type": "info",
+            "message": "No emails have been synced yet",
+            "action": "Check your Microsoft 365 inbox has emails, then click 'Sync Now'"
+        })
+    else:
+        recommendations.append({
+            "type": "success",
+            "message": f"System is working! {email_count} emails synced recently",
+            "action": "Check Reconciliation tab to review processed emails"
+        })
+
+    return recommendations
+
+@app.post("/api/v1/microsoft/force-sync")
+async def force_email_sync(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Force an immediate email sync (bypasses frequency check)"""
+    try:
+        oauth_record = db.query(MicrosoftOAuthToken).filter(
+            MicrosoftOAuthToken.user_id == current_user.id
+        ).first()
+
+        if not oauth_record:
+            raise HTTPException(status_code=404, detail="Microsoft 365 not connected. Please connect in Settings.")
+
+        if not oauth_record.sync_enabled:
+            raise HTTPException(status_code=400, detail="Email sync is disabled. Please enable it in Settings.")
+
+        logger.info(f"🔄 Force sync triggered by user {current_user.id} ({current_user.email})")
+
+        # Fetch emails
+        result = await fetch_microsoft_emails(oauth_record, db, limit=50)
+
+        if "error" in result:
+            logger.error(f"Force sync error: {result['error']}")
+            raise HTTPException(status_code=500, detail=result['error'])
+
+        # Process each email through DRE
+        emails = result.get("emails", [])
+        processed_count = 0
+        new_emails = 0
+
+        for email_data in emails:
+            process_result = await process_microsoft_email_to_dre(email_data, current_user.id, db)
+            if process_result.get("status") == "success":
+                processed_count += 1
+                if not process_result.get("already_processed"):
+                    new_emails += 1
+
+        # Update last_sync_at
+        oauth_record.last_sync_at = datetime.now(timezone.utc)
+        db.commit()
+
+        logger.info(f"✅ Force sync complete: {processed_count}/{len(emails)} emails processed, {new_emails} new")
+
+        return {
+            "success": True,
+            "total_emails": len(emails),
+            "processed_count": processed_count,
+            "new_emails": new_emails,
+            "already_processed": processed_count - new_emails,
+            "message": f"Synced {new_emails} new emails successfully" if new_emails > 0 else "No new emails found"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Force sync error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/v1/system/diagnostics")
 async def get_system_diagnostics(current_user: User = Depends(get_current_user)):
     """Get system configuration diagnostics"""
