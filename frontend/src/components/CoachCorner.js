@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { aiAPI } from '../services/api';
 import './CoachCorner.css';
 
 const CoachCorner = ({ isOpen, onClose }) => {
@@ -7,6 +8,23 @@ const CoachCorner = ({ isOpen, onClose }) => {
   const [response, setResponse] = useState(null);
   const [customMessage, setCustomMessage] = useState('');
   const [showCustomInput, setShowCustomInput] = useState(false);
+  const [memoryStats, setMemoryStats] = useState(null);
+  const [conversationHistory, setConversationHistory] = useState([]);
+
+  useEffect(() => {
+    if (isOpen) {
+      loadMemoryStats();
+    }
+  }, [isOpen]);
+
+  const loadMemoryStats = async () => {
+    try {
+      const stats = await aiAPI.getMemoryStats();
+      setMemoryStats(stats);
+    } catch (error) {
+      console.error('Failed to load memory stats:', error);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -152,24 +170,46 @@ const CoachCorner = ({ isOpen, onClose }) => {
     setResponse(null);
 
     try {
-      const res = await fetch(`${process.env.REACT_APP_API_URL}/api/v1/coach`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          mode: selectedMode,
-          message: message
-        })
+      // Build coaching prompt based on mode
+      const coachingPrompts = {
+        daily_briefing: 'Act as a high-performance business coach for mortgage professionals. Give me my top 3 priorities for today based on my current pipeline, leads, and performance metrics. Be direct and actionable. Focus on what will move the needle.',
+        pipeline_audit: 'Act as a high-performance business coach. Audit my mortgage pipeline and identify bottlenecks, stalled deals, and areas where I\'m losing money. Be brutally honest about inefficiencies.',
+        focus_reset: 'Act as a high-performance business coach. I feel scattered and need to refocus. Help me identify my single most important task right now and create a plan to execute without distraction.',
+        priority_guidance: 'Act as a high-performance business coach. Look at my current situation and tell me exactly what I should do next. What is the highest-leverage activity I can do right now?',
+        accountability: 'Act as a high-performance business coach. Review my performance metrics and hold me accountable. Where am I falling short? What standards am I not meeting? Be direct.',
+        tough_love: 'Act as a high-performance business coach in tough love mode. Call out where I\'m being inefficient, making excuses, or avoiding what needs to be done. No sugarcoating.',
+        teach_process: 'Act as a high-performance business coach. Teach me about systems thinking and building processes that work even when I don\'t feel motivated. How do elite performers structure their day?',
+        tactical_advice: message || 'Act as a high-performance business coach. I have a specific question or situation I need tactical advice on.'
+      };
+
+      const coachPrompt = coachingPrompts[selectedMode] || coachingPrompts.daily_briefing;
+      const fullMessage = message ? `${coachPrompt}\n\nMy question: ${message}` : coachPrompt;
+
+      // Use Smart AI Chat with coaching context
+      const aiResponse = await aiAPI.smartChat(fullMessage, {
+        include_context: true,
+        coaching_mode: selectedMode,
+        context_type: 'coaching'
       });
 
-      if (!res.ok) {
-        throw new Error('Coach unavailable');
-      }
+      // Add to conversation history
+      setConversationHistory(prev => [
+        ...prev,
+        { role: 'user', mode: selectedMode, message: message || selectedMode },
+        { role: 'coach', response: aiResponse.response }
+      ]);
 
-      const data = await res.json();
-      setResponse(data);
+      // Format response for coach display
+      setResponse({
+        mode: selectedMode,
+        response: aiResponse.response,
+        context_used: aiResponse.context_used,
+        context_count: aiResponse.context_count,
+        has_memory: aiResponse.has_memory
+      });
+
+      // Refresh memory stats
+      loadMemoryStats();
     } catch (error) {
       console.error('Coach error:', error);
       // Use mock response as fallback when backend is unavailable
@@ -220,6 +260,12 @@ const CoachCorner = ({ isOpen, onClose }) => {
 
         <div className="coach-response-container">
           <div className="coach-mode-badge">{mode.replace('_', ' ').toUpperCase()}</div>
+
+          {response.context_used && (
+            <div className="context-indicator">
+              💡 Using {response.context_count} previous coaching session{response.context_count !== 1 ? 's' : ''} for personalized guidance
+            </div>
+          )}
 
           <div className="coach-message">
             {response.response.split('\n').map((line, i) => (
@@ -280,10 +326,17 @@ const CoachCorner = ({ isOpen, onClose }) => {
   return (
     <div className="coach-corner">
       <div className="coach-header">
-        <h2>🏆 The Process Coach</h2>
+        <div className="header-content">
+          <h2>🏆 The Process Coach</h2>
+          {memoryStats && (
+            <span className="memory-badge" title="Coaching sessions remembered">
+              🧠 {memoryStats.total_memories} memories
+            </span>
+          )}
+        </div>
         <button className="close-button" onClick={onClose}>×</button>
       </div>
-      <p className="coach-subtitle">Elite Performance Guidance for Mortgage Professionals</p>
+      <p className="coach-subtitle">Elite Performance Guidance with AI Memory</p>
 
       <div className="coach-intro">
         <p><strong>Philosophy:</strong> Process over outcome. Standards over feelings. Execution over excuses.</p>
