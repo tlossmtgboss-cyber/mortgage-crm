@@ -12350,6 +12350,47 @@ async def run_mission_control_migration_endpoint(request: dict):
             "error": str(e)
         }
 
+@app.post("/admin/run-phase1-migration")
+async def run_phase1_migration_endpoint(request: dict):
+    """
+    Run Phase 1 Comprehensive Profiles migration remotely.
+    Creates: LeadProfile, ActiveLoanProfile, MUMClientProfile, TeamMemberProfile,
+             EmailInteraction, FieldUpdateHistory, DataConflict tables
+    Usage: POST /admin/run-phase1-migration with body: {"secret": "migrate-ai-2024"}
+    """
+    import subprocess
+
+    # Simple security check
+    if request.get("secret") != "migrate-ai-2024":
+        raise HTTPException(status_code=403, detail="Invalid secret")
+
+    try:
+        # Run migration script
+        result = subprocess.run(
+            ["python3", "migrations/001_create_comprehensive_profiles.py"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            cwd="/app"
+        )
+
+        return {
+            "success": result.returncode == 0,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "returncode": result.returncode
+        }
+    except subprocess.TimeoutExpired:
+        return {
+            "success": False,
+            "error": "Migration timed out after 120 seconds"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
 @app.post("/admin/initialize-ai-only")
 async def initialize_ai_only_endpoint(request: dict):
     """
