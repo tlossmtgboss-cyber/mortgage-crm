@@ -83,7 +83,7 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
             to="/ai-receptionist-dashboard"
             className={`nav-link ${isActive('/ai-receptionist-dashboard') ? 'active' : ''}`}
           >
-            🤖 AI Receptionist
+            AI Receptionist
           </Link>
         </div>
 
