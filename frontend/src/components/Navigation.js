@@ -80,6 +80,12 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
             AI Underwriter
           </Link>
           <Link
+            to="/ai-receptionist-dashboard"
+            className={`nav-link ${isActive('/ai-receptionist-dashboard') ? 'active' : ''}`}
+          >
+            🤖 AI Receptionist
+          </Link>
+          <Link
             to="/merge"
             className={`nav-link ${isActive('/merge') ? 'active' : ''}`}
           >

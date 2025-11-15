@@ -482,4 +482,78 @@ export const voiceAPI = {
   },
 };
 
+// AI Receptionist Dashboard API
+export const aiReceptionistDashboardAPI = {
+  // Activity Feed
+  getActivityFeed: async (params = {}) => {
+    const response = await api.get('/api/v1/ai-receptionist/dashboard/activity/feed', { params });
+    return response.data;
+  },
+  getActivityCount: async (params = {}) => {
+    const response = await api.get('/api/v1/ai-receptionist/dashboard/activity/count', { params });
+    return response.data;
+  },
+
+  // Metrics
+  getDailyMetrics: async (startDate, endDate) => {
+    const response = await api.get('/api/v1/ai-receptionist/dashboard/metrics/daily', {
+      params: { start_date: startDate, end_date: endDate }
+    });
+    return response.data;
+  },
+  getRealtimeMetrics: async () => {
+    const response = await api.get('/api/v1/ai-receptionist/dashboard/metrics/realtime');
+    return response.data;
+  },
+
+  // Skills
+  getSkills: async (params = {}) => {
+    const response = await api.get('/api/v1/ai-receptionist/dashboard/skills', { params });
+    return response.data;
+  },
+  getSkillDetail: async (skillName) => {
+    const response = await api.get(`/api/v1/ai-receptionist/dashboard/skills/${skillName}`);
+    return response.data;
+  },
+
+  // ROI
+  getROI: async (startDate = null, endDate = null) => {
+    const params = {};
+    if (startDate) params.start_date = startDate;
+    if (endDate) params.end_date = endDate;
+    const response = await api.get('/api/v1/ai-receptionist/dashboard/roi', { params });
+    return response.data;
+  },
+
+  // Errors
+  getErrors: async (params = {}) => {
+    const response = await api.get('/api/v1/ai-receptionist/dashboard/errors', { params });
+    return response.data;
+  },
+  approveErrorFix: async (errorId) => {
+    const response = await api.post(`/api/v1/ai-receptionist/dashboard/errors/${errorId}/approve-fix`);
+    return response.data;
+  },
+
+  // System Health
+  getSystemHealth: async () => {
+    const response = await api.get('/api/v1/ai-receptionist/dashboard/system-health');
+    return response.data;
+  },
+  getComponentHealth: async (componentName) => {
+    const response = await api.get(`/api/v1/ai-receptionist/dashboard/system-health/${componentName}`);
+    return response.data;
+  },
+
+  // Conversations
+  getConversations: async (params = {}) => {
+    const response = await api.get('/api/v1/ai-receptionist/dashboard/conversations', { params });
+    return response.data;
+  },
+  getConversationDetail: async (conversationId) => {
+    const response = await api.get(`/api/v1/ai-receptionist/dashboard/conversations/${conversationId}`);
+    return response.data;
+  },
+};
+
 export default api;

@@ -42,6 +42,7 @@ import ProcessTemplates from './pages/ProcessTemplates';
 import BuyerIntake from './pages/BuyerIntake';
 import VerizonTest from './pages/VerizonTest';
 import PipelineEfficiency from './pages/PipelineEfficiency';
+import AIReceptionistDashboard from './pages/AIReceptionistDashboard';
 import './App.css';
 
 // Use HTTPS Railway URL in production, localhost for development
@@ -453,6 +454,26 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <Assistant />
+                  </main>
+                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/ai-receptionist-dashboard"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <AIReceptionistDashboard />
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
