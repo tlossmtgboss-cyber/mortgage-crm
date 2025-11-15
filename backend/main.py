@@ -2195,6 +2195,287 @@ async def get_memory_stats(
             "error": str(e)
         }
 
+
+@app.post("/api/v1/ai/autonomous-task")
+async def execute_autonomous_task(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Execute autonomous AI task with multi-step capability
+    AI can send SMS, schedule appointments, create tasks autonomously
+    """
+    try:
+        from openai import OpenAI
+        import json
+        from integrations.twilio_service import sms_client
+
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+        data = await request.json()
+        task = data.get("task", "")
+        lead_id = data.get("lead_id")
+        lead_name = data.get("lead_name", "")
+        lead_phone = data.get("lead_phone", "")
+        context = data.get("context", {})
+
+        if not task:
+            raise HTTPException(status_code=400, detail="Task is required")
+
+        # Activity log to track what AI does
+        activity_log = []
+
+        # Define tools available to AI
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "send_sms",
+                    "description": "Send SMS message to a lead's phone number",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "to_number": {
+                                "type": "string",
+                                "description": "Phone number to send SMS to (E.164 format)"
+                            },
+                            "message": {
+                                "type": "string",
+                                "description": "SMS message content to send"
+                            }
+                        },
+                        "required": ["to_number", "message"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "schedule_appointment",
+                    "description": "Schedule an appointment on the calendar",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "date_time": {
+                                "type": "string",
+                                "description": "Appointment date and time (ISO format)"
+                            },
+                            "duration_minutes": {
+                                "type": "integer",
+                                "description": "Duration in minutes"
+                            },
+                            "title": {
+                                "type": "string",
+                                "description": "Appointment title"
+                            },
+                            "notes": {
+                                "type": "string",
+                                "description": "Additional notes"
+                            }
+                        },
+                        "required": ["date_time", "title"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "create_task",
+                    "description": "Create a follow-up task",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "title": {
+                                "type": "string",
+                                "description": "Task title"
+                            },
+                            "description": {
+                                "type": "string",
+                                "description": "Task description"
+                            },
+                            "due_date": {
+                                "type": "string",
+                                "description": "Due date (ISO format)"
+                            },
+                            "priority": {
+                                "type": "string",
+                                "enum": ["low", "medium", "high"],
+                                "description": "Task priority"
+                            }
+                        },
+                        "required": ["title"]
+                    }
+                }
+            }
+        ]
+
+        # Create initial message
+        system_prompt = f"""You are an autonomous AI agent helping with CRM tasks. You can:
+1. Send SMS messages to leads
+2. Schedule appointments on the calendar
+3. Create follow-up tasks
+
+Current task: {task}
+Lead: {lead_name} ({lead_phone})
+Context: {json.dumps(context)}
+
+Execute the task step by step. Be conversational and professional when texting leads.
+When scheduling appointments, confirm the time first via SMS before creating the calendar event.
+"""
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": f"Execute this task: {task}"}
+        ]
+
+        # Run AI with function calling (max 5 iterations)
+        for iteration in range(5):
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages,
+                tools=tools,
+                tool_choice="auto"
+            )
+
+            assistant_message = response.choices[0].message
+            messages.append(assistant_message)
+
+            # Check if AI wants to call tools
+            if assistant_message.tool_calls:
+                for tool_call in assistant_message.tool_calls:
+                    function_name = tool_call.function.name
+                    function_args = json.loads(tool_call.function.arguments)
+
+                    # Execute the tool
+                    tool_result = None
+
+                    if function_name == "send_sms":
+                        # Send SMS using Twilio
+                        try:
+                            if not sms_client.enabled:
+                                tool_result = {"success": False, "error": "SMS service not configured"}
+                            else:
+                                message_sid = await sms_client.send_sms(
+                                    to_number=function_args["to_number"],
+                                    message=function_args["message"]
+                                )
+
+                                # Log SMS
+                                sms_record = SMSMessage(
+                                    user_id=current_user.id,
+                                    lead_id=lead_id,
+                                    to_number=function_args["to_number"],
+                                    from_number=sms_client.from_number,
+                                    message=function_args["message"],
+                                    direction="outbound",
+                                    status="sent",
+                                    twilio_sid=message_sid
+                                )
+                                db.add(sms_record)
+                                db.commit()
+
+                                tool_result = {
+                                    "success": True,
+                                    "message_sid": message_sid,
+                                    "message": "SMS sent successfully"
+                                }
+
+                                activity_log.append({
+                                    "icon": "📤",
+                                    "message": f"Sent SMS to {function_args['to_number']}: {function_args['message'][:50]}...",
+                                    "timestamp": datetime.now().isoformat()
+                                })
+                        except Exception as e:
+                            tool_result = {"success": False, "error": str(e)}
+
+                    elif function_name == "schedule_appointment":
+                        # Create calendar appointment
+                        try:
+                            task_record = Task(
+                                user_id=current_user.id,
+                                title=function_args["title"],
+                                description=function_args.get("notes", ""),
+                                due_date=datetime.fromisoformat(function_args["date_time"]),
+                                priority="high",
+                                status="pending",
+                                entity_type="lead",
+                                entity_id=lead_id,
+                                created_by=current_user.id
+                            )
+                            db.add(task_record)
+                            db.commit()
+
+                            tool_result = {
+                                "success": True,
+                                "appointment_id": task_record.id,
+                                "message": "Appointment scheduled successfully"
+                            }
+
+                            activity_log.append({
+                                "icon": "📅",
+                                "message": f"Scheduled appointment: {function_args['title']} on {function_args['date_time']}",
+                                "timestamp": datetime.now().isoformat()
+                            })
+                        except Exception as e:
+                            tool_result = {"success": False, "error": str(e)}
+
+                    elif function_name == "create_task":
+                        # Create follow-up task
+                        try:
+                            task_record = Task(
+                                user_id=current_user.id,
+                                title=function_args["title"],
+                                description=function_args.get("description", ""),
+                                due_date=datetime.fromisoformat(function_args["due_date"]) if function_args.get("due_date") else None,
+                                priority=function_args.get("priority", "medium"),
+                                status="pending",
+                                entity_type="lead",
+                                entity_id=lead_id,
+                                created_by=current_user.id
+                            )
+                            db.add(task_record)
+                            db.commit()
+
+                            tool_result = {
+                                "success": True,
+                                "task_id": task_record.id,
+                                "message": "Task created successfully"
+                            }
+
+                            activity_log.append({
+                                "icon": "✅",
+                                "message": f"Created task: {function_args['title']}",
+                                "timestamp": datetime.now().isoformat()
+                            })
+                        except Exception as e:
+                            tool_result = {"success": False, "error": str(e)}
+
+                    # Add tool result to messages
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": json.dumps(tool_result)
+                    })
+            else:
+                # No more tool calls, AI is done
+                break
+
+        # Get final response
+        final_message = messages[-1].content if hasattr(messages[-1], 'content') else "Task completed"
+
+        return {
+            "success": True,
+            "message": "Autonomous task executed successfully",
+            "activity_log": activity_log,
+            "final_response": final_message
+        }
+
+    except Exception as e:
+        logger.error(f"Error in autonomous task: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Include public routes - Import AFTER defining functions it needs
 from public_routes import router as public_router
 app.include_router(public_router, tags=["Public"])
