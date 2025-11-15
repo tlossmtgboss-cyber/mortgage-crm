@@ -2896,6 +2896,10 @@ app.include_router(ai_receptionist_dashboard_router, tags=["AI Receptionist Dash
 from voice_routes import router as voice_router
 app.include_router(voice_router, tags=["Voice AI"])
 
+# Include Vapi AI Receptionist routes
+from vapi_routes import router as vapi_router
+app.include_router(vapi_router, tags=["Vapi AI"])
+
 # ============================================================================
 # API KEY HELPER FUNCTIONS
 # ============================================================================
