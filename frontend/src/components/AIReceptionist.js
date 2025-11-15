@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { voiceAPI } from '../services/api';
+import { voiceAPI, aiAPI } from '../services/api';
 import './AIReceptionist.css';
 
 function AIReceptionist() {
@@ -8,6 +8,7 @@ function AIReceptionist() {
   const [callHistory, setCallHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard'); // dashboard, make-call, history, settings
+  const [memoryStats, setMemoryStats] = useState(null);
 
   // Make Call form
   const [callForm, setCallForm] = useState({
@@ -25,15 +26,17 @@ function AIReceptionist() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [configData, statsData, historyData] = await Promise.all([
+      const [configData, statsData, historyData, memStats] = await Promise.all([
         voiceAPI.getConfig(),
         voiceAPI.getCallStats(),
-        voiceAPI.getCallHistory({ limit: 10 })
+        voiceAPI.getCallHistory({ limit: 10 }),
+        aiAPI.getMemoryStats().catch(() => null)
       ]);
 
       setConfig(configData);
       setStats(statsData);
       setCallHistory(historyData.calls || []);
+      setMemoryStats(memStats);
       setLoading(false);
     } catch (error) {
       console.error('Error loading AI Receptionist data:', error);

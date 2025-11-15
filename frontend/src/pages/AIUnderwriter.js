@@ -1,16 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { aiAPI } from '../services/api';
 import './AIUnderwriter.css';
 
 function AIUnderwriter() {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      content: 'Hello! I\'m your AI Underwriter assistant. I can answer any mortgage lending questions by searching current guidelines. Just ask me anything!',
+      content: 'Hello! I\'m your Smart AI Underwriter with memory. I remember our previous conversations and can answer mortgage lending questions by searching current guidelines. I learn from our interactions to provide better answers over time. Just ask me anything!',
       timestamp: new Date(),
     },
   ]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [memoryStats, setMemoryStats] = useState(null);
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -20,6 +22,19 @@ function AIUnderwriter() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    loadMemoryStats();
+  }, []);
+
+  const loadMemoryStats = async () => {
+    try {
+      const stats = await aiAPI.getMemoryStats();
+      setMemoryStats(stats);
+    } catch (error) {
+      console.error('Failed to load memory stats:', error);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -90,8 +105,13 @@ function AIUnderwriter() {
     <div className="ai-underwriter-page">
       <div className="underwriter-header">
         <div className="header-content">
-          <h1>AI Underwriter</h1>
+          <h1>🧠 Smart AI Underwriter</h1>
           <p className="subtitle">Ask any mortgage lending question and get answers with sources</p>
+          {memoryStats && (
+            <div className="memory-stats-badge">
+              💾 {memoryStats.total_memories} conversations remembered
+            </div>
+          )}
         </div>
       </div>
 

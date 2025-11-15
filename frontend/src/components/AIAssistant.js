@@ -7,19 +7,32 @@ function AIAssistant({ isOpen, onClose, context = {} }) {
     {
       id: 1,
       role: 'assistant',
-      content: 'Hello! I\'m your AI assistant. I can help you with lead management, task automation, scheduling, and more. How can I assist you today?',
+      content: 'Hello! I\'m your Smart AI assistant with memory. I remember our past conversations and learn from them. I can help you with lead management, task automation, scheduling, and more. How can I assist you today?',
       timestamp: new Date().toISOString(),
     },
   ]);
   const [inputValue, setInputValue] = useState('');
   const [loading, setLoading] = useState(false);
+  const [memoryStats, setMemoryStats] = useState(null);
 
   useEffect(() => {
-    if (isOpen && (context.lead_id || context.loan_id)) {
-      loadConversations();
+    if (isOpen) {
+      loadMemoryStats();
+      if (context.lead_id || context.loan_id) {
+        loadConversations();
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, context.lead_id, context.loan_id]);
+
+  const loadMemoryStats = async () => {
+    try {
+      const stats = await aiAPI.getMemoryStats();
+      setMemoryStats(stats);
+    } catch (error) {
+      console.error('Failed to load memory stats:', error);
+    }
+  };
 
   const loadConversations = async () => {
     try {
@@ -58,23 +71,33 @@ function AIAssistant({ isOpen, onClose, context = {} }) {
     setLoading(true);
 
     try {
-      // Call AI API
-      const response = await aiAPI.chat(inputValue, context);
+      // Call Smart AI API with memory
+      const response = await aiAPI.smartChat(inputValue, {
+        include_context: true,
+        lead_id: context.lead_id,
+        loan_id: context.loan_id,
+        ...context
+      });
 
       const aiMessage = {
         id: Date.now() + 1,
         role: 'assistant',
         content: response.response,
         timestamp: new Date().toISOString(),
+        contextUsed: response.context_used,
+        contextCount: response.context_count,
       };
 
       setMessages((prev) => [...prev, aiMessage]);
+
+      // Refresh memory stats
+      loadMemoryStats();
     } catch (error) {
       console.error('AI chat error:', error);
       const errorMessage = {
         id: Date.now() + 1,
         role: 'assistant',
-        content: 'Sorry, I encountered an error. Please make sure the OpenAI API key is configured in the backend.',
+        content: 'Sorry, I encountered an error. Please make sure the AI Memory System is configured with Pinecone and OpenAI API keys.',
         timestamp: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, errorMessage]);
@@ -88,7 +111,14 @@ function AIAssistant({ isOpen, onClose, context = {} }) {
   return (
     <div className="ai-assistant">
       <div className="ai-assistant-header">
-        <h3>AI Assistant</h3>
+        <div className="header-content">
+          <h3>🤖 Smart AI Assistant</h3>
+          {memoryStats && (
+            <span className="memory-badge" title="Conversations remembered">
+              🧠 {memoryStats.total_memories} memories
+            </span>
+          )}
+        </div>
         <button className="close-button" onClick={onClose}>
           ×
         </button>
