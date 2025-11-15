@@ -12162,9 +12162,10 @@ async def clear_sample_data(
         # 0. Task approvals (references ai_tasks) - delete via raw SQL if table exists
         from sqlalchemy import text
         try:
-            db.execute(text("DELETE FROM task_approvals"))
-            deleted_task_approvals = db.execute(text("SELECT COUNT(*) FROM task_approvals")).scalar() or 0
-        except:
+            result = db.execute(text("DELETE FROM task_approvals"))
+            deleted_task_approvals = result.rowcount
+        except Exception as e:
+            logger.warning(f"Could not delete task_approvals: {e}")
             deleted_task_approvals = 0  # Table might not exist
 
         # 1. Activities and Conversations (reference leads/loans)
@@ -12203,6 +12204,7 @@ async def clear_sample_data(
         return {
             "success": True,
             "message": "Successfully cleared all dummy data",
+            "deleted_task_approvals": deleted_task_approvals,
             "deleted_activities": deleted_activities,
             "deleted_conversations": deleted_conversations,
             "deleted_ai_tasks": deleted_ai_tasks,
