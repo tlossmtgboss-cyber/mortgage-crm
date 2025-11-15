@@ -20,6 +20,25 @@ function SmartAIChat({ leadId, loanId, context = {} }) {
 
   useEffect(() => {
     loadMemoryStats();
+
+    // Listen for voice commands
+    const handleVoiceCommand = (event) => {
+      const { transcript } = event.detail;
+      if (transcript) {
+        setInputValue(transcript);
+        // Auto-submit the voice command
+        setTimeout(() => {
+          const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+          document.querySelector('.smart-ai-input')?.dispatchEvent(submitEvent);
+        }, 500);
+      }
+    };
+
+    window.addEventListener('voiceCommand', handleVoiceCommand);
+
+    return () => {
+      window.removeEventListener('voiceCommand', handleVoiceCommand);
+    };
   }, []);
 
   useEffect(() => {

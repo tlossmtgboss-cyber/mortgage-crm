@@ -22,6 +22,8 @@ function MumClientDetail() {
   const [noteText, setNoteText] = useState('');
   const [noteLoading, setNoteLoading] = useState(false);
   const [activities, setActivities] = useState([]);
+  const [isListening, setIsListening] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState('');
 
   useEffect(() => {
     loadClientData();
@@ -93,6 +95,52 @@ function MumClientDetail() {
     }
   };
 
+  const handleVoiceCommand = () => {
+    // Check if browser supports Web Speech API
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      alert('Sorry, your browser does not support speech recognition. Please try Chrome or Edge.');
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      setIsListening(true);
+      console.log('Voice recognition started. Speak now...');
+    };
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      setVoiceTranscript(transcript);
+      console.log('Voice command received:', transcript);
+
+      // Display the transcript to the user
+      alert(`Voice Command Received: "${transcript}"\n\nYou can now integrate this with your AI assistant.`);
+    };
+
+    recognition.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
+      setIsListening(false);
+      if (event.error === 'no-speech') {
+        alert('No speech detected. Please try again.');
+      } else {
+        alert(`Error occurred: ${event.error}`);
+      }
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      console.log('Voice recognition ended');
+    };
+
+    recognition.start();
+  };
+
   const handleAction = async (action) => {
     switch(action) {
       case 'call':
@@ -109,6 +157,9 @@ function MumClientDetail() {
         break;
       case 'voicemail':
         setShowVoicemailModal(true);
+        break;
+      case 'voice':
+        handleVoiceCommand();
         break;
       default:
         break;
@@ -631,6 +682,14 @@ function MumClientDetail() {
               >
                 <span className="icon">📞</span>
                 <span>Voicemail Drop</span>
+              </button>
+              <button
+                className={`action-btn voice ${isListening ? 'listening' : ''}`}
+                onClick={() => handleAction('voice')}
+                title="Give voice command to AI assistant"
+              >
+                <span className="icon">🎤</span>
+                <span>{isListening ? 'Listening...' : 'Voice Command'}</span>
               </button>
             </div>
           </div>

@@ -928,6 +928,54 @@
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
 }
 
+/* Voice Command Button */
+.action-btn.voice {
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  border-color: #8b5cf6;
+  color: white;
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
+}
+
+.action-btn.voice:hover:not(:disabled) {
+  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+  border-color: #7c3aed;
+  box-shadow: 0 8px 24px rgba(124, 58, 237, 0.4);
+}
+
+.action-btn.voice .icon {
+  color: white;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+/* Listening state animation */
+.action-btn.voice.listening {
+  animation: pulse 1.5s ease-in-out infinite;
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  border-color: #ef4444;
+}
+
+.action-btn.voice.listening .icon {
+  animation: scale-pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+  }
+  50% {
+    box-shadow: 0 8px 24px rgba(239, 68, 68, 0.6);
+  }
+}
+
+@keyframes scale-pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.2);
+  }
+}
+
 /* Email History */
 .email-list {
   display: flex;

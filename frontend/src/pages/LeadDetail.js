@@ -55,6 +55,8 @@ function LeadDetail() {
   const [showVoicemailModal, setShowVoicemailModal] = useState(false);
   const [teamMembers, setTeamMembers] = useState([]);
   const [assignedTeamMembers, setAssignedTeamMembers] = useState({});
+  const [isListening, setIsListening] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState('');
 
   useEffect(() => {
     loadLeadData();
@@ -442,6 +444,55 @@ function LeadDetail() {
     }
   };
 
+  const handleVoiceCommand = () => {
+    // Check if browser supports Web Speech API
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      alert('Sorry, your browser does not support speech recognition. Please try Chrome or Edge.');
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      setIsListening(true);
+      console.log('Voice recognition started. Speak now...');
+    };
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      setVoiceTranscript(transcript);
+      console.log('Voice command received:', transcript);
+
+      // Send the transcript to the SmartAI chat
+      // The SmartAI component will need to handle this
+      window.dispatchEvent(new CustomEvent('voiceCommand', {
+        detail: { transcript, leadId: lead.id }
+      }));
+    };
+
+    recognition.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
+      setIsListening(false);
+      if (event.error === 'no-speech') {
+        alert('No speech detected. Please try again.');
+      } else {
+        alert(`Error occurred: ${event.error}`);
+      }
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      console.log('Voice recognition ended');
+    };
+
+    recognition.start();
+  };
+
   const handleAction = async (action) => {
     switch(action) {
       case 'call':
@@ -467,6 +518,9 @@ function LeadDetail() {
         break;
       case 'voicemail':
         setShowVoicemailModal(true);
+        break;
+      case 'voice':
+        handleVoiceCommand();
         break;
       default:
         break;
@@ -1440,6 +1494,14 @@ function LeadDetail() {
               >
                 <span className="icon">📞</span>
                 <span>Voicemail Drop</span>
+              </button>
+              <button
+                className={`action-btn voice ${isListening ? 'listening' : ''}`}
+                onClick={() => handleAction('voice')}
+                title="Give voice command to AI assistant"
+              >
+                <span className="icon">🎤</span>
+                <span>{isListening ? 'Listening...' : 'Voice Command'}</span>
               </button>
             </div>
           </div>
