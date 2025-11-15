@@ -63,9 +63,11 @@ class TwilioVoiceClient:
 
         # Connect to OpenAI Realtime API via WebSocket
         # This uses Twilio Media Streams to pipe audio to OpenAI
+        # Use PRODUCTION_DOMAIN if available, fallback to RAILWAY_PUBLIC_DOMAIN
+        domain = os.getenv('PRODUCTION_DOMAIN') or os.getenv('RAILWAY_PUBLIC_DOMAIN', 'localhost')
         connect = response.connect()
         connect.stream(
-            url=f"wss://{os.getenv('RAILWAY_PUBLIC_DOMAIN', 'localhost')}/ws/voice-stream",
+            url=f"wss://{domain}/api/v1/voice/ws/voice-stream",
             track='both_tracks'
         )
 
