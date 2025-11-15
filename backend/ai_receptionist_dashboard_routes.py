@@ -602,3 +602,156 @@ async def get_conversations(
     except Exception as e:
         logger.error(f"Error fetching conversations: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# ADMIN/SEED ENDPOINT
+# ============================================================================
+
+@router.post("/admin/seed-data")
+async def seed_dashboard_data(db: Session = Depends(get_db)):
+    """
+    Admin endpoint to seed sample data into all 6 dashboard tables
+    WARNING: This should be protected in production
+    """
+    try:
+        import uuid
+        import random
+
+        stats = {}
+
+        # 1. Seed activity feed (50 items)
+        action_types = ['incoming_call', 'incoming_text', 'outbound_followup', 'appointment_booked', 'faq_answered']
+        for i in range(50):
+            activity = AIReceptionistActivity(
+                id=str(uuid.uuid4()),
+                timestamp=datetime.now(timezone.utc) - timedelta(days=random.randint(0, 7), hours=random.randint(0, 23)),
+                client_name=f"Client {random.randint(1, 20)}",
+                client_phone=f"+1{random.randint(2000000000, 9999999999)}",
+                action_type=random.choice(action_types),
+                channel=random.choice(['sms', 'voice']),
+                message_in=f"Test inquiry {i}",
+                message_out=f"AI response {i}",
+                confidence_score=random.uniform(0.7, 0.99),
+                outcome_status=random.choice(['success', 'pending', 'escalated']),
+                conversation_id=str(uuid.uuid4())
+            )
+            db.add(activity)
+        stats['activities'] = 50
+
+        # 2. Seed daily metrics (14 days)
+        for day in range(14):
+            metric = AIReceptionistMetricsDaily(
+                date=date.today() - timedelta(days=day),
+                total_conversations=random.randint(80, 200),
+                inbound_calls=random.randint(40, 100),
+                inbound_texts=random.randint(30, 80),
+                outbound_messages=random.randint(20, 50),
+                appointments_scheduled=random.randint(10, 30),
+                forms_completed=random.randint(5, 20),
+                loan_apps_initiated=random.randint(3, 12),
+                escalations=random.randint(2, 15),
+                ai_coverage_percentage=random.uniform(85, 98),
+                estimated_revenue_created=random.uniform(1000, 5000),
+                saved_labor_hours=random.uniform(5, 20),
+                cost_per_interaction=0.50,
+                avg_confidence_score=random.uniform(0.82, 0.94)
+            )
+            db.add(metric)
+        stats['daily_metrics'] = 14
+
+        # 3. Seed skills (12 skills)
+        skills_data = [
+            ('Appointment Scheduling', 'scheduling', 0.95),
+            ('Lead Inquiry Handling', 'lead_management', 0.88),
+            ('Rate Questions', 'faq', 0.72),
+            ('Document Requests', 'operations', 0.85),
+            ('Existing Borrower Support', 'support', 0.90),
+            ('Builder Updates', 'coordination', 0.78),
+            ('Contract Updates', 'legal', 0.82),
+            ('Underwriting Conditions', 'operations', 0.75),
+            ('Voicemail Handling', 'communication', 0.93),
+            ('Emergency Escalation', 'support', 0.97),
+            ('Payment Processing', 'financial', 0.68),
+            ('Compliance Questions', 'legal', 0.80),
+        ]
+        for name, category, accuracy in skills_data:
+            skill = AIReceptionistSkill(
+                id=str(uuid.uuid4()),
+                skill_name=name,
+                skill_category=category,
+                accuracy_score=accuracy,
+                accuracy_score_7day=accuracy + random.uniform(-0.03, 0.03),
+                usage_count=random.randint(50, 500),
+                success_count=random.randint(40, 450),
+                needs_retraining=(accuracy < 0.75),
+                last_updated=datetime.now(timezone.utc)
+            )
+            db.add(skill)
+        stats['skills'] = 12
+
+        # 4. Seed errors (10 items)
+        error_types = ['unrecognized_request', 'missing_context', 'model_uncertainty', 'api_failure']
+        for i in range(10):
+            error = AIReceptionistError(
+                id=str(uuid.uuid4()),
+                timestamp=datetime.now(timezone.utc) - timedelta(days=random.randint(0, 7)),
+                error_type=random.choice(error_types),
+                severity=random.choice(['low', 'medium', 'high']),
+                context=f"Error occurred during interaction {i}",
+                conversation_snippet=f"Sample error conversation {i}",
+                needs_human_review=(random.random() > 0.5),
+                resolution_status=random.choice(['unresolved', 'auto_fixed', 'manually_fixed'])
+            )
+            db.add(error)
+        stats['errors'] = 10
+
+        # 5. Seed system health (6 components)
+        components = ['sms_integration', 'voice_endpoint', 'calendly_api', 'crm_pipeline', 'openai_api', 'document_module']
+        for comp in components:
+            health = AIReceptionistSystemHealth(
+                component_name=comp,
+                status=random.choice(['active', 'active', 'active', 'degraded']),  # Mostly active
+                latency_ms=random.randint(50, 500),
+                error_rate=random.uniform(0, 5),
+                uptime_percentage=random.uniform(95, 99.9),
+                last_checked=datetime.now(timezone.utc)
+            )
+            db.add(health)
+        stats['system_health'] = 6
+
+        # 6. Seed conversations (5 items)
+        for i in range(5):
+            conv = AIReceptionistConversation(
+                id=str(uuid.uuid4()),
+                started_at=datetime.now(timezone.utc) - timedelta(days=random.randint(0, 7)),
+                ended_at=datetime.now(timezone.utc) - timedelta(days=random.randint(0, 7)),
+                duration_seconds=random.randint(60, 600),
+                client_name=f"Test Client {i}",
+                client_phone=f"+1555000{random.randint(1000, 9999)}",
+                channel='voice',
+                direction='inbound',
+                transcript=f"Sample conversation transcript {i}",
+                summary=f"Client inquiry about loan application",
+                intent_detected='rate_inquiry',
+                sentiment='neutral',
+                outcome='completed',
+                avg_confidence_score=random.uniform(0.8, 0.95),
+                total_turns=random.randint(5, 20)
+            )
+            db.add(conv)
+        stats['conversations'] = 5
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": "Sample data seeded successfully",
+            "records_created": stats,
+            "total_records": sum(stats.values())
+        }
+
+    except Exception as e:
+        logger.error(f"Error seeding data: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
