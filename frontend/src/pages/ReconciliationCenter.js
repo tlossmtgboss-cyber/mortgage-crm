@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import './ReconciliationCenter.css';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+// Use HTTPS Railway URL in production, localhost for development
+const isProduction = window.location.hostname.includes('vercel.app');
+const API_BASE_URL = isProduction
+  ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+  : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
 function ReconciliationCenter() {
   const [pendingItems, setPendingItems] = useState([]);

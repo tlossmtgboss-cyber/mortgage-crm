@@ -14,7 +14,8 @@ function YearOverYear() {
   const loadYearlyData = async () => {
     try {
       setLoading(true);
-      const API_URL = process.env.REACT_APP_API_URL || '';
+      const isProduction = window.location.hostname.includes('vercel.app');
+      const API_URL = isProduction ? 'https://mortgage-crm-production-7a9a.up.railway.app' : (process.env.REACT_APP_API_URL || '');
       const token = localStorage.getItem('token');
 
       const response = await fetch(`${API_URL}/api/v1/portfolio/yearly-stats`, {

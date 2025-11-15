@@ -40,7 +40,8 @@ function GoalTracker() {
     setLoadingActuals(true);
     try {
       const token = localStorage.getItem('token');
-      const API_URL = process.env.REACT_APP_API_URL || '';
+      const isProduction = window.location.hostname.includes('vercel.app');
+      const API_URL = isProduction ? 'https://mortgage-crm-production-7a9a.up.railway.app' : (process.env.REACT_APP_API_URL || '');
 
       // Fetch loans data
       const loansResponse = await fetch(`${API_URL}/api/v1/loans`, {
@@ -167,7 +168,8 @@ function GoalTracker() {
       const token = localStorage.getItem('token');
       if (token && calculated.annualOriginationUnitGoal) {
         try {
-          const API_URL = process.env.REACT_APP_API_URL || '';
+          const isProduction = window.location.hostname.includes('vercel.app');
+          const API_URL = isProduction ? 'https://mortgage-crm-production-7a9a.up.railway.app' : (process.env.REACT_APP_API_URL || '');
           await fetch(`${API_URL}/api/v1/users/me/goals`, {
             method: 'PATCH',
             headers: {

@@ -377,7 +377,7 @@ function Settings() {
   const fetchApiKeys = async () => {
     setLoadingApiKeys(true);
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/v1/api-keys`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/api-keys`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -412,7 +412,7 @@ function Settings() {
     }
 
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/v1/api-keys`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/api-keys`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
@@ -447,7 +447,7 @@ function Settings() {
     }
 
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/v1/api-keys/${keyId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/api-keys/${keyId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -467,7 +467,11 @@ function Settings() {
   };
 
   // Microsoft 365 Integration Functions
-  const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+  // Use HTTPS Railway URL in production, localhost for development
+const isProduction = window.location.hostname.includes('vercel.app');
+const API_BASE_URL = isProduction
+  ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+  : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
   const MICROSOFT_CLIENT_ID = process.env.REACT_APP_MICROSOFT_CLIENT_ID || 'YOUR_MICROSOFT_CLIENT_ID'; // Replace with actual client ID
   const MICROSOFT_REDIRECT_URI = `${window.location.origin}/settings`; // OAuth callback
 
@@ -3272,7 +3276,7 @@ function Settings() {
                   onClick={async () => {
                     if (window.confirm('⚠️ Are you absolutely sure you want to clear ALL dummy data?\n\nThis will delete:\n- All tasks\n- All pending approvals\n- All messages\n- All loans and leads\n- All activities\n\nThis action CANNOT be undone!')) {
                       try {
-                        const response = await fetch(`${process.env.REACT_APP_API_URL}/api/v1/admin/clear-sample-data`, {
+                        const response = await fetch(`${API_BASE_URL}/api/v1/admin/clear-sample-data`, {
                           method: 'POST',
                           headers: {
                             'Authorization': `Bearer ${localStorage.getItem('token')}`,

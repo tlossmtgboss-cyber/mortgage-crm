@@ -2,7 +2,11 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import './Users.css';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+// Use HTTPS Railway URL in production, localhost for development
+const isProduction = window.location.hostname.includes('vercel.app');
+const API_BASE_URL = isProduction
+  ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+  : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
 const DEFAULT_ROLES = [
   { id: 1, name: 'Loan Officer', taskCount: 1 },

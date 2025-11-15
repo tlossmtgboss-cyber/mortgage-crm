@@ -2,7 +2,11 @@ import React, { useState } from 'react';
 import { aiAPI } from '../services/api';
 import './SMSModal.css';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+// Use HTTPS Railway URL in production, localhost for development
+const isProduction = window.location.hostname.includes('vercel.app');
+const API_BASE_URL = isProduction
+  ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+  : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
 function SMSModal({ isOpen, onClose, lead }) {
   const [mode, setMode] = useState('manual'); // 'manual' or 'ai'
