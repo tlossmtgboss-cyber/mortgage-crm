@@ -260,6 +260,59 @@
   font-weight: var(--weight-medium);
 }
 
+.input-actions {
+  display: flex;
+  gap: var(--space-sm);
+  align-items: center;
+}
+
+.microphone-button {
+  padding: var(--space-sm) var(--space-md);
+  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
+  color: white;
+  border: none;
+  border-radius: var(--radius-base);
+  font-size: 20px;
+  cursor: pointer;
+  transition: all 250ms ease;
+  min-width: 50px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(33, 141, 141, 0.3);
+}
+
+.microphone-button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #1a7070 0%, #156060 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(26, 112, 112, 0.4);
+}
+
+.microphone-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.microphone-button.listening {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  animation: pulse-mic 1.5s ease-in-out infinite;
+}
+
+.microphone-button.listening:hover {
+  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+}
+
+@keyframes pulse-mic {
+  0%, 100% {
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+  }
+  50% {
+    box-shadow: 0 4px 16px rgba(239, 68, 68, 0.6), 0 0 20px rgba(239, 68, 68, 0.4);
+  }
+}
+
 .send-button {
   padding: var(--space-sm) var(--space-lg);
   background: var(--color-primary);
@@ -292,5 +345,24 @@
 
   .message {
     max-width: 90%;
+  }
+
+  .input-footer {
+    flex-direction: column;
+    gap: var(--space-sm);
+    align-items: stretch;
+  }
+
+  .input-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .microphone-button {
+    flex: 0 0 auto;
+  }
+
+  .send-button {
+    flex: 1;
   }
 }

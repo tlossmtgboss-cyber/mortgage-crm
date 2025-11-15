@@ -16,7 +16,9 @@ function SmartAIChat({ leadId, loanId, context = {} }) {
   const [loading, setLoading] = useState(false);
   const [memoryStats, setMemoryStats] = useState(null);
   const [showStats, setShowStats] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const messagesEndRef = useRef(null);
+  const recognitionRef = useRef(null);
 
   useEffect(() => {
     loadMemoryStats();
@@ -38,6 +40,10 @@ function SmartAIChat({ leadId, loanId, context = {} }) {
 
     return () => {
       window.removeEventListener('voiceCommand', handleVoiceCommand);
+      // Stop voice recognition if component unmounts while listening
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
     };
   }, []);
 
@@ -115,6 +121,58 @@ function SmartAIChat({ leadId, loanId, context = {} }) {
       hour: '2-digit',
       minute: '2-digit',
     });
+  };
+
+  const handleVoiceInput = () => {
+    // Check if browser supports Web Speech API
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      alert('Sorry, your browser does not support speech recognition. Please try Chrome or Edge.');
+      return;
+    }
+
+    // If already listening, stop
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+      return;
+    }
+
+    // Create new recognition instance
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      setIsListening(true);
+      console.log('Voice recognition started. Speak now...');
+    };
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      console.log('Voice input received:', transcript);
+      setInputValue(transcript);
+    };
+
+    recognition.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
+      setIsListening(false);
+      if (event.error === 'no-speech') {
+        alert('No speech detected. Please try again.');
+      } else if (event.error !== 'aborted') {
+        alert(`Error occurred: ${event.error}`);
+      }
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      console.log('Voice recognition ended');
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
   };
 
   return (
@@ -199,7 +257,7 @@ function SmartAIChat({ leadId, loanId, context = {} }) {
         <textarea
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
-          placeholder="Ask me anything... I remember our conversations!"
+          placeholder={isListening ? '🎤 Listening... Speak now!' : 'Ask me anything... I remember our conversations!'}
           rows={3}
           disabled={loading}
           onKeyDown={(e) => {
@@ -213,13 +271,24 @@ function SmartAIChat({ leadId, loanId, context = {} }) {
           <span className="input-hint">
             {memoryStats?.memory_enabled ? '🧠 Memory enabled' : '⚠️ Memory not configured'}
           </span>
-          <button
-            type="submit"
-            className="send-button"
-            disabled={!inputValue.trim() || loading}
-          >
-            {loading ? 'Thinking...' : 'Send'}
-          </button>
+          <div className="input-actions">
+            <button
+              type="button"
+              className={`microphone-button ${isListening ? 'listening' : ''}`}
+              onClick={handleVoiceInput}
+              disabled={loading}
+              title={isListening ? 'Stop listening' : 'Click to speak'}
+            >
+              {isListening ? '🔴' : '🎤'}
+            </button>
+            <button
+              type="submit"
+              className="send-button"
+              disabled={!inputValue.trim() || loading}
+            >
+              {loading ? 'Thinking...' : 'Send'}
+            </button>
+          </div>
         </div>
       </form>
     </div>
