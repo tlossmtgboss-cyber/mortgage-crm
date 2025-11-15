@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { aiAPI } from '../services/api';
+import VoiceInput from './VoiceInput';
 import './CoachCorner.css';
 
 const CoachCorner = ({ isOpen, onClose }) => {
@@ -10,6 +11,9 @@ const CoachCorner = ({ isOpen, onClose }) => {
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [memoryStats, setMemoryStats] = useState(null);
   const [conversationHistory, setConversationHistory] = useState([]);
+  const [aiChatMessage, setAiChatMessage] = useState('');
+  const [aiChatLoading, setAiChatLoading] = useState(false);
+  const [aiChatResponse, setAiChatResponse] = useState(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -230,6 +234,42 @@ const CoachCorner = ({ isOpen, onClose }) => {
     setCustomMessage('');
   };
 
+  const handleAIChatSend = async (message) => {
+    if (!message.trim()) return;
+
+    setAiChatLoading(true);
+    setAiChatResponse(null);
+
+    try {
+      // Send command to Smart AI with action context
+      const aiResponse = await aiAPI.smartChat(message, {
+        include_context: true,
+        context_type: 'action_execution',
+        coaching_mode: mode,
+        action_items: response.action_items || []
+      });
+
+      setAiChatResponse({
+        success: true,
+        message: aiResponse.response,
+        actions_taken: aiResponse.actions_taken || []
+      });
+
+      // Show success message
+      alert(`AI Command Executed:\n\n${aiResponse.response}`);
+    } catch (error) {
+      console.error('AI Chat error:', error);
+      setAiChatResponse({
+        success: false,
+        message: 'Failed to execute AI command. Please try again.',
+        error: error.message
+      });
+      alert('Failed to execute AI command. Please try again.');
+    } finally {
+      setAiChatLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="coach-corner">
@@ -318,6 +358,91 @@ const CoachCorner = ({ isOpen, onClose }) => {
               </div>
             </div>
           )}
+
+          {/* AI Chat / Voice Command Section */}
+          <div className="ai-chat-section">
+            <div className="ai-chat-header">
+              <h3>🤖 Smart AI Commands</h3>
+              <p className="ai-chat-description">
+                Give voice or text commands to take action on these items. For example:
+                "Send Teams message to processor about Sarah Johnson's underwriting delay"
+              </p>
+            </div>
+
+            {aiChatResponse && (
+              <div className={`ai-response-alert ${aiChatResponse.success ? 'success' : 'error'}`}>
+                <div className="ai-response-icon">
+                  {aiChatResponse.success ? '✅' : '❌'}
+                </div>
+                <div className="ai-response-text">
+                  <strong>{aiChatResponse.success ? 'Command Executed:' : 'Error:'}</strong>
+                  <p>{aiChatResponse.message}</p>
+                  {aiChatResponse.actions_taken && aiChatResponse.actions_taken.length > 0 && (
+                    <ul className="actions-taken-list">
+                      {aiChatResponse.actions_taken.map((action, i) => (
+                        <li key={i}>{action}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                <button
+                  className="ai-response-dismiss"
+                  onClick={() => setAiChatResponse(null)}
+                >
+                  ×
+                </button>
+              </div>
+            )}
+
+            <VoiceInput
+              onTranscriptChange={setAiChatMessage}
+              onSend={handleAIChatSend}
+              placeholder="Type or speak your command... e.g., 'Send Teams message to follow up on these deals'"
+            />
+
+            {aiChatLoading && (
+              <div className="ai-chat-loading">
+                <div className="loading-spinner-small"></div>
+                <span>Executing AI command...</span>
+              </div>
+            )}
+
+            <div className="ai-chat-examples">
+              <p className="examples-label">Example Commands:</p>
+              <div className="example-chips">
+                <button
+                  className="example-chip"
+                  onClick={() => {
+                    const exampleMsg = "Please send the processor a Teams message to follow up on these underwriting delays and get these files moving";
+                    setAiChatMessage(exampleMsg);
+                    handleAIChatSend(exampleMsg);
+                  }}
+                >
+                  📨 Send Teams message to processor
+                </button>
+                <button
+                  className="example-chip"
+                  onClick={() => {
+                    const exampleMsg = "Create tasks for each of these action items";
+                    setAiChatMessage(exampleMsg);
+                    handleAIChatSend(exampleMsg);
+                  }}
+                >
+                  ✅ Create tasks from action items
+                </button>
+                <button
+                  className="example-chip"
+                  onClick={() => {
+                    const exampleMsg = "Send email reminders to all borrowers with stalled deals";
+                    setAiChatMessage(exampleMsg);
+                    handleAIChatSend(exampleMsg);
+                  }}
+                >
+                  📧 Email borrowers with updates
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );
