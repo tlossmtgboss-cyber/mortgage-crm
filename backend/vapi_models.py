@@ -37,7 +37,7 @@ class VapiCall(Base):
     language = Column(String(10), default="en")
 
     # Metadata
-    metadata = Column(JSON)
+    call_metadata = Column(JSON)
     vapi_raw_data = Column(JSON)  # Store complete Vapi response
 
     # CRM Integration
