@@ -15,6 +15,14 @@ from main import get_db, User, Lead, Task, Activity, IncomingDataEvent, get_curr
 from integrations.twilio_voice_service import voice_client, ai_config
 import openai
 
+# AI Receptionist Dashboard Integration
+from ai_receptionist_dashboard_models import (
+    AIReceptionistActivity,
+    AIReceptionistError,
+    AIReceptionistConversation
+)
+import uuid
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/voice", tags=["voice"])
@@ -51,6 +59,23 @@ async def handle_incoming_call(request: Request, db: Session = Depends(get_db)):
             }
         )
         db.add(call_event)
+
+        # ✅ NEW: Log to AI Receptionist Dashboard
+        dashboard_activity = AIReceptionistActivity(
+            id=str(uuid.uuid4()),
+            timestamp=datetime.now(timezone.utc),
+            client_phone=caller_number,
+            action_type='incoming_call',
+            channel='voice',
+            outcome_status='pending',
+            conversation_id=call_sid,
+            extra_data={
+                "twilio_call_sid": call_sid,
+                "called_number": called_number
+            }
+        )
+        db.add(dashboard_activity)
+
         db.commit()
 
         # Generate TwiML response to connect to AI
@@ -353,12 +378,82 @@ async def save_call_summary(call_context: dict, db: Session):
             )
             db.add(activity)
 
+            # ✅ NEW: Save full conversation to dashboard
+            conversation_record = AIReceptionistConversation(
+                id=str(uuid.uuid4()),
+                started_at=call_context.get('start_time', datetime.now(timezone.utc)),
+                ended_at=datetime.now(timezone.utc),
+                duration_seconds=call_context.get('duration', 0),
+                client_id=str(lead.id) if lead else None,
+                client_name=call_context['lead_data'].get('name'),
+                client_phone=phone,
+                channel='voice',
+                direction='inbound',
+                transcript=json.dumps(call_context['conversation_history'], indent=2),
+                transcript_json=call_context['conversation_history'],
+                summary=call_context.get('intent', 'General inquiry'),
+                intent_detected=call_context.get('intent', 'unknown'),
+                sentiment='neutral',  # TODO: Add sentiment analysis
+                outcome=call_context.get('outcome', 'completed'),
+                avg_confidence_score=call_context.get('avg_confidence', 0.85),
+                total_turns=len(call_context['conversation_history']),
+                extra_data={
+                    "call_sid": call_context['call_sid'],
+                    "lead_data": call_context['lead_data']
+                }
+            )
+            db.add(conversation_record)
+
+            # ✅ NEW: Update activity feed with conversation summary
+            activity_update = AIReceptionistActivity(
+                id=str(uuid.uuid4()),
+                timestamp=datetime.now(timezone.utc),
+                client_id=str(lead.id) if lead else None,
+                client_name=call_context['lead_data'].get('name'),
+                client_phone=phone,
+                action_type='conversation_summary',
+                channel='voice',
+                confidence_score=call_context.get('avg_confidence', 0.85),
+                ai_version='gpt-4o-realtime-v1',
+                outcome_status='success',
+                conversation_id=call_context['call_sid'],
+                extra_data={
+                    "intent": call_context.get('intent'),
+                    "lead_data": call_context['lead_data'],
+                    "turns": len(call_context['conversation_history'])
+                }
+            )
+            db.add(activity_update)
+
             db.commit()
             logger.info(f"Saved call summary for {phone}")
 
     except Exception as e:
         logger.error(f"Error saving call summary: {e}")
         db.rollback()
+
+        # ✅ NEW: Log error to dashboard
+        try:
+            error_log = AIReceptionistError(
+                id=str(uuid.uuid4()),
+                timestamp=datetime.now(timezone.utc),
+                error_type='api_failure',
+                severity='high',
+                context=f"Failed to save call summary: {str(e)}",
+                conversation_snippet=json.dumps(call_context.get('conversation_history', [])[-3:]),
+                conversation_id=call_context.get('call_sid'),
+                root_cause='Unknown',
+                needs_human_review=True,
+                resolution_status='unresolved',
+                extra_data={
+                    "call_context": str(call_context),
+                    "error_message": str(e)
+                }
+            )
+            db.add(error_log)
+            db.commit()
+        except:
+            pass  # Don't fail on error logging
 
 
 # ============================================================================
