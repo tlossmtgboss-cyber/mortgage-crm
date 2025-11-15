@@ -12192,9 +12192,9 @@ async def clear_sample_data(
         # 6. Leads (no dependencies on them now)
         deleted_leads = db.query(Lead).filter(Lead.owner_id == current_user.id).delete()
 
-        # 7. Referral partners and MUM clients (independent)
-        deleted_partners = db.query(ReferralPartner).filter(ReferralPartner.lo_id == current_user.id).delete()
-        deleted_mum = db.query(MUMClient).filter(MUMClient.lo_id == current_user.id).delete()
+        # 7. Referral partners and MUM clients (independent - no user ownership)
+        deleted_partners = db.query(ReferralPartner).delete()
+        deleted_mum = db.query(MUMClient).delete()
 
         # Commit all deletions
         db.commit()
