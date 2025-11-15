@@ -10489,6 +10489,44 @@ async def run_ai_migration_endpoint(request: dict):
             "error": str(e)
         }
 
+@app.post("/admin/clear-all-tasks")
+async def clear_all_tasks_endpoint(request: dict, db: Session = Depends(get_db)):
+    """
+    Clear all tasks from the database.
+    Usage: POST /admin/clear-all-tasks with body: {"secret": "migrate-ai-2024"}
+    """
+    # Simple security check
+    if request.get("secret") != "migrate-ai-2024":
+        raise HTTPException(status_code=403, detail="Invalid secret")
+
+    try:
+        # Get count before deletion
+        task_count = db.query(Task).count()
+        logger.info(f"Found {task_count} tasks to delete")
+
+        if task_count == 0:
+            return {
+                "success": True,
+                "message": "No tasks to delete",
+                "deleted_count": 0
+            }
+
+        # Delete all tasks
+        deleted_count = db.query(Task).delete()
+        db.commit()
+
+        logger.info(f"Successfully deleted {deleted_count} tasks")
+
+        return {
+            "success": True,
+            "message": f"Successfully deleted {deleted_count} tasks",
+            "deleted_count": deleted_count
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error clearing tasks: {e}")
+        raise HTTPException(status_code=500, detail=f"Error clearing tasks: {str(e)}")
+
 @app.post("/admin/initialize-ai-system")
 async def initialize_ai_system_endpoint(request: dict):
     """
