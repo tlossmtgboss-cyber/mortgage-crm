@@ -3474,6 +3474,112 @@ async def dismiss_duplicate(
         logger.error(f"Error dismissing duplicate: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/api/v1/merge/completed")
+async def get_completed_merges(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get list of completed merges for review and feedback
+    """
+    try:
+        # Query completed merges
+        completed_pairs = db.query(DuplicatePair).filter(
+            DuplicatePair.user_id == current_user.id,
+            DuplicatePair.status.in_(['merged', 'auto_merged'])
+        ).order_by(DuplicatePair.merged_at.desc()).limit(50).all()
+
+        completed_tasks = []
+        for pair in completed_pairs:
+            # Get the lead details
+            lead1 = db.query(Lead).filter(Lead.id == pair.lead_id_1).first()
+            lead2 = db.query(Lead).filter(Lead.id == pair.lead_id_2).first()
+            principal = db.query(Lead).filter(Lead.id == pair.principal_record_id).first()
+
+            # Calculate AI accuracy for this merge
+            training_events = db.query(MergeTrainingEvent).filter(
+                MergeTrainingEvent.duplicate_pair_id == pair.id
+            ).all()
+
+            fields_merged = len(training_events)
+            ai_correct = sum(1 for event in training_events if event.was_correct)
+            ai_accuracy = (ai_correct / fields_merged) if fields_merged > 0 else 0
+            user_overrides = fields_merged - ai_correct
+
+            completed_tasks.append({
+                'id': pair.id,
+                'completed_at': pair.merged_at.isoformat() if pair.merged_at else None,
+                'lead1_name': lead1.name if lead1 else 'Unknown',
+                'lead2_name': lead2.name if lead2 else 'Unknown',
+                'principal_name': principal.name if principal else 'Unknown',
+                'principal_id': pair.principal_record_id,
+                'fields_merged': fields_merged,
+                'ai_accuracy': ai_accuracy,
+                'user_overrides': user_overrides,
+                'similarity_score': pair.similarity_score or 0,
+                'status': pair.status
+            })
+
+        return {
+            'success': True,
+            'completed_tasks': completed_tasks,
+            'total_count': len(completed_tasks)
+        }
+
+    except Exception as e:
+        logger.error(f"Error fetching completed merges: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/merge/feedback")
+async def submit_merge_feedback(
+    feedback_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Submit feedback on a completed merge to improve AI accuracy
+    """
+    try:
+        task_id = feedback_data.get('task_id')
+        feedback = feedback_data.get('feedback', '').strip()
+
+        if not feedback:
+            raise HTTPException(status_code=400, detail="Feedback cannot be empty")
+
+        # Get the duplicate pair
+        pair = db.query(DuplicatePair).filter(
+            DuplicatePair.id == task_id,
+            DuplicatePair.user_id == current_user.id
+        ).first()
+
+        if not pair:
+            raise HTTPException(status_code=404, detail="Merge task not found")
+
+        # Store feedback in user_decision JSON field
+        if pair.user_decision is None:
+            pair.user_decision = {}
+
+        if not isinstance(pair.user_decision, dict):
+            pair.user_decision = {}
+
+        pair.user_decision['feedback'] = feedback
+        pair.user_decision['feedback_at'] = datetime.now(timezone.utc).isoformat()
+
+        db.commit()
+
+        logger.info(f"Feedback submitted for merge {task_id} by user {current_user.id}")
+
+        return {
+            'success': True,
+            'message': 'Feedback submitted successfully. This will help improve AI accuracy.'
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error submitting feedback: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # ============================================================================
 # MICROSOFT 365 OAUTH ENDPOINTS
 # ============================================================================
