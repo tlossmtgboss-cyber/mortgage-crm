@@ -1363,6 +1363,11 @@ function LeadDetail() {
             </div>
           </div>
           )}
+
+          {/* Smart AI Assistant - Always Visible */}
+          <div className="smart-chat-card">
+            <SmartAIChat leadId={lead.id} />
+          </div>
         </div>
 
         {/* Right Column - Actions & Email History */}
@@ -1463,11 +1468,6 @@ function LeadDetail() {
                 <div className="empty-state">No emails yet</div>
               )}
             </div>
-          </div>
-
-          {/* Smart AI Chat with Memory */}
-          <div className="smart-chat-card">
-            <SmartAIChat leadId={lead.id} />
           </div>
         </div>
       </div>
