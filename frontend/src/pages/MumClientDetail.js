@@ -4,6 +4,7 @@ import { mumAPI, activitiesAPI } from '../services/api';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import SMSModal from '../components/SMSModal';
 import TeamsModal from '../components/TeamsModal';
+import VoicemailModal from '../components/VoicemailModal';
 import './LeadDetail.css';
 
 function MumClientDetail() {
@@ -17,6 +18,7 @@ function MumClientDetail() {
   const [saveTimeout, setSaveTimeout] = useState(null);
   const [showSMSModal, setShowSMSModal] = useState(false);
   const [showTeamsModal, setShowTeamsModal] = useState(false);
+  const [showVoicemailModal, setShowVoicemailModal] = useState(false);
   const [noteText, setNoteText] = useState('');
   const [noteLoading, setNoteLoading] = useState(false);
   const [activities, setActivities] = useState([]);
@@ -104,6 +106,9 @@ function MumClientDetail() {
         break;
       case 'teams':
         setShowTeamsModal(true);
+        break;
+      case 'voicemail':
+        setShowVoicemailModal(true);
         break;
       default:
         break;
@@ -618,6 +623,15 @@ function MumClientDetail() {
                 <span className="icon">👥</span>
                 <span>Teams Meeting</span>
               </button>
+              <button
+                className="action-btn voicemail"
+                onClick={() => handleAction('voicemail')}
+                disabled={!client.phone}
+                title="Drop voicemail message"
+              >
+                <span className="icon">📞</span>
+                <span>Voicemail Drop</span>
+              </button>
             </div>
           </div>
 
@@ -666,6 +680,15 @@ function MumClientDetail() {
         <TeamsModal
           isOpen={showTeamsModal}
           onClose={() => setShowTeamsModal(false)}
+          lead={client}
+        />
+      )}
+
+      {/* Voicemail Modal */}
+      {client && (
+        <VoicemailModal
+          isOpen={showVoicemailModal}
+          onClose={() => setShowVoicemailModal(false)}
           lead={client}
         />
       )}

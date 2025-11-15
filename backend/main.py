@@ -19,7 +19,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, DateTime, Date, Text, ForeignKey, JSON, Enum as SQLEnum, func, text, or_
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
-from pydantic import BaseModel, EmailStr, validator
+from pydantic import BaseModel, EmailStr
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from datetime import datetime, timedelta, timezone
@@ -6523,7 +6523,7 @@ async def get_scorecard(
 @app.post("/api/v1/leads/", response_model=LeadResponse, status_code=201)
 async def create_lead(lead: LeadCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
     db_lead = Lead(
-        **lead.dict(),
+        **lead.model_dump(),
         owner_id=current_user.id,
     )
 
@@ -6605,7 +6605,7 @@ async def create_loan(loan: LoanCreate, db: Session = Depends(get_db), current_u
         if existing:
             raise HTTPException(status_code=400, detail="Loan number already exists")
 
-        db_loan = Loan(**loan.dict(), loan_officer_id=current_user.id)
+        db_loan = Loan(**loan.model_dump(), loan_officer_id=current_user.id)
         db_loan.ai_insights = generate_ai_insights(db_loan)
 
         db.add(db_loan)
@@ -6704,7 +6704,7 @@ async def create_client_profile(
         nmls_number=profile_data.nmls_number,
         business_address=profile_data.business_address,
         team_size=profile_data.team_size or 1,
-        user_profile=profile_data.user_profile.dict() if profile_data.user_profile else None,
+        user_profile=profile_data.user_profile.model_dump() if profile_data.user_profile else None,
         subscription_plan=profile_data.subscription_plan or "Solo",
         billing_status="active",
         # Initialize empty JSON fields
@@ -6752,11 +6752,11 @@ async def update_client_profile(
     update_data = profile_update.dict(exclude_unset=True)
     for field, value in update_data.items():
         if field == "user_profile" and value:
-            setattr(profile, field, value.dict())
+            setattr(profile, field, value.model_dump())
         elif field in ["integration_settings", "branding_settings", "automation_settings",
                        "reconciliation_settings", "pipeline_settings", "kpi_targets",
                        "portfolio_settings", "advanced_settings"] and value:
-            setattr(profile, field, value.dict())
+            setattr(profile, field, value.model_dump())
         else:
             setattr(profile, field, value)
 
@@ -6800,7 +6800,7 @@ async def create_team_role(
 
     db_role = TeamRole(
         profile_id=profile.id,
-        **role_data.dict()
+        **role_data.model_dump()
     )
 
     db.add(db_role)
@@ -6888,7 +6888,7 @@ async def upload_process_flow(
 
     db_document = ProcessFlowDocument(
         profile_id=profile.id,
-        **document_data.dict(),
+        **document_data.model_dump(),
         ai_parsing_status="pending"
     )
 
@@ -6920,7 +6920,7 @@ async def get_process_flows(
 @app.post("/api/v1/tasks/", response_model=TaskResponse, status_code=201)
 async def create_task(task: TaskCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     db_task = AITask(
-        **task.dict(),
+        **task.model_dump(),
         assigned_to_id=current_user.id,
         ai_confidence=random.randint(70, 95)
     )
@@ -6994,7 +6994,7 @@ async def delete_task(task_id: int, db: Session = Depends(get_db), current_user:
 
 @app.post("/api/v1/referral-partners/", response_model=ReferralPartnerResponse, status_code=201)
 async def create_referral_partner(partner: ReferralPartnerCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    db_partner = ReferralPartner(**partner.dict())
+    db_partner = ReferralPartner(**partner.model_dump())
     db.add(db_partner)
     db.commit()
     db.refresh(db_partner)
@@ -7055,7 +7055,7 @@ async def create_mum_client(client: MUMClientCreate, db: Session = Depends(get_d
     days_since = (datetime.now(timezone.utc) - original_close_dt).days
 
     db_client = MUMClient(
-        **client.dict(),
+        **client.model_dump(),
         days_since_funding=days_since
     )
 
@@ -7118,7 +7118,7 @@ async def delete_mum_client(client_id: int, db: Session = Depends(get_db), curre
 @app.post("/api/v1/activities/", response_model=ActivityResponse, status_code=201)
 async def create_activity(activity: ActivityCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     db_activity = Activity(
-        **activity.dict(),
+        **activity.model_dump(),
         user_id=current_user.id
     )
 
@@ -7208,7 +7208,7 @@ async def create_process_template(
     current_user: User = Depends(get_current_user)
 ):
     """Create a new process template task"""
-    db_template = ProcessTemplate(**template.dict(), user_id=current_user.id)
+    db_template = ProcessTemplate(**template.model_dump(), user_id=current_user.id)
     db.add(db_template)
     db.commit()
     db.refresh(db_template)
@@ -10265,9 +10265,9 @@ async def parse_onboarding_documents(
         tasks = db.query(ProcessTask).filter(ProcessTask.user_id == current_user.id).all()
 
         return {
-            "roles": [ProcessRoleResponse.from_orm(r) for r in roles],
-            "milestones": [ProcessMilestoneResponse.from_orm(m) for m in milestones],
-            "tasks": [ProcessTaskResponse.from_orm(t) for t in tasks],
+            "roles": [ProcessRoleResponse.model_validate(r) for r in roles],
+            "milestones": [ProcessMilestoneResponse.model_validate(m) for m in milestones],
+            "tasks": [ProcessTaskResponse.model_validate(t) for t in tasks],
             "summary": {
                 "total_roles": len(roles),
                 "total_milestones": len(milestones),
@@ -10293,7 +10293,7 @@ async def get_process_roles(
             ProcessRole.is_active == True
         ).order_by(ProcessRole.role_name).all()
 
-        return [ProcessRoleResponse.from_orm(role) for role in roles]
+        return [ProcessRoleResponse.model_validate(role) for role in roles]
 
     except Exception as e:
         logger.error(f"Get roles error: {e}")
@@ -10311,7 +10311,7 @@ async def get_process_milestones(
             ProcessMilestone.is_active == True
         ).order_by(ProcessMilestone.sequence_order).all()
 
-        return [ProcessMilestoneResponse.from_orm(milestone) for milestone in milestones]
+        return [ProcessMilestoneResponse.model_validate(milestone) for milestone in milestones]
 
     except Exception as e:
         logger.error(f"Get milestones error: {e}")
@@ -10339,7 +10339,7 @@ async def get_process_tasks(
 
         tasks = query.order_by(ProcessTask.milestone_id, ProcessTask.sequence_order).all()
 
-        return [ProcessTaskResponse.from_orm(task) for task in tasks]
+        return [ProcessTaskResponse.model_validate(task) for task in tasks]
 
     except Exception as e:
         logger.error(f"Get tasks error: {e}")
@@ -10462,8 +10462,8 @@ async def get_team_member_detail(
             ).order_by(ProcessTask.milestone_id, ProcessTask.sequence_order).all()
 
             roles_with_tasks.append({
-                "role": ProcessRoleResponse.from_orm(role),
-                "tasks": [ProcessTaskResponse.from_orm(t) for t in tasks]
+                "role": ProcessRoleResponse.model_validate(role),
+                "tasks": [ProcessTaskResponse.model_validate(t) for t in tasks]
             })
 
         return {
@@ -10495,7 +10495,7 @@ async def create_team_member(
         # Generate a random password (they can reset it later)
         import secrets
         temp_password = secrets.token_urlsafe(16)
-        hashed_password = bcrypt.hashpw(temp_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        hashed_password = get_password_hash(temp_password)
 
         # Create full_name from first and last name
         full_name = f"{member_data.first_name} {member_data.last_name}"
@@ -11373,7 +11373,8 @@ async def clear_sample_data(
         deleted_process_tasks = db.query(ProcessTask).delete()
 
         # 3. Reconciliation events (pending approvals)
-        deleted_reconciliation = db.query(ReconciliationEvent).delete()
+        # deleted_reconciliation = db.query(ReconciliationEvent).delete()  # ReconciliationEvent class not defined
+        deleted_reconciliation = 0
 
         # 4. Unified messages
         deleted_sms = db.query(SMSMessage).delete()
