@@ -38,6 +38,7 @@ import requests
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 import asyncio
+import time
 
 # Import security middleware
 from security_middleware import (
@@ -12040,14 +12041,39 @@ async def auto_sync_emails():
     except Exception as e:
         logger.error(f"Auto-sync task error: {e}")
 
+def init_db_with_retry(max_retries=5, initial_delay=2):
+    """Initialize database with retry logic for Railway startup"""
+    # Railway-specific: Wait for Postgres to be ready
+    if os.getenv('RAILWAY_ENVIRONMENT') or os.getenv('RAILWAY_SERVICE_NAME'):
+        logger.info("🚂 Railway environment detected, waiting for Postgres to initialize...")
+        time.sleep(5)  # Give Railway Postgres time to start
+
+    delay = initial_delay
+    for attempt in range(max_retries):
+        try:
+            result = init_db()
+            if result:
+                logger.info(f"✅ Database initialized successfully (attempt {attempt + 1}/{max_retries})")
+                return True
+        except Exception as e:
+            if attempt < max_retries - 1:
+                logger.warning(f"⚠️ Database connection failed (attempt {attempt + 1}/{max_retries}), retrying in {delay}s...")
+                logger.warning(f"   Error: {str(e)[:200]}")
+                time.sleep(delay)
+                delay *= 2  # Exponential backoff
+            else:
+                logger.error(f"❌ Database initialization failed after {max_retries} attempts: {e}")
+                raise
+    return False
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize database on startup"""
     logger.info("🚀 Starting Agentic AI Mortgage CRM...")
 
     try:
-        # Initialize database
-        if init_db():
+        # Initialize database with retry logic
+        if init_db_with_retry():
             # Create sample data
             db = SessionLocal()
             try:
