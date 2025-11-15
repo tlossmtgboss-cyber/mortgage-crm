@@ -2849,6 +2849,10 @@ app.include_router(mission_control_router, tags=["Mission Control"])
 from ab_testing_routes import router as ab_testing_router
 app.include_router(ab_testing_router, tags=["A/B Testing"])
 
+# Include AI Receptionist Dashboard routes
+from ai_receptionist_dashboard_routes import router as ai_receptionist_dashboard_router
+app.include_router(ai_receptionist_dashboard_router, tags=["AI Receptionist Dashboard"])
+
 # Include Voice AI Receptionist routes
 # TEMP DISABLED: Circular import issue - needs refactoring
 # from voice_routes import router as voice_router
@@ -5252,6 +5256,239 @@ async def add_ab_testing_tables_migration(
 
     except Exception as e:
         logger.error(f"A/B testing migration failed: {e}")
+        db.rollback()
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e)
+        }
+
+@app.post("/api/v1/migrations/add-ai-receptionist-dashboard-tables")
+async def add_ai_receptionist_dashboard_tables_migration(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Add AI Receptionist Dashboard tables
+    Creates 6 tables: activity, metrics_daily, skills, errors, system_health, conversations
+    """
+    try:
+        logger.info(f"Running migration: add AI Receptionist Dashboard tables (user: {current_user.id})")
+
+        # Check if tables already exist
+        result = db.execute(text("""
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+            AND table_name = 'ai_receptionist_activity'
+        """))
+
+        if result.fetchone():
+            return {
+                "success": True,
+                "message": "AI Receptionist Dashboard tables already exist",
+                "already_exists": True
+            }
+
+        # Create all AI Receptionist Dashboard tables
+        sql_commands = [
+            # 1. Activity table
+            """
+            CREATE TABLE ai_receptionist_activity (
+                id VARCHAR(36) PRIMARY KEY,
+                timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+                client_id VARCHAR(255),
+                client_name VARCHAR(255),
+                client_phone VARCHAR(50),
+                client_email VARCHAR(255),
+                action_type VARCHAR(100) NOT NULL,
+                channel VARCHAR(50),
+                message_in TEXT,
+                message_out TEXT,
+                confidence_score FLOAT,
+                ai_version VARCHAR(50),
+                lead_stage VARCHAR(100),
+                assigned_to VARCHAR(255),
+                outcome_status VARCHAR(100),
+                conversation_id VARCHAR(255),
+                transcript_url VARCHAR(500),
+                metadata JSON
+            )
+            """,
+
+            # 2. Daily metrics table
+            """
+            CREATE TABLE ai_receptionist_metrics_daily (
+                date DATE PRIMARY KEY,
+                total_conversations INTEGER DEFAULT 0,
+                inbound_calls INTEGER DEFAULT 0,
+                inbound_texts INTEGER DEFAULT 0,
+                outbound_messages INTEGER DEFAULT 0,
+                response_time_avg_seconds FLOAT,
+                response_time_p95_seconds FLOAT,
+                appointments_scheduled INTEGER DEFAULT 0,
+                forms_completed INTEGER DEFAULT 0,
+                loan_apps_initiated INTEGER DEFAULT 0,
+                lead_updates INTEGER DEFAULT 0,
+                task_updates INTEGER DEFAULT 0,
+                documents_requested INTEGER DEFAULT 0,
+                escalations INTEGER DEFAULT 0,
+                ai_confusion_count INTEGER DEFAULT 0,
+                successful_resolutions INTEGER DEFAULT 0,
+                lead_qualification_rate FLOAT,
+                appointment_show_rate FLOAT,
+                ai_coverage_percentage FLOAT,
+                estimated_revenue_created FLOAT,
+                saved_labor_hours FLOAT,
+                cost_per_interaction FLOAT,
+                avg_confidence_score FLOAT,
+                error_rate FLOAT,
+                metadata JSON
+            )
+            """,
+
+            # 3. Skills table
+            """
+            CREATE TABLE ai_receptionist_skills (
+                id VARCHAR(36) PRIMARY KEY,
+                skill_name VARCHAR(255) NOT NULL UNIQUE,
+                skill_category VARCHAR(100),
+                description TEXT,
+                accuracy_score FLOAT,
+                accuracy_score_7day FLOAT,
+                accuracy_score_30day FLOAT,
+                trend_7day FLOAT,
+                trend_30day FLOAT,
+                trend_direction VARCHAR(20),
+                usage_count INTEGER DEFAULT 0,
+                success_count INTEGER DEFAULT 0,
+                failure_count INTEGER DEFAULT 0,
+                needs_retraining BOOLEAN DEFAULT FALSE,
+                last_trained_at TIMESTAMP WITH TIME ZONE,
+                last_updated TIMESTAMP WITH TIME ZONE,
+                metadata JSON
+            )
+            """,
+
+            # 4. Errors table
+            """
+            CREATE TABLE ai_receptionist_errors (
+                id VARCHAR(36) PRIMARY KEY,
+                timestamp TIMESTAMP WITH TIME ZONE NOT NULL,
+                error_type VARCHAR(100),
+                severity VARCHAR(20),
+                context TEXT,
+                conversation_snippet TEXT,
+                conversation_id VARCHAR(255),
+                root_cause TEXT,
+                recommended_fix TEXT,
+                auto_fix_proposed TEXT,
+                needs_human_review BOOLEAN DEFAULT FALSE,
+                reviewed_by VARCHAR(255),
+                reviewed_at TIMESTAMP WITH TIME ZONE,
+                resolution_status VARCHAR(50) DEFAULT 'unresolved',
+                resolution_notes TEXT,
+                trained_into_model BOOLEAN DEFAULT FALSE,
+                training_data_id VARCHAR(255),
+                metadata JSON
+            )
+            """,
+
+            # 5. System health table
+            """
+            CREATE TABLE ai_receptionist_system_health (
+                component_name VARCHAR(255) PRIMARY KEY,
+                status VARCHAR(50) NOT NULL DEFAULT 'unknown',
+                latency_ms INTEGER,
+                error_rate FLOAT,
+                uptime_percentage FLOAT,
+                last_checked TIMESTAMP WITH TIME ZONE,
+                last_success TIMESTAMP WITH TIME ZONE,
+                last_failure TIMESTAMP WITH TIME ZONE,
+                consecutive_failures INTEGER DEFAULT 0,
+                alert_sent BOOLEAN DEFAULT FALSE,
+                alert_sent_at TIMESTAMP WITH TIME ZONE,
+                notes TEXT,
+                endpoint_url VARCHAR(500),
+                metadata JSON
+            )
+            """,
+
+            # 6. Conversations table
+            """
+            CREATE TABLE ai_receptionist_conversations (
+                id VARCHAR(36) PRIMARY KEY,
+                started_at TIMESTAMP WITH TIME ZONE NOT NULL,
+                ended_at TIMESTAMP WITH TIME ZONE,
+                duration_seconds INTEGER,
+                client_id VARCHAR(255),
+                client_name VARCHAR(255),
+                client_phone VARCHAR(50),
+                client_email VARCHAR(255),
+                channel VARCHAR(50),
+                direction VARCHAR(20),
+                transcript TEXT,
+                transcript_json JSON,
+                summary TEXT,
+                intent_detected VARCHAR(100),
+                sentiment VARCHAR(50),
+                key_topics JSON,
+                outcome VARCHAR(100),
+                escalated_to VARCHAR(255),
+                follow_up_required BOOLEAN DEFAULT FALSE,
+                follow_up_date TIMESTAMP WITH TIME ZONE,
+                avg_confidence_score FLOAT,
+                total_turns INTEGER,
+                recording_url VARCHAR(500),
+                metadata JSON
+            )
+            """,
+        ]
+
+        # Execute table creation
+        for sql in sql_commands:
+            db.execute(text(sql))
+
+        # Create indices
+        indices = [
+            "CREATE INDEX idx_activity_timestamp ON ai_receptionist_activity(timestamp DESC)",
+            "CREATE INDEX idx_activity_client ON ai_receptionist_activity(client_id)",
+            "CREATE INDEX idx_activity_type ON ai_receptionist_activity(action_type)",
+            "CREATE INDEX idx_activity_client_timestamp ON ai_receptionist_activity(client_id, timestamp DESC)",
+            "CREATE INDEX idx_activity_type_timestamp ON ai_receptionist_activity(action_type, timestamp DESC)",
+            "CREATE INDEX idx_error_timestamp ON ai_receptionist_errors(timestamp DESC)",
+            "CREATE INDEX idx_error_type ON ai_receptionist_errors(error_type)",
+            "CREATE INDEX idx_error_status ON ai_receptionist_errors(resolution_status)",
+            "CREATE INDEX idx_error_needs_review ON ai_receptionist_errors(needs_human_review)",
+            "CREATE INDEX idx_conversation_started ON ai_receptionist_conversations(started_at DESC)",
+            "CREATE INDEX idx_conversation_client ON ai_receptionist_conversations(client_id)",
+            "CREATE INDEX idx_conversation_outcome ON ai_receptionist_conversations(outcome)",
+            "CREATE INDEX idx_conversation_client_started ON ai_receptionist_conversations(client_id, started_at DESC)",
+        ]
+
+        for index_sql in indices:
+            db.execute(text(index_sql))
+
+        db.commit()
+
+        logger.info("Successfully created AI Receptionist Dashboard tables with indices")
+
+        return {
+            "success": True,
+            "message": "Successfully created AI Receptionist Dashboard tables (6 tables, 13 indices)",
+            "tables_created": [
+                "ai_receptionist_activity",
+                "ai_receptionist_metrics_daily",
+                "ai_receptionist_skills",
+                "ai_receptionist_errors",
+                "ai_receptionist_system_health",
+                "ai_receptionist_conversations"
+            ],
+            "already_exists": False
+        }
+
+    except Exception as e:
+        logger.error(f"AI Receptionist Dashboard migration failed: {e}")
         db.rollback()
         return {
             "success": False,
