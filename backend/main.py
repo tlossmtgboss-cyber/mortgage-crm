@@ -2207,6 +2207,10 @@ app.include_router(ai_router, tags=["AI System"])
 from mission_control_routes import router as mission_control_router
 app.include_router(mission_control_router, tags=["Mission Control"])
 
+# Include A/B Testing routes
+from ab_testing_routes import router as ab_testing_router
+app.include_router(ab_testing_router, tags=["A/B Testing"])
+
 # Include Voice AI Receptionist routes
 # TEMP DISABLED: Circular import issue - needs refactoring
 # from voice_routes import router as voice_router
@@ -11069,6 +11073,10 @@ async def clear_sample_data(
     """
     try:
         # Delete in order (dependencies first):
+
+        # 0. Task approvals (references ai_tasks)
+        from models import TaskApproval
+        deleted_task_approvals = db.query(TaskApproval).delete()
 
         # 1. Activities and Conversations (reference leads/loans)
         deleted_activities = db.query(Activity).delete()
