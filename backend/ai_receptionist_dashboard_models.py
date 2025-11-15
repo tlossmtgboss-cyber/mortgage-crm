@@ -48,7 +48,7 @@ class AIReceptionistActivity(Base):
     transcript_url = Column(String(500))
 
     # Additional data
-    metadata = Column(JSON)  # Flexible field for extra context
+    extra_data = Column(JSON)  # Flexible field for extra context (renamed from 'metadata' to avoid SQLAlchemy reserved word)
 
     # Indices for performance
     __table_args__ = (
@@ -105,7 +105,7 @@ class AIReceptionistMetricsDaily(Base):
     error_rate = Column(Float)  # % of interactions with errors
 
     # Additional data
-    metadata = Column(JSON)
+    extra_data = Column(JSON)  # Renamed from 'metadata' to avoid SQLAlchemy reserved word
 
 
 class AIReceptionistSkill(Base):
@@ -146,7 +146,7 @@ class AIReceptionistSkill(Base):
     last_updated = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # Additional data
-    metadata = Column(JSON)
+    extra_data = Column(JSON)  # Renamed from 'metadata' to avoid SQLAlchemy reserved word
 
 
 class AIReceptionistError(Base):
@@ -190,7 +190,7 @@ class AIReceptionistError(Base):
     training_data_id = Column(String(255))
 
     # Additional data
-    metadata = Column(JSON)
+    extra_data = Column(JSON)  # Renamed from 'metadata' to avoid SQLAlchemy reserved word
 
     # Indices
     __table_args__ = (
@@ -233,7 +233,7 @@ class AIReceptionistSystemHealth(Base):
     # Additional info
     notes = Column(Text)
     endpoint_url = Column(String(500))
-    metadata = Column(JSON)
+    extra_data = Column(JSON)  # Renamed from 'metadata' to avoid SQLAlchemy reserved word
 
 
 class AIReceptionistConversation(Base):
@@ -282,7 +282,7 @@ class AIReceptionistConversation(Base):
     recording_url = Column(String(500))
 
     # Additional data
-    metadata = Column(JSON)
+    extra_data = Column(JSON)  # Renamed from 'metadata' to avoid SQLAlchemy reserved word
 
     # Indices
     __table_args__ = (

@@ -5312,7 +5312,7 @@ async def add_ai_receptionist_dashboard_tables_migration(
                 outcome_status VARCHAR(100),
                 conversation_id VARCHAR(255),
                 transcript_url VARCHAR(500),
-                metadata JSON
+                extra_data JSON
             )
             """,
 
@@ -5343,7 +5343,7 @@ async def add_ai_receptionist_dashboard_tables_migration(
                 cost_per_interaction FLOAT,
                 avg_confidence_score FLOAT,
                 error_rate FLOAT,
-                metadata JSON
+                extra_data JSON
             )
             """,
 
@@ -5366,7 +5366,7 @@ async def add_ai_receptionist_dashboard_tables_migration(
                 needs_retraining BOOLEAN DEFAULT FALSE,
                 last_trained_at TIMESTAMP WITH TIME ZONE,
                 last_updated TIMESTAMP WITH TIME ZONE,
-                metadata JSON
+                extra_data JSON
             )
             """,
 
@@ -5390,7 +5390,7 @@ async def add_ai_receptionist_dashboard_tables_migration(
                 resolution_notes TEXT,
                 trained_into_model BOOLEAN DEFAULT FALSE,
                 training_data_id VARCHAR(255),
-                metadata JSON
+                extra_data JSON
             )
             """,
 
@@ -5410,7 +5410,7 @@ async def add_ai_receptionist_dashboard_tables_migration(
                 alert_sent_at TIMESTAMP WITH TIME ZONE,
                 notes TEXT,
                 endpoint_url VARCHAR(500),
-                metadata JSON
+                extra_data JSON
             )
             """,
 
@@ -5440,7 +5440,7 @@ async def add_ai_receptionist_dashboard_tables_migration(
                 avg_confidence_score FLOAT,
                 total_turns INTEGER,
                 recording_url VARCHAR(500),
-                metadata JSON
+                extra_data JSON
             )
             """,
         ]
