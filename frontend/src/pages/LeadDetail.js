@@ -40,8 +40,6 @@ function LeadDetail() {
   const [lead, setLead] = useState(null);
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [chatMessage, setChatMessage] = useState('');
-  const [chatLoading, setChatLoading] = useState(false);
   const [editing, setEditing] = useState(true); // Always in edit mode
   const [formData, setFormData] = useState({});
   const [emails, setEmails] = useState([]);
@@ -323,30 +321,6 @@ function LeadDetail() {
     }, 1000);
 
     setSaveTimeout(newTimeout);
-  };
-
-  const handleSendMessage = async (e) => {
-    e.preventDefault();
-    if (!chatMessage.trim()) return;
-
-    try {
-      setChatLoading(true);
-      const response = await aiAPI.chat(chatMessage, { lead_id: id });
-
-      await activitiesAPI.create({
-        type: 'ai_chat',
-        description: `User: ${chatMessage}\nAI: ${response.message}`,
-        lead_id: id
-      });
-
-      setChatMessage('');
-      loadLeadData();
-    } catch (error) {
-      console.error('Failed to send AI message:', error);
-      alert('Failed to send message');
-    } finally {
-      setChatLoading(false);
-    }
   };
 
   const handleAddNote = async (e) => {
@@ -1389,23 +1363,6 @@ function LeadDetail() {
             </div>
           </div>
           )}
-
-          {/* AI Chat Assistant - Always Visible */}
-          <div className="info-section">
-            <h2>AI Chat Assistant</h2>
-            <form onSubmit={handleSendMessage} className="ai-chat-form">
-              <textarea
-                value={chatMessage}
-                onChange={(e) => setChatMessage(e.target.value)}
-                placeholder="Ask the AI assistant about this lead..."
-                rows="3"
-                disabled={chatLoading}
-              />
-              <button type="submit" disabled={chatLoading || !chatMessage.trim()}>
-                {chatLoading ? 'Sending...' : 'Send Message'}
-              </button>
-            </form>
-          </div>
         </div>
 
         {/* Right Column - Actions & Email History */}
