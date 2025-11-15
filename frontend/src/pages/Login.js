@@ -40,23 +40,6 @@ function Login() {
     }
   };
 
-  const handleQuickTestLogin = async () => {
-    setError('');
-    setLoading(true);
-
-    try {
-      // Login with demo credentials
-      const data = await authAPI.login('demo@example.com', 'demo123');
-      setAuth(data.access_token, data.user);
-      navigate('/dashboard');
-    } catch (err) {
-      setError('Quick test login failed. Please try again or contact support.');
-      console.error('Quick login error:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <div className="login-container">
       <div className="login-box">
@@ -97,27 +80,7 @@ function Login() {
           <button type="submit" className="btn-primary" disabled={loading}>
             {loading ? 'Logging in...' : 'Login'}
           </button>
-
-          <div className="divider">OR</div>
-
-          <button
-            type="button"
-            className="btn-quick-test"
-            onClick={handleQuickTestLogin}
-            disabled={loading}
-          >
-            🚀 Quick Test Login (Auto-creates demo account)
-          </button>
         </form>
-
-        <div className="login-footer">
-          <p>Need an account? <a href="/register">Sign up here</a></p>
-          <div className="demo-credentials">
-            <p className="note"><strong>Demo Credentials:</strong></p>
-            <p className="note">Email: demo@example.com</p>
-            <p className="note">Password: demo123</p>
-          </div>
-        </div>
       </div>
     </div>
   );

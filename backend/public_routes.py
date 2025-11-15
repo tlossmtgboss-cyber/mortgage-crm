@@ -267,35 +267,28 @@ async def migrate_database(db: Session = Depends(get_db)):
 
 @router.get("/api/v1/register-test")
 async def register_test():
-    """Test endpoint to verify imports and JWT creation"""
-    try:
-        test_token = create_access_token(data={"sub": "test@example.com"})
-        return {
-            "status": "ok",
-            "jwt_import": "working",
-            "token_created": True,
-            "token_preview": test_token[:50] + "..."
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "error": str(e),
-            "error_type": type(e).__name__
-        }
+    """Test endpoint - DISABLED"""
+    raise HTTPException(
+        status_code=403,
+        detail="Registration testing is disabled."
+    )
 
 @router.post("/api/v1/register")
 async def register_user(registration: UserRegistration, db: Session = Depends(get_db)):
     """
-    Register a new user - PAYMENT BYPASSED FOR ALL USERS
+    Register a new user - DISABLED
 
-    Flow:
-    1. Validate email not already registered
-    2. Create user in database (auto-verified and activated)
-    3. Create mock subscription record
-    4. Create onboarding progress
-    5. Generate JWT token and return for immediate login
+    Registration is disabled. Only @cmgfi.com users can access this system.
+    Contact your system administrator for account access.
     """
 
+    raise HTTPException(
+        status_code=403,
+        detail="Registration is disabled. This system is restricted to authorized @cmgfi.com users only. Please contact your administrator for access."
+    )
+
+    # Original registration code disabled below:
+    """
     try:
         # Check if user already exists
         existing_user = db.query(User).filter(User.email == registration.email).first()
