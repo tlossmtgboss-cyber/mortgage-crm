@@ -12,6 +12,7 @@ function AIReceptionistDashboard() {
   const [systemHealth, setSystemHealth] = useState([]);
   const [activeTab, setActiveTab] = useState('overview');
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [selectedCall, setSelectedCall] = useState(null);
 
   // Fetch all dashboard data
   const fetchDashboardData = async () => {
@@ -53,6 +54,13 @@ function AIReceptionistDashboard() {
       if (refreshInterval) clearInterval(refreshInterval);
     };
   }, [autoRefresh]);
+
+  // Auto-select first call when activity feed loads
+  useEffect(() => {
+    if (activityFeed.length > 0 && !selectedCall) {
+      setSelectedCall(activityFeed[0]);
+    }
+  }, [activityFeed, selectedCall]);
 
   const formatTimestamp = (timestamp) => {
     const date = new Date(timestamp);
@@ -196,36 +204,154 @@ function AIReceptionistDashboard() {
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <div className="overview-tab">
-            <div className="activity-section">
-              <h2>📊 Recent Activity</h2>
-              <div className="activity-feed">
-                {activityFeed.length === 0 ? (
-                  <div className="empty-state">
-                    <p>No activity yet. Waiting for AI receptionist calls...</p>
-                  </div>
-                ) : (
-                  activityFeed.map((activity) => (
-                    <div key={activity.id} className="activity-item">
-                      <div className="activity-icon">{getActionTypeIcon(activity.action_type)}</div>
-                      <div className="activity-details">
-                        <div className="activity-header">
-                          <span className="activity-type">{activity.action_type.replace('_', ' ')}</span>
-                          <span className="activity-time">{formatTimestamp(activity.timestamp)}</span>
+            <div className="email-layout">
+              {/* Call List (Left Side) */}
+              <div className="call-inbox">
+                <div className="inbox-header">
+                  <h3>📞 Recent Calls</h3>
+                  <span className="call-count">{activityFeed.length}</span>
+                </div>
+                <div className="inbox-list">
+                  {activityFeed.length === 0 ? (
+                    <div className="empty-inbox">
+                      <p>No calls yet. Waiting for AI receptionist activity...</p>
+                    </div>
+                  ) : (
+                    activityFeed.map((call) => (
+                      <div
+                        key={call.id}
+                        className={`inbox-item ${selectedCall?.id === call.id ? 'selected' : ''}`}
+                        onClick={() => setSelectedCall(call)}
+                      >
+                        <div className="inbox-item-header">
+                          <span className="call-icon">{getActionTypeIcon(call.action_type)}</span>
+                          <span className="call-type-compact">{call.action_type.replace(/_/g, ' ').toUpperCase()}</span>
+                          <span className="call-time-compact">{formatTimestamp(call.timestamp)}</span>
                         </div>
-                        {activity.client_name && (
-                          <div className="activity-client">{activity.client_name} • {activity.client_phone}</div>
+                        <div className="inbox-item-meta">
+                          <span className="call-client-compact">
+                            {call.client_name || 'Unknown Caller'}
+                          </span>
+                          <div className={`status-dot status-${call.outcome_status}`}></div>
+                        </div>
+                        {call.client_phone && (
+                          <div className="call-preview">{call.client_phone}</div>
                         )}
-                        {activity.confidence_score && (
-                          <div className="activity-confidence">
-                            Confidence: {(activity.confidence_score * 100).toFixed(0)}%
+                        {call.confidence_score && (
+                          <div className="confidence-preview">
+                            Confidence: {(call.confidence_score * 100).toFixed(0)}%
                           </div>
                         )}
-                        <div className={`activity-status status-${activity.outcome_status}`}>
-                          {activity.outcome_status}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Call Detail (Right Side) */}
+              <div className="call-detail-pane">
+                {selectedCall ? (
+                  <>
+                    <div className="detail-header">
+                      <div className="detail-title-section">
+                        <div className="detail-source">
+                          <span className="source-icon-large">{getActionTypeIcon(selectedCall.action_type)}</span>
+                          <span className="source-name">{selectedCall.action_type.replace(/_/g, ' ')}</span>
+                        </div>
+                        <h2 className="detail-title">
+                          {selectedCall.client_name || 'Unknown Caller'}
+                        </h2>
+                        {selectedCall.client_phone && (
+                          <p className="detail-subtitle">{selectedCall.client_phone}</p>
+                        )}
+                      </div>
+                      <div className="detail-timestamp">
+                        {new Date(selectedCall.timestamp).toLocaleString()}
+                      </div>
+                    </div>
+
+                    <div className="detail-body">
+                      {/* Call Information */}
+                      <div className="detail-section">
+                        <h3>📋 Call Information</h3>
+                        <div className="detail-info-grid">
+                          <div className="info-item">
+                            <span className="info-label">Type:</span>
+                            <span className="info-value">{selectedCall.action_type.replace(/_/g, ' ')}</span>
+                          </div>
+                          <div className="info-item">
+                            <span className="info-label">Status:</span>
+                            <span className={`info-value status-badge status-${selectedCall.outcome_status}`}>
+                              {selectedCall.outcome_status}
+                            </span>
+                          </div>
+                          {selectedCall.confidence_score && (
+                            <div className="info-item">
+                              <span className="info-label">Confidence:</span>
+                              <span className="info-value">{(selectedCall.confidence_score * 100).toFixed(0)}%</span>
+                            </div>
+                          )}
+                          {selectedCall.duration && (
+                            <div className="info-item">
+                              <span className="info-label">Duration:</span>
+                              <span className="info-value">{selectedCall.duration}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Call Summary */}
+                      {selectedCall.summary && (
+                        <div className="detail-section">
+                          <h3>📝 Summary</h3>
+                          <div className="detail-content">
+                            <p>{selectedCall.summary}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Conversation Transcript */}
+                      {selectedCall.transcript && (
+                        <div className="detail-section">
+                          <h3>💬 Transcript</h3>
+                          <div className="detail-content transcript">
+                            <p>{selectedCall.transcript}</p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* AI Actions Taken */}
+                      {selectedCall.ai_actions && (
+                        <div className="detail-section">
+                          <h3>🤖 AI Actions</h3>
+                          <div className="detail-content">
+                            <ul className="actions-list">
+                              {selectedCall.ai_actions.split(',').map((action, idx) => (
+                                <li key={idx}>{action.trim()}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Outcome */}
+                      <div className="detail-section">
+                        <h3>✅ Outcome</h3>
+                        <div className="detail-content">
+                          <div className={`outcome-badge outcome-${selectedCall.outcome_status}`}>
+                            {selectedCall.outcome_status}
+                          </div>
+                          {selectedCall.outcome_description && (
+                            <p className="outcome-description">{selectedCall.outcome_description}</p>
+                          )}
                         </div>
                       </div>
                     </div>
-                  ))
+                  </>
+                ) : (
+                  <div className="detail-empty">
+                    <p>Select a call to view details</p>
+                  </div>
                 )}
               </div>
             </div>

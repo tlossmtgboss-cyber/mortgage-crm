@@ -616,7 +616,348 @@
   font-weight: 500;
 }
 
+/* Email-Style Two-Column Layout */
+.email-layout {
+  display: grid;
+  grid-template-columns: 350px 1fr;
+  gap: 0;
+  height: calc(100vh - 400px);
+  min-height: 600px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* Call Inbox (Left Side) */
+.call-inbox {
+  border-right: 1px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  background: #f9fafb;
+  height: 100%;
+  overflow: hidden;
+}
+
+.inbox-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #e5e7eb;
+  background: white;
+}
+
+.inbox-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.call-count {
+  background: #3b82f6;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.inbox-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.inbox-item {
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: white;
+}
+
+.inbox-item:hover {
+  background: #f3f4f6;
+}
+
+.inbox-item.selected {
+  background: #dbeafe;
+  border-left: 4px solid #218D8D;
+  padding-left: 16px;
+}
+
+.inbox-item-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.call-icon {
+  font-size: 16px;
+}
+
+.call-type-compact {
+  font-size: 12px;
+  font-weight: 600;
+  color: #1f2937;
+  flex: 1;
+  text-transform: capitalize;
+}
+
+.call-time-compact {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.inbox-item-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.call-client-compact {
+  font-size: 14px;
+  color: #374151;
+  font-weight: 500;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.status-dot.status-success {
+  background: #10b981;
+}
+
+.status-dot.status-pending {
+  background: #f59e0b;
+}
+
+.status-dot.status-escalated {
+  background: #ef4444;
+}
+
+.call-preview {
+  font-size: 12px;
+  color: #6b7280;
+  margin-bottom: 2px;
+}
+
+.confidence-preview {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.empty-inbox {
+  padding: 40px 20px;
+  text-align: center;
+  color: #9ca3af;
+}
+
+/* Call Detail Pane (Right Side) */
+.call-detail-pane {
+  display: flex;
+  flex-direction: column;
+  background: white;
+  overflow-y: auto;
+}
+
+.detail-header {
+  padding: 24px 32px;
+  border-bottom: 1px solid #e5e7eb;
+  background: white;
+}
+
+.detail-title-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-source {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #6b7280;
+  text-transform: capitalize;
+}
+
+.source-icon-large {
+  font-size: 20px;
+}
+
+.source-name {
+  font-weight: 500;
+}
+
+.detail-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.detail-subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.detail-timestamp {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #9ca3af;
+}
+
+.detail-body {
+  padding: 24px 32px;
+}
+
+.detail-section {
+  margin-bottom: 32px;
+}
+
+.detail-section:last-child {
+  margin-bottom: 0;
+}
+
+.detail-section h3 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.detail-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.info-label {
+  font-size: 12px;
+  color: #6b7280;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.info-value {
+  font-size: 14px;
+  color: #1f2937;
+  font-weight: 500;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  width: fit-content;
+}
+
+.status-badge.status-success {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-badge.status-pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-badge.status-escalated {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.detail-content {
+  background: #f9fafb;
+  padding: 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #374151;
+}
+
+.detail-content.transcript {
+  background: white;
+  border: 1px solid #e5e7eb;
+  font-family: 'Courier New', monospace;
+  white-space: pre-wrap;
+}
+
+.actions-list {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.actions-list li {
+  margin-bottom: 8px;
+  color: #374151;
+}
+
+.outcome-badge {
+  display: inline-block;
+  padding: 8px 16px;
+  border-radius: 16px;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.outcome-badge.outcome-success {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.outcome-badge.outcome-pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.outcome-badge.outcome-escalated {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.outcome-description {
+  margin: 0;
+  color: #6b7280;
+}
+
+.detail-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #9ca3af;
+  font-size: 16px;
+}
+
 /* Responsive */
+@media (max-width: 1024px) {
+  .email-layout {
+    grid-template-columns: 300px 1fr;
+  }
+
+  .detail-info-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 768px) {
   .ai-receptionist-dashboard {
     padding: 1rem;
@@ -646,5 +987,21 @@
   .skills-grid,
   .health-grid {
     grid-template-columns: 1fr;
+  }
+
+  .email-layout {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
+  .call-inbox {
+    border-right: none;
+    border-bottom: 1px solid #e5e7eb;
+    max-height: 400px;
+  }
+
+  .detail-header,
+  .detail-body {
+    padding: 16px;
   }
 }
