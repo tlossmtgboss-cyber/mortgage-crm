@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { teamAPI } from '../services/api';
+import MergeCenter from './MergeCenter';
 import './Tasks.css';
 
 function Tasks() {
@@ -699,8 +700,8 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
           <span className="tab-badge">{aiTasks.pending.length + aiTasks.waiting.length}</span>
         </button>
         <button
-          className={`tab-button`}
-          onClick={() => navigate('/merge')}
+          className={`tab-button ${activeTab === 'reconciliation' ? 'active' : ''}`}
+          onClick={() => setActiveTab('reconciliation')}
         >
           🔄 Reconciliation
         </button>
@@ -731,6 +732,13 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
       {activeTab === 'ai-approval' && (
         <div className="tab-content">
           <TaskEmailLayout tasks={tabTasks} emptyMessage="No AI tasks pending approval" />
+        </div>
+      )}
+
+      {/* Reconciliation Tab - Merge Center */}
+      {activeTab === 'reconciliation' && (
+        <div className="tab-content">
+          <MergeCenter />
         </div>
       )}
 
