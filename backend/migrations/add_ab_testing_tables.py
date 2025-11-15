@@ -44,7 +44,7 @@ def run_migration():
             started_at TIMESTAMP WITH TIME ZONE,
             ended_at TIMESTAMP WITH TIME ZONE,
             created_by_user_id INTEGER REFERENCES users(id),
-            metadata JSON
+            experiment_metadata JSON
         );
         """,
 

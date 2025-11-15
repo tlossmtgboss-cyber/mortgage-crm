@@ -4730,6 +4730,178 @@ async def add_conversation_memory_migration(
             "error": str(e)
         }
 
+@app.post("/api/v1/migrations/add-ab-testing-tables")
+async def add_ab_testing_tables_migration(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Add A/B testing tables for experiment management
+    Creates 5 tables: experiments, variants, assignments, results, insights
+    """
+    try:
+        logger.info(f"Running migration: add A/B testing tables (user: {current_user.id})")
+
+        # Check if tables already exist
+        result = db.execute(text("""
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+            AND table_name = 'ab_experiments'
+        """))
+
+        if result.fetchone():
+            return {
+                "success": True,
+                "message": "A/B testing tables already exist",
+                "already_exists": True
+            }
+
+        # Create all A/B testing tables
+        sql_commands = [
+            # 1. Experiments table
+            """
+            CREATE TABLE ab_experiments (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                description TEXT,
+                experiment_type VARCHAR(50) NOT NULL,
+                status VARCHAR(50) NOT NULL DEFAULT 'draft',
+                target_percentage FLOAT DEFAULT 100.0,
+                target_user_segment VARCHAR(100),
+                primary_metric VARCHAR(100) NOT NULL,
+                secondary_metrics JSON,
+                min_sample_size INTEGER DEFAULT 100,
+                confidence_level FLOAT DEFAULT 0.95,
+                winning_variant_id INTEGER,
+                winner_declared_at TIMESTAMP WITH TIME ZONE,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                started_at TIMESTAMP WITH TIME ZONE,
+                ended_at TIMESTAMP WITH TIME ZONE,
+                created_by_user_id INTEGER REFERENCES users(id),
+                experiment_metadata JSON
+            )
+            """,
+
+            # 2. Variants table
+            """
+            CREATE TABLE ab_variants (
+                id SERIAL PRIMARY KEY,
+                experiment_id INTEGER NOT NULL REFERENCES ab_experiments(id) ON DELETE CASCADE,
+                name VARCHAR(100) NOT NULL,
+                description TEXT,
+                is_control BOOLEAN DEFAULT FALSE,
+                traffic_allocation FLOAT DEFAULT 50.0,
+                config JSON NOT NULL,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )
+            """,
+
+            # 3. Assignments table
+            """
+            CREATE TABLE ab_assignments (
+                id SERIAL PRIMARY KEY,
+                experiment_id INTEGER NOT NULL REFERENCES ab_experiments(id) ON DELETE CASCADE,
+                variant_id INTEGER NOT NULL REFERENCES ab_variants(id) ON DELETE CASCADE,
+                user_id INTEGER REFERENCES users(id),
+                session_id VARCHAR(255),
+                assigned_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                assignment_method VARCHAR(50) DEFAULT 'random'
+            )
+            """,
+
+            # 4. Results table
+            """
+            CREATE TABLE ab_results (
+                id SERIAL PRIMARY KEY,
+                experiment_id INTEGER NOT NULL REFERENCES ab_experiments(id) ON DELETE CASCADE,
+                variant_id INTEGER NOT NULL REFERENCES ab_variants(id) ON DELETE CASCADE,
+                user_id INTEGER REFERENCES users(id),
+                session_id VARCHAR(255),
+                metric_name VARCHAR(100) NOT NULL,
+                metric_value FLOAT NOT NULL,
+                context JSON,
+                recorded_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )
+            """,
+
+            # 5. Insights table
+            """
+            CREATE TABLE ab_insights (
+                id SERIAL PRIMARY KEY,
+                experiment_id INTEGER NOT NULL REFERENCES ab_experiments(id) ON DELETE CASCADE,
+                analysis_date TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                variant_stats JSON,
+                p_value FLOAT,
+                is_significant BOOLEAN DEFAULT FALSE,
+                confidence_interval JSON,
+                recommended_winner_id INTEGER REFERENCES ab_variants(id),
+                recommendation_confidence FLOAT,
+                recommendation_reason TEXT,
+                sufficient_sample_size BOOLEAN DEFAULT FALSE,
+                current_sample_size INTEGER,
+                required_sample_size INTEGER,
+                analysis_metadata JSON
+            )
+            """,
+        ]
+
+        # Execute table creation
+        for sql in sql_commands:
+            db.execute(text(sql))
+
+        # Create indices
+        indices = [
+            "CREATE INDEX idx_ab_experiments_status ON ab_experiments(status)",
+            "CREATE INDEX idx_ab_experiments_type ON ab_experiments(experiment_type)",
+            "CREATE INDEX idx_ab_assignments_experiment ON ab_assignments(experiment_id)",
+            "CREATE INDEX idx_ab_assignments_user ON ab_assignments(user_id)",
+            "CREATE INDEX idx_ab_assignments_session ON ab_assignments(session_id)",
+            "CREATE INDEX idx_ab_results_experiment ON ab_results(experiment_id)",
+            "CREATE INDEX idx_ab_results_variant ON ab_results(variant_id)",
+            "CREATE INDEX idx_ab_results_metric ON ab_results(metric_name)",
+            "CREATE INDEX idx_ab_results_recorded ON ab_results(recorded_at)",
+            "CREATE INDEX idx_ab_insights_experiment ON ab_insights(experiment_id)",
+        ]
+
+        for index_sql in indices:
+            db.execute(text(index_sql))
+
+        # Add foreign key constraint for winning_variant_id
+        db.execute(text("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint
+                    WHERE conname = 'ab_experiments_winning_variant_fkey'
+                ) THEN
+                    ALTER TABLE ab_experiments
+                    ADD CONSTRAINT ab_experiments_winning_variant_fkey
+                    FOREIGN KEY (winning_variant_id) REFERENCES ab_variants(id);
+                END IF;
+            END $$
+        """))
+
+        db.commit()
+
+        logger.info("Successfully created A/B testing tables with indices and constraints")
+
+        return {
+            "success": True,
+            "message": "Successfully created A/B testing tables (5 tables, 10 indices)",
+            "tables_created": ["ab_experiments", "ab_variants", "ab_assignments", "ab_results", "ab_insights"],
+            "already_exists": False
+        }
+
+    except Exception as e:
+        logger.error(f"A/B testing migration failed: {e}")
+        db.rollback()
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e)
+        }
+
 @app.get("/api/v1/debug/email-sync-status")
 async def email_sync_status(
     current_user: User = Depends(get_current_user),
