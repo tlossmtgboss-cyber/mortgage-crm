@@ -12192,9 +12192,19 @@ async def clear_sample_data(
         # 6. Leads (no dependencies on them now)
         deleted_leads = db.query(Lead).filter(Lead.owner_id == current_user.id).delete()
 
-        # 7. Referral partners and MUM clients (independent - no user ownership)
-        deleted_partners = db.query(ReferralPartner).delete()
-        deleted_mum = db.query(MUMClient).delete()
+        # 7. Referral partners and MUM clients (delete all - may be shared)
+        # These might be referenced by other users' data, so wrap in try/except
+        try:
+            deleted_partners = db.query(ReferralPartner).delete()
+        except Exception as e:
+            logger.warning(f"Could not delete all referral partners (may be in use): {e}")
+            deleted_partners = 0
+
+        try:
+            deleted_mum = db.query(MUMClient).delete()
+        except Exception as e:
+            logger.warning(f"Could not delete all MUM clients (may be in use): {e}")
+            deleted_mum = 0
 
         # Commit all deletions
         db.commit()
