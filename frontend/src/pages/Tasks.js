@@ -66,23 +66,23 @@ function Tasks() {
     try {
       setLoading(true);
 
-      // Load mock data (same as dashboard)
-      setPrioritizedTasks(mockPrioritizedTasks());
-      setLoanIssues(mockLoanIssues());
-      setAiTasks(mockAiTasks());
-      setMumAlerts(mockMumAlerts());
-      setLeadMetrics(mockLeadMetrics());
-      setMessages(mockMessages());
+      // Clear all task data - no mock data
+      setPrioritizedTasks([]);
+      setLoanIssues([]);
+      setAiTasks({ pending: [], waiting: [] });
+      setMumAlerts([]);
+      setLeadMetrics({ leads: [], opportunities: 0, conversion: 0 });
+      setMessages([]);
 
     } catch (error) {
       console.error('Failed to load tasks:', error);
-      // Use mock data on error
-      setPrioritizedTasks(mockPrioritizedTasks());
-      setLoanIssues(mockLoanIssues());
-      setAiTasks(mockAiTasks());
-      setMumAlerts(mockMumAlerts());
-      setLeadMetrics(mockLeadMetrics());
-      setMessages(mockMessages());
+      // Clear data on error - no mock data
+      setPrioritizedTasks([]);
+      setLoanIssues([]);
+      setAiTasks({ pending: [], waiting: [] });
+      setMumAlerts([]);
+      setLeadMetrics({ leads: [], opportunities: 0, conversion: 0 });
+      setMessages([]);
     } finally {
       setLoading(false);
     }
