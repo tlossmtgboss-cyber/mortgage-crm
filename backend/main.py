@@ -11058,6 +11058,72 @@ async def clear_all_tasks_endpoint(request: dict, db: Session = Depends(get_db))
         logger.error(f"Error clearing tasks: {e}")
         raise HTTPException(status_code=500, detail=f"Error clearing tasks: {str(e)}")
 
+@app.post("/api/v1/admin/clear-sample-data")
+async def clear_sample_data(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Clear all sample/dummy data from the CRM to prepare for workflow-based tasks.
+    This deletes: tasks, reconciliation events, messages, loans, leads, activities, and more.
+    """
+    try:
+        # Delete in order (dependencies first):
+
+        # 1. Activities and Conversations (reference leads/loans)
+        deleted_activities = db.query(Activity).delete()
+        deleted_conversations = db.query(Conversation).delete()
+
+        # 2. Tasks (reference loans/leads)
+        deleted_ai_tasks = db.query(AITask).delete()
+        deleted_tasks = db.query(Task).delete()
+        deleted_process_tasks = db.query(ProcessTask).delete()
+
+        # 3. Reconciliation events (pending approvals)
+        deleted_reconciliation = db.query(ReconciliationEvent).delete()
+
+        # 4. Unified messages
+        deleted_sms = db.query(SMSMessage).delete()
+        deleted_emails = db.query(EmailMessage).delete()
+        deleted_teams = db.query(TeamsMessage).delete()
+
+        # 5. Loans (no dependencies on them now)
+        deleted_loans = db.query(Loan).filter(Loan.loan_officer_id == current_user.id).delete()
+
+        # 6. Leads (no dependencies on them now)
+        deleted_leads = db.query(Lead).filter(Lead.owner_id == current_user.id).delete()
+
+        # 7. Referral partners and MUM clients (independent)
+        deleted_partners = db.query(ReferralPartner).filter(ReferralPartner.lo_id == current_user.id).delete()
+        deleted_mum = db.query(MUMClient).filter(MUMClient.lo_id == current_user.id).delete()
+
+        # Commit all deletions
+        db.commit()
+
+        logger.info(f"Successfully cleared all sample data for user {current_user.email}")
+
+        return {
+            "success": True,
+            "message": "Successfully cleared all dummy data",
+            "deleted_activities": deleted_activities,
+            "deleted_conversations": deleted_conversations,
+            "deleted_ai_tasks": deleted_ai_tasks,
+            "deleted_tasks": deleted_tasks,
+            "deleted_process_tasks": deleted_process_tasks,
+            "deleted_reconciliation": deleted_reconciliation,
+            "deleted_sms": deleted_sms,
+            "deleted_emails": deleted_emails,
+            "deleted_teams": deleted_teams,
+            "deleted_loans": deleted_loans,
+            "deleted_leads": deleted_leads,
+            "deleted_partners": deleted_partners,
+            "deleted_mum": deleted_mum
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error clearing sample data: {e}")
+        raise HTTPException(status_code=500, detail=f"Error clearing data: {str(e)}")
+
 @app.post("/admin/initialize-ai-system")
 async def initialize_ai_system_endpoint(request: dict):
     """
