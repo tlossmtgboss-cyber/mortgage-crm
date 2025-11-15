@@ -2629,3 +2629,340 @@ textarea.text-input {
     grid-template-columns: 1fr;
   }
 }
+
+/* ==================== IT Helpdesk Section ==================== */
+
+.it-helpdesk-section {
+  max-width: 1200px;
+}
+
+.helpdesk-submit-card,
+.helpdesk-tickets-card,
+.helpdesk-details-card {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.helpdesk-submit-card h3,
+.helpdesk-tickets-card h3,
+.helpdesk-details-card h3 {
+  margin-top: 0;
+  margin-bottom: 20px;
+  color: #218D8D;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.btn-submit-ticket {
+  background: #218D8D;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 600;
+  transition: all 0.2s;
+  margin-top: 12px;
+}
+
+.btn-submit-ticket:hover:not(:disabled) {
+  background: #1a7070;
+  transform: translateY(-1px);
+}
+
+.btn-submit-ticket:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+/* Ticket List */
+.tickets-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.ticket-filters {
+  display: flex;
+  gap: 8px;
+}
+
+.filter-btn {
+  padding: 8px 16px;
+  border: 1px solid #ddd;
+  background: white;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.filter-btn:hover {
+  background: #f5f5f5;
+}
+
+.filter-btn.active {
+  background: #218D8D;
+  color: white;
+  border-color: #218D8D;
+}
+
+.tickets-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ticket-item {
+  padding: 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ticket-item:hover {
+  background: #f9f9f9;
+  border-color: #218D8D;
+}
+
+.ticket-item.selected {
+  background: #e6f4f4;
+  border-color: #218D8D;
+}
+
+.ticket-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  margin-bottom: 8px;
+}
+
+.ticket-title {
+  font-weight: 600;
+  color: #333;
+  flex: 1;
+}
+
+.ticket-status {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.ticket-status.status-analyzing {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.ticket-status.status-awaiting_approval {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.ticket-status.status-approved {
+  background: #d4edda;
+  color: #155724;
+}
+
+.ticket-status.status-resolved {
+  background: #d1ecf1;
+  color: #0c5460;
+}
+
+.ticket-meta {
+  font-size: 13px;
+  color: #666;
+}
+
+/* Ticket Details */
+.detail-section {
+  margin-bottom: 24px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.detail-section:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.detail-section h4 {
+  margin-top: 0;
+  margin-bottom: 12px;
+  color: #218D8D;
+  font-size: 16px;
+}
+
+.detail-section p {
+  margin: 8px 0;
+  line-height: 1.6;
+  color: #333;
+}
+
+.detail-section ol {
+  margin: 12px 0;
+  padding-left: 24px;
+}
+
+.detail-section li {
+  margin: 8px 0;
+  line-height: 1.6;
+}
+
+/* Commands Section */
+.commands-section {
+  margin-top: 16px;
+}
+
+.command-block {
+  margin-bottom: 16px;
+}
+
+.command-description {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.command-display {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  background: #f5f5f5;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #ddd;
+}
+
+.command-display code {
+  flex: 1;
+  font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
+  color: #333;
+  word-break: break-all;
+}
+
+.btn-copy-cmd {
+  padding: 6px 12px;
+  background: #218D8D;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.btn-copy-cmd:hover {
+  background: #1a7070;
+}
+
+/* Action Buttons */
+.action-buttons {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.btn-approve,
+.btn-dismiss,
+.btn-resolve {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.btn-approve {
+  background: #28a745;
+  color: white;
+}
+
+.btn-approve:hover {
+  background: #218838;
+}
+
+.btn-dismiss {
+  background: #dc3545;
+  color: white;
+}
+
+.btn-dismiss:hover {
+  background: #c82333;
+}
+
+.btn-resolve {
+  background: #218D8D;
+  color: white;
+  margin-top: 12px;
+}
+
+.btn-resolve:hover:not(:disabled) {
+  background: #1a7070;
+}
+
+.btn-resolve:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.resolved-date {
+  font-size: 13px;
+  color: #666;
+  font-style: italic;
+  margin-top: 8px;
+}
+
+/* Empty State */
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+/* Responsive for IT Helpdesk */
+@media (max-width: 768px) {
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .tickets-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .ticket-filters {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .filter-btn {
+    flex-shrink: 0;
+  }
+
+  .action-buttons {
+    flex-direction: column;
+  }
+
+  .btn-approve,
+  .btn-dismiss {
+    width: 100%;
+  }
+}
