@@ -699,8 +699,8 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
           <span className="tab-badge">{aiTasks.pending.length + aiTasks.waiting.length}</span>
         </button>
         <button
-          className={`tab-button ${activeTab === 'reconciliation' ? 'active' : ''}`}
-          onClick={() => setActiveTab('reconciliation')}
+          className={`tab-button`}
+          onClick={() => navigate('/merge')}
         >
           🔄 Reconciliation
         </button>
@@ -731,13 +731,6 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
       {activeTab === 'ai-approval' && (
         <div className="tab-content">
           <TaskEmailLayout tasks={tabTasks} emptyMessage="No AI tasks pending approval" />
-        </div>
-      )}
-
-      {/* Reconciliation Tab */}
-      {activeTab === 'reconciliation' && (
-        <div className="tab-content">
-          <TaskEmailLayout tasks={tabTasks} emptyMessage="No reconciliation tasks" />
         </div>
       )}
 

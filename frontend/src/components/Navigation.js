@@ -85,12 +85,6 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
           >
             🤖 AI Receptionist
           </Link>
-          <Link
-            to="/merge"
-            className={`nav-link ${isActive('/merge') ? 'active' : ''}`}
-          >
-            Reconciliation
-          </Link>
         </div>
 
         <div className="nav-actions">
