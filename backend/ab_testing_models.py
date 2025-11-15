@@ -6,7 +6,7 @@ from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, Text, 
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 import enum
-from main import Base
+from database import Base
 
 
 class ExperimentStatus(enum.Enum):
@@ -64,7 +64,7 @@ class Experiment(Base):
     created_by_user_id = Column(Integer, ForeignKey("users.id"))
 
     # Metadata
-    metadata = Column(JSON)  # Additional configuration
+    experiment_metadata = Column(JSON)  # Additional configuration (renamed from 'metadata' to avoid SQLAlchemy reserved word)
 
     # Relationships
     variants = relationship("ExperimentVariant", back_populates="experiment", foreign_keys="ExperimentVariant.experiment_id")

@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 from datetime import datetime
 import logging
 
-from main import get_db
+from database import get_db
 from ab_testing_models import ExperimentType, ExperimentStatus
 from ab_testing.experiment_service import ExperimentService
 from ab_testing.statistical_analysis import StatisticalAnalyzer
