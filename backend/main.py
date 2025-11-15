@@ -698,6 +698,188 @@ class OnboardingStep(Base):
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 # ============================================================================
+# MISSION CONTROL - AI COLLEAGUE PERFORMANCE TRACKING MODELS
+# ============================================================================
+
+class AIColleagueAction(Base):
+    """Tracks every AI Colleague action for Mission Control dashboard"""
+    __tablename__ = "ai_colleague_actions"
+    id = Column(Integer, primary_key=True, index=True)
+    action_id = Column(String(100), unique=True, nullable=False, index=True)
+    agent_name = Column(String(100), nullable=False, index=True)
+    action_type = Column(String(100), nullable=False, index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"))
+    loan_id = Column(Integer, ForeignKey("loans.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+
+    # Context
+    context = Column(JSON)
+    trigger_type = Column(String(50))
+    trigger_data = Column(JSON)
+
+    # Decision Making
+    confidence_score = Column(Float)
+    reasoning = Column(Text)
+    alternatives_considered = Column(JSON)
+
+    # Autonomy
+    autonomy_level = Column(String(50))
+    required_approval = Column(Boolean, default=False)
+    approved_by_user_id = Column(Integer, ForeignKey("users.id"))
+    approved_at = Column(DateTime)
+
+    # Execution
+    status = Column(String(50), default='pending', index=True)
+    executed_at = Column(DateTime)
+    completed_at = Column(DateTime)
+
+    # Results
+    outcome = Column(String(50))
+    impact_score = Column(Float)
+    business_metrics = Column(JSON)
+
+    # Learning
+    customer_response = Column(String(50))
+    response_time_minutes = Column(Integer)
+    follow_up_occurred = Column(Boolean, default=False)
+
+    # Metadata
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    metadata = Column(JSON)
+
+class AIColleagueLearningMetric(Base):
+    """Tracks AI learning and improvement metrics"""
+    __tablename__ = "ai_learning_metrics"
+    id = Column(Integer, primary_key=True, index=True)
+    action_id = Column(String(100), ForeignKey("ai_colleague_actions.action_id", ondelete="CASCADE"))
+    metric_type = Column(String(100), nullable=False, index=True)
+    metric_name = Column(String(100), nullable=False)
+    metric_value = Column(Float, nullable=False)
+    baseline_value = Column(Float)
+    improvement_percentage = Column(Float)
+
+    # Context
+    context = Column(JSON)
+    segment = Column(String(100))
+
+    # Time
+    measured_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    period_start = Column(DateTime)
+    period_end = Column(DateTime)
+
+    # Metadata
+    metadata = Column(JSON)
+
+class AIPerformanceDaily(Base):
+    """Daily rollup of AI performance metrics"""
+    __tablename__ = "ai_performance_daily"
+    id = Column(Integer, primary_key=True, index=True)
+    date = Column(Date, nullable=False, index=True)
+    agent_name = Column(String(100), nullable=False, index=True)
+
+    # Volume
+    total_actions = Column(Integer, default=0)
+    autonomous_actions = Column(Integer, default=0)
+    approved_actions = Column(Integer, default=0)
+    rejected_actions = Column(Integer, default=0)
+
+    # Success
+    successful_actions = Column(Integer, default=0)
+    failed_actions = Column(Integer, default=0)
+    success_rate = Column(Float)
+
+    # Response
+    avg_customer_response_time = Column(Float)
+    positive_responses = Column(Integer, default=0)
+    negative_responses = Column(Integer, default=0)
+    neutral_responses = Column(Integer, default=0)
+
+    # Impact
+    avg_impact_score = Column(Float)
+    total_business_value = Column(Float)
+
+    # Confidence
+    avg_confidence_score = Column(Float)
+    high_confidence_actions = Column(Integer, default=0)
+
+    # Metadata
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+class AIJourneyInsight(Base):
+    """Cross-channel pattern insights"""
+    __tablename__ = "ai_journey_insights"
+    id = Column(Integer, primary_key=True, index=True)
+    insight_id = Column(String(100), unique=True, nullable=False)
+    insight_type = Column(String(100), nullable=False, index=True)
+
+    # Scope
+    lead_id = Column(Integer, ForeignKey("leads.id"))
+    loan_id = Column(Integer, ForeignKey("loans.id"))
+    segment = Column(String(100))
+
+    # Pattern
+    pattern_description = Column(Text, nullable=False)
+    pattern_frequency = Column(Integer)
+    pattern_confidence = Column(Float)
+
+    # Context
+    related_actions = Column(JSON)
+    touchpoints = Column(JSON)
+    customer_signals = Column(JSON)
+
+    # Recommendation
+    recommended_action = Column(Text)
+    expected_impact = Column(Float)
+    priority = Column(String(50))
+
+    # Status
+    status = Column(String(50), default='active', index=True)
+    actioned_at = Column(DateTime)
+    outcome = Column(String(50))
+
+    # Metadata
+    discovered_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    expires_at = Column(DateTime)
+    metadata = Column(JSON)
+
+class AIHealthScore(Base):
+    """Overall AI health calculations"""
+    __tablename__ = "ai_health_score"
+    id = Column(Integer, primary_key=True, index=True)
+    calculated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    period_start = Column(DateTime, nullable=False)
+    period_end = Column(DateTime, nullable=False)
+
+    # Overall Health
+    overall_score = Column(Float, nullable=False)
+    health_status = Column(String(50))
+
+    # Component Scores
+    autonomy_score = Column(Float)
+    accuracy_score = Column(Float)
+    efficiency_score = Column(Float)
+    learning_score = Column(Float)
+    impact_score = Column(Float)
+
+    # Metrics
+    total_actions = Column(Integer)
+    autonomous_rate = Column(Float)
+    approval_rate = Column(Float)
+    success_rate = Column(Float)
+    avg_confidence = Column(Float)
+    learning_velocity = Column(Float)
+
+    # Trends
+    score_trend = Column(String(50))
+    previous_score = Column(Float)
+    score_change = Column(Float)
+
+    # Metadata
+    metadata = Column(JSON)
+
+# ============================================================================
 # DATA RECONCILIATION ENGINE (DRE) MODELS
 # ============================================================================
 
@@ -11667,6 +11849,318 @@ async def initialize_ai_only_endpoint(request: dict):
             "success": False,
             "error": str(e)
         }
+
+# ============================================================================
+# MISSION CONTROL - AI COLLEAGUE PERFORMANCE TRACKING API
+# ============================================================================
+
+@app.get("/api/v1/mission-control/health")
+async def get_ai_health(
+    days: int = 7,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get AI Colleague health score and metrics"""
+    try:
+        period_start = datetime.now(timezone.utc) - timedelta(days=days)
+        period_end = datetime.now(timezone.utc)
+
+        # Get all actions in period
+        actions = db.query(AIColleagueAction).filter(
+            AIColleagueAction.created_at >= period_start,
+            AIColleagueAction.created_at <= period_end
+        ).all()
+
+        # Calculate metrics
+        total_actions = len(actions)
+        autonomous_actions = len([a for a in actions if a.autonomy_level == 'full'])
+        successful_actions = len([a for a in actions if a.outcome == 'success'])
+        approved_actions = len([a for a in actions if a.status == 'approved' or not a.required_approval])
+
+        # Calculate scores
+        autonomy_score = (autonomous_actions / total_actions * 100) if total_actions > 0 else 0
+        success_rate = (successful_actions / total_actions * 100) if total_actions > 0 else 0
+        approval_rate = (approved_actions / total_actions * 100) if total_actions > 0 else 0
+        avg_confidence = sum([a.confidence_score or 0 for a in actions]) / total_actions if total_actions > 0 else 0
+
+        # Overall health score (weighted average)
+        overall_score = (
+            autonomy_score * 0.3 +
+            success_rate * 0.3 +
+            approval_rate * 0.2 +
+            avg_confidence * 100 * 0.2
+        )
+
+        # Determine health status
+        if overall_score >= 80:
+            health_status = "excellent"
+        elif overall_score >= 60:
+            health_status = "good"
+        elif overall_score >= 40:
+            health_status = "fair"
+        else:
+            health_status = "needs_attention"
+
+        return {
+            "overall_score": round(overall_score, 2),
+            "health_status": health_status,
+            "component_scores": {
+                "autonomy": round(autonomy_score, 2),
+                "accuracy": round(success_rate, 2),
+                "approval": round(approval_rate, 2),
+                "confidence": round(avg_confidence * 100, 2)
+            },
+            "metrics": {
+                "total_actions": total_actions,
+                "autonomous_actions": autonomous_actions,
+                "successful_actions": successful_actions,
+                "approved_actions": approved_actions
+            },
+            "period": {
+                "start": period_start.isoformat(),
+                "end": period_end.isoformat(),
+                "days": days
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error getting AI health: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/mission-control/metrics")
+async def get_ai_metrics(
+    days: int = 30,
+    agent_name: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get detailed AI performance metrics"""
+    try:
+        period_start = datetime.now(timezone.utc) - timedelta(days=days)
+
+        query = db.query(AIColleagueAction).filter(
+            AIColleagueAction.created_at >= period_start
+        )
+
+        if agent_name:
+            query = query.filter(AIColleagueAction.agent_name == agent_name)
+
+        actions = query.all()
+
+        # Group by agent
+        agents_metrics = {}
+        for action in actions:
+            agent = action.agent_name
+            if agent not in agents_metrics:
+                agents_metrics[agent] = {
+                    "total": 0,
+                    "autonomous": 0,
+                    "successful": 0,
+                    "failed": 0,
+                    "approved": 0,
+                    "rejected": 0,
+                    "avg_confidence": 0,
+                    "confidences": []
+                }
+
+            agents_metrics[agent]["total"] += 1
+            if action.autonomy_level == 'full':
+                agents_metrics[agent]["autonomous"] += 1
+            if action.outcome == 'success':
+                agents_metrics[agent]["successful"] += 1
+            elif action.outcome == 'failure':
+                agents_metrics[agent]["failed"] += 1
+            if action.status == 'approved':
+                agents_metrics[agent]["approved"] += 1
+            elif action.status == 'rejected':
+                agents_metrics[agent]["rejected"] += 1
+            if action.confidence_score:
+                agents_metrics[agent]["confidences"].append(action.confidence_score)
+
+        # Calculate averages
+        for agent, metrics in agents_metrics.items():
+            if metrics["confidences"]:
+                metrics["avg_confidence"] = round(sum(metrics["confidences"]) / len(metrics["confidences"]) * 100, 2)
+            metrics["success_rate"] = round((metrics["successful"] / metrics["total"] * 100) if metrics["total"] > 0 else 0, 2)
+            metrics["autonomy_rate"] = round((metrics["autonomous"] / metrics["total"] * 100) if metrics["total"] > 0 else 0, 2)
+            del metrics["confidences"]  # Remove temp list
+
+        return {
+            "period_days": days,
+            "total_actions": len(actions),
+            "agents": agents_metrics
+        }
+    except Exception as e:
+        logger.error(f"Error getting AI metrics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/mission-control/recent-actions")
+async def get_recent_actions(
+    limit: int = 50,
+    agent_name: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get recent AI actions for activity feed"""
+    try:
+        query = db.query(AIColleagueAction).order_by(AIColleagueAction.created_at.desc())
+
+        if agent_name:
+            query = query.filter(AIColleagueAction.agent_name == agent_name)
+
+        actions = query.limit(limit).all()
+
+        return {
+            "actions": [
+                {
+                    "id": a.id,
+                    "action_id": a.action_id,
+                    "agent_name": a.agent_name,
+                    "action_type": a.action_type,
+                    "lead_id": a.lead_id,
+                    "loan_id": a.loan_id,
+                    "autonomy_level": a.autonomy_level,
+                    "confidence_score": round(a.confidence_score * 100, 2) if a.confidence_score else None,
+                    "status": a.status,
+                    "outcome": a.outcome,
+                    "reasoning": a.reasoning,
+                    "created_at": a.created_at.isoformat() if a.created_at else None,
+                    "completed_at": a.completed_at.isoformat() if a.completed_at else None
+                }
+                for a in actions
+            ],
+            "count": len(actions)
+        }
+    except Exception as e:
+        logger.error(f"Error getting recent actions: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/mission-control/log-action")
+async def log_ai_action(
+    action_data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Log an AI Colleague action for tracking"""
+    try:
+        # Generate action ID if not provided
+        if "action_id" not in action_data:
+            action_data["action_id"] = f"{action_data.get('agent_name', 'ai')}_{datetime.now(timezone.utc).timestamp()}"
+
+        # Create action record
+        action = AIColleagueAction(
+            action_id=action_data["action_id"],
+            agent_name=action_data.get("agent_name", "Smart AI"),
+            action_type=action_data.get("action_type", "unknown"),
+            lead_id=action_data.get("lead_id"),
+            loan_id=action_data.get("loan_id"),
+            user_id=action_data.get("user_id"),
+            context=action_data.get("context"),
+            trigger_type=action_data.get("trigger_type"),
+            trigger_data=action_data.get("trigger_data"),
+            confidence_score=action_data.get("confidence_score"),
+            reasoning=action_data.get("reasoning"),
+            alternatives_considered=action_data.get("alternatives_considered"),
+            autonomy_level=action_data.get("autonomy_level", "assisted"),
+            required_approval=action_data.get("required_approval", False),
+            status=action_data.get("status", "pending"),
+            outcome=action_data.get("outcome"),
+            impact_score=action_data.get("impact_score"),
+            business_metrics=action_data.get("business_metrics"),
+            customer_response=action_data.get("customer_response"),
+            response_time_minutes=action_data.get("response_time_minutes"),
+            metadata=action_data.get("metadata")
+        )
+
+        db.add(action)
+        db.commit()
+        db.refresh(action)
+
+        return {
+            "success": True,
+            "action_id": action.action_id,
+            "message": "AI action logged successfully"
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error logging AI action: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/mission-control/update-action")
+async def update_ai_action(
+    action_id: str,
+    updates: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Update an AI action (e.g., mark as completed, update outcome)"""
+    try:
+        action = db.query(AIColleagueAction).filter(
+            AIColleagueAction.action_id == action_id
+        ).first()
+
+        if not action:
+            raise HTTPException(status_code=404, detail="Action not found")
+
+        # Update fields
+        for key, value in updates.items():
+            if hasattr(action, key):
+                setattr(action, key, value)
+
+        # Set completed_at if outcome is set and not already set
+        if updates.get("outcome") and not action.completed_at:
+            action.completed_at = datetime.now(timezone.utc)
+
+        db.commit()
+        db.refresh(action)
+
+        return {
+            "success": True,
+            "action_id": action.action_id,
+            "message": "AI action updated successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating AI action: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/mission-control/insights")
+async def get_ai_insights(
+    limit: int = 10,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get AI-discovered journey insights"""
+    try:
+        query = db.query(AIJourneyInsight).order_by(AIJourneyInsight.discovered_at.desc())
+
+        if status:
+            query = query.filter(AIJourneyInsight.status == status)
+
+        insights = query.limit(limit).all()
+
+        return {
+            "insights": [
+                {
+                    "id": i.id,
+                    "insight_id": i.insight_id,
+                    "insight_type": i.insight_type,
+                    "pattern_description": i.pattern_description,
+                    "pattern_confidence": round(i.pattern_confidence * 100, 2) if i.pattern_confidence else None,
+                    "recommended_action": i.recommended_action,
+                    "priority": i.priority,
+                    "status": i.status,
+                    "discovered_at": i.discovered_at.isoformat() if i.discovered_at else None
+                }
+                for i in insights
+            ],
+            "count": len(insights)
+        }
+    except Exception as e:
+        logger.error(f"Error getting AI insights: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.on_event("shutdown")
 async def shutdown_event():

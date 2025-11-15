@@ -3,27 +3,25 @@ import { API_BASE_URL } from '../services/api';
 import './MissionControl.css';
 
 function MissionControl() {
-  const [summary, setSummary] = useState(null);
-  const [aiMetrics, setAiMetrics] = useState([]);
-  const [integrations, setIntegrations] = useState([]);
-  const [jobs, setJobs] = useState([]);
-  const [alerts, setAlerts] = useState([]);
-  const [security, setSecurity] = useState(null);
-  const [changelog, setChangelog] = useState([]);
+  const [health, setHealth] = useState(null);
+  const [metrics, setMetrics] = useState(null);
+  const [recentActions, setRecentActions] = useState([]);
+  const [insights, setInsights] = useState([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(new Date());
-  const [metricsView, setMetricsView] = useState('7'); // 7 or 30 days
+  const [metricsView, setMetricsView] = useState(7); // 7 or 30 days
+  const [selectedAgent, setSelectedAgent] = useState(null);
 
   useEffect(() => {
     loadAllData();
 
-    // Auto-refresh every 5 minutes
+    // Auto-refresh every 30 seconds
     const interval = setInterval(() => {
       loadAllData();
-    }, 5 * 60 * 1000);
+    }, 30 * 1000);
 
     return () => clearInterval(interval);
-  }, [metricsView]);
+  }, [metricsView, selectedAgent]);
 
   const loadAllData = async () => {
     const token = localStorage.getItem('token');
@@ -33,49 +31,32 @@ function MissionControl() {
       setLoading(true);
 
       // Load all data in parallel
-      const [summaryRes, metricsRes, integrationsRes, jobsRes, alertsRes, securityRes, changelogRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/api/mission-control/summary`, { headers }),
-        fetch(`${API_BASE_URL}/api/mission-control/ai-metrics?days=${metricsView}`, { headers }),
-        fetch(`${API_BASE_URL}/api/mission-control/integrations`, { headers }),
-        fetch(`${API_BASE_URL}/api/mission-control/jobs`, { headers }),
-        fetch(`${API_BASE_URL}/api/mission-control/alerts`, { headers }),
-        fetch(`${API_BASE_URL}/api/mission-control/security`, { headers }),
-        fetch(`${API_BASE_URL}/api/mission-control/changelog`, { headers })
+      const agentParam = selectedAgent ? `&agent_name=${selectedAgent}` : '';
+      const [healthRes, metricsRes, actionsRes, insightsRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/v1/mission-control/health?days=${metricsView}`, { headers }),
+        fetch(`${API_BASE_URL}/api/v1/mission-control/metrics?days=${metricsView}${agentParam}`, { headers }),
+        fetch(`${API_BASE_URL}/api/v1/mission-control/recent-actions?limit=20${agentParam}`, { headers }),
+        fetch(`${API_BASE_URL}/api/v1/mission-control/insights?limit=10&status=active`, { headers })
       ]);
 
-      if (summaryRes.ok) {
-        const data = await summaryRes.json();
-        setSummary(data);
+      if (healthRes.ok) {
+        const data = await healthRes.json();
+        setHealth(data);
       }
 
       if (metricsRes.ok) {
         const data = await metricsRes.json();
-        setAiMetrics(data.metrics);
+        setMetrics(data);
       }
 
-      if (integrationsRes.ok) {
-        const data = await integrationsRes.json();
-        setIntegrations(data.integrations);
+      if (actionsRes.ok) {
+        const data = await actionsRes.json();
+        setRecentActions(data.actions || []);
       }
 
-      if (jobsRes.ok) {
-        const data = await jobsRes.json();
-        setJobs(data.jobs);
-      }
-
-      if (alertsRes.ok) {
-        const data = await alertsRes.json();
-        setAlerts(data.alerts);
-      }
-
-      if (securityRes.ok) {
-        const data = await securityRes.json();
-        setSecurity(data);
-      }
-
-      if (changelogRes.ok) {
-        const data = await changelogRes.json();
-        setChangelog(data.changelogs);
+      if (insightsRes.ok) {
+        const data = await insightsRes.json();
+        setInsights(data.insights || []);
       }
 
       setLastUpdated(new Date());
@@ -90,64 +71,47 @@ function MissionControl() {
     await loadAllData();
   };
 
-  const handleResolveAlert = async (alertId) => {
-    const token = localStorage.getItem('token');
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/mission-control/alerts/${alertId}/resolve`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      if (response.ok) {
-        // Reload alerts
-        const alertsRes = await fetch(`${API_BASE_URL}/api/mission-control/alerts`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        if (alertsRes.ok) {
-          const data = await alertsRes.json();
-          setAlerts(data.alerts);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to resolve alert:', error);
-    }
-  };
-
-  const getStatusBadgeClass = (status) => {
+  const getHealthStatusClass = (status) => {
     switch (status) {
-      case 'healthy':
-      case 'success':
-      case 'connected':
-        return 'status-badge-success';
-      case 'degraded':
-      case 'warning':
-        return 'status-badge-warning';
-      case 'critical':
-      case 'failed':
-      case 'down':
-      case 'disconnected':
-        return 'status-badge-error';
+      case 'excellent':
+        return 'status-excellent';
+      case 'good':
+        return 'status-good';
+      case 'fair':
+        return 'status-fair';
+      case 'needs_attention':
+        return 'status-warning';
       default:
-        return 'status-badge-default';
+        return 'status-default';
     }
   };
 
-  const getSeverityIcon = (severity) => {
-    switch (severity) {
-      case 'critical':
+  const getHealthStatusIcon = (status) => {
+    switch (status) {
+      case 'excellent':
+        return '🟢';
+      case 'good':
+        return '🟡';
+      case 'fair':
+        return '🟠';
+      case 'needs_attention':
         return '🔴';
-      case 'warning':
-        return '⚠️';
       default:
-        return 'ℹ️';
+        return '⚪';
     }
   };
 
-  const formatDuration = (ms) => {
-    if (!ms) return 'N/A';
-    if (ms < 1000) return `${ms}ms`;
-    if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-    return `${(ms / 60000).toFixed(1)}m`;
+  const getOutcomeIcon = (outcome) => {
+    switch (outcome) {
+      case 'success':
+        return '✅';
+      case 'failure':
+        return '❌';
+      case 'pending':
+        return '⏳';
+      default:
+        return '⚪';
+    }
   };
 
   const formatTimestamp = (timestamp) => {
@@ -163,311 +127,264 @@ function MissionControl() {
     return date.toLocaleDateString();
   };
 
-  if (loading && !summary) {
+  if (loading && !health) {
     return (
       <div className="mission-control-page">
-        <div className="loading">Loading Mission Control...</div>
+        <div className="loading">
+          <div className="spinner"></div>
+          <p>Loading Mission Control...</p>
+        </div>
       </div>
     );
   }
-
-  const latestMetrics = aiMetrics[0] || {};
-  const previousMetrics = aiMetrics[1] || {};
 
   return (
     <div className="mission-control-page">
       <div className="page-header">
         <div>
-          <h1>Mission Control</h1>
-          <p>System Health & AI Performance</p>
+          <h1>🎯 Mission Control</h1>
+          <p>AI Colleague Performance & Autonomous Operations</p>
         </div>
         <div className="header-actions">
           <span className="last-updated">Last updated: {formatTimestamp(lastUpdated)}</span>
-          <button className="btn-secondary" onClick={handleRefresh}>
-            🔄 Refresh Now
+          <button className="btn-refresh" onClick={handleRefresh}>
+            🔄 Refresh
           </button>
         </div>
       </div>
 
-      {/* TOP STRIP - Global Status */}
+      {/* TOP STRIP - AI Health Score */}
       <div className="status-strip">
-        <div className="status-card">
-          <div className="status-label">System Health</div>
-          <div className={`status-value ${getStatusBadgeClass(summary?.overall_status)}`}>
-            {summary?.overall_status === 'healthy' && '✅ Healthy'}
-            {summary?.overall_status === 'degraded' && '⚠️ Degraded'}
-            {summary?.overall_status === 'critical' && '🔴 Critical'}
+        <div className={`health-card ${getHealthStatusClass(health?.health_status)}`}>
+          <div className="health-icon">
+            {getHealthStatusIcon(health?.health_status)}
+          </div>
+          <div className="health-content">
+            <div className="health-label">Overall AI Health</div>
+            <div className="health-score">{health?.overall_score?.toFixed(1) || 0}</div>
+            <div className="health-status">{health?.health_status?.replace('_', ' ').toUpperCase() || 'UNKNOWN'}</div>
           </div>
         </div>
 
-        <div className="status-card">
-          <div className="status-label">AI Improvement Today</div>
-          <div className="status-value">
-            {summary?.ai_improvement_index?.toFixed(1) || '100'}
-            <span className={summary?.ai_improvement_delta >= 0 ? 'delta-positive' : 'delta-negative'}>
-              {summary?.ai_improvement_delta >= 0 ? '+' : ''}{summary?.ai_improvement_delta?.toFixed(1)}%
-            </span>
+        <div className="metrics-summary">
+          <div className="summary-card">
+            <div className="summary-label">Total Actions</div>
+            <div className="summary-value">{health?.metrics?.total_actions || 0}</div>
           </div>
-        </div>
-
-        <div className="status-card">
-          <div className="status-label">Active Alerts</div>
-          <div className="status-value">
-            {summary?.critical_alerts_count > 0 && (
-              <span className="alert-count critical">{summary.critical_alerts_count} Critical</span>
-            )}
-            {summary?.warning_alerts_count > 0 && (
-              <span className="alert-count warning">{summary.warning_alerts_count} Warnings</span>
-            )}
-            {!summary?.critical_alerts_count && !summary?.warning_alerts_count && (
-              <span className="alert-count success">All Clear</span>
-            )}
+          <div className="summary-card">
+            <div className="summary-label">Autonomous</div>
+            <div className="summary-value">{health?.metrics?.autonomous_actions || 0}</div>
+            <div className="summary-percent">
+              {((health?.metrics?.autonomous_actions / health?.metrics?.total_actions * 100) || 0).toFixed(0)}%
+            </div>
+          </div>
+          <div className="summary-card">
+            <div className="summary-label">Success Rate</div>
+            <div className="summary-value">{health?.component_scores?.accuracy?.toFixed(0) || 0}%</div>
+          </div>
+          <div className="summary-card">
+            <div className="summary-label">Approval Rate</div>
+            <div className="summary-value">{health?.component_scores?.approval?.toFixed(0) || 0}%</div>
           </div>
         </div>
       </div>
 
-      {/* SECTION 1: AI LEARNING & PERFORMANCE */}
+      {/* SECTION 1: COMPONENT SCORES */}
       <section className="mc-section">
         <div className="section-header">
-          <h2>AI Learning & Performance</h2>
+          <h2>AI Performance Components</h2>
           <div className="view-toggle">
             <button
-              className={metricsView === '7' ? 'active' : ''}
-              onClick={() => setMetricsView('7')}
+              className={metricsView === 7 ? 'active' : ''}
+              onClick={() => setMetricsView(7)}
             >
               7 Days
             </button>
             <button
-              className={metricsView === '30' ? 'active' : ''}
-              onClick={() => setMetricsView('30')}
+              className={metricsView === 30 ? 'active' : ''}
+              onClick={() => setMetricsView(30)}
             >
               30 Days
             </button>
           </div>
         </div>
 
-        <div className="metrics-grid">
-          <div className="metric-card">
-            <div className="metric-icon">🤖</div>
-            <div className="metric-content">
-              <div className="metric-label">AI Automation Rate</div>
-              <div className="metric-value">{(latestMetrics.automation_rate || 0).toFixed(1)}%</div>
-              <div className="metric-subtext">
-                {latestMetrics.tasks_auto_completed || 0} of {latestMetrics.tasks_total || 0} tasks automated
+        <div className="component-scores-grid">
+          <div className="score-card">
+            <div className="score-icon">🤖</div>
+            <div className="score-content">
+              <div className="score-label">Autonomy Score</div>
+              <div className="score-value">{health?.component_scores?.autonomy?.toFixed(1) || 0}</div>
+              <div className="score-description">
+                How often AI acts independently
               </div>
             </div>
           </div>
 
-          <div className="metric-card">
-            <div className="metric-icon">👥</div>
-            <div className="metric-content">
-              <div className="metric-label">Human Escalations</div>
-              <div className="metric-value">{latestMetrics.tasks_escalated_to_humans || 0}</div>
-              <div className="metric-subtext">
-                {(latestMetrics.escalation_rate || 0).toFixed(1)}% escalation rate
+          <div className="score-card">
+            <div className="score-icon">🎯</div>
+            <div className="score-content">
+              <div className="score-label">Accuracy Score</div>
+              <div className="score-value">{health?.component_scores?.accuracy?.toFixed(1) || 0}</div>
+              <div className="score-description">
+                Success rate of AI actions
               </div>
             </div>
           </div>
 
-          <div className="metric-card">
-            <div className="metric-icon">⚡</div>
-            <div className="metric-content">
-              <div className="metric-label">Avg Resolution Time</div>
-              <div className="metric-value">
-                {formatDuration((latestMetrics.avg_ai_resolution_time_seconds || 0) * 1000)}
-              </div>
-              <div className="metric-subtext">
-                Saving {formatDuration((latestMetrics.time_saved_seconds || 0) * 1000)} per task
+          <div className="score-card">
+            <div className="score-icon">✅</div>
+            <div className="score-content">
+              <div className="score-label">Approval Score</div>
+              <div className="score-value">{health?.component_scores?.approval?.toFixed(1) || 0}</div>
+              <div className="score-description">
+                Actions approved by users
               </div>
             </div>
           </div>
 
-          <div className="metric-card highlight">
-            <div className="metric-icon">📈</div>
-            <div className="metric-content">
-              <div className="metric-label">AI Improvement Index</div>
-              <div className="metric-value">{(latestMetrics.ai_improvement_index || 100).toFixed(1)}</div>
-              <div className="metric-subtext">
-                Composite performance score
+          <div className="score-card">
+            <div className="score-icon">💪</div>
+            <div className="score-content">
+              <div className="score-label">Confidence Score</div>
+              <div className="score-value">{health?.component_scores?.confidence?.toFixed(1) || 0}</div>
+              <div className="score-description">
+                AI's confidence in decisions
               </div>
             </div>
           </div>
         </div>
-
-        {/* AI Narrative */}
-        {changelog[0] && (
-          <div className="ai-narrative">
-            <h3>Today's AI Summary</h3>
-            <p>{changelog[0].summary || 'AI is learning and improving daily.'}</p>
-          </div>
-        )}
       </section>
 
-      {/* SECTION 2: INTEGRATIONS HEALTH */}
+      {/* SECTION 2: AGENT METRICS */}
+      {metrics?.agents && Object.keys(metrics.agents).length > 0 && (
+        <section className="mc-section">
+          <div className="section-header">
+            <h2>Agent Performance Breakdown</h2>
+          </div>
+
+          <div className="agents-grid">
+            {Object.entries(metrics.agents).map(([agentName, agentMetrics]) => (
+              <div key={agentName} className="agent-card">
+                <div className="agent-header">
+                  <h3>{agentName}</h3>
+                  <button
+                    className={`btn-filter ${selectedAgent === agentName ? 'active' : ''}`}
+                    onClick={() => setSelectedAgent(selectedAgent === agentName ? null : agentName)}
+                  >
+                    {selectedAgent === agentName ? 'Show All' : 'Filter'}
+                  </button>
+                </div>
+                <div className="agent-metrics">
+                  <div className="agent-metric">
+                    <span className="metric-label">Total Actions</span>
+                    <span className="metric-value">{agentMetrics.total}</span>
+                  </div>
+                  <div className="agent-metric">
+                    <span className="metric-label">Autonomous</span>
+                    <span className="metric-value">{agentMetrics.autonomous} ({agentMetrics.autonomy_rate}%)</span>
+                  </div>
+                  <div className="agent-metric">
+                    <span className="metric-label">Success Rate</span>
+                    <span className="metric-value">{agentMetrics.success_rate}%</span>
+                  </div>
+                  <div className="agent-metric">
+                    <span className="metric-label">Avg Confidence</span>
+                    <span className="metric-value">{agentMetrics.avg_confidence}%</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* SECTION 3: RECENT ACTIONS */}
       <section className="mc-section">
         <div className="section-header">
-          <h2>Integrations Health</h2>
+          <h2>Recent AI Actions</h2>
+          {selectedAgent && (
+            <span className="filter-badge">Filtered: {selectedAgent}</span>
+          )}
         </div>
 
-        <div className="integrations-grid">
-          {integrations.length === 0 ? (
+        <div className="actions-list">
+          {recentActions.length === 0 ? (
             <div className="empty-state">
-              <p>No integrations configured yet.</p>
+              <p>No recent actions to display</p>
             </div>
           ) : (
-            integrations.map((integration, index) => (
-              <div key={index} className="integration-card">
-                <div className="integration-header">
-                  <div className="integration-name">{integration.name}</div>
-                  <span className={`status-badge ${getStatusBadgeClass(integration.status)}`}>
-                    {integration.status}
-                  </span>
-                </div>
-                <div className="integration-details">
-                  <div className="detail-row">
-                    <span>Last Success:</span>
-                    <span>{formatTimestamp(integration.last_success_at)}</span>
+            recentActions.map((action) => (
+              <div key={action.id} className="action-card">
+                <div className="action-header">
+                  <div className="action-meta">
+                    <span className="action-agent">{action.agent_name}</span>
+                    <span className="action-type">{action.action_type}</span>
+                    <span className="action-time">{formatTimestamp(action.created_at)}</span>
                   </div>
-                  <div className="detail-row">
-                    <span>Errors (24h):</span>
-                    <span className={integration.error_count_24h > 0 ? 'error-text' : ''}>
-                      {integration.error_count_24h}
-                    </span>
+                  <div className="action-badges">
+                    {action.autonomy_level && (
+                      <span className={`badge autonomy-${action.autonomy_level}`}>
+                        {action.autonomy_level === 'full' ? '🤖 Autonomous' : '🤝 Assisted'}
+                      </span>
+                    )}
+                    {action.outcome && (
+                      <span className={`badge outcome-${action.outcome}`}>
+                        {getOutcomeIcon(action.outcome)} {action.outcome}
+                      </span>
+                    )}
+                    {action.confidence_score && (
+                      <span className="badge confidence">
+                        💪 {action.confidence_score}%
+                      </span>
+                    )}
                   </div>
-                  {integration.latency_ms && (
-                    <div className="detail-row">
-                      <span>Latency:</span>
-                      <span>{integration.latency_ms}ms</span>
-                    </div>
-                  )}
-                  {integration.last_error_message && (
-                    <div className="error-message">
-                      {integration.last_error_message}
-                    </div>
-                  )}
                 </div>
+                {action.reasoning && (
+                  <div className="action-reasoning">
+                    {action.reasoning}
+                  </div>
+                )}
               </div>
             ))
           )}
         </div>
       </section>
 
-      {/* SECTION 3: DATA PIPELINES & JOBS */}
-      <section className="mc-section">
-        <div className="section-header">
-          <h2>Data Pipelines & Jobs</h2>
-        </div>
-
-        <div className="jobs-table">
-          {jobs.length === 0 ? (
-            <div className="empty-state">
-              <p>No jobs configured yet.</p>
-            </div>
-          ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>Job Name</th>
-                  <th>Type</th>
-                  <th>Last Run</th>
-                  <th>Status</th>
-                  <th>Duration</th>
-                  <th>Records</th>
-                </tr>
-              </thead>
-              <tbody>
-                {jobs.map((job, index) => (
-                  <tr key={index}>
-                    <td>{job.job_name}</td>
-                    <td>{job.job_type || 'N/A'}</td>
-                    <td>{formatTimestamp(job.last_run_at)}</td>
-                    <td>
-                      <span className={`status-badge ${getStatusBadgeClass(job.status)}`}>
-                        {job.status}
-                      </span>
-                    </td>
-                    <td>{formatDuration(job.duration_ms)}</td>
-                    <td>{job.records_processed || 'N/A'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </section>
-
-      {/* SECTION 4: SECURITY & COMPLIANCE */}
-      <section className="mc-section">
-        <div className="section-header">
-          <h2>Security & Compliance</h2>
-        </div>
-
-        {security && (
-          <div className="security-grid">
-            <div className="security-card">
-              <div className="security-label">2FA Coverage</div>
-              <div className="security-value">
-                {security.tfa_coverage_percent}%
-                <span className="security-subtext">
-                  {security.active_users_with_2fa} of {security.active_users_total} users
-                </span>
-              </div>
-            </div>
-
-            <div className="security-card">
-              <div className="security-label">High-Privilege Actions (24h)</div>
-              <div className="security-value">{security.high_privilege_actions_24h}</div>
-            </div>
-
-            <div className="security-card">
-              <div className="security-label">Failed Logins (24h)</div>
-              <div className="security-value">{security.failed_login_attempts_24h}</div>
-            </div>
-
-            {security.last_permission_change_user && (
-              <div className="security-card">
-                <div className="security-label">Last Permission Change</div>
-                <div className="security-value">
-                  {security.last_permission_change_user}
-                  <span className="security-subtext">
-                    {formatTimestamp(security.last_permission_change_at)}
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </section>
-
-      {/* SECTION 5: ALERTS & RECOMMENDED ACTIONS */}
-      {alerts.length > 0 && (
+      {/* SECTION 4: AI INSIGHTS */}
+      {insights.length > 0 && (
         <section className="mc-section">
           <div className="section-header">
-            <h2>Alerts & Recommended Actions</h2>
+            <h2>AI-Discovered Insights</h2>
           </div>
 
-          <div className="alerts-list">
-            {alerts.map((alert) => (
-              <div key={alert.id} className={`alert-card alert-${alert.severity}`}>
-                <div className="alert-header">
-                  <div className="alert-title">
-                    <span className="alert-icon">{getSeverityIcon(alert.severity)}</span>
-                    {alert.title}
-                  </div>
-                  <button
-                    className="btn-resolve"
-                    onClick={() => handleResolveAlert(alert.id)}
-                  >
-                    Mark Resolved
-                  </button>
+          <div className="insights-list">
+            {insights.map((insight) => (
+              <div key={insight.id} className="insight-card">
+                <div className="insight-header">
+                  <div className="insight-type">{insight.insight_type}</div>
+                  {insight.pattern_confidence && (
+                    <div className="insight-confidence">
+                      {insight.pattern_confidence}% confident
+                    </div>
+                  )}
                 </div>
-                <div className="alert-message">{alert.message}</div>
-                {alert.suggested_action && (
-                  <div className="alert-action">
-                    <strong>Suggested Action:</strong> {alert.suggested_action}
+                <div className="insight-description">
+                  {insight.pattern_description}
+                </div>
+                {insight.recommended_action && (
+                  <div className="insight-recommendation">
+                    <strong>💡 Recommendation:</strong> {insight.recommended_action}
                   </div>
                 )}
-                <div className="alert-time">{formatTimestamp(alert.created_at)}</div>
+                <div className="insight-footer">
+                  <span className="insight-priority priority-{insight.priority}">
+                    {insight.priority?.toUpperCase() || 'NORMAL'}
+                  </span>
+                  <span className="insight-time">
+                    Discovered {formatTimestamp(insight.discovered_at)}
+                  </span>
+                </div>
               </div>
             ))}
           </div>
