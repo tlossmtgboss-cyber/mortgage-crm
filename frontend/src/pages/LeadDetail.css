@@ -725,7 +725,8 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  padding: 20px 16px;
+  padding: 24px 16px;
+  min-height: 110px;
   background: white;
   border: 2px solid #e5e7eb;
   border-radius: 12px;
@@ -816,50 +817,59 @@
 
 /* Email Button */
 .action-btn.email {
-  border-color: #dbeafe;
-  background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%);
-  color: #2563eb;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  border-color: #3b82f6;
+  color: white;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
 }
 
 .action-btn.email:hover:not(:disabled) {
-  border-color: #60a5fa;
-  box-shadow: 0 8px 20px rgba(96, 165, 250, 0.25);
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  border-color: #2563eb;
+  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.4);
 }
 
 .action-btn.email .icon {
-  color: #2563eb;
+  color: white;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
 }
 
 /* Task Button */
 .action-btn.task {
-  border-color: #e9d5ff;
-  background: linear-gradient(135deg, #f5f3ff 0%, #ffffff 100%);
-  color: #7c3aed;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  border-color: #10b981;
+  color: white;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
 }
 
 .action-btn.task:hover:not(:disabled) {
-  border-color: #a78bfa;
-  box-shadow: 0 8px 20px rgba(167, 139, 250, 0.25);
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  border-color: #059669;
+  box-shadow: 0 8px 24px rgba(5, 150, 105, 0.4);
 }
 
 .action-btn.task .icon {
-  color: #7c3aed;
+  color: white;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
 }
 
 /* Calendar Button */
 .action-btn.calendar {
-  border-color: #fed7aa;
-  background: linear-gradient(135deg, #fff7ed 0%, #ffffff 100%);
-  color: #ea580c;
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  border-color: #f97316;
+  color: white;
+  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.3);
 }
 
 .action-btn.calendar:hover:not(:disabled) {
-  border-color: #fb923c;
-  box-shadow: 0 8px 20px rgba(251, 146, 60, 0.25);
+  background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%);
+  border-color: #ea580c;
+  box-shadow: 0 8px 24px rgba(234, 88, 12, 0.4);
 }
 
 .action-btn.calendar .icon {
-  color: #ea580c;
+  color: white;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
 }
 
 /* Teams Button */
@@ -879,6 +889,24 @@
 .action-btn.teams .icon {
   color: white;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+/* Record Meeting Button */
+.action-btn.record {
+  background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
+  border-color: #d1d5db;
+  color: #374151;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.action-btn.record:hover:not(:disabled) {
+  background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
+  border-color: #9ca3af;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+}
+
+.action-btn.record .icon {
+  color: #6b7280;
 }
 
 /* Email History */
