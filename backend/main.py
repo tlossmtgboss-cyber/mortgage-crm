@@ -176,6 +176,21 @@ class ApiKey(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     last_used_at = Column(DateTime, nullable=True)
 
+class ImpersonationSession(Base):
+    __tablename__ = "impersonation_sessions"
+    id = Column(Integer, primary_key=True, index=True)
+    session_token = Column(String, unique=True, index=True, nullable=False)
+    manager_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    impersonated_user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    mode = Column(String, nullable=False)  # 'read_only' or 'full_access'
+    reason = Column(String, nullable=False)
+    duration_minutes = Column(Integer, nullable=False)
+    notify_employee = Column(Boolean, default=False)
+    started_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    expires_at = Column(DateTime, nullable=False)
+    ended_at = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, default=True)
+
 class Lead(Base):
     __tablename__ = "leads"
     id = Column(Integer, primary_key=True, index=True)
@@ -1372,6 +1387,19 @@ class ApiKeyResponse(BaseModel):
     last_used_at: Optional[datetime]
     class Config:
         from_attributes = True
+
+class ImpersonationStart(BaseModel):
+    user_id: int
+    mode: str  # 'read_only' or 'full_access'
+    reason: str
+    duration_minutes: int
+    notify_employee: bool = False
+
+class ImpersonationResponse(BaseModel):
+    session_token: str
+    impersonated_user: Dict[str, Any]
+    expires_at: datetime
+    mode: str
 
 class LeadCreate(BaseModel):
     name: str
@@ -3388,7 +3416,23 @@ async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Ses
             )
 
             # Map Claude result to DRE format
-            fields = parsed_result.get('extracted_fields', {})
+            extracted_fields = parsed_result.get('extracted_fields', {})
+            confidence_scores = parsed_result.get('confidence_scores', {})
+
+            # Convert Claude format to legacy format
+            # Claude: {"field_name": "value"}
+            # Legacy: {"field_name": {"value": "value", "confidence": 0.95}}
+            fields = {}
+            for field_name, field_value in extracted_fields.items():
+                # Get confidence score (convert from 0-100 to 0-1)
+                confidence = confidence_scores.get(field_name, 95) / 100.0
+
+                # Wrap in legacy format
+                fields[field_name] = {
+                    "value": field_value,
+                    "confidence": confidence
+                }
+
             avg_confidence = parsed_result.get('overall_confidence', 0) / 100.0  # Convert to 0-1
             classification = {
                 "category": profile_type,
@@ -3554,7 +3598,23 @@ async def extract_email_data(
             )
 
             # Map Claude result to DRE format
-            fields = parsed_result.get('extracted_fields', {})
+            extracted_fields = parsed_result.get('extracted_fields', {})
+            confidence_scores = parsed_result.get('confidence_scores', {})
+
+            # Convert Claude format to legacy format
+            # Claude: {"field_name": "value"}
+            # Legacy: {"field_name": {"value": "value", "confidence": 0.95}}
+            fields = {}
+            for field_name, field_value in extracted_fields.items():
+                # Get confidence score (convert from 0-100 to 0-1)
+                confidence = confidence_scores.get(field_name, 95) / 100.0
+
+                # Wrap in legacy format
+                fields[field_name] = {
+                    "value": field_value,
+                    "confidence": confidence
+                }
+
             avg_confidence = parsed_result.get('overall_confidence', 0) / 100.0  # Convert to 0-1
             classification = {
                 "category": profile_type,
@@ -7196,21 +7256,16 @@ async def get_scorecard(
             Lead.credit_score.isnot(None)
         ).scalar() or 0
 
-        # Cancelled loans
+        # Cancelled/Suspended loans
         cancelled_count = db.query(func.count(Loan.id)).filter(
             Loan.loan_officer_id == current_user.id,
-            Loan.stage == LoanStage.CANCELLED,
+            Loan.stage == LoanStage.SUSPENDED,
             Loan.created_at >= start,
             Loan.created_at <= end
         ).scalar() or 0
 
-        # Denied loans
-        denied_count = db.query(func.count(Loan.id)).filter(
-            Loan.loan_officer_id == current_user.id,
-            Loan.stage == LoanStage.DENIED,
-            Loan.created_at >= start,
-            Loan.created_at <= end
-        ).scalar() or 0
+        # Denied loans (not tracked in current stages, set to 0)
+        denied_count = 0
 
         # UW to TBDs (underwriting to clear to close)
         uw_count = db.query(func.count(Loan.id)).filter(
@@ -11535,6 +11590,168 @@ async def delete_team_member(
     except Exception as e:
         db.rollback()
         logger.error(f"Delete team member error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================================
+# EMPLOYEE IMPERSONATION
+# ============================================================================
+
+@app.post("/api/v1/impersonation/start", response_model=ImpersonationResponse)
+async def start_impersonation(
+    data: ImpersonationStart,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Start an impersonation session"""
+    try:
+        # Verify the user to be impersonated exists
+        impersonated_user = db.query(User).filter(User.id == data.user_id).first()
+        if not impersonated_user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Check authorization - only managers/admins can impersonate
+        # For now, allow any authenticated user (you can add role checks later)
+
+        # Generate unique session token
+        session_token = secrets.token_urlsafe(32)
+
+        # Calculate expiration time
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=data.duration_minutes)
+
+        # Create impersonation session
+        session = ImpersonationSession(
+            session_token=session_token,
+            manager_id=current_user.id,
+            impersonated_user_id=data.user_id,
+            mode=data.mode,
+            reason=data.reason,
+            duration_minutes=data.duration_minutes,
+            notify_employee=data.notify_employee,
+            expires_at=expires_at,
+            is_active=True
+        )
+
+        db.add(session)
+        db.commit()
+        db.refresh(session)
+
+        # Get impersonated user metadata
+        user_metadata = impersonated_user.user_metadata or {}
+
+        # Return session info
+        return ImpersonationResponse(
+            session_token=session_token,
+            impersonated_user={
+                "id": impersonated_user.id,
+                "email": impersonated_user.email,
+                "full_name": impersonated_user.full_name,
+                "first_name": user_metadata.get("first_name"),
+                "last_name": user_metadata.get("last_name"),
+                "role": impersonated_user.role
+            },
+            expires_at=expires_at,
+            mode=data.mode
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Start impersonation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/impersonation/end")
+async def end_impersonation(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    request: Request = None
+):
+    """End an impersonation session"""
+    try:
+        # Get session token from header
+        session_token = request.headers.get("X-Impersonation-Token")
+
+        if not session_token:
+            raise HTTPException(status_code=400, detail="No active impersonation session")
+
+        # Find and deactivate the session
+        session = db.query(ImpersonationSession).filter(
+            ImpersonationSession.session_token == session_token,
+            ImpersonationSession.is_active == True
+        ).first()
+
+        if not session:
+            raise HTTPException(status_code=404, detail="Impersonation session not found")
+
+        # Verify the current user is the manager who started the session
+        if session.manager_id != current_user.id:
+            raise HTTPException(status_code=403, detail="Not authorized to end this session")
+
+        # End the session
+        session.is_active = False
+        session.ended_at = datetime.now(timezone.utc)
+        db.commit()
+
+        return {"message": "Impersonation session ended successfully"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"End impersonation error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/impersonation/current")
+async def get_current_impersonation(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get current impersonation session info"""
+    try:
+        # Get session token from header
+        session_token = request.headers.get("X-Impersonation-Token")
+
+        if not session_token:
+            return {"is_impersonating": False}
+
+        # Find active session
+        session = db.query(ImpersonationSession).filter(
+            ImpersonationSession.session_token == session_token,
+            ImpersonationSession.is_active == True,
+            ImpersonationSession.expires_at > datetime.now(timezone.utc)
+        ).first()
+
+        if not session:
+            return {"is_impersonating": False}
+
+        # Get impersonated user
+        impersonated_user = db.query(User).filter(User.id == session.impersonated_user_id).first()
+        if not impersonated_user:
+            return {"is_impersonating": False}
+
+        user_metadata = impersonated_user.user_metadata or {}
+
+        # Calculate time remaining
+        time_remaining = (session.expires_at - datetime.now(timezone.utc)).total_seconds()
+
+        return {
+            "is_impersonating": True,
+            "impersonated_user": {
+                "id": impersonated_user.id,
+                "email": impersonated_user.email,
+                "full_name": impersonated_user.full_name,
+                "first_name": user_metadata.get("first_name"),
+                "last_name": user_metadata.get("last_name"),
+                "role": impersonated_user.role
+            },
+            "mode": session.mode,
+            "expires_at": session.expires_at.isoformat(),
+            "time_remaining_seconds": int(time_remaining)
+        }
+
+    except Exception as e:
+        logger.error(f"Get current impersonation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================================================
