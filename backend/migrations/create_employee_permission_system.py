@@ -539,7 +539,8 @@ def run_migration(engine):
             CREATE INDEX IF NOT EXISTS idx_milestones_status ON employee_milestones(status, due_date);
             CREATE INDEX IF NOT EXISTS idx_milestones_workflow ON employee_milestones(workflow_id);
             CREATE INDEX IF NOT EXISTS idx_milestones_recurring ON employee_milestones(recurring_schedule, next_occurrence) WHERE recurring_schedule != 'none';
-            CREATE INDEX IF NOT EXISTS idx_milestones_overdue ON employee_milestones(employee_id, due_date) WHERE status != 'completed' AND due_date < CURRENT_DATE;
+            -- Note: Cannot use CURRENT_DATE in index predicate (not IMMUTABLE)
+            -- CREATE INDEX IF NOT EXISTS idx_milestones_overdue ON employee_milestones(employee_id, due_date) WHERE status != 'completed' AND due_date < CURRENT_DATE;
         """))
 
         # ========================================================================
