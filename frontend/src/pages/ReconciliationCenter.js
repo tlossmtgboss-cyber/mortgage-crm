@@ -21,6 +21,7 @@ function ReconciliationCenter() {
   const [selectedItems, setSelectedItems] = useState(new Set());
   const [bulkProcessing, setBulkProcessing] = useState(false);
   const [approvalProgress, setApprovalProgress] = useState({ approved: 0, total: 20 });
+  const [delegateToAI, setDelegateToAI] = useState(false);
 
   useEffect(() => {
     fetchPendingItems();
@@ -133,7 +134,10 @@ function ReconciliationCenter() {
         },
         body: JSON.stringify({
           extracted_data_id: itemId,
-          corrections: corrections
+          corrections: corrections,
+          delegate_to_ai: delegateToAI,
+          email_intent: selectedItem?.email_intent,
+          recommended_action: selectedItem?.recommended_action
         })
       });
 
@@ -142,6 +146,7 @@ function ReconciliationCenter() {
         setPendingItems(prev => prev.filter(item => item.id !== itemId));
         setSelectedItem(null);
         setEditedFields({});
+        setDelegateToAI(false);
         // Refresh completed items to show the newly approved item
         fetchCompletedItems();
       } else {
@@ -638,6 +643,23 @@ function ReconciliationCenter() {
                             🧠 AI Learning: {selectedItem.recommended_action.learning_status}
                           </div>
                         )}
+                        <div className="ai-delegation-option">
+                          <label className="delegation-checkbox">
+                            <input
+                              type="checkbox"
+                              checked={delegateToAI}
+                              onChange={(e) => setDelegateToAI(e.target.checked)}
+                            />
+                            <span className="delegation-label">
+                              ✓ Let AI handle this task type automatically in the future
+                            </span>
+                          </label>
+                          {delegateToAI && (
+                            <div className="delegation-notice">
+                              When you approve, AI will automatically handle "{selectedItem.email_intent}" emails going forward. You can revoke this in Mission Control.
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>

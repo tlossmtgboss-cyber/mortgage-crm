@@ -385,6 +385,20 @@ class Activity(Base):
     lead = relationship("Lead", back_populates="activities")
     loan = relationship("Loan", back_populates="activities")
 
+class AIDelegatedTask(Base):
+    __tablename__ = "ai_delegated_tasks"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    email_intent = Column(String, nullable=False)  # "Clear to Close", "Rate Lock", etc.
+    action_type = Column(String, nullable=False)  # "status_update", "field_update", etc.
+    action_value = Column(String)  # "Clear to Close", "rate_lock_data", etc.
+    action_title = Column(String)  # Human-readable action title
+    action_description = Column(Text)  # Description of what AI will do
+    approval_count = Column(Integer, default=1)  # Number of times user approved this
+    last_approved_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    is_active = Column(Boolean, default=True)  # Can be revoked by setting to False
+
 class Conversation(Base):
     __tablename__ = "conversations"
     id = Column(Integer, primary_key=True, index=True)
@@ -2096,6 +2110,9 @@ class ReconciliationApproval(BaseModel):
     extracted_data_id: int
     approved_fields: Optional[Dict[str, Any]] = None  # If partial approval
     corrections: Optional[Dict[str, Any]] = None  # If user corrected values
+    delegate_to_ai: Optional[bool] = False  # If user wants AI to handle this task type in future
+    email_intent: Optional[str] = None  # Email intent type (for AI delegation)
+    recommended_action: Optional[Dict[str, Any]] = None  # Recommended action details
 
 class ReconciliationRejection(BaseModel):
     extracted_data_id: int
@@ -4183,6 +4200,37 @@ async def approve_reconciliation(
             extracted.status = "approved"
             extracted.reviewed_by = current_user.id
             extracted.reviewed_at = datetime.now(timezone.utc)
+
+            # Handle AI delegation if requested
+            if approval.delegate_to_ai and approval.email_intent and approval.recommended_action:
+                # Check if this delegation already exists
+                existing_delegation = db.query(AIDelegatedTask).filter(
+                    AIDelegatedTask.user_id == current_user.id,
+                    AIDelegatedTask.email_intent == approval.email_intent,
+                    AIDelegatedTask.action_type == approval.recommended_action.get("action_type"),
+                    AIDelegatedTask.is_active == True
+                ).first()
+
+                if existing_delegation:
+                    # Increment approval count
+                    existing_delegation.approval_count += 1
+                    existing_delegation.last_approved_at = datetime.now(timezone.utc)
+                    logger.info(f"Updated AI delegation {existing_delegation.id} - approval count: {existing_delegation.approval_count}")
+                else:
+                    # Create new delegation
+                    new_delegation = AIDelegatedTask(
+                        user_id=current_user.id,
+                        email_intent=approval.email_intent,
+                        action_type=approval.recommended_action.get("action_type", "unknown"),
+                        action_value=approval.recommended_action.get("action_value", ""),
+                        action_title=approval.recommended_action.get("title", f"Auto-handle {approval.email_intent}"),
+                        action_description=approval.recommended_action.get("description", ""),
+                        approval_count=1,
+                        is_active=True
+                    )
+                    db.add(new_delegation)
+                    logger.info(f"Created new AI delegation for user {current_user.id}: {approval.email_intent}")
+
             db.commit()
 
             logger.info(f"Approved and applied extracted data {extracted.id} by user {current_user.id}")
@@ -4190,7 +4238,8 @@ async def approve_reconciliation(
             return {
                 "status": "success",
                 "message": "Data approved and applied to CRM",
-                "extracted_data_id": extracted.id
+                "extracted_data_id": extracted.id,
+                "ai_delegation_enabled": approval.delegate_to_ai if approval.delegate_to_ai else False
             }
         else:
             raise HTTPException(status_code=500, detail="Failed to apply data to CRM")

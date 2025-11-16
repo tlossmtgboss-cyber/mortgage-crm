@@ -552,6 +552,50 @@
   font-style: italic;
 }
 
+.ai-delegation-option {
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-border-light);
+}
+
+.delegation-checkbox {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  cursor: pointer;
+  padding: var(--space-sm);
+  border-radius: var(--radius-md);
+  transition: background-color 0.2s ease;
+}
+
+.delegation-checkbox:hover {
+  background: var(--color-bg-hover);
+}
+
+.delegation-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--color-primary);
+}
+
+.delegation-label {
+  font-size: var(--font-sm);
+  color: var(--color-text-primary);
+  font-weight: var(--weight-semibold);
+}
+
+.delegation-notice {
+  margin-top: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: rgba(255, 215, 0, 0.1);
+  border: 1px solid rgba(255, 215, 0, 0.3);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-xs);
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
 /* Extracted Fields */
 .extracted-fields {
   margin-bottom: var(--space-xl);
