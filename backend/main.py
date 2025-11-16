@@ -18730,6 +18730,31 @@ async def add_access_certifications_table_migration(
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 
+@app.post("/api/v1/migrations/fix-access-certifications-schema", response_model=None)
+async def fix_access_certifications_schema_migration(
+    migration_key: str = "",
+    db: Session = Depends(get_db)
+):
+    """
+    Fix access_certifications table schema (drop and recreate with correct columns)
+    """
+    if migration_key != "fix-certifications-schema":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    try:
+        from migrations.fix_access_certifications_schema import upgrade
+        upgrade()
+        return {
+            "success": True,
+            "message": "Access certifications table schema fixed",
+            "action": "Dropped and recreated with correct schema"
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Fix certifications schema migration error: {e}")
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
