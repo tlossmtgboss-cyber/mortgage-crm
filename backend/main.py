@@ -13809,6 +13809,46 @@ async def check_phase2_permission_migration(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/v1/migrations/bootstrap-admin-user", response_model=None)
+async def bootstrap_admin_user(
+    user_id: int = 1,
+    bootstrap_key: str = "",
+    db: Session = Depends(get_db)
+):
+    """
+    Bootstrap an admin user with management permissions
+    Call with: POST /api/v1/migrations/bootstrap-admin-user?user_id=1&bootstrap_key=bootstrap-now
+    """
+    try:
+        if bootstrap_key != "bootstrap-now":
+            raise HTTPException(status_code=403, detail="Invalid bootstrap key")
+
+        # Check if user exists
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail=f"User {user_id} not found")
+
+        # Apply management role
+        success = apply_role_template_to_user(user_id, "management", user_id, db)
+
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to apply management template")
+
+        return {
+            "success": True,
+            "message": f"Successfully bootstrapped user {user.email} with management permissions",
+            "user_id": user_id,
+            "email": user.email,
+            "role": "management"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Bootstrap error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/v1/migrations/run-phase2-permissions", response_model=None)
 async def run_phase2_permission_migration(
     migration_key: str = "",
