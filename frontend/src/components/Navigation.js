@@ -55,7 +55,7 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
             to="/tasks"
             className={`nav-link ${isActive('/tasks') ? 'active' : ''}`}
           >
-            Tasks {renderBadge(taskCounts.tasks)}
+            Tasks {taskCounts.urgentTasks > 0 && <span className="nav-badge urgent">({taskCounts.urgentTasks})</span>}
           </Link>
           <Link
             to="/reconciliation"
@@ -117,6 +117,29 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
           >
             🏆 Coach
           </button>
+          <Link
+            to="/my-profile"
+            className={`nav-link profile-link ${isActive('/my-profile') ? 'active' : ''}`}
+            title="My Profile"
+          >
+            👤 My Profile
+          </Link>
+          <Link
+            to="/my-permissions"
+            className={`nav-link permissions-link ${isActive('/my-permissions') ? 'active' : ''}`}
+            title="My Permissions"
+          >
+            🔐 My Permissions
+          </Link>
+          {(userRole === 'manager' || userRole === 'management') && (
+            <Link
+              to="/team-members"
+              className={`nav-link team-link ${isActive('/team-members') || location.pathname.startsWith('/team-members') ? 'active' : ''}`}
+              title="Team Members"
+            >
+              👥 Team
+            </Link>
+          )}
           <Link
             to="/settings"
             className={`settings-link ${isActive('/settings') ? 'active' : ''}`}

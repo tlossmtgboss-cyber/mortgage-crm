@@ -654,4 +654,44 @@ export const accessAuditAPI = {
 // Legacy alias for backward compatibility
 export const auditAPI = accessAuditAPI;
 
+// Permission Request API
+export const permissionsApi = {
+  // Get user's current permissions
+  getUserPermissions: async (userId) => {
+    const response = await api.get(`/api/v1/users/${userId}/permissions`);
+    return response;
+  },
+
+  // Get all available permissions
+  getAvailablePermissions: async () => {
+    const response = await api.get('/api/v1/permissions/available');
+    return response;
+  },
+
+  // Get my permission requests
+  getMyPermissionRequests: async (status = null) => {
+    const params = status ? { status } : {};
+    const response = await api.get('/api/v1/permission-requests', { params });
+    return response;
+  },
+
+  // Create a new permission request
+  createPermissionRequest: async (data) => {
+    const response = await api.post('/api/v1/permission-requests', data);
+    return response;
+  },
+
+  // Approve a permission request (manager only)
+  approvePermissionRequest: async (requestId, notes = '') => {
+    const response = await api.put(`/api/v1/permission-requests/${requestId}/approve`, { notes });
+    return response;
+  },
+
+  // Deny a permission request (manager only)
+  denyPermissionRequest: async (requestId, reason) => {
+    const response = await api.put(`/api/v1/permission-requests/${requestId}/deny`, { reason });
+    return response;
+  },
+};
+
 export default api;

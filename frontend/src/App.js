@@ -43,6 +43,8 @@ const MergeCenter = lazy(() => import('./pages/MergeCenter'));
 const Settings = lazy(() => import('./pages/Settings'));
 const TeamMembers = lazy(() => import('./pages/TeamMembers'));
 const TeamMemberProfile = lazy(() => import('./pages/TeamMemberProfile'));
+const MyProfile = lazy(() => import('./pages/MyProfile'));
+const MyPermissions = lazy(() => import('./pages/MyPermissions'));
 const DataUpload = lazy(() => import('./pages/DataUpload'));
 const Users = lazy(() => import('./pages/Users'));
 const UserProfile = lazy(() => import('./pages/UserProfile'));
@@ -97,6 +99,7 @@ function App() {
     loans: 0,
     portfolio: 3,  // MUM tasks
     tasks: 0,
+    urgentTasks: 0,
     partners: 0
   });
 
@@ -175,9 +178,12 @@ function App() {
           const tasks = await response.json();
           // Count outstanding tasks (not completed)
           const outstandingTasks = tasks.filter(t => t.status !== 'completed' && t.status !== 'done').length;
+          // Count urgent tasks (high priority and not completed)
+          const urgentTasks = tasks.filter(t => t.priority === 'high' && t.status !== 'completed' && t.status !== 'done').length;
           setTaskCounts(prev => ({
             ...prev,
-            tasks: outstandingTasks
+            tasks: outstandingTasks,
+            urgentTasks: urgentTasks
           }));
         }
       } catch (error) {
@@ -719,6 +725,48 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <TeamMemberProfile />
+                  </main>
+                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/my-profile"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><MyProfile /></LazyPage>
+                  </main>
+                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/my-permissions"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><MyPermissions /></LazyPage>
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />

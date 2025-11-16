@@ -1530,6 +1530,41 @@ class UserSkillAssessment(Base):
         UniqueConstraint('user_id', 'skill_id', name='unique_user_skill'),
     )
 
+class UserPermission(Base):
+    __tablename__ = "user_permissions"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    permission_key = Column(String(255), nullable=False)
+    granted = Column(Boolean, default=False)
+    granted_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    granted_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Unique constraint: one permission per user
+    __table_args__ = (
+        UniqueConstraint('user_id', 'permission_key', name='unique_user_permission'),
+    )
+
+class PermissionRequest(Base):
+    __tablename__ = "permission_requests"
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    permission_key = Column(String(255), nullable=False)
+    justification = Column(Text, nullable=False)
+    urgency = Column(SQLEnum('low', 'medium', 'high', name='urgency_enum'), default='medium')
+    is_temporary = Column(Boolean, default=False)
+    duration_days = Column(Integer, nullable=True)
+
+    status = Column(SQLEnum('pending', 'approved', 'denied', 'more_info_needed', name='request_status_enum'), default='pending')
+    manager_notes = Column(Text, nullable=True)
+    decided_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    decided_at = Column(DateTime, nullable=True)
+
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
 
 # ============================================================================
 # PYDANTIC SCHEMAS
@@ -13199,6 +13234,320 @@ async def update_user_permissions(
 
 
 # ============================================================================
+# PERMISSION REQUEST WORKFLOW - API ENDPOINTS
+# ============================================================================
+
+@app.post("/api/v1/permission-requests")
+async def create_permission_request(
+    request: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Employee creates a permission request
+    Body: {
+        "permission_key": "view_production_tracker",
+        "justification": "I need this to track my sales performance...",
+        "urgency": "medium",
+        "is_temporary": false,
+        "duration_days": null
+    }
+    """
+    try:
+        # Validate justification length
+        justification = request.get('justification', '')
+        if len(justification) < 50:
+            raise HTTPException(status_code=400, detail="Justification must be at least 50 characters")
+
+        permission_key = request.get('permission_key')
+        if not permission_key:
+            raise HTTPException(status_code=400, detail="permission_key is required")
+
+        # Check if user already has this permission
+        existing_perm = db.execute(text("""
+            SELECT granted FROM user_permissions
+            WHERE user_id = :user_id AND permission_key = :permission_key
+        """), {
+            'user_id': current_user.id,
+            'permission_key': permission_key
+        }).fetchone()
+
+        if existing_perm and existing_perm[0]:
+            raise HTTPException(status_code=400, detail="You already have this permission")
+
+        # Check if there's already a pending request
+        pending_request = db.execute(text("""
+            SELECT id FROM permission_requests
+            WHERE employee_id = :user_id AND permission_key = :permission_key AND status = 'pending'
+        """), {
+            'user_id': current_user.id,
+            'permission_key': permission_key
+        }).fetchone()
+
+        if pending_request:
+            raise HTTPException(status_code=400, detail="You already have a pending request for this permission")
+
+        # Create request
+        urgency = request.get('urgency', 'medium')
+        is_temporary = request.get('is_temporary', False)
+        duration_days = request.get('duration_days')
+
+        if is_temporary and not duration_days:
+            raise HTTPException(status_code=400, detail="duration_days required for temporary permissions")
+
+        result = db.execute(text("""
+            INSERT INTO permission_requests
+            (employee_id, permission_key, justification, urgency, is_temporary, duration_days, status, created_at, updated_at)
+            VALUES (:employee_id, :permission_key, :justification, :urgency, :is_temporary, :duration_days, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            RETURNING id
+        """), {
+            'employee_id': current_user.id,
+            'permission_key': permission_key,
+            'justification': justification,
+            'urgency': urgency,
+            'is_temporary': is_temporary,
+            'duration_days': duration_days
+        })
+
+        db.commit()
+        request_id = result.fetchone()[0]
+
+        logger.info(f"Permission request created: {request_id} by user {current_user.email} for {permission_key}")
+
+        return {
+            "success": True,
+            "request_id": request_id,
+            "status": "pending",
+            "message": "Permission request submitted successfully"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Create permission request error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/permission-requests")
+async def get_permission_requests(
+    status: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Employees see their own requests
+    Managers see their team's pending requests
+    """
+    try:
+        # Check if user is a manager
+        is_manager = current_user.role in ['manager', 'management'] or current_user.permission_role in ['management']
+
+        if is_manager:
+            # Managers see all requests (or filtered by status)
+            if status:
+                requests = db.execute(text("""
+                    SELECT pr.*, u.full_name as employee_name, u.email as employee_email
+                    FROM permission_requests pr
+                    JOIN users u ON pr.employee_id = u.id
+                    WHERE pr.status = :status
+                    ORDER BY pr.created_at DESC
+                """), {'status': status}).fetchall()
+            else:
+                # Default to pending for managers
+                requests = db.execute(text("""
+                    SELECT pr.*, u.full_name as employee_name, u.email as employee_email
+                    FROM permission_requests pr
+                    JOIN users u ON pr.employee_id = u.id
+                    WHERE pr.status = 'pending'
+                    ORDER BY pr.created_at DESC
+                """)).fetchall()
+        else:
+            # Employees see only their own requests
+            if status:
+                requests = db.execute(text("""
+                    SELECT pr.*, u.full_name as employee_name, u.email as employee_email
+                    FROM permission_requests pr
+                    JOIN users u ON pr.employee_id = u.id
+                    WHERE pr.employee_id = :user_id AND pr.status = :status
+                    ORDER BY pr.created_at DESC
+                """), {'user_id': current_user.id, 'status': status}).fetchall()
+            else:
+                requests = db.execute(text("""
+                    SELECT pr.*, u.full_name as employee_name, u.email as employee_email
+                    FROM permission_requests pr
+                    JOIN users u ON pr.employee_id = u.id
+                    WHERE pr.employee_id = :user_id
+                    ORDER BY pr.created_at DESC
+                """), {'user_id': current_user.id}).fetchall()
+
+        return {
+            "requests": [
+                {
+                    "id": req.id,
+                    "employee_id": req.employee_id,
+                    "employee_name": req.employee_name,
+                    "employee_email": req.employee_email,
+                    "permission_key": req.permission_key,
+                    "justification": req.justification,
+                    "urgency": req.urgency,
+                    "is_temporary": req.is_temporary,
+                    "duration_days": req.duration_days,
+                    "status": req.status,
+                    "manager_notes": req.manager_notes,
+                    "created_at": req.created_at.isoformat() if req.created_at else None,
+                    "decided_at": req.decided_at.isoformat() if req.decided_at else None
+                }
+                for req in requests
+            ]
+        }
+
+    except Exception as e:
+        logger.error(f"Get permission requests error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/v1/permission-requests/{request_id}/approve")
+async def approve_permission_request(
+    request_id: int,
+    data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Manager approves permission request and grants the permission"""
+
+    try:
+        # Check if user is a manager
+        is_manager = current_user.role in ['manager', 'management'] or current_user.permission_role in ['management']
+        if not is_manager:
+            raise HTTPException(status_code=403, detail="Only managers can approve requests")
+
+        # Get the request
+        perm_request = db.execute(text("""
+            SELECT * FROM permission_requests WHERE id = :request_id
+        """), {'request_id': request_id}).fetchone()
+
+        if not perm_request:
+            raise HTTPException(status_code=404, detail="Request not found")
+
+        if perm_request.status != 'pending':
+            raise HTTPException(status_code=400, detail="Request already processed")
+
+        # Update request status
+        notes = data.get('notes', '')
+        db.execute(text("""
+            UPDATE permission_requests
+            SET status = 'approved',
+                manager_notes = :notes,
+                decided_by_id = :decided_by,
+                decided_at = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = :request_id
+        """), {
+            'request_id': request_id,
+            'notes': notes,
+            'decided_by': current_user.id
+        })
+
+        # Grant the permission
+        expires_at = None
+        if perm_request.is_temporary and perm_request.duration_days:
+            # Calculate expiration date
+            expires_at = datetime.now(timezone.utc) + timedelta(days=perm_request.duration_days)
+
+        db.execute(text("""
+            INSERT INTO user_permissions (user_id, permission_key, granted, granted_by, granted_at, expires_at, created_at, updated_at)
+            VALUES (:user_id, :permission_key, TRUE, :granted_by, CURRENT_TIMESTAMP, :expires_at, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            ON CONFLICT (user_id, permission_key) DO UPDATE
+            SET granted = TRUE, granted_by = :granted_by, granted_at = CURRENT_TIMESTAMP, expires_at = :expires_at, updated_at = CURRENT_TIMESTAMP
+        """), {
+            'user_id': perm_request.employee_id,
+            'permission_key': perm_request.permission_key,
+            'granted_by': current_user.id,
+            'expires_at': expires_at
+        })
+
+        db.commit()
+
+        logger.info(f"Permission request {request_id} approved by {current_user.email}, granted {perm_request.permission_key} to user {perm_request.employee_id}")
+
+        return {
+            "success": True,
+            "message": "Permission request approved and granted"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Approve permission request error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/v1/permission-requests/{request_id}/deny")
+async def deny_permission_request(
+    request_id: int,
+    data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Manager denies permission request"""
+
+    try:
+        # Check if user is a manager
+        is_manager = current_user.role in ['manager', 'management'] or current_user.permission_role in ['management']
+        if not is_manager:
+            raise HTTPException(status_code=403, detail="Only managers can deny requests")
+
+        # Get the request
+        perm_request = db.execute(text("""
+            SELECT * FROM permission_requests WHERE id = :request_id
+        """), {'request_id': request_id}).fetchone()
+
+        if not perm_request:
+            raise HTTPException(status_code=404, detail="Request not found")
+
+        if perm_request.status != 'pending':
+            raise HTTPException(status_code=400, detail="Request already processed")
+
+        # Validate reason
+        reason = data.get('reason', '')
+        if not reason:
+            raise HTTPException(status_code=400, detail="Reason is required when denying")
+
+        # Update request status
+        db.execute(text("""
+            UPDATE permission_requests
+            SET status = 'denied',
+                manager_notes = :reason,
+                decided_by_id = :decided_by,
+                decided_at = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = :request_id
+        """), {
+            'request_id': request_id,
+            'reason': reason,
+            'decided_by': current_user.id
+        })
+
+        db.commit()
+
+        logger.info(f"Permission request {request_id} denied by {current_user.email}")
+
+        return {
+            "success": True,
+            "message": "Permission request denied"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Deny permission request error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
 # TAB 6: ACCESS & AUDIT - API ENDPOINTS
 # ============================================================================
 
@@ -15764,6 +16113,48 @@ def run_phase2_permission_migration():
         """))
         db.commit()
         logger.info("   ✅ Created user_permissions table")
+
+        # Step 3b: Create enum types for permission_requests
+        db.execute(text("""
+            DO $$ BEGIN
+                CREATE TYPE urgency_enum AS ENUM ('low', 'medium', 'high');
+            EXCEPTION
+                WHEN duplicate_object THEN null;
+            END $$;
+
+            DO $$ BEGIN
+                CREATE TYPE request_status_enum AS ENUM ('pending', 'approved', 'denied', 'more_info_needed');
+            EXCEPTION
+                WHEN duplicate_object THEN null;
+            END $$;
+        """))
+        db.commit()
+        logger.info("   ✅ Created enum types for permission requests")
+
+        # Step 3c: Create permission_requests table
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS permission_requests (
+                id SERIAL PRIMARY KEY,
+                employee_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                permission_key VARCHAR(255) NOT NULL,
+                justification TEXT NOT NULL,
+                urgency urgency_enum DEFAULT 'medium',
+                is_temporary BOOLEAN DEFAULT FALSE,
+                duration_days INTEGER,
+                status request_status_enum DEFAULT 'pending',
+                manager_notes TEXT,
+                decided_by_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                decided_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_permission_requests_employee ON permission_requests(employee_id);
+            CREATE INDEX IF NOT EXISTS idx_permission_requests_status ON permission_requests(status);
+            CREATE INDEX IF NOT EXISTS idx_permission_requests_created ON permission_requests(created_at DESC);
+        """))
+        db.commit()
+        logger.info("   ✅ Created permission_requests table")
 
         # Step 4: Check if templates already exist
         result = db.execute(text("""
