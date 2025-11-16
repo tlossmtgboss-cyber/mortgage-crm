@@ -575,6 +575,74 @@ function ReconciliationCenter() {
                   </div>
                 </div>
 
+                {/* Entity Match Info */}
+                {selectedItem.match_entity_type && selectedItem.match_entity_id && (
+                  <div className="entity-match-section">
+                    <h3>Matched Profile</h3>
+                    <div className="entity-match-card">
+                      <div className="entity-icon">
+                        {selectedItem.match_entity_type === 'lead' ? '👤' :
+                         selectedItem.match_entity_type === 'active_loan' ? '🏠' :
+                         selectedItem.match_entity_type === 'client' ? '👥' : '📋'}
+                      </div>
+                      <div className="entity-details">
+                        <div className="entity-name">
+                          {selectedItem.match_entity_name || `${selectedItem.match_entity_type} #${selectedItem.match_entity_id}`}
+                        </div>
+                        <div className="entity-type">
+                          {selectedItem.match_entity_type === 'active_loan' ? 'Active Loan' :
+                           selectedItem.match_entity_type === 'lead' ? 'Lead' :
+                           selectedItem.match_entity_type === 'client' ? 'Client' :
+                           selectedItem.match_entity_type}
+                        </div>
+                        <div className="entity-confidence">
+                          Match Confidence: {Math.round(selectedItem.match_confidence * 100)}%
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Email Intent Classification */}
+                {selectedItem.email_intent && (
+                  <div className="email-intent-section">
+                    <h3>Email Type Detected</h3>
+                    <div className="intent-card">
+                      <div className="intent-badge">
+                        {selectedItem.email_intent}
+                      </div>
+                      {selectedItem.email_intent_description && (
+                        <div className="intent-description">
+                          {selectedItem.email_intent_description}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Recommended Action */}
+                {selectedItem.recommended_action && (
+                  <div className="recommended-action-section">
+                    <h3>AI Recommendation</h3>
+                    <div className="recommendation-card">
+                      <div className="recommendation-icon">💡</div>
+                      <div className="recommendation-content">
+                        <div className="recommendation-title">
+                          {selectedItem.recommended_action.title || 'Suggested Action'}
+                        </div>
+                        <div className="recommendation-description">
+                          {selectedItem.recommended_action.description}
+                        </div>
+                        {selectedItem.recommended_action.learning_status && (
+                          <div className="learning-status">
+                            🧠 AI Learning: {selectedItem.recommended_action.learning_status}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="extracted-fields">
                   <h3>Extracted Fields</h3>
                   <div className="fields-grid">

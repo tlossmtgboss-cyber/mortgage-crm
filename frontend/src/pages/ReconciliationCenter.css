@@ -406,6 +406,152 @@
   margin-right: var(--space-xs);
 }
 
+/* Entity Match Section */
+.entity-match-section {
+  margin-bottom: var(--space-xl);
+}
+
+.entity-match-section h3 {
+  font-size: var(--font-sm);
+  font-weight: var(--weight-bold);
+  color: var(--color-primary);
+  margin: 0 0 var(--space-sm) 0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.entity-match-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.1) 0%, rgba(124, 58, 237, 0.1) 100%);
+  border: 1px solid rgba(79, 70, 229, 0.3);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+}
+
+.entity-icon {
+  font-size: 32px;
+  flex-shrink: 0;
+}
+
+.entity-details {
+  flex: 1;
+}
+
+.entity-name {
+  font-size: var(--font-base);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-xs);
+}
+
+.entity-type {
+  font-size: var(--font-sm);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--space-xs);
+  text-transform: capitalize;
+}
+
+.entity-confidence {
+  font-size: var(--font-xs);
+  color: var(--color-primary);
+  font-weight: var(--weight-semibold);
+}
+
+/* Email Intent Section */
+.email-intent-section {
+  margin-bottom: var(--space-xl);
+}
+
+.email-intent-section h3 {
+  font-size: var(--font-sm);
+  font-weight: var(--weight-bold);
+  color: var(--color-primary);
+  margin: 0 0 var(--space-sm) 0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.intent-card {
+  background: var(--color-bg-hover);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+}
+
+.intent-badge {
+  display: inline-block;
+  background: var(--color-primary);
+  color: white;
+  padding: var(--space-xs) var(--space-md);
+  border-radius: var(--radius-full);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: var(--space-sm);
+}
+
+.intent-description {
+  font-size: var(--font-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+/* Recommended Action Section */
+.recommended-action-section {
+  margin-bottom: var(--space-xl);
+}
+
+.recommended-action-section h3 {
+  font-size: var(--font-sm);
+  font-weight: var(--weight-bold);
+  color: var(--color-primary);
+  margin: 0 0 var(--space-sm) 0;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.recommendation-card {
+  display: flex;
+  gap: var(--space-md);
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.1) 0%, rgba(255, 193, 7, 0.1) 100%);
+  border: 2px solid rgba(255, 215, 0, 0.3);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+}
+
+.recommendation-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.recommendation-content {
+  flex: 1;
+}
+
+.recommendation-title {
+  font-size: var(--font-base);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-xs);
+}
+
+.recommendation-description {
+  font-size: var(--font-sm);
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  margin-bottom: var(--space-sm);
+}
+
+.learning-status {
+  font-size: var(--font-xs);
+  color: var(--color-primary);
+  font-weight: var(--weight-semibold);
+  font-style: italic;
+}
+
 /* Extracted Fields */
 .extracted-fields {
   margin-bottom: var(--space-xl);

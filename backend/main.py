@@ -3263,6 +3263,141 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
 
     return match_results
 
+def classify_email_intent(subject: str, content: str, fields: Dict[str, Any]) -> Dict[str, Any]:
+    """Classify the intent/type of the email based on subject and content"""
+
+    subject_lower = subject.lower() if subject else ""
+    content_lower = content.lower() if content else ""
+
+    # Clear to Close detection
+    if any(keyword in subject_lower for keyword in ["clear to close", "cleartoclose", "ctc", "clear-to-close"]):
+        return {
+            "intent": "Clear to Close",
+            "description": "Borrower has been cleared to close on their loan",
+            "confidence": 0.95
+        }
+
+    # Appraisal detection
+    if any(keyword in subject_lower for keyword in ["appraisal", "appraisal report", "home appraisal"]):
+        return {
+            "intent": "Appraisal Update",
+            "description": "Appraisal report or update received",
+            "confidence": 0.90
+        }
+
+    # Rate lock detection
+    if any(keyword in subject_lower for keyword in ["rate lock", "lock confirmation", "locked rate"]):
+        return {
+            "intent": "Rate Lock",
+            "description": "Interest rate has been locked for the loan",
+            "confidence": 0.90
+        }
+
+    # Underwriting detection
+    if any(keyword in subject_lower for keyword in ["underwriting", "underwriter", "uw approval", "conditionally approved"]):
+        return {
+            "intent": "Underwriting Update",
+            "description": "Update from underwriting department",
+            "confidence": 0.85
+        }
+
+    # Title/closing detection
+    if any(keyword in subject_lower for keyword in ["title", "closing", "settlement"]):
+        return {
+            "intent": "Title/Closing Update",
+            "description": "Update related to title or closing process",
+            "confidence": 0.80
+        }
+
+    # Generic loan update
+    if "loan_number" in fields or "borrower_name" in fields:
+        return {
+            "intent": "Loan Update",
+            "description": "General loan status update",
+            "confidence": 0.70
+        }
+
+    return {
+        "intent": "General",
+        "description": "General communication",
+        "confidence": 0.50
+    }
+
+def get_entity_name(entity_type: str, entity_id: int, db: Session) -> str:
+    """Get the name of the matched entity"""
+    try:
+        if entity_type == "loan":
+            loan = db.query(Loan).filter(Loan.id == entity_id).first()
+            return loan.borrower_name if loan and loan.borrower_name else f"Loan #{entity_id}"
+        elif entity_type == "lead":
+            lead = db.query(Lead).filter(Lead.id == entity_id).first()
+            return lead.name if lead and lead.name else f"Lead #{entity_id}"
+        elif entity_type == "active_loan":
+            loan = db.query(Loan).filter(Loan.id == entity_id).first()
+            return loan.borrower_name if loan and loan.borrower_name else f"Active Loan #{entity_id}"
+        elif entity_type == "client":
+            # Assuming client is a Lead
+            client = db.query(Lead).filter(Lead.id == entity_id).first()
+            return client.name if client and client.name else f"Client #{entity_id}"
+    except Exception as e:
+        logger.error(f"Error getting entity name: {e}")
+
+    return f"{entity_type} #{entity_id}"
+
+def generate_recommended_action(email_intent: Dict[str, Any], entity_type: str, fields: Dict[str, Any]) -> Dict[str, Any]:
+    """Generate recommended action based on email intent and context"""
+
+    intent = email_intent.get("intent", "General")
+
+    # Clear to Close recommendation
+    if intent == "Clear to Close":
+        return {
+            "title": "Update Status to Clear to Close",
+            "description": "The AI recommends updating the loan status to 'Clear to Close' based on this email notification.",
+            "action_type": "status_update",
+            "action_value": "Clear to Close",
+            "learning_status": "Learning from your approvals to auto-execute in the future"
+        }
+
+    # Appraisal recommendation
+    if intent == "Appraisal Update":
+        return {
+            "title": "Update Appraisal Information",
+            "description": "The AI recommends updating the appraisal value and date in the loan record.",
+            "action_type": "field_update",
+            "action_value": "appraisal_data",
+            "learning_status": "Learning from your approvals to auto-execute in the future"
+        }
+
+    # Rate Lock recommendation
+    if intent == "Rate Lock":
+        return {
+            "title": "Update Rate and Lock Date",
+            "description": "The AI recommends updating the interest rate and lock expiration date.",
+            "action_type": "field_update",
+            "action_value": "rate_lock_data",
+            "learning_status": "Learning from your approvals to auto-execute in the future"
+        }
+
+    # Underwriting recommendation
+    if intent == "Underwriting Update":
+        return {
+            "title": "Update Status to Underwriting",
+            "description": "The AI recommends updating the loan status based on underwriting progress.",
+            "action_type": "status_update",
+            "action_value": "In Underwriting",
+            "learning_status": "Learning from your approvals to auto-execute in the future"
+        }
+
+    # Generic field update
+    return {
+        "title": "Update Loan Information",
+        "description": "The AI recommends applying the extracted data to the matched loan record.",
+        "action_type": "field_update",
+        "action_value": "general",
+        "learning_status": "Learning from your approvals to auto-execute in the future"
+    }
+
 def apply_extracted_data(extracted_data: ExtractedData, db: Session) -> bool:
     """Apply extracted data to CRM entities"""
 
@@ -3828,6 +3963,27 @@ async def get_pending_reconciliation(
                 IncomingDataEvent.id == item.event_id
             ).first()
 
+            # Get entity name if matched
+            entity_name = None
+            if item.match_entity_type and item.match_entity_id:
+                entity_name = get_entity_name(item.match_entity_type, item.match_entity_id, db)
+
+            # Classify email intent
+            email_intent = classify_email_intent(
+                event.subject if event else "",
+                event.raw_text if event else "",
+                item.fields
+            )
+
+            # Generate recommended action
+            recommended_action = None
+            if email_intent.get("confidence", 0) > 0.60:
+                recommended_action = generate_recommended_action(
+                    email_intent,
+                    item.match_entity_type,
+                    item.fields
+                )
+
             results.append({
                 "id": item.id,
                 "event_id": item.event_id,
@@ -3836,6 +3992,7 @@ async def get_pending_reconciliation(
                 "fields": item.fields,
                 "match_entity_type": item.match_entity_type,
                 "match_entity_id": item.match_entity_id,
+                "match_entity_name": entity_name,
                 "match_confidence": item.match_confidence,
                 "ai_confidence": item.ai_confidence,
                 "status": item.status,
@@ -3844,7 +4001,10 @@ async def get_pending_reconciliation(
                     "subject": event.subject,
                     "sender": event.sender,
                     "received_at": event.received_at
-                }
+                },
+                "email_intent": email_intent.get("intent"),
+                "email_intent_description": email_intent.get("description"),
+                "recommended_action": recommended_action
             })
 
         logger.info(f"Retrieved {len(results)} pending reconciliation items for user {current_user.id}")
@@ -3891,6 +4051,27 @@ async def get_completed_reconciliation(
                 reviewer = db.query(User).filter(User.id == item.reviewed_by).first()
                 reviewer_name = reviewer.full_name if reviewer else "Unknown"
 
+            # Get entity name if matched
+            entity_name = None
+            if item.match_entity_type and item.match_entity_id:
+                entity_name = get_entity_name(item.match_entity_type, item.match_entity_id, db)
+
+            # Classify email intent
+            email_intent = classify_email_intent(
+                event.subject if event else "",
+                event.raw_text if event else "",
+                item.fields
+            )
+
+            # Generate recommended action
+            recommended_action = None
+            if email_intent.get("confidence", 0) > 0.60:
+                recommended_action = generate_recommended_action(
+                    email_intent,
+                    item.match_entity_type,
+                    item.fields
+                )
+
             results.append({
                 "id": item.id,
                 "event_id": item.event_id,
@@ -3899,6 +4080,7 @@ async def get_completed_reconciliation(
                 "fields": item.fields,
                 "match_entity_type": item.match_entity_type,
                 "match_entity_id": item.match_entity_id,
+                "match_entity_name": entity_name,
                 "match_confidence": item.match_confidence,
                 "ai_confidence": item.ai_confidence,
                 "status": item.status,
@@ -3909,7 +4091,10 @@ async def get_completed_reconciliation(
                     "subject": event.subject if event else None,
                     "sender": event.sender if event else None,
                     "received_at": event.received_at if event else None
-                }
+                },
+                "email_intent": email_intent.get("intent"),
+                "email_intent_description": email_intent.get("description"),
+                "recommended_action": recommended_action
             })
 
         # Get total count for pagination
