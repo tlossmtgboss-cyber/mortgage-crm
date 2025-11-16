@@ -3352,18 +3352,75 @@ async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Ses
 
         logger.info(f"Ingested NEW Microsoft email {db_event.id} from {sender} (msg_id: {message_id[:20]}...)")
 
-        # Trigger extraction
+        # Check AI provider setting
+        ai_provider = os.getenv("AI_PROVIDER", "openai").lower()
+
+        # Trigger extraction with Claude or legacy OpenAI
         content = raw_text or raw_html or ""
-        classification = classify_email_content(content, subject)
+
+        if ai_provider == "claude":
+            # Use Claude for superior extraction (97-99% accuracy)
+            from ai_providers.claude_parser import get_claude_parser
+
+            logger.info(f"🤖 Using Claude parser for email {db_event.id}")
+
+            # Format email for Claude parser
+            claude_email_data = {
+                "id": message_id,
+                "subject": subject,
+                "from_email": sender,
+                "body_text": raw_text,
+                "body_html": raw_html,
+                "received_at": received_at
+            }
+
+            # Get Claude parser and classify
+            parser = get_claude_parser()
+            profile_type = parser.classify_email(claude_email_data)
+
+            logger.info(f"📧 Email classified as: {profile_type}")
+
+            # Parse with Claude
+            parsed_result = await parser.parse_email(
+                claude_email_data,
+                profile_type,
+                current_profile=None
+            )
+
+            # Map Claude result to DRE format
+            fields = parsed_result.get('extracted_fields', {})
+            avg_confidence = parsed_result.get('overall_confidence', 0) / 100.0  # Convert to 0-1
+            classification = {
+                "category": profile_type,
+                "subcategory": parsed_result.get('email_summary', ''),
+                "confidence": avg_confidence
+            }
+
+            logger.info(f"✅ Claude extracted {len(fields)} fields with {avg_confidence*100:.1f}% confidence")
+        else:
+            # Legacy OpenAI extraction
+            logger.info(f"⚙️  Using legacy OpenAI parser for email {db_event.id}")
+            classification = classify_email_content(content, subject)
+            fields = extract_loan_fields(content, classification["category"]) if classification["category"] != "unrelated" and classification["confidence"] >= 0.3 else {}
+            avg_confidence = classification["confidence"]
 
         # More lenient extraction - lower confidence threshold and allow emails with no fields
         # This ensures all emails appear in Reconciliation for user review and AI learning
-        if classification["category"] != "unrelated" and classification["confidence"] >= 0.3:
-            fields = extract_loan_fields(content, classification["category"])
+        if classification["category"] != "unrelated" and classification.get("confidence", 0) >= 0.3:
+            if not fields:
+                # Extract fields if not already done (OpenAI path)
+                fields = extract_loan_fields(content, classification["category"])
 
             # Create extracted_data even if no fields found - user can manually review
-            confidences = [field.get("confidence", 0.0) for field in fields.values()] if fields else []
-            avg_confidence = sum(confidences) / len(confidences) if confidences else classification["confidence"]
+            # Handle different confidence formats (Claude vs OpenAI)
+            if ai_provider == "claude":
+                # Claude already calculated avg_confidence
+                # Confidence is already set from parsed_result (0-1 scale)
+                pass
+            else:
+                # Legacy OpenAI format - fields contain {"confidence": ...} dicts
+                confidences = [field.get("confidence", 0.0) for field in fields.values()] if fields else []
+                avg_confidence = sum(confidences) / len(confidences) if confidences else classification["confidence"]
 
             entity_match = match_entity(fields, db, user_id) if fields else {"entity_type": None, "entity_id": None, "confidence": 0.0}
 
