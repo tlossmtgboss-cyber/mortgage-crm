@@ -3522,9 +3522,56 @@ async def extract_email_data(
         content = event.raw_text or event.raw_html or ""
         subject = event.subject or ""
 
-        classification = classify_email_content(content, subject)
+        # Check AI provider setting
+        ai_provider = os.getenv("AI_PROVIDER", "openai").lower()
 
-        if classification["category"] == "unrelated" or classification["confidence"] < 0.5:
+        if ai_provider == "claude":
+            # Use Claude for superior extraction (97-99% accuracy)
+            from ai_providers.claude_parser import get_claude_parser
+
+            logger.info(f"🤖 Using Claude parser for event {event_id}")
+
+            # Format for Claude
+            claude_email_data = {
+                "id": str(event.id),
+                "subject": subject,
+                "from_email": event.sender,
+                "body_text": event.raw_text,
+                "body_html": event.raw_html,
+            }
+
+            # Get Claude parser and classify
+            parser = get_claude_parser()
+            profile_type = parser.classify_email(claude_email_data)
+
+            logger.info(f"📧 Event {event_id} classified as: {profile_type}")
+
+            # Parse with Claude
+            parsed_result = await parser.parse_email(
+                claude_email_data,
+                profile_type,
+                current_profile=None
+            )
+
+            # Map Claude result to DRE format
+            fields = parsed_result.get('extracted_fields', {})
+            avg_confidence = parsed_result.get('overall_confidence', 0) / 100.0  # Convert to 0-1
+            classification = {
+                "category": profile_type,
+                "subcategory": parsed_result.get('email_summary', ''),
+                "confidence": avg_confidence
+            }
+
+            logger.info(f"✅ Claude extracted {len(fields)} fields with {avg_confidence*100:.1f}% confidence")
+        else:
+            # Legacy OpenAI extraction
+            logger.info(f"⚙️  Using legacy OpenAI parser for event {event_id}")
+            classification = classify_email_content(content, subject)
+            fields = extract_loan_fields(content, classification["category"]) if classification["category"] != "unrelated" and classification["confidence"] >= 0.5 else {}
+            confidences = [field.get("confidence", 0.0) for field in fields.values()] if fields else []
+            avg_confidence = sum(confidences) / len(confidences) if confidences else classification["confidence"]
+
+        if classification["category"] == "unrelated" or classification.get("confidence", 0) < 0.5:
             event.processed = True
             db.commit()
             return {
@@ -3532,9 +3579,6 @@ async def extract_email_data(
                 "reason": "Email classified as unrelated or low confidence",
                 "classification": classification
             }
-
-        # Extract fields
-        fields = extract_loan_fields(content, classification["category"])
 
         if not fields:
             event.processed = True
@@ -3545,9 +3589,7 @@ async def extract_email_data(
                 "classification": classification
             }
 
-        # Calculate overall AI confidence
-        confidences = [field.get("confidence", 0.0) for field in fields.values()]
-        avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
+        # avg_confidence already calculated above
 
         # Match entity
         entity_match = match_entity(fields, db, current_user.id)
