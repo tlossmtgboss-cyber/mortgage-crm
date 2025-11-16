@@ -1,10 +1,12 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { usePermissions } from '../contexts/PermissionContext';
 import './Navigation.css';
 
 function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen, taskCounts = {} }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const { userRole } = usePermissions();
 
   const isActive = (path) => location.pathname === path;
 
@@ -67,18 +69,26 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
           >
             Calendar
           </Link>
-          <Link
-            to="/scorecard"
-            className={`nav-link ${isActive('/scorecard') ? 'active' : ''}`}
-          >
-            Scorecard
-          </Link>
-          <Link
-            to="/referral-partners"
-            className={`nav-link ${isActive('/referral-partners') ? 'active' : ''}`}
-          >
-            Partners {renderBadge(taskCounts.partners)}
-          </Link>
+
+          {/* PHASE 4: Scorecard only visible to Management */}
+          {userRole === 'management' && (
+            <Link
+              to="/scorecard"
+              className={`nav-link ${isActive('/scorecard') ? 'active' : ''}`}
+            >
+              Scorecard
+            </Link>
+          )}
+
+          {/* PHASE 4: Partners only visible to Management */}
+          {userRole === 'management' && (
+            <Link
+              to="/referral-partners"
+              className={`nav-link ${isActive('/referral-partners') ? 'active' : ''}`}
+            >
+              Partners {renderBadge(taskCounts.partners)}
+            </Link>
+          )}
           <Link
             to="/ai-underwriter"
             className={`nav-link ${isActive('/ai-underwriter') ? 'active' : ''}`}

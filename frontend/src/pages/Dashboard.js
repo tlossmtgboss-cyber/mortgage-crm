@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { usePermissions } from '../contexts/PermissionContext';
 import './Dashboard.css';
 
 function Dashboard() {
   const navigate = useNavigate();
+  const { hasPermission, userRole } = usePermissions();
   const [loading, setLoading] = useState(true);
 
   // Dashboard data states
@@ -258,6 +260,11 @@ function Dashboard() {
     }
 
     if (containerId === 'production-tracker') {
+      // PHASE 4: Only show for Sales and Management roles (NOT Operations)
+      if (userRole === 'operations') {
+        return null;
+      }
+
       return (
         <div
           key={containerId}
@@ -407,6 +414,11 @@ function Dashboard() {
     }
 
     if (containerId === 'efficiency') {
+      // PHASE 4: Only show for Operations and Management roles (NOT Sales)
+      if (userRole === 'sales') {
+        return null;
+      }
+
       return (
         <div
           key={containerId}
@@ -589,6 +601,11 @@ function Dashboard() {
     }
 
     if (containerId === 'referrals') {
+      // PHASE 4: Only show for Sales and Management roles (NOT Operations)
+      if (userRole === 'operations') {
+        return null;
+      }
+
       return (
         <div
           key={containerId}
@@ -641,6 +658,11 @@ function Dashboard() {
     }
 
     if (containerId === 'team' && teamStats.has_team) {
+      // PHASE 4: Only show for Sales and Management roles (NOT Operations for now)
+      if (userRole === 'operations') {
+        return null;
+      }
+
       return (
         <div
           key={containerId}

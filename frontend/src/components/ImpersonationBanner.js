@@ -59,6 +59,19 @@ function ImpersonationBanner() {
   const impersonatedUser = getImpersonatedUser();
   if (!impersonatedUser) return null;
 
+  // PHASE 4: Format permission role for display
+  const formatRole = (role) => {
+    if (!role) return 'Unknown Role';
+
+    const roleMap = {
+      'management': 'Management Role',
+      'sales': 'Sales Role',
+      'operations': 'Operations Role'
+    };
+
+    return roleMap[role.toLowerCase()] || role;
+  };
+
   return (
     <div className="impersonation-banner">
       <div className="banner-content">
@@ -75,7 +88,7 @@ function ImpersonationBanner() {
             {impersonatedUser.first_name} {impersonatedUser.last_name}
           </span>
           <span className="separator">•</span>
-          <span className="user-role">{impersonatedUser.role}</span>
+          <span className="user-role">{formatRole(impersonatedUser.permission_role || impersonatedUser.role)}</span>
           <span className="separator">•</span>
           <span className={`timer ${timeLeft < 300 ? 'warning' : ''}`}>
             {formatTime(timeLeft)} remaining

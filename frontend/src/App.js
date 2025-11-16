@@ -2,6 +2,7 @@ import { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { isAuthenticated } from './utils/auth';
 import { ImpersonationProvider } from './contexts/ImpersonationContext';
+import { PermissionProvider } from './contexts/PermissionContext';
 import Navigation from './components/Navigation';
 import AIAssistant from './components/AIAssistant';
 import CoachCorner from './components/CoachCorner';
@@ -197,9 +198,10 @@ function App() {
   return (
     <ErrorBoundary>
       <ImpersonationProvider>
-        <Router>
-          <ImpersonationBanner />
-          <div className="app">
+        <PermissionProvider>
+          <Router>
+            <ImpersonationBanner />
+            <div className="app">
         <Routes>
           {/* Public routes */}
           <Route path="/" element={<LandingPage />} />
@@ -850,6 +852,7 @@ function App() {
           <ErrorTestButton />
         </div>
       </Router>
+        </PermissionProvider>
       </ImpersonationProvider>
     </ErrorBoundary>
   );
