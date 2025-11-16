@@ -6,6 +6,156 @@ function PipelineEfficiency() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState('30days'); // 7days, 30days, 90days, year
+  const [selectedBottleneck, setSelectedBottleneck] = useState(null);
+  const [showDrilldownModal, setShowDrilldownModal] = useState(false);
+
+  // Mock affected loans data - keyed by bottleneck ID
+  const affectedLoansData = {
+    1: [ // Missing Documents
+      {
+        id: 1001,
+        borrowerName: 'Sarah Johnson',
+        loanNumber: 'L-2024-001',
+        loanAmount: 425000,
+        currentStage: 'Processing',
+        processor: 'John Smith',
+        missingItems: ['Pay Stubs (last 2 months)', 'Bank Statements', 'W-2 Forms (2023)'],
+        daysDelayed: 5
+      },
+      {
+        id: 1002,
+        borrowerName: 'Michael Chen',
+        loanNumber: 'L-2024-012',
+        loanAmount: 380000,
+        currentStage: 'Processing',
+        processor: 'Jane Doe',
+        missingItems: ['Tax Returns (2022-2023)', 'Proof of Assets'],
+        daysDelayed: 4
+      },
+      {
+        id: 1003,
+        borrowerName: 'Emily Rodriguez',
+        loanNumber: 'L-2024-018',
+        loanAmount: 295000,
+        currentStage: 'Processing',
+        processor: 'John Smith',
+        missingItems: ['Employment Verification', 'HOA Documents'],
+        daysDelayed: 3
+      },
+      {
+        id: 1004,
+        borrowerName: 'David Martinez',
+        loanNumber: 'L-2024-023',
+        loanAmount: 550000,
+        currentStage: 'Processing',
+        processor: 'Jane Doe',
+        missingItems: ['Gift Letter', 'Source of Funds Documentation'],
+        daysDelayed: 6
+      },
+      {
+        id: 1005,
+        borrowerName: 'Jennifer Lee',
+        loanNumber: 'L-2024-029',
+        loanAmount: 340000,
+        currentStage: 'Processing',
+        processor: 'John Smith',
+        missingItems: ['Divorce Decree', 'Child Support Documentation'],
+        daysDelayed: 4
+      },
+      {
+        id: 1006,
+        borrowerName: 'Robert Taylor',
+        loanNumber: 'L-2024-031',
+        loanAmount: 620000,
+        currentStage: 'Processing',
+        processor: 'Jane Doe',
+        missingItems: ['Business Tax Returns', 'Profit & Loss Statement'],
+        daysDelayed: 5
+      },
+      {
+        id: 1007,
+        borrowerName: 'Amanda Wilson',
+        loanNumber: 'L-2024-035',
+        loanAmount: 475000,
+        currentStage: 'Processing',
+        processor: 'John Smith',
+        missingItems: ['Homeowners Insurance', 'Property Appraisal'],
+        daysDelayed: 3
+      },
+      {
+        id: 1008,
+        borrowerName: 'James Brown',
+        loanNumber: 'L-2024-037',
+        loanAmount: 410000,
+        currentStage: 'Processing',
+        processor: 'Jane Doe',
+        missingItems: ['Retirement Account Statements', 'Investment Documentation'],
+        daysDelayed: 7
+      }
+    ],
+    2: [ // Income Verification Delays
+      {
+        id: 2001,
+        borrowerName: 'Lisa Anderson',
+        loanNumber: 'L-2024-008',
+        loanAmount: 385000,
+        currentStage: 'Pre-Qualification',
+        processor: 'John Smith',
+        missingItems: ['Employer Verification Response'],
+        daysDelayed: 4
+      },
+      {
+        id: 2002,
+        borrowerName: 'Christopher Garcia',
+        loanNumber: 'L-2024-015',
+        loanAmount: 290000,
+        currentStage: 'Pre-Qualification',
+        processor: 'Jane Doe',
+        missingItems: ['Employment Letter', 'Salary Confirmation'],
+        daysDelayed: 3
+      },
+      {
+        id: 2003,
+        borrowerName: 'Patricia Moore',
+        loanNumber: 'L-2024-022',
+        loanAmount: 445000,
+        currentStage: 'Pre-Qualification',
+        processor: 'John Smith',
+        missingItems: ['Commission Income Verification'],
+        daysDelayed: 5
+      },
+      {
+        id: 2004,
+        borrowerName: 'Daniel Thomas',
+        loanNumber: 'L-2024-026',
+        loanAmount: 315000,
+        currentStage: 'Pre-Qualification',
+        processor: 'Jane Doe',
+        missingItems: ['Self-Employment Verification'],
+        daysDelayed: 2
+      },
+      {
+        id: 2005,
+        borrowerName: 'Nancy Jackson',
+        loanNumber: 'L-2024-033',
+        loanAmount: 520000,
+        currentStage: 'Pre-Qualification',
+        processor: 'John Smith',
+        missingItems: ['Bonus Income Documentation'],
+        daysDelayed: 3
+      },
+      {
+        id: 2006,
+        borrowerName: 'Kevin White',
+        loanNumber: 'L-2024-039',
+        loanAmount: 360000,
+        currentStage: 'Pre-Qualification',
+        processor: 'Jane Doe',
+        missingItems: ['Overtime Income Verification'],
+        daysDelayed: 4
+      }
+    ]
+  };
 
   // Mock data - in production this would come from API
   const [efficiencyData, setEfficiencyData] = useState({
@@ -230,6 +380,30 @@ function PipelineEfficiency() {
     }
   };
 
+  const handleBottleneckClick = (bottleneck) => {
+    setSelectedBottleneck(bottleneck);
+    setShowDrilldownModal(true);
+  };
+
+  const handleCloseDrilldown = () => {
+    setShowDrilldownModal(false);
+    setSelectedBottleneck(null);
+  };
+
+  const handleCreateTask = (loan) => {
+    alert(`Creating task for ${loan.processor} to follow up on loan ${loan.loanNumber} for borrower ${loan.borrowerName}`);
+    // In production, this would call the AI task creation API
+  };
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount);
+  };
+
   if (loading) {
     return (
       <div className="efficiency-page">
@@ -399,7 +573,12 @@ function PipelineEfficiency() {
           <h2>Active Bottlenecks & Recommendations</h2>
           <div className="bottlenecks-list">
             {efficiencyData.bottlenecks.map((bottleneck) => (
-              <div key={bottleneck.id} className={`bottleneck-card severity-${bottleneck.severity}`}>
+              <div
+                key={bottleneck.id}
+                className={`bottleneck-card severity-${bottleneck.severity} clickable`}
+                onClick={() => handleBottleneckClick(bottleneck)}
+                style={{ cursor: 'pointer' }}
+              >
                 <div className="bottleneck-header">
                   <div className="bottleneck-title">
                     <span className="severity-icon">{getSeverityIcon(bottleneck.severity)}</span>
@@ -419,6 +598,9 @@ function PipelineEfficiency() {
                 </div>
                 <div className="bottleneck-action">
                   <strong>Suggested Action:</strong> {bottleneck.suggestedAction}
+                </div>
+                <div className="click-to-view">
+                  Click to view affected loans →
                 </div>
               </div>
             ))}
@@ -462,6 +644,80 @@ function PipelineEfficiency() {
         </div>
 
       </div>
+
+      {/* Drill-down Modal */}
+      {showDrilldownModal && selectedBottleneck && (
+        <div className="drilldown-modal-overlay" onClick={handleCloseDrilldown}>
+          <div className="drilldown-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="drilldown-header">
+              <div>
+                <h2>{selectedBottleneck.issue}</h2>
+                <p className="drilldown-subtitle">
+                  {selectedBottleneck.stage} • {selectedBottleneck.affectedLoans} Affected Loans
+                </p>
+              </div>
+              <button className="btn-close-modal" onClick={handleCloseDrilldown}>
+                ✕
+              </button>
+            </div>
+
+            <div className="drilldown-content">
+              {affectedLoansData[selectedBottleneck.id] ? (
+                <div className="affected-loans-list">
+                  {affectedLoansData[selectedBottleneck.id].map((loan) => (
+                    <div key={loan.id} className="affected-loan-card">
+                      <div className="loan-card-header">
+                        <div>
+                          <h3>{loan.borrowerName}</h3>
+                          <p className="loan-number">{loan.loanNumber}</p>
+                        </div>
+                        <div className="loan-amount">{formatCurrency(loan.loanAmount)}</div>
+                      </div>
+
+                      <div className="loan-card-info">
+                        <div className="loan-info-row">
+                          <span className="info-label">Current Stage:</span>
+                          <span className="info-value">{loan.currentStage}</span>
+                        </div>
+                        <div className="loan-info-row">
+                          <span className="info-label">Assigned Processor:</span>
+                          <span className="info-value">{loan.processor}</span>
+                        </div>
+                        <div className="loan-info-row">
+                          <span className="info-label">Days Delayed:</span>
+                          <span className="info-value delay-warning">{loan.daysDelayed} days</span>
+                        </div>
+                      </div>
+
+                      <div className="missing-items-section">
+                        <h4>Missing Items:</h4>
+                        <ul className="missing-items-list">
+                          {loan.missingItems.map((item, idx) => (
+                            <li key={idx}>{item}</li>
+                          ))}
+                        </ul>
+                      </div>
+
+                      <div className="loan-card-actions">
+                        <button
+                          className="btn-create-task"
+                          onClick={() => handleCreateTask(loan)}
+                        >
+                          🤖 Create AI Task for {loan.processor}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="no-data">
+                  <p>No detailed loan data available for this bottleneck.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
