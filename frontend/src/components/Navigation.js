@@ -153,6 +153,15 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
               👥 Team
             </Link>
           )}
+          {(userRole === 'management' || userRole === 'admin') && (
+            <Link
+              to="/admin/settings"
+              className={`nav-link ${isActive('/admin/settings') ? 'active' : ''}`}
+              title="Admin Settings"
+            >
+              🔧 Admin
+            </Link>
+          )}
           <Link
             to="/settings"
             className={`settings-link ${isActive('/settings') ? 'active' : ''}`}
