@@ -193,21 +193,21 @@ Try these scenarios:
 
 ### Test 1: Existing Customer Recognition
 1. Call from a phone number that's already in the CRM
-2. Harry should recognize you and greet you by name
+2. Sam should recognize you and greet you by name
 
 ### Test 2: Schedule a Callback
 Say: "Can someone call me back tomorrow at 2 PM?"
-- Harry should create a task for the team
+- Sam should create a task for the team
 - Check the Tasks page in the CRM to verify
 
 ### Test 3: Schedule an Appointment
 Say: "I'd like to schedule a meeting with a loan officer"
-- Harry should offer available time slots
+- Sam should offer available time slots
 - After you choose, check Activities and Tasks in the CRM
 
 ### Test 4: Update Lead Information
 Say: "I'm interested in a conventional loan for a $500,000 home in Austin"
-- Harry should update your lead record with these details
+- Sam should update your lead record with these details
 - Check the lead's notes in the CRM
 
 ## Monitoring Function Calls
@@ -218,7 +218,7 @@ To see function calling in action:
 2. Navigate to **Calls** after making a test call
 3. Click on your call to see the transcript
 4. Look for function calls in the **Events** section
-5. You should see when Harry called functions and the responses
+5. You should see when Sam called functions and the responses
 
 ## Troubleshooting
 
@@ -238,14 +238,14 @@ To see function calling in action:
     -d '{"phone_number": "+18326482297"}'
   ```
 
-**Harry not recognizing existing leads?**
+**Sam not recognizing existing leads?**
 - Make sure you have leads with phone numbers in your CRM
 - Phone number matching works with or without formatting
 - Check that the phone number in the CRM matches the caller ID
 
 ## What Happens During a Call
 
-1. **Call starts** → Harry greets the caller
+1. **Call starts** → Sam greets the caller
 2. **First action** → Calls `get_lead_info` to check for existing customer
 3. **If found** → Personalizes greeting with their name and information
 4. **During conversation** → Calls functions as needed:
@@ -269,6 +269,6 @@ With function calling enabled:
 
 After testing, consider:
 - Training your team on how to review AI-scheduled appointments
-- Setting up notifications for high-priority tasks created by Harry
-- Reviewing call transcripts to improve Harry's prompts
+- Setting up notifications for high-priority tasks created by Sam
+- Reviewing call transcripts to improve Sam's prompts
 - Adding more functions for specific workflows
