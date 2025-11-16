@@ -428,14 +428,15 @@ def run_migration():
         management_perms = get_management_permissions()
         conn.execute(text("""
             INSERT INTO permission_templates
-            (name, description, permissions, is_system_default, created_by, created_at)
+            (name, description, permissions, is_system_default, category, created_by, created_at)
             VALUES
-            (:name, :description, :permissions::jsonb, :is_system, 1, :created_at)
+            (:name, :description, CAST(:permissions AS jsonb), :is_system, :category, 1, :created_at)
         """), {
             'name': 'Management',
             'description': 'Full access template for management and leadership roles. Includes all permissions for team management, reports, settings, and system administration.',
             'permissions': json.dumps(management_perms),
             'is_system': True,
+            'category': 'management',
             'created_at': datetime.utcnow()
         })
 
@@ -444,14 +445,15 @@ def run_migration():
         sales_perms = get_sales_permissions()
         conn.execute(text("""
             INSERT INTO permission_templates
-            (name, description, permissions, is_system_default, created_by, created_at)
+            (name, description, permissions, is_system_default, category, created_by, created_at)
             VALUES
-            (:name, :description, :permissions::jsonb, :is_system, 1, :created_at)
+            (:name, :description, CAST(:permissions AS jsonb), :is_system, :category, 1, :created_at)
         """), {
             'name': 'Sales',
             'description': 'Sales-focused template for sales representatives and account executives. Full access to assigned leads, clients, and sales features. Limited visibility to operations and settings.',
             'permissions': json.dumps(sales_perms),
             'is_system': True,
+            'category': 'sales',
             'created_at': datetime.utcnow()
         })
 
@@ -460,14 +462,15 @@ def run_migration():
         operations_perms = get_operations_permissions()
         conn.execute(text("""
             INSERT INTO permission_templates
-            (name, description, permissions, is_system_default, created_by, created_at)
+            (name, description, permissions, is_system_default, category, created_by, created_at)
             VALUES
-            (:name, :description, :permissions::jsonb, :is_system, 1, :created_at)
+            (:name, :description, CAST(:permissions AS jsonb), :is_system, :category, 1, :created_at)
         """), {
             'name': 'Operations',
             'description': 'Operations-focused template for loan processors, underwriters, and operations staff. Full access to loan processing, document management, and compliance features. Limited sales visibility.',
             'permissions': json.dumps(operations_perms),
             'is_system': True,
+            'category': 'operations',
             'created_at': datetime.utcnow()
         })
 
