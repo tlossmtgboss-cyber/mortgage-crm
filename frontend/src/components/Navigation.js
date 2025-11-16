@@ -56,6 +56,12 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
             Tasks {renderBadge(taskCounts.tasks)}
           </Link>
           <Link
+            to="/reconciliation"
+            className={`nav-link ${isActive('/reconciliation') ? 'active' : ''}`}
+          >
+            Reconciliation {renderBadge(taskCounts.reconciliation)}
+          </Link>
+          <Link
             to="/calendar"
             className={`nav-link ${isActive('/calendar') ? 'active' : ''}`}
           >
