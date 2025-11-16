@@ -117,6 +117,115 @@
       },
       "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/available-time-slots",
       "method": "GET"
+    },
+    {
+      "name": "submit_preapproval_application",
+      "description": "Submit a pre-approval application collected over the phone. Use this when the caller wants to apply for mortgage pre-approval.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "phone_number": {
+            "type": "string",
+            "description": "Caller's phone number"
+          },
+          "first_name": {
+            "type": "string",
+            "description": "First name"
+          },
+          "last_name": {
+            "type": "string",
+            "description": "Last name"
+          },
+          "email": {
+            "type": "string",
+            "description": "Email address"
+          },
+          "location": {
+            "type": "string",
+            "description": "Property location (city, state)"
+          },
+          "price_target": {
+            "type": "string",
+            "description": "Purchase price or property value"
+          },
+          "down_payment": {
+            "type": "string",
+            "description": "Down payment amount"
+          },
+          "household_income": {
+            "type": "string",
+            "description": "Annual household income"
+          },
+          "credit_range": {
+            "type": "string",
+            "enum": ["760+", "740-759", "700-739", "660-699", "620-659", "<620", "Unsure"],
+            "description": "Credit score range"
+          },
+          "employment_type": {
+            "type": "string",
+            "description": "Employment type (W2, Self-Employed, etc.)"
+          },
+          "first_time_buyer": {
+            "type": "string",
+            "description": "Yes or No - first-time homebuyer status"
+          },
+          "timeframe": {
+            "type": "string",
+            "description": "Timeline for purchase (0-30 days, 31-60 days, etc.)"
+          },
+          "occupancy": {
+            "type": "string",
+            "description": "Primary Residence, Investment Property, or Second Home"
+          },
+          "va_eligible": {
+            "type": "string",
+            "description": "VA loan eligible (Yes/No)"
+          },
+          "employer": {
+            "type": "string",
+            "description": "Current employer name"
+          },
+          "has_agent": {
+            "type": "string",
+            "description": "Do they have a real estate agent (Yes/No)"
+          },
+          "agent_name": {
+            "type": "string",
+            "description": "Real estate agent name if applicable"
+          },
+          "notes": {
+            "type": "string",
+            "description": "Additional notes about the application"
+          }
+        },
+        "required": ["phone_number", "first_name", "last_name"]
+      },
+      "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/submit-preapproval-application",
+      "method": "POST"
+    },
+    {
+      "name": "schedule_calendly_appointment",
+      "description": "Provide Calendly scheduling link for discovery call. Use this when the caller wants to schedule an appointment or consultation.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "phone_number": {
+            "type": "string",
+            "description": "Caller's phone number"
+          },
+          "name": {
+            "type": "string",
+            "description": "Caller's full name"
+          },
+          "email": {
+            "type": "string",
+            "description": "Caller's email address"
+          }
+        },
+        "required": ["phone_number"]
+      },
+      "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/schedule-calendly-appointment",
+      "method": "POST"
     }
   ],
   "server_url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions",

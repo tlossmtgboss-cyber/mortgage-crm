@@ -541,6 +541,218 @@ async def available_time_slots_function(
         return {"success": False, "error": str(e)}
 
 
+@router.post("/functions/submit-preapproval-application")
+async def submit_preapproval_application_function(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Submit pre-approval application collected over the phone
+    Called by Vapi when customer wants to apply for pre-approval
+    """
+    try:
+        from main import Lead, Task
+        from sqlalchemy import or_
+        from datetime import datetime, timezone
+
+        data = await request.json()
+
+        # Required fields
+        phone = data.get("phone_number")
+        first_name = data.get("first_name")
+        last_name = data.get("last_name")
+        email = data.get("email")
+
+        if not phone or not first_name or not last_name:
+            return {"success": False, "error": "Phone, first name, and last name are required"}
+
+        # Clean phone number
+        phone_clean = ''.join(filter(str.isdigit, phone))
+
+        # Find or create lead
+        lead = db.query(Lead).filter(
+            or_(
+                Lead.phone == phone,
+                Lead.phone.contains(phone_clean[-10:])
+            )
+        ).first()
+
+        if not lead:
+            # Create new lead
+            lead = Lead(
+                first_name=first_name,
+                last_name=last_name,
+                name=f"{first_name} {last_name}",
+                email=email,
+                phone=phone,
+                source="AI Phone Call",
+                stage="Application Started",
+                owner_id=1  # Default to first user
+            )
+            db.add(lead)
+            db.flush()
+        else:
+            # Update existing lead
+            if email:
+                lead.email = email
+            lead.first_name = first_name
+            lead.last_name = last_name
+            lead.name = f"{first_name} {last_name}"
+            if lead.stage in ["New", "Attempted Contact", "Prospect"]:
+                lead.stage = "Application Started"
+
+        # Collect application data
+        application_data = {
+            # Contact info
+            "first_name": first_name,
+            "last_name": last_name,
+            "email": email or lead.email,
+            "phone": phone,
+            "preferred_contact": data.get("preferred_contact", "Phone"),
+
+            # Scenario
+            "occupancy": data.get("occupancy", "Primary Residence"),
+            "timeframe": data.get("timeframe"),
+            "location": data.get("location"),
+
+            # Budget
+            "price_target": data.get("price_target"),
+            "down_payment": data.get("down_payment"),
+            "monthly_comfort": data.get("monthly_comfort"),
+
+            # Profile
+            "credit_range": data.get("credit_range"),
+            "first_time_buyer": data.get("first_time_buyer"),
+            "va_eligible": data.get("va_eligible"),
+            "employment_type": data.get("employment_type"),
+            "household_income": data.get("household_income"),
+            "employer": data.get("employer"),
+
+            # Preferences
+            "has_agent": data.get("has_agent"),
+            "agent_name": data.get("agent_name"),
+            "letter_type": data.get("letter_type", "Full Pre-Approval"),
+
+            # Notes
+            "notes": data.get("notes", "Application submitted via AI phone call"),
+            "source": "AI Phone Call"
+        }
+
+        # Store application data in lead metadata
+        if not lead.metadata:
+            lead.metadata = {}
+        lead.metadata["phone_application"] = application_data
+        lead.metadata["application_date"] = datetime.now(timezone.utc).isoformat()
+
+        # Create a task for the loan officer to review the application
+        task = Task(
+            title=f"Review Phone Pre-Approval Application: {lead.name}",
+            description=f"Pre-approval application collected via AI phone call. Review and complete application in system.\n\nCollected information:\n" +
+                       "\n".join([f"- {k.replace('_', ' ').title()}: {v}" for k, v in application_data.items() if v]),
+            status="pending",
+            priority="high",
+            lead_id=lead.id,
+            owner_id=lead.owner_id,
+            related_contact_name=lead.name,
+            related_type="application"
+        )
+
+        db.add(task)
+        db.commit()
+        db.refresh(lead)
+        db.refresh(task)
+
+        return {
+            "success": True,
+            "message": "Pre-approval application submitted successfully",
+            "lead_id": lead.id,
+            "task_id": task.id,
+            "next_steps": "A loan officer will review your application and contact you within 24 hours"
+        }
+
+    except Exception as e:
+        logger.error(f"Error in submit_preapproval_application_function: {e}")
+        db.rollback()
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/functions/schedule-calendly-appointment")
+async def schedule_calendly_appointment_function(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Provide Calendly link for scheduling discovery call
+    Called by Vapi when customer wants to schedule an appointment
+    """
+    try:
+        from main import Lead, Task, Activity, ActivityType
+        from sqlalchemy import or_
+
+        data = await request.json()
+        phone = data.get("phone_number")
+        name = data.get("name", "")
+        email = data.get("email", "")
+
+        if not phone:
+            return {"success": False, "error": "Phone number required"}
+
+        # Clean phone number
+        phone_clean = ''.join(filter(str.isdigit, phone))
+
+        # Find or create lead
+        lead = db.query(Lead).filter(
+            or_(
+                Lead.phone == phone,
+                Lead.phone.contains(phone_clean[-10:])
+            )
+        ).first()
+
+        if not lead and name:
+            # Create new lead
+            parts = name.split(' ', 1)
+            first_name = parts[0]
+            last_name = parts[1] if len(parts) > 1 else ""
+
+            lead = Lead(
+                first_name=first_name,
+                last_name=last_name,
+                name=name,
+                email=email,
+                phone=phone,
+                source="AI Phone Call",
+                stage="Prospect",
+                owner_id=1
+            )
+            db.add(lead)
+            db.flush()
+
+        # Calendly link (this should be configured in your settings)
+        calendly_link = "https://calendly.com/timloss/discovery-call"
+
+        # Create activity
+        if lead:
+            activity = Activity(
+                type=ActivityType.NOTE,
+                content=f"Calendly link sent via AI call: {calendly_link}",
+                lead_id=lead.id,
+                user_id=lead.owner_id
+            )
+            db.add(activity)
+            db.commit()
+
+        return {
+            "success": True,
+            "calendly_link": calendly_link,
+            "message": f"I'm sending you a link to schedule a discovery call. You can book a time that works best for you at: {calendly_link}. Would you like me to text or email this link to you?"
+        }
+
+    except Exception as e:
+        logger.error(f"Error in schedule_calendly_appointment_function: {e}")
+        db.rollback()
+        return {"success": False, "error": str(e)}
+
+
 # Authenticated Endpoints
 @router.get("/calls", response_model=List[CallResponse])
 async def get_calls(

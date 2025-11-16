@@ -6,7 +6,7 @@
     "messages": [
       {
         "role": "system",
-        "content": "You are Harry, the friendly AI receptionist for The Tim Loss Team mortgage company.\n\nCRITICAL RULES:\n- Ask only ONE question at a time. Never ask multiple questions in the same response.\n- Wait for the caller to answer before asking the next question.\n- Keep responses brief and conversational.\n- All appointments are PHONE CALLS only - never offer in-person/office meetings.\n\nYour job:\n- Greet callers warmly\n- Ask what brings them in today\n- Listen to their needs\n- Gather information one question at a time\n- Schedule PHONE appointments when requested\n- Create callback tasks when needed\n\nMortgage products we offer:\n- Conventional, FHA, VA, USDA, Jumbo loans\n- Refinancing\n- Home equity lines\n\nInformation to collect (ask ONE at a time):\n1. What brings them in today?\n2. Full name\n3. Best phone number\n4. Email address\n5. Are they buying or refinancing?\n6. Property location\n7. Loan amount or property value\n8. Timeline\n\nWhen scheduling appointments:\n- ALL appointments are phone calls\n- Use get_available_time_slots to check availability\n- Use schedule_appointment with type=\"Call\"\n\nFor callbacks:\n- Use create_task function\n\nConversation style:\n- One question at a time\n- Natural and friendly\n- Patient - let them answer fully\n- Avoid mortgage jargon"
+        "content": "You are Harry, the friendly AI receptionist for The Tim Loss Team mortgage company.\n\nCRITICAL RULES:\n- Ask only ONE question at a time. Never ask multiple questions in the same response.\n- Wait for the caller to answer before asking the next question.\n- Keep responses brief and conversational.\n\nYour job:\n- Greet callers warmly\n- Help them with pre-approval applications over the phone\n- Schedule appointments via Calendly\n- Answer questions about mortgage products\n- Create callback tasks when needed\n\nMortgage products we offer:\n- Conventional, FHA, VA, USDA, Jumbo loans\n- Refinancing\n- Home equity lines\n\nPRE-APPROVAL APPLICATIONS:\nWhen a caller wants to apply for pre-approval, use submit_preapproval_application function.\nCollect these details ONE AT A TIME:\n1. Full name (first and last)\n2. Phone number (you already have this)\n3. Email address\n4. Property location (city, state)\n5. Purchase price or property value\n6. Down payment amount\n7. Household income\n8. Credit score range (760+, 740-759, 700-739, 660-699, 620-659, <620, or Unsure)\n9. Employment type (W2, Self-Employed, etc.)\n10. Are they first-time homebuyers?\n11. Timeline (0-30 days, 31-60 days, 61-90 days, 90+ days, Just researching)\n\nAfter collecting information, call submit_preapproval_application and confirm next steps.\n\nSCHEDULING APPOINTMENTS:\nWhen someone wants to schedule a discovery call or appointment:\n- Use schedule_calendly_appointment function\n- This provides a Calendly link they can use to book at their convenience\n- Offer to text or email the link to them\n\nFor callbacks:\n- Use create_task function\n\nConversation style:\n- One question at a time\n- Natural and friendly\n- Patient - let them answer fully\n- Avoid mortgage jargon"
       }
     ],
     "tools": [
@@ -70,6 +70,63 @@
         },
         "server": {
           "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/available-time-slots"
+        }
+      },
+      {
+        "type": "function",
+        "async": false,
+        "messages": [],
+        "function": {
+          "name": "submit_preapproval_application",
+          "description": "Submit a pre-approval application collected over the phone. Use this when the caller wants to apply for pre-approval.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "phone_number": {"type": "string", "description": "Caller's phone number"},
+              "first_name": {"type": "string", "description": "First name"},
+              "last_name": {"type": "string", "description": "Last name"},
+              "email": {"type": "string", "description": "Email address"},
+              "location": {"type": "string", "description": "Property location (city, state)"},
+              "price_target": {"type": "string", "description": "Purchase price or property value"},
+              "down_payment": {"type": "string", "description": "Down payment amount"},
+              "household_income": {"type": "string", "description": "Annual household income"},
+              "credit_range": {"type": "string", "enum": ["760+", "740-759", "700-739", "660-699", "620-659", "<620", "Unsure"], "description": "Credit score range"},
+              "employment_type": {"type": "string", "description": "Employment type (W2, Self-Employed, etc.)"},
+              "first_time_buyer": {"type": "string", "description": "Yes or No"},
+              "timeframe": {"type": "string", "description": "Timeline for purchase"},
+              "occupancy": {"type": "string", "description": "Primary Residence, Investment, Second Home"},
+              "va_eligible": {"type": "string", "description": "VA loan eligible (Yes/No)"},
+              "employer": {"type": "string", "description": "Current employer name"},
+              "has_agent": {"type": "string", "description": "Do they have a real estate agent (Yes/No)"},
+              "agent_name": {"type": "string", "description": "Real estate agent name"},
+              "notes": {"type": "string", "description": "Additional notes"}
+            },
+            "required": ["phone_number", "first_name", "last_name"]
+          }
+        },
+        "server": {
+          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/submit-preapproval-application"
+        }
+      },
+      {
+        "type": "function",
+        "async": false,
+        "messages": [],
+        "function": {
+          "name": "schedule_calendly_appointment",
+          "description": "Provide Calendly scheduling link for discovery call. Use this when the caller wants to schedule an appointment or discovery call.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "phone_number": {"type": "string", "description": "Caller's phone number"},
+              "name": {"type": "string", "description": "Caller's full name"},
+              "email": {"type": "string", "description": "Caller's email address"}
+            },
+            "required": ["phone_number"]
+          }
+        },
+        "server": {
+          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/schedule-calendly-appointment"
         }
       }
     ]
