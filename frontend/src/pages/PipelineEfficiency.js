@@ -10,6 +10,47 @@ function PipelineEfficiency() {
   const [showDrilldownModal, setShowDrilldownModal] = useState(false);
   const [selectedTeamMember, setSelectedTeamMember] = useState(null);
   const [showTeamDrilldown, setShowTeamDrilldown] = useState(false);
+  const [selectedStage, setSelectedStage] = useState(null);
+  const [showStageDrilldown, setShowStageDrilldown] = useState(false);
+
+  // Mock stage loans data - keyed by stage name
+  const stageLoansData = {
+    'Lead Generation': [
+      { id: 4001, borrowerName: 'Sarah Chen', loanNumber: 'L-2024-201', loanAmount: 420000, source: 'Website', assignedTo: 'Mike Johnson', daysInStage: 1, status: 'New Lead', lastActivity: 'Form submitted' },
+      { id: 4002, borrowerName: 'Robert Martinez', loanNumber: 'L-2024-202', loanAmount: 385000, source: 'Referral', assignedTo: 'Sarah Mitchell', daysInStage: 2, status: 'Contacted', lastActivity: 'Initial call completed' },
+      { id: 4003, borrowerName: 'Emily Taylor', loanNumber: 'L-2024-203', loanAmount: 510000, source: 'Facebook Ad', assignedTo: 'Mike Johnson', daysInStage: 1, status: 'New Lead', lastActivity: 'Waiting for callback' },
+      { id: 4004, borrowerName: 'James Wilson', loanNumber: 'L-2024-204', loanAmount: 295000, source: 'Zillow', assignedTo: 'Sarah Mitchell', daysInStage: 3, status: 'Needs Follow-up', lastActivity: 'Voicemail left' }
+    ],
+    'Pre-Qualification': [
+      { id: 4005, borrowerName: 'Linda Brown', loanNumber: 'L-2024-205', loanAmount: 475000, assignedTo: 'Mike Johnson', creditScore: 740, daysInStage: 2, status: 'Documents Pending', lastActivity: 'Waiting for paystubs' },
+      { id: 4006, borrowerName: 'David Garcia', loanNumber: 'L-2024-206', loanAmount: 550000, assignedTo: 'Sarah Mitchell', creditScore: 780, daysInStage: 5, status: 'Needs Attention', lastActivity: 'Missing bank statements' },
+      { id: 4007, borrowerName: 'Patricia Lee', loanNumber: 'L-2024-207', loanAmount: 325000, assignedTo: 'Mike Johnson', creditScore: 720, daysInStage: 1, status: 'On Track', lastActivity: 'All docs received' }
+    ],
+    'Application': [
+      { id: 4008, borrowerName: 'Michael Anderson', loanNumber: 'L-2024-208', loanAmount: 680000, assignedTo: 'Jennifer Lopez', creditScore: 760, daysInStage: 4, status: 'In Review', lastActivity: 'Credit pulled' },
+      { id: 4009, borrowerName: 'Jennifer Thomas', loanNumber: 'L-2024-209', loanAmount: 445000, assignedTo: 'Jennifer Lopez', creditScore: 710, daysInStage: 6, status: 'Needs Attention', lastActivity: 'Waiting for employment verification' },
+      { id: 4010, borrowerName: 'Christopher Moore', loanNumber: 'L-2024-210', loanAmount: 390000, assignedTo: 'Maria Garcia', creditScore: 795, daysInStage: 3, status: 'On Track', lastActivity: 'Application complete' }
+    ],
+    'Processing': [
+      { id: 4011, borrowerName: 'Jessica White', loanNumber: 'L-2024-211', loanAmount: 520000, processor: 'Jennifer Lopez', daysInStage: 8, status: 'Delayed', missingDocs: 'Tax returns, HOA docs', lastActivity: 'Requested docs 3 days ago' },
+      { id: 4012, borrowerName: 'Daniel Harris', loanNumber: 'L-2024-212', loanAmount: 415000, processor: 'Maria Garcia', daysInStage: 15, status: 'Critical', missingDocs: 'Gift letter, appraisal', lastActivity: 'Escalated to manager' },
+      { id: 4013, borrowerName: 'Ashley Clark', loanNumber: 'L-2024-213', loanAmount: 365000, processor: 'Jennifer Lopez', daysInStage: 10, status: 'Needs Attention', missingDocs: 'Insurance binder', lastActivity: 'Follow-up scheduled' }
+    ],
+    'Underwriting': [
+      { id: 4014, borrowerName: 'Matthew Lewis', loanNumber: 'L-2024-214', loanAmount: 595000, underwriter: 'David Chen', daysInStage: 7, status: 'In Review', conditions: '2', lastActivity: 'Submitted to underwriter' },
+      { id: 4015, borrowerName: 'Amanda Walker', loanNumber: 'L-2024-215', loanAmount: 725000, underwriter: 'David Chen', daysInStage: 9, status: 'Suspended', conditions: '5', lastActivity: 'Waiting for appraisal review' },
+      { id: 4016, borrowerName: 'Joshua Hall', loanNumber: 'L-2024-216', loanAmount: 455000, underwriter: 'Rachel Kim', daysInStage: 5, status: 'On Track', conditions: '1', lastActivity: 'Conditional approval issued' }
+    ],
+    'Clear to Close': [
+      { id: 4017, borrowerName: 'Nicole Young', loanNumber: 'L-2024-217', loanAmount: 485000, closer: 'Tom Wilson', daysInStage: 2, status: 'Ready to Close', closingDate: '2024-01-25', lastActivity: 'Docs sent to title' },
+      { id: 4018, borrowerName: 'Ryan King', loanNumber: 'L-2024-218', loanAmount: 540000, closer: 'Tom Wilson', daysInStage: 4, status: 'Pending Final Review', closingDate: '2024-01-27', lastActivity: 'Final walkthrough complete' },
+      { id: 4019, borrowerName: 'Stephanie Scott', loanNumber: 'L-2024-219', loanAmount: 395000, closer: 'Tom Wilson', daysInStage: 1, status: 'Ready to Close', closingDate: '2024-01-24', lastActivity: 'Wire instructions sent' }
+    ],
+    'Closing': [
+      { id: 4020, borrowerName: 'Brandon Green', loanNumber: 'L-2024-220', loanAmount: 625000, closer: 'Tom Wilson', daysInStage: 1, status: 'Scheduled', closingDate: '2024-01-23', lastActivity: 'Closing scheduled' },
+      { id: 4021, borrowerName: 'Michelle Adams', loanNumber: 'L-2024-221', loanAmount: 475000, closer: 'Tom Wilson', daysInStage: 2, status: 'In Progress', closingDate: '2024-01-24', lastActivity: 'Waiting for funds' }
+    ]
+  };
 
   // Mock team member loans data - keyed by role
   const teamMemberLoansData = {
@@ -483,6 +524,16 @@ function PipelineEfficiency() {
     setSelectedTeamMember(null);
   };
 
+  const handleStageClick = (stage) => {
+    setSelectedStage(stage);
+    setShowStageDrilldown(true);
+  };
+
+  const handleCloseStageDrilldown = () => {
+    setShowStageDrilldown(false);
+    setSelectedStage(null);
+  };
+
   const getStatusColorClass = (status) => {
     switch (status) {
       case 'On Track': return 'status-on-track';
@@ -606,7 +657,12 @@ function PipelineEfficiency() {
               </thead>
               <tbody>
                 {efficiencyData.stageMetrics.map((stage, idx) => (
-                  <tr key={idx}>
+                  <tr
+                    key={idx}
+                    className="stage-row clickable"
+                    onClick={() => handleStageClick(stage)}
+                    style={{ cursor: 'pointer' }}
+                  >
                     <td className="stage-name">{stage.name}</td>
                     <td>
                       <div className="efficiency-cell">
@@ -892,6 +948,121 @@ function PipelineEfficiency() {
               ) : (
                 <div className="no-data">
                   <p>No active loans data available for {selectedTeamMember.role}.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Stage Drill-down Modal */}
+      {showStageDrilldown && selectedStage && stageLoansData[selectedStage.name] && (
+        <div className="drilldown-modal-overlay" onClick={handleCloseStageDrilldown}>
+          <div className="drilldown-modal stage-drilldown-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="drilldown-header">
+              <div>
+                <h2>{selectedStage.name}</h2>
+                <p className="drilldown-subtitle">
+                  {stageLoansData[selectedStage.name].length} Active Loans •
+                  {selectedStage.efficiency}% Efficiency •
+                  Avg. {selectedStage.avgTime}
+                </p>
+              </div>
+              <button className="btn-close-modal" onClick={handleCloseStageDrilldown}>×</button>
+            </div>
+            <div className="drilldown-content">
+              {stageLoansData[selectedStage.name] && stageLoansData[selectedStage.name].length > 0 ? (
+                <div className="affected-loans-list">
+                  {stageLoansData[selectedStage.name].map((loan) => (
+                    <div key={loan.id} className="affected-loan-card stage-loan-card">
+                      <div className="loan-card-header">
+                        <div>
+                          <h3>{loan.borrowerName}</h3>
+                          <p className="loan-number">{loan.loanNumber}</p>
+                        </div>
+                        <div className="loan-amount">{formatCurrency(loan.loanAmount)}</div>
+                      </div>
+
+                      <div className="loan-card-info">
+                        <div className="loan-info-row">
+                          <span className="info-label">Assigned To:</span>
+                          <span className="info-value">
+                            {loan.assignedTo || loan.processor || loan.underwriter || loan.closer}
+                          </span>
+                        </div>
+                        <div className="loan-info-row">
+                          <span className="info-label">Days in Stage:</span>
+                          <span className={`info-value ${loan.daysInStage > 7 ? 'delay-warning' : ''}`}>
+                            {loan.daysInStage} days
+                          </span>
+                        </div>
+                        <div className="loan-info-row">
+                          <span className="info-label">Status:</span>
+                          <span className={`info-value loan-status ${getStatusColorClass(loan.status)}`}>
+                            {loan.status}
+                          </span>
+                        </div>
+
+                        {/* Stage-specific fields */}
+                        {loan.source && (
+                          <div className="loan-info-row">
+                            <span className="info-label">Source:</span>
+                            <span className="info-value">{loan.source}</span>
+                          </div>
+                        )}
+                        {loan.creditScore && (
+                          <div className="loan-info-row">
+                            <span className="info-label">Credit Score:</span>
+                            <span className="info-value">{loan.creditScore}</span>
+                          </div>
+                        )}
+                        {loan.conditions && (
+                          <div className="loan-info-row">
+                            <span className="info-label">Conditions:</span>
+                            <span className="info-value">{loan.conditions} outstanding</span>
+                          </div>
+                        )}
+                        {loan.closingDate && (
+                          <div className="loan-info-row">
+                            <span className="info-label">Closing Date:</span>
+                            <span className="info-value">{loan.closingDate}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Missing docs or last activity */}
+                      {loan.missingDocs && (
+                        <div className="missing-items-section">
+                          <h4>Missing Documents</h4>
+                          <p style={{ margin: 0, color: '#e53e3e', fontSize: '14px' }}>{loan.missingDocs}</p>
+                        </div>
+                      )}
+
+                      <div style={{
+                        marginTop: '12px',
+                        padding: '12px',
+                        background: '#f7fafc',
+                        borderRadius: '6px',
+                        fontSize: '13px',
+                        color: '#4a5568'
+                      }}>
+                        <strong>Last Activity:</strong> {loan.lastActivity}
+                      </div>
+
+                      <div className="loan-card-actions">
+                        <button
+                          className="btn-create-task"
+                          onClick={() => handleCreateTask(loan)}
+                        >
+                          🤖 Create AI Task for {loan.assignedTo || loan.processor || loan.underwriter || loan.closer}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="no-data">
+                  <p>No active loans in {selectedStage.name} stage.</p>
                 </div>
               )}
             </div>

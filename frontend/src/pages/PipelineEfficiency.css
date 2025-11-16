@@ -234,8 +234,19 @@
   color: #2d3748;
 }
 
+.stage-table tbody tr {
+  transition: all 0.2s ease;
+}
+
 .stage-table tbody tr:hover {
-  background: #f7fafc;
+  background: #f0f9ff;
+  transform: scale(1.005);
+  box-shadow: 0 2px 8px rgba(33, 141, 141, 0.1);
+}
+
+.stage-table tbody tr.clickable:hover {
+  background: linear-gradient(90deg, #f0f9ff 0%, #e0f2fe 100%);
+  cursor: pointer;
 }
 
 .stage-name {
@@ -983,6 +994,39 @@
 
 @media (max-width: 768px) {
   .team-loan-card .loan-card-info {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Stage Drill-down Modal */
+.stage-drilldown-modal .loan-card-info {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.stage-loan-card {
+  position: relative;
+}
+
+.stage-loan-card .loan-card-info {
+  gap: 12px;
+}
+
+/* Stage-specific loan info styling */
+.stage-loan-card .loan-info-row {
+  background: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+}
+
+@media (max-width: 992px) {
+  .stage-drilldown-modal .loan-card-info {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .stage-drilldown-modal .loan-card-info {
     grid-template-columns: 1fr;
   }
 }
