@@ -155,7 +155,8 @@ class User(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     full_name = Column(String)
-    role = Column(String, default="loan_officer")
+    role = Column(String, default="loan_officer")  # Legacy role field
+    permission_role = Column(String, default="sales")  # Phase 2: 'management', 'sales', or 'operations'
     branch_id = Column(Integer, ForeignKey("branches.id"))
     is_active = Column(Boolean, default=True)
     email_verified = Column(Boolean, default=False)
@@ -3655,10 +3656,10 @@ async def extract_email_data(
         entity_match = match_entity(fields, db, current_user.id)
 
         # Determine status based on confidence
+        # AI NEVER auto-approves - users must manually review all items
+        # High confidence items get "pending_review", low confidence get "needs_review"
         status = "pending_review"
-        if avg_confidence > 0.85 and entity_match["confidence"] > 0.90:
-            status = "auto_approved"
-        elif avg_confidence < 0.60 or entity_match["confidence"] < 0.50:
+        if avg_confidence < 0.60 or entity_match["confidence"] < 0.50:
             status = "needs_review"
 
         # Create extracted data record
@@ -3681,12 +3682,8 @@ async def extract_email_data(
         db.commit()
         db.refresh(extracted)
 
-        # Auto-apply if high confidence
-        if status == "auto_approved":
-            applied = apply_extracted_data(extracted, db)
-            if applied:
-                extracted.status = "applied"
-                db.commit()
+        # NOTE: Auto-apply disabled - users must manually approve all items
+        # Future: AI learning system will enable auto-execution based on user approval patterns
 
         logger.info(f"Extracted data from event {event_id}, status: {extracted.status}")
 
@@ -3759,6 +3756,81 @@ async def get_pending_reconciliation(
         }
     except Exception as e:
         logger.error(f"Get pending error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/reconciliation/completed")
+async def get_completed_reconciliation(
+    limit: int = 50,
+    offset: int = 0,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all completed reconciliation items (approved or rejected)"""
+    try:
+        # Get all extracted data that has been completed
+        completed = db.query(ExtractedData).join(
+            IncomingDataEvent,
+            ExtractedData.event_id == IncomingDataEvent.id
+        ).filter(
+            IncomingDataEvent.user_id == current_user.id,
+            ExtractedData.status.in_(["approved", "applied", "rejected"])
+        ).order_by(
+            ExtractedData.reviewed_at.desc()
+        ).offset(offset).limit(limit).all()
+
+        # Format response with event details
+        results = []
+        for item in completed:
+            event = db.query(IncomingDataEvent).filter(
+                IncomingDataEvent.id == item.event_id
+            ).first()
+
+            # Get reviewer info if available
+            reviewer_name = None
+            if item.reviewed_by:
+                reviewer = db.query(User).filter(User.id == item.reviewed_by).first()
+                reviewer_name = reviewer.full_name if reviewer else "Unknown"
+
+            results.append({
+                "id": item.id,
+                "event_id": item.event_id,
+                "category": item.category,
+                "subcategory": item.subcategory,
+                "fields": item.fields,
+                "match_entity_type": item.match_entity_type,
+                "match_entity_id": item.match_entity_id,
+                "match_confidence": item.match_confidence,
+                "ai_confidence": item.ai_confidence,
+                "status": item.status,
+                "created_at": item.created_at,
+                "reviewed_at": item.reviewed_at,
+                "reviewed_by": reviewer_name,
+                "email": {
+                    "subject": event.subject if event else None,
+                    "sender": event.sender if event else None,
+                    "received_at": event.received_at if event else None
+                }
+            })
+
+        # Get total count for pagination
+        total_count = db.query(ExtractedData).join(
+            IncomingDataEvent,
+            ExtractedData.event_id == IncomingDataEvent.id
+        ).filter(
+            IncomingDataEvent.user_id == current_user.id,
+            ExtractedData.status.in_(["approved", "applied", "rejected"])
+        ).count()
+
+        logger.info(f"Retrieved {len(results)} completed reconciliation items for user {current_user.id}")
+
+        return {
+            "status": "success",
+            "count": len(results),
+            "total": total_count,
+            "items": results
+        }
+    except Exception as e:
+        logger.error(f"Get completed error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/v1/reconciliation/approve")
@@ -11749,6 +11821,264 @@ async def get_current_impersonation(
     except Exception as e:
         logger.error(f"Get current impersonation error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================================
+# PHASE 2: PERMISSION SYSTEM - CORE FUNCTIONS & ENDPOINTS
+# ============================================================================
+
+def has_permission(user_id: int, permission_key: str, db: Session) -> bool:
+    """
+    Check if a user has a specific permission
+
+    Args:
+        user_id: ID of the user to check
+        permission_key: Permission key (e.g., 'leads.view_all', 'clients.edit_own')
+        db: Database session
+
+    Returns:
+        True if user has the permission, False otherwise
+    """
+    try:
+        # Get user permissions from database
+        result = db.execute(text("""
+            SELECT granted FROM user_permissions
+            WHERE user_id = :user_id
+              AND permission_key = :permission_key
+              AND granted = TRUE
+            LIMIT 1
+        """), {'user_id': user_id, 'permission_key': permission_key})
+
+        permission = result.fetchone()
+        return permission is not None
+
+    except Exception as e:
+        logger.error(f"Permission check error for user {user_id}, key {permission_key}: {e}")
+        return False
+
+
+def get_user_permissions(user_id: int, db: Session) -> Dict[str, bool]:
+    """
+    Get all permissions for a user
+
+    Returns a dictionary of permission_key -> granted
+    """
+    try:
+        result = db.execute(text("""
+            SELECT permission_key, granted
+            FROM user_permissions
+            WHERE user_id = :user_id
+        """), {'user_id': user_id})
+
+        permissions = {}
+        for row in result:
+            permissions[row[0]] = row[1]
+
+        return permissions
+
+    except Exception as e:
+        logger.error(f"Get user permissions error for user {user_id}: {e}")
+        return {}
+
+
+def apply_role_template_to_user(user_id: int, role_name: str, granted_by_id: int, db: Session) -> bool:
+    """
+    Apply a permission template to a user based on their role
+
+    Args:
+        user_id: User to apply template to
+        role_name: 'management', 'sales', or 'operations'
+        granted_by_id: ID of user granting the permissions
+        db: Database session
+
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        # Get template by category (role name)
+        result = db.execute(text("""
+            SELECT id, name, permissions
+            FROM permission_templates
+            WHERE category = :role_name
+              AND is_system_default = TRUE
+            LIMIT 1
+        """), {'role_name': role_name})
+
+        template = result.fetchone()
+        if not template:
+            logger.error(f"No template found for role: {role_name}")
+            return False
+
+        template_id, template_name, permissions_json = template
+        permissions = json.loads(permissions_json) if isinstance(permissions_json, str) else permissions_json
+
+        # Delete existing permissions for this user
+        db.execute(text("""
+            DELETE FROM user_permissions WHERE user_id = :user_id
+        """), {'user_id': user_id})
+
+        # Insert new permissions from template
+        for perm_key, granted in permissions.items():
+            db.execute(text("""
+                INSERT INTO user_permissions
+                (user_id, permission_key, granted, granted_by, inherited_from)
+                VALUES (:user_id, :perm_key, :granted, :granted_by, 'template')
+            """), {
+                'user_id': user_id,
+                'perm_key': perm_key,
+                'granted': granted,
+                'granted_by': granted_by_id
+            })
+
+        # Update user's permission_role
+        db.execute(text("""
+            UPDATE users
+            SET permission_role = :role_name
+            WHERE id = :user_id
+        """), {'user_id': user_id, 'role_name': role_name})
+
+        db.commit()
+        logger.info(f"Applied {template_name} template to user {user_id} ({len(permissions)} permissions)")
+        return True
+
+    except Exception as e:
+        logger.error(f"Apply template error: {e}")
+        db.rollback()
+        return False
+
+
+@app.post("/api/v1/users/{user_id}/assign-role")
+async def assign_role_to_user(
+    user_id: int,
+    role: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Assign a permission role to a user and apply the corresponding template
+
+    Requires: team.manage_permissions or permissions.manage
+    """
+    try:
+        # Check if current user has permission to manage permissions
+        if not has_permission(current_user.id, 'permissions.manage', db):
+            if not has_permission(current_user.id, 'team.manage_permissions', db):
+                raise HTTPException(status_code=403, detail="You don't have permission to manage user roles")
+
+        # Validate role
+        if role not in ['management', 'sales', 'operations']:
+            raise HTTPException(status_code=400, detail="Invalid role. Must be: management, sales, or operations")
+
+        # Check if user exists
+        target_user = db.query(User).filter(User.id == user_id).first()
+        if not target_user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Apply template
+        success = apply_role_template_to_user(user_id, role, current_user.id, db)
+
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to apply role template")
+
+        return {
+            "success": True,
+            "message": f"Successfully assigned {role} role to {target_user.email}",
+            "user_id": user_id,
+            "role": role
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Assign role error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/users/{user_id}/permissions")
+async def get_user_permissions_endpoint(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get all permissions for a user
+
+    Users can view their own permissions, or if they have permissions.view_all
+    """
+    try:
+        # Check if requesting own permissions or has permission to view all
+        if user_id != current_user.id:
+            if not has_permission(current_user.id, 'permissions.view_all', db):
+                raise HTTPException(status_code=403, detail="You can only view your own permissions")
+
+        # Get user
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Get permissions
+        permissions = get_user_permissions(user_id, db)
+
+        return {
+            "user_id": user_id,
+            "email": user.email,
+            "permission_role": user.permission_role,
+            "permissions": permissions,
+            "permission_count": len(permissions)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get permissions error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/permissions/templates")
+async def get_permission_templates(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get all available permission templates
+
+    Requires: permissions.view_all or team.manage_permissions
+    """
+    try:
+        # Check permission
+        if not has_permission(current_user.id, 'permissions.view_all', db):
+            if not has_permission(current_user.id, 'team.manage_permissions', db):
+                raise HTTPException(status_code=403, detail="Access denied")
+
+        # Get templates
+        result = db.execute(text("""
+            SELECT id, name, description, category, permissions, is_system_default
+            FROM permission_templates
+            ORDER BY is_system_default DESC, name
+        """))
+
+        templates = []
+        for row in result:
+            perms = json.loads(row[4]) if isinstance(row[4], str) else row[4]
+            templates.append({
+                "id": row[0],
+                "name": row[1],
+                "description": row[2],
+                "category": row[3],
+                "permission_count": len(perms),
+                "is_system_default": row[5]
+            })
+
+        return {
+            "templates": templates,
+            "count": len(templates)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get templates error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # ============================================================================
 # AGENTIC AI PERFORMANCE COACH ("THE PROCESS COACH")
