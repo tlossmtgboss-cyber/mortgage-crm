@@ -8,7 +8,9 @@ from typing import Optional, Dict, List, Any
 from datetime import datetime
 from sqlalchemy.orm import Session
 from vapi_models import VapiCall, VapiCallNote, VapiAssistant, VapiPhoneNumber
+from ai_receptionist_dashboard_models import AIReceptionistActivity, AIReceptionistConversation
 import logging
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -216,6 +218,9 @@ class VapiCRMIntegration:
         # Extract action items
         await self._extract_action_items(vapi_call, call_data)
 
+        # Log to AI Receptionist Dashboard tables
+        await self._log_to_dashboard(vapi_call, call_data)
+
         self.db.commit()
         self.db.refresh(vapi_call)
 
@@ -296,6 +301,60 @@ class VapiCRMIntegration:
                 priority="high"
             )
             self.db.add(note)
+
+    async def _log_to_dashboard(self, vapi_call: VapiCall, call_data: Dict) -> None:
+        """Log call to AI Receptionist Dashboard tables"""
+        try:
+            # Create conversation record
+            conversation = AIReceptionistConversation(
+                id=str(uuid.uuid4()),
+                started_at=vapi_call.started_at,
+                ended_at=vapi_call.ended_at,
+                duration_seconds=vapi_call.duration,
+                client_phone=vapi_call.phone_number,
+                client_name=vapi_call.caller_name,
+                channel='voice',
+                full_transcript=vapi_call.transcript or "",
+                summary=vapi_call.summary or "",
+                sentiment=vapi_call.sentiment or "neutral",
+                ai_confidence=0.9,  # Default high confidence for VAPI calls
+                outcome_status='completed' if vapi_call.status == 'ended' else 'failed',
+                recording_url=vapi_call.recording_url,
+                extra_data={
+                    'vapi_call_id': vapi_call.vapi_call_id,
+                    'analysis': call_data.get('analysis', {})
+                }
+            )
+            self.db.add(conversation)
+            self.db.flush()  # Get the conversation ID
+
+            # Create activity feed record
+            activity = AIReceptionistActivity(
+                id=str(uuid.uuid4()),
+                timestamp=vapi_call.ended_at or datetime.now(),
+                client_phone=vapi_call.phone_number,
+                client_name=vapi_call.caller_name,
+                action_type='incoming_call',
+                channel='voice',
+                message_in=f"Incoming call from {vapi_call.caller_name or vapi_call.phone_number}",
+                message_out=vapi_call.summary or "Call completed",
+                confidence_score=0.9,
+                outcome_status='success' if vapi_call.status == 'ended' else 'failed',
+                conversation_id=conversation.id,
+                transcript_url=vapi_call.recording_url,
+                extra_data={
+                    'vapi_call_id': vapi_call.vapi_call_id,
+                    'duration': vapi_call.duration,
+                    'sentiment': vapi_call.sentiment
+                }
+            )
+            self.db.add(activity)
+
+            logger.info(f"Logged call {vapi_call.vapi_call_id} to dashboard")
+
+        except Exception as e:
+            logger.error(f"Error logging to dashboard: {e}")
+            # Don't fail the whole process if dashboard logging fails
 
     def _extract_sentiment(self, analysis: Dict) -> str:
         """Extract sentiment from Vapi analysis"""
