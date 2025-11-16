@@ -1,10 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './BuyerIntake.css';
 
 export default function BuyerIntake() {
   const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState('');
+  const [lastCommand, setLastCommand] = useState('');
+  const recognitionRef = useRef(null);
   const [form, setForm] = useState({
     // Contact
     firstName: "",
@@ -105,6 +109,309 @@ export default function BuyerIntake() {
       set.has(opt) ? set.delete(opt) : set.add(opt);
       return { ...f, communicationPrefs: Array.from(set) };
     });
+  };
+
+  // Initialize voice recognition
+  useEffect(() => {
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = true;
+      recognitionRef.current.interimResults = true;
+      recognitionRef.current.lang = 'en-US';
+
+      recognitionRef.current.onresult = (event) => {
+        let interimTranscript = '';
+        let finalTranscript = '';
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript + ' ';
+          } else {
+            interimTranscript += transcript;
+          }
+        }
+
+        if (finalTranscript) {
+          processVoiceCommand(finalTranscript.trim());
+          setVoiceTranscript(finalTranscript.trim());
+        }
+      };
+
+      recognitionRef.current.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        if (event.error === 'no-speech' || event.error === 'aborted') {
+          // Silently handle these common errors
+        } else {
+          setIsListening(false);
+        }
+      };
+
+      recognitionRef.current.onend = () => {
+        if (isListening) {
+          // Restart if it stopped but we're still in listening mode
+          try {
+            recognitionRef.current.start();
+          } catch (e) {
+            console.error('Error restarting recognition:', e);
+          }
+        }
+      };
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, [isListening]);
+
+  const processVoiceCommand = (transcript) => {
+    const lower = transcript.toLowerCase();
+    setLastCommand(transcript);
+
+    // Contact fields
+    if (lower.includes('first name') || lower.includes('my name is') || lower.includes("i'm ")) {
+      const match = transcript.match(/(?:first name|my name is|i'm)\s+([a-z]+)/i);
+      if (match) {
+        setForm(f => ({ ...f, firstName: match[1].charAt(0).toUpperCase() + match[1].slice(1) }));
+      }
+    }
+
+    if (lower.includes('last name') || lower.includes('surname')) {
+      const match = transcript.match(/(?:last name|surname)\s+([a-z]+)/i);
+      if (match) {
+        setForm(f => ({ ...f, lastName: match[1].charAt(0).toUpperCase() + match[1].slice(1) }));
+      }
+    }
+
+    if (lower.includes('email')) {
+      const emailMatch = transcript.match(/([a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,})/i);
+      if (emailMatch) {
+        setForm(f => ({ ...f, email: emailMatch[1].toLowerCase() }));
+      }
+    }
+
+    if (lower.includes('phone') || lower.includes('mobile') || lower.includes('number')) {
+      const phoneMatch = transcript.match(/(\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}|\d{10})/);
+      if (phoneMatch) {
+        setForm(f => ({ ...f, phone: phoneMatch[1] }));
+      }
+    }
+
+    if (lower.includes('preferred contact')) {
+      if (lower.includes('text')) setForm(f => ({ ...f, preferredContact: 'Text' }));
+      else if (lower.includes('email')) setForm(f => ({ ...f, preferredContact: 'Email' }));
+      else if (lower.includes('phone')) setForm(f => ({ ...f, preferredContact: 'Phone' }));
+    }
+
+    // Scenario fields
+    if (lower.includes('occupancy') || lower.includes('property type')) {
+      if (lower.includes('primary residence') || lower.includes('primary home')) {
+        setForm(f => ({ ...f, occupancy: 'Primary Residence' }));
+      } else if (lower.includes('second home')) {
+        setForm(f => ({ ...f, occupancy: 'Second Home' }));
+      } else if (lower.includes('investment')) {
+        setForm(f => ({ ...f, occupancy: 'Investment' }));
+      }
+    }
+
+    if (lower.includes('timeline') || lower.includes('timeframe')) {
+      if (lower.includes('30 days') || lower.includes('0 to 30') || lower.includes('zero to thirty')) {
+        setForm(f => ({ ...f, timeframe: '0–30 days' }));
+      } else if (lower.includes('60 days') || lower.includes('31 to 60')) {
+        setForm(f => ({ ...f, timeframe: '31–60 days' }));
+      } else if (lower.includes('90 days') || lower.includes('61 to 90')) {
+        setForm(f => ({ ...f, timeframe: '61–90 days' }));
+      } else if (lower.includes('90 plus') || lower.includes('more than 90')) {
+        setForm(f => ({ ...f, timeframe: '90+ days' }));
+      } else if (lower.includes('research')) {
+        setForm(f => ({ ...f, timeframe: 'Just researching' }));
+      }
+    }
+
+    if (lower.includes('location') || lower.includes('target area') || lower.includes('city')) {
+      const locMatch = transcript.match(/(?:location|target area|city)\s+(.+?)(?:\s|$)/i);
+      if (locMatch) {
+        setForm(f => ({ ...f, location: locMatch[1] }));
+      }
+    }
+
+    // Budget fields
+    if (lower.includes('price target') || lower.includes('purchase price') || lower.includes('home price')) {
+      const priceMatch = transcript.match(/(\$?[\d,]+,?\d*)/);
+      if (priceMatch) {
+        setForm(f => ({ ...f, priceTarget: priceMatch[1] }));
+      }
+    }
+
+    if (lower.includes('down payment')) {
+      const downMatch = transcript.match(/(\$?[\d,]+%?)/);
+      if (downMatch) {
+        const value = downMatch[1];
+        setForm(f => ({
+          ...f,
+          downPayment: value.replace(/[^0-9]/g, ''),
+          downType: value.includes('%') ? '%' : '$'
+        }));
+      }
+    }
+
+    if (lower.includes('monthly') || lower.includes('piti')) {
+      const monthlyMatch = transcript.match(/(\$?[\d,]+)/);
+      if (monthlyMatch) {
+        setForm(f => ({ ...f, monthlyComfort: monthlyMatch[1] }));
+      }
+    }
+
+    // Profile fields
+    if (lower.includes('date of birth') || lower.includes('birthday') || lower.includes('born')) {
+      const dateMatch = transcript.match(/(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/);
+      if (dateMatch) {
+        // Convert to YYYY-MM-DD format
+        const parts = dateMatch[1].split(/[/-]/);
+        if (parts.length === 3) {
+          const year = parts[2].length === 2 ? '19' + parts[2] : parts[2];
+          const formatted = `${year}-${parts[0].padStart(2, '0')}-${parts[1].padStart(2, '0')}`;
+          setForm(f => ({ ...f, dateOfBirth: formatted }));
+        }
+      }
+    }
+
+    if (lower.includes('social security') || lower.includes('ssn')) {
+      const ssnMatch = transcript.match(/(\d{3}[-\s]?\d{2}[-\s]?\d{4})/);
+      if (ssnMatch) {
+        const digits = ssnMatch[1].replace(/\D/g, '');
+        const formatted = `${digits.slice(0, 3)}-${digits.slice(3, 5)}-${digits.slice(5, 9)}`;
+        setForm(f => ({ ...f, ssn: formatted }));
+      }
+    }
+
+    if (lower.includes('credit score') || lower.includes('credit range')) {
+      if (lower.includes('760') || lower.includes('excellent')) {
+        setForm(f => ({ ...f, creditRange: '760+' }));
+      } else if (lower.includes('740')) {
+        setForm(f => ({ ...f, creditRange: '740–759' }));
+      } else if (lower.includes('700')) {
+        setForm(f => ({ ...f, creditRange: '700–739' }));
+      } else if (lower.includes('660')) {
+        setForm(f => ({ ...f, creditRange: '660–699' }));
+      } else if (lower.includes('620')) {
+        setForm(f => ({ ...f, creditRange: '620–659' }));
+      } else if (lower.includes('below 620') || lower.includes('under 620')) {
+        setForm(f => ({ ...f, creditRange: '<620' }));
+      } else if (lower.includes('unsure') || lower.includes("don't know")) {
+        setForm(f => ({ ...f, creditRange: 'Unsure' }));
+      }
+    }
+
+    if (lower.includes('first time buyer') || lower.includes('first-time buyer')) {
+      if (lower.includes('yes') || lower.includes('i am')) {
+        setForm(f => ({ ...f, firstTimeBuyer: 'Yes' }));
+      } else if (lower.includes('no') || lower.includes("i'm not")) {
+        setForm(f => ({ ...f, firstTimeBuyer: 'No' }));
+      }
+    }
+
+    if (lower.includes('va eligible') || lower.includes('veteran')) {
+      if (lower.includes('yes') || lower.includes('i am')) {
+        setForm(f => ({ ...f, vaEligible: 'Yes' }));
+      } else {
+        setForm(f => ({ ...f, vaEligible: 'No' }));
+      }
+    }
+
+    if (lower.includes('employment type') || lower.includes('how are you employed')) {
+      if (lower.includes('w2') || lower.includes('w-2') || lower.includes('employee')) {
+        setForm(f => ({ ...f, employmentType: 'W2' }));
+      } else if (lower.includes('self-employed') || lower.includes('self employed')) {
+        setForm(f => ({ ...f, employmentType: 'Self‑Employed' }));
+      } else if (lower.includes('contractor') || lower.includes('1099')) {
+        setForm(f => ({ ...f, employmentType: '1099/Contractor' }));
+      } else if (lower.includes('retired')) {
+        setForm(f => ({ ...f, employmentType: 'Retired' }));
+      }
+    }
+
+    if (lower.includes('employer')) {
+      const empMatch = transcript.match(/employer\s+(?:is\s+)?(.+?)(?:\s|$)/i);
+      if (empMatch) {
+        setForm(f => ({ ...f, employer: empMatch[1] }));
+      }
+    }
+
+    if (lower.includes('years with employer') || lower.includes('years at')) {
+      const yearsMatch = transcript.match(/(\d+\.?\d*)\s*years?/i);
+      if (yearsMatch) {
+        setForm(f => ({ ...f, yearsWithEmployer: yearsMatch[1] }));
+      }
+    }
+
+    if (lower.includes('income') || lower.includes('salary')) {
+      const incomeMatch = transcript.match(/(\$?[\d,]+)/);
+      if (incomeMatch) {
+        setForm(f => ({ ...f, householdIncome: incomeMatch[1] }));
+      }
+    }
+
+    if (lower.includes('liquid assets') || lower.includes('assets for closing')) {
+      const assetsMatch = transcript.match(/(\$?[\d,]+)/);
+      if (assetsMatch) {
+        setForm(f => ({ ...f, liquidAssets: assetsMatch[1] }));
+      }
+    }
+
+    // Co-borrower
+    if (lower.includes('co-borrower') || lower.includes('coborrower')) {
+      if (lower.includes('yes') || lower.includes('have')) {
+        setForm(f => ({ ...f, hasCoborrower: 'Yes' }));
+      } else if (lower.includes('no')) {
+        setForm(f => ({ ...f, hasCoborrower: 'No' }));
+      }
+    }
+
+    // Realtor
+    if (lower.includes('realtor') || lower.includes('agent')) {
+      if (lower.includes('yes') || lower.includes('working with')) {
+        setForm(f => ({ ...f, hasAgent: 'Yes' }));
+      } else if (lower.includes('no') || lower.includes("don't have")) {
+        setForm(f => ({ ...f, hasAgent: 'No' }));
+      }
+    }
+
+    // Consents
+    if (lower.includes('credit pull') || lower.includes('soft credit')) {
+      if (lower.includes('yes') || lower.includes('authorize') || lower.includes('agree')) {
+        setForm(f => ({ ...f, softCreditOk: true }));
+      }
+    }
+
+    if (lower.includes('contact consent') || lower.includes('agree to be contacted')) {
+      if (lower.includes('yes') || lower.includes('agree')) {
+        setForm(f => ({ ...f, contactConsent: true }));
+      }
+    }
+  };
+
+  const toggleVoiceInput = () => {
+    if (!recognitionRef.current) {
+      alert('Voice recognition is not supported in this browser. Please use Chrome, Safari, or Edge.');
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      try {
+        recognitionRef.current.start();
+        setIsListening(true);
+        setVoiceTranscript('');
+      } catch (error) {
+        console.error('Error starting voice recognition:', error);
+      }
+    }
   };
 
   const onSubmit = async (e) => {
@@ -221,6 +528,45 @@ export default function BuyerIntake() {
         <div className="intake-header">
           <h1>Buyer's Quick Start</h1>
           <p>A short intake to kick off your pre‑approval. Takes ~2 minutes.</p>
+
+          {/* Voice Control Button */}
+          <div className="voice-control-container">
+            <button
+              type="button"
+              onClick={toggleVoiceInput}
+              className={`voice-btn ${isListening ? 'listening' : ''}`}
+              title={isListening ? 'Stop voice input' : 'Start voice input'}
+            >
+              {isListening ? (
+                <>
+                  <span className="mic-icon pulsing">🎤</span>
+                  <span>Listening...</span>
+                </>
+              ) : (
+                <>
+                  <span className="mic-icon">🎤</span>
+                  <span>Voice Input</span>
+                </>
+              )}
+            </button>
+            {isListening && (
+              <div className="voice-indicator">
+                <div className="sound-wave">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {lastCommand && (
+            <div className="last-command">
+              <strong>Last heard:</strong> "{lastCommand}"
+            </div>
+          )}
         </div>
 
         <form onSubmit={onSubmit} className="intake-form">
