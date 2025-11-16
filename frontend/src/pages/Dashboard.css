@@ -1543,16 +1543,18 @@
   align-items: center;
   gap: 4px;
   padding: 6px 12px;
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.25);
   border-radius: 20px;
+  color: white;
+  margin-top: 8px;
 }
 
 .score-trend.up {
-  color: #10b981;
+  color: white;
 }
 
 .score-trend.down {
-  color: #ef4444;
+  color: white;
 }
 
 .efficiency-cards {
