@@ -1577,6 +1577,27 @@ class Notification(Base):
     read_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
 
+class AccessCertification(Base):
+    __tablename__ = "access_certifications"
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    certification_period = Column(String(20), nullable=False)  # e.g., "Q4-2025"
+    due_date = Column(Date, nullable=False, index=True)
+    status = Column(String(20), default='pending', index=True)  # 'pending', 'certified', 'overdue', 'skipped'
+
+    certified_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    certified_at = Column(DateTime, nullable=True)
+    certification_notes = Column(Text, nullable=True)
+
+    permissions_snapshot = Column(JSON, nullable=True)  # Snapshot of permissions at certification time
+    permissions_changed = Column(JSON, nullable=True)  # Any changes made during certification
+
+    reminder_sent_30d = Column(Boolean, default=False)
+    reminder_sent_7d = Column(Boolean, default=False)
+    reminder_sent_overdue = Column(Boolean, default=False)
+
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
 
 # ============================================================================
 # PYDANTIC SCHEMAS
@@ -13712,6 +13733,577 @@ async def mark_all_notifications_read(
 
 
 # ============================================================================
+# ACCESS CERTIFICATION - API ENDPOINTS
+# ============================================================================
+
+@app.get("/api/v1/certifications/due")
+async def get_due_certifications(
+    status: Optional[str] = None,  # pending, overdue, all
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get certifications due for manager's team
+    Managers see their direct reports
+    Admins see all
+    """
+    try:
+        # Build base query
+        if current_user.role == 'manager':
+            # Get team member IDs
+            team_query = text("""
+                SELECT id FROM users WHERE manager_id = :manager_id
+            """)
+            team_members = db.execute(team_query, {"manager_id": current_user.id}).fetchall()
+            team_ids = [m.id for m in team_members]
+
+            if not team_ids:
+                return {"certifications": []}
+
+            # Get certifications for team
+            query = text("""
+                SELECT ac.id, ac.employee_id, ac.certification_period, ac.due_date,
+                       ac.status, ac.permissions_snapshot,
+                       u.full_name as employee_name
+                FROM access_certifications ac
+                JOIN users u ON ac.employee_id = u.id
+                WHERE ac.employee_id = ANY(:team_ids)
+            """)
+
+            if status:
+                query = text(str(query) + " AND ac.status = :status")
+                certs = db.execute(query, {"team_ids": team_ids, "status": status}).fetchall()
+            else:
+                query = text(str(query) + " AND ac.status IN ('pending', 'overdue')")
+                certs = db.execute(query, {"team_ids": team_ids}).fetchall()
+
+        elif current_user.role in ['management', 'admin']:
+            # Get all certifications
+            query = text("""
+                SELECT ac.id, ac.employee_id, ac.certification_period, ac.due_date,
+                       ac.status, ac.permissions_snapshot,
+                       u.full_name as employee_name
+                FROM access_certifications ac
+                JOIN users u ON ac.employee_id = u.id
+            """)
+
+            if status:
+                query = text(str(query) + " WHERE ac.status = :status")
+                certs = db.execute(query, {"status": status}).fetchall()
+            else:
+                query = text(str(query) + " WHERE ac.status IN ('pending', 'overdue')")
+                certs = db.execute(query).fetchall()
+        else:
+            raise HTTPException(403, "Only managers can view certifications")
+
+        from datetime import datetime, date
+
+        return {
+            "certifications": [
+                {
+                    "id": cert.id,
+                    "employee_id": cert.employee_id,
+                    "employee_name": cert.employee_name,
+                    "certification_period": cert.certification_period,
+                    "due_date": cert.due_date.isoformat() if isinstance(cert.due_date, date) else cert.due_date,
+                    "status": cert.status,
+                    "days_until_due": (cert.due_date - date.today()).days if isinstance(cert.due_date, date) else 0,
+                    "permissions_count": len(cert.permissions_snapshot) if cert.permissions_snapshot else 0
+                }
+                for cert in certs
+            ]
+        }
+
+    except Exception as e:
+        logger.error(f"Get due certifications error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/certifications/{cert_id}")
+async def get_certification_details(
+    cert_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get full certification details including permission snapshot"""
+    try:
+        query = text("""
+            SELECT ac.*, u.full_name, u.role as user_role, u.department, u.manager_id,
+                   cb.full_name as certified_by_name
+            FROM access_certifications ac
+            JOIN users u ON ac.employee_id = u.id
+            LEFT JOIN users cb ON ac.certified_by_id = cb.id
+            WHERE ac.id = :cert_id
+        """)
+
+        cert = db.execute(query, {"cert_id": cert_id}).fetchone()
+
+        if not cert:
+            raise HTTPException(404, "Certification not found")
+
+        # Verify access
+        if current_user.role not in ['management', 'admin']:
+            if cert.manager_id != current_user.id:
+                raise HTTPException(403, "Can only view certifications for your team")
+
+        # Get current permissions to compare
+        from jobs.certification_jobs import get_user_permissions_dict
+        current_permissions = get_user_permissions_dict(cert.employee_id, db)
+
+        # Compare permissions
+        snapshot_perms = set(cert.permissions_snapshot.keys()) if cert.permissions_snapshot else set()
+        current_perms = set(current_permissions.keys())
+
+        changes = {
+            "added": list(current_perms - snapshot_perms),
+            "removed": list(snapshot_perms - current_perms)
+        }
+
+        return {
+            "id": cert.id,
+            "employee": {
+                "id": cert.employee_id,
+                "name": cert.full_name,
+                "role": cert.user_role,
+                "department": cert.department
+            },
+            "certification_period": cert.certification_period,
+            "due_date": cert.due_date.isoformat(),
+            "status": cert.status,
+            "permissions_at_snapshot": cert.permissions_snapshot,
+            "current_permissions": current_permissions,
+            "permissions_changed_since_snapshot": changes,
+            "certified_by": cert.certified_by_name if cert.certified_by_name else None,
+            "certified_at": cert.certified_at.isoformat() if cert.certified_at else None,
+            "certification_notes": cert.certification_notes
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get certification details error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/certifications/{cert_id}/certify")
+async def certify_employee_access(
+    cert_id: int,
+    data: dict,  # { "notes": "...", "permissions_to_revoke": [...] }
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Manager certifies employee's access
+    Optionally revoke permissions during certification
+    """
+    try:
+        # Get certification
+        query = text("""
+            SELECT ac.*, u.manager_id, u.full_name
+            FROM access_certifications ac
+            JOIN users u ON ac.employee_id = u.id
+            WHERE ac.id = :cert_id
+        """)
+
+        cert = db.execute(query, {"cert_id": cert_id}).fetchone()
+
+        if not cert:
+            raise HTTPException(404, "Certification not found")
+
+        # Verify manager
+        if current_user.role not in ['management', 'admin']:
+            if cert.manager_id != current_user.id:
+                raise HTTPException(403, "Can only certify your team members")
+
+        if cert.status not in ['pending', 'overdue']:
+            raise HTTPException(400, "Certification already completed")
+
+        # Revoke any permissions specified
+        permissions_revoked = data.get('permissions_to_revoke', [])
+        for perm_key in permissions_revoked:
+            # Revoke permission
+            db.execute(text("""
+                UPDATE user_permissions
+                SET granted = FALSE, revoked_by_id = :revoked_by_id, revoked_at = CURRENT_TIMESTAMP
+                WHERE user_id = :user_id AND permission_key = :perm_key
+            """), {
+                "user_id": cert.employee_id,
+                "perm_key": perm_key,
+                "revoked_by_id": current_user.id
+            })
+
+        # Update certification
+        db.execute(text("""
+            UPDATE access_certifications
+            SET status = 'certified',
+                certified_by_id = :certified_by_id,
+                certified_at = CURRENT_TIMESTAMP,
+                certification_notes = :notes,
+                permissions_changed = :permissions_changed
+            WHERE id = :cert_id
+        """), {
+            "cert_id": cert_id,
+            "certified_by_id": current_user.id,
+            "notes": data.get('notes', ''),
+            "permissions_changed": str({
+                "revoked": permissions_revoked,
+                "revoked_by": current_user.id,
+                "revoked_at": datetime.now(timezone.utc).isoformat()
+            })
+        })
+
+        # Notify employee if permissions were revoked
+        if permissions_revoked:
+            db.execute(text("""
+                INSERT INTO notifications (user_id, type, title, message, link, created_at)
+                VALUES (:user_id, :type, :title, :message, :link, CURRENT_TIMESTAMP)
+            """), {
+                "user_id": cert.employee_id,
+                "type": "permissions_revoked",
+                "title": "Permissions Revoked During Certification",
+                "message": f"The following permissions were revoked: {', '.join(permissions_revoked)}",
+                "link": "/my-permissions"
+            })
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": "Access certification completed",
+            "permissions_revoked": len(permissions_revoked)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Certify access error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/certifications/{cert_id}/skip")
+async def skip_certification(
+    cert_id: int,
+    data: dict,  # { "reason": "..." }
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Manager skips certification with reason (requires escalation approval)"""
+    try:
+        if not data.get('reason'):
+            raise HTTPException(400, "Reason required to skip certification")
+
+        # Get certification
+        cert = db.execute(text("""
+            SELECT * FROM access_certifications WHERE id = :cert_id
+        """), {"cert_id": cert_id}).fetchone()
+
+        if not cert:
+            raise HTTPException(404, "Certification not found")
+
+        # Update status
+        db.execute(text("""
+            UPDATE access_certifications
+            SET status = 'skipped',
+                certification_notes = :notes
+            WHERE id = :cert_id
+        """), {
+            "cert_id": cert_id,
+            "notes": f"SKIPPED: {data['reason']}"
+        })
+
+        # Create escalation notification to admin/compliance
+        db.execute(text("""
+            INSERT INTO notifications (user_id, type, title, message, created_at)
+            SELECT u.id, 'certification_skipped',
+                   'Certification Skipped - Requires Review',
+                   :message,
+                   CURRENT_TIMESTAMP
+            FROM users u
+            WHERE u.role IN ('management', 'admin')
+        """), {
+            "message": f"Manager {current_user.full_name} skipped certification {cert_id}. Reason: {data['reason']}"
+        })
+
+        db.commit()
+
+        return {"success": True, "message": "Certification skipped, escalated to compliance"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Skip certification error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/users/{user_id}/certifications/history")
+async def get_certification_history(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all past certifications for an employee"""
+    try:
+        query = text("""
+            SELECT ac.*, cb.full_name as certified_by_name
+            FROM access_certifications ac
+            LEFT JOIN users cb ON ac.certified_by_id = cb.id
+            WHERE ac.employee_id = :user_id
+            ORDER BY ac.due_date DESC
+        """)
+
+        certifications = db.execute(query, {"user_id": user_id}).fetchall()
+
+        return {
+            "certifications": [
+                {
+                    "period": cert.certification_period,
+                    "due_date": cert.due_date.isoformat(),
+                    "status": cert.status,
+                    "certified_by": cert.certified_by_name if cert.certified_by_name else None,
+                    "certified_at": cert.certified_at.isoformat() if cert.certified_at else None,
+                    "permissions_changed": cert.permissions_changed
+                }
+                for cert in certifications
+            ]
+        }
+
+    except Exception as e:
+        logger.error(f"Get certification history error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# COMPLIANCE DASHBOARD - API ENDPOINTS
+# ============================================================================
+
+@app.get("/api/v1/compliance/overview")
+async def get_compliance_overview(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get high-level compliance metrics
+    Admin/Management only
+    """
+    try:
+        if current_user.role not in ['management', 'admin']:
+            raise HTTPException(403, "Admin access required")
+
+        # Total users
+        total_users = db.execute(text("""
+            SELECT COUNT(*) as count FROM users WHERE account_status = 'active'
+        """)).fetchone().count
+
+        # Certification metrics
+        total_certs = db.execute(text("""
+            SELECT COUNT(*) as count FROM access_certifications
+        """)).fetchone().count
+
+        certified = db.execute(text("""
+            SELECT COUNT(*) as count FROM access_certifications
+            WHERE status = 'certified'
+        """)).fetchone().count
+
+        overdue = db.execute(text("""
+            SELECT COUNT(*) as count FROM access_certifications
+            WHERE status = 'overdue'
+        """)).fetchone().count
+
+        # Permission metrics
+        total_permissions_granted = db.execute(text("""
+            SELECT COUNT(*) as count FROM user_permissions
+            WHERE granted = TRUE
+        """)).fetchone().count
+
+        # High-risk permissions (define your own criteria)
+        high_risk_perms = ['delete_clients', 'delete_loans', 'manage_users',
+                          'access_audit_logs', 'emergency_revoke']
+        high_risk_count = db.execute(text("""
+            SELECT COUNT(*) as count FROM user_permissions
+            WHERE granted = TRUE
+            AND permission_key = ANY(:high_risk_perms)
+        """), {"high_risk_perms": high_risk_perms}).fetchone().count
+
+        # Recent access changes (last 30 days)
+        thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+        recent_changes = db.execute(text("""
+            SELECT COUNT(*) as count FROM user_permissions
+            WHERE granted_at >= :since
+            OR revoked_at >= :since
+        """), {"since": thirty_days_ago}).fetchone().count
+
+        return {
+            "users": {
+                "total": total_users,
+                "active": total_users
+            },
+            "certifications": {
+                "total": total_certs,
+                "certified": certified,
+                "certified_percent": round((certified / total_certs * 100) if total_certs > 0 else 0, 1),
+                "overdue": overdue,
+                "pending": total_certs - certified - overdue
+            },
+            "permissions": {
+                "total_granted": total_permissions_granted,
+                "high_risk_granted": high_risk_count,
+                "recent_changes_30d": recent_changes
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get compliance overview error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/compliance/certifications/by-department")
+async def get_certifications_by_department(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get certification completion rates by department"""
+    try:
+        if current_user.role not in ['management', 'admin']:
+            raise HTTPException(403, "Admin access required")
+
+        # Get all departments
+        departments_query = text("""
+            SELECT DISTINCT department FROM users
+            WHERE department IS NOT NULL
+            AND account_status = 'active'
+        """)
+
+        departments = db.execute(departments_query).fetchall()
+
+        results = []
+        for dept_row in departments:
+            dept = dept_row.department
+
+            # Get employees in department
+            dept_employees_query = text("""
+                SELECT COUNT(*) as count FROM users
+                WHERE department = :dept
+                AND account_status = 'active'
+            """)
+
+            total_employees = db.execute(dept_employees_query, {"dept": dept}).fetchone().count
+
+            # Get certifications for these employees
+            total_certs_query = text("""
+                SELECT COUNT(*) as count FROM access_certifications ac
+                JOIN users u ON ac.employee_id = u.id
+                WHERE u.department = :dept
+                AND u.account_status = 'active'
+            """)
+
+            total = db.execute(total_certs_query, {"dept": dept}).fetchone().count
+
+            certified_query = text("""
+                SELECT COUNT(*) as count FROM access_certifications ac
+                JOIN users u ON ac.employee_id = u.id
+                WHERE u.department = :dept
+                AND u.account_status = 'active'
+                AND ac.status = 'certified'
+            """)
+
+            certified = db.execute(certified_query, {"dept": dept}).fetchone().count
+
+            overdue_query = text("""
+                SELECT COUNT(*) as count FROM access_certifications ac
+                JOIN users u ON ac.employee_id = u.id
+                WHERE u.department = :dept
+                AND u.account_status = 'active'
+                AND ac.status = 'overdue'
+            """)
+
+            overdue = db.execute(overdue_query, {"dept": dept}).fetchone().count
+
+            results.append({
+                "department": dept,
+                "total_employees": total_employees,
+                "total_certifications": total,
+                "certified": certified,
+                "certified_percent": round((certified / total * 100) if total > 0 else 0, 1),
+                "overdue": overdue
+            })
+
+        return {"departments": results}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get certifications by department error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/compliance/export")
+async def export_compliance_report(
+    format: str = 'csv',
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Generate downloadable compliance report"""
+    try:
+        if current_user.role not in ['management', 'admin']:
+            raise HTTPException(403, "Admin access required")
+
+        # Gather compliance data
+        overview = await get_compliance_overview(current_user, db)
+        dept_data = await get_certifications_by_department(current_user, db)
+
+        if format == 'csv':
+            import csv
+            import io
+
+            output = io.StringIO()
+            writer = csv.writer(output)
+
+            # Header
+            writer.writerow(['Compliance Report', f'Generated: {datetime.now(timezone.utc).isoformat()}'])
+            writer.writerow([])
+
+            # Overview
+            writer.writerow(['OVERVIEW'])
+            writer.writerow(['Total Users', overview['users']['total']])
+            writer.writerow(['Certifications Completed', f"{overview['certifications']['certified_percent']}%"])
+            writer.writerow(['Overdue Certifications', overview['certifications']['overdue']])
+            writer.writerow([])
+
+            # Department breakdown
+            writer.writerow(['DEPARTMENT BREAKDOWN'])
+            writer.writerow(['Department', 'Employees', 'Certifications', 'Certified %', 'Overdue'])
+            for dept in dept_data['departments']:
+                writer.writerow([
+                    dept['department'],
+                    dept['total_employees'],
+                    dept['total_certifications'],
+                    f"{dept['certified_percent']}%",
+                    dept['overdue']
+                ])
+
+            # Return CSV
+            from fastapi.responses import StreamingResponse
+            output.seek(0)
+            return StreamingResponse(
+                iter([output.getvalue()]),
+                media_type="text/csv",
+                headers={"Content-Disposition": f"attachment; filename=compliance_report_{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv"}
+            )
+
+        raise HTTPException(400, "Only CSV format supported")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Export compliance report error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
 # TAB 6: ACCESS & AUDIT - API ENDPOINTS
 # ============================================================================
 
@@ -16341,6 +16933,37 @@ def run_phase2_permission_migration():
         """))
         db.commit()
         logger.info("   ✅ Created notifications table")
+
+        # Step 3e: Create access_certifications table
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS access_certifications (
+                id SERIAL PRIMARY KEY,
+                employee_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                certification_period VARCHAR(20) NOT NULL,
+                due_date DATE NOT NULL,
+                status VARCHAR(20) DEFAULT 'pending',
+
+                certified_by_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                certified_at TIMESTAMP,
+                certification_notes TEXT,
+
+                permissions_snapshot JSONB,
+                permissions_changed JSONB,
+
+                reminder_sent_30d BOOLEAN DEFAULT FALSE,
+                reminder_sent_7d BOOLEAN DEFAULT FALSE,
+                reminder_sent_overdue BOOLEAN DEFAULT FALSE,
+
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_certifications_employee ON access_certifications(employee_id);
+            CREATE INDEX IF NOT EXISTS idx_certifications_due_date ON access_certifications(due_date);
+            CREATE INDEX IF NOT EXISTS idx_certifications_status ON access_certifications(status);
+            CREATE INDEX IF NOT EXISTS idx_certifications_period ON access_certifications(certification_period);
+        """))
+        db.commit()
+        logger.info("   ✅ Created access_certifications table")
 
         # Step 4: Check if templates already exist
         result = db.execute(text("""

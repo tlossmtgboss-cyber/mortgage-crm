@@ -716,4 +716,62 @@ export const notificationsApi = {
   },
 };
 
+// Certifications API
+export const certificationsApi = {
+  // Get due certifications for manager's team
+  getDueCertifications: async (status = null) => {
+    const params = status ? { status } : {};
+    const response = await api.get('/api/v1/certifications/due', { params });
+    return response;
+  },
+
+  // Get certification details
+  getCertificationDetails: async (certId) => {
+    const response = await api.get(`/api/v1/certifications/${certId}`);
+    return response;
+  },
+
+  // Certify employee access
+  certifyAccess: async (certId, data) => {
+    const response = await api.post(`/api/v1/certifications/${certId}/certify`, data);
+    return response;
+  },
+
+  // Skip certification
+  skipCertification: async (certId, data) => {
+    const response = await api.post(`/api/v1/certifications/${certId}/skip`, data);
+    return response;
+  },
+
+  // Get certification history for employee
+  getCertificationHistory: async (userId) => {
+    const response = await api.get(`/api/v1/users/${userId}/certifications/history`);
+    return response;
+  },
+};
+
+// Compliance Dashboard API
+export const complianceApi = {
+  // Get compliance overview metrics
+  getOverview: async () => {
+    const response = await api.get('/api/v1/compliance/overview');
+    return response;
+  },
+
+  // Get certifications by department
+  getCertificationsByDepartment: async () => {
+    const response = await api.get('/api/v1/compliance/certifications/by-department');
+    return response;
+  },
+
+  // Export compliance report
+  exportReport: async (format = 'csv') => {
+    const response = await api.get('/api/v1/compliance/export', {
+      params: { format },
+      responseType: 'blob'
+    });
+    return response;
+  },
+};
+
 export default api;
