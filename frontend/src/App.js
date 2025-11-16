@@ -45,6 +45,7 @@ const TeamMembers = lazy(() => import('./pages/TeamMembers'));
 const TeamMemberProfile = lazy(() => import('./pages/TeamMemberProfile'));
 const MyProfile = lazy(() => import('./pages/MyProfile'));
 const MyPermissions = lazy(() => import('./pages/MyPermissions'));
+const ComplianceDashboard = lazy(() => import('./pages/ComplianceDashboard'));
 const DataUpload = lazy(() => import('./pages/DataUpload'));
 const Users = lazy(() => import('./pages/Users'));
 const UserProfile = lazy(() => import('./pages/UserProfile'));
@@ -767,6 +768,27 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><MyPermissions /></LazyPage>
+                  </main>
+                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/compliance"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><ComplianceDashboard /></LazyPage>
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />

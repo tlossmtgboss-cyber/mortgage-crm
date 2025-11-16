@@ -14304,6 +14304,88 @@ async def export_compliance_report(
 
 
 # ============================================================================
+# CERTIFICATION BACKGROUND JOBS - MANUAL TRIGGERS
+# ============================================================================
+
+@app.post("/api/v1/admin/certification-jobs/create")
+async def run_create_certifications(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Manually trigger quarterly certification creation (admin only)
+    Creates certifications for all active employees for the current quarter
+    """
+    try:
+        if current_user.role not in ['management', 'admin']:
+            raise HTTPException(403, "Admin access required")
+
+        # Import and run the job
+        import sys
+        import os
+        sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+        from jobs.certification_jobs import create_quarterly_certifications
+        result = create_quarterly_certifications()
+
+        if result.get('success'):
+            return {
+                "success": True,
+                "message": f"Created {result.get('created', 0)} certifications for {result.get('quarter')}",
+                "created": result.get('created', 0),
+                "skipped": result.get('skipped', 0),
+                "quarter": result.get('quarter')
+            }
+        else:
+            raise HTTPException(500, f"Job failed: {result.get('error')}")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Run create certifications error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/admin/certification-jobs/reminders")
+async def run_certification_reminders(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Manually trigger certification reminder sending (admin only)
+    Sends 30-day, 7-day, and overdue reminders
+    """
+    try:
+        if current_user.role not in ['management', 'admin']:
+            raise HTTPException(403, "Admin access required")
+
+        # Import and run the job
+        import sys
+        import os
+        sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+        from jobs.certification_jobs import send_certification_reminders
+        result = send_certification_reminders()
+
+        if result.get('success'):
+            return {
+                "success": True,
+                "message": "Certification reminders sent successfully",
+                "reminders_30d": result.get('reminders_30d', 0),
+                "reminders_7d": result.get('reminders_7d', 0),
+                "overdue": result.get('overdue', 0)
+            }
+        else:
+            raise HTTPException(500, f"Job failed: {result.get('error')}")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Run certification reminders error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
 # TAB 6: ACCESS & AUDIT - API ENDPOINTS
 # ============================================================================
 

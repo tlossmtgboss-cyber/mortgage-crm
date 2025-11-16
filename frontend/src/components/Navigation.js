@@ -90,6 +90,17 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
               Partners {renderBadge(taskCounts.partners)}
             </Link>
           )}
+
+          {/* Compliance Dashboard - Management/Admin only */}
+          {(userRole === 'management' || userRole === 'admin') && (
+            <Link
+              to="/compliance"
+              className={`nav-link ${isActive('/compliance') ? 'active' : ''}`}
+            >
+              Compliance
+            </Link>
+          )}
+
           <Link
             to="/ai-underwriter"
             className={`nav-link ${isActive('/ai-underwriter') ? 'active' : ''}`}
