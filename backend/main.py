@@ -3839,7 +3839,17 @@ async def approve_reconciliation(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Approve extracted data and apply to CRM"""
+    """
+    Approve extracted data and apply to CRM
+
+    AI LEARNING SYSTEM:
+    - All user approvals/corrections are stored in AITrainingEvent table
+    - Future enhancement: Analyze training events to identify patterns
+    - When user consistently approves similar extractions, AI can auto-execute
+    - Example: If user approves 10 "closing" emails with >95% confidence,
+      future similar emails can be auto-applied
+    - Settings will allow users to enable/disable AI auto-execution per category
+    """
     try:
         # Get extracted data
         extracted = db.query(ExtractedData).join(
@@ -3886,9 +3896,11 @@ async def approve_reconciliation(
 
         if applied:
             extracted.status = "approved"
+            extracted.reviewed_by = current_user.id
+            extracted.reviewed_at = datetime.now(timezone.utc)
             db.commit()
 
-            logger.info(f"Approved and applied extracted data {extracted.id}")
+            logger.info(f"Approved and applied extracted data {extracted.id} by user {current_user.id}")
 
             return {
                 "status": "success",
@@ -3939,9 +3951,11 @@ async def reject_reconciliation(
             db.add(training)
 
         extracted.status = "rejected"
+        extracted.reviewed_by = current_user.id
+        extracted.reviewed_at = datetime.now(timezone.utc)
         db.commit()
 
-        logger.info(f"Rejected extracted data {extracted.id}: {rejection.reason}")
+        logger.info(f"Rejected extracted data {extracted.id} by user {current_user.id}: {rejection.reason}")
 
         return {
             "status": "success",
@@ -13798,25 +13812,21 @@ async def check_phase2_permission_migration(db: Session = Depends(get_db)):
 @app.post("/api/v1/migrations/run-phase2-permissions")
 async def run_phase2_permission_migration(
     migration_key: str = "",
-    current_user: Optional[User] = None,
     db: Session = Depends(get_db)
 ):
     """
     Run Phase 2 Permission System Migration
     Creates permission tables and seeds default templates
 
-    Can be called with:
-    1. Migration key: POST with migration_key="run-migration-now" (no auth needed)
-    2. Authenticated user: Must be admin or manager
+    Call with: POST /api/v1/migrations/run-phase2-permissions?migration_key=run-migration-now
     """
     try:
-        # Check migration key OR user auth
+        # Check migration key
         if migration_key != "run-migration-now":
-            # Require auth if no migration key
-            if not current_user:
-                raise HTTPException(status_code=401, detail="Authentication required")
-            if current_user.role not in ['admin', 'manager']:
-                raise HTTPException(status_code=403, detail="Only admins can run migrations")
+            raise HTTPException(
+                status_code=403,
+                detail="Invalid migration key. Use migration_key=run-migration-now"
+            )
 
         results = []
 
