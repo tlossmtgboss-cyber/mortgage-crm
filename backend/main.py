@@ -14153,7 +14153,7 @@ async def fix_impersonation_table(
 ):
     """
     Fix impersonation_sessions table schema
-    Adds missing impersonated_user_id column if it doesn't exist
+    Adds all missing Phase 1 columns
     """
     if migration_key != "fix-impersonation-schema":
         raise HTTPException(status_code=403, detail="Invalid migration key")
@@ -14161,42 +14161,53 @@ async def fix_impersonation_table(
     try:
         results = []
 
-        # Check if column exists
-        check_column = db.execute(text("""
+        # Get existing columns
+        existing_columns_result = db.execute(text("""
             SELECT column_name
             FROM information_schema.columns
             WHERE table_name = 'impersonation_sessions'
-            AND column_name = 'impersonated_user_id'
         """))
+        existing_columns = {row[0] for row in existing_columns_result}
 
-        if check_column.fetchone():
-            return {
-                "success": True,
-                "message": "impersonated_user_id column already exists",
-                "results": ["✅ Schema already up to date"]
-            }
+        # Define required columns and their SQL definitions
+        required_columns = {
+            'session_token': 'VARCHAR UNIQUE NOT NULL',
+            'manager_id': 'INTEGER REFERENCES users(id) NOT NULL',
+            'impersonated_user_id': 'INTEGER REFERENCES users(id) NOT NULL',
+            'mode': 'VARCHAR NOT NULL',
+            'reason': 'VARCHAR NOT NULL',
+            'duration_minutes': 'INTEGER NOT NULL',
+            'notify_employee': 'BOOLEAN DEFAULT FALSE',
+            'started_at': 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+            'expires_at': 'TIMESTAMP NOT NULL',
+            'ended_at': 'TIMESTAMP',
+            'is_active': 'BOOLEAN DEFAULT TRUE'
+        }
 
-        # Add the column
-        db.execute(text("""
-            ALTER TABLE impersonation_sessions
-            ADD COLUMN impersonated_user_id INTEGER REFERENCES users(id)
-        """))
-        results.append("✅ Added impersonated_user_id column")
-
-        # Update any existing rows (set to NULL for now, they'll need to be recreated)
-        db.execute(text("""
-            UPDATE impersonation_sessions
-            SET impersonated_user_id = NULL
-            WHERE impersonated_user_id IS NULL
-        """))
+        # Add missing columns
+        for column_name, column_def in required_columns.items():
+            if column_name not in existing_columns:
+                # Modify definition for adding column (remove constraints like UNIQUE, NOT NULL for existing data)
+                safe_def = column_def.replace(' UNIQUE', '').replace(' NOT NULL', '')
+                db.execute(text(f"""
+                    ALTER TABLE impersonation_sessions
+                    ADD COLUMN {column_name} {safe_def}
+                """))
+                results.append(f"✅ Added {column_name} column")
+                existing_columns.add(column_name)
 
         db.commit()
+
+        if len(results) == 0:
+            results.append("✅ Schema already up to date")
+
         results.append("✅ Migration completed successfully")
 
         return {
             "success": True,
             "message": "Impersonation table schema fixed",
-            "results": results
+            "results": results,
+            "columns_added": len([r for r in results if "Added" in r])
         }
 
     except Exception as e:
