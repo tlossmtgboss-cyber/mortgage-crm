@@ -14184,16 +14184,18 @@ async def fix_impersonation_table(
             'is_active': 'BOOLEAN DEFAULT TRUE'
         }
 
-        # Fix employee_id column if it exists with NOT NULL constraint
-        if 'employee_id' in existing_columns:
+        # Fix any extra columns with NOT NULL constraints that aren't in our model
+        extra_columns = existing_columns - set(required_columns.keys()) - {'id'}
+        for column in extra_columns:
             try:
-                db.execute(text("""
+                db.execute(text(f"""
                     ALTER TABLE impersonation_sessions
-                    ALTER COLUMN employee_id DROP NOT NULL
+                    ALTER COLUMN {column} DROP NOT NULL
                 """))
-                results.append("✅ Made employee_id column nullable")
+                results.append(f"✅ Made {column} column nullable")
             except Exception as e:
-                logger.warning(f"Could not alter employee_id: {e}")
+                # Column might already be nullable or might not have NOT NULL constraint
+                logger.debug(f"Could not alter {column}: {e}")
 
         # Add missing columns
         for column_name, column_def in required_columns.items():
