@@ -1464,7 +1464,6 @@
 
 .efficiency-summary {
   margin-bottom: 24px;
-  text-align: center;
 }
 
 .efficiency-score-display {
@@ -1472,6 +1471,55 @@
   border-radius: 12px;
   padding: 12px;
   color: white;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+/* Key Metrics Grid */
+.efficiency-key-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.efficiency-metric-card {
+  background: white;
+  border-radius: 8px;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  text-align: center;
+}
+
+.efficiency-metric-card .metric-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #666;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.efficiency-metric-card .metric-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin-bottom: 4px;
+}
+
+.efficiency-metric-card .metric-change {
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.efficiency-metric-card .metric-change.positive {
+  color: #10b981;
+}
+
+.efficiency-metric-card .metric-change.negative {
+  color: #ef4444;
 }
 
 .score-number {
@@ -1509,7 +1557,7 @@
 
 .efficiency-cards {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 16px;
   margin-bottom: 20px;
 }
@@ -1650,28 +1698,62 @@
   line-height: 1;
 }
 
+.efficiency-bottlenecks-section {
+  margin-top: 20px;
+  padding: 16px;
+  background: #fff9f0;
+  border-radius: 8px;
+  border: 1px solid #fed7aa;
+}
+
+.efficiency-bottlenecks-section h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #92400e;
+  margin: 0 0 12px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
 .bottleneck-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .bottleneck-item {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: 10px;
   font-size: 12px;
   color: #555;
   line-height: 1.4;
+  padding: 8px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #fde68a;
 }
 
 .bottleneck-icon {
   font-size: 14px;
   flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.bottleneck-content {
+  flex: 1;
 }
 
 .bottleneck-text {
-  flex: 1;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 4px;
+}
+
+.bottleneck-meta {
+  font-size: 11px;
+  color: #78350f;
+  font-weight: 500;
 }
 
 .btn-view-efficiency {
@@ -1695,6 +1777,16 @@
 /* Responsive - Efficiency */
 @media (max-width: 1400px) {
   .efficiency-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .efficiency-key-metrics {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .efficiency-key-metrics {
     grid-template-columns: 1fr;
   }
 }

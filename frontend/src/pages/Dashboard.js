@@ -8,6 +8,20 @@ function Dashboard() {
   const { hasPermission, userRole } = usePermissions();
   const [loading, setLoading] = useState(true);
 
+  // Check if current user is demo user
+  const isDemoUser = () => {
+    try {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        return user.email === 'demo@example.com';
+      }
+    } catch (error) {
+      console.error('Error checking demo user:', error);
+    }
+    return false;
+  };
+
   // Dashboard data states
   const [prioritizedTasks, setPrioritizedTasks] = useState([]);
   const [pipelineStats, setPipelineStats] = useState([]);
@@ -261,7 +275,8 @@ function Dashboard() {
 
     if (containerId === 'production-tracker') {
       // PHASE 4: Only show for Sales and Management roles (NOT Operations)
-      if (userRole === 'operations') {
+      // Always show for demo user
+      if (userRole === 'operations' && !isDemoUser()) {
         return null;
       }
 
@@ -415,7 +430,8 @@ function Dashboard() {
 
     if (containerId === 'efficiency') {
       // PHASE 4: Only show for Operations and Management roles (NOT Sales)
-      if (userRole === 'sales') {
+      // Always show for demo user
+      if (userRole === 'sales' && !isDemoUser()) {
         return null;
       }
 
@@ -432,26 +448,58 @@ function Dashboard() {
             draggable="true"
             onDragStart={() => handleDragStart(index)}
           >⋮⋮</div>
-          <div className="block-header">
-            <h2>📊 Loan Efficiency Monitor</h2>
+          <div className="block-header clickable-block" onClick={() => navigate('/dashboard/efficiency')}>
+            <h2>📊 Pipeline Efficiency Monitor</h2>
           </div>
 
-          {/* Summary Bar */}
+          {/* Overall Score & Key Metrics Row */}
           <div className="efficiency-summary">
             <div className="efficiency-score-display">
               <div className="score-number">{efficiency.overallScore || 0}</div>
-              <div className="score-label">Pipeline Efficiency</div>
+              <div className="score-label">Overall Efficiency</div>
               <div className={`score-trend ${(efficiency.trend || 0) >= 0 ? 'up' : 'down'}`}>
-                {(efficiency.trend || 0) >= 0 ? '↑' : '↓'} {Math.abs(efficiency.trend || 0)}% (7 days)
+                {(efficiency.trend || 0) >= 0 ? '↑' : '↓'} {Math.abs(efficiency.trend || 0)}% vs. last period
+              </div>
+            </div>
+
+            {/* Key Metrics Grid */}
+            <div className="efficiency-key-metrics">
+              <div className="efficiency-metric-card">
+                <div className="metric-label">Avg. Time to Close</div>
+                <div className="metric-value">{efficiency.avgTimeToClose || 0} days</div>
+                <div className={`metric-change ${(efficiency.avgTimeToCloseChange || 0) < 0 ? 'positive' : 'negative'}`}>
+                  {(efficiency.avgTimeToCloseChange || 0) < 0 ? '↓' : '↑'} {Math.abs(efficiency.avgTimeToCloseChange || 0)} days
+                </div>
+              </div>
+              <div className="efficiency-metric-card">
+                <div className="metric-label">Pull-Through Rate</div>
+                <div className="metric-value">{efficiency.pullThroughRate || 0}%</div>
+                <div className={`metric-change ${(efficiency.pullThroughRateChange || 0) >= 0 ? 'positive' : 'negative'}`}>
+                  {(efficiency.pullThroughRateChange || 0) >= 0 ? '↑' : '↓'} {Math.abs(efficiency.pullThroughRateChange || 0)}%
+                </div>
+              </div>
+              <div className="efficiency-metric-card">
+                <div className="metric-label">Loans Falling Behind</div>
+                <div className="metric-value">{efficiency.loansFallingBehind || 0}</div>
+                <div className={`metric-change ${(efficiency.loansFallingBehindChange || 0) < 0 ? 'positive' : 'negative'}`}>
+                  {(efficiency.loansFallingBehindChange || 0) < 0 ? '↓' : '↑'} {Math.abs(efficiency.loansFallingBehindChange || 0)}
+                </div>
+              </div>
+              <div className="efficiency-metric-card">
+                <div className="metric-label">Automation Rate</div>
+                <div className="metric-value">{efficiency.automationRate || 0}%</div>
+                <div className={`metric-change ${(efficiency.automationRateChange || 0) >= 0 ? 'positive' : 'negative'}`}>
+                  {(efficiency.automationRateChange || 0) >= 0 ? '↑' : '↓'} {Math.abs(efficiency.automationRateChange || 0)}%
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Three Mini-Cards */}
+          {/* Stage Performance & Team Performance Row */}
           <div className="efficiency-cards">
             {/* Stage Efficiency */}
             <div className="efficiency-card stage-efficiency">
-              <h4>Stage Efficiency</h4>
+              <h4>Stage Performance</h4>
               <div className="stage-bars">
                 {(efficiency.stages || []).map((stage, idx) => (
                   <div key={idx} className="stage-bar-row">
@@ -470,7 +518,7 @@ function Dashboard() {
 
             {/* Team Efficiency */}
             <div className="efficiency-card team-efficiency">
-              <h4>Team Efficiency</h4>
+              <h4>Team Performance</h4>
               <div className="team-roles">
                 {(efficiency.team || []).map((role, idx) => (
                   <div key={idx} className="team-role-row">
@@ -486,19 +534,21 @@ function Dashboard() {
                 ))}
               </div>
             </div>
+          </div>
 
-            {/* Bottlenecks */}
-            <div className="efficiency-card bottlenecks">
-              <h4>Active Bottlenecks</h4>
-              <div className="bottleneck-count">{efficiency.bottleneckCount || 0}</div>
-              <div className="bottleneck-list">
-                {(efficiency.bottlenecks || []).slice(0, 3).map((bottleneck, idx) => (
-                  <div key={idx} className="bottleneck-item">
-                    <span className="bottleneck-icon">⚠️</span>
-                    <span className="bottleneck-text">{bottleneck}</span>
+          {/* Bottlenecks Section */}
+          <div className="efficiency-bottlenecks-section">
+            <h4>Active Bottlenecks ({efficiency.bottleneckCount || 0})</h4>
+            <div className="bottleneck-list">
+              {(efficiency.bottlenecks || []).slice(0, 4).map((bottleneck, idx) => (
+                <div key={idx} className="bottleneck-item">
+                  <span className="bottleneck-icon">⚠️</span>
+                  <div className="bottleneck-content">
+                    <div className="bottleneck-text">{bottleneck.issue}</div>
+                    <div className="bottleneck-meta">{bottleneck.stage} • {bottleneck.affectedLoans} loans • {bottleneck.avgDelay}</div>
                   </div>
-                ))}
-              </div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -602,7 +652,8 @@ function Dashboard() {
 
     if (containerId === 'referrals') {
       // PHASE 4: Only show for Sales and Management roles (NOT Operations)
-      if (userRole === 'operations') {
+      // Always show for demo user
+      if (userRole === 'operations' && !isDemoUser()) {
         return null;
       }
 
@@ -659,7 +710,8 @@ function Dashboard() {
 
     if (containerId === 'team' && teamStats.has_team) {
       // PHASE 4: Only show for Sales and Management roles (NOT Operations for now)
-      if (userRole === 'operations') {
+      // Always show for demo user
+      if (userRole === 'operations' && !isDemoUser()) {
         return null;
       }
 
@@ -987,28 +1039,64 @@ const mockMessages = () => [
 
 const mockEfficiency = () => ({
   overallScore: 78,
-  trend: 5,
+  trend: 5.2,
+
+  // Key Metrics
+  avgTimeToClose: 35.2,
+  avgTimeToCloseChange: -2.3,
+  pullThroughRate: 68,
+  pullThroughRateChange: 4.1,
+  loansFallingBehind: 12,
+  loansFallingBehindChange: -3,
+  automationRate: 42,
+  automationRateChange: 8.5,
+
+  // Stage Performance
   stages: [
-    { name: 'Lead Intake', efficiency: 92, status: 'on-track' },
-    { name: 'Pre-Approval', efficiency: 85, status: 'on-track' },
-    { name: 'Contract', efficiency: 78, status: 'slightly-delayed' },
+    { name: 'Lead Generation', efficiency: 85, status: 'on-track' },
+    { name: 'Pre-Qualification', efficiency: 72, status: 'slightly-delayed' },
+    { name: 'Application', efficiency: 81, status: 'on-track' },
     { name: 'Processing', efficiency: 65, status: 'behind' },
-    { name: 'Underwriting', efficiency: 88, status: 'on-track' },
-    { name: 'Conditions', efficiency: 58, status: 'behind' },
-    { name: 'CTC', efficiency: 82, status: 'on-track' },
-    { name: 'Closing', efficiency: 90, status: 'on-track' }
+    { name: 'Underwriting', efficiency: 70, status: 'slightly-delayed' },
+    { name: 'Clear to Close', efficiency: 88, status: 'on-track' },
+    { name: 'Closing', efficiency: 92, status: 'on-track' }
   ],
+
+  // Team Performance
   team: [
-    { role: 'Loan Officer', performance: 85 },
-    { role: 'App Analyst', performance: 92 },
-    { role: 'Processor', performance: 68 },
-    { role: 'Concierge', performance: 88 }
+    { role: 'Loan Officers', performance: 82 },
+    { role: 'Processors', performance: 68 },
+    { role: 'Underwriters', performance: 75 },
+    { role: 'Closers', performance: 91 }
   ],
-  bottleneckCount: 8,
+
+  // Bottlenecks
+  bottleneckCount: 6,
   bottlenecks: [
-    '5 loans stuck in Conditions > 72 hours',
-    '3 loans waiting on borrower docs',
-    '2 loans with unreviewed appraisal reports'
+    {
+      issue: 'Missing Documents',
+      stage: 'Processing',
+      affectedLoans: 8,
+      avgDelay: '4.5 days'
+    },
+    {
+      issue: 'Income Verification Delays',
+      stage: 'Pre-Qualification',
+      affectedLoans: 6,
+      avgDelay: '3.2 days'
+    },
+    {
+      issue: 'Appraisal Review Backlog',
+      stage: 'Underwriting',
+      affectedLoans: 5,
+      avgDelay: '2.8 days'
+    },
+    {
+      issue: 'Credit Report Disputes',
+      stage: 'Processing',
+      affectedLoans: 4,
+      avgDelay: '5.1 days'
+    }
   ]
 });
 
