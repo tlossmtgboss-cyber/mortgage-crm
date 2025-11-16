@@ -116,22 +116,23 @@
 }
 
 .score-trend-large {
-  font-size: 18px;
+  font-size: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  color: white;
-  font-weight: 600;
+  color: #ffffff !important;
+  font-weight: 700;
   opacity: 1;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .score-trend-large.up {
-  color: white;
+  color: #ffffff !important;
 }
 
 .score-trend-large.down {
-  color: white;
+  color: #ffffff !important;
 }
 
 /* Key Metrics Grid */
