@@ -90,7 +90,7 @@ try:
                 INSERT INTO employee_permissions
                 (employee_id, permission_key, granted, granted_by, granted_at, inherited_from)
                 VALUES
-                (:emp_id, 'team.impersonate', true, 1, CURRENT_TIMESTAMP, 'manual')
+                (:emp_id, 'team.impersonate', true, 1, CURRENT_TIMESTAMP, 'none')
             """), {'emp_id': employee_id})
             conn.commit()
             print("   ✅ Granted team.impersonate permission")
@@ -119,7 +119,7 @@ try:
                     INSERT INTO employee_permissions
                     (employee_id, permission_key, granted, granted_by, granted_at, inherited_from)
                     VALUES
-                    (:emp_id, :perm_key, true, 1, CURRENT_TIMESTAMP, 'demo_setup')
+                    (:emp_id, :perm_key, true, 1, CURRENT_TIMESTAMP, 'none')
                 """), {'emp_id': employee_id, 'perm_key': perm_key})
 
         conn.commit()
