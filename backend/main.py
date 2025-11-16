@@ -2298,9 +2298,28 @@ async def get_current_user_flexible(
             db.commit()
 
             # Get the user associated with this API key
-            user = db.query(User).filter(User.id == api_key.user_id).first()
-            if user:
-                return user
+            actual_user = db.query(User).filter(User.id == api_key.user_id).first()
+            if actual_user:
+                # Check for impersonation
+                impersonation_token = request.headers.get("X-Impersonation-Token")
+                if impersonation_token:
+                    session = db.query(ImpersonationSession).filter(
+                        ImpersonationSession.session_token == impersonation_token,
+                        ImpersonationSession.is_active == True,
+                        ImpersonationSession.expires_at > datetime.now(timezone.utc),
+                        ImpersonationSession.manager_id == actual_user.id
+                    ).first()
+
+                    if session:
+                        impersonated_user = db.query(User).filter(
+                            User.id == session.impersonated_user_id
+                        ).first()
+
+                        if impersonated_user:
+                            logger.info(f"Impersonation active (API key): {actual_user.email} → {impersonated_user.email}")
+                            return impersonated_user
+
+                return actual_user
 
         # If we have X-API-Key header but it's invalid, raise exception
         raise credentials_exception
@@ -2328,10 +2347,30 @@ async def get_current_user_flexible(
         db.commit()
 
         # Get the user associated with this API key
-        user = db.query(User).filter(User.id == api_key.user_id).first()
-        if user is None:
+        actual_user = db.query(User).filter(User.id == api_key.user_id).first()
+        if actual_user is None:
             raise credentials_exception
-        return user
+
+        # Check for impersonation
+        impersonation_token = request.headers.get("X-Impersonation-Token")
+        if impersonation_token:
+            session = db.query(ImpersonationSession).filter(
+                ImpersonationSession.session_token == impersonation_token,
+                ImpersonationSession.is_active == True,
+                ImpersonationSession.expires_at > datetime.now(timezone.utc),
+                ImpersonationSession.manager_id == actual_user.id
+            ).first()
+
+            if session:
+                impersonated_user = db.query(User).filter(
+                    User.id == session.impersonated_user_id
+                ).first()
+
+                if impersonated_user:
+                    logger.info(f"Impersonation active (Bearer API key): {actual_user.email} → {impersonated_user.email}")
+                    return impersonated_user
+
+        return actual_user
 
     # Otherwise, treat it as a JWT token
     try:
@@ -2342,10 +2381,33 @@ async def get_current_user_flexible(
     except JWTError:
         raise credentials_exception
 
-    user = db.query(User).filter(User.email == email).first()
-    if user is None:
+    actual_user = db.query(User).filter(User.email == email).first()
+    if actual_user is None:
         raise credentials_exception
-    return user
+
+    # PHASE 3: Check for impersonation (same logic as get_current_user)
+    impersonation_token = request.headers.get("X-Impersonation-Token")
+    if impersonation_token:
+        # Validate impersonation session
+        session = db.query(ImpersonationSession).filter(
+            ImpersonationSession.session_token == impersonation_token,
+            ImpersonationSession.is_active == True,
+            ImpersonationSession.expires_at > datetime.now(timezone.utc),
+            ImpersonationSession.manager_id == actual_user.id
+        ).first()
+
+        if session:
+            # Return the impersonated user instead of the manager
+            impersonated_user = db.query(User).filter(
+                User.id == session.impersonated_user_id
+            ).first()
+
+            if impersonated_user:
+                logger.info(f"Impersonation active (flexible): {actual_user.email} → {impersonated_user.email}")
+                return impersonated_user
+
+    # No impersonation, return actual user
+    return actual_user
 
 # ============================================================================
 # MISSION CONTROL - AI ACTION LOGGING HELPER
