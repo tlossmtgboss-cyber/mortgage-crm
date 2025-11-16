@@ -164,6 +164,383 @@ async def assistant_request_webhook(
         return JSONResponse(status_code=200, content={})
 
 
+# ============================================================================
+# FUNCTION CALLING ENDPOINTS (Called by Vapi during conversations)
+# ============================================================================
+
+@router.post("/functions/get-lead-info")
+async def get_lead_info_function(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Get lead information by phone number
+    Called by Vapi to personalize conversation
+    """
+    try:
+        from main import Lead
+        from sqlalchemy import or_
+
+        data = await request.json()
+        phone = data.get("phone_number")
+
+        if not phone:
+            return {"success": False, "error": "Phone number required"}
+
+        # Clean phone number (remove formatting)
+        phone_clean = ''.join(filter(str.isdigit, phone))
+
+        # Search for lead by phone
+        lead = db.query(Lead).filter(
+            or_(
+                Lead.phone == phone,
+                Lead.phone.contains(phone_clean[-10:])  # Match last 10 digits
+            )
+        ).first()
+
+        if not lead:
+            return {
+                "success": True,
+                "found": False,
+                "message": "No existing lead found"
+            }
+
+        return {
+            "success": True,
+            "found": True,
+            "lead": {
+                "id": lead.id,
+                "name": lead.name,
+                "email": lead.email,
+                "phone": lead.phone,
+                "stage": lead.stage.value if lead.stage else "New",
+                "source": lead.source,
+                "loan_type": lead.loan_type,
+                "preapproval_amount": lead.preapproval_amount,
+                "credit_score": lead.credit_score,
+                "notes": lead.notes
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Error in get_lead_info_function: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/functions/update-lead-status")
+async def update_lead_status_function(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Update lead status/stage
+    Called by Vapi when conversation progresses the lead
+    """
+    try:
+        from main import Lead, LeadStage
+        from sqlalchemy import or_
+        from datetime import datetime, timezone
+
+        data = await request.json()
+        phone = data.get("phone_number")
+        new_stage = data.get("stage")  # e.g., "Prospect", "Application Started"
+        notes = data.get("notes", "")
+
+        if not phone:
+            return {"success": False, "error": "Phone number required"}
+
+        # Clean phone number
+        phone_clean = ''.join(filter(str.isdigit, phone))
+
+        # Find lead
+        lead = db.query(Lead).filter(
+            or_(
+                Lead.phone == phone,
+                Lead.phone.contains(phone_clean[-10:])
+            )
+        ).first()
+
+        if not lead:
+            return {"success": False, "error": "Lead not found"}
+
+        # Update stage if provided and valid
+        if new_stage:
+            try:
+                # Map common stage names to enum values
+                stage_mapping = {
+                    "new": LeadStage.NEW,
+                    "attempted contact": LeadStage.ATTEMPTED_CONTACT,
+                    "prospect": LeadStage.PROSPECT,
+                    "application started": LeadStage.APPLICATION_STARTED,
+                    "application complete": LeadStage.APPLICATION_COMPLETE,
+                    "pre-approved": LeadStage.PRE_APPROVED,
+                }
+
+                stage_key = new_stage.lower()
+                if stage_key in stage_mapping:
+                    lead.stage = stage_mapping[stage_key]
+
+            except Exception as e:
+                logger.error(f"Invalid stage: {new_stage}, {e}")
+
+        # Append notes
+        if notes:
+            timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+            new_note = f"\n[{timestamp}] AI Call: {notes}"
+            lead.notes = (lead.notes or "") + new_note
+
+        lead.last_contact = datetime.now(timezone.utc)
+        lead.updated_at = datetime.now(timezone.utc)
+
+        db.commit()
+        db.refresh(lead)
+
+        return {
+            "success": True,
+            "message": "Lead updated successfully",
+            "lead_id": lead.id,
+            "current_stage": lead.stage.value if lead.stage else None
+        }
+
+    except Exception as e:
+        logger.error(f"Error in update_lead_status_function: {e}")
+        db.rollback()
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/functions/create-task")
+async def create_task_function(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Create a follow-up task
+    Called by Vapi when action items are identified
+    """
+    try:
+        from main import Task, Lead
+        from sqlalchemy import or_
+        from datetime import datetime, timezone, timedelta
+
+        data = await request.json()
+        phone = data.get("phone_number")
+        title = data.get("title")
+        description = data.get("description", "")
+        priority = data.get("priority", "medium")  # low, medium, high
+        due_date_str = data.get("due_date")  # ISO format string
+
+        if not phone or not title:
+            return {"success": False, "error": "Phone number and title required"}
+
+        # Clean phone number
+        phone_clean = ''.join(filter(str.isdigit, phone))
+
+        # Find lead
+        lead = db.query(Lead).filter(
+            or_(
+                Lead.phone == phone,
+                Lead.phone.contains(phone_clean[-10:])
+            )
+        ).first()
+
+        if not lead:
+            return {"success": False, "error": "Lead not found"}
+
+        # Parse due date if provided
+        due_date = None
+        if due_date_str:
+            try:
+                due_date = datetime.fromisoformat(due_date_str.replace('Z', '+00:00'))
+            except:
+                # Default to 24 hours from now if parsing fails
+                due_date = datetime.now(timezone.utc) + timedelta(days=1)
+        else:
+            # Default to 24 hours from now
+            due_date = datetime.now(timezone.utc) + timedelta(days=1)
+
+        # Create task
+        task = Task(
+            title=title,
+            description=description,
+            status="pending",
+            priority=priority,
+            due_date=due_date,
+            lead_id=lead.id,
+            owner_id=lead.owner_id,
+            related_contact_name=lead.name,
+            related_type="lead"
+        )
+
+        db.add(task)
+        db.commit()
+        db.refresh(task)
+
+        return {
+            "success": True,
+            "message": "Task created successfully",
+            "task_id": task.id,
+            "due_date": task.due_date.isoformat() if task.due_date else None
+        }
+
+    except Exception as e:
+        logger.error(f"Error in create_task_function: {e}")
+        db.rollback()
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/functions/schedule-appointment")
+async def schedule_appointment_function(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Schedule an appointment/meeting
+    Called by Vapi when customer requests appointment
+    """
+    try:
+        from main import Activity, ActivityType, Lead, Task
+        from sqlalchemy import or_
+        from datetime import datetime, timezone
+
+        data = await request.json()
+        phone = data.get("phone_number")
+        appointment_type = data.get("type", "Meeting")  # Meeting, Call, etc.
+        appointment_time_str = data.get("appointment_time")
+        notes = data.get("notes", "")
+
+        if not phone:
+            return {"success": False, "error": "Phone number required"}
+
+        # Clean phone number
+        phone_clean = ''.join(filter(str.isdigit, phone))
+
+        # Find lead
+        lead = db.query(Lead).filter(
+            or_(
+                Lead.phone == phone,
+                Lead.phone.contains(phone_clean[-10:])
+            )
+        ).first()
+
+        if not lead:
+            return {"success": False, "error": "Lead not found"}
+
+        # Parse appointment time
+        appointment_time = None
+        if appointment_time_str:
+            try:
+                appointment_time = datetime.fromisoformat(appointment_time_str.replace('Z', '+00:00'))
+            except:
+                pass
+
+        # Map appointment type to ActivityType
+        activity_type_map = {
+            "meeting": ActivityType.MEETING,
+            "call": ActivityType.CALL,
+            "email": ActivityType.EMAIL,
+        }
+
+        activity_type = activity_type_map.get(appointment_type.lower(), ActivityType.MEETING)
+
+        # Create activity
+        content = f"Appointment scheduled via AI call"
+        if notes:
+            content += f": {notes}"
+        if appointment_time:
+            content += f" at {appointment_time.strftime('%Y-%m-%d %H:%M %Z')}"
+
+        activity = Activity(
+            type=activity_type,
+            content=content,
+            lead_id=lead.id,
+            user_id=lead.owner_id,
+            user_metadata={
+                "scheduled_time": appointment_time.isoformat() if appointment_time else None,
+                "appointment_type": appointment_type,
+                "source": "vapi_ai_call"
+            }
+        )
+
+        db.add(activity)
+
+        # Also create a task for the appointment
+        task = Task(
+            title=f"{appointment_type}: {lead.name}",
+            description=content,
+            status="pending",
+            priority="high",
+            due_date=appointment_time,
+            lead_id=lead.id,
+            owner_id=lead.owner_id,
+            related_contact_name=lead.name,
+            related_type="appointment"
+        )
+
+        db.add(task)
+        db.commit()
+        db.refresh(activity)
+        db.refresh(task)
+
+        return {
+            "success": True,
+            "message": "Appointment scheduled successfully",
+            "activity_id": activity.id,
+            "task_id": task.id,
+            "appointment_time": appointment_time.isoformat() if appointment_time else None
+        }
+
+    except Exception as e:
+        logger.error(f"Error in schedule_appointment_function: {e}")
+        db.rollback()
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/functions/available-time-slots")
+async def available_time_slots_function(
+    date: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Get available appointment time slots
+    Simplified version - returns standard business hours
+    """
+    try:
+        from datetime import datetime, timezone, timedelta
+
+        # Parse requested date or use tomorrow
+        if date:
+            try:
+                target_date = datetime.fromisoformat(date.replace('Z', '+00:00')).date()
+            except:
+                target_date = (datetime.now(timezone.utc) + timedelta(days=1)).date()
+        else:
+            target_date = (datetime.now(timezone.utc) + timedelta(days=1)).date()
+
+        # Generate time slots (9 AM - 5 PM, every hour)
+        slots = []
+        for hour in range(9, 17):  # 9 AM to 4 PM
+            slot_time = datetime.combine(
+                target_date,
+                datetime.min.time().replace(hour=hour)
+            ).replace(tzinfo=timezone.utc)
+
+            slots.append({
+                "time": slot_time.isoformat(),
+                "display": slot_time.strftime("%I:%M %p"),
+                "available": True
+            })
+
+        return {
+            "success": True,
+            "date": target_date.isoformat(),
+            "slots": slots
+        }
+
+    except Exception as e:
+        logger.error(f"Error in available_time_slots_function: {e}")
+        return {"success": False, "error": str(e)}
+
+
 # Authenticated Endpoints
 @router.get("/calls", response_model=List[CallResponse])
 async def get_calls(
