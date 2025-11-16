@@ -70,7 +70,7 @@ const AccessAuditTab = ({ userId }) => {
   const loadSessions = async () => {
     try {
       setSessionsLoading(true);
-      const response = await accessAuditAPI.getActiveSessions(userId);
+      const response = await auditAPI.getActiveSessions(userId);
       setSessions(response.sessions || []);
     } catch (error) {
       console.error('Error loading sessions:', error);
@@ -84,7 +84,7 @@ const AccessAuditTab = ({ userId }) => {
   const loadImpersonations = async () => {
     try {
       setImpersonationsLoading(true);
-      const response = await accessAuditAPI.getImpersonationHistory(userId);
+      const response = await auditAPI.getImpersonationHistory(userId);
       setImpersonations(response.impersonations || []);
     } catch (error) {
       console.error('Error loading impersonation history:', error);
@@ -99,7 +99,7 @@ const AccessAuditTab = ({ userId }) => {
     if (!reason) return;
 
     try {
-      await accessAuditAPI.revokeSession(userId, sessionId, reason);
+      await auditAPI.revokeSession(userId, sessionId, reason);
       alert('Session revoked successfully');
       loadSessions();
       loadAuditLog();
@@ -119,7 +119,7 @@ const AccessAuditTab = ({ userId }) => {
     }
 
     try {
-      await accessAuditAPI.revokeAllSessions(userId, reason);
+      await auditAPI.revokeAllSessions(userId, reason);
       alert('All sessions revoked successfully');
       loadSessions();
       loadAuditLog();
@@ -151,7 +151,7 @@ const AccessAuditTab = ({ userId }) => {
 
     try {
       setEmergencyLoading(true);
-      await accessAuditAPI.emergencyRevoke(userId, emergencyForm);
+      await auditAPI.emergencyRevoke(userId, emergencyForm);
       alert('Emergency access revocation completed successfully');
       setShowEmergencyModal(false);
       setEmergencyForm({

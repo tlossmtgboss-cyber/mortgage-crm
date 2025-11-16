@@ -1,0 +1,94 @@
+.workflow-milestones-tab {
+  padding: 20px;
+}
+
+.section-header {
+  margin-bottom: 24px;
+}
+
+.section-header h2 {
+  margin: 0 0 8px 0;
+  color: #2c3e50;
+  font-size: 24px;
+}
+
+.section-description {
+  color: #7f8c8d;
+  margin: 0;
+  font-size: 14px;
+}
+
+/* Placeholder Styling */
+.placeholder-section {
+  background: white;
+  border-radius: 8px;
+  padding: 32px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  text-align: left;
+}
+
+.placeholder-section h3 {
+  margin: 0 0 12px 0;
+  color: #2c3e50;
+  font-size: 20px;
+}
+
+.placeholder-section > p {
+  color: #7f8c8d;
+  margin-bottom: 24px;
+  font-size: 15px;
+}
+
+.placeholder-features {
+  background: #f8f9fa;
+  border-left: 4px solid #3498db;
+  padding: 20px;
+  border-radius: 4px;
+  margin-bottom: 24px;
+}
+
+.placeholder-features h4 {
+  margin: 0 0 16px 0;
+  color: #2c3e50;
+  font-size: 16px;
+}
+
+.placeholder-features ul {
+  margin: 0;
+  padding-left: 20px;
+  color: #2c3e50;
+}
+
+.placeholder-features li {
+  margin-bottom: 12px;
+  line-height: 1.6;
+}
+
+.placeholder-features li:last-child {
+  margin-bottom: 0;
+}
+
+.placeholder-features strong {
+  color: #3498db;
+}
+
+/* Migration Notice */
+.migration-notice {
+  background: #fff3cd;
+  border-left: 4px solid #ffc107;
+  padding: 16px 20px;
+  border-radius: 4px;
+}
+
+.migration-notice h4 {
+  margin: 0 0 8px 0;
+  color: #856404;
+  font-size: 16px;
+}
+
+.migration-notice p {
+  margin: 0;
+  color: #856404;
+  font-size: 14px;
+  line-height: 1.6;
+}

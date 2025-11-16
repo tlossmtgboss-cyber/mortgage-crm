@@ -1,0 +1,99 @@
+.roles-responsibilities-tab {
+  padding: 20px;
+}
+
+.section-header {
+  margin-bottom: 24px;
+}
+
+.section-header h2 {
+  margin: 0 0 8px 0;
+  color: #2c3e50;
+  font-size: 24px;
+}
+
+.section-description {
+  color: #7f8c8d;
+  margin: 0;
+  font-size: 14px;
+}
+
+/* Sub-navigation tabs */
+.section-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  border-bottom: 2px solid #e0e0e0;
+  padding-bottom: 0;
+}
+
+.section-tab-btn {
+  padding: 12px 20px;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #7f8c8d;
+  transition: all 0.2s;
+  position: relative;
+  bottom: -2px;
+}
+
+.section-tab-btn:hover {
+  color: #2c3e50;
+  background-color: #f8f9fa;
+}
+
+.section-tab-btn.active {
+  color: #27ae60;
+  border-bottom-color: #27ae60;
+}
+
+/* Section Content */
+.section-content {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Placeholder Styling */
+.placeholder-section {
+  text-align: left;
+}
+
+.placeholder-section h3 {
+  margin: 0 0 12px 0;
+  color: #2c3e50;
+  font-size: 20px;
+}
+
+.placeholder-section > p {
+  color: #7f8c8d;
+  margin-bottom: 20px;
+  font-size: 15px;
+}
+
+.placeholder-features {
+  background: #f8f9fa;
+  border-left: 4px solid #27ae60;
+  padding: 16px 20px;
+  border-radius: 4px;
+}
+
+.placeholder-features ul {
+  margin: 0;
+  padding-left: 20px;
+  color: #2c3e50;
+}
+
+.placeholder-features li {
+  margin-bottom: 8px;
+  line-height: 1.6;
+}
+
+.placeholder-features li:last-child {
+  margin-bottom: 0;
+}
