@@ -1565,6 +1565,18 @@ class PermissionRequest(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
+class Notification(Base):
+    __tablename__ = "notifications"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    type = Column(String(50), nullable=False)  # 'permission_approved', 'permission_denied', 'milestone_due', 'assessment_reminder', 'goal_reminder', 'feedback_added'
+    title = Column(String(255), nullable=False)
+    message = Column(Text, nullable=False)
+    link = Column(String(500), nullable=True)  # URL to navigate to when clicked
+    is_read = Column(Boolean, default=False, index=True)
+    read_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
 
 # ============================================================================
 # PYDANTIC SCHEMAS
@@ -13467,6 +13479,19 @@ async def approve_permission_request(
             'expires_at': expires_at
         })
 
+        # Create notification for employee
+        temp_text = f" (temporary - {perm_request.duration_days} days)" if perm_request.is_temporary else ""
+        db.execute(text("""
+            INSERT INTO notifications (user_id, type, title, message, link, created_at)
+            VALUES (:user_id, :type, :title, :message, :link, CURRENT_TIMESTAMP)
+        """), {
+            'user_id': perm_request.employee_id,
+            'type': 'permission_approved',
+            'title': 'Permission Request Approved',
+            'message': f'Your request for "{perm_request.permission_key}" has been approved{temp_text}. {notes if notes else ""}',
+            'link': '/my-permissions'
+        })
+
         db.commit()
 
         logger.info(f"Permission request {request_id} approved by {current_user.email}, granted {perm_request.permission_key} to user {perm_request.employee_id}")
@@ -13530,6 +13555,18 @@ async def deny_permission_request(
             'decided_by': current_user.id
         })
 
+        # Create notification for employee
+        db.execute(text("""
+            INSERT INTO notifications (user_id, type, title, message, link, created_at)
+            VALUES (:user_id, :type, :title, :message, :link, CURRENT_TIMESTAMP)
+        """), {
+            'user_id': perm_request.employee_id,
+            'type': 'permission_denied',
+            'title': 'Permission Request Denied',
+            'message': f'Your request for "{perm_request.permission_key}" was denied. Reason: {reason}',
+            'link': '/my-permissions'
+        })
+
         db.commit()
 
         logger.info(f"Permission request {request_id} denied by {current_user.email}")
@@ -13543,6 +13580,133 @@ async def deny_permission_request(
         raise
     except Exception as e:
         logger.error(f"Deny permission request error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# NOTIFICATIONS - API ENDPOINTS
+# ============================================================================
+
+@app.get("/api/v1/notifications")
+async def get_notifications(
+    unread_only: bool = False,
+    limit: int = 50,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get notifications for current user"""
+
+    try:
+        query = db.execute(text("""
+            SELECT * FROM notifications
+            WHERE user_id = :user_id
+            {}
+            ORDER BY created_at DESC
+            LIMIT :limit
+        """.format("AND is_read = FALSE" if unread_only else "")), {
+            'user_id': current_user.id,
+            'limit': limit
+        })
+
+        notifications = query.fetchall()
+
+        # Get unread count
+        unread_count_query = db.execute(text("""
+            SELECT COUNT(*) as count FROM notifications
+            WHERE user_id = :user_id AND is_read = FALSE
+        """), {'user_id': current_user.id})
+
+        unread_count = unread_count_query.fetchone()[0]
+
+        return {
+            "notifications": [
+                {
+                    "id": n.id,
+                    "type": n.type,
+                    "title": n.title,
+                    "message": n.message,
+                    "link": n.link,
+                    "is_read": n.is_read,
+                    "read_at": n.read_at.isoformat() if n.read_at else None,
+                    "created_at": n.created_at.isoformat()
+                }
+                for n in notifications
+            ],
+            "unread_count": unread_count
+        }
+
+    except Exception as e:
+        logger.error(f"Get notifications error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/v1/notifications/{notification_id}/read")
+async def mark_notification_read(
+    notification_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Mark a notification as read"""
+
+    try:
+        # Verify notification belongs to current user
+        notification = db.execute(text("""
+            SELECT * FROM notifications
+            WHERE id = :id AND user_id = :user_id
+        """), {
+            'id': notification_id,
+            'user_id': current_user.id
+        }).fetchone()
+
+        if not notification:
+            raise HTTPException(status_code=404, detail="Notification not found")
+
+        if notification.is_read:
+            return {"success": True, "message": "Already marked as read"}
+
+        # Mark as read
+        db.execute(text("""
+            UPDATE notifications
+            SET is_read = TRUE, read_at = CURRENT_TIMESTAMP
+            WHERE id = :id
+        """), {'id': notification_id})
+
+        db.commit()
+
+        return {"success": True, "message": "Notification marked as read"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Mark notification read error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/v1/notifications/read-all")
+async def mark_all_notifications_read(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Mark all notifications as read for current user"""
+
+    try:
+        result = db.execute(text("""
+            UPDATE notifications
+            SET is_read = TRUE, read_at = CURRENT_TIMESTAMP
+            WHERE user_id = :user_id AND is_read = FALSE
+        """), {'user_id': current_user.id})
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": "All notifications marked as read"
+        }
+
+    except Exception as e:
+        logger.error(f"Mark all notifications read error: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -16155,6 +16319,28 @@ def run_phase2_permission_migration():
         """))
         db.commit()
         logger.info("   ✅ Created permission_requests table")
+
+        # Step 3d: Create notifications table
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS notifications (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                type VARCHAR(50) NOT NULL,
+                title VARCHAR(255) NOT NULL,
+                message TEXT NOT NULL,
+                link VARCHAR(500),
+                is_read BOOLEAN DEFAULT FALSE,
+                read_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id);
+            CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(is_read);
+            CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, is_read) WHERE is_read = FALSE;
+        """))
+        db.commit()
+        logger.info("   ✅ Created notifications table")
 
         # Step 4: Check if templates already exist
         result = db.execute(text("""

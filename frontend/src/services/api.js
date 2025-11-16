@@ -694,4 +694,26 @@ export const permissionsApi = {
   },
 };
 
+// Notifications API
+export const notificationsApi = {
+  // Get notifications
+  getNotifications: async (unreadOnly = false, limit = 50) => {
+    const params = { unread_only: unreadOnly, limit };
+    const response = await api.get('/api/v1/notifications', { params });
+    return response;
+  },
+
+  // Mark notification as read
+  markAsRead: async (notificationId) => {
+    const response = await api.put(`/api/v1/notifications/${notificationId}/read`);
+    return response;
+  },
+
+  // Mark all notifications as read
+  markAllAsRead: async () => {
+    const response = await api.put('/api/v1/notifications/read-all');
+    return response;
+  },
+};
+
 export default api;
