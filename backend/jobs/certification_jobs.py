@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import text, and_
 import sys
 import os
+import json
 
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -99,7 +100,7 @@ def create_quarterly_certifications():
                 "employee_id": employee.id,
                 "period": quarter,
                 "due_date": due_date,
-                "permissions": str(permissions)  # Convert to JSON string
+                "permissions": json.dumps(permissions)  # Convert to JSON string
             })
 
             created_count += 1
