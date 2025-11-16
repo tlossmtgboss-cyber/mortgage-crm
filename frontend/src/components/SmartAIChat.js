@@ -27,12 +27,15 @@ function SmartAIChat({ leadId, loanId, context = {} }) {
     const handleVoiceCommand = (event) => {
       const { transcript } = event.detail;
       if (transcript) {
+        console.log('Voice command received in SmartAIChat:', transcript);
         setInputValue(transcript);
-        // Auto-submit the voice command
+        // Auto-submit the voice command after a brief delay
         setTimeout(() => {
-          const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
-          document.querySelector('.smart-ai-input')?.dispatchEvent(submitEvent);
-        }, 500);
+          const form = document.querySelector('.smart-ai-input');
+          if (form) {
+            form.requestSubmit(); // This properly triggers the onSubmit handler
+          }
+        }, 300);
       }
     };
 
