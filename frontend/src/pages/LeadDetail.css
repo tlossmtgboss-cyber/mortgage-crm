@@ -783,165 +783,44 @@
   transform: scale(1.15);
 }
 
-/* Call Button */
-.action-btn.call {
-  border-color: #e0f2fe;
-  background: linear-gradient(135deg, #f0f9ff 0%, #ffffff 100%);
-  color: #0284c7;
-}
-
-.action-btn.call:hover:not(:disabled) {
-  border-color: #38bdf8;
-  box-shadow: 0 8px 20px rgba(56, 189, 248, 0.25);
-}
-
-.action-btn.call .icon {
-  color: #0284c7;
-}
-
-/* SMS Button */
-.action-btn.sms {
-  border-color: #d1fae5;
-  background: linear-gradient(135deg, #ecfdf5 0%, #ffffff 100%);
-  color: #059669;
-}
-
-.action-btn.sms:hover:not(:disabled) {
-  border-color: #34d399;
-  box-shadow: 0 8px 20px rgba(52, 211, 153, 0.25);
-}
-
-.action-btn.sms .icon {
-  color: #059669;
-}
-
-/* Email Button */
-.action-btn.email {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  border-color: #3b82f6;
-  color: white;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
-}
-
-.action-btn.email:hover:not(:disabled) {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-  border-color: #2563eb;
-  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.4);
-}
-
-.action-btn.email .icon {
-  color: white;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
-}
-
-/* Task Button */
-.action-btn.task {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  border-color: #10b981;
-  color: white;
-  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
-}
-
-.action-btn.task:hover:not(:disabled) {
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
-  border-color: #059669;
-  box-shadow: 0 8px 24px rgba(5, 150, 105, 0.4);
-}
-
-.action-btn.task .icon {
-  color: white;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
-}
-
-/* Calendar Button */
-.action-btn.calendar {
-  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
-  border-color: #f97316;
-  color: white;
-  box-shadow: 0 2px 8px rgba(249, 115, 22, 0.3);
-}
-
-.action-btn.calendar:hover:not(:disabled) {
-  background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%);
-  border-color: #ea580c;
-  box-shadow: 0 8px 24px rgba(234, 88, 12, 0.4);
-}
-
-.action-btn.calendar .icon {
-  color: white;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
-}
-
-/* Teams Button */
-.action-btn.teams {
-  background: linear-gradient(135deg, #218D8D 0%, #218D8D 100%);
+/* All Action Buttons - Unified Teal Color Scheme */
+.action-btn.call,
+.action-btn.sms,
+.action-btn.email,
+.action-btn.task,
+.action-btn.calendar,
+.action-btn.teams,
+.action-btn.record,
+.action-btn.voicemail,
+.action-btn.voice {
+  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
   border-color: #218D8D;
   color: white;
-  box-shadow: 0 2px 8px rgba(91, 95, 199, 0.3);
+  box-shadow: 0 2px 8px rgba(33, 141, 141, 0.3);
 }
 
-.action-btn.teams:hover:not(:disabled) {
-  background: linear-gradient(135deg, #4f46e5 0%, #218D8D 100%);
-  border-color: #4f46e5;
-  box-shadow: 0 8px 24px rgba(79, 70, 229, 0.4);
-}
-
-.action-btn.teams .icon {
-  color: white;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
-}
-
-/* Record Meeting Button */
-.action-btn.record {
-  background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%);
-  border-color: #d1d5db;
-  color: #374151;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-
-.action-btn.record:hover:not(:disabled) {
-  background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%);
-  border-color: #9ca3af;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
-}
-
-.action-btn.record .icon {
-  color: #6b7280;
-}
-
-/* Voicemail Drop Button */
-.action-btn.voicemail {
-  background: linear-gradient(135deg, #14b8a6 0%, #0d9488 100%);
-  border-color: #14b8a6;
-  color: white;
-  box-shadow: 0 2px 8px rgba(20, 184, 166, 0.3);
-}
-
-.action-btn.voicemail:hover:not(:disabled) {
-  background: linear-gradient(135deg, #0d9488 0%, #0f766e 100%);
-  border-color: #0d9488;
-  box-shadow: 0 8px 24px rgba(13, 148, 136, 0.4);
-}
-
-.action-btn.voicemail .icon {
-  color: white;
-  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
-}
-
-/* Voice Command Button */
-.action-btn.voice {
-  background: linear-gradient(135deg, #10b981 0%, #7c3aed 100%);
-  border-color: #10b981;
-  color: white;
-  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
-}
-
+.action-btn.call:hover:not(:disabled),
+.action-btn.sms:hover:not(:disabled),
+.action-btn.email:hover:not(:disabled),
+.action-btn.task:hover:not(:disabled),
+.action-btn.calendar:hover:not(:disabled),
+.action-btn.teams:hover:not(:disabled),
+.action-btn.record:hover:not(:disabled),
+.action-btn.voicemail:hover:not(:disabled),
 .action-btn.voice:hover:not(:disabled) {
-  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
-  border-color: #7c3aed;
-  box-shadow: 0 8px 24px rgba(124, 58, 237, 0.4);
+  background: linear-gradient(135deg, #1a7070 0%, #155858 100%);
+  border-color: #1a7070;
+  box-shadow: 0 8px 24px rgba(33, 141, 141, 0.4);
 }
 
+.action-btn.call .icon,
+.action-btn.sms .icon,
+.action-btn.email .icon,
+.action-btn.task .icon,
+.action-btn.calendar .icon,
+.action-btn.teams .icon,
+.action-btn.record .icon,
+.action-btn.voicemail .icon,
 .action-btn.voice .icon {
   color: white;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
