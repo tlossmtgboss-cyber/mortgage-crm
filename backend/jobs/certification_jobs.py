@@ -93,14 +93,14 @@ def create_quarterly_certifications():
             insert_query = text("""
                 INSERT INTO access_certifications
                 (employee_id, certification_period, due_date, permissions_snapshot, created_at)
-                VALUES (:employee_id, :period, :due_date, :permissions, CURRENT_TIMESTAMP)
+                VALUES (:employee_id, :period, :due_date, CAST(:permissions AS jsonb), CURRENT_TIMESTAMP)
             """)
 
             db.execute(insert_query, {
                 "employee_id": employee.id,
                 "period": quarter,
                 "due_date": due_date,
-                "permissions": json.dumps(permissions)  # Convert to JSON string
+                "permissions": json.dumps(permissions)  # Convert to JSON string for CAST
             })
 
             created_count += 1
