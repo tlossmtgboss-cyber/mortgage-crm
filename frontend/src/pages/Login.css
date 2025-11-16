@@ -60,7 +60,7 @@
 
 .form-group input:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: #218D8D;
 }
 
 .form-group input:disabled {
@@ -89,7 +89,7 @@
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
   color: white;
 }
 
@@ -105,8 +105,8 @@
 
 .btn-secondary {
   background: white;
-  color: #667eea;
-  border: 2px solid #667eea;
+  color: #218D8D;
+  border: 2px solid #218D8D;
 }
 
 .btn-secondary:hover:not(:disabled) {
@@ -178,7 +178,7 @@
 }
 
 .login-footer a {
-  color: #667eea;
+  color: #218D8D;
   text-decoration: none;
   font-weight: 600;
 }

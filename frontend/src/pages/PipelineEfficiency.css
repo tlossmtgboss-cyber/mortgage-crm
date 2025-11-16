@@ -67,11 +67,11 @@
 
 .time-range-selector:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: #218D8D;
 }
 
 .btn-export {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
   color: white;
   border: none;
   padding: 10px 20px;
@@ -89,7 +89,7 @@
 
 /* Overall Score Card */
 .efficiency-score-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
   padding: 40px;
   border-radius: 16px;
   box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
@@ -310,7 +310,7 @@
 }
 
 .team-performance-card:hover {
-  border-color: #667eea;
+  border-color: #218D8D;
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
   transform: translateY(-4px);
 }
@@ -438,7 +438,7 @@
 }
 
 .bottleneck-stage {
-  background: #667eea;
+  background: #218D8D;
   color: white;
   padding: 6px 12px;
   border-radius: 6px;
@@ -479,7 +479,7 @@
 }
 
 .bottleneck-action strong {
-  color: #667eea;
+  color: #218D8D;
 }
 
 /* Trends Chart */
@@ -530,7 +530,7 @@
 }
 
 .score-bar {
-  background: linear-gradient(to top, #667eea, #764ba2);
+  background: linear-gradient(to top, #218D8D, #10b981);
 }
 
 .volume-bar {
@@ -566,7 +566,7 @@
 }
 
 .score-color {
-  background: linear-gradient(to right, #667eea, #764ba2);
+  background: linear-gradient(to right, #218D8D, #10b981);
 }
 
 .volume-color {

@@ -26,7 +26,7 @@
 
 .btn-totals {
   padding: 10px 24px;
-  background: #667eea;
+  background: #218D8D;
   color: white;
   border: none;
   border-radius: 6px;
@@ -698,7 +698,7 @@
 
 /* Segment Cards */
 .segment-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
   color: white;
 }
 
@@ -718,7 +718,7 @@
   border-radius: 8px;
   padding: 24px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  border-left: 4px solid #667eea;
+  border-left: 4px solid #218D8D;
 }
 
 .ai-suggestion-item {
@@ -735,7 +735,7 @@
 }
 
 .ai-bullet {
-  color: #667eea;
+  color: #218D8D;
   font-size: 20px;
   font-weight: bold;
   line-height: 1.5;

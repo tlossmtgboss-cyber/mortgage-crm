@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { teamAPI } from '../services/api';
+import ImpersonationModal from '../components/ImpersonationModal';
 import './TeamMemberProfile.css';
 
 function TeamMemberProfile() {
@@ -11,6 +12,8 @@ function TeamMemberProfile() {
   const [activeTab, setActiveTab] = useState('overview');
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState({});
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [showImpersonationModal, setShowImpersonationModal] = useState(false);
 
   useEffect(() => {
     loadMemberData();
@@ -47,6 +50,48 @@ function TeamMemberProfile() {
     setFormData({ ...formData, [field]: value });
   };
 
+  const handlePhotoUpload = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('File size must be less than 5MB');
+      return;
+    }
+
+    try {
+      setUploadingPhoto(true);
+      const formData = new FormData();
+      formData.append('photo', file);
+
+      // TODO: Update this endpoint when backend support is added
+      // await teamAPI.uploadPhoto(id, formData);
+
+      // For now, create a local URL preview
+      const photoUrl = URL.createObjectURL(file);
+      setFormData(prev => ({ ...prev, photo_url: photoUrl }));
+      setMember(prev => ({ ...prev, photo_url: photoUrl }));
+
+      alert('Photo uploaded successfully! (Note: This is a preview. Backend integration pending)');
+    } catch (error) {
+      console.error('Failed to upload photo:', error);
+      alert('Failed to upload photo');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const handleImpersonate = () => {
+    setShowImpersonationModal(true);
+  };
+
   if (loading) {
     return (
       <div className="team-member-profile-page">
@@ -65,7 +110,7 @@ function TeamMemberProfile() {
 
   return (
     <div className="team-member-profile-page">
-      {/* Header */}
+      {/* Back Button */}
       <div className="profile-header">
         <button className="btn-back" onClick={() => navigate('/team-members')}>
           ← Back to Team Members
@@ -84,62 +129,85 @@ function TeamMemberProfile() {
         </div>
       </div>
 
-      {/* Member Info Card */}
-      <div className="member-info-card">
-        <div className="member-avatar">
-          <div className="avatar-circle">
-            {member.first_name?.[0]}{member.last_name?.[0]}
+      {/* Green Header Bar with Profile Picture, Name, Tabs, and Impersonate Button */}
+      <div className="profile-green-bar">
+        <div className="profile-left-section">
+          {/* Profile Picture */}
+          <div className="member-avatar-section">
+            <input
+              type="file"
+              id="photo-upload"
+              accept="image/*"
+              onChange={handlePhotoUpload}
+              style={{ display: 'none' }}
+            />
+            <label htmlFor="photo-upload" className="avatar-upload-label">
+              <div className="avatar-circle-new">
+                {formData.photo_url || member.photo_url ? (
+                  <img src={formData.photo_url || member.photo_url} alt={`${member.first_name} ${member.last_name}`} />
+                ) : (
+                  <span className="avatar-initials">{member.first_name?.[0]}{member.last_name?.[0]}</span>
+                )}
+                <div className="avatar-upload-overlay">
+                  {uploadingPhoto ? '⏳' : '📷'}
+                </div>
+              </div>
+            </label>
           </div>
-        </div>
-        <div className="member-details">
-          <h1>{member.first_name} {member.last_name}</h1>
-          <p className="member-role">{member.role}</p>
-          {member.title && <p className="member-title">{member.title}</p>}
-          <div className="member-contact">
-            {member.email && <span>✉️ {member.email}</span>}
-            {member.phone && <span>📞 {member.phone}</span>}
-          </div>
-        </div>
-      </div>
 
-      {/* Tab Navigation */}
-      <div className="profile-tabs">
-        <button
-          className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`}
-          onClick={() => setActiveTab('overview')}
-        >
-          Overview
-        </button>
-        <button
-          className={`tab-btn ${activeTab === 'kpis' ? 'active' : ''}`}
-          onClick={() => setActiveTab('kpis')}
-        >
-          KPIs
-        </button>
-        <button
-          className={`tab-btn ${activeTab === 'notes' ? 'active' : ''}`}
-          onClick={() => setActiveTab('notes')}
-        >
-          Notes & Meetings
-        </button>
-        <button
-          className={`tab-btn ${activeTab === 'personality' ? 'active' : ''}`}
-          onClick={() => setActiveTab('personality')}
-        >
-          DISC Profile
-        </button>
-        <button
-          className={`tab-btn ${activeTab === 'personal' ? 'active' : ''}`}
-          onClick={() => setActiveTab('personal')}
-        >
-          Personal Info
-        </button>
-        <button
-          className={`tab-btn ${activeTab === 'goals' ? 'active' : ''}`}
-          onClick={() => setActiveTab('goals')}
-        >
-          Goals
-        </button>
+          {/* Member Name and Info */}
+          <div className="member-name-section">
+            <h1 className="member-name-header">{member.first_name} {member.last_name}</h1>
+            <p className="member-role-header">{member.role}</p>
+          </div>
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="profile-tabs-new">
+          <button
+            className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`}
+            onClick={() => setActiveTab('overview')}
+          >
+            Overview
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'kpis' ? 'active' : ''}`}
+            onClick={() => setActiveTab('kpis')}
+          >
+            KPIs
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'notes' ? 'active' : ''}`}
+            onClick={() => setActiveTab('notes')}
+          >
+            Notes & Meetings
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'personality' ? 'active' : ''}`}
+            onClick={() => setActiveTab('personality')}
+          >
+            DISC Profile
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'personal' ? 'active' : ''}`}
+            onClick={() => setActiveTab('personal')}
+          >
+            Personal Info
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'goals' ? 'active' : ''}`}
+            onClick={() => setActiveTab('goals')}
+          >
+            Goals
+          </button>
+        </div>
+
+        {/* Impersonate Button */}
+        <div className="profile-right-section">
+          <button className="btn-impersonate" onClick={handleImpersonate} title="View CRM as this user">
+            👤 Impersonate
+          </button>
+        </div>
       </div>
 
       {/* Tab Content */}
@@ -500,6 +568,14 @@ function TeamMemberProfile() {
           </div>
         )}
       </div>
+
+      {/* Impersonation Modal */}
+      {showImpersonationModal && member && (
+        <ImpersonationModal
+          employee={member}
+          onClose={() => setShowImpersonationModal(false)}
+        />
+      )}
     </div>
   );
 }

@@ -1055,7 +1055,7 @@ textarea.text-input {
 }
 
 .milestone-card:hover {
-  border-color: #764ba2;
+  border-color: #10b981;
   box-shadow: 0 4px 12px rgba(118, 75, 162, 0.15);
 }
 
@@ -1064,7 +1064,7 @@ textarea.text-input {
   align-items: center;
   gap: 16px;
   padding: 20px 24px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
   color: white;
 }
 
@@ -1112,7 +1112,7 @@ textarea.text-input {
   padding: 16px;
   background: #f8f9fa;
   border-radius: 8px;
-  border-left: 4px solid #764ba2;
+  border-left: 4px solid #10b981;
   transition: all 0.2s ease;
 }
 
@@ -1132,7 +1132,7 @@ textarea.text-input {
   width: 32px;
   height: 32px;
   border-radius: 50%;
-  background: #764ba2;
+  background: #10b981;
   color: white;
   display: flex;
   align-items: center;
@@ -1170,7 +1170,7 @@ textarea.text-input {
 }
 
 .task-ai-badge {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
   color: white;
   padding: 4px 10px;
   border-radius: 12px;
@@ -1186,7 +1186,7 @@ textarea.text-input {
 }
 
 .stat-box {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
   padding: 24px;
   border-radius: 12px;
   text-align: center;

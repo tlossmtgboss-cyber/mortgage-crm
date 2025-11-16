@@ -1,49 +1,69 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { isAuthenticated } from './utils/auth';
+import { ImpersonationProvider } from './contexts/ImpersonationContext';
 import Navigation from './components/Navigation';
 import AIAssistant from './components/AIAssistant';
 import CoachCorner from './components/CoachCorner';
 import OnboardingPrompt from './components/OnboardingPrompt';
+import ImpersonationBanner from './components/ImpersonationBanner';
 import ErrorBoundary from './components/ErrorBoundary';
 import ErrorTestButton from './components/ErrorTestButton';
+import './App.css';
+
+// Landing/Auth pages (keep these as regular imports for faster initial load)
 import LandingPage from './pages/LandingPage';
 import Registration from './pages/Registration';
 import EmailVerificationSent from './pages/EmailVerificationSent';
 import Login from './pages/Login';
 import Onboarding from './pages/Onboarding';
-import Dashboard from './pages/Dashboard';
-import Leads from './pages/Leads';
-import LeadDetail from './pages/LeadDetail';
-import Loans from './pages/Loans';
-import LoanDetail from './pages/LoanDetail';
-import Portfolio from './pages/Portfolio';
-import MumClientDetail from './pages/MumClientDetail';
-import YearOverYear from './pages/YearOverYear';
-import Tasks from './pages/Tasks';
-import Calendar from './pages/Calendar';
-import Scorecard from './pages/Scorecard';
-import Assistant from './pages/Assistant';
-import ClientProfile from './pages/ClientProfile';
-import ReferralPartners from './pages/ReferralPartners';
-import ReferralPartnerDetail from './pages/ReferralPartnerDetail';
-import AIUnderwriter from './pages/AIUnderwriter';
-import GoalTracker from './pages/GoalTracker';
-import Coach from './pages/Coach';
-import ReconciliationCenter from './pages/ReconciliationCenter';
-import MergeCenter from './pages/MergeCenter';
-import Settings from './pages/Settings';
-import TeamMembers from './pages/TeamMembers';
-import TeamMemberProfile from './pages/TeamMemberProfile';
-import DataUpload from './pages/DataUpload';
-import Users from './pages/Users';
-import UserProfile from './pages/UserProfile';
-import ProcessTemplates from './pages/ProcessTemplates';
-import BuyerIntake from './pages/BuyerIntake';
-import VerizonTest from './pages/VerizonTest';
-import PipelineEfficiency from './pages/PipelineEfficiency';
-import AIReceptionistDashboard from './pages/AIReceptionistDashboard';
-import './App.css';
+
+// Lazy load all other pages for instant navigation
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Leads = lazy(() => import('./pages/Leads'));
+const LeadDetail = lazy(() => import('./pages/LeadDetail'));
+const Loans = lazy(() => import('./pages/Loans'));
+const LoanDetail = lazy(() => import('./pages/LoanDetail'));
+const Portfolio = lazy(() => import('./pages/Portfolio'));
+const MumClientDetail = lazy(() => import('./pages/MumClientDetail'));
+const YearOverYear = lazy(() => import('./pages/YearOverYear'));
+const Tasks = lazy(() => import('./pages/Tasks'));
+const Calendar = lazy(() => import('./pages/Calendar'));
+const Scorecard = lazy(() => import('./pages/Scorecard'));
+const Assistant = lazy(() => import('./pages/Assistant'));
+const ClientProfile = lazy(() => import('./pages/ClientProfile'));
+const ReferralPartners = lazy(() => import('./pages/ReferralPartners'));
+const ReferralPartnerDetail = lazy(() => import('./pages/ReferralPartnerDetail'));
+const AIUnderwriter = lazy(() => import('./pages/AIUnderwriter'));
+const GoalTracker = lazy(() => import('./pages/GoalTracker'));
+const Coach = lazy(() => import('./pages/Coach'));
+const ReconciliationCenter = lazy(() => import('./pages/ReconciliationCenter'));
+const MergeCenter = lazy(() => import('./pages/MergeCenter'));
+const Settings = lazy(() => import('./pages/Settings'));
+const TeamMembers = lazy(() => import('./pages/TeamMembers'));
+const TeamMemberProfile = lazy(() => import('./pages/TeamMemberProfile'));
+const DataUpload = lazy(() => import('./pages/DataUpload'));
+const Users = lazy(() => import('./pages/Users'));
+const UserProfile = lazy(() => import('./pages/UserProfile'));
+const ProcessTemplates = lazy(() => import('./pages/ProcessTemplates'));
+const BuyerIntake = lazy(() => import('./pages/BuyerIntake'));
+const VerizonTest = lazy(() => import('./pages/VerizonTest'));
+const PipelineEfficiency = lazy(() => import('./pages/PipelineEfficiency'));
+const AIReceptionistDashboard = lazy(() => import('./pages/AIReceptionistDashboard'));
+
+// Simple loading component
+const PageLoader = () => (
+  <div style={{
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: '100vh',
+    fontSize: '14px',
+    color: '#666'
+  }}>
+    Loading...
+  </div>
+);
 
 // Use HTTPS Railway URL in production, localhost for development
 const isProduction = window.location.hostname.includes('vercel.app');
@@ -53,6 +73,15 @@ const API_BASE_URL = isProduction
 
 function PrivateRoute({ children }) {
   return isAuthenticated() ? children : <Navigate to="/login" />;
+}
+
+// Wrapper to handle lazy-loaded pages with suspense
+function LazyPage({ children }) {
+  return (
+    <Suspense fallback={<PageLoader />}>
+      {children}
+    </Suspense>
+  );
 }
 
 function App() {
@@ -85,56 +114,44 @@ function App() {
 
   useEffect(() => {
     const checkOnboardingStatus = async () => {
-      try {
-        if (isAuthenticated()) {
-          try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/users/me`, {
-              headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-              }
-            });
+      // OPTIMIZED: Don't block rendering - check localStorage first
+      setCheckingOnboarding(false);
 
-            if (response.ok) {
-              const userData = await response.json();
-              // Show onboarding wizard if user hasn't completed it
-              if (!userData.onboarding_completed) {
-                setShowOnboarding(true);
-              }
-            } else {
-              // If endpoint doesn't exist, check localStorage
-              try {
-                const userStr = localStorage.getItem('user');
-                if (userStr) {
-                  const user = JSON.parse(userStr);
-                  // Default to showing onboarding for new users
-                  if (user.onboarding_completed === undefined || user.onboarding_completed === false) {
-                    setShowOnboarding(true);
-                  }
-                }
-              } catch (parseError) {
-                console.warn('Error parsing user data:', parseError);
-              }
-            }
-          } catch (error) {
-            console.error('Error checking onboarding status:', error);
-            // Fallback: check localStorage
-            try {
-              const userStr = localStorage.getItem('user');
-              if (userStr) {
-                const user = JSON.parse(userStr);
-                if (user.onboarding_completed === undefined || user.onboarding_completed === false) {
-                  setShowOnboarding(true);
-                }
-              }
-            } catch (parseError) {
-              console.warn('Error parsing user data in fallback:', parseError);
-            }
+      if (!isAuthenticated()) return;
+
+      // Check localStorage immediately (non-blocking)
+      try {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          if (user.onboarding_completed === undefined || user.onboarding_completed === false) {
+            setShowOnboarding(true);
           }
         }
-      } catch (outerError) {
-        console.error('Critical error in onboarding check:', outerError);
-      } finally {
-        setCheckingOnboarding(false);
+      } catch (parseError) {
+        console.warn('Error parsing user data:', parseError);
+      }
+
+      // Then verify with API in background (non-blocking for UI)
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/v1/users/me`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+
+        if (response.ok) {
+          const userData = await response.json();
+          // Update state if different from localStorage
+          if (!userData.onboarding_completed) {
+            setShowOnboarding(true);
+          } else {
+            setShowOnboarding(false);
+          }
+        }
+      } catch (error) {
+        console.error('Error checking onboarding status:', error);
+        // Already checked localStorage, so we're okay
       }
     };
 
@@ -167,16 +184,22 @@ function App() {
       }
     };
 
-    fetchTaskCounts();
-    // Refresh task counts every 2 minutes
-    const interval = setInterval(fetchTaskCounts, 120000);
-    return () => clearInterval(interval);
+    // OPTIMIZED: Delay initial fetch by 1 second to not block page load
+    const initialTimeout = setTimeout(fetchTaskCounts, 1000);
+    // Refresh task counts every 5 minutes (reduced frequency)
+    const interval = setInterval(fetchTaskCounts, 300000);
+    return () => {
+      clearTimeout(initialTimeout);
+      clearInterval(interval);
+    };
   }, []);
 
   return (
     <ErrorBoundary>
-      <Router>
-        <div className="app">
+      <ImpersonationProvider>
+        <Router>
+          <ImpersonationBanner />
+          <div className="app">
         <Routes>
           {/* Public routes */}
           <Route path="/" element={<LandingPage />} />
@@ -213,7 +236,7 @@ function App() {
                     {showOnboarding && !checkingOnboarding && (
                       <OnboardingPrompt onDismiss={handleDismissOnboardingPrompt} />
                     )}
-                    <Dashboard />
+                    <LazyPage><Dashboard /></LazyPage>
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
@@ -233,7 +256,7 @@ function App() {
                     coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <PipelineEfficiency />
+                    <LazyPage><PipelineEfficiency /></LazyPage>
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
@@ -253,7 +276,7 @@ function App() {
                     coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <Leads />
+                    <LazyPage><Leads /></LazyPage>
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
@@ -273,7 +296,7 @@ function App() {
                     coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <LeadDetail />
+                    <LazyPage><LeadDetail /></LazyPage>
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
@@ -293,7 +316,7 @@ function App() {
                     coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <Loans />
+                    <LazyPage><Loans /></LazyPage>
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
@@ -313,7 +336,7 @@ function App() {
                     coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <LoanDetail />
+                    <LazyPage><LoanDetail /></LazyPage>
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
@@ -333,7 +356,7 @@ function App() {
                     coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <Portfolio />
+                    <LazyPage><Portfolio /></LazyPage>
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
@@ -353,7 +376,7 @@ function App() {
                     coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <YearOverYear />
+                    <LazyPage><YearOverYear /></LazyPage>
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
@@ -373,7 +396,7 @@ function App() {
                     coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <MumClientDetail />
+                    <LazyPage><MumClientDetail /></LazyPage>
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
@@ -393,7 +416,7 @@ function App() {
                     coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <Tasks />
+                    <LazyPage><Tasks /></LazyPage>
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
@@ -413,7 +436,7 @@ function App() {
                     coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <Calendar />
+                    <LazyPage><Calendar /></LazyPage>
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
@@ -433,7 +456,7 @@ function App() {
                     coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <Scorecard />
+                    <LazyPage><Scorecard /></LazyPage>
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
@@ -453,7 +476,7 @@ function App() {
                     coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <Assistant />
+                    <LazyPage><Assistant /></LazyPage>
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
@@ -473,7 +496,7 @@ function App() {
                     coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <AIReceptionistDashboard />
+                    <LazyPage><AIReceptionistDashboard /></LazyPage>
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
@@ -493,7 +516,7 @@ function App() {
                     coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <ClientProfile />
+                    <LazyPage><ClientProfile /></LazyPage>
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
@@ -513,7 +536,7 @@ function App() {
                     coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <ReferralPartners />
+                    <LazyPage><ReferralPartners /></LazyPage>
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
@@ -533,7 +556,7 @@ function App() {
                     coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <ReferralPartnerDetail />
+                    <LazyPage><ReferralPartnerDetail /></LazyPage>
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
@@ -553,7 +576,7 @@ function App() {
                     coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <AIUnderwriter />
+                    <LazyPage><AIUnderwriter /></LazyPage>
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
@@ -573,7 +596,7 @@ function App() {
                     coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <GoalTracker />
+                    <LazyPage><GoalTracker /></LazyPage>
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
@@ -593,7 +616,7 @@ function App() {
                     coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <Coach />
+                    <LazyPage><Coach /></LazyPage>
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
@@ -613,7 +636,7 @@ function App() {
                     coachOpen={coachOpen}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <ReconciliationCenter />
+                    <LazyPage><ReconciliationCenter /></LazyPage>
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
@@ -823,10 +846,11 @@ function App() {
           />
         </Routes>
 
-        {/* Global Error Test Button - appears on all pages */}
-        <ErrorTestButton />
-      </div>
-    </Router>
+          {/* Global Error Test Button - appears on all pages */}
+          <ErrorTestButton />
+        </div>
+      </Router>
+      </ImpersonationProvider>
     </ErrorBoundary>
   );
 }

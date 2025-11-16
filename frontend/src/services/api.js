@@ -15,13 +15,27 @@ const api = axios.create({
   },
 });
 
-// Add token to requests
+// Add token and impersonation headers to requests
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
+    // Add impersonation token if present
+    const impersonationData = localStorage.getItem('impersonation');
+    if (impersonationData) {
+      try {
+        const data = JSON.parse(impersonationData);
+        if (data.session_token) {
+          config.headers['X-Impersonation-Token'] = data.session_token;
+        }
+      } catch (error) {
+        console.error('Error parsing impersonation data:', error);
+      }
+    }
+
     return config;
   },
   (error) => {
@@ -552,6 +566,22 @@ export const aiReceptionistDashboardAPI = {
   },
   getConversationDetail: async (conversationId) => {
     const response = await api.get(`/api/v1/ai-receptionist/dashboard/conversations/${conversationId}`);
+    return response.data;
+  },
+};
+
+// Impersonation API
+export const impersonationAPI = {
+  start: async (data) => {
+    const response = await api.post('/api/v1/impersonation/start', data);
+    return response.data;
+  },
+  end: async () => {
+    const response = await api.post('/api/v1/impersonation/end');
+    return response.data;
+  },
+  getCurrent: async () => {
+    const response = await api.get('/api/v1/impersonation/current');
     return response.data;
   },
 };

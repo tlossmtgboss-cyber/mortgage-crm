@@ -1,0 +1,9 @@
+{
+  "transcriber": {
+    "provider": "deepgram",
+    "model": "nova-2",
+    "language": "en",
+    "keywords": [],
+    "endpointing": 255
+  }
+}

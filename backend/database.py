@@ -39,3 +39,12 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def get_db_url():
+    """Get database URL (helper for migrations)"""
+    url = os.getenv("DATABASE_URL", "sqlite:///./mortgage_crm.db")
+    # Fix postgres:// to postgresql:// for SQLAlchemy
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
+    return url

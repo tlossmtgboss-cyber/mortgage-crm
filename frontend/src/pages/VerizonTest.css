@@ -144,7 +144,7 @@
 }
 
 .test-btn.all-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
   border: none;
   color: white;
 }
@@ -393,7 +393,7 @@
 
 /* Twilio Setup Section */
 .twilio-setup-section {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
   border-radius: 12px;
   padding: 40px;
   margin-bottom: 30px;
@@ -441,7 +441,7 @@
 .btn-setup-twilio {
   padding: 15px 30px;
   background: white;
-  color: #667eea;
+  color: #218D8D;
   border: none;
   border-radius: 8px;
   font-size: 16px;

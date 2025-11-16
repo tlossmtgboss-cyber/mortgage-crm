@@ -1,0 +1,6 @@
+{
+  "voice": {
+    "provider": "azure",
+    "voiceId": "andrew"
+  }
+}

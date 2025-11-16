@@ -6,7 +6,7 @@ function Scorecard() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
-  const [period, setPeriod] = useState({ start: null, end: null });
+  const [period, setPeriod] = useState({ start_date: null, end_date: null });
 
   useEffect(() => {
     loadScorecard();
@@ -100,7 +100,7 @@ function Scorecard() {
       <div className="scorecard-header-main">
         <h1>Loan Scorecard Report</h1>
         <div className="scorecard-subtitle">
-          {formatDate(period.start_date)} | LO Scorecard
+          {period.start_date ? formatDate(period.start_date) : 'Loading...'} | LO Scorecard
         </div>
       </div>
 
@@ -111,7 +111,7 @@ function Scorecard() {
           Loan Starts vs. Activity Totals
         </div>
         <div className="section-subheader">
-          Counts: {period.start_date} - {period.end_date}
+          Counts: {period.start_date || 'N/A'} - {period.end_date || 'N/A'}
         </div>
 
         <div className="metrics-table-container">
@@ -127,7 +127,7 @@ function Scorecard() {
               </tr>
             </thead>
             <tbody>
-              {data.conversion_metrics.map((metric, index) => (
+              {data.conversion_metrics && data.conversion_metrics.map((metric, index) => (
                 <tr key={index}>
                   <td className="metric-name">{metric.metric}</td>
                   <td className="metric-count">{metric.total}</td>
@@ -153,6 +153,7 @@ function Scorecard() {
       </section>
 
       {/* CONVERSION UPSWING */}
+      {data.conversion_upswing && (
       <section className="scorecard-section pink-section">
         <div className="section-header pink-header">
           <span className="indicator"></span>
@@ -199,8 +200,10 @@ function Scorecard() {
           </div>
         </div>
       </section>
+      )}
 
       {/* FUNDING TOTALS */}
+      {data.funding_totals && (
       <section className="scorecard-section yellow-section">
         <div className="section-header yellow-header">
           <span className="indicator"></span>
@@ -244,7 +247,7 @@ function Scorecard() {
                 </tr>
               </thead>
               <tbody>
-                {data.funding_totals.loan_types.map((type, index) => (
+                {data.funding_totals.loan_types && data.funding_totals.loan_types.map((type, index) => (
                   <tr key={index}>
                     <td>{type.type}</td>
                     <td>{type.units}</td>
@@ -267,7 +270,7 @@ function Scorecard() {
                 </tr>
               </thead>
               <tbody>
-                {data.funding_totals.referral_sources.map((source, index) => (
+                {data.funding_totals.referral_sources && data.funding_totals.referral_sources.map((source, index) => (
                   <tr key={index}>
                     <td>{source.source}</td>
                     <td>{source.referrals}</td>
@@ -279,6 +282,7 @@ function Scorecard() {
           </div>
         </div>
       </section>
+      )}
 
       <div className="scorecard-footer">
         <small>Last updated: {new Date(data.generated_at).toLocaleString()}</small>

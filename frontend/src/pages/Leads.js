@@ -326,10 +326,27 @@ function Leads() {
 
   const loadLeads = async () => {
     try {
+      // OPTIMIZED: Check cache first (cache for 30 seconds)
+      const cacheKey = 'leads_data';
+      const cacheTimeKey = 'leads_data_time';
+      const cachedData = localStorage.getItem(cacheKey);
+      const cachedTime = localStorage.getItem(cacheTimeKey);
+      const now = Date.now();
+
+      if (cachedData && cachedTime && (now - parseInt(cachedTime)) < 30000) {
+        const data = JSON.parse(cachedData);
+        setLeads(data);
+        setLoading(false);
+        return;
+      }
+
       const data = await leadsAPI.getAll();
       // Use API data if it has items, otherwise use mock data
       if (Array.isArray(data) && data.length > 0) {
         setLeads(data);
+        // Cache the response
+        localStorage.setItem(cacheKey, JSON.stringify(data));
+        localStorage.setItem(cacheTimeKey, now.toString());
       } else {
         console.log('API returned empty/invalid data, using mock leads');
         setLeads(generateMockLeads());
@@ -559,7 +576,7 @@ function Leads() {
   const getStatusColor = (status) => {
     const colors = {
       'New': 'blue',
-      'Attempted Contact': 'purple',
+      'Attempted Contact': 'teal',
       'Prospect': 'yellow',
       'Application': 'orange',
       'Pre-Qualified': 'teal',

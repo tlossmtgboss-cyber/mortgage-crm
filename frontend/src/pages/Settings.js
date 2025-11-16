@@ -1247,7 +1247,7 @@ const API_BASE_URL = isProduction
       name: 'Synthflow AI',
       description: 'AI-powered voice agents for automated client calls and lead qualification',
       icon: '🤖',
-      color: '#6366f1',
+      color: '#218D8D',
       category: 'AI & Automation'
     },
     {
@@ -1255,7 +1255,7 @@ const API_BASE_URL = isProduction
       name: 'Recall.ai',
       description: 'Record and transcribe meetings from Zoom, Teams, and Google Meet with AI',
       icon: '🎙️',
-      color: '#8b5cf6',
+      color: '#10b981',
       category: 'AI & Automation'
     },
     {
@@ -1625,7 +1625,7 @@ const API_BASE_URL = isProduction
                       <button className="btn-sync" onClick={(e) => { e.stopPropagation(); syncMicrosoftNow(); }} disabled={loadingMicrosoft || reprocessing}>
                         {loadingMicrosoft ? 'Syncing...' : syncCompleted ? '✓ Synced' : '🔄 Sync Now'}
                       </button>
-                      <button className="btn-sync" onClick={(e) => { e.stopPropagation(); createSampleTasks(); }} style={{background: '#8b5cf6'}}>
+                      <button className="btn-sync" onClick={(e) => { e.stopPropagation(); createSampleTasks(); }} style={{background: '#218D8D'}}>
                         ✨ Create 5 Sample Tasks
                       </button>
                       <button className="btn-sync" onClick={(e) => { e.stopPropagation(); runDatabaseMigration(); }} style={{background: '#10b981'}}>

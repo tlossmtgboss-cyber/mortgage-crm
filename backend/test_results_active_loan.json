@@ -1,0 +1,115 @@
+{
+  "extracted_fields": {
+    "loan_number": "12345678",
+    "amount": 425000,
+    "rate": 0.06375,
+    "term": 30,
+    "appraisal_value": 475000,
+    "property_address": "456 Oak Lane",
+    "property_city": "Dallas",
+    "property_state": "TX",
+    "property_zip": "75201",
+    "loan_officer_name": "Sarah Johnson",
+    "loan_officer_email": "sjohnson@lender.com",
+    "processor": "Mike Chen",
+    "processor_email": "mchen@lender.com",
+    "underwriter": "David Park",
+    "closer": "Lisa Wong",
+    "closer_email": "lwong@titleco.com",
+    "appraisal_completed_date": "2025-01-10",
+    "title_received_date": "2025-01-12",
+    "conditional_approval_date": "2025-01-15",
+    "clear_to_close_date": "2025-01-20",
+    "closing_disclosure_sent_date": "2025-01-18",
+    "cd_received_signed_date": "2025-01-19",
+    "closing_scheduled_date": "2025-01-25"
+  },
+  "confidence_scores": {
+    "loan_number": 100,
+    "amount": 100,
+    "rate": 100,
+    "term": 95,
+    "appraisal_value": 100,
+    "property_address": 100,
+    "property_city": 100,
+    "property_state": 100,
+    "property_zip": 100,
+    "loan_officer_name": 100,
+    "loan_officer_email": 100,
+    "processor": 100,
+    "processor_email": 100,
+    "underwriter": 100,
+    "closer": 100,
+    "closer_email": 100,
+    "appraisal_completed_date": 100,
+    "title_received_date": 100,
+    "conditional_approval_date": 100,
+    "clear_to_close_date": 100,
+    "closing_disclosure_sent_date": 100,
+    "cd_received_signed_date": 100,
+    "closing_scheduled_date": 100
+  },
+  "calculated_fields": {
+    "ltv": 0.8947,
+    "days_to_closing": 5
+  },
+  "milestone_triggers": [
+    {
+      "milestone": "appraisal_completed",
+      "date": "2025-01-10",
+      "confidence": 100
+    },
+    {
+      "milestone": "title_received",
+      "date": "2025-01-12",
+      "confidence": 100
+    },
+    {
+      "milestone": "conditional_approval",
+      "date": "2025-01-15",
+      "confidence": 100
+    },
+    {
+      "milestone": "clear_to_close",
+      "date": "2025-01-20",
+      "confidence": 100
+    },
+    {
+      "milestone": "closing_disclosure_sent",
+      "date": "2025-01-18",
+      "confidence": 100
+    },
+    {
+      "milestone": "cd_signed",
+      "date": "2025-01-19",
+      "confidence": 100
+    },
+    {
+      "milestone": "closing_scheduled",
+      "date": "2025-01-25",
+      "confidence": 100
+    }
+  ],
+  "field_updates": [],
+  "conflicts": [],
+  "suggested_actions": [
+    "Confirm receipt of clear to close notification",
+    "Coordinate final closing details with title company",
+    "Prepare final closing package",
+    "Confirm closing appointment with borrower",
+    "Verify all closing documents are ready"
+  ],
+  "email_summary": "Loan #12345678 for Jennifer Martinez has been cleared to close with a scheduled closing date of January 25, 2025. The closing disclosure has been sent and signed, and all major milestones have been completed successfully.",
+  "sentiment": "positive",
+  "urgency_score": 75,
+  "next_best_action": "Confirm receipt and coordinate final closing details with title company",
+  "extraction_metadata": {
+    "parser_version": "1.0.0",
+    "model": "claude-sonnet-4-20250514",
+    "timestamp": "2025-11-16T11:07:48.127993",
+    "email_id": "msg-loan-001",
+    "processing_time_ms": 11677
+  },
+  "overall_confidence": 99.78,
+  "field_count": 23
+}

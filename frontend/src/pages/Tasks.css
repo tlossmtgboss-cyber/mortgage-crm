@@ -293,7 +293,7 @@
 }
 
 .ai-count-badge {
-  background: #667eea;
+  background: #218D8D;
   color: white;
   padding: 4px 12px;
   border-radius: var(--radius-full);
@@ -319,7 +319,7 @@
 }
 
 .ai-task-card:hover {
-  border-color: #667eea;
+  border-color: #218D8D;
   box-shadow: var(--shadow-md);
 }
 
@@ -382,8 +382,8 @@
 .btn-coach {
   padding: 8px 16px;
   background: white;
-  color: #667eea;
-  border: 2px solid #667eea;
+  color: #218D8D;
+  border: 2px solid #218D8D;
   border-radius: 6px;
   font-size: 13px;
   font-weight: 600;
@@ -393,7 +393,7 @@
 
 .btn-fix:hover,
 .btn-coach:hover {
-  background: #667eea;
+  background: #218D8D;
   color: white;
 }
 
@@ -410,7 +410,7 @@
 }
 
 .ai-task-simple:hover {
-  border-color: #667eea;
+  border-color: #218D8D;
   box-shadow: var(--shadow-sm);
 }
 

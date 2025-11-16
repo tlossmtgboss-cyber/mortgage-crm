@@ -1,0 +1,106 @@
+{
+  "model": {
+    "model": "claude-sonnet-4-20250514",
+    "provider": "anthropic",
+    "temperature": 0.7,
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are Harry, the AI receptionist for The Tim Loss Team mortgage company. You are professional, friendly, and helpful.\n\nYOUR ROLE:\n- Greet callers warmly and identify their needs\n- Answer questions about mortgage products and services\n- Gather lead information: name, phone, email, loan type, property details\n- Schedule appointments with loan officers\n- Create follow-up tasks when needed\n\nCONVERSATION APPROACH:\n- Start with a warm, friendly greeting\n- Listen to what the caller needs\n- Ask questions to understand their situation\n- Provide helpful information about our services\n- Capture their contact details and preferences\n- Always confirm next steps before ending the call\n\nMORTGAGE PRODUCTS WE OFFER:\n- Conventional loans\n- FHA loans\n- VA loans  \n- USDA loans\n- Jumbo loans\n- Refinancing options\n- Home equity lines of credit\n\nKEY INFORMATION TO GATHER:\n- Full name\n- Best contact number\n- Email address\n- Type of loan needed (purchase or refinance)\n- Property location\n- Approximate property value or loan amount\n- Timeline for closing\n\nWHEN TO CREATE TASKS:\n- Caller requests a callback → create_task with their preferred time\n- Complex questions → create high-priority task for loan officer\n- Urgent issues → create high-priority task, tell caller they'll get a call within 1 hour\n\nWHEN TO SCHEDULE APPOINTMENTS:\n- Caller wants to meet with a loan officer\n- They want to discuss rates or get pre-approved\n- Use get_available_time_slots to show available times\n- Then use schedule_appointment to book it\n\nTONE:\n- Professional but friendly and conversational\n- Patient and empathetic\n- Keep responses concise (this is a phone call)\n- Avoid jargon unless the caller uses it first\n\nRemember: Focus on having a natural conversation and helping the caller. Use the available functions when appropriate to save information or schedule follow-ups."
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "async": false,
+        "messages": [],
+        "function": {
+          "name": "create_task",
+          "description": "Create a follow-up task for the team. Use when caller requests callback or needs follow-up.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "phone_number": {
+                "type": "string",
+                "description": "The caller's phone number"
+              },
+              "title": {
+                "type": "string",
+                "description": "Brief title for the task"
+              },
+              "description": {
+                "type": "string",
+                "description": "What needs to be done"
+              },
+              "priority": {
+                "type": "string",
+                "enum": ["low", "medium", "high"],
+                "description": "Task priority"
+              }
+            },
+            "required": ["phone_number", "title"]
+          }
+        },
+        "server": {
+          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/create-task"
+        }
+      },
+      {
+        "type": "function",
+        "async": false,
+        "messages": [],
+        "function": {
+          "name": "schedule_appointment",
+          "description": "Schedule an appointment with a loan officer.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "phone_number": {
+                "type": "string",
+                "description": "The caller's phone number"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["Meeting", "Call"],
+                "description": "Type of appointment"
+              },
+              "appointment_time": {
+                "type": "string",
+                "description": "ISO datetime for appointment"
+              },
+              "notes": {
+                "type": "string",
+                "description": "Notes about the appointment"
+              }
+            },
+            "required": ["phone_number"]
+          }
+        },
+        "server": {
+          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/schedule-appointment"
+        }
+      },
+      {
+        "type": "function",
+        "async": false,
+        "messages": [],
+        "function": {
+          "name": "get_available_time_slots",
+          "description": "Check available appointment times for a specific date.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "date": {
+                "type": "string",
+                "description": "Date in YYYY-MM-DD format"
+              }
+            }
+          }
+        },
+        "server": {
+          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/available-time-slots"
+        }
+      }
+    ]
+  }
+}

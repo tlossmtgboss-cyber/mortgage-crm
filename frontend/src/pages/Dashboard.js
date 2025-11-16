@@ -107,6 +107,30 @@ function Dashboard() {
     try {
       setLoading(true);
 
+      // OPTIMIZED: Check cache first (cache for 30 seconds)
+      const cacheKey = 'dashboard_data';
+      const cacheTimeKey = 'dashboard_data_time';
+      const cachedData = localStorage.getItem(cacheKey);
+      const cachedTime = localStorage.getItem(cacheTimeKey);
+      const now = Date.now();
+
+      if (cachedData && cachedTime && (now - parseInt(cachedTime)) < 30000) {
+        // Use cached data
+        const data = JSON.parse(cachedData);
+        setPrioritizedTasks(data.prioritized_tasks || []);
+        setPipelineStats(data.pipeline_stats || []);
+        setProduction(data.production || {});
+        setLeadMetrics(data.lead_metrics || {});
+        setLoanIssues(data.loan_issues || []);
+        setAiTasks(data.ai_tasks || { pending: [], waiting: [] });
+        setReferralStats(data.referral_stats || {});
+        setTeamStats(data.team_stats || {});
+        setMessages(data.messages || []);
+        setEfficiency(data.efficiency || {});
+        setLoading(false);
+        return;
+      }
+
       // Fetch real data from backend
       const API_URL = process.env.REACT_APP_API_URL || '';
       const response = await fetch(`${API_URL}/api/v1/dashboard`, {
@@ -121,6 +145,10 @@ function Dashboard() {
       }
 
       const data = await response.json();
+
+      // Cache the response
+      localStorage.setItem(cacheKey, JSON.stringify(data));
+      localStorage.setItem(cacheTimeKey, now.toString());
 
       // Set all data from backend
       setPrioritizedTasks(data.prioritized_tasks || []);

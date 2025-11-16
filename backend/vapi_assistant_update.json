@@ -1,0 +1,163 @@
+{
+  "model": {
+    "model": "claude-sonnet-4-20250514",
+    "provider": "anthropic",
+    "temperature": 2,
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are a spunky, energetic, professional mortgage company receptionist. Your role is to:\n- Respond with lots of enthusiasm, use an upbeat tone, and inject positive energy into every statement.\n- Greet callers warmly and energetically\n- Capture caller information (name, phone, inquiry type)\n- Try to schedule an appointment\n- Answer basic questions about mortgage services\n- Schedule appointments or callbacks\n- Transfer urgent calls appropriately\nAlways be polite, helpful, and upbeat. If you don't know something, offer to have someone call them back, and keep a positive, lively attitude throughout.\n"
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "async": false,
+        "messages": [],
+        "function": {
+          "name": "get_lead_info",
+          "description": "Get information about a lead by their phone number. Use this to personalize the conversation with existing customers.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "phone_number": {
+                "type": "string",
+                "description": "The caller's phone number"
+              }
+            },
+            "required": ["phone_number"]
+          }
+        },
+        "server": {
+          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/get-lead-info"
+        }
+      },
+      {
+        "type": "function",
+        "async": false,
+        "messages": [],
+        "function": {
+          "name": "update_lead_status",
+          "description": "Update a lead's status or add notes after gathering information. Use this when the conversation progresses the lead to a new stage or when important information is shared.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "phone_number": {
+                "type": "string",
+                "description": "The caller's phone number"
+              },
+              "stage": {
+                "type": "string",
+                "enum": ["New", "Attempted Contact", "Prospect", "Application Started", "Application Complete", "Pre-Approved"],
+                "description": "The new stage for the lead"
+              },
+              "notes": {
+                "type": "string",
+                "description": "Notes to add to the lead record"
+              }
+            },
+            "required": ["phone_number"]
+          }
+        },
+        "server": {
+          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/update-lead-status"
+        }
+      },
+      {
+        "type": "function",
+        "async": false,
+        "messages": [],
+        "function": {
+          "name": "create_task",
+          "description": "Create a follow-up task for the team. Use this when the caller requests a callback, needs documentation, or any action item is identified.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "phone_number": {
+                "type": "string",
+                "description": "The caller's phone number"
+              },
+              "title": {
+                "type": "string",
+                "description": "Brief title for the task"
+              },
+              "description": {
+                "type": "string",
+                "description": "Detailed description of what needs to be done"
+              },
+              "priority": {
+                "type": "string",
+                "enum": ["low", "medium", "high"],
+                "description": "Task priority level"
+              },
+              "due_date": {
+                "type": "string",
+                "description": "ISO format datetime string for when the task is due"
+              }
+            },
+            "required": ["phone_number", "title"]
+          }
+        },
+        "server": {
+          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/create-task"
+        }
+      },
+      {
+        "type": "function",
+        "async": false,
+        "messages": [],
+        "function": {
+          "name": "schedule_appointment",
+          "description": "Schedule an appointment or meeting with the caller. Use this when they want to meet with a loan officer or schedule a callback at a specific time.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "phone_number": {
+                "type": "string",
+                "description": "The caller's phone number"
+              },
+              "type": {
+                "type": "string",
+                "enum": ["Meeting", "Call", "Email"],
+                "description": "Type of appointment"
+              },
+              "appointment_time": {
+                "type": "string",
+                "description": "ISO format datetime string for the appointment"
+              },
+              "notes": {
+                "type": "string",
+                "description": "Additional notes about the appointment"
+              }
+            },
+            "required": ["phone_number"]
+          }
+        },
+        "server": {
+          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/schedule-appointment"
+        }
+      },
+      {
+        "type": "function",
+        "async": false,
+        "messages": [],
+        "function": {
+          "name": "get_available_time_slots",
+          "description": "Get available appointment time slots for a specific date. Use this to help customers schedule appointments.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "date": {
+                "type": "string",
+                "description": "ISO format date string (YYYY-MM-DD)"
+              }
+            }
+          }
+        },
+        "server": {
+          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/available-time-slots"
+        }
+      }
+    ]
+  }
+}

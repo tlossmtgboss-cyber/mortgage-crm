@@ -1,0 +1,156 @@
+.impersonation-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  color: white;
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 9999;
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.4);
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.banner-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.banner-icon {
+  width: 32px;
+  height: 32px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.banner-icon svg {
+  color: white;
+}
+
+.banner-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  flex-wrap: wrap;
+}
+
+.banner-text strong {
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.user-name {
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.user-role {
+  font-size: 13px;
+  opacity: 0.9;
+}
+
+.separator {
+  opacity: 0.6;
+  font-size: 12px;
+}
+
+.timer {
+  font-weight: 600;
+  font-family: 'Monaco', 'Courier New', monospace;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.timer.warning {
+  background: #dc2626;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.exit-btn {
+  background: rgba(255, 255, 255, 0.9);
+  color: #ea580c;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.exit-btn:hover:not(:disabled) {
+  background: white;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.exit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Adjust main content when banner is visible */
+body:has(.impersonation-banner) .app-layout,
+body:has(.impersonation-banner) .app-main {
+  padding-top: 56px;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .impersonation-banner {
+    padding: 10px 16px;
+  }
+
+  .banner-text {
+    font-size: 12px;
+    gap: 6px;
+  }
+
+  .user-name {
+    font-size: 13px;
+  }
+
+  .user-role {
+    display: none;
+  }
+
+  .timer {
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+
+  .exit-btn {
+    padding: 6px 14px;
+    font-size: 12px;
+  }
+}

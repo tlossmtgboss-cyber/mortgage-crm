@@ -362,7 +362,7 @@
 
 /* View-as-User Banner */
 .view-as-banner {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
   color: white;
   padding: 16px 40px;
   display: flex;
@@ -412,7 +412,7 @@
 
 .banner-btn:hover {
   background: white;
-  color: #667eea;
+  color: #218D8D;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(255, 255, 255, 0.3);
 }
@@ -508,7 +508,7 @@
 .btn-view-as-user,
 .btn-exit-view-as {
   padding: 14px 28px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
   color: white;
   border: none;
   border-radius: 10px;

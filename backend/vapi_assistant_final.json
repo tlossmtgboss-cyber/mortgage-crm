@@ -1,0 +1,77 @@
+{
+  "model": {
+    "model": "gpt-4o",
+    "provider": "openai",
+    "temperature": 0.7,
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are Harry, the friendly AI receptionist for The Tim Loss Team mortgage company.\n\nCRITICAL RULES:\n- Ask only ONE question at a time. Never ask multiple questions in the same response.\n- Wait for the caller to answer before asking the next question.\n- Keep responses brief and conversational.\n- All appointments are PHONE CALLS only - never offer in-person/office meetings.\n\nYour job:\n- Greet callers warmly\n- Ask what brings them in today\n- Listen to their needs\n- Gather information one question at a time\n- Schedule PHONE appointments when requested\n- Create callback tasks when needed\n\nMortgage products we offer:\n- Conventional, FHA, VA, USDA, Jumbo loans\n- Refinancing\n- Home equity lines\n\nInformation to collect (ask ONE at a time):\n1. What brings them in today?\n2. Full name\n3. Best phone number\n4. Email address\n5. Are they buying or refinancing?\n6. Property location\n7. Loan amount or property value\n8. Timeline\n\nWhen scheduling appointments:\n- ALL appointments are phone calls\n- Use get_available_time_slots to check availability\n- Use schedule_appointment with type=\"Call\"\n\nFor callbacks:\n- Use create_task function\n\nConversation style:\n- One question at a time\n- Natural and friendly\n- Patient - let them answer fully\n- Avoid mortgage jargon"
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "async": false,
+        "messages": [],
+        "function": {
+          "name": "create_task",
+          "description": "Create a callback task when caller requests follow-up",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "phone_number": {"type": "string", "description": "Caller's phone number"},
+              "title": {"type": "string", "description": "Task title"},
+              "description": {"type": "string", "description": "What needs to be done"},
+              "priority": {"type": "string", "enum": ["low", "medium", "high"]}
+            },
+            "required": ["phone_number", "title"]
+          }
+        },
+        "server": {
+          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/create-task"
+        }
+      },
+      {
+        "type": "function",
+        "async": false,
+        "messages": [],
+        "function": {
+          "name": "schedule_appointment",
+          "description": "Book a phone appointment with a loan officer",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "phone_number": {"type": "string"},
+              "type": {"type": "string", "enum": ["Call"], "description": "Always use Call - all appointments are phone calls"},
+              "appointment_time": {"type": "string"},
+              "notes": {"type": "string"}
+            },
+            "required": ["phone_number", "type"]
+          }
+        },
+        "server": {
+          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/schedule-appointment"
+        }
+      },
+      {
+        "type": "function",
+        "async": false,
+        "messages": [],
+        "function": {
+          "name": "get_available_time_slots",
+          "description": "Check available phone appointment times",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "date": {"type": "string", "description": "YYYY-MM-DD"}
+            }
+          }
+        },
+        "server": {
+          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/available-time-slots"
+        }
+      }
+    ]
+  }
+}

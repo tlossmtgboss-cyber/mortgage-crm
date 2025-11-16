@@ -123,7 +123,7 @@
   transform: translateY(-50%);
   font-size: 24px;
   font-weight: bold;
-  color: #667eea;
+  color: #218D8D;
   background: white;
   border-radius: 6px;
   cursor: grab;
@@ -141,8 +141,8 @@
 }
 
 .drag-handle:hover {
-  color: #764ba2;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  color: #10b981;
+  box-shadow: 0 4px 12px rgba(33, 141, 141, 0.3);
   transform: translateY(-50%) scale(1.05);
 }
 
@@ -171,7 +171,7 @@
 .clickable-block:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  border-color: #764ba2;
+  border-color: #218D8D;
 }
 
 .block-header {
@@ -535,7 +535,7 @@
 .kpi-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  border-color: #667eea;
+  border-color: #218D8D;
 }
 
 .kpi-label {
@@ -587,7 +587,7 @@
 
 .kpi-progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(90deg, #218D8D 0%, #10b981 100%);
   border-radius: 4px;
   transition: width 0.3s ease;
 }
@@ -595,7 +595,7 @@
 .kpi-percentage {
   font-size: 13px;
   font-weight: 600;
-  color: #667eea;
+  color: #218D8D;
   text-align: center;
   margin-top: 6px;
 }
@@ -848,7 +848,7 @@
 }
 
 .btn-coach {
-  background: #6366f1;
+  background: #218D8D;
   color: white;
 }
 
@@ -893,7 +893,7 @@
 }
 
 .btn-quick-delegate {
-  background: #6366f1;
+  background: #218D8D;
   color: white;
 }
 
@@ -1182,7 +1182,7 @@
 .message-client-type {
   font-size: 11px;
   padding: 3px 8px;
-  background: #667eea;
+  background: #218D8D;
   color: white;
   border-radius: 10px;
   font-weight: 600;
@@ -1468,7 +1468,7 @@
 }
 
 .efficiency-score-display {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
   border-radius: 12px;
   padding: 12px;
   color: white;
@@ -1677,7 +1677,7 @@
 .btn-view-efficiency {
   width: 100%;
   padding: 12px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
   color: white;
   border: none;
   border-radius: 8px;
@@ -1689,7 +1689,7 @@
 
 .btn-view-efficiency:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 4px 12px rgba(33, 141, 141, 0.4);
 }
 
 /* Responsive - Efficiency */

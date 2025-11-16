@@ -74,7 +74,173 @@
   background: #dc2626;
 }
 
-/* Member Info Card */
+/* Green Header Bar with Tabs */
+.profile-green-bar {
+  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
+  padding: 16px 32px;
+  margin-bottom: 24px;
+  box-shadow: 0 4px 12px rgba(33, 141, 141, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  color: white;
+}
+
+.profile-left-section {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-shrink: 0;
+}
+
+/* Profile Picture with Upload */
+.member-avatar-section {
+  flex-shrink: 0;
+}
+
+.avatar-upload-label {
+  cursor: pointer;
+  display: block;
+  position: relative;
+}
+
+.avatar-circle-new {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: white;
+  color: #218D8D;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  font-weight: 700;
+  border: 3px solid rgba(255, 255, 255, 0.5);
+  overflow: hidden;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.avatar-circle-new:hover {
+  border-color: rgba(255, 255, 255, 0.9);
+  transform: scale(1.05);
+}
+
+.avatar-circle-new img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-initials {
+  user-select: none;
+}
+
+.avatar-upload-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  padding: 4px;
+  text-align: center;
+  font-size: 16px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.avatar-upload-label:hover .avatar-upload-overlay {
+  opacity: 1;
+}
+
+/* Member Name Section */
+.member-name-section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.member-name-header {
+  font-size: 24px;
+  font-weight: 700;
+  margin: 0;
+  color: white;
+}
+
+.member-role-header {
+  font-size: 14px;
+  font-weight: 500;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* Tabs in Green Bar */
+.profile-tabs-new {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+  justify-content: center;
+  align-items: center;
+}
+
+.profile-tabs-new .tab-btn {
+  padding: 10px 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.profile-tabs-new .tab-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+}
+
+.profile-tabs-new .tab-btn.active {
+  background: white;
+  color: #218D8D;
+}
+
+/* Impersonate Button */
+.profile-right-section {
+  flex-shrink: 0;
+}
+
+.btn-impersonate {
+  padding: 10px 20px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  border-radius: 8px;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.btn-impersonate:hover {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.8);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.btn-impersonate:active {
+  transform: translateY(0);
+}
+
+/* Old styles - keep for backwards compatibility */
 .member-info-card {
   display: flex;
   gap: 24px;
@@ -418,11 +584,61 @@
   .disc-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+
+  .profile-green-bar {
+    flex-wrap: wrap;
+  }
+
+  .profile-tabs-new {
+    order: 3;
+    width: 100%;
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+  }
 }
 
 @media (max-width: 768px) {
   .team-member-profile-page {
     padding: 16px;
+  }
+
+  .profile-green-bar {
+    padding: 16px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .profile-left-section {
+    width: 100%;
+  }
+
+  .profile-right-section {
+    width: 100%;
+  }
+
+  .btn-impersonate {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .profile-tabs-new {
+    width: 100%;
+    overflow-x: auto;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+  }
+
+  .member-name-header {
+    font-size: 20px;
+  }
+
+  .avatar-circle-new {
+    width: 60px;
+    height: 60px;
+    font-size: 24px;
   }
 
   .member-info-card {

@@ -1,0 +1,68 @@
+{
+  "extracted_fields": {
+    "name": "Robert Williams",
+    "email": "robert.williams@email.com",
+    "phone": "(214) 555-9876",
+    "loan_number": "98765432",
+    "original_close_date": "2024-03-15",
+    "current_rate": 0.0725,
+    "loan_balance": 380000,
+    "refinance_opportunity": true,
+    "opportunity_notes": "Client inquiring about refinancing due to rate drops, current rate 7.25% with $380k balance",
+    "last_contact": "2025-11-16",
+    "referrals_sent": 1
+  },
+  "confidence_scores": {
+    "name": 100,
+    "email": 100,
+    "phone": 100,
+    "loan_number": 100,
+    "original_close_date": 100,
+    "current_rate": 100,
+    "loan_balance": 85,
+    "refinance_opportunity": 95,
+    "opportunity_notes": 95,
+    "last_contact": 100,
+    "referrals_sent": 90
+  },
+  "calculated_fields": {
+    "current_ltv": 0.724,
+    "months_since_close": 8,
+    "home_value": 525000,
+    "potential_equity": 145000
+  },
+  "milestone_triggers": [
+    {
+      "milestone": "refinance_inquiry",
+      "date": "2025-11-16",
+      "confidence": 95
+    },
+    {
+      "milestone": "referral_opportunity",
+      "date": "2025-11-16",
+      "confidence": 90
+    }
+  ],
+  "field_updates": [],
+  "conflicts": [],
+  "suggested_actions": [
+    "Run rate quote analysis for refinance",
+    "Calculate break-even point for refinance costs",
+    "Contact client with current rate options",
+    "Follow up on referral lead Tom",
+    "Schedule refinance consultation call"
+  ],
+  "email_summary": "Existing client Robert Williams is inquiring about refinancing his loan #98765432 due to dropping rates, currently at 7.25% with $380k balance. He also mentioned referring coworker Tom for a first-time home purchase.",
+  "sentiment": "positive",
+  "urgency_score": 70,
+  "next_best_action": "Contact client within 24 hours with current refinance rates and potential savings analysis",
+  "extraction_metadata": {
+    "parser_version": "1.0.0",
+    "model": "claude-sonnet-4-20250514",
+    "timestamp": "2025-11-16T11:07:58.238324",
+    "email_id": "msg-mum-001",
+    "processing_time_ms": 10108
+  },
+  "overall_confidence": 96.82,
+  "field_count": 11
+}

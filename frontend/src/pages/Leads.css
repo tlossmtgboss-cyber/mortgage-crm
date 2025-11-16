@@ -335,7 +335,7 @@
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #218D8D 0%, #10b981 100%);
   color: white;
   padding: 12px 24px;
   border: none;
@@ -351,8 +351,8 @@
 
 .btn-secondary {
   background: white;
-  color: #667eea;
-  border: 2px solid #667eea;
+  color: #218D8D;
+  border: 2px solid #218D8D;
   padding: 12px 24px;
   border-radius: 8px;
   font-weight: 600;
@@ -452,7 +452,7 @@
 .form-group select:focus,
 .form-group textarea:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: #218D8D;
 }
 
 .form-group textarea {

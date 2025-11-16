@@ -874,14 +874,14 @@
 
 /* Teams Button */
 .action-btn.teams {
-  background: linear-gradient(135deg, #5b5fc7 0%, #6366f1 100%);
-  border-color: #5b5fc7;
+  background: linear-gradient(135deg, #218D8D 0%, #218D8D 100%);
+  border-color: #218D8D;
   color: white;
   box-shadow: 0 2px 8px rgba(91, 95, 199, 0.3);
 }
 
 .action-btn.teams:hover:not(:disabled) {
-  background: linear-gradient(135deg, #4f46e5 0%, #5b5fc7 100%);
+  background: linear-gradient(135deg, #4f46e5 0%, #218D8D 100%);
   border-color: #4f46e5;
   box-shadow: 0 8px 24px rgba(79, 70, 229, 0.4);
 }
@@ -930,8 +930,8 @@
 
 /* Voice Command Button */
 .action-btn.voice {
-  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
-  border-color: #8b5cf6;
+  background: linear-gradient(135deg, #10b981 0%, #7c3aed 100%);
+  border-color: #10b981;
   color: white;
   box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
 }
