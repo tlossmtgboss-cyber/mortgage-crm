@@ -288,12 +288,14 @@
     "keywords": [],
     "endpointing": 255
   },
-  "firstMessage": "Thank you for calling The Tim Loss Team. This is Sam, your AI receptionist. How may I help you today?",
+  "firstMessage": "Thank you for calling The Tim Loss Team. This is Sam. How may I help you today?",
   "endCallMessage": "Thank you for calling. Have a great day!",
   "recordingEnabled": true,
   "silenceTimeoutSeconds": 30,
   "maxDurationSeconds": 1800,
   "responseDelaySeconds": 0.4,
   "llmRequestDelaySeconds": 0.1,
-  "numWordsToInterruptAssistant": 2
+  "numWordsToInterruptAssistant": 2,
+  "serverUrl": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/webhook",
+  "serverUrlSecret": ""
 }
