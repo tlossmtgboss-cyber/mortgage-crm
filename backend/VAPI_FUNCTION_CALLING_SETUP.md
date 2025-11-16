@@ -1,10 +1,10 @@
 # Vapi Function Calling Setup Guide
 
-This guide will help you configure your Vapi assistant (Harry) to update the CRM in real-time during phone calls.
+This guide will help you configure your Vapi assistant (Sam) to update the CRM in real-time during phone calls.
 
 ## What's Been Implemented
 
-5 new API endpoints that Harry can call during conversations:
+5 new API endpoints that Sam can call during conversations:
 
 1. **get_lead_info** - Lookup caller information by phone number
 2. **update_lead_status** - Update lead stage and add notes
@@ -20,7 +20,7 @@ This guide will help you configure your Vapi assistant (Harry) to update the CRM
 4. Find the **System Prompt** section
 5. Replace the current prompt with the content from `backend/vapi_system_prompt.txt`
 
-The new prompt instructs Harry to:
+The new prompt instructs Sam to:
 - Check for existing leads at the start of each call
 - Update lead records with information gathered
 - Create tasks when callers request callbacks
