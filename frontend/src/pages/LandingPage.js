@@ -60,9 +60,6 @@ function LandingPage() {
             <button className="btn-login" onClick={() => navigate('/login')}>
               Log In
             </button>
-            <button className="btn-signup" onClick={() => handleGetStarted('professional')}>
-              Sign Up
-            </button>
           </div>
         </div>
       </nav>
@@ -79,19 +76,12 @@ function LandingPage() {
           </p>
           <div className="hero-cta">
             <button
-              className="btn-primary-large"
-              onClick={() => handleGetStarted('professional')}
-            >
-              Start Free Trial
-            </button>
-            <button
               className="btn-secondary-large"
               onClick={() => document.getElementById('features').scrollIntoView({ behavior: 'smooth' })}
             >
               Learn More
             </button>
           </div>
-          <p className="hero-note">14-day free trial • No credit card required</p>
         </div>
       </section>
 
@@ -231,13 +221,6 @@ function LandingPage() {
       <section className="cta-section">
         <h2>Ready to Transform Your Business?</h2>
         <p>Join hundreds of mortgage professionals using AI to close more loans</p>
-        <button
-          className="btn-primary-large"
-          onClick={() => handleGetStarted('professional')}
-        >
-          Start Your Free Trial
-        </button>
-        <p className="cta-note">No credit card required • Setup in minutes</p>
       </section>
 
       {/* Footer */}
