@@ -15827,6 +15827,14 @@ async def startup_event():
             # Run Phase 2 permission migration
             run_phase2_permission_migration()
 
+            # Create AI Receptionist Dashboard tables
+            try:
+                from ai_receptionist_dashboard_models import create_dashboard_tables
+                create_dashboard_tables()
+                logger.info("✅ AI Receptionist Dashboard tables initialized")
+            except Exception as e:
+                logger.warning(f"⚠️ AI Receptionist Dashboard tables creation skipped: {e}")
+
             # Create sample data
             db = SessionLocal()
             try:
