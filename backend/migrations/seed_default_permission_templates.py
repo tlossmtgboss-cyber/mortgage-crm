@@ -479,8 +479,7 @@ def run_migration():
 
         # Verify templates were created
         result = conn.execute(text("""
-            SELECT id, name,
-                   jsonb_array_length(jsonb_object_keys(permissions)) as permission_count
+            SELECT id, name
             FROM permission_templates
             WHERE is_system_default = TRUE
             ORDER BY name
@@ -488,16 +487,13 @@ def run_migration():
 
         print("\n✅ Default permission templates created successfully:\n")
         for row in result:
-            # Count actual permissions
-            count_result = conn.execute(text("""
-                SELECT COUNT(*) as count
-                FROM jsonb_each(:perms::jsonb)
-            """), {'perms': json.dumps(
-                get_management_permissions() if row[1] == 'Management'
-                else get_sales_permissions() if row[1] == 'Sales'
-                else get_operations_permissions()
-            )})
-            perm_count = count_result.fetchone()[0]
+            # Count actual permissions from the Python objects
+            if row[1] == 'Management':
+                perm_count = len(get_management_permissions())
+            elif row[1] == 'Sales':
+                perm_count = len(get_sales_permissions())
+            else:
+                perm_count = len(get_operations_permissions())
 
             print(f"   • {row[1]} Template (ID: {row[0]}) - {perm_count} permissions")
 
