@@ -52,7 +52,7 @@ def run_migration():
             language VARCHAR(10) DEFAULT 'en',
 
             -- Metadata
-            metadata JSON,
+            call_metadata JSON,
             vapi_raw_data JSON,
 
             -- CRM Integration

@@ -12547,6 +12547,60 @@ async def run_vapi_migration_endpoint(request: dict):
             "error": str(e)
         }
 
+@app.post("/admin/fix-vapi-metadata-column")
+async def fix_vapi_metadata_column(request: dict, db: Session = Depends(get_db)):
+    """
+    Fix vapi_calls table column name from 'metadata' to 'call_metadata'
+    Usage: POST /admin/fix-vapi-metadata-column with body: {"secret": "migrate-ai-2024"}
+    """
+    # Simple security check
+    if request.get("secret") != "migrate-ai-2024":
+        raise HTTPException(status_code=403, detail="Invalid secret")
+
+    try:
+        # Check if metadata column exists
+        check_result = db.execute(text("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = 'vapi_calls'
+            AND column_name IN ('metadata', 'call_metadata')
+        """))
+        columns = [row[0] for row in check_result]
+
+        if 'call_metadata' in columns:
+            return {
+                "success": True,
+                "message": "Column 'call_metadata' already exists - no fix needed",
+                "columns": columns
+            }
+
+        if 'metadata' in columns:
+            # Rename the column
+            db.execute(text("""
+                ALTER TABLE vapi_calls
+                RENAME COLUMN metadata TO call_metadata
+            """))
+            db.commit()
+
+            return {
+                "success": True,
+                "message": "Successfully renamed 'metadata' to 'call_metadata'",
+                "action": "renamed"
+            }
+
+        return {
+            "success": False,
+            "message": "Neither 'metadata' nor 'call_metadata' column found",
+            "columns": columns
+        }
+
+    except Exception as e:
+        db.rollback()
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
 @app.get("/admin/verify-phase1-tables")
 async def verify_phase1_tables(db: Session = Depends(get_db)):
     """
