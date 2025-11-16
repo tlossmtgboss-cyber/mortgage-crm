@@ -14418,6 +14418,119 @@ async def upgrade_demo_user_to_admin(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/v1/admin/run-compliance-migrations")
+async def run_compliance_migrations(db: Session = Depends(get_db)):
+    """
+    Run database migrations to add compliance system columns
+    Adds: account_status, department, full_name to users table
+    """
+    try:
+        results = []
+
+        # Migration 1: Add account_status column
+        try:
+            db.execute(text("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS account_status VARCHAR(20) DEFAULT 'active'
+            """))
+            db.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_users_account_status ON users(account_status)
+            """))
+            db.execute(text("""
+                UPDATE users SET account_status = 'active' WHERE account_status IS NULL
+            """))
+            results.append("✅ Added account_status column")
+        except Exception as e:
+            results.append(f"⚠️ account_status: {str(e)}")
+
+        # Migration 2: Add department column
+        try:
+            db.execute(text("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS department VARCHAR(100)
+            """))
+            db.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_users_department ON users(department)
+            """))
+            db.execute(text("""
+                UPDATE users
+                SET department = CASE
+                    WHEN role IN ('sales', 'loan_officer') THEN 'Sales'
+                    WHEN role = 'operations' THEN 'Operations'
+                    WHEN role IN ('manager', 'management') THEN 'Management'
+                    WHEN role = 'admin' THEN 'Administration'
+                    ELSE 'General'
+                END
+                WHERE department IS NULL
+            """))
+            results.append("✅ Added department column")
+        except Exception as e:
+            results.append(f"⚠️ department: {str(e)}")
+
+        # Migration 3: Add full_name column
+        try:
+            db.execute(text("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name VARCHAR(255)
+            """))
+            db.execute(text("""
+                UPDATE users SET full_name = name WHERE full_name IS NULL AND name IS NOT NULL
+            """))
+            results.append("✅ Added full_name column")
+        except Exception as e:
+            results.append(f"⚠️ full_name: {str(e)}")
+
+        # Migration 4: Create access_certifications table
+        try:
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS access_certifications (
+                    id SERIAL PRIMARY KEY,
+                    employee_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    certification_period VARCHAR(20) NOT NULL,
+                    due_date DATE NOT NULL,
+                    status VARCHAR(20) DEFAULT 'pending',
+
+                    certified_by_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                    certified_at TIMESTAMP,
+                    certification_notes TEXT,
+
+                    permissions_snapshot JSONB,
+                    permissions_changed JSONB,
+
+                    reminder_sent_30d BOOLEAN DEFAULT FALSE,
+                    reminder_sent_7d BOOLEAN DEFAULT FALSE,
+                    reminder_sent_overdue BOOLEAN DEFAULT FALSE,
+
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            db.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_certifications_employee ON access_certifications(employee_id)
+            """))
+            db.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_certifications_due_date ON access_certifications(due_date)
+            """))
+            db.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_certifications_status ON access_certifications(status)
+            """))
+            db.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_certifications_period ON access_certifications(certification_period)
+            """))
+            results.append("✅ Created access_certifications table")
+        except Exception as e:
+            results.append(f"⚠️ access_certifications: {str(e)}")
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": "Compliance migrations completed",
+            "results": results
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Migration error: {e}")
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
 # ============================================================================
 # TAB 6: ACCESS & AUDIT - API ENDPOINTS
 # ============================================================================
