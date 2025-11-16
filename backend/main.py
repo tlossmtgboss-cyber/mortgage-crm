@@ -2185,12 +2185,25 @@ def create_access_token(data: dict):
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
+async def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    request: Request = None,
+    db: Session = Depends(get_db)
+) -> User:
+    """
+    Get current user with impersonation support
+
+    Returns the impersonated user if X-Impersonation-Token header is present,
+    otherwise returns the authenticated user.
+    """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+    # First, authenticate the actual user (manager)
+    actual_user = None
 
     # Check if token is an API key (starts with 'sk_')
     if token.startswith('sk_'):
@@ -2207,24 +2220,49 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         db.commit()
 
         # Get the user associated with this API key
-        user = db.query(User).filter(User.id == api_key.user_id).first()
-        if user is None:
+        actual_user = db.query(User).filter(User.id == api_key.user_id).first()
+        if actual_user is None:
             raise credentials_exception
-        return user
 
-    # Otherwise, treat it as a JWT token
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
+    else:
+        # Otherwise, treat it as a JWT token
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            email: str = payload.get("sub")
+            if email is None:
+                raise credentials_exception
+        except JWTError:
             raise credentials_exception
-    except JWTError:
-        raise credentials_exception
 
-    user = db.query(User).filter(User.email == email).first()
-    if user is None:
-        raise credentials_exception
-    return user
+        actual_user = db.query(User).filter(User.email == email).first()
+        if actual_user is None:
+            raise credentials_exception
+
+    # PHASE 2: Check for impersonation
+    if request:
+        impersonation_token = request.headers.get("X-Impersonation-Token")
+
+        if impersonation_token:
+            # Validate impersonation session
+            session = db.query(ImpersonationSession).filter(
+                ImpersonationSession.session_token == impersonation_token,
+                ImpersonationSession.is_active == True,
+                ImpersonationSession.expires_at > datetime.now(timezone.utc),
+                ImpersonationSession.manager_id == actual_user.id
+            ).first()
+
+            if session:
+                # Return the impersonated user instead of the manager
+                impersonated_user = db.query(User).filter(
+                    User.id == session.impersonated_user_id
+                ).first()
+
+                if impersonated_user:
+                    logger.info(f"Impersonation active: {actual_user.email} → {impersonated_user.email}")
+                    return impersonated_user
+
+    # No impersonation, return actual user
+    return actual_user
 
 async def get_current_user_flexible(
     request: Request,
@@ -7600,7 +7638,10 @@ async def get_leads(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_flexible)
 ):
-    query = db.query(Lead).filter(Lead.owner_id == current_user.id)
+    # Phase 3: Apply permission-based filtering
+    query = db.query(Lead)
+    query = filter_leads_by_permissions(query, current_user, db)
+
     if stage:
         try:
             stage_enum = LeadStage(stage)
@@ -7682,7 +7723,10 @@ async def get_loans(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    query = db.query(Loan).filter(Loan.loan_officer_id == current_user.id)
+    # Phase 3: Apply permission-based filtering
+    query = db.query(Loan)
+    query = filter_loans_by_permissions(query, current_user, db)
+
     if stage:
         try:
             stage_enum = LoanStage(stage)
@@ -11892,6 +11936,69 @@ def get_user_permissions(user_id: int, db: Session) -> Dict[str, bool]:
     except Exception as e:
         logger.error(f"Get user permissions error for user {user_id}: {e}")
         return {}
+
+
+def filter_leads_by_permissions(query, user: User, db: Session):
+    """
+    Filter leads query based on user's permissions
+
+    Returns filtered query based on:
+    - leads.view_all: See all leads
+    - leads.view_team: See team's leads (not implemented yet - needs team_id)
+    - leads.view_assigned: See only assigned leads
+    """
+    if has_permission(user.id, 'leads.view_all', db):
+        # Management: See all leads
+        return query
+
+    if has_permission(user.id, 'leads.view_assigned', db):
+        # Sales: See only their assigned leads
+        return query.filter(Lead.owner_id == user.id)
+
+    # No permission to view leads
+    return query.filter(Lead.id == None)  # Returns empty result
+
+
+def filter_clients_by_permissions(query, user: User, db: Session):
+    """
+    Filter clients query based on user's permissions
+
+    Note: Client model doesn't have owner_id, so this is a placeholder.
+    In production, you'd need to add owner_id to Client model.
+    """
+    if has_permission(user.id, 'clients.view_all', db):
+        # Management/Operations: See all clients
+        return query
+
+    if has_permission(user.id, 'clients.view_assigned', db):
+        # Sales: See only their assigned clients
+        # TODO: Add owner_id to Client model
+        # return query.filter(Client.owner_id == user.id)
+        return query  # For now, return all (needs schema update)
+
+    # No permission to view clients
+    return query.filter(False)  # Returns empty result
+
+
+def filter_loans_by_permissions(query, user: User, db: Session):
+    """
+    Filter loans query based on user's permissions
+
+    Returns filtered query based on:
+    - loans.view_all: See all loans
+    - loans.view_team: See team's loans
+    - loans.view_assigned: See only assigned loans (where user is loan_officer)
+    """
+    if has_permission(user.id, 'loans.view_all', db):
+        # Management/Operations: See all loans
+        return query
+
+    if has_permission(user.id, 'loans.view_assigned', db):
+        # Sales: See only loans where they are the loan officer
+        return query.filter(Loan.loan_officer_id == user.id)
+
+    # No permission to view loans
+    return query.filter(Loan.id == None)  # Returns empty result
 
 
 def apply_role_template_to_user(user_id: int, role_name: str, granted_by_id: int, db: Session) -> bool:
