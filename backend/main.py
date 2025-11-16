@@ -12601,6 +12601,45 @@ async def fix_vapi_metadata_column(request: dict, db: Session = Depends(get_db))
             "error": str(e)
         }
 
+@app.post("/admin/setup-demo-impersonation")
+async def setup_demo_impersonation(request: dict, db: Session = Depends(get_db)):
+    """
+    Setup demo account with impersonation permissions
+    Usage: POST /admin/setup-demo-impersonation with body: {"secret": "migrate-ai-2024"}
+    """
+    import subprocess
+
+    # Simple security check
+    if request.get("secret") != "migrate-ai-2024":
+        raise HTTPException(status_code=403, detail="Invalid secret")
+
+    try:
+        # Run setup script
+        result = subprocess.run(
+            ["python3", "setup_demo_impersonation.py"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            cwd="/app"
+        )
+
+        return {
+            "success": result.returncode == 0,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "returncode": result.returncode
+        }
+    except subprocess.TimeoutExpired:
+        return {
+            "success": False,
+            "error": "Setup timed out after 120 seconds"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
 @app.get("/admin/verify-phase1-tables")
 async def verify_phase1_tables(db: Session = Depends(get_db)):
     """
