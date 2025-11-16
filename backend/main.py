@@ -12378,6 +12378,124 @@ def init_db_with_retry(max_retries=5, initial_delay=2):
                 raise
     return False
 
+def run_phase2_permission_migration():
+    """Run Phase 2 permission system migration on startup"""
+    db = SessionLocal()
+    try:
+        logger.info("🔐 Running Phase 2 Permission System Migration...")
+
+        # Step 1: Add permission_role to users
+        try:
+            db.execute(text("""
+                ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS permission_role VARCHAR(50) DEFAULT 'sales';
+            """))
+            db.commit()
+            logger.info("   ✅ Added permission_role column to users table")
+        except Exception as e:
+            logger.warning(f"   ⚠️  permission_role column: {str(e)}")
+            db.rollback()
+
+        # Step 2: Create permission_templates table
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS permission_templates (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(255) NOT NULL UNIQUE,
+                description TEXT,
+                category VARCHAR(50) NOT NULL,
+                permissions JSONB NOT NULL DEFAULT '{}',
+                is_system_default BOOLEAN DEFAULT FALSE,
+                created_by INTEGER REFERENCES users(id),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+                CONSTRAINT template_category_check CHECK (category IN ('management', 'sales', 'operations', 'custom'))
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_permission_templates_category
+                ON permission_templates(category);
+            CREATE INDEX IF NOT EXISTS idx_permission_templates_system
+                ON permission_templates(is_system_default) WHERE is_system_default = TRUE;
+        """))
+        db.commit()
+        logger.info("   ✅ Created permission_templates table")
+
+        # Step 3: Create user_permissions table
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS user_permissions (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                permission_key VARCHAR(255) NOT NULL,
+                granted BOOLEAN DEFAULT TRUE,
+                granted_by INTEGER REFERENCES users(id),
+                granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP,
+                inherited_from VARCHAR(50) DEFAULT 'template',
+
+                CONSTRAINT unique_user_permission UNIQUE (user_id, permission_key)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_user_permissions_user
+                ON user_permissions(user_id);
+            CREATE INDEX IF NOT EXISTS idx_user_permissions_composite
+                ON user_permissions(user_id, permission_key, granted);
+            CREATE INDEX IF NOT EXISTS idx_user_permissions_expires
+                ON user_permissions(expires_at) WHERE expires_at IS NOT NULL;
+        """))
+        db.commit()
+        logger.info("   ✅ Created user_permissions table")
+
+        # Step 4: Check if templates already exist
+        result = db.execute(text("""
+            SELECT COUNT(*) as count FROM permission_templates
+            WHERE name IN ('Management', 'Sales', 'Operations')
+        """))
+        existing_count = result.fetchone()[0]
+
+        if existing_count == 0:
+            # Management permissions
+            management_perms = {
+                "dashboard.view_all_widgets": True, "leads.view_all": True, "clients.view_all": True,
+                "loans.view_all": True, "team.view_all": True, "team.impersonate": True, "permissions.manage": True
+            }
+            # Sales permissions
+            sales_perms = {
+                "dashboard.view_all_widgets": False, "leads.view_assigned": True, "leads.edit_own": True,
+                "clients.view_assigned": True, "loans.view_assigned": True
+            }
+            # Operations permissions
+            operations_perms = {
+                "leads.view_all": True, "clients.view_all": True,
+                "loans.view_all": True, "loans.process": True
+            }
+
+            # Insert templates
+            db.execute(text("""
+                INSERT INTO permission_templates
+                (name, description, permissions, is_system_default, category, created_at)
+                VALUES
+                ('Management', 'Full access', CAST(:perms1 AS jsonb), TRUE, 'management', CURRENT_TIMESTAMP),
+                ('Sales', 'Sales focused', CAST(:perms2 AS jsonb), TRUE, 'sales', CURRENT_TIMESTAMP),
+                ('Operations', 'Operations focused', CAST(:perms3 AS jsonb), TRUE, 'operations', CURRENT_TIMESTAMP)
+            """), {
+                'perms1': json.dumps(management_perms),
+                'perms2': json.dumps(sales_perms),
+                'perms3': json.dumps(operations_perms)
+            })
+            db.commit()
+            logger.info("   ✅ Seeded 3 default permission templates")
+        else:
+            logger.info(f"   ⚠️  Found {existing_count} existing templates, skipping seed")
+
+        logger.info("✅ Phase 2 Permission System Migration Completed!")
+
+    except Exception as e:
+        logger.error(f"❌ Phase 2 migration error: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
 @app.on_event("startup")
 async def startup_event():
     """Initialize database on startup"""
@@ -12386,6 +12504,9 @@ async def startup_event():
     try:
         # Initialize database with retry logic
         if init_db_with_retry():
+            # Run Phase 2 permission migration
+            run_phase2_permission_migration()
+
             # Create sample data
             db = SessionLocal()
             try:
