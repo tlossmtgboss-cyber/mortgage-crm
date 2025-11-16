@@ -50,7 +50,7 @@ try:
             # Create employee record
             employee_result = conn.execute(text("""
                 INSERT INTO employees
-                (user_id, first_name, last_name, email, status, hire_date, created_at)
+                (user_id, first_name, last_name, email, employment_status, hire_date, created_at)
                 VALUES
                 (:user_id, 'Demo', 'User', 'demo@example.com', 'active', CURRENT_DATE, CURRENT_TIMESTAMP)
                 RETURNING id
@@ -162,7 +162,7 @@ try:
                     # Create employee
                     conn.execute(text("""
                         INSERT INTO employees
-                        (user_id, first_name, last_name, email, job_title, status, hire_date, created_at)
+                        (user_id, first_name, last_name, email, job_title, employment_status, hire_date, created_at)
                         VALUES
                         (:user_id, :first, :last, :email, :job_title, 'active', CURRENT_DATE, CURRENT_TIMESTAMP)
                     """), {
