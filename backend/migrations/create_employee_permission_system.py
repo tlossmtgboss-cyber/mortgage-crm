@@ -373,8 +373,10 @@ def run_migration(engine):
             CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log(entity_type, entity_id, timestamp DESC);
 
             -- Partial index for recent logs (last 90 days) for faster hot queries
-            CREATE INDEX IF NOT EXISTS idx_audit_log_recent ON audit_log(timestamp DESC, event_category)
-                WHERE timestamp > CURRENT_TIMESTAMP - INTERVAL '90 days';
+            -- Note: Cannot use CURRENT_TIMESTAMP in index predicate (not IMMUTABLE)
+            -- Use a date-based approach instead or maintain manually via cron
+            -- CREATE INDEX IF NOT EXISTS idx_audit_log_recent ON audit_log(timestamp DESC, event_category);
+
         """))
 
         # Access Certifications
