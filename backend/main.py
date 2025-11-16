@@ -1356,6 +1356,59 @@ class AIChangelogDaily(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
+class AuditLog(Base):
+    """Audit log for tracking all changes to user profiles and permissions"""
+    __tablename__ = "audit_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    changed_by_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    change_type = Column(String, nullable=False, index=True)  # 'permission', 'role', 'profile', 'workflow', 'milestone', 'goal', 'skill'
+    entity_type = Column(String, nullable=False)  # 'user_permissions', 'user_profile', 'workflow_settings', etc.
+    entity_id = Column(Integer, nullable=True)
+    before_state = Column(JSON, nullable=True)  # State before the change
+    after_state = Column(JSON, nullable=True)  # State after the change
+    ip_address = Column(String, nullable=True)
+    session_id = Column(String, nullable=True)
+    reason = Column(Text, nullable=True)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+
+class UserSession(Base):
+    """Track active user sessions for security monitoring"""
+    __tablename__ = "user_sessions"
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String, unique=True, index=True, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    ip_address = Column(String, nullable=True)
+    location = Column(String, nullable=True)  # Geographic location
+    device = Column(String, nullable=True)  # Device description (browser, OS)
+    user_agent = Column(Text, nullable=True)  # Full user agent string
+    logged_in_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    last_activity = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    is_active = Column(Boolean, default=True, index=True)
+    revoked_at = Column(DateTime, nullable=True)
+    revoked_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    revoke_reason = Column(Text, nullable=True)
+
+
+class EmergencyRevocation(Base):
+    """Track emergency access revocations for compliance and audit"""
+    __tablename__ = "emergency_revocations"
+    id = Column(Integer, primary_key=True, index=True)
+    revocation_id = Column(String, unique=True, index=True, nullable=False)  # Format: REV-YYYY-NNNNNN
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    revoked_by_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    reason = Column(String, nullable=False)  # 'termination', 'security_incident', 'policy_violation', 'investigation', 'other'
+    details = Column(Text, nullable=False)
+    sessions_terminated = Column(Integer, default=0)
+    permissions_revoked = Column(Integer, default=0)
+    notifications_sent = Column(JSON, nullable=True)  # Array of who was notified
+    reinstate_type = Column(String, nullable=False)  # 'manual' or 'automatic'
+    reinstate_date = Column(DateTime, nullable=True)
+    reinstated_at = Column(DateTime, nullable=True)
+    revoked_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+
 # ============================================================================
 # PYDANTIC SCHEMAS
 # ============================================================================
@@ -2136,6 +2189,23 @@ class MicrosoftSyncSettings(BaseModel):
     sync_enabled: Optional[bool] = None
     sync_folder: Optional[str] = None
     sync_frequency_minutes: Optional[int] = None
+
+# ============================================================================
+# AUDIT & ACCESS SCHEMAS (Tab 6)
+# ============================================================================
+
+class RevokeSessionRequest(BaseModel):
+    reason: Optional[str] = None
+
+class RevokeAllSessionsRequest(BaseModel):
+    reason: str  # Required for revoking all sessions
+
+class EmergencyRevokeRequest(BaseModel):
+    reason: str  # 'termination', 'security_incident', 'policy_violation', 'investigation', 'other'
+    details: str
+    notify: Optional[List[str]] = []  # Array of who to notify: 'hr', 'security', 'employee', 'manager'
+    reinstate_type: str = "manual"  # 'manual' or 'automatic'
+    reinstate_date: Optional[datetime] = None
 
 # ============================================================================
 # FASTAPI APP
@@ -12952,6 +13022,406 @@ async def update_user_permissions(
 
 
 # ============================================================================
+# TAB 6: ACCESS & AUDIT - API ENDPOINTS
+# ============================================================================
+
+@app.get("/api/v1/users/{user_id}/audit-log")
+async def get_user_audit_log(
+    user_id: int,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    change_type: Optional[str] = None,
+    search: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get audit log for a user - all changes to their profile and permissions
+    """
+    try:
+        # Check permission
+        if not has_permission(current_user.id, 'team.view_all', db) and current_user.id != user_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        # Build query
+        query = db.query(AuditLog).filter(AuditLog.user_id == user_id)
+
+        # Apply filters
+        if start_date:
+            start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
+            query = query.filter(AuditLog.timestamp >= start_dt)
+
+        if end_date:
+            end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
+            query = query.filter(AuditLog.timestamp <= end_dt)
+
+        if change_type:
+            query = query.filter(AuditLog.change_type == change_type)
+
+        if search:
+            query = query.filter(
+                or_(
+                    AuditLog.entity_type.contains(search),
+                    AuditLog.reason.contains(search)
+                )
+            )
+
+        # Get total count
+        total = query.count()
+
+        # Get paginated results
+        changes = query.order_by(AuditLog.timestamp.desc()).offset(offset).limit(limit).all()
+
+        # Format response
+        change_list = []
+        for change in changes:
+            changed_by = db.query(User).filter(User.id == change.changed_by_id).first()
+            change_list.append({
+                "id": change.id,
+                "timestamp": change.timestamp.isoformat(),
+                "changed_by": {
+                    "id": changed_by.id,
+                    "name": changed_by.full_name,
+                    "role": changed_by.role
+                } if changed_by else None,
+                "change_type": change.change_type,
+                "entity_type": change.entity_type,
+                "entity_id": change.entity_id,
+                "before_state": change.before_state,
+                "after_state": change.after_state,
+                "ip_address": change.ip_address,
+                "session_id": change.session_id,
+                "reason": change.reason
+            })
+
+        return {
+            "total": total,
+            "changes": change_list
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get audit log error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/users/{user_id}/impersonation-history")
+async def get_impersonation_history(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get impersonation history for a user
+    """
+    try:
+        # Check permission
+        if not has_permission(current_user.id, 'team.view_all', db) and current_user.id != user_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        # Get impersonation sessions
+        sessions = db.query(ImpersonationSession).filter(
+            ImpersonationSession.impersonated_user_id == user_id
+        ).order_by(ImpersonationSession.started_at.desc()).all()
+
+        # Format response
+        session_list = []
+        reason_counts = {}
+        manager_counts = {}
+        total_duration = 0
+
+        for session in sessions:
+            manager = db.query(User).filter(User.id == session.manager_id).first()
+
+            # Calculate duration
+            if session.ended_at:
+                duration = int((session.ended_at - session.started_at).total_seconds() / 60)
+            elif session.is_active:
+                duration = int((datetime.now(timezone.utc) - session.started_at).total_seconds() / 60)
+            else:
+                duration = session.duration_minutes
+
+            total_duration += duration
+
+            # Count reasons and managers
+            reason_counts[session.reason] = reason_counts.get(session.reason, 0) + 1
+            if manager:
+                manager_counts[manager.full_name] = manager_counts.get(manager.full_name, 0) + 1
+
+            session_list.append({
+                "id": session.id,
+                "started_at": session.started_at.isoformat(),
+                "ended_at": session.ended_at.isoformat() if session.ended_at else None,
+                "duration_minutes": duration,
+                "manager": {
+                    "id": manager.id,
+                    "name": manager.full_name
+                } if manager else None,
+                "mode": session.mode,
+                "reason": session.reason,
+                "reason_notes": session.reason if session.reason else None,
+                "employee_notified": session.notify_employee,
+                "actions": []  # TODO: Implement action tracking
+            })
+
+        # Calculate summary
+        most_common_reason = max(reason_counts.items(), key=lambda x: x[1])[0] if reason_counts else None
+        most_frequent_manager = max(manager_counts.items(), key=lambda x: x[1])[0] if manager_counts else None
+        avg_duration = int(total_duration / len(sessions)) if sessions else 0
+
+        return {
+            "total_sessions": len(sessions),
+            "sessions": session_list,
+            "summary": {
+                "total_sessions": len(sessions),
+                "avg_duration_minutes": avg_duration,
+                "most_common_reason": most_common_reason,
+                "most_frequent_manager": most_frequent_manager
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get impersonation history error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/users/{user_id}/active-sessions")
+async def get_active_sessions(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get active sessions for a user
+    """
+    try:
+        # Check permission
+        if not has_permission(current_user.id, 'team.view_all', db) and current_user.id != user_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        # Get active sessions
+        sessions = db.query(UserSession).filter(
+            UserSession.user_id == user_id,
+            UserSession.is_active == True
+        ).order_by(UserSession.logged_in_at.desc()).all()
+
+        # Format response
+        session_list = []
+        for session in sessions:
+            session_list.append({
+                "session_id": session.session_id,
+                "logged_in_at": session.logged_in_at.isoformat(),
+                "ip_address": session.ip_address,
+                "location": session.location,
+                "device": session.device,
+                "user_agent": session.user_agent,
+                "last_activity": session.last_activity.isoformat()
+            })
+
+        return {
+            "sessions": session_list
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get active sessions error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/v1/users/{user_id}/sessions/{session_id}")
+async def revoke_user_session(
+    user_id: int,
+    session_id: str,
+    body: RevokeSessionRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Revoke a specific user session
+    """
+    try:
+        # Check permission
+        if not has_permission(current_user.id, 'team.manage_permissions', db):
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        # Get session
+        session = db.query(UserSession).filter(
+            UserSession.session_id == session_id,
+            UserSession.user_id == user_id
+        ).first()
+
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        # Revoke session
+        session.is_active = False
+        session.revoked_at = datetime.now(timezone.utc)
+        session.revoked_by_id = current_user.id
+        session.revoke_reason = body.reason
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": "Session revoked successfully"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Revoke session error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/v1/users/{user_id}/sessions")
+async def revoke_all_user_sessions(
+    user_id: int,
+    body: RevokeAllSessionsRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Revoke all sessions for a user
+    """
+    try:
+        # Check permission
+        if not has_permission(current_user.id, 'team.manage_permissions', db):
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        # Get all active sessions
+        sessions = db.query(UserSession).filter(
+            UserSession.user_id == user_id,
+            UserSession.is_active == True
+        ).all()
+
+        # Revoke all sessions
+        sessions_revoked = 0
+        for session in sessions:
+            session.is_active = False
+            session.revoked_at = datetime.now(timezone.utc)
+            session.revoked_by_id = current_user.id
+            session.revoke_reason = body.reason
+            sessions_revoked += 1
+
+        db.commit()
+
+        return {
+            "success": True,
+            "sessions_revoked": sessions_revoked,
+            "message": f"All {sessions_revoked} sessions revoked"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Revoke all sessions error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/users/{user_id}/emergency-revoke")
+async def emergency_revoke_access(
+    user_id: int,
+    body: EmergencyRevokeRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Emergency access revocation - immediately disable all access for a user
+    """
+    try:
+        # Check permission
+        if not has_permission(current_user.id, 'team.manage_permissions', db):
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        # Get user
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Generate revocation ID
+        revocation_id = f"REV-{datetime.now().year}-{str(random.randint(100000, 999999))}"
+
+        # 1. Disable user account
+        user.is_active = False
+
+        # 2. Terminate all active sessions
+        active_sessions = db.query(UserSession).filter(
+            UserSession.user_id == user_id,
+            UserSession.is_active == True
+        ).all()
+
+        sessions_terminated = 0
+        for session in active_sessions:
+            session.is_active = False
+            session.revoked_at = datetime.now(timezone.utc)
+            session.revoked_by_id = current_user.id
+            session.revoke_reason = f"Emergency revocation: {body.reason}"
+            sessions_terminated += 1
+
+        # 3. Count permissions (for reporting)
+        permissions_revoked = 0
+        if user.user_metadata and 'permissions' in user.user_metadata:
+            permissions_revoked = len([p for p, v in user.user_metadata['permissions'].items() if v])
+
+        # 4. Create emergency revocation record
+        revocation = EmergencyRevocation(
+            revocation_id=revocation_id,
+            user_id=user_id,
+            revoked_by_id=current_user.id,
+            reason=body.reason,
+            details=body.details,
+            sessions_terminated=sessions_terminated,
+            permissions_revoked=permissions_revoked,
+            notifications_sent=body.notify,
+            reinstate_type=body.reinstate_type,
+            reinstate_date=body.reinstate_date
+        )
+        db.add(revocation)
+
+        # 5. Log to audit log
+        audit_entry = AuditLog(
+            user_id=user_id,
+            changed_by_id=current_user.id,
+            change_type="emergency_revocation",
+            entity_type="user_account",
+            entity_id=user_id,
+            before_state={"is_active": True, "has_access": True},
+            after_state={"is_active": False, "has_access": False, "revocation_id": revocation_id},
+            reason=f"{body.reason}: {body.details}"
+        )
+        db.add(audit_entry)
+
+        db.commit()
+
+        # TODO: Send notifications to HR, Security, etc. based on body.notify
+
+        return {
+            "success": True,
+            "revocation_id": revocation_id,
+            "revoked_at": datetime.now(timezone.utc).isoformat(),
+            "sessions_terminated": sessions_terminated,
+            "permissions_revoked": permissions_revoked,
+            "notifications_sent": body.notify,
+            "account_status": "disabled"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Emergency revoke error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
 # AGENTIC AI PERFORMANCE COACH ("THE PROCESS COACH")
 # ============================================================================
 
@@ -14976,6 +15446,77 @@ async def fix_impersonation_table(
     except Exception as e:
         db.rollback()
         logger.error(f"Fix impersonation table error: {e}")
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
+@app.post("/api/v1/migrations/add-ai-delegated-tasks-table", response_model=None)
+async def add_ai_delegated_tasks_table(
+    migration_key: str = "",
+    db: Session = Depends(get_db)
+):
+    """
+    Create ai_delegated_tasks table for storing user AI delegation preferences
+    """
+    if migration_key != "add-ai-delegated-tasks":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    try:
+        results = []
+
+        # Check if table already exists
+        table_exists = db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_name = 'ai_delegated_tasks'
+            );
+        """)).scalar()
+
+        if table_exists:
+            results.append("⚠️  ai_delegated_tasks table already exists")
+        else:
+            # Create the table
+            db.execute(text("""
+                CREATE TABLE ai_delegated_tasks (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    email_intent VARCHAR NOT NULL,
+                    action_type VARCHAR NOT NULL,
+                    action_value VARCHAR,
+                    action_title VARCHAR,
+                    action_description TEXT,
+                    approval_count INTEGER DEFAULT 1,
+                    last_approved_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    UNIQUE(user_id, email_intent, action_type)
+                );
+            """))
+            results.append("✅ Created ai_delegated_tasks table")
+
+            # Create indexes
+            db.execute(text("""
+                CREATE INDEX idx_ai_delegated_tasks_user_active
+                    ON ai_delegated_tasks(user_id, is_active);
+            """))
+            results.append("✅ Created index on user_id and is_active")
+
+            db.execute(text("""
+                CREATE INDEX idx_ai_delegated_tasks_intent
+                    ON ai_delegated_tasks(email_intent);
+            """))
+            results.append("✅ Created index on email_intent")
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": "AI Delegated Tasks table migration completed",
+            "results": results
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"AI delegated tasks migration error: {e}")
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 
