@@ -17568,6 +17568,81 @@ async def add_ai_delegated_tasks_table(
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 
+@app.post("/api/v1/migrations/add-responsibilities-and-skills", response_model=None)
+async def add_responsibilities_and_skills_migration(
+    migration_key: str = "",
+    db: Session = Depends(get_db)
+):
+    """
+    Create responsibilities and skills tables for employee management
+    """
+    if migration_key != "add-resp-skills":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    try:
+        from migrations.add_responsibilities_and_skills import run_migration
+        result = run_migration()
+        return {
+            "success": True,
+            "message": "Responsibilities and skills migration completed",
+            "details": result
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Responsibilities migration error: {e}")
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
+@app.post("/api/v1/migrations/add-skill-assessments", response_model=None)
+async def add_skill_assessments_migration(
+    migration_key: str = "",
+    db: Session = Depends(get_db)
+):
+    """
+    Create skill assessments table for tracking employee skill proficiency
+    """
+    if migration_key != "add-skill-assess":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    try:
+        from migrations.add_skill_assessments import run_migration
+        result = run_migration()
+        return {
+            "success": True,
+            "message": "Skill assessments migration completed",
+            "details": result
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Skill assessments migration error: {e}")
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
+@app.post("/api/v1/migrations/add-goals-and-okrs", response_model=None)
+async def add_goals_and_okrs_migration(
+    migration_key: str = "",
+    db: Session = Depends(get_db)
+):
+    """
+    Create goals and OKRs tables for employee performance management
+    """
+    if migration_key != "add-goals-okrs":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    try:
+        from migrations.add_goals_and_okrs import run_migration
+        result = run_migration()
+        return {
+            "success": True,
+            "message": "Goals and OKRs migration completed",
+            "details": result
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Goals migration error: {e}")
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
