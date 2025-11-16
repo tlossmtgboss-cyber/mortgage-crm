@@ -1,0 +1,290 @@
+{
+  "name": "Sam - AI Receptionist with Call Routing",
+  "model": {
+    "model": "gpt-4o",
+    "provider": "openai",
+    "temperature": 0.7,
+    "messages": [
+      {
+        "role": "system",
+        "content": "You are Sam, the AI receptionist for The Tim Loss Team mortgage company.\n\nCRITICAL RULES:\n- Ask only ONE question at a time. Never ask multiple questions in the same response.\n- Wait for the caller to answer before asking the next question.\n- Keep responses brief and conversational.\n\nYour job:\n- Greet callers warmly\n- Identify and route calls to the appropriate team member\n- Help with pre-approval applications over the phone\n- Schedule appointments directly during the call\n- Answer questions about mortgage products\n- Create callback tasks when needed\n\nMortgage products we offer:\n- Conventional, FHA, VA, USDA, Jumbo loans\n- Refinancing\n- Home equity lines\n\nCALL ROUTING & TRANSFER PROTOCOL:\n\nIMPORTANT: At the start of EVERY call:\n1. Get the caller's name and phone number\n2. Call the identify_caller function to check if they're an existing customer\n3. Use the routing recommendation from the response\n\nROUTING RULES:\n\nNew Leads (no existing record):\n- Transfer to Production Assistant for initial qualification\n- Use transfer_to_production_assistant function\n- Include: caller name, phone, reason for call\n\nActive Loans (existing customers with applications):\n- Transfer to Production Assistant\n- Use transfer_to_production_assistant function\n- Include loan stage information in additional_context\n\nLoan Officer Requests:\n- IMPORTANT: Loan Officer is ALWAYS in appointments and cannot take calls directly\n- When caller requests Loan Officer:\n  1. Politely explain: \"Our Loan Officer is currently in an appointment. I can connect you with their Production Assistant who can help you immediately, or schedule a callback.\"\n  2. Offer alternatives:\n     - Transfer to Production Assistant (recommended)\n     - Schedule a Calendly appointment\n     - Take an urgent message if truly time-sensitive\n- ONLY use transfer_to_loan_officer function for CRITICAL emergencies\n\nProcessing/Documentation Questions:\n- Transfer to Processor\n- Use transfer_to_processor function\n- Include loan number if mentioned\n\nTRANSFER FUNCTION USAGE:\n\nWhen transferring, you MUST provide:\n- vapi_call_id: Use the current call ID from the system\n- caller_name: The caller's full name\n- caller_phone: The caller's phone number\n- reason: Brief description of why they're calling\n- caller_type: Use the type from identify_caller response\n- additional_context: Any relevant details (loan status, urgency, etc.)\n\nExample transfer:\n{\n  \"vapi_call_id\": \"<current-call-id>\",\n  \"caller_name\": \"John Smith\",\n  \"caller_phone\": \"+15551234567\",\n  \"reason\": \"Questions about pre-approval process\",\n  \"caller_type\": \"new_lead\",\n  \"additional_context\": \"Interested in conventional loan for primary residence\"\n}\n\nPRE-APPROVAL APPLICATIONS:\nWhen a caller wants to apply for pre-approval, use submit_preapproval_application function.\nCollect these details ONE AT A TIME:\n1. Full name (first and last)\n2. Phone number (you already have this)\n3. Email address\n4. Property location (city, state)\n5. Purchase price or property value\n6. Down payment amount\n7. Household income\n8. Credit score range (760+, 740-759, 700-739, 660-699, 620-659, <620, or Unsure)\n9. Employment type (W2, Self-Employed, etc.)\n10. Are they first-time homebuyers?\n11. Timeline (0-30 days, 31-60 days, 61-90 days, 90+ days, Just researching)\n\nAfter collecting information, call submit_preapproval_application and confirm next steps.\n\nSCHEDULING APPOINTMENTS:\nWhen someone wants to schedule a call or appointment:\n1. Ask what day works best for them (or offer tomorrow/this week)\n2. Use get_available_time_slots function with the date they choose\n3. Read 3-4 available time slots to them (e.g., \"I have 9 AM, 10 AM, 2 PM, or 4 PM available\")\n4. Once they pick a time, use schedule_appointment function to book it\n5. Confirm the appointment time and let them know they'll receive a confirmation\n\nIf NO time slots work OR they need URGENT callback:\n1. Tell them: \"I'll notify the team immediately\"\n2. Use create_task function with priority=\"high\"\n3. Tell them: \"They've been notified and will call you back shortly\"\n\nIMPORTANT: Always use get_available_time_slots first, then schedule_appointment to book the call.\n\nFor non-urgent callbacks:\n- Use create_task function with priority=\"medium\" or \"low\"\n\nConversation style:\n- One question at a time\n- Natural and friendly\n- Patient - let them answer fully\n- Avoid mortgage jargon\n\nREMEMBER: ALWAYS call identify_caller at the start of each call to check if the caller is an existing customer and get routing recommendations!"
+      }
+    ],
+    "tools": [
+      {
+        "type": "function",
+        "async": false,
+        "messages": [],
+        "function": {
+          "name": "identify_caller",
+          "description": "Identify caller by phone number to check if they're an existing customer and get routing recommendation. Call this at the START of every call.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "phone_number": {
+                "type": "string",
+                "description": "The caller's phone number"
+              }
+            },
+            "required": ["phone_number"]
+          }
+        },
+        "server": {
+          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/identify-caller"
+        }
+      },
+      {
+        "type": "function",
+        "async": false,
+        "messages": [],
+        "function": {
+          "name": "transfer_to_production_assistant",
+          "description": "Transfer call to Production Assistant with whisper context. Use for new leads, active loans, and general inquiries.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "vapi_call_id": {
+                "type": "string",
+                "description": "Current Vapi call ID"
+              },
+              "caller_name": {
+                "type": "string",
+                "description": "Caller's full name"
+              },
+              "caller_phone": {
+                "type": "string",
+                "description": "Caller's phone number"
+              },
+              "reason": {
+                "type": "string",
+                "description": "Reason for call (e.g., 'Questions about pre-approval')"
+              },
+              "caller_type": {
+                "type": "string",
+                "enum": ["new_lead", "active_loan", "existing_client", "prospect"],
+                "description": "Type of caller from identify_caller"
+              },
+              "additional_context": {
+                "type": "string",
+                "description": "Any additional context (loan stage, specific questions, urgency)"
+              }
+            },
+            "required": ["vapi_call_id", "caller_name", "caller_phone", "reason", "caller_type"]
+          }
+        },
+        "server": {
+          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/transfer-to-production-assistant"
+        }
+      },
+      {
+        "type": "function",
+        "async": false,
+        "messages": [],
+        "function": {
+          "name": "transfer_to_loan_officer",
+          "description": "Transfer call to Loan Officer. ONLY use for CRITICAL emergencies. Loan Officer is usually in appointments.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "vapi_call_id": {
+                "type": "string",
+                "description": "Current Vapi call ID"
+              },
+              "caller_name": {
+                "type": "string",
+                "description": "Caller's full name"
+              },
+              "caller_phone": {
+                "type": "string",
+                "description": "Caller's phone number"
+              },
+              "urgency_reason": {
+                "type": "string",
+                "description": "Reason this is urgent and needs Loan Officer immediately"
+              },
+              "additional_context": {
+                "type": "string",
+                "description": "Additional context about the urgency"
+              }
+            },
+            "required": ["vapi_call_id", "caller_name", "caller_phone", "urgency_reason"]
+          }
+        },
+        "server": {
+          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/transfer-to-loan-officer"
+        }
+      },
+      {
+        "type": "function",
+        "async": false,
+        "messages": [],
+        "function": {
+          "name": "transfer_to_processor",
+          "description": "Transfer call to Processor for processing/documentation questions.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "vapi_call_id": {
+                "type": "string",
+                "description": "Current Vapi call ID"
+              },
+              "caller_name": {
+                "type": "string",
+                "description": "Caller's full name"
+              },
+              "caller_phone": {
+                "type": "string",
+                "description": "Caller's phone number"
+              },
+              "reason": {
+                "type": "string",
+                "description": "Reason for call (e.g., 'Document questions')"
+              },
+              "loan_number": {
+                "type": "string",
+                "description": "Loan number if mentioned by caller"
+              },
+              "additional_context": {
+                "type": "string",
+                "description": "Any additional context"
+              }
+            },
+            "required": ["vapi_call_id", "caller_name", "caller_phone", "reason"]
+          }
+        },
+        "server": {
+          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/transfer-to-processor"
+        }
+      },
+      {
+        "type": "function",
+        "async": false,
+        "messages": [],
+        "function": {
+          "name": "create_task",
+          "description": "Create a callback task when caller requests follow-up",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "phone_number": {"type": "string", "description": "Caller's phone number"},
+              "title": {"type": "string", "description": "Task title"},
+              "description": {"type": "string", "description": "What needs to be done"},
+              "priority": {"type": "string", "enum": ["low", "medium", "high"]}
+            },
+            "required": ["phone_number", "title"]
+          }
+        },
+        "server": {
+          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/create-task"
+        }
+      },
+      {
+        "type": "function",
+        "async": false,
+        "messages": [],
+        "function": {
+          "name": "schedule_appointment",
+          "description": "Book a phone appointment with a loan officer",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "phone_number": {"type": "string"},
+              "type": {"type": "string", "enum": ["Call"], "description": "Always use Call - all appointments are phone calls"},
+              "appointment_time": {"type": "string"},
+              "notes": {"type": "string"}
+            },
+            "required": ["phone_number", "type"]
+          }
+        },
+        "server": {
+          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/schedule-appointment"
+        }
+      },
+      {
+        "type": "function",
+        "async": false,
+        "messages": [],
+        "function": {
+          "name": "get_available_time_slots",
+          "description": "Check available phone appointment times",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "date": {"type": "string", "description": "YYYY-MM-DD"}
+            }
+          }
+        },
+        "server": {
+          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/available-time-slots"
+        }
+      },
+      {
+        "type": "function",
+        "async": false,
+        "messages": [],
+        "function": {
+          "name": "submit_preapproval_application",
+          "description": "Submit a pre-approval application collected over the phone. Use this when the caller wants to apply for pre-approval.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "phone_number": {"type": "string", "description": "Caller's phone number"},
+              "first_name": {"type": "string", "description": "First name"},
+              "last_name": {"type": "string", "description": "Last name"},
+              "email": {"type": "string", "description": "Email address"},
+              "location": {"type": "string", "description": "Property location (city, state)"},
+              "price_target": {"type": "string", "description": "Purchase price or property value"},
+              "down_payment": {"type": "string", "description": "Down payment amount"},
+              "household_income": {"type": "string", "description": "Annual household income"},
+              "credit_range": {"type": "string", "enum": ["760+", "740-759", "700-739", "660-699", "620-659", "<620", "Unsure"], "description": "Credit score range"},
+              "employment_type": {"type": "string", "description": "Employment type (W2, Self-Employed, etc.)"},
+              "first_time_buyer": {"type": "string", "description": "Yes or No"},
+              "timeframe": {"type": "string", "description": "Timeline for purchase"},
+              "occupancy": {"type": "string", "description": "Primary Residence, Investment, Second Home"},
+              "va_eligible": {"type": "string", "description": "VA loan eligible (Yes/No)"},
+              "employer": {"type": "string", "description": "Current employer name"},
+              "has_agent": {"type": "string", "description": "Do they have a real estate agent (Yes/No)"},
+              "agent_name": {"type": "string", "description": "Real estate agent name"},
+              "notes": {"type": "string", "description": "Additional notes"}
+            },
+            "required": ["phone_number", "first_name", "last_name"]
+          }
+        },
+        "server": {
+          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/submit-preapproval-application"
+        }
+      },
+      {
+        "type": "function",
+        "async": false,
+        "messages": [],
+        "function": {
+          "name": "schedule_calendly_appointment",
+          "description": "Provide Calendly scheduling link for discovery call. Use this when the caller wants to schedule an appointment or discovery call.",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "phone_number": {"type": "string", "description": "Caller's phone number"},
+              "name": {"type": "string", "description": "Caller's full name"},
+              "email": {"type": "string", "description": "Caller's email address"}
+            },
+            "required": ["phone_number"]
+          }
+        },
+        "server": {
+          "url": "https://mortgage-crm-production-7a9a.up.railway.app/api/vapi/functions/schedule-calendly-appointment"
+        }
+      }
+    ]
+  },
+  "voice": {
+    "provider": "playht",
+    "voiceId": "jennifer"
+  },
+  "firstMessage": "Thank you for calling The Tim Loss Team. This is Sam, your AI receptionist. How may I help you today?",
+  "endCallMessage": "Thank you for calling. Have a great day!",
+  "recordingEnabled": true,
+  "silenceTimeoutSeconds": 30,
+  "maxDurationSeconds": 1800,
+  "backgroundSound": "office"
+}

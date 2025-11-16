@@ -316,11 +316,13 @@ async def create_task_function(
     """
     Create a follow-up task
     Called by Vapi when action items are identified
+    If priority is high, sends SMS notification to task owner
     """
     try:
-        from main import Task, Lead
+        from main import Task, Lead, User
         from sqlalchemy import or_
         from datetime import datetime, timezone, timedelta
+        from integrations.twilio_service import TwilioSMSClient
 
         data = await request.json()
         phone = data.get("phone_number")
@@ -375,11 +377,45 @@ async def create_task_function(
         db.commit()
         db.refresh(task)
 
+        # Send SMS notification if urgent (high priority)
+        sms_sent = False
+        if priority == "high":
+            try:
+                # Get task owner's phone number
+                owner = db.query(User).filter(User.id == lead.owner_id).first()
+                if owner and owner.user_metadata:
+                    owner_phone = owner.user_metadata.get("phone")
+                    if owner_phone:
+                        # Initialize Twilio client
+                        sms_client = TwilioSMSClient()
+
+                        # Create urgent notification message
+                        caller_name = lead.name or "Unknown caller"
+                        sms_message = f"🚨 URGENT: {caller_name} needs immediate callback.\n\nReason: {title}\n\n{description}\n\nView task in CRM: https://mortgage-crm-nine.vercel.app/tasks"
+
+                        # Send SMS
+                        message_sid = await sms_client.send_sms(
+                            to_number=owner_phone,
+                            message=sms_message
+                        )
+
+                        if message_sid:
+                            sms_sent = True
+                            logger.info(f"Urgent task SMS sent to {owner_phone}. SID: {message_sid}")
+                        else:
+                            logger.warning(f"Failed to send urgent task SMS to {owner_phone}")
+            except Exception as sms_error:
+                # Log error but don't fail the task creation
+                logger.error(f"Error sending urgent task SMS: {sms_error}")
+
+        response_message = "I've notified them immediately. They'll call you back shortly." if sms_sent and priority == "high" else "Task created successfully"
+
         return {
             "success": True,
-            "message": "Task created successfully",
+            "message": response_message,
             "task_id": task.id,
-            "due_date": task.due_date.isoformat() if task.due_date else None
+            "due_date": task.due_date.isoformat() if task.due_date else None,
+            "sms_sent": sms_sent
         }
 
     except Exception as e:
@@ -749,6 +785,450 @@ async def schedule_calendly_appointment_function(
 
     except Exception as e:
         logger.error(f"Error in schedule_calendly_appointment_function: {e}")
+        db.rollback()
+        return {"success": False, "error": str(e)}
+
+
+# ============================================================================
+# CALL ROUTING & TRANSFER ENDPOINTS
+# ============================================================================
+
+@router.post("/functions/identify-caller")
+async def identify_caller_function(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Identify caller and get routing recommendation
+    Called by Vapi at start of call to personalize and route appropriately
+    """
+    try:
+        data = await request.json()
+        phone = data.get("phone_number")
+
+        if not phone:
+            return {"success": False, "error": "Phone number required"}
+
+        integration = VapiCRMIntegration(db)
+        result = await integration.identify_caller(phone)
+
+        return {
+            "success": True,
+            **result
+        }
+
+    except Exception as e:
+        logger.error(f"Error in identify_caller_function: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/functions/transfer-to-production-assistant")
+async def transfer_to_production_assistant_function(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Transfer call to Production Assistant with whisper context
+    Called by Vapi when routing new leads or active loans
+    """
+    try:
+        from vapi_models import StaffAvailability
+
+        data = await request.json()
+        vapi_call_id = data.get("vapi_call_id")
+        caller_name = data.get("caller_name")
+        caller_phone = data.get("caller_phone")
+        reason = data.get("reason", "General inquiry")
+        caller_type = data.get("caller_type", "new_lead")
+        additional_context = data.get("additional_context", "")
+
+        if not vapi_call_id or not caller_phone:
+            return {"success": False, "error": "vapi_call_id and caller_phone required"}
+
+        # Find available Production Assistant
+        pa = db.query(StaffAvailability).filter(
+            StaffAvailability.role == 'production_assistant',
+            StaffAvailability.available_for_calls == True,
+            StaffAvailability.status == 'available'
+        ).first()
+
+        if not pa:
+            # Fallback: get first PA regardless of availability
+            pa = db.query(StaffAvailability).filter(
+                StaffAvailability.role == 'production_assistant'
+            ).first()
+
+        if not pa:
+            return {
+                "success": False,
+                "error": "No Production Assistant configured",
+                "fallback_action": "create_task"
+            }
+
+        # Prepare whisper data
+        whisper_data = {
+            "caller_name": caller_name,
+            "caller_phone": caller_phone,
+            "reason": reason,
+            "caller_type": caller_type,
+            "additional_context": additional_context,
+            "urgency_level": "medium"
+        }
+
+        # Execute transfer
+        integration = VapiCRMIntegration(db)
+        result = await integration.transfer_call_with_whisper(
+            vapi_call_id=vapi_call_id,
+            recipient_user_id=pa.user_id,
+            recipient_role="production_assistant",
+            whisper_data=whisper_data
+        )
+
+        if result["success"]:
+            return {
+                "success": True,
+                "message": f"Transferring you to our Production Assistant now. Please hold.",
+                "transferred_to": "Production Assistant",
+                **result
+            }
+        else:
+            return {
+                "success": False,
+                "error": result.get("reason"),
+                "message": "I'm sorry, the Production Assistant is currently unavailable. Let me create a callback task for you.",
+                "fallback_action": result.get("fallback_action")
+            }
+
+    except Exception as e:
+        logger.error(f"Error in transfer_to_production_assistant_function: {e}")
+        db.rollback()
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/functions/transfer-to-loan-officer")
+async def transfer_to_loan_officer_function(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Transfer call to Loan Officer with whisper context
+    Called by Vapi for urgent situations or specific LO requests
+    """
+    try:
+        from vapi_models import StaffAvailability
+
+        data = await request.json()
+        vapi_call_id = data.get("vapi_call_id")
+        caller_name = data.get("caller_name")
+        caller_phone = data.get("caller_phone")
+        urgency_reason = data.get("urgency_reason", "Urgent client request")
+        additional_context = data.get("additional_context", "")
+
+        if not vapi_call_id or not caller_phone:
+            return {"success": False, "error": "vapi_call_id and caller_phone required"}
+
+        # Find available Loan Officer
+        lo = db.query(StaffAvailability).filter(
+            StaffAvailability.role == 'loan_officer',
+            StaffAvailability.available_for_calls == True,
+            StaffAvailability.status == 'available'
+        ).first()
+
+        if not lo:
+            # Check if LO exists but unavailable
+            lo = db.query(StaffAvailability).filter(
+                StaffAvailability.role == 'loan_officer'
+            ).first()
+
+            if lo and not lo.available_for_calls:
+                return {
+                    "success": False,
+                    "error": "Loan Officer is currently unavailable",
+                    "message": "The Loan Officer is currently in an appointment. I can connect you with their Production Assistant who can help immediately, or schedule a callback.",
+                    "fallback_action": "offer_pa_or_schedule"
+                }
+
+        if not lo:
+            return {
+                "success": False,
+                "error": "No Loan Officer configured",
+                "fallback_action": "create_urgent_task"
+            }
+
+        # Prepare whisper data
+        whisper_data = {
+            "caller_name": caller_name,
+            "caller_phone": caller_phone,
+            "reason": urgency_reason,
+            "caller_type": "urgent_request",
+            "additional_context": additional_context,
+            "urgency_level": "high"
+        }
+
+        # Execute transfer
+        integration = VapiCRMIntegration(db)
+        result = await integration.transfer_call_with_whisper(
+            vapi_call_id=vapi_call_id,
+            recipient_user_id=lo.user_id,
+            recipient_role="loan_officer",
+            whisper_data=whisper_data
+        )
+
+        if result["success"]:
+            return {
+                "success": True,
+                "message": f"Transferring you to the Loan Officer now. Please hold.",
+                "transferred_to": "Loan Officer",
+                **result
+            }
+        else:
+            return {
+                "success": False,
+                "error": result.get("reason"),
+                "message": "The Loan Officer is currently unavailable. Let me take your information and have them call you back as soon as possible.",
+                "fallback_action": "create_urgent_task"
+            }
+
+    except Exception as e:
+        logger.error(f"Error in transfer_to_loan_officer_function: {e}")
+        db.rollback()
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/functions/transfer-to-processor")
+async def transfer_to_processor_function(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Transfer call to Processor with whisper context
+    Called by Vapi for processing/documentation questions
+    """
+    try:
+        from vapi_models import StaffAvailability
+
+        data = await request.json()
+        vapi_call_id = data.get("vapi_call_id")
+        caller_name = data.get("caller_name")
+        caller_phone = data.get("caller_phone")
+        reason = data.get("reason", "Processing question")
+        loan_number = data.get("loan_number", "")
+        additional_context = data.get("additional_context", "")
+
+        if not vapi_call_id or not caller_phone:
+            return {"success": False, "error": "vapi_call_id and caller_phone required"}
+
+        # Find available Processor
+        processor = db.query(StaffAvailability).filter(
+            StaffAvailability.role == 'processor',
+            StaffAvailability.available_for_calls == True,
+            StaffAvailability.status == 'available'
+        ).first()
+
+        if not processor:
+            # Fallback: get first processor
+            processor = db.query(StaffAvailability).filter(
+                StaffAvailability.role == 'processor'
+            ).first()
+
+        if not processor:
+            return {
+                "success": False,
+                "error": "No Processor configured",
+                "message": "Let me take your information and have our processor call you back.",
+                "fallback_action": "create_task"
+            }
+
+        # Prepare whisper data
+        context_msg = additional_context
+        if loan_number:
+            context_msg += f" Loan #: {loan_number}"
+
+        whisper_data = {
+            "caller_name": caller_name,
+            "caller_phone": caller_phone,
+            "reason": reason,
+            "caller_type": "processing_inquiry",
+            "additional_context": context_msg,
+            "urgency_level": "medium"
+        }
+
+        # Execute transfer
+        integration = VapiCRMIntegration(db)
+        result = await integration.transfer_call_with_whisper(
+            vapi_call_id=vapi_call_id,
+            recipient_user_id=processor.user_id,
+            recipient_role="processor",
+            whisper_data=whisper_data
+        )
+
+        if result["success"]:
+            return {
+                "success": True,
+                "message": f"Transferring you to our Processor now. Please hold.",
+                "transferred_to": "Processor",
+                **result
+            }
+        else:
+            return {
+                "success": False,
+                "error": result.get("reason"),
+                "message": "The Processor is currently unavailable. Let me create a callback task for you.",
+                "fallback_action": result.get("fallback_action")
+            }
+
+    except Exception as e:
+        logger.error(f"Error in transfer_to_processor_function: {e}")
+        db.rollback()
+        return {"success": False, "error": str(e)}
+
+
+# ============================================================================
+# AUTHENTICATED CALL ROUTING MANAGEMENT ENDPOINTS
+# ============================================================================
+
+@router.get("/receptionist/available-staff")
+async def get_available_staff(
+    role: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_flexible)
+):
+    """Get list of staff available for call routing"""
+    try:
+        from vapi_models import StaffAvailability
+
+        query = db.query(StaffAvailability).filter(
+            StaffAvailability.available_for_calls == True
+        )
+
+        if role:
+            query = query.filter(StaffAvailability.role == role)
+
+        staff = query.all()
+
+        return {
+            "success": True,
+            "staff": [
+                {
+                    "user_id": s.user_id,
+                    "role": s.role,
+                    "status": s.status,
+                    "primary_phone": s.primary_phone,
+                    "department": s.department,
+                    "current_call_count": s.current_call_count,
+                    "max_concurrent_calls": s.max_concurrent_calls,
+                    "out_of_office": s.out_of_office
+                }
+                for s in staff
+            ]
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting available staff: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/receptionist/routing-log")
+async def get_routing_log(
+    limit: int = 100,
+    skip: int = 0,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_flexible)
+):
+    """Get call routing history"""
+    try:
+        from vapi_models import CallRoutingLog
+
+        logs = db.query(CallRoutingLog).order_by(
+            CallRoutingLog.created_at.desc()
+        ).offset(skip).limit(limit).all()
+
+        return {
+            "success": True,
+            "routing_logs": [
+                {
+                    "id": log.id,
+                    "vapi_call_id": log.vapi_call_id,
+                    "routing_decision": log.routing_decision,
+                    "caller_type": log.caller_type,
+                    "routed_to_role": log.routed_to_role,
+                    "caller_name": log.caller_name,
+                    "caller_phone": log.caller_phone,
+                    "call_reason": log.call_reason,
+                    "transfer_successful": log.transfer_successful,
+                    "created_at": log.created_at.isoformat() if log.created_at else None
+                }
+                for log in logs
+            ]
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting routing log: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@router.post("/receptionist/staff-availability")
+async def update_staff_availability(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_flexible)
+):
+    """Update staff availability for call routing"""
+    try:
+        from vapi_models import StaffAvailability
+
+        data = await request.json()
+        user_id = data.get("user_id")
+        status = data.get("status")  # available, busy, offline, dnd
+        available_for_calls = data.get("available_for_calls")
+
+        if not user_id:
+            return {"success": False, "error": "user_id required"}
+
+        # Find or create staff availability record
+        staff = db.query(StaffAvailability).filter(
+            StaffAvailability.user_id == user_id
+        ).first()
+
+        if not staff:
+            # Create new record
+            staff = StaffAvailability(
+                user_id=user_id,
+                status=status or 'available',
+                available_for_calls=available_for_calls if available_for_calls is not None else True,
+                role=data.get("role", "production_assistant"),
+                primary_phone=data.get("primary_phone"),
+                department=data.get("department")
+            )
+            db.add(staff)
+        else:
+            # Update existing
+            if status:
+                staff.status = status
+            if available_for_calls is not None:
+                staff.available_for_calls = available_for_calls
+            if data.get("primary_phone"):
+                staff.primary_phone = data.get("primary_phone")
+            if data.get("out_of_office") is not None:
+                staff.out_of_office = data.get("out_of_office")
+
+        staff.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(staff)
+
+        return {
+            "success": True,
+            "message": "Staff availability updated",
+            "staff": {
+                "user_id": staff.user_id,
+                "status": staff.status,
+                "available_for_calls": staff.available_for_calls,
+                "role": staff.role
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Error updating staff availability: {e}")
         db.rollback()
         return {"success": False, "error": str(e)}
 

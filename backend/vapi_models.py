@@ -120,3 +120,98 @@ class VapiPhoneNumber(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class CallRoutingLog(Base):
+    """Track call routing decisions and transfers"""
+    __tablename__ = "call_routing_log"
+
+    id = Column(Integer, primary_key=True, index=True)
+    call_id = Column(Integer, ForeignKey('vapi_calls.id'), nullable=True)
+    vapi_call_id = Column(String(255), index=True)
+
+    # Routing Decision
+    routing_decision = Column(String(100))  # transfer_to_pa, transfer_to_lo, etc.
+    caller_type = Column(String(50))  # new_lead, active_loan, existing_client
+
+    # Transfer Details
+    routed_to_user_id = Column(Integer, ForeignKey('users.id'), nullable=True)
+    routed_to_role = Column(String(50))  # production_assistant, loan_officer, processor
+    routed_to_phone = Column(String(20))
+
+    # Whisper Message
+    whisper_message = Column(Text)
+
+    # Transfer Status
+    transfer_successful = Column(Boolean, default=False)
+    transfer_error = Column(Text)
+
+    # Context
+    caller_phone = Column(String(20))
+    caller_name = Column(String(255))
+    call_reason = Column(Text)
+    urgency_level = Column(String(20))  # low, medium, high, urgent
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class StaffAvailability(Base):
+    """Track staff availability for call routing"""
+    __tablename__ = "staff_availability"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id'), unique=True, nullable=False)
+
+    # Availability Status
+    status = Column(String(50), default='available')  # available, busy, offline, dnd
+    available_for_calls = Column(Boolean, default=True)
+
+    # Phone Numbers
+    primary_phone = Column(String(20))
+    backup_phone = Column(String(20))
+
+    # Role Information
+    role = Column(String(50))  # production_assistant, loan_officer, processor
+    department = Column(String(100))
+
+    # Working Hours
+    working_hours = Column(JSON)  # {monday: {start: '09:00', end: '17:00'}, ...}
+
+    # Current Status
+    current_call_count = Column(Integer, default=0)
+    max_concurrent_calls = Column(Integer, default=3)
+
+    # Metadata
+    out_of_office = Column(Boolean, default=False)
+    out_of_office_message = Column(Text)
+    auto_response_enabled = Column(Boolean, default=False)
+
+    # Timestamps
+    last_call_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class CallTransferConfig(Base):
+    """Configuration for call routing rules"""
+    __tablename__ = "call_transfer_config"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    # Transfer Rules
+    caller_type = Column(String(50))  # new_lead, active_loan, etc.
+    default_route_to_role = Column(String(50))  # production_assistant, loan_officer
+
+    # Conditions
+    routing_conditions = Column(JSON)  # Additional routing logic
+
+    # Priority
+    priority_order = Column(Integer, default=0)
+
+    # Active Status
+    is_active = Column(Boolean, default=True)
+
+    # Timestamps
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

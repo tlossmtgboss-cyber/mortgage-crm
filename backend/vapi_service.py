@@ -120,6 +120,32 @@ class VapiService:
             response.raise_for_status()
             return response.json()
 
+    async def transfer_call(
+        self,
+        call_id: str,
+        destination_number: str,
+        whisper_message: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Transfer an active call to another phone number
+        Uses Vapi's transfer functionality with optional whisper
+        """
+        async with httpx.AsyncClient() as client:
+            payload = {
+                "destinationNumber": destination_number,
+            }
+
+            if whisper_message:
+                payload["whisperMessage"] = whisper_message
+
+            response = await client.post(
+                f"{self.base_url}/call/{call_id}/transfer",
+                json=payload,
+                headers=self.headers
+            )
+            response.raise_for_status()
+            return response.json()
+
 
 class VapiCRMIntegration:
     """Integrate Vapi calls with CRM data"""
@@ -331,3 +357,215 @@ class VapiCRMIntegration:
         except Exception as e:
             logger.error(f"Error creating outbound call: {e}")
             raise
+
+    async def identify_caller(self, phone_number: str) -> Dict[str, Any]:
+        """
+        Comprehensive caller identification and routing recommendation
+        Returns: caller type, loan status, assigned team members, routing suggestion
+        """
+        try:
+            from main import Lead
+            from vapi_models import StaffAvailability
+
+            # Clean and format phone number
+            cleaned_phone = ''.join(filter(str.isdigit, phone_number))
+            if len(cleaned_phone) >= 10:
+                cleaned_phone = cleaned_phone[-10:]  # Last 10 digits
+
+            # 1. Check for existing lead
+            lead = self.db.query(Lead).filter(
+                Lead.phone.contains(cleaned_phone)
+            ).first()
+
+            # 2. Check for active loans (if you have a Loan model)
+            # For now, we'll check lead stage
+            if lead:
+                # Determine caller type based on lead stage
+                caller_type = "new_lead"
+                if lead.stage in ["Application Started", "Application Complete", "Pre-Approved"]:
+                    caller_type = "active_loan"
+                elif lead.stage in ["Prospect", "Attempted Contact"]:
+                    caller_type = "prospect"
+                else:
+                    caller_type = "existing_client"
+
+                # Get assigned team members
+                production_assistant = None
+                if lead.owner_id:
+                    # Check if owner is a PA or LO
+                    owner_availability = self.db.query(StaffAvailability).filter(
+                        StaffAvailability.user_id == lead.owner_id
+                    ).first()
+
+                    if owner_availability:
+                        production_assistant = {
+                            "user_id": owner_availability.user_id,
+                            "role": owner_availability.role,
+                            "phone": owner_availability.primary_phone,
+                            "available": owner_availability.available_for_calls,
+                            "status": owner_availability.status
+                        }
+
+                return {
+                    "found": True,
+                    "caller_type": caller_type,
+                    "lead_id": lead.id,
+                    "lead_name": lead.name,
+                    "lead_stage": lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage),
+                    "lead_source": lead.source,
+                    "assigned_owner_id": lead.owner_id,
+                    "production_assistant": production_assistant,
+                    "routing_recommendation": "transfer_to_production_assistant",
+                    "context": f"Existing {caller_type}: {lead.name}, Stage: {lead.stage}"
+                }
+            else:
+                # New caller - no existing record
+                return {
+                    "found": False,
+                    "caller_type": "new_prospect",
+                    "routing_recommendation": "collect_info_and_transfer_to_pa",
+                    "context": "New caller - no existing record found"
+                }
+
+        except Exception as e:
+            logger.error(f"Error identifying caller: {e}")
+            return {
+                "found": False,
+                "error": str(e),
+                "caller_type": "unknown",
+                "routing_recommendation": "transfer_to_production_assistant"
+            }
+
+    async def transfer_call_with_whisper(
+        self,
+        vapi_call_id: str,
+        recipient_user_id: int,
+        recipient_role: str,
+        whisper_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        Execute call transfer with whisper message to recipient
+        Creates routing log and handles transfer via Vapi API
+        """
+        try:
+            from main import User
+            from vapi_models import CallRoutingLog, StaffAvailability, VapiCall
+
+            # 1. Get recipient's availability and phone number
+            staff = self.db.query(StaffAvailability).filter(
+                StaffAvailability.user_id == recipient_user_id
+            ).first()
+
+            if not staff:
+                # Fallback: get user info directly
+                user = self.db.query(User).filter(User.id == recipient_user_id).first()
+                if not user:
+                    return {
+                        "success": False,
+                        "reason": "recipient_not_found",
+                        "fallback_action": "create_task"
+                    }
+
+                # Check if user has phone in metadata
+                recipient_phone = user.user_metadata.get("phone") if user.user_metadata else None
+                if not recipient_phone:
+                    return {
+                        "success": False,
+                        "reason": "no_phone_number",
+                        "fallback_action": "create_task"
+                    }
+
+                staff_available = True
+                staff_status = "unknown"
+            else:
+                recipient_phone = staff.primary_phone
+                staff_available = staff.available_for_calls and staff.status == 'available'
+                staff_status = staff.status
+
+            # 2. Check availability
+            if not staff_available:
+                return {
+                    "success": False,
+                    "reason": "recipient_unavailable",
+                    "status": staff_status,
+                    "fallback_action": "offer_voicemail_or_schedule"
+                }
+
+            # 3. Format whisper message
+            whisper_message = f"""Transferring call from {whisper_data.get('caller_name', 'Unknown')} at {whisper_data.get('caller_phone', 'Unknown number')}.
+Reason: {whisper_data.get('reason', 'General inquiry')}.
+Status: {whisper_data.get('caller_type', 'Unknown')}.
+{whisper_data.get('additional_context', '')}"""
+
+            # 4. Get or create VapiCall record
+            vapi_call = self.db.query(VapiCall).filter(
+                VapiCall.vapi_call_id == vapi_call_id
+            ).first()
+
+            call_db_id = vapi_call.id if vapi_call else None
+
+            # 5. Log routing decision
+            routing_log = CallRoutingLog(
+                call_id=call_db_id,
+                vapi_call_id=vapi_call_id,
+                routing_decision=f"transfer_to_{recipient_role}",
+                caller_type=whisper_data.get('caller_type'),
+                routed_to_user_id=recipient_user_id,
+                routed_to_role=recipient_role,
+                routed_to_phone=recipient_phone,
+                whisper_message=whisper_message,
+                caller_phone=whisper_data.get('caller_phone'),
+                caller_name=whisper_data.get('caller_name'),
+                call_reason=whisper_data.get('reason'),
+                urgency_level=whisper_data.get('urgency_level', 'medium')
+            )
+            self.db.add(routing_log)
+            self.db.flush()
+
+            # 6. Execute Vapi transfer with whisper
+            try:
+                vapi_response = await self.vapi.transfer_call(
+                    call_id=vapi_call_id,
+                    destination_number=recipient_phone,
+                    whisper_message=whisper_message
+                )
+
+                # Update routing log with success
+                routing_log.transfer_successful = True
+                self.db.commit()
+
+                # Update staff call count
+                if staff:
+                    staff.current_call_count += 1
+                    staff.last_call_at = datetime.utcnow()
+                    self.db.commit()
+
+                return {
+                    "success": True,
+                    "transferred_to": f"{recipient_role} (User ID: {recipient_user_id})",
+                    "transfer_id": vapi_response.get('id'),
+                    "routing_log_id": routing_log.id
+                }
+
+            except Exception as transfer_error:
+                # Log transfer failure
+                routing_log.transfer_successful = False
+                routing_log.transfer_error = str(transfer_error)
+                self.db.commit()
+
+                logger.error(f"Transfer failed: {transfer_error}")
+                return {
+                    "success": False,
+                    "reason": "transfer_failed",
+                    "error": str(transfer_error),
+                    "fallback_action": "create_task"
+                }
+
+        except Exception as e:
+            logger.error(f"Error in transfer_call_with_whisper: {e}")
+            self.db.rollback()
+            return {
+                "success": False,
+                "reason": "system_error",
+                "error": str(e)
+            }
