@@ -14470,11 +14470,13 @@ async def run_compliance_migrations(db: Session = Depends(get_db)):
             db.execute(text("""
                 ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name VARCHAR(255)
             """))
+            # Try to populate from email if no other name field exists
             db.execute(text("""
-                UPDATE users SET full_name = name WHERE full_name IS NULL AND name IS NOT NULL
+                UPDATE users SET full_name = COALESCE(full_name, email) WHERE full_name IS NULL
             """))
             results.append("✅ Added full_name column")
         except Exception as e:
+            db.rollback()  # Rollback this specific failure
             results.append(f"⚠️ full_name: {str(e)}")
 
         # Migration 4: Create access_certifications table
@@ -14515,6 +14517,7 @@ async def run_compliance_migrations(db: Session = Depends(get_db)):
             """))
             results.append("✅ Created access_certifications table")
         except Exception as e:
+            db.rollback()  # Rollback this specific failure
             results.append(f"⚠️ access_certifications: {str(e)}")
 
         db.commit()
