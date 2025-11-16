@@ -906,3 +906,81 @@
     gap: 12px;
   }
 }
+
+/* Team Performance Cards - Clickable */
+.team-performance-card.clickable {
+  transition: all 0.3s ease;
+}
+
+.team-performance-card.clickable:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(33, 141, 141, 0.2);
+  border-color: #218D8D;
+}
+
+.click-to-view-team {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+  color: #218D8D;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* Team Loan Card Specific Styles */
+.team-loan-card {
+  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+}
+
+.team-loan-card .loan-card-info {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+/* Loan Status Badges */
+.loan-status {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  display: inline-block;
+}
+
+.loan-status.status-on-track {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.loan-status.status-scheduled {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.loan-status.status-warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.loan-status.status-danger {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.loan-status.status-default {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+/* Responsive adjustments for team drill-down */
+@media (max-width: 992px) {
+  .team-loan-card .loan-card-info {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .team-loan-card .loan-card-info {
+    grid-template-columns: 1fr;
+  }
+}

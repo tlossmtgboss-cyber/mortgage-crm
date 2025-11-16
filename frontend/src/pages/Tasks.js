@@ -163,8 +163,6 @@ function Tasks() {
         return allTasks.filter(task => !snoozedTasks.has(task.id));
       case 'ai-approval':
         return allTasks.filter(task => task.source === 'AI Engine' && !snoozedTasks.has(task.id));
-      case 'reconciliation':
-        return allTasks.filter(task => task.source === 'Milestone Risk' && !snoozedTasks.has(task.id));
       case 'messages':
         return allTasks.filter(task => task.source === 'Messages' && !snoozedTasks.has(task.id));
       case 'mum':
@@ -700,12 +698,6 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
           <span className="tab-badge">{aiTasks.pending.length + aiTasks.waiting.length}</span>
         </button>
         <button
-          className={`tab-button ${activeTab === 'reconciliation' ? 'active' : ''}`}
-          onClick={() => setActiveTab('reconciliation')}
-        >
-          🔄 Reconciliation
-        </button>
-        <button
           className={`tab-button ${activeTab === 'messages' ? 'active' : ''}`}
           onClick={() => setActiveTab('messages')}
         >
@@ -732,13 +724,6 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
       {activeTab === 'ai-approval' && (
         <div className="tab-content">
           <TaskEmailLayout tasks={tabTasks} emptyMessage="No AI tasks pending approval" />
-        </div>
-      )}
-
-      {/* Reconciliation Tab - Merge Center */}
-      {activeTab === 'reconciliation' && (
-        <div className="tab-content">
-          <MergeCenter />
         </div>
       )}
 

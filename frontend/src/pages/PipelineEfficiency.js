@@ -8,6 +8,83 @@ function PipelineEfficiency() {
   const [timeRange, setTimeRange] = useState('30days'); // 7days, 30days, 90days, year
   const [selectedBottleneck, setSelectedBottleneck] = useState(null);
   const [showDrilldownModal, setShowDrilldownModal] = useState(false);
+  const [selectedTeamMember, setSelectedTeamMember] = useState(null);
+  const [showTeamDrilldown, setShowTeamDrilldown] = useState(false);
+
+  // Mock team member loans data - keyed by role
+  const teamMemberLoansData = {
+    'Loan Officers': [
+      { id: 3001, borrowerName: 'Alex Thompson', loanNumber: 'L-2024-101', loanAmount: 450000, currentStage: 'Application', assignedTo: 'Sarah Mitchell', daysInStage: 3, status: 'On Track' },
+      { id: 3002, borrowerName: 'Maria Garcia', loanNumber: 'L-2024-102', loanAmount: 325000, currentStage: 'Pre-Approval', assignedTo: 'Mike Johnson', daysInStage: 2, status: 'On Track' },
+      { id: 3003, borrowerName: 'David Chen', loanNumber: 'L-2024-103', loanAmount: 580000, currentStage: 'Application', assignedTo: 'Sarah Mitchell', daysInStage: 5, status: 'Needs Attention' },
+      { id: 3004, borrowerName: 'Jennifer Lopez', loanNumber: 'L-2024-104', loanAmount: 395000, currentStage: 'Pre-Qualification', assignedTo: 'Mike Johnson', daysInStage: 1, status: 'On Track' },
+      { id: 3005, borrowerName: 'Robert Taylor', loanNumber: 'L-2024-105', loanAmount: 670000, currentStage: 'Application', assignedTo: 'Sarah Mitchell', daysInStage: 4, status: 'On Track' },
+      { id: 3006, borrowerName: 'Lisa Anderson', loanNumber: 'L-2024-106', loanAmount: 410000, currentStage: 'Pre-Approval', assignedTo: 'Mike Johnson', daysInStage: 2, status: 'On Track' },
+      { id: 3007, borrowerName: 'James Wilson', loanNumber: 'L-2024-107', loanAmount: 525000, currentStage: 'Application', assignedTo: 'Sarah Mitchell', daysInStage: 6, status: 'Delayed' },
+      { id: 3008, borrowerName: 'Patricia Moore', loanNumber: 'L-2024-108', loanAmount: 360000, currentStage: 'Pre-Qualification', assignedTo: 'Mike Johnson', daysInStage: 1, status: 'On Track' },
+      { id: 3009, borrowerName: 'Christopher Lee', loanNumber: 'L-2024-109', loanAmount: 495000, currentStage: 'Application', assignedTo: 'Sarah Mitchell', daysInStage: 3, status: 'On Track' },
+      { id: 3010, borrowerName: 'Barbara Martinez', loanNumber: 'L-2024-110', loanAmount: 425000, currentStage: 'Pre-Approval', assignedTo: 'Mike Johnson', daysInStage: 2, status: 'On Track' },
+      { id: 3011, borrowerName: 'Daniel White', loanNumber: 'L-2024-111', loanAmount: 550000, currentStage: 'Application', assignedTo: 'Sarah Mitchell', daysInStage: 4, status: 'On Track' },
+      { id: 3012, borrowerName: 'Nancy Jackson', loanNumber: 'L-2024-112', loanAmount: 385000, currentStage: 'Pre-Qualification', assignedTo: 'Mike Johnson', daysInStage: 1, status: 'On Track' },
+      { id: 3013, borrowerName: 'Kevin Brown', loanNumber: 'L-2024-113', loanAmount: 615000, currentStage: 'Application', assignedTo: 'Sarah Mitchell', daysInStage: 5, status: 'Needs Attention' },
+      { id: 3014, borrowerName: 'Michelle Davis', loanNumber: 'L-2024-114', loanAmount: 440000, currentStage: 'Pre-Approval', assignedTo: 'Mike Johnson', daysInStage: 2, status: 'On Track' },
+      { id: 3015, borrowerName: 'Steven Johnson', loanNumber: 'L-2024-115', loanAmount: 375000, currentStage: 'Application', assignedTo: 'Sarah Mitchell', daysInStage: 3, status: 'On Track' }
+    ],
+    'Processors': [
+      { id: 4001, borrowerName: 'Emily Roberts', loanNumber: 'L-2024-201', loanAmount: 465000, currentStage: 'Processing', assignedTo: 'John Smith', daysInStage: 8, status: 'On Track' },
+      { id: 4002, borrowerName: 'Michael Green', loanNumber: 'L-2024-202', loanAmount: 390000, currentStage: 'Processing', assignedTo: 'Jane Doe', daysInStage: 12, status: 'Needs Attention' },
+      { id: 4003, borrowerName: 'Amanda Clark', loanNumber: 'L-2024-203', loanAmount: 520000, currentStage: 'Processing', assignedTo: 'John Smith', daysInStage: 6, status: 'On Track' },
+      { id: 4004, borrowerName: 'Thomas Hill', loanNumber: 'L-2024-204', loanAmount: 435000, currentStage: 'Processing', assignedTo: 'Jane Doe', daysInStage: 15, status: 'Delayed' },
+      { id: 4005, borrowerName: 'Rachel Adams', loanNumber: 'L-2024-205', loanAmount: 585000, currentStage: 'Processing', assignedTo: 'John Smith', daysInStage: 7, status: 'On Track' },
+      { id: 4006, borrowerName: 'Brandon Scott', loanNumber: 'L-2024-206', loanAmount: 410000, currentStage: 'Processing', assignedTo: 'Jane Doe', daysInStage: 10, status: 'On Track' },
+      { id: 4007, borrowerName: 'Stephanie King', loanNumber: 'L-2024-207', loanAmount: 495000, currentStage: 'Processing', assignedTo: 'John Smith', daysInStage: 9, status: 'On Track' },
+      { id: 4008, borrowerName: 'Jason Wright', loanNumber: 'L-2024-208', loanAmount: 375000, currentStage: 'Processing', assignedTo: 'Jane Doe', daysInStage: 11, status: 'Needs Attention' },
+      { id: 4009, borrowerName: 'Angela Lopez', loanNumber: 'L-2024-209', loanAmount: 540000, currentStage: 'Processing', assignedTo: 'John Smith', daysInStage: 8, status: 'On Track' },
+      { id: 4010, borrowerName: 'Brian Hall', loanNumber: 'L-2024-210', loanAmount: 420000, currentStage: 'Processing', assignedTo: 'Jane Doe', daysInStage: 13, status: 'Delayed' },
+      { id: 4011, borrowerName: 'Rebecca Allen', loanNumber: 'L-2024-211', loanAmount: 475000, currentStage: 'Processing', assignedTo: 'John Smith', daysInStage: 7, status: 'On Track' },
+      { id: 4012, borrowerName: 'Justin Young', loanNumber: 'L-2024-212', loanAmount: 405000, currentStage: 'Processing', assignedTo: 'Jane Doe', daysInStage: 9, status: 'On Track' },
+      { id: 4013, borrowerName: 'Melissa King', loanNumber: 'L-2024-213', loanAmount: 560000, currentStage: 'Processing', assignedTo: 'John Smith', daysInStage: 10, status: 'On Track' },
+      { id: 4014, borrowerName: 'Gary Wright', loanNumber: 'L-2024-214', loanAmount: 385000, currentStage: 'Processing', assignedTo: 'Jane Doe', daysInStage: 14, status: 'Needs Attention' },
+      { id: 4015, borrowerName: 'Laura Scott', loanNumber: 'L-2024-215', loanAmount: 510000, currentStage: 'Processing', assignedTo: 'John Smith', daysInStage: 6, status: 'On Track' },
+      { id: 4016, borrowerName: 'Ryan Turner', loanNumber: 'L-2024-216', loanAmount: 445000, currentStage: 'Processing', assignedTo: 'Jane Doe', daysInStage: 11, status: 'On Track' },
+      { id: 4017, borrowerName: 'Kimberly Baker', loanNumber: 'L-2024-217', loanAmount: 395000, currentStage: 'Processing', assignedTo: 'John Smith', daysInStage: 8, status: 'On Track' },
+      { id: 4018, borrowerName: 'Eric Nelson', loanNumber: 'L-2024-218', loanAmount: 525000, currentStage: 'Processing', assignedTo: 'Jane Doe', daysInStage: 12, status: 'Needs Attention' },
+      { id: 4019, borrowerName: 'Sharon Carter', loanNumber: 'L-2024-219', loanAmount: 430000, currentStage: 'Processing', assignedTo: 'John Smith', daysInStage: 7, status: 'On Track' },
+      { id: 4020, borrowerName: 'Dennis Mitchell', loanNumber: 'L-2024-220', loanAmount: 490000, currentStage: 'Processing', assignedTo: 'Jane Doe', daysInStage: 9, status: 'On Track' },
+      { id: 4021, borrowerName: 'Cynthia Perez', loanNumber: 'L-2024-221', loanAmount: 455000, currentStage: 'Processing', assignedTo: 'John Smith', daysInStage: 10, status: 'On Track' },
+      { id: 4022, borrowerName: 'Raymond Roberts', loanNumber: 'L-2024-222', loanAmount: 370000, currentStage: 'Processing', assignedTo: 'Jane Doe', daysInStage: 15, status: 'Delayed' }
+    ],
+    'Underwriters': [
+      { id: 5001, borrowerName: 'Gregory Turner', loanNumber: 'L-2024-301', loanAmount: 515000, currentStage: 'Underwriting', assignedTo: 'Tom Wilson', daysInStage: 5, status: 'On Track' },
+      { id: 5002, borrowerName: 'Deborah Phillips', loanNumber: 'L-2024-302', loanAmount: 445000, currentStage: 'Underwriting', assignedTo: 'Susan Davis', daysInStage: 9, status: 'Needs Review' },
+      { id: 5003, borrowerName: 'Frank Campbell', loanNumber: 'L-2024-303', loanAmount: 590000, currentStage: 'Underwriting', assignedTo: 'Tom Wilson', daysInStage: 4, status: 'On Track' },
+      { id: 5004, borrowerName: 'Ruth Parker', loanNumber: 'L-2024-304', loanAmount: 425000, currentStage: 'Underwriting', assignedTo: 'Susan Davis', daysInStage: 7, status: 'On Track' },
+      { id: 5005, borrowerName: 'Harold Evans', loanNumber: 'L-2024-305', loanAmount: 555000, currentStage: 'Underwriting', assignedTo: 'Tom Wilson', daysInStage: 6, status: 'On Track' },
+      { id: 5006, borrowerName: 'Catherine Edwards', loanNumber: 'L-2024-306', loanAmount: 395000, currentStage: 'Underwriting', assignedTo: 'Susan Davis', daysInStage: 8, status: 'Needs Review' },
+      { id: 5007, borrowerName: 'Peter Collins', loanNumber: 'L-2024-307', loanAmount: 620000, currentStage: 'Underwriting', assignedTo: 'Tom Wilson', daysInStage: 5, status: 'On Track' },
+      { id: 5008, borrowerName: 'Donna Stewart', loanNumber: 'L-2024-308', loanAmount: 465000, currentStage: 'Underwriting', assignedTo: 'Susan Davis', daysInStage: 10, status: 'Suspended' },
+      { id: 5009, borrowerName: 'Arthur Morris', loanNumber: 'L-2024-309', loanAmount: 535000, currentStage: 'Underwriting', assignedTo: 'Tom Wilson', daysInStage: 4, status: 'On Track' },
+      { id: 5010, borrowerName: 'Carol Rogers', loanNumber: 'L-2024-310', loanAmount: 480000, currentStage: 'Underwriting', assignedTo: 'Susan Davis', daysInStage: 6, status: 'On Track' },
+      { id: 5011, borrowerName: 'Henry Reed', loanNumber: 'L-2024-311', loanAmount: 425000, currentStage: 'Underwriting', assignedTo: 'Tom Wilson', daysInStage: 5, status: 'On Track' },
+      { id: 5012, borrowerName: 'Frances Cook', loanNumber: 'L-2024-312', loanAmount: 560000, currentStage: 'Underwriting', assignedTo: 'Susan Davis', daysInStage: 7, status: 'On Track' },
+      { id: 5013, borrowerName: 'Carl Morgan', loanNumber: 'L-2024-313', loanAmount: 410000, currentStage: 'Underwriting', assignedTo: 'Tom Wilson', daysInStage: 8, status: 'Needs Review' },
+      { id: 5014, borrowerName: 'Janet Bell', loanNumber: 'L-2024-314', loanAmount: 495000, currentStage: 'Underwriting', assignedTo: 'Susan Davis', daysInStage: 5, status: 'On Track' },
+      { id: 5015, borrowerName: 'Roger Murphy', loanNumber: 'L-2024-315', loanAmount: 445000, currentStage: 'Underwriting', assignedTo: 'Tom Wilson', daysInStage: 6, status: 'On Track' },
+      { id: 5016, borrowerName: 'Diane Bailey', loanNumber: 'L-2024-316', loanAmount: 525000, currentStage: 'Underwriting', assignedTo: 'Susan Davis', daysInStage: 9, status: 'Needs Review' },
+      { id: 5017, borrowerName: 'Keith Rivera', loanNumber: 'L-2024-317', loanAmount: 475000, currentStage: 'Underwriting', assignedTo: 'Tom Wilson', daysInStage: 4, status: 'On Track' },
+      { id: 5018, borrowerName: 'Alice Cooper', loanNumber: 'L-2024-318', loanAmount: 580000, currentStage: 'Underwriting', assignedTo: 'Susan Davis', daysInStage: 7, status: 'On Track' }
+    ],
+    'Closers': [
+      { id: 6001, borrowerName: 'Willie Richardson', loanNumber: 'L-2024-401', loanAmount: 485000, currentStage: 'Clear to Close', assignedTo: 'Linda Martinez', daysInStage: 2, status: 'Ready to Close' },
+      { id: 6002, borrowerName: 'Teresa Cox', loanNumber: 'L-2024-402', loanAmount: 420000, currentStage: 'Clear to Close', assignedTo: 'Robert Chen', daysInStage: 1, status: 'Ready to Close' },
+      { id: 6003, borrowerName: 'Lawrence Howard', loanNumber: 'L-2024-403', loanAmount: 545000, currentStage: 'Closing', assignedTo: 'Linda Martinez', daysInStage: 1, status: 'Scheduled' },
+      { id: 6004, borrowerName: 'Evelyn Ward', loanNumber: 'L-2024-404', loanAmount: 395000, currentStage: 'Clear to Close', assignedTo: 'Robert Chen', daysInStage: 2, status: 'Ready to Close' },
+      { id: 6005, borrowerName: 'Russell Torres', loanNumber: 'L-2024-405', loanAmount: 615000, currentStage: 'Closing', assignedTo: 'Linda Martinez', daysInStage: 1, status: 'Scheduled' },
+      { id: 6006, borrowerName: 'Ann Peterson', loanNumber: 'L-2024-406', loanAmount: 455000, currentStage: 'Clear to Close', assignedTo: 'Robert Chen', daysInStage: 2, status: 'Ready to Close' },
+      { id: 6007, borrowerName: 'Philip Gray', loanNumber: 'L-2024-407', loanAmount: 530000, currentStage: 'Closing', assignedTo: 'Linda Martinez', daysInStage: 1, status: 'Scheduled' },
+      { id: 6008, borrowerName: 'Judith Ramirez', loanNumber: 'L-2024-408', loanAmount: 475000, currentStage: 'Clear to Close', assignedTo: 'Robert Chen', daysInStage: 1, status: 'Ready to Close' }
+    ]
+  };
 
   // Mock affected loans data - keyed by bottleneck ID
   const affectedLoansData = {
@@ -391,8 +468,32 @@ function PipelineEfficiency() {
   };
 
   const handleCreateTask = (loan) => {
-    alert(`Creating task for ${loan.processor} to follow up on loan ${loan.loanNumber} for borrower ${loan.borrowerName}`);
+    const assignee = loan.processor || loan.assignedTo;
+    alert(`Creating task for ${assignee} to follow up on loan ${loan.loanNumber} for borrower ${loan.borrowerName}`);
     // In production, this would call the AI task creation API
+  };
+
+  const handleTeamMemberClick = (member) => {
+    setSelectedTeamMember(member);
+    setShowTeamDrilldown(true);
+  };
+
+  const handleCloseTeamDrilldown = () => {
+    setShowTeamDrilldown(false);
+    setSelectedTeamMember(null);
+  };
+
+  const getStatusColorClass = (status) => {
+    switch (status) {
+      case 'On Track': return 'status-on-track';
+      case 'Ready to Close': return 'status-on-track';
+      case 'Scheduled': return 'status-scheduled';
+      case 'Needs Attention': return 'status-warning';
+      case 'Needs Review': return 'status-warning';
+      case 'Delayed': return 'status-danger';
+      case 'Suspended': return 'status-danger';
+      default: return 'status-default';
+    }
   };
 
   const formatCurrency = (amount) => {
@@ -539,7 +640,12 @@ function PipelineEfficiency() {
           <h2>Team Performance Metrics</h2>
           <div className="team-cards">
             {efficiencyData.teamMetrics.map((member, idx) => (
-              <div key={idx} className="team-performance-card">
+              <div
+                key={idx}
+                className="team-performance-card clickable"
+                onClick={() => handleTeamMemberClick(member)}
+                style={{ cursor: 'pointer' }}
+              >
                 <div className="team-card-header">
                   <h3>{member.role}</h3>
                   <div className={`efficiency-score ${getStatusColor(member.efficiency)}`}>
@@ -562,6 +668,9 @@ function PipelineEfficiency() {
                 </div>
                 <div className={`team-trend ${member.trend >= 0 ? 'positive' : 'negative'}`}>
                   {member.trend >= 0 ? '↑' : '↓'} {Math.abs(member.trend)}% vs. last period
+                </div>
+                <div className="click-to-view-team">
+                  Click to view active loans →
                 </div>
               </div>
             ))}
@@ -712,6 +821,77 @@ function PipelineEfficiency() {
               ) : (
                 <div className="no-data">
                   <p>No detailed loan data available for this bottleneck.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Team Member Drill-down Modal */}
+      {showTeamDrilldown && selectedTeamMember && (
+        <div className="drilldown-modal-overlay" onClick={handleCloseTeamDrilldown}>
+          <div className="drilldown-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="drilldown-header">
+              <div>
+                <h2>{selectedTeamMember.role} - Active Loans</h2>
+                <p className="drilldown-subtitle">
+                  {selectedTeamMember.activeLoans} Active Loans • {selectedTeamMember.efficiency}% Efficiency
+                </p>
+              </div>
+              <button className="btn-close-modal" onClick={handleCloseTeamDrilldown}>
+                ✕
+              </button>
+            </div>
+
+            <div className="drilldown-content">
+              {teamMemberLoansData[selectedTeamMember.role] ? (
+                <div className="affected-loans-list">
+                  {teamMemberLoansData[selectedTeamMember.role].map((loan) => (
+                    <div key={loan.id} className="affected-loan-card team-loan-card">
+                      <div className="loan-card-header">
+                        <div>
+                          <h3>{loan.borrowerName}</h3>
+                          <p className="loan-number">{loan.loanNumber}</p>
+                        </div>
+                        <div className="loan-amount">{formatCurrency(loan.loanAmount)}</div>
+                      </div>
+
+                      <div className="loan-card-info">
+                        <div className="loan-info-row">
+                          <span className="info-label">Current Stage:</span>
+                          <span className="info-value">{loan.currentStage}</span>
+                        </div>
+                        <div className="loan-info-row">
+                          <span className="info-label">Assigned To:</span>
+                          <span className="info-value">{loan.assignedTo}</span>
+                        </div>
+                        <div className="loan-info-row">
+                          <span className="info-label">Days in Stage:</span>
+                          <span className="info-value">{loan.daysInStage} days</span>
+                        </div>
+                        <div className="loan-info-row">
+                          <span className="info-label">Status:</span>
+                          <span className={`info-value loan-status ${getStatusColorClass(loan.status)}`}>
+                            {loan.status}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="loan-card-actions">
+                        <button
+                          className="btn-create-task"
+                          onClick={() => handleCreateTask(loan)}
+                        >
+                          🤖 Create AI Task for {loan.assignedTo}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="no-data">
+                  <p>No active loans data available for {selectedTeamMember.role}.</p>
                 </div>
               )}
             </div>
