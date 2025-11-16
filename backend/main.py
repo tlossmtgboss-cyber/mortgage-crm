@@ -14385,6 +14385,39 @@ async def run_certification_reminders(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# TEMPORARY: Upgrade demo user to admin for testing compliance features
+@app.post("/api/v1/admin/upgrade-demo-user")
+async def upgrade_demo_user_to_admin(db: Session = Depends(get_db)):
+    """
+    TEMPORARY ENDPOINT: Upgrade demo@example.com to admin role
+    This allows testing of admin-only compliance features
+    """
+    try:
+        user = db.query(User).filter(User.email == "demo@example.com").first()
+        if not user:
+            raise HTTPException(status_code=404, detail="Demo user not found")
+
+        old_role = user.role
+        user.role = "admin"
+        db.commit()
+
+        return {
+            "success": True,
+            "message": f"Demo user upgraded from '{old_role}' to 'admin'",
+            "user": {
+                "email": user.email,
+                "name": user.full_name,
+                "old_role": old_role,
+                "new_role": user.role
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Upgrade demo user error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ============================================================================
 # TAB 6: ACCESS & AUDIT - API ENDPOINTS
 # ============================================================================
