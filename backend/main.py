@@ -8276,7 +8276,7 @@ async def create_task(task: TaskCreate, db: Session = Depends(get_db), current_u
     logger.info(f"Task created: {db_task.title}")
     return db_task
 
-@app.get("/api/v1/tasks/", response_model=List[TaskResponse])
+@app.get("/api/v1/tasks/")
 async def get_tasks(
     skip: int = 0,
     limit: int = 100,
@@ -8293,7 +8293,87 @@ async def get_tasks(
             pass
 
     tasks = query.order_by(AITask.created_at.desc()).offset(skip).limit(limit).all()
-    return tasks
+
+    # Enhance tasks with AI intelligence
+    enhanced_tasks = []
+    for task in tasks:
+        task_dict = {
+            "id": task.id,
+            "title": task.title,
+            "description": task.description,
+            "type": task.type.value if task.type else None,
+            "category": task.category,
+            "priority": task.priority,
+            "ai_confidence": task.ai_confidence,
+            "ai_reasoning": task.ai_reasoning,
+            "suggested_action": task.suggested_action,
+            "completed_action": task.completed_action,
+            "borrower_name": task.borrower_name,
+            "lead_id": task.lead_id,
+            "loan_id": task.loan_id,
+            "assigned_to_id": task.assigned_to_id,
+            "due_date": task.due_date,
+            "completed_at": task.completed_at,
+            "estimated_time": task.estimated_time,
+            "feedback": task.feedback,
+            "user_metadata": task.user_metadata,
+            "created_at": task.created_at,
+            "updated_at": task.updated_at
+        }
+
+        # Add entity name
+        entity_name = None
+        entity_type = None
+        if task.loan_id:
+            entity_type = "loan"
+            entity_name = get_entity_name("loan", task.loan_id, db)
+        elif task.lead_id:
+            entity_type = "lead"
+            entity_name = get_entity_name("lead", task.lead_id, db)
+
+        task_dict["entity_name"] = entity_name
+        task_dict["entity_type"] = entity_type
+
+        # Classify task intent if description is available
+        if task.description:
+            email_intent = classify_email_intent(
+                task.title or "",
+                task.description or "",
+                {}
+            )
+            task_dict["task_intent"] = email_intent.get("intent")
+            task_dict["task_intent_description"] = email_intent.get("description")
+        else:
+            task_dict["task_intent"] = None
+            task_dict["task_intent_description"] = None
+
+        # Generate recommended action if not already set
+        if not task.suggested_action and task.description:
+            email_intent = classify_email_intent(task.title or "", task.description or "", {})
+            if email_intent.get("confidence", 0) > 0.60:
+                recommended_action = generate_recommended_action(
+                    email_intent,
+                    entity_type,
+                    {}
+                )
+                task_dict["recommended_action"] = recommended_action
+            else:
+                task_dict["recommended_action"] = None
+        else:
+            # Use existing suggested_action
+            if task.suggested_action:
+                task_dict["recommended_action"] = {
+                    "title": "Suggested Action",
+                    "description": task.suggested_action,
+                    "action_type": "manual",
+                    "learning_status": "AI suggestion based on task analysis"
+                }
+            else:
+                task_dict["recommended_action"] = None
+
+        enhanced_tasks.append(task_dict)
+
+    return enhanced_tasks
 
 @app.get("/api/v1/tasks/{task_id}", response_model=TaskResponse)
 async def get_task(task_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -8410,10 +8490,66 @@ async def create_mum_client(client: MUMClientCreate, db: Session = Depends(get_d
     logger.info(f"MUM client created: {db_client.name}")
     return db_client
 
-@app.get("/api/v1/mum-clients/", response_model=List[MUMClientResponse])
+@app.get("/api/v1/mum-clients/")
 async def get_mum_clients(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     clients = db.query(MUMClient).order_by(MUMClient.created_at.desc()).offset(skip).limit(limit).all()
-    return clients
+
+    # Enhance MUM clients with AI intelligence
+    enhanced_clients = []
+    for client in clients:
+        client_dict = {
+            "id": client.id,
+            "name": client.name,
+            "loan_number": client.loan_number,
+            "original_close_date": client.original_close_date,
+            "days_since_funding": client.days_since_funding,
+            "original_rate": client.original_rate,
+            "current_rate": client.current_rate,
+            "loan_balance": client.loan_balance,
+            "refinance_opportunity": client.refinance_opportunity,
+            "estimated_savings": client.estimated_savings,
+            "engagement_score": client.engagement_score,
+            "status": client.status,
+            "last_contact": client.last_contact,
+            "created_at": client.created_at
+        }
+
+        # Add AI intent classification for MUM clients (Client for Life)
+        client_dict["client_intent"] = "Client for Life Opportunity"
+        if client.refinance_opportunity:
+            client_dict["client_intent_description"] = f"Refinance opportunity with estimated savings of ${client.estimated_savings:,.2f}" if client.estimated_savings else "Refinance opportunity detected"
+        else:
+            client_dict["client_intent_description"] = "Maintain client relationship for future opportunities"
+
+        # Generate recommended action for MUM clients
+        if client.refinance_opportunity and client.estimated_savings and client.estimated_savings > 0:
+            client_dict["recommended_action"] = {
+                "title": "Contact for Refinance Opportunity",
+                "description": f"AI recommends reaching out to {client.name} about refinancing. They could save approximately ${client.estimated_savings:,.2f} based on current market rates.",
+                "action_type": "outreach",
+                "action_value": "refinance_contact",
+                "learning_status": "Learning from your client engagement patterns"
+            }
+        elif client.days_since_funding and client.days_since_funding > 365:
+            client_dict["recommended_action"] = {
+                "title": "Annual Check-in",
+                "description": f"AI recommends an annual check-in with {client.name}. It's been {client.days_since_funding} days since their loan closed.",
+                "action_type": "outreach",
+                "action_value": "annual_checkin",
+                "learning_status": "Learning from your client engagement patterns"
+            }
+        else:
+            client_dict["recommended_action"] = {
+                "title": "Maintain Relationship",
+                "description": f"AI recommends continuing to nurture relationship with {client.name} for future opportunities.",
+                "action_type": "nurture",
+                "action_value": "relationship_maintenance",
+                "learning_status": "Learning from your client engagement patterns"
+            }
+
+        enhanced_clients.append(client_dict)
+
+    return enhanced_clients
 
 @app.get("/api/v1/mum-clients/{client_id}", response_model=MUMClientResponse)
 async def get_mum_client(client_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
@@ -12445,6 +12581,324 @@ async def get_permission_templates(
         raise
     except Exception as e:
         logger.error(f"Get templates error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/users/{user_id}/permissions/template")
+async def get_user_permission_template(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get the current permission template assigned to a user
+
+    Returns the template name/category currently assigned
+    """
+    try:
+        # Check permission
+        if not has_permission(current_user.id, 'team.manage_permissions', db):
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        # Get user
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        return {
+            "user_id": user_id,
+            "email": user.email,
+            "template": user.permission_role,
+            "template_display": user.permission_role.title() if user.permission_role else "None"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get user template error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/permissions/available")
+async def get_available_permissions(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get all available permissions with descriptions and categories
+
+    Returns a structured list of all permissions in the system
+    """
+    try:
+        # Check permission
+        if not has_permission(current_user.id, 'team.manage_permissions', db):
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        # Define all available permissions organized by category
+        permissions = {
+            "dashboard_widgets": {
+                "name": "Dashboard Widgets",
+                "permissions": {
+                    "dashboard.view_all_widgets": "View all dashboard widgets",
+                    "dashboard.view_production_tracker": "View production tracker widget",
+                    "dashboard.view_efficiency_monitor": "View loan efficiency monitor widget",
+                    "dashboard.view_referral_scoreboard": "View referral scoreboard widget",
+                    "dashboard.view_team_performance": "View team performance metrics widget",
+                    "dashboard.customize": "Customize dashboard layout",
+                    "dashboard.export": "Export dashboard data"
+                }
+            },
+            "navigation": {
+                "name": "Navigation Tabs",
+                "permissions": {
+                    "reports.view_scorecard": "Access Scorecard tab",
+                    "partners.view": "Access Partners tab",
+                    "team.view_all": "Access Team Members tab",
+                    "reports.view_all": "Access Reports tab"
+                }
+            },
+            "leads": {
+                "name": "Leads Management",
+                "permissions": {
+                    "leads.view_all": "View all leads",
+                    "leads.view_team": "View team's leads",
+                    "leads.view_assigned": "View only assigned leads",
+                    "leads.create": "Create new leads",
+                    "leads.edit_all": "Edit any lead",
+                    "leads.edit_own": "Edit own leads only",
+                    "leads.delete": "Delete leads",
+                    "leads.assign": "Assign leads to others",
+                    "leads.export": "Export lead data"
+                }
+            },
+            "clients": {
+                "name": "Client Management",
+                "permissions": {
+                    "clients.view_all": "View all clients",
+                    "clients.view_assigned": "View assigned clients only",
+                    "clients.create": "Create clients",
+                    "clients.edit_all": "Edit any client",
+                    "clients.edit_own": "Edit own clients only",
+                    "clients.delete": "Delete clients",
+                    "clients.export": "Export client data"
+                }
+            },
+            "loans": {
+                "name": "Loan Management",
+                "permissions": {
+                    "loans.view_all": "View all loans",
+                    "loans.view_assigned": "View assigned loans only",
+                    "loans.create": "Create loans",
+                    "loans.edit_all": "Edit any loan",
+                    "loans.edit_own": "Edit own loans only",
+                    "loans.delete": "Delete loans",
+                    "loans.process": "Process loans (operations)",
+                    "loans.export": "Export loan data"
+                }
+            },
+            "team": {
+                "name": "Team Management",
+                "permissions": {
+                    "team.view_all": "View all team members",
+                    "team.view_team": "View own team",
+                    "team.edit_members": "Edit team member profiles",
+                    "team.manage_permissions": "Manage team permissions",
+                    "team.impersonate": "Impersonate team members",
+                    "team.view_performance": "View team performance metrics"
+                }
+            },
+            "reports": {
+                "name": "Reports & Analytics",
+                "permissions": {
+                    "reports.view_all": "View all reports",
+                    "reports.view_sales": "View sales reports",
+                    "reports.view_operations": "View operations reports",
+                    "reports.export": "Export report data",
+                    "analytics.view_all": "View all analytics",
+                    "analytics.export": "Export analytics data"
+                }
+            },
+            "settings": {
+                "name": "Settings & Administration",
+                "permissions": {
+                    "settings.view": "View settings",
+                    "settings.edit": "Edit settings",
+                    "permissions.view_all": "View all user permissions",
+                    "permissions.manage": "Manage permissions and assign roles"
+                }
+            },
+            "tasks": {
+                "name": "Tasks & Workflows",
+                "permissions": {
+                    "tasks.view_all": "View all tasks",
+                    "tasks.view_team": "View team tasks",
+                    "tasks.view_assigned": "View assigned tasks",
+                    "tasks.create": "Create tasks",
+                    "tasks.edit_all": "Edit any task",
+                    "tasks.delete": "Delete tasks"
+                }
+            }
+        }
+
+        return {
+            "categories": permissions,
+            "total_permissions": sum(len(cat["permissions"]) for cat in permissions.values())
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get available permissions error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/users/{user_id}/permissions/apply-template")
+async def apply_permission_template(
+    user_id: int,
+    template_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Apply a permission template to a user
+
+    Body: { "template": "sales" | "operations" | "management" }
+    Returns: Updated permissions and diff of changes
+    """
+    try:
+        # Check permission
+        if not has_permission(current_user.id, 'team.manage_permissions', db):
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        # Get user
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        template_name = template_data.get("template")
+        if not template_name:
+            raise HTTPException(status_code=400, detail="Template name required")
+
+        # Get current permissions before applying template
+        old_permissions = get_user_permissions(user_id, db)
+
+        # Apply template
+        success = apply_role_template_to_user(user_id, template_name, current_user.id, db)
+
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to apply template")
+
+        # Get new permissions after applying template
+        new_permissions = get_user_permissions(user_id, db)
+
+        # Calculate diff
+        added = {k: v for k, v in new_permissions.items() if k not in old_permissions or not old_permissions[k]}
+        removed = {k: v for k, v in old_permissions.items() if k not in new_permissions or not new_permissions[k]}
+        unchanged = {k: v for k, v in new_permissions.items() if k in old_permissions and old_permissions[k] == v}
+
+        # TODO: Log to audit log
+        logger.info(f"Applied {template_name} template to user {user_id} by {current_user.email}")
+
+        return {
+            "success": True,
+            "message": f"Successfully applied {template_name} template",
+            "user_id": user_id,
+            "template": template_name,
+            "permissions": new_permissions,
+            "diff": {
+                "added": list(added.keys()),
+                "removed": list(removed.keys()),
+                "unchanged": list(unchanged.keys()),
+                "added_count": len(added),
+                "removed_count": len(removed)
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Apply template error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/v1/users/{user_id}/permissions")
+async def update_user_permissions(
+    user_id: int,
+    permission_data: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Update individual permissions for a user
+
+    Body: { "permissions": { "leads.view_all": true, "leads.edit_all": false, ... } }
+    """
+    try:
+        # Check permission
+        if not has_permission(current_user.id, 'team.manage_permissions', db):
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        # Get user
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        permissions = permission_data.get("permissions", {})
+        if not permissions:
+            raise HTTPException(status_code=400, detail="Permissions object required")
+
+        # Get current permissions
+        old_permissions = get_user_permissions(user_id, db)
+
+        # Update each permission
+        for permission_key, granted in permissions.items():
+            # Insert or update permission
+            db.execute(text("""
+                INSERT INTO user_permissions (user_id, permission_key, granted, granted_by, granted_at, inherited_from)
+                VALUES (:user_id, :permission_key, :granted, :granted_by, CURRENT_TIMESTAMP, 'manual')
+                ON CONFLICT (user_id, permission_key) DO UPDATE
+                SET granted = :granted, granted_by = :granted_by, granted_at = CURRENT_TIMESTAMP
+            """), {
+                'user_id': user_id,
+                'permission_key': permission_key,
+                'granted': granted,
+                'granted_by': current_user.id
+            })
+
+        db.commit()
+
+        # Get updated permissions
+        new_permissions = get_user_permissions(user_id, db)
+
+        # Calculate changes
+        changes = []
+        for key in set(list(old_permissions.keys()) + list(new_permissions.keys())):
+            old_val = old_permissions.get(key, False)
+            new_val = new_permissions.get(key, False)
+            if old_val != new_val:
+                changes.append({
+                    "permission": key,
+                    "old_value": old_val,
+                    "new_value": new_val
+                })
+
+        # TODO: Log to audit log
+        logger.info(f"Updated permissions for user {user_id} by {current_user.email}. Changes: {len(changes)}")
+
+        return {
+            "success": True,
+            "message": f"Successfully updated {len(changes)} permissions",
+            "user_id": user_id,
+            "permissions": new_permissions,
+            "changes": changes,
+            "changes_count": len(changes)
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Update permissions error: {e}")
+        db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
 
