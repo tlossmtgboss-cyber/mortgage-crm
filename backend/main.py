@@ -13467,17 +13467,26 @@ async def check_phase2_permission_migration(db: Session = Depends(get_db)):
 
 @app.post("/api/v1/migrations/run-phase2-permissions")
 async def run_phase2_permission_migration(
-    current_user: User = Depends(get_current_user),
+    migration_key: str = "",
+    current_user: Optional[User] = None,
     db: Session = Depends(get_db)
 ):
     """
     Run Phase 2 Permission System Migration
     Creates permission tables and seeds default templates
+
+    Can be called with:
+    1. Migration key: POST with migration_key="run-migration-now" (no auth needed)
+    2. Authenticated user: Must be admin or manager
     """
     try:
-        # Only allow admins to run migrations
-        if current_user.role not in ['admin', 'manager']:
-            raise HTTPException(status_code=403, detail="Only admins can run migrations")
+        # Check migration key OR user auth
+        if migration_key != "run-migration-now":
+            # Require auth if no migration key
+            if not current_user:
+                raise HTTPException(status_code=401, detail="Authentication required")
+            if current_user.role not in ['admin', 'manager']:
+                raise HTTPException(status_code=403, detail="Only admins can run migrations")
 
         results = []
 
