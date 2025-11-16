@@ -160,6 +160,8 @@
   font-size: 14px;
   opacity: 0.9;
   margin-bottom: 8px;
+  color: #ffffff;
+  font-weight: 600;
 }
 
 .metric-value {
