@@ -1,0 +1,144 @@
+.job-description-section {
+  padding: 24px;
+}
+
+.section-header-with-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.section-header-with-actions h3 {
+  margin: 0 0 8px 0;
+  color: #2c3e50;
+  font-size: 18px;
+}
+
+.section-subtitle {
+  color: #7f8c8d;
+  margin: 0;
+  font-size: 14px;
+}
+
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.save-status {
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.save-status.saving {
+  color: #3498db;
+  background-color: #ebf5fb;
+}
+
+.save-status.saved {
+  color: #27ae60;
+  background-color: #e8f8f5;
+}
+
+.save-status.error {
+  color: #e74c3c;
+  background-color: #fadbd8;
+}
+
+.btn-save-description {
+  padding: 8px 16px;
+  background-color: #27ae60;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.btn-save-description:hover:not(:disabled) {
+  background-color: #229954;
+}
+
+.btn-save-description:disabled {
+  background-color: #95a5a6;
+  cursor: not-allowed;
+}
+
+/* Rich Text Editor Wrapper */
+.rich-text-editor-wrapper {
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin-bottom: 12px;
+}
+
+.rich-text-editor-wrapper .quill {
+  border: none;
+}
+
+.rich-text-editor-wrapper .ql-container {
+  min-height: 300px;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.rich-text-editor-wrapper .ql-editor {
+  min-height: 300px;
+}
+
+.rich-text-editor-wrapper .ql-toolbar {
+  background: #f8f9fa;
+  border: none;
+  border-bottom: 1px solid #ddd;
+}
+
+/* Editor Footer */
+.editor-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-top: 1px solid #e0e0e0;
+  margin-top: 8px;
+  padding-top: 12px;
+}
+
+.character-count {
+  font-size: 13px;
+  color: #7f8c8d;
+}
+
+.limit-warning {
+  color: #e74c3c;
+  font-weight: 600;
+}
+
+.last-updated {
+  font-size: 13px;
+  color: #7f8c8d;
+  font-style: italic;
+}
+
+/* Unsaved Changes Notice */
+.unsaved-changes-notice {
+  background-color: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 4px;
+  padding: 12px 16px;
+  margin-top: 16px;
+  color: #856404;
+  font-size: 14px;
+}
+
+/* Loading State */
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: #7f8c8d;
+  font-size: 15px;
+}

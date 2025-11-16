@@ -1408,6 +1408,15 @@ class EmergencyRevocation(Base):
     reinstated_at = Column(DateTime, nullable=True)
     revoked_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
 
+class UserJobDescription(Base):
+    __tablename__ = "user_job_descriptions"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    description = Column(Text, nullable=False)
+    updated_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
 
 # ============================================================================
 # PYDANTIC SCHEMAS
@@ -2206,6 +2215,14 @@ class EmergencyRevokeRequest(BaseModel):
     notify: Optional[List[str]] = []  # Array of who to notify: 'hr', 'security', 'employee', 'manager'
     reinstate_type: str = "manual"  # 'manual' or 'automatic'
     reinstate_date: Optional[datetime] = None
+
+class UpdateJobDescriptionRequest(BaseModel):
+    description: str
+
+class JobDescriptionResponse(BaseModel):
+    description: str
+    last_updated: Optional[datetime]
+    updated_by: Optional[Dict[str, Any]]
 
 # ============================================================================
 # FASTAPI APP
@@ -13276,6 +13293,124 @@ async def revoke_user_session(
         raise
     except Exception as e:
         logger.error(f"Revoke session error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================================
+# JOB DESCRIPTION ENDPOINTS
+# ============================================================================
+
+@app.get("/api/v1/users/{user_id}/job-description", response_model=JobDescriptionResponse)
+async def get_user_job_description(
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get job description for a user"""
+    try:
+        # Authorization: Only allow managers or the user themselves
+        if current_user.id != user_id and current_user.permission_role != 'management':
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+        # Get the most recent job description
+        job_desc = db.query(UserJobDescription).filter(
+            UserJobDescription.user_id == user_id
+        ).order_by(UserJobDescription.updated_at.desc()).first()
+
+        if not job_desc:
+            raise HTTPException(status_code=404, detail="Job description not found")
+
+        # Get updated_by user info
+        updated_by_user = None
+        if job_desc.updated_by_id:
+            updated_by = db.query(User).filter(User.id == job_desc.updated_by_id).first()
+            if updated_by:
+                updated_by_user = {
+                    "id": updated_by.id,
+                    "name": updated_by.full_name or updated_by.email
+                }
+
+        return {
+            "description": job_desc.description,
+            "last_updated": job_desc.updated_at,
+            "updated_by": updated_by_user
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get job description error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.put("/api/v1/users/{user_id}/job-description")
+async def update_user_job_description(
+    user_id: int,
+    body: UpdateJobDescriptionRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update job description for a user"""
+    try:
+        # Authorization: Only allow managers
+        if current_user.permission_role != 'management':
+            raise HTTPException(status_code=403, detail="Only managers can update job descriptions")
+
+        # Validate description length (5000 characters)
+        # Strip HTML for character count
+        from html.parser import HTMLParser
+
+        class MLStripper(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.reset()
+                self.strict = False
+                self.convert_charrefs = True
+                self.fed = []
+            def handle_data(self, d):
+                self.fed.append(d)
+            def get_data(self):
+                return ''.join(self.fed)
+
+        stripper = MLStripper()
+        stripper.feed(body.description)
+        plain_text = stripper.get_data()
+
+        if len(plain_text) > 5000:
+            raise HTTPException(status_code=400, detail="Description exceeds 5000 character limit")
+
+        # Check if job description exists
+        existing = db.query(UserJobDescription).filter(
+            UserJobDescription.user_id == user_id
+        ).order_by(UserJobDescription.updated_at.desc()).first()
+
+        if existing:
+            # Update existing
+            existing.description = body.description
+            existing.updated_by_id = current_user.id
+            existing.updated_at = datetime.now(timezone.utc)
+            db.commit()
+            db.refresh(existing)
+            job_desc = existing
+        else:
+            # Create new
+            job_desc = UserJobDescription(
+                user_id=user_id,
+                description=body.description,
+                updated_by_id=current_user.id
+            )
+            db.add(job_desc)
+            db.commit()
+            db.refresh(job_desc)
+
+        return {
+            "success": True,
+            "updated_at": job_desc.updated_at
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Update job description error: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
