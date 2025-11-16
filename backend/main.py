@@ -6883,9 +6883,10 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     """
     Get dashboard data with real metrics from database.
     All values are server-computed from CRM database.
+    OPTIMIZED: Uses fewer queries by batching and aggregating in memory.
     """
     from datetime import date, timedelta, datetime, timezone
-    from sqlalchemy import func, extract
+    from sqlalchemy import func, extract, case
 
     # Get current date ranges
     today = date.today()
@@ -6901,30 +6902,21 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     user_metadata = current_user.user_metadata or {}
     goals = user_metadata.get('goals', {})
 
-    # Calculate actuals from funded loans
-    annual_actual = db.query(func.count(Loan.id)).filter(
+    # OPTIMIZED: Single query to get all funded loan counts with CASE statements
+    funded_counts = db.query(
+        func.count(case((extract('year', Loan.funded_date) == today.year, 1))).label('annual'),
+        func.count(case((Loan.funded_date >= start_of_month, 1))).label('monthly'),
+        func.count(case((Loan.funded_date >= start_of_week, 1))).label('weekly'),
+        func.count(case((Loan.funded_date == today, 1))).label('daily')
+    ).filter(
         Loan.loan_officer_id == current_user.id,
-        Loan.stage == LoanStage.FUNDED,
-        extract('year', Loan.funded_date) == today.year
-    ).scalar() or 0
+        Loan.stage == LoanStage.FUNDED
+    ).first()
 
-    monthly_actual = db.query(func.count(Loan.id)).filter(
-        Loan.loan_officer_id == current_user.id,
-        Loan.stage == LoanStage.FUNDED,
-        Loan.funded_date >= start_of_month
-    ).scalar() or 0
-
-    weekly_actual = db.query(func.count(Loan.id)).filter(
-        Loan.loan_officer_id == current_user.id,
-        Loan.stage == LoanStage.FUNDED,
-        Loan.funded_date >= start_of_week
-    ).scalar() or 0
-
-    daily_actual = db.query(func.count(Loan.id)).filter(
-        Loan.loan_officer_id == current_user.id,
-        Loan.stage == LoanStage.FUNDED,
-        Loan.funded_date == today
-    ).scalar() or 0
+    annual_actual = funded_counts.annual or 0
+    monthly_actual = funded_counts.monthly or 0
+    weekly_actual = funded_counts.weekly or 0
+    daily_actual = funded_counts.daily or 0
 
     # Use goals from Goal Tracker or defaults
     annual_goal = goals.get('annualGoal', 222)
@@ -6953,18 +6945,21 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
 
     pipeline_stats = []
 
-    # Count leads by stage
-    new_leads = db.query(func.count(Lead.id)).filter(
-        Lead.owner_id == current_user.id,
-        Lead.stage == LeadStage.NEW
-    ).scalar() or 0
+    # OPTIMIZED: Single query to get all lead counts
+    lead_counts = db.query(
+        func.count(case((Lead.stage == LeadStage.NEW, 1))).label('new_leads'),
+        func.count(case((
+            (Lead.stage == LeadStage.NEW) &
+            (Lead.created_at < datetime.now(timezone.utc) - timedelta(hours=24)), 1
+        ))).label('uncontacted'),
+        func.count(case((Lead.stage == LeadStage.PRE_APPROVED, 1))).label('preapproved')
+    ).filter(
+        Lead.owner_id == current_user.id
+    ).first()
 
-    # Leads that haven't been contacted in 24h
-    uncontacted_alerts = db.query(func.count(Lead.id)).filter(
-        Lead.owner_id == current_user.id,
-        Lead.stage == LeadStage.NEW,
-        Lead.created_at < datetime.now(timezone.utc) - timedelta(hours=24)
-    ).scalar() or 0
+    new_leads = lead_counts.new_leads or 0
+    uncontacted_alerts = lead_counts.uncontacted or 0
+    preapproved = lead_counts.preapproved or 0
 
     pipeline_stats.append({
         "id": "new",
@@ -6975,12 +6970,6 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
         "volume": None
     })
 
-    # Pre-approved leads
-    preapproved = db.query(func.count(Lead.id)).filter(
-        Lead.owner_id == current_user.id,
-        Lead.stage == LeadStage.PRE_APPROVED
-    ).scalar() or 0
-
     pipeline_stats.append({
         "id": "preapproved",
         "name": "Pre-Approved",
@@ -6990,14 +6979,24 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
         "volume": None
     })
 
-    # Loans in processing
-    processing = db.query(Loan).filter(
+    # OPTIMIZED: Fetch all active loans in one query and aggregate in memory
+    active_loans = db.query(Loan).filter(
         Loan.loan_officer_id == current_user.id,
-        Loan.stage == LoanStage.PROCESSING
+        Loan.stage.in_([LoanStage.PROCESSING, LoanStage.UW_RECEIVED, LoanStage.CTC])
     ).all()
+
+    # Process data in memory instead of separate queries
+    processing = [l for l in active_loans if l.stage == LoanStage.PROCESSING]
+    underwriting = [l for l in active_loans if l.stage == LoanStage.UW_RECEIVED]
+    ctc = [l for l in active_loans if l.stage == LoanStage.CTC]
 
     processing_volume = sum(loan.amount for loan in processing if loan.amount)
     processing_alerts = sum(1 for loan in processing if loan.days_in_stage and loan.days_in_stage > 14)
+
+    underwriting_volume = sum(loan.amount for loan in underwriting if loan.amount)
+    underwriting_alerts = sum(1 for loan in underwriting if loan.status == "suspended")
+
+    ctc_volume = sum(loan.amount for loan in ctc if loan.amount)
 
     pipeline_stats.append({
         "id": "processing",
@@ -7008,15 +7007,6 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
         "volume": int(processing_volume)
     })
 
-    # Loans in underwriting
-    underwriting = db.query(Loan).filter(
-        Loan.loan_officer_id == current_user.id,
-        Loan.stage == LoanStage.UW_RECEIVED
-    ).all()
-
-    underwriting_volume = sum(loan.amount for loan in underwriting if loan.amount)
-    underwriting_alerts = sum(1 for loan in underwriting if loan.status == "suspended")
-
     pipeline_stats.append({
         "id": "underwriting",
         "name": "In Underwriting",
@@ -7025,14 +7015,6 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
         "alert_text": "suspended" if underwriting_alerts > 0 else "",
         "volume": int(underwriting_volume)
     })
-
-    # Clear to close
-    ctc = db.query(Loan).filter(
-        Loan.loan_officer_id == current_user.id,
-        Loan.stage == LoanStage.CTC
-    ).all()
-
-    ctc_volume = sum(loan.amount for loan in ctc if loan.amount)
 
     pipeline_stats.append({
         "id": "ctc",
@@ -7043,22 +7025,23 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
         "volume": int(ctc_volume)
     })
 
-    # Funded this month
-    funded = db.query(Loan).filter(
+    # Funded this month - use aggregation
+    funded_data = db.query(
+        func.count(Loan.id).label('count'),
+        func.sum(Loan.amount).label('volume')
+    ).filter(
         Loan.loan_officer_id == current_user.id,
         Loan.stage == LoanStage.FUNDED,
         Loan.funded_date >= start_of_month
-    ).all()
-
-    funded_volume = sum(loan.amount for loan in funded if loan.amount)
+    ).first()
 
     pipeline_stats.append({
         "id": "funded",
         "name": "Funded This Month",
-        "count": len(funded),
+        "count": funded_data.count or 0,
         "alerts": 0,
         "alert_text": "",
-        "volume": int(funded_volume)
+        "volume": int(funded_data.volume or 0)
     })
 
     # ============================================================================
@@ -7083,24 +7066,29 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     # LEAD METRICS & ALERTS
     # ============================================================================
 
-    # New leads today
-    new_today = db.query(func.count(Lead.id)).filter(
-        Lead.owner_id == current_user.id,
-        Lead.created_at >= datetime.now(timezone.utc).replace(hour=0, minute=0, second=0)
-    ).scalar() or 0
-
-    # Hot leads (high AI score)
-    hot_leads = db.query(func.count(Lead.id)).filter(
-        Lead.owner_id == current_user.id,
-        Lead.ai_score >= 80,
-        Lead.stage.in_([LeadStage.NEW, LeadStage.CONTACTED])
-    ).scalar() or 0
-
-    # Calculate conversion rate (leads -> applications)
-    total_leads = db.query(func.count(Lead.id)).filter(
+    # OPTIMIZED: Single query for all lead metrics
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0)
+    lead_metrics_query = db.query(
+        func.count(Lead.id).label('total_leads'),
+        func.count(case((Lead.created_at >= today_start, 1))).label('new_today'),
+        func.count(case((
+            (Lead.ai_score >= 80) &
+            (Lead.stage.in_([LeadStage.NEW, LeadStage.CONTACTED])), 1
+        ))).label('hot_leads'),
+        func.count(case((
+            (Lead.ai_score >= 75) &
+            (Lead.stage == LeadStage.CONTACTED), 1
+        ))).label('high_intent')
+    ).filter(
         Lead.owner_id == current_user.id
-    ).scalar() or 1
+    ).first()
 
+    total_leads = lead_metrics_query.total_leads or 1
+    new_today = lead_metrics_query.new_today or 0
+    hot_leads = lead_metrics_query.hot_leads or 0
+    high_intent_leads = lead_metrics_query.high_intent or 0
+
+    # Get applications count (already have it from earlier, but need to query separately)
     applications = db.query(func.count(Loan.id)).filter(
         Loan.loan_officer_id == current_user.id
     ).scalar() or 0
@@ -7111,12 +7099,6 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     alerts = []
     if uncontacted_alerts > 0:
         alerts.append(f"{uncontacted_alerts} leads haven't been contacted in 24 hours.")
-
-    high_intent_leads = db.query(func.count(Lead.id)).filter(
-        Lead.owner_id == current_user.id,
-        Lead.ai_score >= 75,
-        Lead.stage == LeadStage.CONTACTED
-    ).scalar() or 0
 
     if high_intent_leads > 0:
         alerts.append(f"{high_intent_leads} leads showed high buying intent.")
@@ -7133,18 +7115,32 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     # REFERRAL PARTNER STATS
     # ============================================================================
 
+    # OPTIMIZED: Get partners and their lead counts in separate queries, then join in memory
     partners = db.query(ReferralPartner).filter(
         ReferralPartner.owner_id == current_user.id,
         ReferralPartner.status == "active"
     ).limit(5).all()
 
+    # Get all lead counts by source in one query
+    partner_names = [p.name for p in partners]
+    if partner_names:
+        lead_counts_by_source = db.query(
+            Lead.source,
+            func.count(Lead.id).label('count')
+        ).filter(
+            Lead.owner_id == current_user.id,
+            Lead.source.in_(partner_names)
+        ).group_by(Lead.source).all()
+
+        # Create a lookup dict
+        source_counts = {row.source: row.count for row in lead_counts_by_source}
+    else:
+        source_counts = {}
+
     referral_stats = {
         "top_partners": [{
             "name": p.name,
-            "received": db.query(func.count(Lead.id)).filter(
-                Lead.owner_id == current_user.id,
-                Lead.source == p.name
-            ).scalar() or 0,
+            "received": source_counts.get(p.name, 0),
             "sent": 0,  # TODO: Track sent referrals
             "balance": 0
         } for p in partners],
@@ -13288,6 +13284,195 @@ async def get_ai_insights(
     except Exception as e:
         logger.error(f"Error getting AI insights: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================================
+# PHASE 2: PERMISSION SYSTEM MIGRATION ENDPOINT
+# ============================================================================
+
+@app.post("/api/v1/migrations/run-phase2-permissions")
+async def run_phase2_permission_migration(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Run Phase 2 Permission System Migration
+    Creates permission tables and seeds default templates
+    """
+    try:
+        # Only allow admins to run migrations
+        if current_user.role not in ['admin', 'manager']:
+            raise HTTPException(status_code=403, detail="Only admins can run migrations")
+
+        results = []
+
+        # STEP 1: Add role field to users table
+        try:
+            db.execute(text("""
+                ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS permission_role VARCHAR(50) DEFAULT 'sales';
+            """))
+            db.commit()
+            results.append("✅ Added permission_role column to users table")
+        except Exception as e:
+            results.append(f"⚠️  permission_role column: {str(e)}")
+
+        # STEP 2: Create permission_templates table
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS permission_templates (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(255) NOT NULL UNIQUE,
+                description TEXT,
+                category VARCHAR(50) NOT NULL,
+                permissions JSONB NOT NULL DEFAULT '{}',
+                is_system_default BOOLEAN DEFAULT FALSE,
+                created_by INTEGER REFERENCES users(id),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+                CONSTRAINT template_category_check CHECK (category IN ('management', 'sales', 'operations', 'custom'))
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_permission_templates_category
+                ON permission_templates(category);
+            CREATE INDEX IF NOT EXISTS idx_permission_templates_system
+                ON permission_templates(is_system_default) WHERE is_system_default = TRUE;
+        """))
+        db.commit()
+        results.append("✅ Created permission_templates table")
+
+        # STEP 3: Create user_permissions table
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS user_permissions (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                permission_key VARCHAR(255) NOT NULL,
+                granted BOOLEAN DEFAULT TRUE,
+                granted_by INTEGER REFERENCES users(id),
+                granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP,
+                inherited_from VARCHAR(50) DEFAULT 'template',
+
+                CONSTRAINT unique_user_permission UNIQUE (user_id, permission_key)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_user_permissions_user
+                ON user_permissions(user_id);
+            CREATE INDEX IF NOT EXISTS idx_user_permissions_composite
+                ON user_permissions(user_id, permission_key, granted);
+            CREATE INDEX IF NOT EXISTS idx_user_permissions_expires
+                ON user_permissions(expires_at) WHERE expires_at IS NOT NULL;
+        """))
+        db.commit()
+        results.append("✅ Created user_permissions table")
+
+        # STEP 4: Check if templates already exist
+        result = db.execute(text("""
+            SELECT COUNT(*) as count FROM permission_templates
+            WHERE name IN ('Management', 'Sales', 'Operations')
+        """))
+        existing_count = result.fetchone()[0]
+
+        if existing_count == 0:
+            # Seed templates
+            # Management permissions
+            management_perms = {
+                "dashboard.view_all_widgets": True, "dashboard.customize": True, "dashboard.export": True,
+                "analytics.view_all": True, "analytics.export": True,
+                "leads.view_all": True, "leads.view_team": True, "leads.view_assigned": True,
+                "leads.create": True, "leads.edit_all": True, "leads.edit_own": True,
+                "leads.delete": True, "leads.assign": True, "leads.export": True,
+                "clients.view_all": True, "clients.view_team": True, "clients.view_assigned": True,
+                "clients.create": True, "clients.edit_all": True, "clients.edit_own": True,
+                "clients.delete": True, "clients.export": True,
+                "loans.view_all": True, "loans.view_team": True, "loans.view_assigned": True,
+                "loans.create": True, "loans.edit_all": True, "loans.edit_own": True,
+                "loans.delete": True, "loans.process": True, "loans.export": True,
+                "team.view_all": True, "team.view_team": True, "team.edit_members": True,
+                "team.manage_permissions": True, "team.impersonate": True, "team.view_performance": True,
+                "reports.view_all": True, "reports.view_sales": True, "reports.view_operations": True, "reports.export": True,
+                "settings.view": True, "settings.edit": True, "permissions.view_all": True, "permissions.manage": True,
+                "tasks.view_all": True, "tasks.view_team": True, "tasks.view_assigned": True,
+                "tasks.create": True, "tasks.edit_all": True, "tasks.delete": True,
+            }
+
+            # Sales permissions
+            sales_perms = {
+                "dashboard.view_all_widgets": False, "dashboard.customize": True, "dashboard.export": True,
+                "analytics.view_all": False, "analytics.export": True,
+                "leads.view_all": False, "leads.view_team": True, "leads.view_assigned": True,
+                "leads.create": True, "leads.edit_all": False, "leads.edit_own": True,
+                "leads.delete": False, "leads.assign": False, "leads.export": True,
+                "clients.view_all": False, "clients.view_team": True, "clients.view_assigned": True,
+                "clients.create": True, "clients.edit_all": False, "clients.edit_own": True,
+                "clients.delete": False, "clients.export": True,
+                "loans.view_all": False, "loans.view_team": True, "loans.view_assigned": True,
+                "loans.create": True, "loans.edit_all": False, "loans.edit_own": True,
+                "loans.delete": False, "loans.process": False, "loans.export": True,
+                "team.view_all": False, "team.view_team": True, "team.edit_members": False,
+                "team.manage_permissions": False, "team.impersonate": False, "team.view_performance": True,
+                "reports.view_all": False, "reports.view_sales": True, "reports.view_operations": False, "reports.export": True,
+                "settings.view": True, "settings.edit": False, "permissions.view_all": False, "permissions.manage": False,
+                "tasks.view_all": False, "tasks.view_team": True, "tasks.view_assigned": True,
+                "tasks.create": True, "tasks.edit_all": False, "tasks.delete": False,
+            }
+
+            # Operations permissions
+            operations_perms = {
+                "dashboard.view_all_widgets": False, "dashboard.customize": True, "dashboard.export": True,
+                "analytics.view_all": False, "analytics.export": True,
+                "leads.view_all": True, "leads.view_team": True, "leads.view_assigned": True,
+                "leads.create": False, "leads.edit_all": True, "leads.edit_own": True,
+                "leads.delete": False, "leads.assign": True, "leads.export": True,
+                "clients.view_all": True, "clients.view_team": True, "clients.view_assigned": True,
+                "clients.create": False, "clients.edit_all": True, "clients.edit_own": True,
+                "clients.delete": False, "clients.export": True,
+                "loans.view_all": True, "loans.view_team": True, "loans.view_assigned": True,
+                "loans.create": True, "loans.edit_all": True, "loans.edit_own": True,
+                "loans.delete": False, "loans.process": True, "loans.export": True,
+                "team.view_all": False, "team.view_team": True, "team.edit_members": False,
+                "team.manage_permissions": False, "team.impersonate": False, "team.view_performance": True,
+                "reports.view_all": False, "reports.view_sales": False, "reports.view_operations": True, "reports.export": True,
+                "settings.view": True, "settings.edit": False, "permissions.view_all": False, "permissions.manage": False,
+                "tasks.view_all": True, "tasks.view_team": True, "tasks.view_assigned": True,
+                "tasks.create": True, "tasks.edit_all": True, "tasks.delete": False,
+            }
+
+            # Insert templates
+            db.execute(text("""
+                INSERT INTO permission_templates
+                (name, description, permissions, is_system_default, category, created_by, created_at)
+                VALUES
+                (:name1, :desc1, CAST(:perms1 AS jsonb), TRUE, 'management', :user_id, CURRENT_TIMESTAMP),
+                (:name2, :desc2, CAST(:perms2 AS jsonb), TRUE, 'sales', :user_id, CURRENT_TIMESTAMP),
+                (:name3, :desc3, CAST(:perms3 AS jsonb), TRUE, 'operations', :user_id, CURRENT_TIMESTAMP)
+            """), {
+                'name1': 'Management',
+                'desc1': 'Full access for management and leadership roles',
+                'perms1': json.dumps(management_perms),
+                'name2': 'Sales',
+                'desc2': 'Sales-focused template for sales reps and loan officers',
+                'perms2': json.dumps(sales_perms),
+                'name3': 'Operations',
+                'desc3': 'Operations template for processors and underwriters',
+                'perms3': json.dumps(operations_perms),
+                'user_id': current_user.id
+            })
+            db.commit()
+            results.append("✅ Seeded 3 default permission templates")
+        else:
+            results.append(f"⚠️  Found {existing_count} existing templates, skipping seed")
+
+        return {
+            "success": True,
+            "message": "Phase 2 Permission System Migration Completed",
+            "results": results
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Migration error: {e}")
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
