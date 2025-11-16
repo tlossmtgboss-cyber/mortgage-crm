@@ -614,4 +614,44 @@ export const impersonationAPI = {
   },
 };
 
+// Audit & Access API (Tab 6)
+export const accessAuditAPI = {
+  getAuditLog: async (userId, startDate = null, endDate = null, changeType = null, search = null, limit = 50, offset = 0) => {
+    const params = { limit, offset };
+    if (startDate) params.start_date = startDate;
+    if (endDate) params.end_date = endDate;
+    if (changeType) params.change_type = changeType;
+    if (search) params.search = search;
+    const response = await api.get(`/api/v1/users/${userId}/audit-log`, { params });
+    return response.data;
+  },
+  getImpersonationHistory: async (userId) => {
+    const response = await api.get(`/api/v1/users/${userId}/impersonation-history`);
+    return response.data;
+  },
+  getActiveSessions: async (userId) => {
+    const response = await api.get(`/api/v1/users/${userId}/active-sessions`);
+    return response.data;
+  },
+  revokeSession: async (userId, sessionId, reason = null) => {
+    const response = await api.delete(`/api/v1/users/${userId}/sessions/${sessionId}`, {
+      data: { reason }
+    });
+    return response.data;
+  },
+  revokeAllSessions: async (userId, reason) => {
+    const response = await api.delete(`/api/v1/users/${userId}/sessions`, {
+      data: { reason }
+    });
+    return response.data;
+  },
+  emergencyRevoke: async (userId, data) => {
+    const response = await api.post(`/api/v1/users/${userId}/emergency-revoke`, data);
+    return response.data;
+  },
+};
+
+// Legacy alias for backward compatibility
+export const auditAPI = accessAuditAPI;
+
 export default api;
