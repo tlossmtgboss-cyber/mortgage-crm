@@ -50,8 +50,33 @@
   margin-left: 4px;
 }
 
+.nav-badge.urgent {
+  color: #ffffff;
+  background: #ef4444;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-weight: var(--weight-bold);
+  font-size: var(--font-sm);
+  margin-left: 6px;
+  animation: urgentPulse 2s ease-in-out infinite;
+}
+
 .nav-link.active .nav-badge {
   color: #fee2e2;
+}
+
+.nav-link.active .nav-badge.urgent {
+  color: #ffffff;
+  background: #dc2626;
+}
+
+@keyframes urgentPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0);
+  }
 }
 
 .nav-actions {

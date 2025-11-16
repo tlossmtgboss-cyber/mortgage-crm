@@ -1,0 +1,271 @@
+.responsibility-card {
+  background: white;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+  border-left: 4px solid #e0e0e0;
+}
+
+.responsibility-card:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+/* Priority color coding on left border */
+.responsibility-card:has(.priority-critical) {
+  border-left-color: #e74c3c;
+}
+
+.responsibility-card:has(.priority-high) {
+  border-left-color: #f39c12;
+}
+
+.responsibility-card:has(.priority-medium) {
+  border-left-color: #f1c40f;
+}
+
+.responsibility-card:has(.priority-low) {
+  border-left-color: #95a5a6;
+}
+
+/* Card Header */
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.drag-handle {
+  cursor: grab;
+  padding: 4px;
+  color: #95a5a6;
+  transition: color 0.2s;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.drag-handle:hover {
+  color: #7f8c8d;
+}
+
+.drag-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.card-title {
+  flex: 1;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #2c3e50;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.title-icon {
+  font-size: 18px;
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-card-edit,
+.btn-card-archive {
+  background: none;
+  border: none;
+  padding: 6px;
+  cursor: pointer;
+  font-size: 16px;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.btn-card-edit:hover {
+  background-color: #e3f2fd;
+}
+
+.btn-card-archive:hover {
+  background-color: #ffebee;
+}
+
+/* Card Body */
+.card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.card-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.info-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #7f8c8d;
+}
+
+.value {
+  font-size: 14px;
+  color: #2c3e50;
+  font-weight: 500;
+}
+
+/* Ownership Badge */
+.ownership-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.ownership-primary {
+  background-color: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #4caf50;
+}
+
+.ownership-secondary {
+  background-color: #e3f2fd;
+  color: #1565c0;
+  border: 1px solid #2196f3;
+}
+
+.ownership-shared {
+  background-color: #fff3e0;
+  color: #e65100;
+  border: 1px solid #ff9800;
+}
+
+.ownership-icon {
+  font-size: 14px;
+}
+
+/* Priority Badge */
+.priority-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.priority-critical {
+  background-color: #ffebee;
+  color: #c62828;
+  border: 1px solid #e74c3c;
+}
+
+.priority-high {
+  background-color: #fff3e0;
+  color: #e65100;
+  border: 1px solid #f39c12;
+}
+
+.priority-medium {
+  background-color: #fffde7;
+  color: #f57f17;
+  border: 1px solid #f1c40f;
+}
+
+.priority-low {
+  background-color: #f5f5f5;
+  color: #616161;
+  border: 1px solid #95a5a6;
+}
+
+/* Skills Tags */
+.skills-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.skill-tag {
+  background-color: #e3f2fd;
+  color: #1976d2;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid #90caf9;
+}
+
+.skill-tag.more-skills {
+  background-color: #f5f5f5;
+  color: #616161;
+  border: 1px solid #e0e0e0;
+  font-style: italic;
+}
+
+/* Description */
+.description {
+  margin: 0;
+  font-size: 14px;
+  color: #5a6c7d;
+  line-height: 1.6;
+}
+
+/* Date Range */
+.date-range {
+  font-size: 13px;
+  color: #2c3e50;
+  font-style: italic;
+}
+
+/* Dragging State */
+.responsibility-card[data-is-dragging="true"] {
+  opacity: 0.5;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .card-header {
+    flex-wrap: wrap;
+  }
+
+  .card-title {
+    flex-basis: 100%;
+    order: 2;
+  }
+
+  .drag-handle {
+    order: 1;
+  }
+
+  .card-actions {
+    order: 3;
+    margin-left: auto;
+  }
+
+  .card-row {
+    flex-direction: column;
+    gap: 8px;
+  }
+}

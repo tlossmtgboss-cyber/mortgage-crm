@@ -1,0 +1,277 @@
+/* Archived Modal Specific Styles */
+.archived-modal {
+  max-width: 800px;
+}
+
+.archived-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.empty-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+  opacity: 0.3;
+}
+
+.empty-state h4 {
+  margin: 0 0 8px 0;
+  color: #2c3e50;
+  font-size: 18px;
+}
+
+.empty-state p {
+  margin: 0;
+  color: #7f8c8d;
+  font-size: 14px;
+}
+
+/* Archived Card */
+.archived-card {
+  background: #f8f9fa;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 16px;
+  opacity: 0.85;
+  transition: opacity 0.2s;
+}
+
+.archived-card:hover {
+  opacity: 1;
+}
+
+.archived-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.archived-card .card-title {
+  flex: 1;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #5a6c7d;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.archived-card .title-icon {
+  font-size: 18px;
+  opacity: 0.5;
+}
+
+/* Restore Button */
+.btn-restore {
+  padding: 8px 16px;
+  background-color: #27ae60;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-restore:hover:not(:disabled) {
+  background-color: #229954;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.btn-restore:disabled {
+  background-color: #95a5a6;
+  cursor: not-allowed;
+}
+
+/* Archived Card Body */
+.archived-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.info-item .label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #7f8c8d;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.info-item .value {
+  font-size: 14px;
+  color: #2c3e50;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ownership-icon {
+  font-size: 16px;
+}
+
+/* Priority Badge */
+.priority-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.7;
+}
+
+.priority-critical {
+  background-color: #ffebee;
+  color: #c62828;
+}
+
+.priority-high {
+  background-color: #fff3e0;
+  color: #e65100;
+}
+
+.priority-medium {
+  background-color: #fffde7;
+  color: #f57f17;
+}
+
+.priority-low {
+  background-color: #f5f5f5;
+  color: #616161;
+}
+
+/* Date Range */
+.date-range {
+  font-style: italic;
+  font-size: 13px;
+}
+
+/* Skills Section */
+.skills-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skills-section .label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #7f8c8d;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.skills-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.skill-tag {
+  background-color: #e3f2fd;
+  color: #1976d2;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0.7;
+}
+
+/* Description Section */
+.description-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.description-section .label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #7f8c8d;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.description {
+  margin: 0;
+  font-size: 14px;
+  color: #5a6c7d;
+  line-height: 1.6;
+  font-style: italic;
+}
+
+/* Modal Footer */
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btn-close-modal {
+  padding: 10px 24px;
+  background-color: #f5f5f5;
+  color: #2c3e50;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-close-modal:hover {
+  background-color: #e0e0e0;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .archived-modal {
+    width: 95%;
+  }
+
+  .archived-card-header {
+    flex-wrap: wrap;
+  }
+
+  .btn-restore {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import JobDescriptionSection from './JobDescriptionSection';
+import CoreResponsibilitiesSection from './CoreResponsibilitiesSection';
+import GoalsOKRsSection from './GoalsOKRsSection';
+import SkillsAssessmentSection from './SkillsAssessmentSection';
 import './RolesResponsibilitiesTab.css';
 
 /**
@@ -12,7 +15,7 @@ import './RolesResponsibilitiesTab.css';
  * 4. Skills Assessment - Proficiency tracking with gap analysis
  */
 
-function RolesResponsibilitiesTab({ userId }) {
+function RolesResponsibilitiesTab({ userId, isManager = true }) {
   const [activeSection, setActiveSection] = useState('job-description');
 
   return (
@@ -59,54 +62,15 @@ function RolesResponsibilitiesTab({ userId }) {
         )}
 
         {activeSection === 'responsibilities' && (
-          <div className="placeholder-section">
-            <h3>Core Responsibilities</h3>
-            <p>CRUD interface for managing responsibilities - Coming soon...</p>
-            <div className="placeholder-features">
-              <ul>
-                <li>Add/edit/archive responsibilities</li>
-                <li>Drag-and-drop reordering</li>
-                <li>Time allocation tracking (with warning if &gt;100%)</li>
-                <li>Priority levels (Critical/High/Medium/Low)</li>
-                <li>Required skills mapping</li>
-                <li>Effective date ranges</li>
-              </ul>
-            </div>
-          </div>
+          <CoreResponsibilitiesSection userId={userId} />
         )}
 
         {activeSection === 'goals' && (
-          <div className="placeholder-section">
-            <h3>Goals & OKRs</h3>
-            <p>Objective and Key Results tracking - Coming soon...</p>
-            <div className="placeholder-features">
-              <ul>
-                <li>Create objectives with measurable key results</li>
-                <li>Progress tracking with visual indicators</li>
-                <li>Employee self-assessment</li>
-                <li>Manager assessment and feedback</li>
-                <li>Quarterly goal filtering</li>
-                <li>Link goals to responsibilities</li>
-              </ul>
-            </div>
-          </div>
+          <GoalsOKRsSection userId={userId} isManager={isManager} />
         )}
 
         {activeSection === 'skills' && (
-          <div className="placeholder-section">
-            <h3>Skills Assessment</h3>
-            <p>Proficiency tracking and gap analysis - Coming soon...</p>
-            <div className="placeholder-features">
-              <ul>
-                <li>Skills matrix with required vs. current proficiency</li>
-                <li>Gap analysis (5-star rating system)</li>
-                <li>Training recommendations</li>
-                <li>Assessment history and trends</li>
-                <li>Next assessment date tracking</li>
-                <li>Skills library management</li>
-              </ul>
-            </div>
-          </div>
+          <SkillsAssessmentSection userId={userId} isManager={isManager} />
         )}
       </div>
     </div>

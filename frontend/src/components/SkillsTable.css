@@ -1,0 +1,191 @@
+/* Skills Table Styles */
+
+.skills-table-container {
+  overflow-x: auto;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.skills-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.skills-table thead {
+  background: #f9fafb;
+}
+
+.skills-table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.skills-table tbody tr {
+  border-bottom: 1px solid #f3f4f6;
+  transition: background-color 0.2s;
+}
+
+.skills-table tbody tr:hover {
+  background: #f9fafb;
+}
+
+.skills-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.skills-table td {
+  padding: 14px 16px;
+  font-size: 14px;
+  color: #374151;
+}
+
+/* Row colors based on gap */
+.skills-table tbody tr.row-ahead {
+  background: #f0fdf4;
+}
+
+.skills-table tbody tr.row-meeting {
+  background: #f0f9ff;
+}
+
+.skills-table tbody tr.row-minor-gap {
+  background: #fffbeb;
+}
+
+.skills-table tbody tr.row-major-gap {
+  background: #fef2f2;
+}
+
+/* Skill Name Cell */
+.skill-name {
+  font-weight: 500;
+  color: #111827;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.has-notes {
+  font-size: 16px;
+  cursor: help;
+}
+
+/* Proficiency Cell */
+.proficiency-cell {
+  white-space: nowrap;
+}
+
+.stars {
+  font-size: 14px;
+  margin-right: 4px;
+}
+
+.level-text {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.not-assessed {
+  color: #9ca3af;
+  font-style: italic;
+  font-size: 13px;
+}
+
+/* Gap Cell */
+.gap-cell {
+  font-weight: 500;
+}
+
+.gap-badge {
+  padding: 3px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-block;
+}
+
+.gap-badge.ahead {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.gap-badge.meeting {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.gap-badge.gap {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+/* Date Cell */
+.date-cell {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+/* Actions Cell */
+.actions-cell {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-small {
+  padding: 5px 12px;
+  font-size: 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+  font-weight: 500;
+}
+
+.btn-assess {
+  background: #3b82f6;
+  color: white;
+}
+
+.btn-assess:hover {
+  background: #2563eb;
+}
+
+.btn-remove {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.btn-remove:hover {
+  background: #fecaca;
+}
+
+/* Responsive */
+@media (max-width: 968px) {
+  .skills-table {
+    font-size: 13px;
+  }
+
+  .skills-table th,
+  .skills-table td {
+    padding: 10px 12px;
+  }
+
+  .stars {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 768px) {
+  .skills-table-container {
+    font-size: 12px;
+  }
+
+  .actions-cell {
+    flex-direction: column;
+  }
+}

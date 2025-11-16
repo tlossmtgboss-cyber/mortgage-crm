@@ -1,0 +1,213 @@
+/* Key Result Progress Component Styles */
+
+.key-result-item {
+  margin-bottom: 12px;
+  padding: 12px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  transition: all 0.2s;
+}
+
+.key-result-item:hover {
+  border-color: #d1d5db;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.key-result-item:last-child {
+  margin-bottom: 0;
+}
+
+/* Header */
+.kr-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.kr-number {
+  font-weight: 600;
+  color: #9ca3af;
+  font-size: 13px;
+  min-width: 20px;
+}
+
+.kr-metric {
+  font-size: 14px;
+  font-weight: 500;
+  color: #111827;
+}
+
+/* Progress Row */
+.kr-progress-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Values */
+.kr-values {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.kr-current {
+  font-weight: 600;
+  color: #111827;
+}
+
+.kr-separator {
+  color: #9ca3af;
+}
+
+.kr-target {
+  color: #6b7280;
+}
+
+.kr-percent {
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.btn-edit-kr {
+  margin-left: auto;
+  padding: 3px 10px;
+  font-size: 12px;
+  background: #f3f4f6;
+  color: #374151;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-edit-kr:hover {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+/* Edit Controls */
+.kr-edit-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.kr-input {
+  width: 100px;
+  padding: 4px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.kr-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.btn-save,
+.btn-cancel {
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 600;
+}
+
+.btn-save {
+  background: #10b981;
+  color: white;
+}
+
+.btn-save:hover {
+  background: #059669;
+}
+
+.btn-cancel {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.btn-cancel:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+/* Progress Bar */
+.kr-progress-bar {
+  height: 8px;
+  background: #e5e7eb;
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+}
+
+.kr-progress-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+.kr-progress-bar.completed .kr-progress-fill {
+  background: #3b82f6;
+}
+
+.kr-progress-bar.on-track .kr-progress-fill {
+  background: #10b981;
+}
+
+.kr-progress-bar.progress .kr-progress-fill {
+  background: #f59e0b;
+}
+
+.kr-progress-bar.behind .kr-progress-fill {
+  background: #ef4444;
+}
+
+/* Status Badge */
+.kr-status-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 8px;
+  align-self: flex-start;
+}
+
+.kr-status-badge.completed {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.kr-status-badge.on-track {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.kr-status-badge.progress {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.kr-status-badge.behind {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .kr-values {
+    flex-wrap: wrap;
+  }
+
+  .btn-edit-kr {
+    margin-left: 0;
+  }
+}

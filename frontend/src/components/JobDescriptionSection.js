@@ -46,6 +46,7 @@ function JobDescriptionSection({ userId }) {
   // Load job description on mount
   useEffect(() => {
     loadJobDescription();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
   const loadJobDescription = async () => {

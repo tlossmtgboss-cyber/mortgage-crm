@@ -199,12 +199,6 @@ function TeamMemberProfile() {
             Personal Info
           </button>
           <button
-            className={`tab-btn ${activeTab === 'goals' ? 'active' : ''}`}
-            onClick={() => setActiveTab('goals')}
-          >
-            Goals
-          </button>
-          <button
             className={`tab-btn ${activeTab === 'permissions' ? 'active' : ''}`}
             onClick={() => setActiveTab('permissions')}
           >
@@ -276,7 +270,7 @@ function TeamMemberProfile() {
         {/* Roles & Responsibilities Tab */}
         {activeTab === 'roles' && (
           <div className="tab-panel">
-            <RolesResponsibilitiesTab userId={member.id} />
+            <RolesResponsibilitiesTab userId={member.id} isManager={true} />
           </div>
         )}
 
@@ -425,71 +419,6 @@ function TeamMemberProfile() {
                   value={formData.emergency_phone || ''}
                   onChange={(e) => handleFieldChange('emergency_phone', e.target.value)}
                   disabled={!editing}
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Goals Tab */}
-        {activeTab === 'goals' && (
-          <div className="tab-panel">
-            <h2>Personal & Professional Goals</h2>
-            <div className="goals-section">
-              <div className="info-field">
-                <label>Career Goals</label>
-                <textarea
-                  rows="4"
-                  value={formData.career_goals || ''}
-                  onChange={(e) => handleFieldChange('career_goals', e.target.value)}
-                  disabled={!editing}
-                  placeholder="Long-term career aspirations, desired positions, etc."
-                />
-              </div>
-              <div className="info-field">
-                <label>Q1 Goals</label>
-                <textarea
-                  rows="3"
-                  value={formData.q1_goals || ''}
-                  onChange={(e) => handleFieldChange('q1_goals', e.target.value)}
-                  disabled={!editing}
-                />
-              </div>
-              <div className="info-field">
-                <label>Q2 Goals</label>
-                <textarea
-                  rows="3"
-                  value={formData.q2_goals || ''}
-                  onChange={(e) => handleFieldChange('q2_goals', e.target.value)}
-                  disabled={!editing}
-                />
-              </div>
-              <div className="info-field">
-                <label>Q3 Goals</label>
-                <textarea
-                  rows="3"
-                  value={formData.q3_goals || ''}
-                  onChange={(e) => handleFieldChange('q3_goals', e.target.value)}
-                  disabled={!editing}
-                />
-              </div>
-              <div className="info-field">
-                <label>Q4 Goals</label>
-                <textarea
-                  rows="3"
-                  value={formData.q4_goals || ''}
-                  onChange={(e) => handleFieldChange('q4_goals', e.target.value)}
-                  disabled={!editing}
-                />
-              </div>
-              <div className="info-field">
-                <label>Development Areas</label>
-                <textarea
-                  rows="4"
-                  value={formData.development_areas || ''}
-                  onChange={(e) => handleFieldChange('development_areas', e.target.value)}
-                  disabled={!editing}
-                  placeholder="Skills to develop, training needs, etc."
                 />
               </div>
             </div>

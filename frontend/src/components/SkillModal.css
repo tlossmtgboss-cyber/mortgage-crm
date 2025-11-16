@@ -1,0 +1,269 @@
+/* Skill Modals Styles (Shared by AddSkillModal and AssessSkillModal) */
+
+.skill-modal {
+  max-width: 650px;
+}
+
+.assess-modal {
+  max-width: 700px;
+}
+
+/* Skill Context */
+.skill-context {
+  padding: 16px 24px;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.context-row {
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #374151;
+}
+
+.context-row:last-child {
+  margin-bottom: 0;
+}
+
+.context-row strong {
+  font-weight: 600;
+  color: #111827;
+  margin-right: 8px;
+}
+
+/* Form Styles */
+.skill-modal form {
+  padding: 24px;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+}
+
+.form-group select,
+.form-group input[type="text"],
+.form-group input[type="date"],
+.form-group textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.form-group select:focus,
+.form-group input:focus,
+.form-group textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.form-group textarea {
+  font-family: inherit;
+  resize: vertical;
+}
+
+.help-text {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+/* Proficiency Selector */
+.proficiency-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.proficiency-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #f9fafb;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.proficiency-option:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+.proficiency-option:has(input:checked) {
+  background: #eff6ff;
+  border-color: #3b82f6;
+}
+
+.proficiency-option input[type="radio"] {
+  cursor: pointer;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
+.star-display {
+  font-size: 16px;
+  min-width: 90px;
+}
+
+.level-label {
+  font-size: 14px;
+  color: #374151;
+  font-weight: 500;
+}
+
+.proficiency-option:has(input:checked) .level-label {
+  color: #1e40af;
+  font-weight: 600;
+}
+
+/* Training Input */
+.training-input-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.training-input-row input {
+  flex: 1;
+}
+
+.training-list {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0 0 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.training-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: #374151;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.training-list li:last-child {
+  border-bottom: none;
+}
+
+.btn-remove-training {
+  background: #fee2e2;
+  color: #dc2626;
+  border: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.btn-remove-training:hover {
+  background: #fecaca;
+}
+
+/* Modal Actions */
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 24px;
+  border-top: 1px solid #e5e7eb;
+  margin-top: 24px;
+}
+
+.btn-primary,
+.btn-secondary {
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.btn-primary {
+  background: #3b82f6;
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #2563eb;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.btn-primary:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: white;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.btn-secondary:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.btn-small {
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+/* Loading State */
+.loading-state {
+  padding: 40px;
+  text-align: center;
+  color: #6b7280;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .skill-modal {
+    max-height: 100vh;
+    border-radius: 0;
+  }
+
+  .proficiency-selector {
+    gap: 8px;
+  }
+
+  .proficiency-option {
+    padding: 10px;
+  }
+
+  .star-display {
+    font-size: 14px;
+    min-width: 80px;
+  }
+}
