@@ -570,6 +570,34 @@ export const aiReceptionistDashboardAPI = {
   },
 };
 
+// Permissions API
+export const permissionsAPI = {
+  getUserPermissions: async (userId) => {
+    const response = await api.get(`/api/v1/users/${userId}/permissions`);
+    return response.data;
+  },
+  getUserTemplate: async (userId) => {
+    const response = await api.get(`/api/v1/users/${userId}/permissions/template`);
+    return response.data;
+  },
+  getAvailablePermissions: async () => {
+    const response = await api.get('/api/v1/permissions/available');
+    return response.data;
+  },
+  applyTemplate: async (userId, templateName) => {
+    const response = await api.post(`/api/v1/users/${userId}/permissions/apply-template`, {
+      template_name: templateName
+    });
+    return response.data;
+  },
+  updatePermissions: async (userId, permissions) => {
+    const response = await api.put(`/api/v1/users/${userId}/permissions`, {
+      permissions
+    });
+    return response.data;
+  },
+};
+
 // Impersonation API
 export const impersonationAPI = {
   start: async (data) => {

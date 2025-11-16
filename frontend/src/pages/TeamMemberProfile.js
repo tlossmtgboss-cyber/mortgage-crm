@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { teamAPI } from '../services/api';
 import ImpersonationModal from '../components/ImpersonationModal';
+import PermissionsTab from '../components/PermissionsTab';
 import './TeamMemberProfile.css';
 
 function TeamMemberProfile() {
@@ -199,6 +200,12 @@ function TeamMemberProfile() {
             onClick={() => setActiveTab('goals')}
           >
             Goals
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'permissions' ? 'active' : ''}`}
+            onClick={() => setActiveTab('permissions')}
+          >
+            Permissions
           </button>
         </div>
 
@@ -565,6 +572,13 @@ function TeamMemberProfile() {
                 />
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Permissions Tab */}
+        {activeTab === 'permissions' && (
+          <div className="tab-panel">
+            <PermissionsTab userId={member.id} />
           </div>
         )}
       </div>
