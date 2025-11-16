@@ -12391,6 +12391,105 @@ async def run_phase1_migration_endpoint(request: dict):
             "error": str(e)
         }
 
+@app.post("/admin/run-employee-permission-migration")
+async def run_employee_permission_migration_endpoint(request: dict):
+    """
+    Run Employee Permission System migration remotely.
+    Creates comprehensive employee management, permissions, impersonation, and audit tables.
+    Usage: POST /admin/run-employee-permission-migration with body: {"secret": "migrate-ai-2024"}
+    """
+    import subprocess
+
+    # Simple security check
+    if request.get("secret") != "migrate-ai-2024":
+        raise HTTPException(status_code=403, detail="Invalid secret")
+
+    try:
+        # Run migration script
+        result = subprocess.run(
+            ["python3", "migrations/create_employee_permission_system.py"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            cwd="/app"
+        )
+
+        # If successful, seed default templates
+        if result.returncode == 0:
+            seed_result = subprocess.run(
+                ["python3", "migrations/seed_default_permission_templates.py"],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                cwd="/app"
+            )
+
+            return {
+                "success": result.returncode == 0 and seed_result.returncode == 0,
+                "migration_stdout": result.stdout,
+                "migration_stderr": result.stderr,
+                "seed_stdout": seed_result.stdout,
+                "seed_stderr": seed_result.stderr,
+                "returncode": seed_result.returncode
+            }
+
+        return {
+            "success": False,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "returncode": result.returncode
+        }
+    except subprocess.TimeoutExpired:
+        return {
+            "success": False,
+            "error": "Migration timed out after 120 seconds"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+@app.post("/admin/run-vapi-migration")
+async def run_vapi_migration_endpoint(request: dict):
+    """
+    Run VAPI AI tables migration remotely.
+    Creates tables for AI call management, transcripts, assistants, and phone numbers.
+    Usage: POST /admin/run-vapi-migration with body: {"secret": "migrate-ai-2024"}
+    """
+    import subprocess
+
+    # Simple security check
+    if request.get("secret") != "migrate-ai-2024":
+        raise HTTPException(status_code=403, detail="Invalid secret")
+
+    try:
+        # Run migration script
+        result = subprocess.run(
+            ["python3", "run_vapi_migration.py"],
+            capture_output=True,
+            text=True,
+            timeout=120,
+            cwd="/app"
+        )
+
+        return {
+            "success": result.returncode == 0,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "returncode": result.returncode
+        }
+    except subprocess.TimeoutExpired:
+        return {
+            "success": False,
+            "error": "Migration timed out after 120 seconds"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
 @app.get("/admin/verify-phase1-tables")
 async def verify_phase1_tables(db: Session = Depends(get_db)):
     """
