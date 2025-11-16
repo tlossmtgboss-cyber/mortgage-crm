@@ -13754,7 +13754,7 @@ async def get_ai_insights(
 # PHASE 2: PERMISSION SYSTEM MIGRATION ENDPOINTS
 # ============================================================================
 
-@app.get("/api/v1/migrations/check-phase2-permissions")
+@app.get("/api/v1/migrations/check-phase2-permissions", response_model=None)
 async def check_phase2_permission_migration(db: Session = Depends(get_db)):
     """
     Check if Phase 2 Permission System Migration has completed
@@ -13809,7 +13809,7 @@ async def check_phase2_permission_migration(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/v1/migrations/run-phase2-permissions")
+@app.post("/api/v1/migrations/run-phase2-permissions", response_model=None)
 async def run_phase2_permission_migration(
     migration_key: str = "",
     db: Session = Depends(get_db)

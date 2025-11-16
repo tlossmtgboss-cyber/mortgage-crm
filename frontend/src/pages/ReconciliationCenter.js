@@ -8,7 +8,9 @@ const API_BASE_URL = isProduction
   : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
 function ReconciliationCenter() {
+  const [activeTab, setActiveTab] = useState('pending'); // 'pending' or 'completed'
   const [pendingItems, setPendingItems] = useState([]);
+  const [completedItems, setCompletedItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState(null);
   const [editedFields, setEditedFields] = useState({});
@@ -22,6 +24,7 @@ function ReconciliationCenter() {
 
   useEffect(() => {
     fetchPendingItems();
+    fetchCompletedItems();
 
     // Auto-sync emails every 5 minutes
     const syncInterval = setInterval(() => {
@@ -54,6 +57,23 @@ function ReconciliationCenter() {
     }
   };
 
+  const fetchCompletedItems = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/reconciliation/completed?limit=50`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setCompletedItems(data.items || []);
+      }
+    } catch (error) {
+      console.error('Error fetching completed items:', error);
+    }
+  };
+
   const syncEmails = async (silent = false) => {
     try {
       if (!silent) {
@@ -74,8 +94,9 @@ function ReconciliationCenter() {
 
         if (!silent) {
           setSyncStatus(`✓ Synced ${data.processed_count} emails successfully`);
-          // Refresh pending items to show new data
+          // Refresh both pending and completed items to show new data
           fetchPendingItems();
+          fetchCompletedItems();
 
           // Clear status after 3 seconds
           setTimeout(() => setSyncStatus(''), 3000);
@@ -121,6 +142,8 @@ function ReconciliationCenter() {
         setPendingItems(prev => prev.filter(item => item.id !== itemId));
         setSelectedItem(null);
         setEditedFields({});
+        // Refresh completed items to show the newly approved item
+        fetchCompletedItems();
       } else {
         alert('Failed to approve item');
       }
@@ -151,6 +174,8 @@ function ReconciliationCenter() {
         setPendingItems(prev => prev.filter(item => item.id !== itemId));
         setSelectedItem(null);
         setEditedFields({});
+        // Refresh completed items to show the rejected item
+        fetchCompletedItems();
       } else {
         alert('Failed to reject item');
       }
@@ -351,6 +376,22 @@ function ReconciliationCenter() {
           <div className="header-content">
             <h1>Data Reconciliation Center</h1>
             <p>Review and approve AI-extracted loan data from emails</p>
+
+            {/* Tab Navigation */}
+            <div className="tab-navigation">
+              <button
+                className={`tab-button ${activeTab === 'pending' ? 'active' : ''}`}
+                onClick={() => setActiveTab('pending')}
+              >
+                Pending Review ({pendingItems.length})
+              </button>
+              <button
+                className={`tab-button ${activeTab === 'completed' ? 'active' : ''}`}
+                onClick={() => setActiveTab('completed')}
+              >
+                Completed ({completedItems.length})
+              </button>
+            </div>
           </div>
           <div className="header-actions">
             <button
@@ -397,8 +438,8 @@ function ReconciliationCenter() {
           </div>
         </div>
 
-        {/* Bulk Actions Bar */}
-        {pendingItems.length > 0 && (
+        {/* Bulk Actions Bar - only show for pending tab */}
+        {activeTab === 'pending' && pendingItems.length > 0 && (
           <div className="bulk-actions-bar">
             <div className="bulk-controls">
               <button
@@ -447,13 +488,14 @@ function ReconciliationCenter() {
           </div>
         )}
 
-        {pendingItems.length === 0 ? (
+        {/* Pending Tab Content */}
+        {activeTab === 'pending' && pendingItems.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon">✓</div>
             <h2>All Caught Up!</h2>
             <p>No pending reconciliation items. The AI will notify you when new data arrives.</p>
           </div>
-        ) : (
+        ) : activeTab === 'pending' && pendingItems.length > 0 ? (
           <div className="reconciliation-content">
             {/* Items List */}
             <div className="items-list">
@@ -616,7 +658,146 @@ function ReconciliationCenter() {
               </div>
             )}
           </div>
-        )}
+        ) : null}
+
+        {/* Completed Tab Content */}
+        {activeTab === 'completed' && completedItems.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-icon">📋</div>
+            <h2>No Completed Items</h2>
+            <p>Approved and rejected reconciliation items will appear here.</p>
+          </div>
+        ) : activeTab === 'completed' && completedItems.length > 0 ? (
+          <div className="reconciliation-content">
+            {/* Completed Items List */}
+            <div className="items-list">
+              {completedItems.map((item) => (
+                <div
+                  key={item.id}
+                  className={`reconciliation-item ${selectedItem?.id === item.id ? 'selected' : ''} ${item.status === 'rejected' ? 'rejected-item' : 'approved-item'}`}
+                  onClick={() => setSelectedItem(item)}
+                >
+                  <div className="item-content">
+                    <div className="item-header">
+                      <div className="item-category">
+                        {item.category?.toUpperCase() || 'UNKNOWN'}
+                      </div>
+                      <div className={`status-badge ${item.status === 'rejected' ? 'rejected' : 'approved'}`}>
+                        {item.status === 'rejected' ? '✕ REJECTED' : '✓ APPROVED'}
+                      </div>
+                    </div>
+                    <div className="item-subject">{item.email?.subject}</div>
+                    <div className="item-meta">
+                      <span className="meta-sender">From: {item.email?.sender}</span>
+                      <span className="meta-date">
+                        Reviewed: {item.reviewed_at ? new Date(item.reviewed_at).toLocaleDateString() : 'N/A'}
+                      </span>
+                      {item.reviewed_by && (
+                        <span className="meta-reviewer">By: {item.reviewed_by}</span>
+                      )}
+                    </div>
+                    {item.match_entity_type && (
+                      <div className="item-match">
+                        Applied to: {item.match_entity_type} #{item.match_entity_id}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Detail Panel for Completed Items - Read Only */}
+            {selectedItem && (
+              <div className="detail-panel">
+                <div className="panel-header">
+                  <h2>Completed Item Details</h2>
+                  <button
+                    className="close-panel"
+                    onClick={() => setSelectedItem(null)}
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="email-context">
+                  <h3>Email Context</h3>
+                  <div className="context-field">
+                    <strong>Subject:</strong> {selectedItem.email?.subject}
+                  </div>
+                  <div className="context-field">
+                    <strong>From:</strong> {selectedItem.email?.sender}
+                  </div>
+                  <div className="context-field">
+                    <strong>Received:</strong>{' '}
+                    {new Date(selectedItem.email?.received_at).toLocaleString()}
+                  </div>
+                  <div className="context-field">
+                    <strong>Status:</strong>{' '}
+                    <span className={`status-text ${selectedItem.status}`}>
+                      {selectedItem.status?.toUpperCase()}
+                    </span>
+                  </div>
+                  {selectedItem.reviewed_at && (
+                    <div className="context-field">
+                      <strong>Reviewed:</strong>{' '}
+                      {new Date(selectedItem.reviewed_at).toLocaleString()}
+                      {selectedItem.reviewed_by && ` by ${selectedItem.reviewed_by}`}
+                    </div>
+                  )}
+                </div>
+
+                <div className="extracted-fields">
+                  <h3>Extracted Fields (Read-Only)</h3>
+                  <div className="fields-grid">
+                    {Object.entries(selectedItem.fields || {}).map(([fieldName, fieldData]) => {
+                      const confidence = fieldData.confidence || 0;
+                      const value = fieldData.value;
+
+                      return (
+                        <div key={fieldName} className="field-row">
+                          <div className="field-label">
+                            <span>{formatFieldName(fieldName)}</span>
+                            <span
+                              className="field-confidence"
+                              style={{ color: getConfidenceColor(confidence) }}
+                            >
+                              {Math.round(confidence * 100)}%
+                            </span>
+                          </div>
+                          <input
+                            type="text"
+                            className="field-input"
+                            value={value || ''}
+                            readOnly
+                            disabled
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="ai-info">
+                  <div className="info-row">
+                    <strong>AI Confidence:</strong>
+                    <span style={{ color: getConfidenceColor(selectedItem.ai_confidence) }}>
+                      {Math.round(selectedItem.ai_confidence * 100)}%
+                    </span>
+                  </div>
+                  {selectedItem.match_entity_type && (
+                    <div className="info-row">
+                      <strong>Entity Match:</strong>
+                      <span>
+                        {selectedItem.match_entity_type} #{selectedItem.match_entity_id} (
+                        {Math.round(selectedItem.match_confidence * 100)}%)
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : null}
       </div>
     </div>
   );
