@@ -28,10 +28,11 @@ def run_migration():
     print("="*80 + "\n")
 
     with engine.begin() as conn:
-        # Check if tables already exist
+        # Check if tables already exist (PostgreSQL and SQLite compatible)
         result = conn.execute(text("""
-            SELECT name FROM sqlite_master
-            WHERE type='table' AND name IN ('skills', 'user_responsibilities', 'responsibility_skills')
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public'
+            AND table_name IN ('skills', 'user_responsibilities', 'responsibility_skills')
         """))
 
         existing_tables = [row[0] for row in result.fetchall()]
@@ -41,7 +42,7 @@ def run_migration():
             print("Creating skills table...")
             conn.execute(text("""
                 CREATE TABLE skills (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id SERIAL PRIMARY KEY,
                     name VARCHAR(255) NOT NULL UNIQUE,
                     category VARCHAR(100),
                     description TEXT,
@@ -63,7 +64,7 @@ def run_migration():
             print("Creating user_responsibilities table...")
             conn.execute(text("""
                 CREATE TABLE user_responsibilities (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id SERIAL PRIMARY KEY,
                     user_id INTEGER NOT NULL,
                     title VARCHAR(255) NOT NULL,
                     description TEXT,
@@ -72,7 +73,7 @@ def run_migration():
                     priority VARCHAR(50) NOT NULL,
                     effective_date DATE NOT NULL,
                     end_date DATE,
-                    archived BOOLEAN DEFAULT 0,
+                    archived BOOLEAN DEFAULT FALSE,
                     display_order INTEGER DEFAULT 0,
                     created_by_id INTEGER,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

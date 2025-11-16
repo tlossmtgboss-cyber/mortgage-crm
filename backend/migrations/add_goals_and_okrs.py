@@ -30,10 +30,10 @@ def run_migration():
     print("="*80 + "\n")
 
     with engine.begin() as conn:
-        # Check if tables already exist
+        # Check if tables already exist (PostgreSQL compatible)
         result = conn.execute(text("""
-            SELECT name FROM sqlite_master
-            WHERE type='table' AND name IN (
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name IN (
                 'user_goals',
                 'goal_key_results',
                 'goal_employee_assessments',
@@ -49,7 +49,7 @@ def run_migration():
             print("Creating user_goals table...")
             conn.execute(text("""
                 CREATE TABLE user_goals (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id SERIAL PRIMARY KEY,
                     user_id INTEGER NOT NULL,
                     objective TEXT NOT NULL,
                     start_date DATE NOT NULL,
@@ -78,7 +78,7 @@ def run_migration():
             print("Creating goal_key_results table...")
             conn.execute(text("""
                 CREATE TABLE goal_key_results (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id SERIAL PRIMARY KEY,
                     goal_id INTEGER NOT NULL,
                     metric VARCHAR(255) NOT NULL,
                     target REAL NOT NULL,
@@ -104,7 +104,7 @@ def run_migration():
             print("Creating goal_employee_assessments table...")
             conn.execute(text("""
                 CREATE TABLE goal_employee_assessments (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id SERIAL PRIMARY KEY,
                     goal_id INTEGER NOT NULL UNIQUE,
                     progress_percent INTEGER,
                     status VARCHAR(50) DEFAULT 'on_track',
@@ -132,7 +132,7 @@ def run_migration():
             print("Creating goal_manager_assessments table...")
             conn.execute(text("""
                 CREATE TABLE goal_manager_assessments (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id SERIAL PRIMARY KEY,
                     goal_id INTEGER NOT NULL UNIQUE,
                     notes TEXT,
                     updated_by_id INTEGER,

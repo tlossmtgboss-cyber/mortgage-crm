@@ -26,10 +26,10 @@ def run_migration():
     print("="*80 + "\n")
 
     with engine.begin() as conn:
-        # Check if table already exists
+        # Check if table already exists (PostgreSQL compatible)
         result = conn.execute(text("""
-            SELECT name FROM sqlite_master
-            WHERE type='table' AND name = 'user_skill_assessments'
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'user_skill_assessments'
         """))
 
         existing_table = result.fetchone()
@@ -39,13 +39,13 @@ def run_migration():
             print("Creating user_skill_assessments table...")
             conn.execute(text("""
                 CREATE TABLE user_skill_assessments (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id SERIAL PRIMARY KEY,
                     user_id INTEGER NOT NULL,
                     skill_id INTEGER NOT NULL,
                     required_proficiency INTEGER NOT NULL,
                     current_proficiency INTEGER DEFAULT 0,
                     assessment_notes TEXT,
-                    training_recommendations JSON,
+                    training_recommendations JSONB,
                     assessed_by_id INTEGER,
                     assessed_at TIMESTAMP,
                     next_assessment_date DATE,
