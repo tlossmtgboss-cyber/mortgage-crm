@@ -13407,8 +13407,63 @@ async def get_ai_insights(
         raise HTTPException(status_code=500, detail=str(e))
 
 # ============================================================================
-# PHASE 2: PERMISSION SYSTEM MIGRATION ENDPOINT
+# PHASE 2: PERMISSION SYSTEM MIGRATION ENDPOINTS
 # ============================================================================
+
+@app.get("/api/v1/migrations/check-phase2-permissions")
+async def check_phase2_permission_migration(db: Session = Depends(get_db)):
+    """
+    Check if Phase 2 Permission System Migration has completed
+    Returns status of tables and templates
+    """
+    try:
+        results = {
+            "permission_role_column_exists": False,
+            "permission_templates_table_exists": False,
+            "user_permissions_table_exists": False,
+            "template_count": 0,
+            "templates": []
+        }
+
+        # Check if permission_role column exists in users table
+        try:
+            db.execute(text("SELECT permission_role FROM users LIMIT 1"))
+            results["permission_role_column_exists"] = True
+        except:
+            pass
+
+        # Check if permission_templates table exists
+        try:
+            result = db.execute(text("SELECT COUNT(*) FROM permission_templates"))
+            results["permission_templates_table_exists"] = True
+            results["template_count"] = result.fetchone()[0]
+
+            # Get template names
+            templates = db.execute(text("SELECT id, name, category FROM permission_templates"))
+            results["templates"] = [{"id": t[0], "name": t[1], "category": t[2]} for t in templates]
+        except:
+            pass
+
+        # Check if user_permissions table exists
+        try:
+            db.execute(text("SELECT COUNT(*) FROM user_permissions LIMIT 1"))
+            results["user_permissions_table_exists"] = True
+        except:
+            pass
+
+        results["migration_complete"] = (
+            results["permission_role_column_exists"] and
+            results["permission_templates_table_exists"] and
+            results["user_permissions_table_exists"] and
+            results["template_count"] >= 3
+        )
+
+        return results
+
+    except Exception as e:
+        logger.error(f"Check migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/api/v1/migrations/run-phase2-permissions")
 async def run_phase2_permission_migration(
