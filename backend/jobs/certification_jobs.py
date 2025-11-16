@@ -17,7 +17,7 @@ def get_user_permissions_dict(user_id: int, db):
     """Get all permissions for a user as a dictionary"""
     query = text("""
         SELECT up.permission_key, up.granted, up.is_temporary, up.granted_until,
-               pt.description, pt.risk_level
+               pt.description
         FROM user_permissions up
         LEFT JOIN permission_templates pt ON pt.name = (
             SELECT name FROM permission_templates
@@ -35,8 +35,7 @@ def get_user_permissions_dict(user_id: int, db):
             "granted": row.granted,
             "is_temporary": row.is_temporary,
             "granted_until": row.granted_until.isoformat() if row.granted_until else None,
-            "description": row.description,
-            "risk_level": row.risk_level
+            "description": row.description
         }
 
     return permissions
