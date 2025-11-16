@@ -18567,6 +18567,56 @@ async def add_goals_and_okrs_migration(
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 
+@app.post("/api/v1/migrations/add-user-compliance-columns", response_model=None)
+async def add_user_compliance_columns_migration(
+    migration_key: str = "",
+    db: Session = Depends(get_db)
+):
+    """
+    Add compliance columns to users table (account_status, department, full_name)
+    """
+    if migration_key != "add-compliance-columns":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    try:
+        from migrations.add_user_compliance_columns import upgrade
+        upgrade()
+        return {
+            "success": True,
+            "message": "User compliance columns migration completed",
+            "columns_added": ["account_status", "department", "full_name"]
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Compliance columns migration error: {e}")
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
+@app.post("/api/v1/migrations/add-access-certifications-table", response_model=None)
+async def add_access_certifications_table_migration(
+    migration_key: str = "",
+    db: Session = Depends(get_db)
+):
+    """
+    Create access_certifications table for quarterly permission reviews
+    """
+    if migration_key != "add-certifications-table":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    try:
+        from migrations.add_access_certifications import upgrade
+        upgrade()
+        return {
+            "success": True,
+            "message": "Access certifications table migration completed",
+            "table_created": "access_certifications"
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Access certifications migration error: {e}")
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""

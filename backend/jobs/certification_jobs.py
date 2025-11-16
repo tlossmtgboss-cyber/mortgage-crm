@@ -56,10 +56,10 @@ def create_quarterly_certifications():
 
         # Get all active employees (excluding temp/inactive accounts)
         query = text("""
-            SELECT id, email, full_name, role, manager_id
+            SELECT id, email, full_name, role
             FROM users
             WHERE account_status = 'active'
-            AND role IN ('sales', 'operations', 'manager', 'management', 'loan_officer')
+            AND role IN ('sales', 'operations', 'manager', 'management', 'loan_officer', 'admin')
         """)
 
         active_employees = db.execute(query).fetchall()
@@ -141,7 +141,7 @@ def send_certification_reminders():
         due_in_30 = today + timedelta(days=30)
         certs_30d_query = text("""
             SELECT ac.id, ac.employee_id, ac.due_date, ac.certification_period,
-                   u.full_name, u.manager_id
+                   u.full_name
             FROM access_certifications ac
             JOIN users u ON ac.employee_id = u.id
             WHERE ac.status = 'pending'
@@ -166,7 +166,7 @@ def send_certification_reminders():
         due_in_7 = today + timedelta(days=7)
         certs_7d_query = text("""
             SELECT ac.id, ac.employee_id, ac.due_date, ac.certification_period,
-                   u.full_name, u.manager_id
+                   u.full_name
             FROM access_certifications ac
             JOIN users u ON ac.employee_id = u.id
             WHERE ac.status = 'pending'
@@ -189,7 +189,7 @@ def send_certification_reminders():
         # Overdue certifications
         overdue_query = text("""
             SELECT ac.id, ac.employee_id, ac.due_date, ac.certification_period,
-                   u.full_name, u.manager_id
+                   u.full_name
             FROM access_certifications ac
             JOIN users u ON ac.employee_id = u.id
             WHERE ac.status = 'pending'
@@ -228,11 +228,7 @@ def send_certification_reminders():
         db.close()
 
 def send_certification_reminder(cert, reminder_type, db):
-    """Create notification for manager about certification"""
-    if not cert.manager_id:
-        logger.warning(f"   ⚠️  Employee {cert.full_name} has no manager - skipping notification")
-        return
-
+    """Create notification for admins about certification (sends to all admins/management)"""
     messages = {
         "30_days": {
             "title": f"Access certification due in 30 days",
@@ -253,18 +249,30 @@ def send_certification_reminder(cert, reminder_type, db):
 
     msg = messages[reminder_type]
 
+    # Get all admin/management users to notify
+    admin_query = text("""
+        SELECT id FROM users
+        WHERE role IN ('admin', 'management')
+        AND account_status = 'active'
+    """)
+    admins = db.execute(admin_query).fetchall()
+
     insert_notification = text("""
         INSERT INTO notifications (user_id, type, title, message, link, created_at)
         VALUES (:user_id, :type, :title, :message, :link, CURRENT_TIMESTAMP)
     """)
 
-    db.execute(insert_notification, {
-        "user_id": cert.manager_id,
-        "type": msg["type"],
-        "title": msg["title"],
-        "message": msg["message"],
-        "link": f"/team-members/{cert.employee_id}?tab=permissions&cert={cert.id}"
-    })
+    # Send notification to each admin
+    for admin in admins:
+        db.execute(insert_notification, {
+            "user_id": admin.id,
+            "type": msg["type"],
+            "title": msg["title"],
+            "message": msg["message"],
+            "link": f"/team-members/{cert.employee_id}?tab=permissions&cert={cert.id}"
+        })
+
+    logger.info(f"   📬 Sent {len(admins)} notifications for {cert.full_name}")
 
 if __name__ == "__main__":
     import sys
