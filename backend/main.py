@@ -14146,6 +14146,65 @@ async def run_phase2_permission_migration(
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 
+@app.post("/api/v1/migrations/fix-impersonation-table", response_model=None)
+async def fix_impersonation_table(
+    migration_key: str = "",
+    db: Session = Depends(get_db)
+):
+    """
+    Fix impersonation_sessions table schema
+    Adds missing impersonated_user_id column if it doesn't exist
+    """
+    if migration_key != "fix-impersonation-schema":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    try:
+        results = []
+
+        # Check if column exists
+        check_column = db.execute(text("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = 'impersonation_sessions'
+            AND column_name = 'impersonated_user_id'
+        """))
+
+        if check_column.fetchone():
+            return {
+                "success": True,
+                "message": "impersonated_user_id column already exists",
+                "results": ["✅ Schema already up to date"]
+            }
+
+        # Add the column
+        db.execute(text("""
+            ALTER TABLE impersonation_sessions
+            ADD COLUMN impersonated_user_id INTEGER REFERENCES users(id)
+        """))
+        results.append("✅ Added impersonated_user_id column")
+
+        # Update any existing rows (set to NULL for now, they'll need to be recreated)
+        db.execute(text("""
+            UPDATE impersonation_sessions
+            SET impersonated_user_id = NULL
+            WHERE impersonated_user_id IS NULL
+        """))
+
+        db.commit()
+        results.append("✅ Migration completed successfully")
+
+        return {
+            "success": True,
+            "message": "Impersonation table schema fixed",
+            "results": results
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Fix impersonation table error: {e}")
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
