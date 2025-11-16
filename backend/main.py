@@ -18783,6 +18783,31 @@ async def add_user_permissions_columns_migration(
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 
+@app.post("/api/v1/migrations/add-permission-template-risk-level", response_model=None)
+async def add_permission_template_risk_level_migration(
+    migration_key: str = "",
+    db: Session = Depends(get_db)
+):
+    """
+    Add risk_level column to permission_templates table
+    """
+    if migration_key != "add-risk-level":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    try:
+        from migrations.add_permission_template_risk_level import upgrade
+        upgrade()
+        return {
+            "success": True,
+            "message": "Permission templates risk_level column migration completed",
+            "column_added": "risk_level"
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Permission template risk level migration error: {e}")
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
