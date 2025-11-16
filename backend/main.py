@@ -12391,6 +12391,45 @@ async def run_phase1_migration_endpoint(request: dict):
             "error": str(e)
         }
 
+@app.get("/admin/verify-phase1-tables")
+async def verify_phase1_tables(db: Session = Depends(get_db)):
+    """
+    Verify Phase 1 tables exist in the database.
+    Returns list of Phase 1 tables that were successfully created.
+    """
+    try:
+        # Query for Phase 1 tables
+        result = db.execute(text("""
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+            AND table_name IN (
+                'lead_profiles',
+                'active_loan_profiles',
+                'mum_client_profiles',
+                'team_member_profiles',
+                'email_interactions',
+                'field_update_history',
+                'data_conflicts'
+            )
+            ORDER BY table_name
+        """))
+
+        tables = [row[0] for row in result]
+
+        return {
+            "success": True,
+            "tables_found": len(tables),
+            "total_expected": 7,
+            "tables": tables,
+            "phase1_complete": len(tables) == 7
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
 @app.post("/admin/initialize-ai-only")
 async def initialize_ai_only_endpoint(request: dict):
     """
