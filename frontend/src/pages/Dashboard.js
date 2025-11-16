@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePermissions } from '../contexts/PermissionContext';
+import PendingPermissionRequests from '../components/PendingPermissionRequests';
 import './Dashboard.css';
 
 function Dashboard() {
@@ -785,6 +786,13 @@ function Dashboard() {
           {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
         </div>
       </div>
+
+      {/* Permission Requests Widget - Managers Only */}
+      {(userRole === 'management' || userRole === 'manager') && (
+        <div style={{ marginBottom: '2rem' }}>
+          <PendingPermissionRequests />
+        </div>
+      )}
 
       {/* Draggable Containers */}
       <div className="draggable-containers-wrapper">

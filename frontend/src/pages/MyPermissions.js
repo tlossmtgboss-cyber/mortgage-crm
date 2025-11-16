@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getAuth } from '../utils/auth';
 import { permissionsApi } from '../services/api';
+import PermissionRequestModal from '../components/PermissionRequestModal';
 import './MyPermissions.css';
 
 const MyPermissions = () => {
@@ -10,12 +11,6 @@ const MyPermissions = () => {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showRequestModal, setShowRequestModal] = useState(false);
-  const [selectedPermission, setSelectedPermission] = useState(null);
-  const [justification, setJustification] = useState('');
-  const [urgency, setUrgency] = useState('medium');
-  const [isTemporary, setIsTemporary] = useState(false);
-  const [durationDays, setDurationDays] = useState(30);
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -45,47 +40,9 @@ const MyPermissions = () => {
     }
   };
 
-  const handleRequestSubmit = async (e) => {
-    e.preventDefault();
-
-    if (!selectedPermission) {
-      setError('Please select a permission');
-      return;
-    }
-
-    if (justification.length < 50) {
-      setError('Justification must be at least 50 characters');
-      return;
-    }
-
-    try {
-      setSubmitting(true);
-      setError(null);
-
-      await permissionsApi.createPermissionRequest({
-        permission_key: selectedPermission,
-        justification,
-        urgency,
-        is_temporary: isTemporary,
-        duration_days: isTemporary ? durationDays : null
-      });
-
-      // Reset form
-      setSelectedPermission(null);
-      setJustification('');
-      setUrgency('medium');
-      setIsTemporary(false);
-      setDurationDays(30);
-      setShowRequestModal(false);
-
-      // Reload data
-      await loadData();
-    } catch (err) {
-      console.error('Error submitting request:', err);
-      setError(err.response?.data?.detail || 'Failed to submit request. Please try again.');
-    } finally {
-      setSubmitting(false);
-    }
+  const handleRequestSubmitted = () => {
+    setShowRequestModal(false);
+    loadData(); // Refresh to show new request
   };
 
   const getPermissionsByCategory = () => {
@@ -290,88 +247,13 @@ const MyPermissions = () => {
 
       {/* Request Modal */}
       {showRequestModal && (
-        <div className="modal-overlay" onClick={() => setShowRequestModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>Request Permission</h2>
-              <button className="close-btn" onClick={() => setShowRequestModal(false)}>&times;</button>
-            </div>
-
-            <form onSubmit={handleRequestSubmit} className="request-form">
-              <div className="form-group">
-                <label>Permission *</label>
-                <select
-                  value={selectedPermission || ''}
-                  onChange={(e) => setSelectedPermission(e.target.value)}
-                  required
-                >
-                  <option value="">Select a permission...</option>
-                  {unavailablePermissions.map(([key, info]) => (
-                    <option key={key} value={key} disabled={hasPendingRequest(key)}>
-                      {info.name || key} {hasPendingRequest(key) ? '(Pending)' : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="form-group">
-                <label>Justification * (minimum 50 characters)</label>
-                <textarea
-                  value={justification}
-                  onChange={(e) => setJustification(e.target.value)}
-                  placeholder="Explain why you need this permission and how it will help you do your job..."
-                  rows={4}
-                  required
-                  minLength={50}
-                />
-                <small>{justification.length}/50 characters</small>
-              </div>
-
-              <div className="form-group">
-                <label>Urgency</label>
-                <select value={urgency} onChange={(e) => setUrgency(e.target.value)}>
-                  <option value="low">Low - Can wait a few days</option>
-                  <option value="medium">Medium - Needed this week</option>
-                  <option value="high">High - Needed ASAP</option>
-                </select>
-              </div>
-
-              <div className="form-group checkbox-group">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={isTemporary}
-                    onChange={(e) => setIsTemporary(e.target.checked)}
-                  />
-                  This is a temporary permission
-                </label>
-              </div>
-
-              {isTemporary && (
-                <div className="form-group">
-                  <label>Duration (days)</label>
-                  <input
-                    type="number"
-                    value={durationDays}
-                    onChange={(e) => setDurationDays(parseInt(e.target.value))}
-                    min={1}
-                    max={365}
-                    required
-                  />
-                </div>
-              )}
-
-              <div className="modal-actions">
-                <button type="button" onClick={() => setShowRequestModal(false)} className="btn-secondary">
-                  Cancel
-                </button>
-                <button type="submit" className="btn-primary" disabled={submitting}>
-                  {submitting ? 'Submitting...' : 'Submit Request'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <PermissionRequestModal
+          availablePermissions={unavailablePermissions}
+          allPermissions={allPermissions}
+          pendingRequests={requests}
+          onClose={() => setShowRequestModal(false)}
+          onSubmit={handleRequestSubmitted}
+        />
       )}
     </div>
   );
