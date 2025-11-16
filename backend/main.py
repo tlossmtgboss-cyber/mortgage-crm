@@ -18755,6 +18755,31 @@ async def fix_access_certifications_schema_migration(
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 
+@app.post("/api/v1/migrations/add-user-permissions-columns", response_model=None)
+async def add_user_permissions_columns_migration(
+    migration_key: str = "",
+    db: Session = Depends(get_db)
+):
+    """
+    Add missing columns to user_permissions table (is_temporary, granted_until, revoked_at)
+    """
+    if migration_key != "add-permissions-cols":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    try:
+        from migrations.add_user_permissions_columns import upgrade
+        upgrade()
+        return {
+            "success": True,
+            "message": "User permissions columns migration completed",
+            "columns_added": ["is_temporary", "granted_until", "revoked_at"]
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"User permissions columns migration error: {e}")
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
+
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
