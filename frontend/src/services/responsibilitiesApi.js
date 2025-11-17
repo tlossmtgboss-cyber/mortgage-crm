@@ -4,6 +4,8 @@
  * Provides all API calls for managing user responsibilities and skills
  */
 
+import { ensureArray } from '../utils/arrayHelpers';
+
 const API_BASE = '/api/v1';
 
 // Helper to get auth headers
@@ -24,22 +26,6 @@ const handleResponse = async (response) => {
   return await response.json();
 };
 
-// Helper to ensure array response
-const ensureArray = (data) => {
-  if (Array.isArray(data)) {
-    return data;
-  }
-  if (data && typeof data === 'object') {
-    // Check for common array wrapper properties
-    if (Array.isArray(data.responsibilities)) return data.responsibilities;
-    if (Array.isArray(data.skills)) return data.skills;
-    if (Array.isArray(data.data)) return data.data;
-    if (Array.isArray(data.items)) return data.items;
-  }
-  console.warn('Expected array but got:', data);
-  return [];
-};
-
 /**
  * Responsibilities API
  */
@@ -49,7 +35,7 @@ export const fetchResponsibilities = async (userId) => {
     headers: getAuthHeaders()
   });
   const data = await handleResponse(response);
-  return ensureArray(data);
+  return ensureArray(data, 'responsibilities');
 };
 
 export const fetchArchivedResponsibilities = async (userId) => {
@@ -57,7 +43,7 @@ export const fetchArchivedResponsibilities = async (userId) => {
     headers: getAuthHeaders()
   });
   const data = await handleResponse(response);
-  return ensureArray(data);
+  return ensureArray(data, 'responsibilities');
 };
 
 export const createResponsibility = async (userId, data) => {
@@ -112,7 +98,7 @@ export const fetchSkillsLibrary = async () => {
     headers: getAuthHeaders()
   });
   const data = await handleResponse(response);
-  return ensureArray(data);
+  return ensureArray(data, 'skills');
 };
 
 export const addSkillToLibrary = async (skillData) => {
