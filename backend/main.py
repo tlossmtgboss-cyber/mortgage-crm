@@ -14,6 +14,7 @@
 # ============================================================================
 
 from fastapi import FastAPI, Depends, HTTPException, status, Request
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.responses import JSONResponse, RedirectResponse, Response
@@ -2635,6 +2636,14 @@ app.add_middleware(SecurityLoggingMiddleware)
 
 logger.info("✅ Security middleware enabled: Rate limiting, IP blocking, security headers, request validation, and logging")
 
+# Mount static files directory for voicemail audio files
+import os as os_module
+from pathlib import Path as PathLib
+static_dir = PathLib("static")
+static_dir.mkdir(exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+logger.info(f"✅ Static files mounted at /static from {static_dir.absolute()}")
+
 # Auth - Define BEFORE importing routes that use these functions
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -4444,9 +4453,13 @@ async def drop_voicemail(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Drop a voicemail using Vapi AI receptionist"""
+    """Drop a ringless voicemail using Slybroadcast (or fallback to Vapi)"""
     try:
         import httpx
+        from datetime import datetime, timezone
+        import tempfile
+        import os as os_module
+        from pathlib import Path
 
         data = await request.json()
         to_number = data.get("to_number")
@@ -4454,6 +4467,7 @@ async def drop_voicemail(
         recipient_name = data.get("recipient_name", "")
         lead_id = data.get("lead_id")
         loan_id = data.get("loan_id")
+        provider = data.get("provider", "slybroadcast")  # Default to Slybroadcast
 
         if not to_number:
             raise HTTPException(status_code=400, detail="Phone number is required")
@@ -4461,26 +4475,12 @@ async def drop_voicemail(
         if not message:
             raise HTTPException(status_code=400, detail="Message is required")
 
-        # Format phone number to E.164 format
+        # Format phone number (10 digits for Slybroadcast, E.164 for Vapi)
         clean_number = ''.join(filter(str.isdigit, to_number))
-        if len(clean_number) == 10:
-            to_number = f"+1{clean_number}"
-        elif len(clean_number) == 11 and clean_number.startswith('1'):
-            to_number = f"+{clean_number}"
-        elif not to_number.startswith('+'):
-            to_number = f"+{clean_number}"
+        if len(clean_number) == 11 and clean_number.startswith('1'):
+            clean_number = clean_number[1:]  # Remove leading 1 for Slybroadcast
 
-        logger.info(f"Dropping voicemail to {to_number} for {recipient_name}")
-
-        # Get Vapi API key
-        vapi_api_key = os.getenv("VAPI_API_KEY")
-        if not vapi_api_key:
-            raise HTTPException(status_code=503, detail="Vapi API key not configured")
-
-        # Get Vapi assistant ID (you can set this in env or use a default)
-        vapi_assistant_id = os.getenv("VAPI_VOICEMAIL_ASSISTANT_ID", os.getenv("VAPI_ASSISTANT_ID"))
-        if not vapi_assistant_id:
-            raise HTTPException(status_code=503, detail="Vapi assistant ID not configured")
+        logger.info(f"Dropping voicemail to {clean_number} for {recipient_name} via {provider}")
 
         # Format the message naturally with context
         greeting = f"Hi {recipient_name}, " if recipient_name else "Hello, "
@@ -4496,7 +4496,7 @@ async def drop_voicemail(
             user_id=current_user.id,
             lead_id=lead_id,
             loan_id=loan_id,
-            phone_number=to_number,
+            phone_number=clean_number,
             recipient_name=recipient_name,
             message_text=message,
             delivery_status='pending'
@@ -4505,97 +4505,185 @@ async def drop_voicemail(
         db.commit()
         db.refresh(voicemail_drop)
 
-        # Get API URL for webhook
-        api_url = os.getenv("API_URL", "https://mortgage-crm-production-7a9a.up.railway.app")
+        session_id = None
 
-        # Call Vapi API to initiate outbound voicemail drop
-        # Get optional phone number ID if configured
-        vapi_phone_number_id = os.getenv("VAPI_PHONE_NUMBER_ID")
+        if provider == "slybroadcast":
+            # SLYBROADCAST RINGLESS VOICEMAIL
+            logger.info("Using Slybroadcast for ringless voicemail")
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            # Build the request payload according to Vapi API format
-            vapi_payload = {
-                "customer": {
-                    "number": to_number
-                },
-                "assistantId": vapi_assistant_id,
-                "assistantOverrides": {
-                    "firstMessage": full_message,
-                    "voicemailMessage": full_message
+            # Get Slybroadcast credentials
+            sly_email = os.getenv("SLYBROADCAST_EMAIL")
+            sly_password = os.getenv("SLYBROADCAST_PASSWORD")
+            sly_caller_id = os.getenv("SLYBROADCAST_CALLER_ID", "8438345251")  # Default caller ID
+
+            if not sly_email or not sly_password:
+                raise HTTPException(status_code=503, detail="Slybroadcast credentials not configured")
+
+            # Step 1: Generate audio file using OpenAI TTS
+            openai_api_key = os.getenv("OPENAI_API_KEY")
+            if not openai_api_key:
+                raise HTTPException(status_code=503, detail="OpenAI API key not configured for TTS")
+
+            logger.info("Generating TTS audio with OpenAI")
+
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                # Generate TTS audio
+                tts_response = await client.post(
+                    "https://api.openai.com/v1/audio/speech",
+                    headers={
+                        "Authorization": f"Bearer {openai_api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": "tts-1",
+                        "voice": "nova",  # Natural, friendly female voice
+                        "input": full_message,
+                        "speed": 0.95  # Slightly slower for clarity
+                    }
+                )
+
+                if tts_response.status_code != 200:
+                    logger.error(f"OpenAI TTS error: {tts_response.text}")
+                    raise HTTPException(status_code=500, detail="Failed to generate voicemail audio")
+
+                # Save audio file temporarily
+                audio_data = tts_response.content
+                temp_dir = Path(tempfile.gettempdir())
+                audio_filename = f"voicemail_{voicemail_drop.id}_{datetime.now(timezone.utc).timestamp()}.mp3"
+                audio_path = temp_dir / audio_filename
+
+                with open(audio_path, 'wb') as f:
+                    f.write(audio_data)
+
+                logger.info(f"Audio file saved to {audio_path}")
+
+                # Upload audio to a public URL (using Railway public storage)
+                # For now, we'll use a base64 encoded data URL (Slybroadcast supports c_url parameter)
+                # In production, upload to S3/CloudFlare R2 and use c_url
+
+                # For immediate testing: Save to static directory if it exists
+                static_dir = Path("/app/static") if Path("/app/static").exists() else Path("static")
+                static_dir.mkdir(exist_ok=True)
+                static_audio_path = static_dir / audio_filename
+
+                import shutil
+                shutil.copy(audio_path, static_audio_path)
+
+                # Get public URL for audio
+                api_url = os.getenv("API_URL", "https://mortgage-crm-production-7a9a.up.railway.app")
+                audio_url = f"{api_url}/static/{audio_filename}"
+
+                logger.info(f"Audio URL: {audio_url}")
+
+                # Step 2: Call Slybroadcast API
+                # Current date/time in ET for immediate delivery
+                from datetime import datetime as dt
+                import pytz
+                et_tz = pytz.timezone('US/Eastern')
+                now_et = dt.now(et_tz)
+                delivery_time = now_et.strftime("%m/%d/%Y %H:%M")
+
+                slybroadcast_data = {
+                    "c_uid": sly_email,
+                    "c_password": sly_password,
+                    "c_phone": clean_number,
+                    "c_callerID": sly_caller_id,
+                    "c_date": delivery_time,
+                    "c_url": audio_url,
+                    "c_audio": "mp3",
+                    "c_title": f"Voicemail to {recipient_name or clean_number}",
+                    "mobile_only": "1"  # Deliver to mobile phones only
                 }
-            }
 
-            # Add phoneNumberId if configured (for outbound caller ID)
-            if vapi_phone_number_id:
-                vapi_payload["phoneNumberId"] = vapi_phone_number_id
+                logger.info(f"Calling Slybroadcast API for {clean_number}")
+                logger.info(f"Slybroadcast payload: {dict(c_phone=clean_number, c_callerID=sly_caller_id, c_date=delivery_time, c_url=audio_url)}")
 
-            logger.info(f"Sending Vapi request to https://api.vapi.ai/call/phone")
-            logger.info(f"Vapi payload: {vapi_payload}")
+                sly_response = await client.post(
+                    "https://www.mobile-sphere.com/gateway/vmb.php",
+                    data=slybroadcast_data,
+                    timeout=30.0
+                )
 
-            vapi_response = await client.post(
-                "https://api.vapi.ai/call/phone",
-                headers={
-                    "Authorization": f"Bearer {vapi_api_key}",
-                    "Content-Type": "application/json"
-                },
-                json=vapi_payload
-            )
+                sly_text = sly_response.text.strip()
+                logger.info(f"Slybroadcast response: {sly_text}")
 
-            # Log the response for debugging
-            response_text = vapi_response.text
-            logger.info(f"Vapi response status={vapi_response.status_code}")
-            logger.info(f"Vapi response body: {response_text}")
-
-            vapi_data = vapi_response.json()
-
-            if vapi_response.status_code not in [200, 201]:
-                # Handle error response - could be dict or string
-                error_details = f"Status {vapi_response.status_code}: {response_text}"
-
-                if isinstance(vapi_data, dict):
-                    # Try to extract error message from various possible formats
-                    if "message" in vapi_data:
-                        error_msg = vapi_data["message"]
-                    elif "error" in vapi_data:
-                        error_data = vapi_data["error"]
-                        if isinstance(error_data, dict):
-                            error_msg = error_data.get("message", str(error_data))
-                        else:
-                            error_msg = str(error_data)
+                # Parse response: "OK session_id=[number] number of phone=[count]"
+                if sly_text.startswith("OK"):
+                    # Extract session ID
+                    import re
+                    match = re.search(r'session_id=(\d+)', sly_text)
+                    if match:
+                        session_id = match.group(1)
+                        voicemail_drop.vapi_call_id = session_id  # Reuse vapi_call_id column for session_id
+                        voicemail_drop.delivery_status = 'sent'
+                        db.commit()
+                        logger.info(f"Voicemail sent successfully. Session ID: {session_id}")
                     else:
-                        error_msg = str(vapi_data)
+                        raise HTTPException(status_code=500, detail=f"Unexpected Slybroadcast response: {sly_text}")
                 else:
-                    error_msg = str(vapi_data)
+                    # Error response
+                    voicemail_drop.delivery_status = 'failed'
+                    voicemail_drop.error_message = sly_text
+                    db.commit()
+                    logger.error(f"Slybroadcast error: {sly_text}")
+                    raise HTTPException(status_code=500, detail=f"Slybroadcast error: {sly_text}")
 
-                voicemail_drop.delivery_status = 'failed'
-                voicemail_drop.error_message = error_details
+        else:
+            # VAPI FALLBACK (will ring the phone)
+            logger.info("Using Vapi for voicemail (phone will ring)")
+            vapi_api_key = os.getenv("VAPI_API_KEY")
+            vapi_assistant_id = os.getenv("VAPI_VOICEMAIL_ASSISTANT_ID", os.getenv("VAPI_ASSISTANT_ID"))
+            vapi_phone_number_id = os.getenv("VAPI_PHONE_NUMBER_ID")
+
+            if not vapi_api_key or not vapi_assistant_id:
+                raise HTTPException(status_code=503, detail="Vapi credentials not configured")
+
+            # E.164 format for Vapi
+            vapi_number = f"+1{clean_number}"
+
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                vapi_payload = {
+                    "customer": {"number": vapi_number},
+                    "assistantId": vapi_assistant_id,
+                    "assistantOverrides": {
+                        "firstMessage": full_message,
+                        "voicemailMessage": full_message
+                    }
+                }
+                if vapi_phone_number_id:
+                    vapi_payload["phoneNumberId"] = vapi_phone_number_id
+
+                vapi_response = await client.post(
+                    "https://api.vapi.ai/call/phone",
+                    headers={"Authorization": f"Bearer {vapi_api_key}", "Content-Type": "application/json"},
+                    json=vapi_payload
+                )
+
+                if vapi_response.status_code not in [200, 201]:
+                    error_msg = vapi_response.text
+                    logger.error(f"Vapi error: {error_msg}")
+                    raise HTTPException(status_code=500, detail=f"Vapi error: {error_msg}")
+
+                vapi_data = vapi_response.json()
+                session_id = vapi_data.get("id")
+                voicemail_drop.vapi_call_id = session_id
                 db.commit()
-
-                logger.error(f"Vapi API error: {error_details}")
-                raise HTTPException(status_code=500, detail=f"Vapi API error: {error_msg}")
-
-            # Update voicemail drop with Vapi call ID
-            vapi_call_id = vapi_data.get("id") if isinstance(vapi_data, dict) else None
-            if not vapi_call_id:
-                raise HTTPException(status_code=500, detail="No call ID returned from Vapi")
-
-            voicemail_drop.vapi_call_id = vapi_call_id
-            db.commit()
 
         # Log the activity
         activity = Activity(
             user_id=current_user.id,
             type=ActivityType.CALL,
-            content=f"Voicemail dropped to {recipient_name or to_number}: {message[:100]}",
+            content=f"Ringless voicemail sent to {recipient_name or clean_number}: {message[:100]}",
             user_metadata={
                 "direction": "outbound",
-                "phone_number": to_number,
+                "phone_number": clean_number,
                 "recipient_name": recipient_name,
-                "vapi_call_id": vapi_call_id,
+                "session_id": session_id,
                 "voicemail_drop_id": voicemail_drop.id,
                 "message": message,
-                "status": "initiated",
-                "call_type": "voicemail_drop"
+                "status": "sent",
+                "call_type": "ringless_voicemail",
+                "provider": provider
             },
             lead_id=lead_id,
             loan_id=loan_id
@@ -4606,8 +4694,9 @@ async def drop_voicemail(
         return {
             "success": True,
             "voicemail_id": voicemail_drop.id,
-            "vapi_call_id": vapi_call_id,
-            "message": "Voicemail drop initiated successfully"
+            "session_id": session_id,
+            "provider": provider,
+            "message": f"Ringless voicemail sent successfully via {provider}"
         }
 
     except HTTPException:

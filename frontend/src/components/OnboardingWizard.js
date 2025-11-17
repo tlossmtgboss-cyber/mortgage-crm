@@ -79,15 +79,39 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
           setTeamMembers(members);
         }
 
-        if (roles.length > 0 || milestones.length > 0 || tasks.length > 0) {
+        // Check localStorage as fallback for process data
+        let processData = null;
+        try {
+          const stored = localStorage.getItem('onboarding_process_data');
+          if (stored) {
+            processData = JSON.parse(stored);
+          }
+        } catch (e) {
+          console.error('Failed to load from localStorage:', e);
+        }
+
+        // Use database data if available, otherwise use localStorage
+        const finalRoles = roles.length > 0 ? roles : (processData?.extractedRoles || []);
+        const finalMilestones = milestones.length > 0 ? milestones : (processData?.extractedMilestones || []);
+        const finalTasks = tasks.length > 0 ? tasks : (processData?.extractedTasks || []);
+        const finalProcessTree = processData?.processTree || null;
+
+        if (finalRoles.length > 0 || finalMilestones.length > 0 || finalTasks.length > 0) {
+          // Calculate processTree stats from loaded data
+          const processTreeStats = finalProcessTree || {
+            generated: true,
+            milestones: finalMilestones.length,
+            tasks: finalTasks.length,
+            roles: finalRoles.length
+          };
+
           setFormData(prevData => ({
             ...prevData,
-            extractedRoles: roles,
-            extractedMilestones: milestones,
-            extractedTasks: tasks,
-            // Don't load processTree from database - should start fresh at 0,0,0
-            // processTree will only be set after user uploads documents and runs AI processing
-            processTree: null
+            extractedRoles: finalRoles,
+            extractedMilestones: finalMilestones,
+            extractedTasks: finalTasks,
+            // Set processTree with stats from loaded data
+            processTree: processTreeStats
           }));
         }
       } catch (error) {
@@ -274,8 +298,8 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
       const totalTasks = parseResult.summary.total_tasks;
 
       // Store all extracted data
-      setFormData(prevData => ({
-        ...prevData,
+      const updatedFormData = {
+        ...formData,
         milestones: generatedMilestones,
         extractedRoles: parseResult.roles,
         extractedTasks: parseResult.tasks,
@@ -286,7 +310,21 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
           tasks: totalTasks,
           roles: parseResult.summary.total_roles
         }
-      }));
+      };
+
+      setFormData(updatedFormData);
+
+      // Persist to localStorage as backup
+      try {
+        localStorage.setItem('onboarding_process_data', JSON.stringify({
+          extractedRoles: parseResult.roles,
+          extractedTasks: parseResult.tasks,
+          extractedMilestones: parseResult.milestones,
+          processTree: updatedFormData.processTree
+        }));
+      } catch (error) {
+        console.error('Failed to persist to localStorage:', error);
+      }
 
       setIsProcessing(false);
 
