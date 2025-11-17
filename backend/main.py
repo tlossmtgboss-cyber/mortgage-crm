@@ -20078,6 +20078,80 @@ async def add_permission_template_risk_level_migration(
         logger.error(f"Permission template risk level migration error: {e}")
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
+@app.post("/api/v1/migrations/add-mum-client-fields", response_model=None)
+async def add_mum_client_fields_migration(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Add missing fields to mum_clients table and mum_client_id to activities table
+    This fixes the "Failed to load client details" error for MUM clients
+    """
+    try:
+        logger.info(f"Running migration: add MUM client fields (user: {current_user.id})")
+
+        columns_to_add = [
+            ("mum_clients", "email", "VARCHAR"),
+            ("mum_clients", "phone", "VARCHAR"),
+            ("mum_clients", "close_date", "TIMESTAMP"),
+            ("mum_clients", "notes", "TEXT"),
+            ("mum_clients", "next_touchpoint", "TIMESTAMP"),
+            ("mum_clients", "referrals_sent", "INTEGER DEFAULT 0"),
+            ("mum_clients", "opportunity_notes", "TEXT"),
+            ("mum_clients", "loan_officer", "VARCHAR"),
+            ("mum_clients", "loan_officer_email", "VARCHAR"),
+            ("mum_clients", "processor", "VARCHAR"),
+            ("mum_clients", "processor_email", "VARCHAR"),
+            ("mum_clients", "underwriter", "VARCHAR"),
+            ("mum_clients", "underwriter_email", "VARCHAR"),
+            ("mum_clients", "closer", "VARCHAR"),
+            ("mum_clients", "closer_email", "VARCHAR"),
+            ("mum_clients", "user_id", "INTEGER REFERENCES users(id)"),
+            ("activities", "mum_client_id", "INTEGER REFERENCES mum_clients(id)")
+        ]
+
+        added_columns = []
+        existing_columns = []
+
+        for table_name, column_name, column_type in columns_to_add:
+            # Check if column already exists
+            result = db.execute(text(f"""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = '{table_name}'
+                AND column_name = '{column_name}'
+            """))
+
+            if result.fetchone():
+                existing_columns.append(f"{table_name}.{column_name}")
+            else:
+                # Add the column
+                db.execute(text(f"""
+                    ALTER TABLE {table_name}
+                    ADD COLUMN {column_name} {column_type};
+                """))
+                added_columns.append(f"{table_name}.{column_name}")
+
+        db.commit()
+
+        logger.info(f"Migration completed. Added: {len(added_columns)}, Already existed: {len(existing_columns)}")
+
+        return {
+            "success": True,
+            "message": "MUM client fields migration completed",
+            "added_columns": added_columns,
+            "existing_columns": existing_columns
+        }
+
+    except Exception as e:
+        logger.error(f"MUM client fields migration failed: {e}")
+        db.rollback()
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e)
+        }
+
 
 # ============================================================================
 # MUM (MORTGAGES UNDER MANAGEMENT) API
