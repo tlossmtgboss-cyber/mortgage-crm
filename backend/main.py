@@ -19012,6 +19012,210 @@ async def add_permission_template_risk_level_migration(
         raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 
+# ============================================================================
+# MUM (MORTGAGES UNDER MANAGEMENT) API
+# ============================================================================
+
+@app.get("/api/v1/mum/clients")
+async def get_mum_clients(
+    status: str = "active",
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get all MUM clients with calculated fields"""
+    try:
+        from models_mum import MUMClient
+        from utils_mum import (
+            calculate_current_balance, calculate_property_value,
+            calculate_ltv, calculate_equity, calculate_days_since_funding,
+            calculate_servicing_revenue, determine_loan_term_from_type
+        )
+
+        # Query clients
+        query = db.query(MUMClient)
+        if status:
+            query = query.filter(MUMClient.status == status)
+
+        clients = query.all()
+
+        # Calculate real-time values for each client
+        client_list = []
+        for client in clients:
+            # Determine loan term
+            loan_term = determine_loan_term_from_type(client.loan_type)
+
+            # Calculate current balance
+            current_balance = calculate_current_balance(
+                float(client.original_loan_amount),
+                float(client.interest_rate),
+                client.first_payment_date,
+                loan_term
+            )
+
+            # Calculate current property value
+            current_value = calculate_property_value(
+                float(client.appraisal_value_at_closing),
+                client.first_payment_date
+            )
+
+            # Calculate LTV and equity
+            ltv = calculate_ltv(current_balance, current_value)
+            equity_amount, equity_pct = calculate_equity(current_value, current_balance)
+
+            # Calculate days since funding
+            days_since_funding = calculate_days_since_funding(client.closing_date)
+
+            # Calculate revenue
+            annual_revenue = calculate_servicing_revenue(current_balance)
+
+            client_data = {
+                "id": client.id,
+                "client_name": client.client_name,
+                "email": client.email,
+                "phone": client.phone,
+                "original_loan_amount": float(client.original_loan_amount),
+                "current_loan_amount": current_balance,
+                "interest_rate": float(client.interest_rate),
+                "servicing_loan_number": client.servicing_loan_number,
+                "origination_loan_number": client.origination_loan_number,
+                "appraisal_value_at_closing": float(client.appraisal_value_at_closing),
+                "current_property_value": current_value,
+                "current_servicer": client.current_servicer,
+                "has_escrow": client.has_escrow,
+                "current_principal_payment": float(client.current_principal_payment or 0),
+                "monthly_taxes": float(client.monthly_taxes or 0),
+                "monthly_insurance": float(client.monthly_insurance or 0),
+                "monthly_pmi": float(client.monthly_pmi or 0) if client.monthly_pmi else None,
+                "loan_type": client.loan_type,
+                "is_veteran": client.is_veteran,
+                "ltv": ltv,
+                "equity_amount": equity_amount,
+                "equity_percentage": equity_pct,
+                "closing_date": client.closing_date.isoformat(),
+                "first_payment_date": client.first_payment_date.isoformat(),
+                "days_since_funding": days_since_funding,
+                "refinance_opportunity": client.refinance_opportunity,
+                "heloc_opportunity": client.heloc_opportunity,
+                "rate_rebound_opportunity": client.rate_rebound_opportunity,
+                "high_equity_opportunity": client.high_equity_opportunity,
+                "referrals_sent": client.referrals_sent,
+                "annual_servicing_revenue": annual_revenue,
+                "status": client.status
+            }
+
+            client_list.append(client_data)
+
+        return {"clients": client_list, "count": len(client_list)}
+
+    except Exception as e:
+        logger.error(f"Get MUM clients error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/mum/metrics")
+async def get_mum_metrics(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get aggregated MUM portfolio metrics"""
+    try:
+        from models_mum import MUMClient, MUMTransaction
+        from utils_mum import (
+            calculate_current_balance, calculate_property_value,
+            calculate_equity, determine_loan_term_from_type,
+            calculate_servicing_revenue
+        )
+        from datetime import date, timedelta
+
+        # Get all active clients
+        clients = db.query(MUMClient).filter(MUMClient.status == 'active').all()
+
+        if not clients:
+            return {
+                "total_upb": 0,
+                "client_count": 0,
+                "net_growth_mom": 0,
+                "portfolio_yield": 0,
+                "avg_client_ltv": 0
+            }
+
+        # Calculate metrics
+        total_upb = 0
+        total_revenue = 0
+        total_equity = 0
+        ltv_sum = 0
+
+        refinance_opps = 0
+        heloc_opps = 0
+        rate_rebound_opps = 0
+
+        for client in clients:
+            loan_term = determine_loan_term_from_type(client.loan_type)
+            current_balance = calculate_current_balance(
+                float(client.original_loan_amount),
+                float(client.interest_rate),
+                client.first_payment_date,
+                loan_term
+            )
+            current_value = calculate_property_value(
+                float(client.appraisal_value_at_closing),
+                client.first_payment_date
+            )
+
+            total_upb += current_balance
+            total_revenue += calculate_servicing_revenue(current_balance)
+            equity_amt, _ = calculate_equity(current_value, current_balance)
+            total_equity += equity_amt
+            ltv_sum += (current_balance / current_value) if current_value > 0 else 0
+
+            if client.refinance_opportunity:
+                refinance_opps += 1
+            if client.heloc_opportunity:
+                heloc_opps += 1
+            if client.rate_rebound_opportunity:
+                rate_rebound_opps += 1
+
+        # Calculate month-over-month growth
+        thirty_days_ago = date.today() - timedelta(days=30)
+        recent_adds = db.query(MUMTransaction).filter(
+            MUMTransaction.transaction_type == 'added',
+            MUMTransaction.transaction_date >= thirty_days_ago
+        ).all()
+        recent_losses = db.query(MUMTransaction).filter(
+            MUMTransaction.transaction_type.in_(['lost', 'paid_off', 'refinanced']),
+            MUMTransaction.transaction_date >= thirty_days_ago
+        ).all()
+
+        added_upb = sum([float(t.loan_amount) for t in recent_adds])
+        lost_upb = sum([float(t.loan_amount) for t in recent_losses])
+        net_growth = added_upb - lost_upb
+
+        # Calculate metrics
+        client_count = len(clients)
+        portfolio_yield = (total_revenue / total_upb * 100) if total_upb > 0 else 0
+        avg_ltv = (ltv_sum / client_count) if client_count > 0 else 0
+        avg_client_value = total_revenue / client_count if client_count > 0 else 0
+
+        return {
+            "total_upb": round(total_upb, 2),
+            "client_count": client_count,
+            "net_growth_mom": round(net_growth, 2),
+            "portfolio_yield": round(portfolio_yield, 4),
+            "avg_client_ltv": round(avg_ltv, 4),
+            "avg_annual_revenue_per_client": round(avg_client_value, 2),
+            "total_annual_revenue": round(total_revenue, 2),
+            "refinance_opportunities": refinance_opps,
+            "heloc_opportunities": heloc_opps,
+            "rate_rebound_opportunities": rate_rebound_opps,
+            "loans_added_30d": len(recent_adds),
+            "loans_lost_30d": len(recent_losses)
+        }
+
+    except Exception as e:
+        logger.error(f"Get MUM metrics error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
