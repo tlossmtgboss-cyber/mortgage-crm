@@ -303,21 +303,23 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
         };
       });
 
-      // Calculate stats
-      const totalTasks = parseResult.summary.total_tasks;
+      // Calculate stats from actual extracted data (not summary which may be inaccurate)
+      const totalTasks = parseResult.tasks?.length || 0;
+      const totalMilestones = parseResult.milestones?.length || 0;
+      const totalRoles = parseResult.roles?.length || 0;
 
       // Store all extracted data
       const updatedFormData = {
         ...formData,
         milestones: generatedMilestones,
-        extractedRoles: parseResult.roles,
-        extractedTasks: parseResult.tasks,
-        extractedMilestones: parseResult.milestones,
+        extractedRoles: parseResult.roles || [],
+        extractedTasks: parseResult.tasks || [],
+        extractedMilestones: parseResult.milestones || [],
         processTree: {
           generated: true,
-          milestones: parseResult.summary.total_milestones,
+          milestones: totalMilestones,
           tasks: totalTasks,
-          roles: parseResult.summary.total_roles
+          roles: totalRoles
         }
       };
 
@@ -527,15 +529,58 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
     // Calculate stats
     const totalTasks = generatedMilestones.reduce((total, m) => total + m.tasks.length, 0);
 
+      // Extract unique roles from generated milestones (fallback)
+      const uniqueRoles = new Set();
+      generatedMilestones.forEach(milestone => {
+        milestone.tasks.forEach(task => {
+          uniqueRoles.add(task.owner);
+        });
+      });
+
+      // Create role objects for fallback
+      const fallbackRoles = Array.from(uniqueRoles).map((roleName, index) => ({
+        id: `role-${index + 1}`,
+        role_title: roleName,
+        role_name: roleName,
+        responsibilities: `Handles ${roleName} responsibilities`
+      }));
+
+      // Create task objects for fallback
+      const fallbackTasks = [];
+      generatedMilestones.forEach((milestone, mIndex) => {
+        milestone.tasks.forEach((task, tIndex) => {
+          const roleObj = fallbackRoles.find(r => r.role_name === task.owner);
+          fallbackTasks.push({
+            id: `task-${mIndex}-${tIndex}`,
+            name: task.name,
+            role_id: roleObj?.id,
+            milestone_id: `milestone-${mIndex}`,
+            sla: task.sla,
+            slaUnit: task.slaUnit,
+            aiAuto: task.aiAuto
+          });
+        });
+      });
+
+      // Create milestone objects for fallback
+      const fallbackMilestones = generatedMilestones.map((milestone, index) => ({
+        id: `milestone-${index}`,
+        name: milestone.name,
+        order: index + 1
+      }));
+
       // Update BOTH milestones AND processTree in a single atomic update (fallback)
       setFormData(prevData => ({
         ...prevData,
         milestones: generatedMilestones,
+        extractedRoles: fallbackRoles,
+        extractedTasks: fallbackTasks,
+        extractedMilestones: fallbackMilestones,
         processTree: {
           generated: true,
-          milestones: generatedMilestones.length,
-          tasks: totalTasks,
-          roles: 5
+          milestones: fallbackMilestones.length,
+          tasks: fallbackTasks.length,
+          roles: fallbackRoles.length
         }
       }));
 
