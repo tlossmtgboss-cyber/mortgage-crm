@@ -4279,7 +4279,7 @@ async def make_outbound_call(
 ):
     """Make an outbound AI call"""
     try:
-        from integrations.twilio_service import twilio_client
+        from twilio.rest import Client as TwilioClient
 
         data = await request.json()
         to_number = data.get("to_number")
@@ -4289,9 +4289,14 @@ async def make_outbound_call(
         if not to_number:
             raise HTTPException(status_code=400, detail="Phone number is required")
 
-        # Check if Twilio is configured
-        if not twilio_client:
+        # Initialize Twilio client
+        twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
+        twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
+
+        if not twilio_sid or not twilio_token:
             raise HTTPException(status_code=503, detail="Twilio is not configured")
+
+        twilio_client = TwilioClient(twilio_sid, twilio_token)
 
         # Get Twilio phone number
         from_number = os.getenv("TWILIO_PHONE_NUMBER")
@@ -4354,7 +4359,7 @@ async def drop_voicemail(
 ):
     """Drop a voicemail using AI-generated speech"""
     try:
-        from integrations.twilio_service import twilio_client
+        from twilio.rest import Client as TwilioClient
         from openai import OpenAI
         import tempfile
 
@@ -4383,9 +4388,14 @@ async def drop_voicemail(
 
         logger.info(f"Formatted phone number: {to_number}")
 
-        # Check if Twilio is configured
-        if not twilio_client:
+        # Initialize Twilio client
+        twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
+        twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
+
+        if not twilio_sid or not twilio_token:
             raise HTTPException(status_code=503, detail="Twilio is not configured")
+
+        twilio_client = TwilioClient(twilio_sid, twilio_token)
 
         # Get Twilio phone number
         from_number = os.getenv("TWILIO_PHONE_NUMBER")
