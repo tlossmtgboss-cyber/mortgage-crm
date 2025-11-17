@@ -21,6 +21,7 @@ import Onboarding from './pages/Onboarding';
 
 // Lazy load all other pages for instant navigation
 const Dashboard = lazy(() => import('./pages/Dashboard'));
+const OnboardingWizard = lazy(() => import('./components/onboarding/OnboardingWizard'));
 const Leads = lazy(() => import('./pages/Leads'));
 const LeadDetail = lazy(() => import('./pages/LeadDetail'));
 const Loans = lazy(() => import('./pages/Loans'));
@@ -219,12 +220,24 @@ function App() {
           <Route path="/verify-email-sent" element={<EmailVerificationSent />} />
           <Route path="/login" element={<Login />} />
 
-          {/* Onboarding Page */}
+          {/* Onboarding Page (old) */}
           <Route
             path="/onboarding"
             element={
               <PrivateRoute>
                 <Onboarding />
+              </PrivateRoute>
+            }
+          />
+
+          {/* New Onboarding Wizard with steps */}
+          <Route
+            path="/onboarding/:step"
+            element={
+              <PrivateRoute>
+                <LazyPage>
+                  <OnboardingWizard />
+                </LazyPage>
               </PrivateRoute>
             }
           />
