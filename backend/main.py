@@ -4517,17 +4517,11 @@ async def drop_voicemail(
                     "Content-Type": "application/json"
                 },
                 json={
+                    "phoneNumber": to_number,
                     "assistantId": vapi_assistant_id,
-                    "customer": {
-                        "number": to_number,
-                        "name": recipient_name
-                    },
                     "assistantOverrides": {
                         "firstMessage": full_message,
-                        "endCallMessage": "",  # End silently
-                        "voicemailMessage": full_message,
-                        "endCallOnVoicemailDetection": True,
-                        "recordingEnabled": False
+                        "voicemailMessage": full_message
                     },
                     "serverMessages": ["end-of-call-report"],
                     "serverUrl": f"{api_url}/api/v1/webhooks/vapi/voicemail-status?voicemail_id={voicemail_drop.id}"
