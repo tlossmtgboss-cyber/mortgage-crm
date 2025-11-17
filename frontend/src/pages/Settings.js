@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { teamAPI } from '../services/api';
 import MissionControl from './MissionControl';
 import AIReceptionist from '../components/AIReceptionist';
+import MyProfile from './MyProfile';
 import './Settings.css';
 
 function Settings() {
@@ -2507,10 +2508,7 @@ const API_BASE_URL = isProduction
           )}
 
           {activeSection === 'profile' && (
-            <div className="profile-section">
-              <h2>Profile Settings</h2>
-              <p>Coming soon...</p>
-            </div>
+            <MyProfile />
           )}
 
           {activeSection === 'notifications' && (

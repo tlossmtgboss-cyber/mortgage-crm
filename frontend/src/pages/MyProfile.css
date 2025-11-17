@@ -82,6 +82,38 @@
   opacity: 0.8;
 }
 
+/* Profile Tabs */
+.profile-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin: 2rem 0 1.5rem 0;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.profile-tabs .tab-btn {
+  padding: 1rem 1.5rem;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: -2px;
+}
+
+.profile-tabs .tab-btn:hover {
+  color: #2d5f3f;
+  background: rgba(45, 95, 63, 0.05);
+}
+
+.profile-tabs .tab-btn.active {
+  color: #2d5f3f;
+  border-bottom-color: #2d5f3f;
+  font-weight: 600;
+}
+
 /* Profile Content */
 .profile-content {
   margin-bottom: 2rem;

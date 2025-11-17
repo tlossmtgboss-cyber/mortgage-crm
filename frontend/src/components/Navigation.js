@@ -130,20 +130,7 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
           >
             🏆 Coach
           </button>
-          <Link
-            to="/my-profile"
-            className={`nav-link profile-link ${isActive('/my-profile') ? 'active' : ''}`}
-            title="My Profile"
-          >
-            👤 My Profile
-          </Link>
-          <Link
-            to="/my-permissions"
-            className={`nav-link permissions-link ${isActive('/my-permissions') ? 'active' : ''}`}
-            title="My Permissions"
-          >
-            🔐 My Permissions
-          </Link>
+          {/* My Profile and Permissions moved to Settings page */}
           {(userRole === 'manager' || userRole === 'management') && (
             <Link
               to="/team-members"

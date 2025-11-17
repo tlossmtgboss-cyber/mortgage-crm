@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { getAuth } from '../utils/auth';
 import RolesResponsibilitiesTab from '../components/RolesResponsibilitiesTab';
+import PermissionsTab from '../components/PermissionsTab';
 import './MyProfile.css';
 
 /**
  * Employee Self-Service: My Profile Page
  *
  * This page allows employees to view their own:
- * - Job Description (read-only)
- * - Core Responsibilities (read-only)
+ * - Job Description & Responsibilities
  * - Goals & OKRs (can submit self-assessments)
  * - Skills Assessment (read-only, shows proficiency levels and gaps)
+ * - Permissions (view current permissions and role)
  *
  * When isManager=false, the RolesResponsibilitiesTab component:
  * - Hides edit/delete buttons for job description and responsibilities
@@ -20,6 +21,7 @@ import './MyProfile.css';
 function MyProfile() {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('roles'); // 'roles' or 'permissions'
 
   useEffect(() => {
     const { user } = getAuth();
@@ -75,34 +77,36 @@ function MyProfile() {
         </div>
       </div>
 
-      {/* Roles & Responsibilities Tab with Employee View */}
-      <div className="profile-content">
-        <RolesResponsibilitiesTab
-          userId={currentUser.id}
-          isManager={false}  // Employee view - limits editing capabilities
-        />
+      {/* Tab Navigation */}
+      <div className="profile-tabs">
+        <button
+          className={`tab-btn ${activeTab === 'roles' ? 'active' : ''}`}
+          onClick={() => setActiveTab('roles')}
+        >
+          📋 Job & Responsibilities
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'permissions' ? 'active' : ''}`}
+          onClick={() => setActiveTab('permissions')}
+        >
+          🔐 My Permissions
+        </button>
       </div>
 
-      {/* Future: Add quick links for common employee tasks */}
-      <div className="employee-quick-links">
-        <h3>Quick Links</h3>
-        <div className="quick-links-grid">
-          <a href="#" className="quick-link-card" onClick={(e) => e.preventDefault()}>
-            <span className="icon">📋</span>
-            <span className="label">My Permissions</span>
-            <span className="badge">Coming Soon</span>
-          </a>
-          <a href="#" className="quick-link-card" onClick={(e) => e.preventDefault()}>
-            <span className="icon">🔔</span>
-            <span className="label">Notifications</span>
-            <span className="badge">Coming Soon</span>
-          </a>
-          <a href="#" className="quick-link-card" onClick={(e) => e.preventDefault()}>
-            <span className="icon">📊</span>
-            <span className="label">My Performance</span>
-            <span className="badge">Coming Soon</span>
-          </a>
-        </div>
+      {/* Tab Content */}
+      <div className="profile-content">
+        {activeTab === 'roles' && (
+          <RolesResponsibilitiesTab
+            userId={currentUser.id}
+            isManager={false}  // Employee view - limits editing capabilities
+          />
+        )}
+
+        {activeTab === 'permissions' && (
+          <PermissionsTab
+            userId={currentUser.id}
+          />
+        )}
       </div>
     </div>
   );
