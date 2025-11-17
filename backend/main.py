@@ -17464,6 +17464,144 @@ async def clear_sample_data(
         logger.error(f"Error clearing sample data: {e}")
         raise HTTPException(status_code=500, detail=f"Error clearing data: {str(e)}")
 
+
+@app.post("/api/v1/admin/seed-demo-people")
+async def seed_demo_people(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Seed comprehensive demo data: team members, leads, loans, and MUM clients.
+    Creates realistic placeholder people across all CRM categories.
+    """
+    try:
+        from passlib.context import CryptContext
+        pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+        results = {}
+        default_password = pwd_context.hash("demo123")
+
+        # TEAM MEMBERS
+        team_members = [
+            {"name": "Sarah Mitchell", "email": "sarah.mitchell@company.com", "role": "admin", "department": "Leadership"},
+            {"name": "Michael Chen", "email": "michael.chen@company.com", "role": "management", "department": "Leadership"},
+            {"name": "Jennifer Rodriguez", "email": "jennifer.rodriguez@company.com", "role": "management", "department": "Management"},
+            {"name": "David Thompson", "email": "david.thompson@company.com", "role": "management", "department": "Management"},
+            {"name": "Robert Garcia", "email": "robert.garcia@company.com", "role": "operations", "department": "Operations"},
+            {"name": "Amanda Foster", "email": "amanda.foster@company.com", "role": "operations", "department": "Operations"},
+            {"name": "Marcus Johnson", "email": "marcus.johnson@company.com", "role": "sales", "department": "Sales"},
+            {"name": "Emily Patterson", "email": "emily.patterson@company.com", "role": "sales", "department": "Sales"},
+            {"name": "Brandon Lee", "email": "brandon.lee@company.com", "role": "loan_officer", "department": "Sales"},
+        ]
+
+        team_count = 0
+        for member in team_members:
+            existing = db.execute(text("SELECT id FROM users WHERE email = :email"), {"email": member["email"]}).fetchone()
+            if not existing:
+                db.execute(text("""
+                    INSERT INTO users (email, hashed_password, full_name, role, account_status, department, created_at)
+                    VALUES (:email, :password, :name, :role, 'active', :department, CURRENT_TIMESTAMP)
+                """), {
+                    "email": member["email"],
+                    "password": default_password,
+                    "name": member["name"],
+                    "role": member["role"],
+                    "department": member["department"]
+                })
+                team_count += 1
+
+        # LEADS
+        leads_data = [
+            {"name": "James Wilson", "email": "james.wilson@email.com", "phone": "(555) 234-5678", "stage": "New", "source": "Website", "loan_type": "Purchase - Conventional", "credit_score": 750, "annual_income": 125000, "property_value": 450000, "down_payment": 90000},
+            {"name": "Maria Hernandez", "email": "maria.hernandez@email.com", "phone": "(555) 345-6789", "stage": "Prospect", "source": "Referral Partner", "loan_type": "Purchase - FHA", "credit_score": 680, "annual_income": 85000, "property_value": 325000, "down_payment": 11375},
+            {"name": "Robert Taylor", "email": "robert.taylor@email.com", "phone": "(555) 456-7890", "stage": "Application Started", "source": "Zillow", "loan_type": "Refinance - Conventional", "credit_score": 720, "annual_income": 150000, "property_value": 550000},
+            {"name": "Ashley Thompson", "email": "ashley.thompson@email.com", "phone": "(555) 567-8901", "stage": "Application Complete", "source": "Facebook Ad", "loan_type": "Purchase - VA", "credit_score": 695, "annual_income": 95000, "property_value": 380000},
+            {"name": "Christopher Davis", "email": "chris.davis@email.com", "phone": "(555) 678-9012", "stage": "Pre-Approved", "source": "Realtor Referral", "loan_type": "Purchase - Jumbo", "credit_score": 780, "annual_income": 250000, "property_value": 850000, "down_payment": 170000, "preapproval_amount": 680000},
+        ]
+
+        loan_officer = db.execute(text("SELECT id FROM users WHERE role IN ('loan_officer', 'sales') ORDER BY id LIMIT 1")).fetchone()
+        owner_id = loan_officer.id if loan_officer else current_user.id
+        leads_count = 0
+
+        for lead in leads_data:
+            existing = db.execute(text("SELECT id FROM leads WHERE email = :email"), {"email": lead["email"]}).fetchone()
+            if not existing:
+                loan_amount = lead.get("property_value", 0) - lead.get("down_payment", 0)
+                db.execute(text("""
+                    INSERT INTO leads (name, email, phone, stage, source, loan_type, credit_score, annual_income, property_value, down_payment, loan_amount, owner_id, ai_score, sentiment, created_at, updated_at)
+                    VALUES (:name, :email, :phone, :stage, :source, :loan_type, :credit_score, :income, :property_value, :down_payment, :loan_amount, :owner_id, 65, 'positive', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """), {**lead, "loan_amount": loan_amount, "owner_id": owner_id, "income": lead.get("annual_income")})
+                leads_count += 1
+
+        # ACTIVE LOANS
+        loans_data = [
+            {"loan_number": "2025-001234", "borrower_name": "Michael Roberts", "coborrower_name": "Sarah Roberts", "stage": "Processing", "program": "Conventional 30-Year Fixed", "loan_type": "Purchase", "amount": 420000, "purchase_price": 525000, "down_payment": 105000, "rate": 6.875, "term": 360, "property_address": "1234 Oak Street, Austin, TX 78701"},
+            {"loan_number": "2025-001235", "borrower_name": "Jennifer Kim", "stage": "UW Received", "program": "FHA 30-Year Fixed", "loan_type": "Purchase", "amount": 285000, "purchase_price": 300000, "down_payment": 10500, "rate": 6.625, "term": 360, "property_address": "5678 Elm Avenue, Houston, TX 77002"},
+            {"loan_number": "2025-001236", "borrower_name": "William Turner", "coborrower_name": "Patricia Turner", "stage": "Approved", "program": "VA 30-Year Fixed", "loan_type": "Purchase", "amount": 365000, "rate": 6.500, "term": 360, "property_address": "9012 Pine Road, Dallas, TX 75201"},
+            {"loan_number": "2025-001237", "borrower_name": "Elizabeth Moore", "coborrower_name": "Richard Moore", "stage": "CTC", "program": "Jumbo 30-Year Fixed", "loan_type": "Purchase", "amount": 825000, "purchase_price": 1100000, "down_payment": 275000, "rate": 7.125, "term": 360, "property_address": "7890 Highland Drive, Plano, TX 75024"},
+        ]
+
+        loans_count = 0
+        for loan in loans_data:
+            existing = db.execute(text("SELECT id FROM loans WHERE loan_number = :loan_number"), {"loan_number": loan["loan_number"]}).fetchone()
+            if not existing:
+                closing_date = datetime.now(timezone.utc) + timedelta(days=25)
+                db.execute(text("""
+                    INSERT INTO loans (loan_number, borrower_name, coborrower_name, stage, program, loan_type, amount, purchase_price, down_payment, rate, term, property_address, closing_date, loan_officer_id, days_in_stage, sla_status, created_at, updated_at)
+                    VALUES (:loan_number, :borrower_name, :coborrower_name, :stage, :program, :loan_type, :amount, :purchase_price, :down_payment, :rate, :term, :property_address, :closing_date, :lo_id, 8, 'on-track', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """), {**loan, "closing_date": closing_date, "lo_id": owner_id})
+                loans_count += 1
+
+        # MUM CLIENTS
+        mum_data = [
+            {"name": "Charles Bennett", "email": "charles.bennett@email.com", "phone": "(555) 111-2222", "loan_number": "MUM-2023-001", "original_loan_amount": 385000, "current_property_value": 485000, "days_ago": 730},
+            {"name": "Rebecca Sullivan", "email": "rebecca.sullivan@email.com", "phone": "(555) 222-3333", "loan_number": "MUM-2022-001", "original_loan_amount": 425000, "current_property_value": 525000, "days_ago": 1095},
+            {"name": "Gregory Phillips", "email": "gregory.phillips@email.com", "phone": "(555) 333-4444", "loan_number": "MUM-2024-001", "original_loan_amount": 295000, "current_property_value": 315000, "days_ago": 365},
+        ]
+
+        mum_count = 0
+        for client in mum_data:
+            existing = db.execute(text("SELECT id FROM mum_clients WHERE loan_number = :loan_number"), {"loan_number": client["loan_number"]}).fetchone()
+            if not existing:
+                original_date = datetime.now(timezone.utc) - timedelta(days=client["days_ago"])
+                last_contact = datetime.now(timezone.utc) - timedelta(days=45)
+                loan_balance = client["original_loan_amount"] * 0.92  # Assume 8% paid down
+                db.execute(text("""
+                    INSERT INTO mum_clients (name, loan_number, original_close_date, days_since_funding, original_rate, current_rate, loan_balance, engagement_score, status, last_contact, created_at)
+                    VALUES (:name, :loan_number, :original_date, :days_since, 6.5, 6.875, :loan_balance, 75, 'active', :last_contact, CURRENT_TIMESTAMP)
+                """), {
+                    "name": client["name"],
+                    "loan_number": client["loan_number"],
+                    "original_date": original_date,
+                    "days_since": client["days_ago"],
+                    "loan_balance": loan_balance,
+                    "last_contact": last_contact
+                })
+                mum_count += 1
+
+        db.commit()
+
+        results = {
+            "success": True,
+            "message": "Demo data seeded successfully",
+            "team_members": team_count,
+            "leads": leads_count,
+            "active_loans": loans_count,
+            "mum_clients": mum_count,
+            "total": team_count + leads_count + loans_count + mum_count
+        }
+
+        logger.info(f"Seeded demo data: {results}")
+        return results
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error seeding demo data: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error seeding data: {str(e)}")
+
+
 @app.post("/admin/initialize-ai-system")
 async def initialize_ai_system_endpoint(request: dict):
     """
