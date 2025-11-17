@@ -8039,6 +8039,43 @@ async def add_voicemail_system_migration(
             "error": str(e)
         }
 
+@app.post("/api/v1/migrations/fix-voicemail-drops-columns")
+async def fix_voicemail_drops_columns_migration(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Fix voicemail_drops table to add missing columns from new schema
+    """
+    try:
+        logger.info(f"Running migration: fix voicemail_drops columns (user: {current_user.id})")
+
+        # Read and execute migration SQL
+        migration_path = os.path.join(os.path.dirname(__file__), "migrations", "fix_voicemail_drops_columns.sql")
+
+        with open(migration_path, 'r') as f:
+            migration_sql = f.read()
+
+        # Execute the migration (it contains DO $$ blocks that handle checking for existing columns)
+        db.execute(text(migration_sql))
+        db.commit()
+
+        logger.info("Successfully fixed voicemail_drops table columns")
+
+        return {
+            "success": True,
+            "message": "Successfully added missing columns to voicemail_drops table"
+        }
+
+    except Exception as e:
+        logger.error(f"Voicemail drops column fix migration failed: {e}")
+        db.rollback()
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e)
+        }
+
 @app.get("/api/v1/debug/email-sync-status")
 async def email_sync_status(
     current_user: User = Depends(get_current_user),
