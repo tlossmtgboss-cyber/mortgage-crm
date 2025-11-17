@@ -19016,6 +19016,45 @@ async def add_permission_template_risk_level_migration(
 # MUM (MORTGAGES UNDER MANAGEMENT) API
 # ============================================================================
 
+@app.post("/api/v1/mum/setup")
+async def setup_mum_database(
+    migration_key: str = "",
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create MUM tables and seed 100 clients (ONE-TIME SETUP)"""
+    if migration_key != "setup-mum-database-2025":
+        raise HTTPException(status_code=403, detail="Invalid migration key")
+
+    try:
+        from migrations.create_mum_tables import upgrade as create_tables
+
+        # Create tables
+        create_tables()
+        logger.info("✅ MUM tables created")
+
+        # Import and run seed script
+        import sys
+        import os
+        sys.path.insert(0, os.path.dirname(__file__))
+
+        from seed_100_mum_clients import generate_mum_clients
+        generate_mum_clients()
+        logger.info("✅ 100 MUM clients generated")
+
+        return {
+            "success": True,
+            "message": "MUM database setup completed",
+            "tables_created": ["mum_clients", "mum_transactions"],
+            "clients_generated": 100
+        }
+
+    except Exception as e:
+        logger.error(f"MUM setup error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Setup failed: {str(e)}")
+
+
 @app.get("/api/v1/mum/clients")
 async def get_mum_clients(
     status: str = "active",
