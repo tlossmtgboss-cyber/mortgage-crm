@@ -4,6 +4,7 @@ import { teamAPI } from '../services/api';
 import MissionControl from './MissionControl';
 import AIReceptionist from '../components/AIReceptionist';
 import MyProfile from './MyProfile';
+import ExperimentsDashboard from './ExperimentsDashboard';
 import './Settings.css';
 
 function Settings() {
@@ -1372,6 +1373,14 @@ const API_BASE_URL = isProduction
             <span>AI Receptionist</span>
           </button>
 
+          <button
+            className={`sidebar-btn ${activeSection === 'experiments' ? 'active' : ''}`}
+            onClick={() => setActiveSection('experiments')}
+          >
+            <span className="icon">🧪</span>
+            <span>A/B Testing</span>
+          </button>
+
           {/* Integrations - Conditionally Expandable based on connected apps */}
           {(microsoftStatus.connected || calendlyEventTypes.length > 0 || twilioStatus.configured) ? (
             <>
@@ -1604,6 +1613,10 @@ const API_BASE_URL = isProduction
 
           {activeSection === 'ai-receptionist' && (
             <AIReceptionist />
+          )}
+
+          {activeSection === 'experiments' && (
+            <ExperimentsDashboard />
           )}
 
           {/* OUTLOOK EMAIL */}
