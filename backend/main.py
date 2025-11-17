@@ -20183,6 +20183,99 @@ async def add_mum_client_fields_migration(
             "error": str(e)
         }
 
+@app.post("/api/v1/migrations/fix-mum-schema", response_model=None)
+async def fix_mum_schema_migration(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Fix schema mismatch between database and model
+    The original create_mum_tables migration used different column names than the model
+    This migration adds the model-expected columns and copies data from the old columns
+    """
+    try:
+        logger.info(f"Running migration: fix MUM schema mismatch (user: {current_user.id})")
+
+        # Core columns that the model expects but might be missing or have different names
+        core_columns = [
+            ("name", "VARCHAR(200)"),
+            ("loan_number", "VARCHAR(100)"),
+            ("original_close_date", "TIMESTAMP"),
+            ("days_since_funding", "INTEGER"),
+            ("original_rate", "DECIMAL(6, 4)"),
+            ("current_rate", "DECIMAL(6, 4)"),
+            ("loan_balance", "DECIMAL(12, 2)"),
+            ("refinance_opportunity", "BOOLEAN DEFAULT FALSE"),
+            ("estimated_savings", "DECIMAL(10, 2)"),
+            ("engagement_score", "INTEGER"),
+            ("status", "VARCHAR(50)"),
+            ("last_contact", "TIMESTAMP"),
+            ("created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+        ]
+
+        added_columns = []
+        existing_columns = []
+
+        # Add missing core columns
+        for column_name, column_type in core_columns:
+            result = db.execute(text(f"""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_name = 'mum_clients'
+                AND column_name = '{column_name}'
+            """))
+
+            if result.fetchone():
+                existing_columns.append(f"mum_clients.{column_name}")
+            else:
+                db.execute(text(f"""
+                    ALTER TABLE mum_clients
+                    ADD COLUMN {column_name} {column_type};
+                """))
+                added_columns.append(f"mum_clients.{column_name}")
+
+        # Copy data from old column names to new ones if they exist
+        data_migrations = [
+            ("UPDATE mum_clients SET name = client_name WHERE name IS NULL AND client_name IS NOT NULL", "name from client_name"),
+            ("UPDATE mum_clients SET loan_number = servicing_loan_number WHERE loan_number IS NULL AND servicing_loan_number IS NOT NULL", "loan_number from servicing_loan_number"),
+            ("UPDATE mum_clients SET original_close_date = closing_date WHERE original_close_date IS NULL AND closing_date IS NOT NULL", "original_close_date from closing_date"),
+            ("UPDATE mum_clients SET original_rate = interest_rate WHERE original_rate IS NULL AND interest_rate IS NOT NULL", "original_rate from interest_rate"),
+            ("UPDATE mum_clients SET current_rate = interest_rate WHERE current_rate IS NULL AND interest_rate IS NOT NULL", "current_rate from interest_rate"),
+            ("UPDATE mum_clients SET loan_balance = current_loan_amount WHERE loan_balance IS NULL AND current_loan_amount IS NOT NULL", "loan_balance from current_loan_amount"),
+            ("UPDATE mum_clients SET last_contact = last_contact_date WHERE last_contact IS NULL AND last_contact_date IS NOT NULL", "last_contact from last_contact_date"),
+        ]
+
+        migrated_data = []
+        for sql, description in data_migrations:
+            try:
+                result = db.execute(text(sql))
+                rows_affected = result.rowcount
+                if rows_affected > 0:
+                    migrated_data.append(f"{description} ({rows_affected} rows)")
+            except Exception as e:
+                logger.warning(f"Data migration skipped ({description}): {e}")
+
+        db.commit()
+
+        logger.info(f"Schema fix completed. Added: {len(added_columns)}, Migrated data: {len(migrated_data)}")
+
+        return {
+            "success": True,
+            "message": "MUM schema fix migration completed",
+            "added_columns": added_columns,
+            "existing_columns": existing_columns,
+            "data_migrations": migrated_data
+        }
+
+    except Exception as e:
+        logger.error(f"MUM schema fix migration failed: {e}")
+        db.rollback()
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e)
+        }
+
 
 # ============================================================================
 # MUM (MORTGAGES UNDER MANAGEMENT) API
