@@ -17,7 +17,7 @@ from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.responses import JSONResponse, RedirectResponse, Response
-from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, DateTime, Date, Text, ForeignKey, JSON, Enum as SQLEnum, func, text, or_, UniqueConstraint
+from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, DateTime, Date, Text, ForeignKey, JSON, Enum as SQLEnum, func, text, or_, UniqueConstraint, Numeric
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
 from pydantic import BaseModel, EmailStr
@@ -472,6 +472,25 @@ class Conversation(Base):
     role = Column(String, nullable=False)  # 'user' or 'assistant'
     meta_data = Column(JSON)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class VoicemailDrop(Base):
+    """Tracks voicemail drops via Vapi AI"""
+    __tablename__ = "voicemail_drops"
+    __table_args__ = {'extend_existing': True}
+    id = Column(Integer, primary_key=True, index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"), index=True)
+    loan_id = Column(Integer, ForeignKey("loans.id"), index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    phone_number = Column(String(20), nullable=False)
+    recipient_name = Column(String(255))
+    message_text = Column(Text, nullable=False)
+    vapi_call_id = Column(String(255), index=True)
+    delivery_status = Column(String(50), default='pending')  # pending, delivered, failed, no-answer
+    delivered_at = Column(DateTime)
+    call_duration = Column(Integer)  # seconds
+    call_cost = Column(Numeric(10, 4))
+    error_message = Column(Text)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
 
 class ConversationMemory(Base):
     """Stores conversation summaries with vector embeddings for AI context retrieval"""
@@ -4358,14 +4377,16 @@ async def drop_voicemail(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Drop a voicemail using AI receptionist voice"""
+    """Drop a voicemail using Vapi AI receptionist"""
     try:
-        from twilio.rest import Client as TwilioClient
+        import httpx
 
         data = await request.json()
         to_number = data.get("to_number")
         message = data.get("message")
         recipient_name = data.get("recipient_name", "")
+        lead_id = data.get("lead_id")
+        loan_id = data.get("loan_id")
 
         if not to_number:
             raise HTTPException(status_code=400, detail="Phone number is required")
@@ -4373,11 +4394,8 @@ async def drop_voicemail(
         if not message:
             raise HTTPException(status_code=400, detail="Message is required")
 
-        # Format phone number to E.164 format for Twilio
-        # Remove all non-digit characters
+        # Format phone number to E.164 format
         clean_number = ''.join(filter(str.isdigit, to_number))
-
-        # Add +1 prefix if not present (assuming US numbers)
         if len(clean_number) == 10:
             to_number = f"+1{clean_number}"
         elif len(clean_number) == 11 and clean_number.startswith('1'):
@@ -4385,55 +4403,84 @@ async def drop_voicemail(
         elif not to_number.startswith('+'):
             to_number = f"+{clean_number}"
 
-        logger.info(f"Formatted phone number: {to_number}")
+        logger.info(f"Dropping voicemail to {to_number} for {recipient_name}")
 
-        # Initialize Twilio client
-        twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
-        twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
+        # Get Vapi API key
+        vapi_api_key = os.getenv("VAPI_API_KEY")
+        if not vapi_api_key:
+            raise HTTPException(status_code=503, detail="Vapi API key not configured")
 
-        if not twilio_sid or not twilio_token:
-            raise HTTPException(status_code=503, detail="Twilio is not configured")
+        # Get Vapi assistant ID (you can set this in env or use a default)
+        vapi_assistant_id = os.getenv("VAPI_VOICEMAIL_ASSISTANT_ID", os.getenv("VAPI_ASSISTANT_ID"))
+        if not vapi_assistant_id:
+            raise HTTPException(status_code=503, detail="Vapi assistant ID not configured")
 
-        twilio_client = TwilioClient(twilio_sid, twilio_token)
-
-        # Get Twilio phone number
-        from_number = os.getenv("TWILIO_PHONE_NUMBER")
-        if not from_number:
-            raise HTTPException(status_code=503, detail="Twilio phone number not configured")
-
-        # Format the message to sound natural and conversational like an AI receptionist
+        # Format the message naturally with context
         greeting = f"Hi {recipient_name}, " if recipient_name else "Hello, "
-
-        # Add natural pauses and phrasing with SSML-like formatting
         full_message = (
             f"{greeting}this is the AI assistant calling from "
             f"{current_user.full_name or 'your loan officer'}'s office. "
-            f"<break time='300ms'/>{message} "
-            f"<break time='300ms'/>Feel free to call us back at your convenience. "
-            f"Have a great day!"
+            f"{message} "
+            f"Feel free to call us back at your convenience. Have a great day!"
         )
 
-        logger.info(f"Voicemail message prepared: {full_message}")
+        # Create voicemail drop record
+        voicemail_drop = VoicemailDrop(
+            user_id=current_user.id,
+            lead_id=lead_id,
+            loan_id=loan_id,
+            phone_number=to_number,
+            recipient_name=recipient_name,
+            message_text=message,
+            delivery_status='pending'
+        )
+        db.add(voicemail_drop)
+        db.commit()
+        db.refresh(voicemail_drop)
 
-        # Create TwiML URL that plays the voicemail using AI receptionist voice
+        # Get API URL for webhook
         api_url = os.getenv("API_URL", "https://mortgage-crm-production-7a9a.up.railway.app")
 
-        # URL-encode the message to ensure it's a valid URL parameter
-        from urllib.parse import quote
-        encoded_message = quote(full_message)
-        call = twilio_client.calls.create(
-            to=to_number,
-            from_=from_number,
-            url=f"{api_url}/api/v1/voice/voicemail-twiml?message={encoded_message}",
-            method='GET',
-            machine_detection='Enable',
-            async_amd='true',
-            async_amd_status_callback=f"{api_url}/api/v1/voice/amd-callback",
-            async_amd_status_callback_method='POST',
-            status_callback=f"{api_url}/api/v1/voice/call-status",
-            status_callback_event=['completed'],
-            status_callback_method='POST'
-        )
+        # Call Vapi API to initiate outbound voicemail drop
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            vapi_response = await client.post(
+                "https://api.vapi.ai/call/phone",
+                headers={
+                    "Authorization": f"Bearer {vapi_api_key}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "assistantId": vapi_assistant_id,
+                    "customer": {
+                        "number": to_number,
+                        "name": recipient_name
+                    },
+                    "assistantOverrides": {
+                        "firstMessage": full_message,
+                        "endCallMessage": "",  # End silently
+                        "voicemailMessage": full_message,
+                        "endCallOnVoicemailDetection": True,
+                        "recordingEnabled": False
+                    },
+                    "serverMessages": ["end-of-call-report"],
+                    "serverUrl": f"{api_url}/api/v1/webhooks/vapi/voicemail-status?voicemail_id={voicemail_drop.id}"
+                }
+            )
+
+            vapi_data = vapi_response.json()
+            logger.info(f"Vapi response: {vapi_data}")
+
+            if vapi_response.status_code not in [200, 201]:
+                error_msg = vapi_data.get("error", {}).get("message", "Unknown Vapi error")
+                voicemail_drop.delivery_status = 'failed'
+                voicemail_drop.error_message = error_msg
+                db.commit()
+                raise HTTPException(status_code=500, detail=f"Vapi API error: {error_msg}")
+
+            # Update voicemail drop with Vapi call ID
+            vapi_call_id = vapi_data.get("id")
+            voicemail_drop.vapi_call_id = vapi_call_id
+            db.commit()
 
         # Log the activity
         activity = Activity(
@@ -4444,34 +4491,90 @@ async def drop_voicemail(
                 "direction": "outbound",
                 "phone_number": to_number,
                 "recipient_name": recipient_name,
-                "call_sid": call.sid,
+                "vapi_call_id": vapi_call_id,
+                "voicemail_drop_id": voicemail_drop.id,
                 "message": message,
                 "status": "initiated",
                 "call_type": "voicemail_drop"
-            }
+            },
+            lead_id=lead_id,
+            loan_id=loan_id
         )
         db.add(activity)
         db.commit()
 
         return {
             "success": True,
-            "call_sid": call.sid,
+            "voicemail_id": voicemail_drop.id,
+            "vapi_call_id": vapi_call_id,
             "message": "Voicemail drop initiated successfully"
         }
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error dropping voicemail: {e}")
+        logger.error(f"Error dropping voicemail: {e}", exc_info=True)
         return {
             "success": False,
             "error": str(e)
         }
 
 
+@app.post("/api/v1/webhooks/vapi/voicemail-status")
+async def vapi_voicemail_status_webhook(
+    request: Request,
+    voicemail_id: int,
+    db: Session = Depends(get_db)
+):
+    """Handle Vapi webhook for voicemail drop status updates"""
+    try:
+        payload = await request.json()
+        logger.info(f"Vapi voicemail webhook received for voicemail_id={voicemail_id}: {payload}")
+
+        # Find the voicemail drop record
+        voicemail_drop = db.query(VoicemailDrop).filter(VoicemailDrop.id == voicemail_id).first()
+        if not voicemail_drop:
+            logger.error(f"Voicemail drop {voicemail_id} not found")
+            return {"status": "error", "message": "Voicemail drop not found"}
+
+        message_type = payload.get("message", {}).get("type")
+
+        # Handle end-of-call-report
+        if message_type == "end-of-call-report":
+            call_data = payload.get("call", {})
+            end_reason = call_data.get("endedReason")
+            duration = call_data.get("duration")  # in seconds
+            cost = call_data.get("cost")
+
+            # Update voicemail drop status
+            if end_reason in ["assistant-left-voicemail", "voicemail-detected"]:
+                voicemail_drop.delivery_status = "delivered"
+                voicemail_drop.delivered_at = datetime.now(timezone.utc)
+            elif end_reason == "customer-did-not-answer":
+                voicemail_drop.delivery_status = "no-answer"
+            elif end_reason in ["customer-ended-call", "customer-busy"]:
+                voicemail_drop.delivery_status = "failed"
+                voicemail_drop.error_message = end_reason
+            else:
+                voicemail_drop.delivery_status = "completed"
+
+            voicemail_drop.call_duration = duration
+            voicemail_drop.call_cost = cost
+
+            db.commit()
+
+            logger.info(f"Updated voicemail drop {voicemail_id}: status={voicemail_drop.delivery_status}")
+
+        return {"status": "received"}
+
+    except Exception as e:
+        logger.error(f"Error in Vapi voicemail webhook: {e}", exc_info=True)
+        return {"status": "error", "message": str(e)}
+
+
 @app.post("/api/v1/voice/amd-callback")
 async def amd_callback(request: Request):
-    """Handle AMD (Answering Machine Detection) callback"""
+    """Handle AMD (Answering Machine Detection) callback (legacy Twilio)"""
     try:
         form_data = await request.form()
         amd_status = form_data.get("AnsweredBy")
