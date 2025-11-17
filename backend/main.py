@@ -17708,13 +17708,13 @@ async def fix_loan_stages(
         # Update loans with NULL stages to have proper stage values
         db.execute(text("""
             UPDATE loans
-            SET stage = CASE
+            SET stage = (CASE
                 WHEN loan_number LIKE '%-001234' THEN 'Processing'
                 WHEN loan_number LIKE '%-001235' THEN 'UW Received'
                 WHEN loan_number LIKE '%-001236' THEN 'Approved'
                 WHEN loan_number LIKE '%-001237' THEN 'CTC'
                 ELSE 'Processing'
-            END
+            END)::loanstage
             WHERE stage IS NULL
         """))
 
