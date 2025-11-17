@@ -17537,11 +17537,11 @@ async def seed_demo_people(
             existing = db.execute(text("SELECT id FROM leads WHERE email = :email"), {"email": lead["email"]}).fetchone()
             if not existing:
                 loan_amount = lead.get("property_value", 0) - lead.get("down_payment", 0)
-                # Cast stage to text to avoid enum issues
+                # Skip stage column - enum might not be created yet in production
                 db.execute(text("""
-                    INSERT INTO leads (name, email, phone, stage, source, loan_type, credit_score, annual_income, property_value, down_payment, loan_amount, owner_id, ai_score, sentiment, created_at, updated_at)
-                    VALUES (:name, :email, :phone, CAST(:stage AS leadstage), :source, :loan_type, :credit_score, :income, :property_value, :down_payment, :loan_amount, :owner_id, 65, 'positive', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                """), {**lead, "loan_amount": loan_amount, "owner_id": owner_id, "income": lead.get("annual_income")})
+                    INSERT INTO leads (name, email, phone, source, loan_type, credit_score, annual_income, property_value, down_payment, loan_amount, owner_id, ai_score, sentiment, created_at, updated_at)
+                    VALUES (:name, :email, :phone, :source, :loan_type, :credit_score, :income, :property_value, :down_payment, :loan_amount, :owner_id, 65, 'positive', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """), {"name": lead["name"], "email": lead["email"], "phone": lead.get("phone"), "source": lead.get("source"), "loan_type": lead.get("loan_type"), "credit_score": lead.get("credit_score"), "income": lead.get("annual_income"), "property_value": lead.get("property_value"), "down_payment": lead.get("down_payment"), "loan_amount": loan_amount, "owner_id": owner_id})
                 leads_count += 1
 
         # ACTIVE LOANS - Use enum string values (not keys)
@@ -17557,11 +17557,11 @@ async def seed_demo_people(
             existing = db.execute(text("SELECT id FROM loans WHERE loan_number = :loan_number"), {"loan_number": loan["loan_number"]}).fetchone()
             if not existing:
                 closing_date = datetime.now(timezone.utc) + timedelta(days=25)
-                # Cast stage to avoid enum issues
+                # Skip stage column - enum might not be created yet
                 db.execute(text("""
-                    INSERT INTO loans (loan_number, borrower_name, coborrower_name, stage, program, loan_type, amount, purchase_price, down_payment, rate, term, property_address, closing_date, loan_officer_id, days_in_stage, sla_status, created_at, updated_at)
-                    VALUES (:loan_number, :borrower_name, :coborrower_name, CAST(:stage AS loanstage), :program, :loan_type, :amount, :purchase_price, :down_payment, :rate, :term, :property_address, :closing_date, :lo_id, 8, 'on-track', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                """), {**loan, "closing_date": closing_date, "lo_id": owner_id})
+                    INSERT INTO loans (loan_number, borrower_name, coborrower_name, program, loan_type, amount, purchase_price, down_payment, rate, term, property_address, closing_date, loan_officer_id, days_in_stage, sla_status, created_at, updated_at)
+                    VALUES (:loan_number, :borrower_name, :coborrower_name, :program, :loan_type, :amount, :purchase_price, :down_payment, :rate, :term, :property_address, :closing_date, :lo_id, 8, 'on-track', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """), {"loan_number": loan["loan_number"], "borrower_name": loan["borrower_name"], "coborrower_name": loan.get("coborrower_name"), "program": loan.get("program"), "loan_type": loan.get("loan_type"), "amount": loan["amount"], "purchase_price": loan.get("purchase_price"), "down_payment": loan.get("down_payment"), "rate": loan.get("rate"), "term": loan.get("term"), "property_address": loan.get("property_address"), "closing_date": closing_date, "lo_id": owner_id})
                 loans_count += 1
 
         # MUM CLIENTS
