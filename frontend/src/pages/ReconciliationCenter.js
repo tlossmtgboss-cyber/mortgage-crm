@@ -981,14 +981,19 @@ function ReconciliationCenter() {
                 <div className="detail-actions">
                   <button
                     className="btn-approve"
-                    onClick={() => approveItem(selectedItem.id)}
+                    onClick={() => handleApprove(selectedItem.id)}
                     disabled={processingAction}
                   >
                     {processingAction ? 'Processing...' : '✓ Approve & Continue'}
                   </button>
                   <button
                     className="btn-reject"
-                    onClick={() => rejectItem(selectedItem.id)}
+                    onClick={() => {
+                      const reason = prompt('Reason for rejection (optional):');
+                      if (reason !== null) {
+                        handleReject(selectedItem.id, reason);
+                      }
+                    }}
                     disabled={processingAction}
                   >
                     ✕ Reject
