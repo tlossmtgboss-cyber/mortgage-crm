@@ -3021,3 +3021,262 @@
   margin: 0;
   font-size: 15px;
 }
+
+/* Task Management Modal for Review Tasks Step */
+.member-tasks-card.clickable {
+  cursor: pointer;
+  position: relative;
+}
+
+.member-tasks-card.clickable .click-hint {
+  color: #218D8D;
+  font-size: 13px;
+  font-weight: 500;
+  margin-top: 12px;
+  text-align: center;
+}
+
+.member-tasks-card.clickable:hover .click-hint {
+  text-decoration: underline;
+}
+
+.more-tasks {
+  color: #6b7280;
+  font-style: italic;
+}
+
+.task-management-section {
+  margin-top: 20px;
+}
+
+.task-management-section h4 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: #1f2937;
+}
+
+.tasks-list-modal {
+  max-height: 400px;
+  overflow-y: auto;
+  margin-bottom: 16px;
+}
+
+.task-item-modal {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 16px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.task-info {
+  flex: 1;
+}
+
+.task-info strong {
+  display: block;
+  font-size: 15px;
+  color: #1f2937;
+  margin-bottom: 4px;
+}
+
+.task-info p {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0;
+}
+
+.task-milestone {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 4px 8px;
+  background: #dbeafe;
+  color: #1e40af;
+  font-size: 12px;
+  border-radius: 4px;
+}
+
+.btn-delete-task {
+  background: #fee2e2;
+  color: #dc2626;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.btn-delete-task:hover {
+  background: #dc2626;
+  color: white;
+}
+
+.btn-add-task {
+  background: #218D8D;
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  width: 100%;
+}
+
+.btn-add-task:hover {
+  background: #1a6f6f;
+}
+
+/* Data Preview Step Enhancements */
+.file-upload-label {
+  display: block;
+  cursor: pointer;
+}
+
+.upload-button {
+  background: #218D8D;
+  color: white;
+  padding: 14px 20px;
+  border-radius: 8px;
+  text-align: center;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.upload-button:hover {
+  background: #1a6f6f;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(33, 141, 141, 0.3);
+}
+
+.upload-success {
+  color: #10b981;
+  font-weight: 500;
+  margin-top: 12px;
+  font-size: 14px;
+}
+
+.parsed-emails-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.parsed-email-card {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  transition: all 0.2s ease;
+}
+
+.parsed-email-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.email-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.email-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.email-meta {
+  flex: 1;
+}
+
+.email-meta strong {
+  display: block;
+  font-size: 15px;
+  color: #1f2937;
+  margin-bottom: 4px;
+}
+
+.email-subject,
+.email-sender {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 2px 0;
+}
+
+.extracted-data h4 {
+  font-size: 15px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 12px;
+}
+
+.data-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.data-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.data-label {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.data-value {
+  font-size: 14px;
+  color: #1f2937;
+  font-weight: 500;
+}
+
+.milestone-badge {
+  background: #dbeafe;
+  color: #1e40af;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  display: inline-block;
+}
+
+.confidence-score {
+  color: #10b981;
+  font-weight: 600;
+}
+
+.preview-note {
+  max-width: 900px;
+  margin: 20px auto;
+  padding: 16px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.preview-note p {
+  margin: 0;
+  color: #1e40af;
+  font-size: 14px;
+}
+
+.hint-text {
+  color: #6b7280;
+  font-size: 13px;
+  margin-top: 8px;
+}

@@ -8,8 +8,9 @@ const API_BASE_URL = isProduction
   : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
 function ReconciliationCenter() {
-  const [activeTab, setActiveTab] = useState('pending'); // 'pending' or 'completed'
+  const [activeTab, setActiveTab] = useState('pending'); // 'pending', 'pendingReview', or 'completed'
   const [pendingItems, setPendingItems] = useState([]);
+  const [pendingReviewItems, setPendingReviewItems] = useState([]);
   const [completedItems, setCompletedItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState(null);
