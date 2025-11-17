@@ -4203,14 +4203,14 @@ async def get_call_stats(
         # Get call activities from activity log
         activities = db.query(Activity).filter(
             Activity.user_id == current_user.id,
-            Activity.activity_type.in_(['voice_call', 'inbound_call', 'outbound_call']),
+            Activity.type == ActivityType.CALL,
             Activity.created_at >= thirty_days_ago
         ).all()
 
         # Calculate stats
         total_calls = len(activities)
-        inbound_calls = sum(1 for a in activities if a.metadata and a.metadata.get('direction') == 'inbound')
-        outbound_calls = sum(1 for a in activities if a.metadata and a.metadata.get('direction') == 'outbound')
+        inbound_calls = sum(1 for a in activities if a.user_metadata and a.user_metadata.get('direction') == 'inbound')
+        outbound_calls = sum(1 for a in activities if a.user_metadata and a.user_metadata.get('direction') == 'outbound')
 
         # Count leads generated from calls
         leads_from_calls = db.query(Lead).filter(
@@ -4247,15 +4247,15 @@ async def get_call_history(
         # Get call activities
         activities = db.query(Activity).filter(
             Activity.user_id == current_user.id,
-            Activity.activity_type.in_(['voice_call', 'inbound_call', 'outbound_call'])
+            Activity.type == ActivityType.CALL
         ).order_by(Activity.created_at.desc()).limit(limit).all()
 
         calls = []
         for activity in activities:
-            metadata = activity.metadata or {}
+            metadata = activity.user_metadata or {}
             calls.append({
                 "id": activity.id,
-                "description": activity.description,
+                "description": activity.content,
                 "created_at": activity.created_at.isoformat() if activity.created_at else None,
                 "metadata": {
                     "direction": metadata.get("direction", "inbound"),
@@ -4321,14 +4321,15 @@ async def make_outbound_call(
         # Log the activity
         activity = Activity(
             user_id=current_user.id,
-            activity_type="outbound_call",
-            description=f"AI called {to_number}",
-            metadata={
+            type=ActivityType.CALL,
+            content=f"AI called {to_number}",
+            user_metadata={
                 "direction": "outbound",
                 "phone_number": to_number,
                 "script_type": script_type,
                 "call_sid": call.sid,
-                "status": "initiated"
+                "status": "initiated",
+                "call_type": "outbound_call"
             },
             lead_id=lead_id
         )
@@ -4458,15 +4459,16 @@ async def drop_voicemail(
         # Log the activity
         activity = Activity(
             user_id=current_user.id,
-            activity_type="voicemail_drop",
-            description=f"Voicemail dropped to {recipient_name or to_number}: {message[:100]}",
-            metadata={
+            type=ActivityType.CALL,
+            content=f"Voicemail dropped to {recipient_name or to_number}: {message[:100]}",
+            user_metadata={
                 "direction": "outbound",
                 "phone_number": to_number,
                 "recipient_name": recipient_name,
                 "call_sid": call.sid,
                 "message": message,
-                "status": "initiated"
+                "status": "initiated",
+                "call_type": "voicemail_drop"
             }
         )
         db.add(activity)
