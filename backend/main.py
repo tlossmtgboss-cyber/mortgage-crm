@@ -4513,19 +4513,19 @@ async def drop_voicemail(
         vapi_phone_number_id = os.getenv("VAPI_PHONE_NUMBER_ID")
 
         async with httpx.AsyncClient(timeout=30.0) as client:
-            # Build the request payload
+            # Build the request payload according to Vapi API format
             vapi_payload = {
-                "phoneNumber": to_number,
+                "customer": {
+                    "number": to_number
+                },
                 "assistantId": vapi_assistant_id,
                 "assistantOverrides": {
                     "firstMessage": full_message,
                     "voicemailMessage": full_message
-                },
-                "serverMessages": ["end-of-call-report"],
-                "serverUrl": f"{api_url}/api/v1/webhooks/vapi/voicemail-status?voicemail_id={voicemail_drop.id}"
+                }
             }
 
-            # Add phoneNumberId if configured
+            # Add phoneNumberId if configured (for outbound caller ID)
             if vapi_phone_number_id:
                 vapi_payload["phoneNumberId"] = vapi_phone_number_id
 

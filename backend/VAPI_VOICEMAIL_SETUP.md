@@ -110,16 +110,22 @@ CREATE INDEX idx_voicemail_created ON voicemail_drops(created_at);
 
 ## Webhook Configuration
 
-The webhook URL is automatically configured when making the call:
-```
-https://your-domain.railway.app/api/v1/webhooks/vapi/voicemail-status?voicemail_id={id}
-```
+**Important**: Configure the webhook URL in your Vapi Assistant settings:
 
-Vapi will send `end-of-call-report` to this endpoint with:
+1. Go to Vapi Dashboard → Your Assistant → Settings
+2. Set Server URL to:
+```
+https://mortgage-crm-production-7a9a.up.railway.app/api/v1/webhooks/vapi/voicemail-status
+```
+3. Enable Server Messages: `end-of-call-report`
+
+The webhook will receive call completion data with:
 - Call duration
 - End reason
 - Call cost
 - Delivery confirmation
+
+**Note**: Each voicemail drop will pass its ID as a query parameter, but the base webhook URL must be configured in your assistant settings.
 
 ## Cost Tracking
 
