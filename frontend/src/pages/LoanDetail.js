@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { loansAPI, activitiesAPI } from '../services/api';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
+import SmartAIChat from '../components/SmartAIChat';
+import VoicemailDrop from '../components/VoicemailDrop';
 import './LeadDetail.css';
 
 // Mock loans data (same as Loans.js)
@@ -51,6 +53,7 @@ function LoanDetail() {
   const [borrowers, setBorrowers] = useState([]);
   const [activeBorrower, setActiveBorrower] = useState(0);
   const [saveTimeout, setSaveTimeout] = useState(null);
+  const [showVoicemailDrop, setShowVoicemailDrop] = useState(false);
 
   useEffect(() => {
     loadLoanData();
@@ -182,6 +185,15 @@ function LoanDetail() {
           ← Back to Loans
         </button>
         <div className="header-actions">
+          {loan?.borrower_phone && (
+            <button
+              className="btn-voicemail-drop"
+              onClick={() => setShowVoicemailDrop(true)}
+              title="Drop voicemail to borrower"
+            >
+              📞 Voicemail Drop
+            </button>
+          )}
           {editing ? (
             <>
               <button className="btn-save" onClick={handleSave}>Save</button>
@@ -963,7 +975,22 @@ function LoanDetail() {
             </div>
           </div>
         )}
+
+        {/* Smart AI Chat for Borrowers */}
+        <div className="smart-ai-section">
+          <h3>Smart AI Assistant</h3>
+          <SmartAIChat loanId={loan.id} context={{ borrower_name: loan.borrower_name || loan.borrower, loan_stage: loan.stage }} />
+        </div>
       </div>
+
+      {/* Voicemail Drop */}
+      {loan && showVoicemailDrop && (
+        <VoicemailDrop
+          phoneNumber={loan.borrower_phone}
+          recipientName={loan.borrower_name || loan.borrower}
+          onClose={() => setShowVoicemailDrop(false)}
+        />
+      )}
     </div>
   );
 }

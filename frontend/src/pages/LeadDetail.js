@@ -7,6 +7,7 @@ import SMSModal from '../components/SMSModal';
 import TeamsModal from '../components/TeamsModal';
 import RecordingModal from '../components/RecordingModal';
 import VoicemailModal from '../components/VoicemailModal';
+import VoicemailDrop from '../components/VoicemailDrop';
 import SmartAIChat from '../components/SmartAIChat';
 import './LeadDetail.css';
 
@@ -53,6 +54,7 @@ function LeadDetail() {
   const [showTeamsModal, setShowTeamsModal] = useState(false);
   const [showRecordingModal, setShowRecordingModal] = useState(false);
   const [showVoicemailModal, setShowVoicemailModal] = useState(false);
+  const [showVoicemailDrop, setShowVoicemailDrop] = useState(false);
   const [teamMembers, setTeamMembers] = useState([]);
   const [assignedTeamMembers, setAssignedTeamMembers] = useState({});
   const [isListening, setIsListening] = useState(false);
@@ -517,7 +519,7 @@ function LeadDetail() {
         setShowRecordingModal(true);
         break;
       case 'voicemail':
-        setShowVoicemailModal(true);
+        setShowVoicemailDrop(true);
         break;
       case 'voice':
         handleVoiceCommand();
@@ -1567,6 +1569,15 @@ function LeadDetail() {
           isOpen={showVoicemailModal}
           onClose={() => setShowVoicemailModal(false)}
           lead={lead}
+        />
+      )}
+
+      {/* Voicemail Drop */}
+      {lead && showVoicemailDrop && (
+        <VoicemailDrop
+          phoneNumber={lead.phone}
+          recipientName={lead.name}
+          onClose={() => setShowVoicemailDrop(false)}
         />
       )}
     </div>

@@ -498,6 +498,10 @@ export const voiceAPI = {
     const response = await api.post('/api/v1/voice/ai-receptionist-config', data);
     return response.data;
   },
+  dropVoicemail: async (data) => {
+    const response = await api.post('/api/v1/voice/drop-voicemail', data);
+    return response.data;
+  },
 };
 
 // AI Receptionist Dashboard API

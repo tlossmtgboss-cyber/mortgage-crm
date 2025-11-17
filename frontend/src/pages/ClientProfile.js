@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { leadsAPI, loansAPI, conversationsAPI } from '../services/api';
 import AIAssistant from '../components/AIAssistant';
+import SmartAIChat from '../components/SmartAIChat';
+import VoicemailDrop from '../components/VoicemailDrop';
 import './ClientProfile.css';
 
 function ClientProfile() {
@@ -11,6 +13,7 @@ function ClientProfile() {
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [showVoicemailDrop, setShowVoicemailDrop] = useState(false);
 
   useEffect(() => {
     loadClientData();
@@ -60,6 +63,11 @@ function ClientProfile() {
         </button>
         <h1>{type === 'lead' ? client.name : client.borrower_name}</h1>
         <div className="profile-actions">
+          {(client.phone || client.borrower_phone) && (
+            <button className="btn-voicemail" onClick={() => setShowVoicemailDrop(true)}>
+              📞 Voicemail Drop
+            </button>
+          )}
           <button className="btn-ai" onClick={() => setAssistantOpen(!assistantOpen)}>
             {assistantOpen ? 'Close' : 'Open'} AI Assistant
           </button>
@@ -179,6 +187,20 @@ function ClientProfile() {
               </div>
             )}
           </div>
+
+          {/* Smart AI Chat for MUM Clients */}
+          <div className="smart-ai-section">
+            <h3>Smart AI Assistant</h3>
+            <SmartAIChat
+              leadId={type === 'lead' ? id : null}
+              loanId={type === 'loan' ? id : null}
+              context={{
+                client_name: type === 'lead' ? client.name : client.borrower_name,
+                client_type: type,
+                stage: client.stage || client.loan_stage
+              }}
+            />
+          </div>
         </div>
 
         {/* AI Assistant Sidebar */}
@@ -192,6 +214,15 @@ function ClientProfile() {
           </div>
         )}
       </div>
+
+      {/* Voicemail Drop */}
+      {client && showVoicemailDrop && (
+        <VoicemailDrop
+          phoneNumber={type === 'lead' ? client.phone : client.borrower_phone}
+          recipientName={type === 'lead' ? client.name : client.borrower_name}
+          onClose={() => setShowVoicemailDrop(false)}
+        />
+      )}
     </div>
   );
 }

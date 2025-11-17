@@ -190,3 +190,22 @@
   font-size: 16px;
   color: #666;
 }
+
+/* Smart AI Section */
+.smart-ai-section {
+  margin-top: 32px;
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.smart-ai-section h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 16px 0;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #218D8D;
+}
+

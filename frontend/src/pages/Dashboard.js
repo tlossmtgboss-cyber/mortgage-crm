@@ -493,6 +493,13 @@ function Dashboard() {
                   {(efficiency.automationRateChange || 0) >= 0 ? '↑' : '↓'} {Math.abs(efficiency.automationRateChange || 0)}%
                 </div>
               </div>
+              <div className="efficiency-metric-card">
+                <div className="metric-label">Customer Satisfaction Score</div>
+                <div className="metric-value">{efficiency.customerSatisfaction || 0}%</div>
+                <div className={`metric-change ${(efficiency.customerSatisfactionChange || 0) >= 0 ? 'positive' : 'negative'}`}>
+                  {(efficiency.customerSatisfactionChange || 0) >= 0 ? '↑' : '↓'} {Math.abs(efficiency.customerSatisfactionChange || 0)}%
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1058,6 +1065,8 @@ const mockEfficiency = () => ({
   loansFallingBehindChange: -3,
   automationRate: 42,
   automationRateChange: 8.5,
+  customerSatisfaction: 85,
+  customerSatisfactionChange: 3.2,
 
   // Stage Performance
   stages: [

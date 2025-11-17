@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { aiAPI, conversationsAPI } from '../services/api';
 import './AIAssistant.css';
 
@@ -14,6 +14,8 @@ function AIAssistant({ isOpen, onClose, context = {} }) {
   const [inputValue, setInputValue] = useState('');
   const [loading, setLoading] = useState(false);
   const [memoryStats, setMemoryStats] = useState(null);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -24,6 +26,15 @@ function AIAssistant({ isOpen, onClose, context = {} }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, context.lead_id, context.loan_id]);
+
+  useEffect(() => {
+    // Cleanup voice recognition on unmount
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, []);
 
   const loadMemoryStats = async () => {
     try {
@@ -106,6 +117,58 @@ function AIAssistant({ isOpen, onClose, context = {} }) {
     }
   };
 
+  const handleVoiceInput = () => {
+    // Check if browser supports Web Speech API
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      alert('Sorry, your browser does not support speech recognition. Please try Chrome or Edge.');
+      return;
+    }
+
+    // If already listening, stop
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+      return;
+    }
+
+    // Create new recognition instance
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      setIsListening(true);
+      console.log('Voice recognition started. Speak now...');
+    };
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      console.log('Voice input received:', transcript);
+      setInputValue(transcript);
+    };
+
+    recognition.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
+      setIsListening(false);
+      if (event.error === 'no-speech') {
+        alert('No speech detected. Please try again.');
+      } else if (event.error !== 'aborted') {
+        alert(`Error occurred: ${event.error}`);
+      }
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      console.log('Voice recognition ended');
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -145,8 +208,9 @@ function AIAssistant({ isOpen, onClose, context = {} }) {
         <textarea
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
-          placeholder="Ask me anything..."
+          placeholder={isListening ? '🎤 Listening... Speak now!' : 'Ask me anything...'}
           rows={3}
+          disabled={loading}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
@@ -154,9 +218,20 @@ function AIAssistant({ isOpen, onClose, context = {} }) {
             }
           }}
         />
-        <button type="submit" className="send-button" disabled={!inputValue.trim()}>
-          Send
-        </button>
+        <div className="input-actions">
+          <button
+            type="button"
+            className={`microphone-button ${isListening ? 'listening' : ''}`}
+            onClick={handleVoiceInput}
+            disabled={loading}
+            title={isListening ? 'Stop listening' : 'Click to speak'}
+          >
+            {isListening ? '🔴' : '🎤'}
+          </button>
+          <button type="submit" className="send-button" disabled={!inputValue.trim() || loading}>
+            {loading ? 'Thinking...' : 'Send'}
+          </button>
+        </div>
       </form>
     </div>
   );

@@ -1409,3 +1409,48 @@
   box-shadow: none;
   border-radius: 0;
 }
+
+/* Smart AI Section */
+.smart-ai-section {
+  margin-top: 32px;
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.smart-ai-section h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 16px 0;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #218D8D;
+}
+
+
+/* Voicemail Drop Button */
+.btn-voicemail-drop,
+.btn-voicemail {
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.btn-voicemail-drop:hover,
+.btn-voicemail:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.btn-voicemail-drop:active,
+.btn-voicemail:active {
+  transform: translateY(0);
+}
+

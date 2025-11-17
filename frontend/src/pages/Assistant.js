@@ -8,7 +8,9 @@ function Assistant() {
   const [loading, setLoading] = useState(false);
   const [context, setContext] = useState(null);
   const [suggestions, setSuggestions] = useState([]);
+  const [isListening, setIsListening] = useState(false);
   const messagesEndRef = useRef(null);
+  const recognitionRef = useRef(null);
 
   const quickActions = [
     { icon: '📊', text: 'Show my pipeline overview', action: 'pipeline_overview' },
@@ -27,6 +29,15 @@ function Assistant() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    // Cleanup voice recognition on unmount
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -133,6 +144,58 @@ function Assistant() {
     }
   };
 
+  const handleVoiceInput = () => {
+    // Check if browser supports Web Speech API
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      alert('Sorry, your browser does not support speech recognition. Please try Chrome or Edge.');
+      return;
+    }
+
+    // If already listening, stop
+    if (isListening && recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+      return;
+    }
+
+    // Create new recognition instance
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      setIsListening(true);
+      console.log('Voice recognition started. Speak now...');
+    };
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      console.log('Voice input received:', transcript);
+      setInputMessage(transcript);
+    };
+
+    recognition.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
+      setIsListening(false);
+      if (event.error === 'no-speech') {
+        alert('No speech detected. Please try again.');
+      } else if (event.error !== 'aborted') {
+        alert(`Error occurred: ${event.error}`);
+      }
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      console.log('Voice recognition ended');
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  };
+
   return (
     <div className="assistant-page">
       <div className="assistant-header">
@@ -231,20 +294,31 @@ function Assistant() {
           <div className="input-area">
             <textarea
               className="message-input"
-              placeholder="Ask me anything about your mortgage business..."
+              placeholder={isListening ? '🎤 Listening... Speak now!' : 'Ask me anything about your mortgage business...'}
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyPress={handleKeyPress}
               rows="3"
               disabled={loading}
             />
-            <button
-              className="btn-send"
-              onClick={() => handleSendMessage()}
-              disabled={loading || !inputMessage.trim()}
-            >
-              {loading ? '⏳' : '📤'} Send
-            </button>
+            <div className="input-actions">
+              <button
+                type="button"
+                className={`btn-microphone ${isListening ? 'listening' : ''}`}
+                onClick={handleVoiceInput}
+                disabled={loading}
+                title={isListening ? 'Stop listening' : 'Click to speak'}
+              >
+                {isListening ? '🔴 Listening' : '🎤 Speak'}
+              </button>
+              <button
+                className="btn-send"
+                onClick={() => handleSendMessage()}
+                disabled={loading || !inputMessage.trim()}
+              >
+                {loading ? '⏳ Thinking...' : '📤 Send'}
+              </button>
+            </div>
           </div>
         </div>
 

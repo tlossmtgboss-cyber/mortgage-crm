@@ -190,7 +190,8 @@ DEMO_LOANS = [
         "term": 360,
         "property_address": "1234 Oak Street, Austin, TX 78701",
         "closing_date_days": 25,
-        "processor": "Amanda Foster"
+        "processor": "Amanda Foster",
+        "days_in_stage": 18
     },
     {
         "loan_number": "2025-001235",
@@ -266,6 +267,71 @@ DEMO_LOANS = [
         "property_address": "2345 Cedar Court, Fort Worth, TX 76101",
         "closing_date_days": 28,
         "processor": "Amanda Foster"
+    },
+    # Funded loans (for efficiency metrics)
+    {
+        "loan_number": "2024-008901",
+        "borrower_name": "Anthony Martinez",
+        "coborrower_name": "Laura Martinez",
+        "stage": "Funded",
+        "program": "Conventional 30-Year Fixed",
+        "loan_type": "Purchase",
+        "amount": 395000,
+        "purchase_price": 495000,
+        "down_payment": 100000,
+        "rate": 6.875,
+        "term": 360,
+        "property_address": "1111 Sunset Blvd, Austin, TX 78704",
+        "processor": "Robert Garcia",
+        "funded_days_ago": 5,
+        "created_days_ago": 38
+    },
+    {
+        "loan_number": "2024-008902",
+        "borrower_name": "Karen White",
+        "stage": "Funded",
+        "program": "FHA 30-Year Fixed",
+        "loan_type": "Purchase",
+        "amount": 275000,
+        "purchase_price": 295000,
+        "down_payment": 10325,
+        "rate": 6.625,
+        "term": 360,
+        "property_address": "2222 River Road, Dallas, TX 75202",
+        "processor": "Amanda Foster",
+        "funded_days_ago": 12,
+        "created_days_ago": 45
+    },
+    {
+        "loan_number": "2024-008903",
+        "borrower_name": "Steven Harris",
+        "coborrower_name": "Michelle Harris",
+        "stage": "Funded",
+        "program": "VA 30-Year Fixed",
+        "loan_type": "Purchase",
+        "amount": 355000,
+        "purchase_price": 355000,
+        "down_payment": 0,
+        "rate": 6.500,
+        "term": 360,
+        "property_address": "3333 Lake View, Houston, TX 77003",
+        "processor": "Robert Garcia",
+        "funded_days_ago": 18,
+        "created_days_ago": 50
+    },
+    {
+        "loan_number": "2024-008904",
+        "borrower_name": "Patricia Lewis",
+        "stage": "Funded",
+        "program": "Conventional 15-Year Fixed",
+        "loan_type": "Refinance",
+        "amount": 320000,
+        "rate": 6.250,
+        "term": 180,
+        "property_address": "4444 Park Avenue, San Antonio, TX 78202",
+        "processor": "Kevin Park",
+        "funded_days_ago": 25,
+        "created_days_ago": 55
     }
 ]
 
@@ -504,8 +570,18 @@ def create_active_loans(db):
             continue
 
         # Calculate dates
-        closing_date = datetime.now(timezone.utc) + timedelta(days=loan.get("closing_date_days", 30))
-        lock_date = datetime.now(timezone.utc) - timedelta(days=random.randint(5, 15))
+        if loan["stage"] == "Funded":
+            # Funded loans: set funded_date and created_at in the past
+            funded_date = datetime.now(timezone.utc).date() - timedelta(days=loan.get("funded_days_ago", 10))
+            created_at = datetime.now(timezone.utc) - timedelta(days=loan.get("created_days_ago", 40))
+            closing_date = funded_date
+            lock_date = datetime.now(timezone.utc) - timedelta(days=loan.get("created_days_ago", 40) - 5)
+        else:
+            # Active loans: closing date in future
+            closing_date = datetime.now(timezone.utc) + timedelta(days=loan.get("closing_date_days", 30))
+            lock_date = datetime.now(timezone.utc) - timedelta(days=random.randint(5, 15))
+            funded_date = None
+            created_at = datetime.now(timezone.utc)
 
         db.execute(text("""
             INSERT INTO loans (
@@ -513,7 +589,7 @@ def create_active_loans(db):
                 stage, program, loan_type, amount,
                 purchase_price, down_payment, rate, term,
                 property_address, closing_date, lock_date,
-                processor, loan_officer_id,
+                funded_date, processor, loan_officer_id,
                 days_in_stage, sla_status, risk_score,
                 created_at, updated_at
             )
@@ -522,9 +598,9 @@ def create_active_loans(db):
                 :stage, :program, :loan_type, :amount,
                 :purchase_price, :down_payment, :rate, :term,
                 :address, :closing_date, :lock_date,
-                :processor, :lo_id,
+                :funded_date, :processor, :lo_id,
                 :days_in_stage, 'on-track', :risk_score,
-                CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                :created_at, CURRENT_TIMESTAMP
             )
         """), {
             "loan_number": loan["loan_number"],
@@ -541,10 +617,12 @@ def create_active_loans(db):
             "address": loan["property_address"],
             "closing_date": closing_date,
             "lock_date": lock_date,
+            "funded_date": funded_date,
             "processor": loan.get("processor"),
             "lo_id": lo_id,
-            "days_in_stage": random.randint(3, 15),
-            "risk_score": random.randint(10, 40)
+            "days_in_stage": loan.get("days_in_stage", random.randint(3, 15)),
+            "risk_score": random.randint(10, 40),
+            "created_at": created_at
         })
 
         created_count += 1
