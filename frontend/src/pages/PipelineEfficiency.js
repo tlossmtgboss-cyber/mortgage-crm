@@ -451,7 +451,9 @@ function PipelineEfficiency() {
       loansFallingBehind: 12,
       loansFallingBehindChange: -3,
       automationRate: 42,
-      automationRateChange: 8.5
+      automationRateChange: 8.5,
+      customerSatisfaction: 4.6,
+      customerSatisfactionChange: 0.3
     },
 
     // Performance trends (last 12 weeks)
@@ -631,6 +633,14 @@ function PipelineEfficiency() {
             <div className="metric-value">{efficiencyData.keyMetrics.automationRate}%</div>
             <div className={`metric-change ${efficiencyData.keyMetrics.automationRateChange >= 0 ? 'positive' : 'negative'}`}>
               {efficiencyData.keyMetrics.automationRateChange >= 0 ? '↑' : '↓'} {Math.abs(efficiencyData.keyMetrics.automationRateChange)}%
+            </div>
+          </div>
+
+          <div className="metric-card">
+            <div className="metric-label">Customer Satisfaction</div>
+            <div className="metric-value">{efficiencyData.keyMetrics.customerSatisfaction}/5.0</div>
+            <div className={`metric-change ${efficiencyData.keyMetrics.customerSatisfactionChange >= 0 ? 'positive' : 'negative'}`}>
+              {efficiencyData.keyMetrics.customerSatisfactionChange >= 0 ? '↑' : '↓'} {Math.abs(efficiencyData.keyMetrics.customerSatisfactionChange)}
             </div>
           </div>
         </div>
