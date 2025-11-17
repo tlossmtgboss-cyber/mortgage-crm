@@ -85,7 +85,7 @@ function VoicemailDrop({ phoneNumber, recipientName, onClose }) {
         to_number: phoneNumber,
         message: message,
         recipient_name: recipientName,
-        provider: "zapier"  // Use Zapier for ringless voicemail (interim solution)
+        provider: "slybroadcast"  // Use Slybroadcast JSON API for ringless voicemail
       });
 
       if (response.success) {

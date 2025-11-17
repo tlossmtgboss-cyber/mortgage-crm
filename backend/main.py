@@ -4617,58 +4617,62 @@ async def drop_voicemail(
 
                 logger.info(f"Audio URL: {audio_url}")
 
-                # Step 2: Call Slybroadcast API
-                # Current date/time in ET for immediate delivery
-                from datetime import datetime as dt
-                import pytz
-                et_tz = pytz.timezone('US/Eastern')
-                now_et = dt.now(et_tz)
-                delivery_time = now_et.strftime("%m/%d/%Y %H:%M")
-
+                # Step 2: Call Slybroadcast JSON API
                 slybroadcast_data = {
+                    "c_method": "new_campaign",
                     "c_uid": sly_email,
                     "c_password": sly_password,
                     "c_phone": clean_number,
                     "c_callerID": sly_caller_id,
-                    "c_date": delivery_time,
+                    "c_date": "now",  # Immediate delivery
                     "c_url": audio_url,
                     "c_audio": "mp3",
                     "c_title": f"Voicemail to {recipient_name or clean_number}",
                     "mobile_only": "1"  # Deliver to mobile phones only
                 }
 
-                logger.info(f"Calling Slybroadcast API for {clean_number}")
-                logger.info(f"Slybroadcast payload: {dict(c_phone=clean_number, c_callerID=sly_caller_id, c_date=delivery_time, c_url=audio_url)}")
+                logger.info(f"Calling Slybroadcast JSON API for {clean_number}")
+                logger.info(f"Slybroadcast payload: {dict(c_phone=clean_number, c_callerID=sly_caller_id, c_url=audio_url)}")
 
                 sly_response = await client.post(
-                    "https://www.mobile-sphere.com/gateway/vmb.php",
-                    data=slybroadcast_data,
+                    "https://www.slybroadcast.com/gateway/vmb.json.php",
+                    json=slybroadcast_data,
                     timeout=30.0
                 )
 
-                sly_text = sly_response.text.strip()
-                logger.info(f"Slybroadcast response: {sly_text}")
+                logger.info(f"Slybroadcast response status: {sly_response.status_code}")
+                logger.info(f"Slybroadcast response: {sly_response.text}")
 
-                # Parse response: "OK session_id=[number] number of phone=[count]"
-                if sly_text.startswith("OK"):
-                    # Extract session ID
-                    import re
-                    match = re.search(r'session_id=(\d+)', sly_text)
-                    if match:
-                        session_id = match.group(1)
-                        voicemail_drop.vapi_call_id = session_id  # Reuse vapi_call_id column for session_id
-                        voicemail_drop.delivery_status = 'sent'
-                        db.commit()
-                        logger.info(f"Voicemail sent successfully. Session ID: {session_id}")
-                    else:
-                        raise HTTPException(status_code=500, detail=f"Unexpected Slybroadcast response: {sly_text}")
-                else:
-                    # Error response
-                    voicemail_drop.delivery_status = 'failed'
-                    voicemail_drop.error_message = sly_text
+                # Parse JSON response
+                try:
+                    sly_data = sly_response.json()
+                except Exception as e:
+                    logger.error(f"Failed to parse Slybroadcast JSON response: {sly_response.text}")
+                    raise HTTPException(status_code=500, detail=f"Invalid JSON response from Slybroadcast: {sly_response.text}")
+
+                # Check for success: {"new_campaign": "OK", "session_id": "123456", "number_of_phone": 1}
+                if sly_data.get("new_campaign") == "OK":
+                    session_id = str(sly_data.get("session_id"))
+                    voicemail_drop.vapi_call_id = session_id
+                    voicemail_drop.delivery_status = 'sent'
                     db.commit()
-                    logger.error(f"Slybroadcast error: {sly_text}")
-                    raise HTTPException(status_code=500, detail=f"Slybroadcast error: {sly_text}")
+                    logger.info(f"Voicemail sent successfully via Slybroadcast. Session ID: {session_id}")
+                elif "ERROR" in sly_data:
+                    # Error response: {"ERROR": "error message"}
+                    error_msg = sly_data.get("ERROR", "Unknown error")
+                    voicemail_drop.delivery_status = 'failed'
+                    voicemail_drop.error_message = error_msg
+                    db.commit()
+                    logger.error(f"Slybroadcast error: {error_msg}")
+                    raise HTTPException(status_code=500, detail=f"Slybroadcast error: {error_msg}")
+                else:
+                    # Unexpected response
+                    error_msg = str(sly_data)
+                    voicemail_drop.delivery_status = 'failed'
+                    voicemail_drop.error_message = error_msg
+                    db.commit()
+                    logger.error(f"Unexpected Slybroadcast response: {error_msg}")
+                    raise HTTPException(status_code=500, detail=f"Unexpected Slybroadcast response: {error_msg}")
 
         else:
             # VAPI FALLBACK (will ring the phone)
