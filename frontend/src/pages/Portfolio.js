@@ -197,6 +197,7 @@ function Portfolio() {
     loans: []
   });
   const [mumClients, setMumClients] = useState([]);
+  const [mumMetrics, setMumMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [filterView, setFilterView] = useState('all');
@@ -209,10 +210,11 @@ function Portfolio() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [stats, loans, mum] = await Promise.all([
+      const [stats, loans, mum, metrics] = await Promise.all([
         portfolioAPI.getStats(),
         portfolioAPI.getAll(),
-        mumAPI.getAll()
+        mumAPI.getAll(),
+        mumAPI.getMetrics()
       ]);
 
       const totalVolume = stats.total_volume || 0;
@@ -245,6 +247,7 @@ function Portfolio() {
       });
 
       setMumClients(Array.isArray(mum) ? mum : []);
+      setMumMetrics(metrics || null);
     } catch (error) {
       console.error('Failed to load portfolio data:', error);
       // Use mock data on error
@@ -318,10 +321,11 @@ function Portfolio() {
   if (searchQuery.trim()) {
     const query = searchQuery.toLowerCase();
     filteredMumClients = filteredMumClients.filter(client =>
-      client.name?.toLowerCase().includes(query) ||
+      client.client_name?.toLowerCase().includes(query) ||
       client.email?.toLowerCase().includes(query) ||
       client.phone?.toLowerCase().includes(query) ||
-      client.loan_amount?.toString().includes(query)
+      client.current_loan_amount?.toString().includes(query) ||
+      client.servicing_loan_number?.toLowerCase().includes(query)
     );
   }
 
@@ -380,45 +384,77 @@ function Portfolio() {
 
           {/* Top Row Stats */}
           <div className="mum-stats-grid mum-stats-row">
-            <div className="mum-stat-card">
-              <div className="mum-stat-value">$184,250,000</div>
+            <div
+              className="mum-stat-card clickable"
+              onClick={() => navigate('/portfolio/detail?metric=total_upb')}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="mum-stat-value">{formatCurrency(mumMetrics?.total_upb || 0)}</div>
               <div className="mum-stat-label">TOTAL UPB UNDER MGT</div>
             </div>
-            <div className="mum-stat-card">
-              <div className="mum-stat-value">+$3.4M</div>
+            <div
+              className="mum-stat-card clickable"
+              onClick={() => navigate('/portfolio/detail?metric=net_growth')}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="mum-stat-value">{formatCurrency(mumMetrics?.net_growth_mom || 0)}</div>
               <div className="mum-stat-sublabel">(MoM)</div>
               <div className="mum-stat-label">NET MUM GROWTH</div>
             </div>
-            <div className="mum-stat-card">
-              <div className="mum-stat-value">1.82%</div>
+            <div
+              className="mum-stat-card clickable"
+              onClick={() => navigate('/portfolio/detail?metric=portfolio_yield')}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="mum-stat-value">{((mumMetrics?.portfolio_yield || 0) * 100).toFixed(2)}%</div>
               <div className="mum-stat-sublabel">Annual Yield</div>
               <div className="mum-stat-label">PORTFOLIO REVENUE YIELD</div>
             </div>
-            <div className="mum-stat-card">
-              <div className="mum-stat-value">$12,480</div>
-              <div className="mum-stat-sublabel">Avg. per Client</div>
+            <div
+              className="mum-stat-card clickable"
+              onClick={() => navigate('/portfolio/detail?metric=client_ltv')}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="mum-stat-value">{formatCurrency(mumMetrics?.avg_annual_revenue_per_client * 5 || 0)}</div>
+              <div className="mum-stat-sublabel">Avg. per Client (5yr)</div>
               <div className="mum-stat-label">CLIENT LIFETIME VALUE</div>
             </div>
           </div>
 
           {/* Second Row Stats */}
           <div className="mum-stats-grid mum-stats-row">
-            <div className="mum-stat-card">
-              <div className="mum-stat-value">487</div>
+            <div
+              className="mum-stat-card clickable"
+              onClick={() => navigate('/portfolio/detail?metric=client_count')}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="mum-stat-value">{mumMetrics?.client_count || 0}</div>
               <div className="mum-stat-sublabel">Active Clients</div>
               <div className="mum-stat-label">CLIENT COUNT</div>
             </div>
-            <div className="mum-stat-card">
-              <div className="mum-stat-value">+22 / -5</div>
-              <div className="mum-stat-sublabel">Added / Lost</div>
+            <div
+              className="mum-stat-card clickable"
+              onClick={() => navigate('/portfolio/detail?metric=loans_added_lost')}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="mum-stat-value">+{mumMetrics?.loans_added_30d || 0} / -{mumMetrics?.loans_lost_30d || 0}</div>
+              <div className="mum-stat-sublabel">Added / Lost (30d)</div>
               <div className="mum-stat-label">LOANS ADDED VS LOST</div>
             </div>
-            <div className="mum-stat-card">
+            <div
+              className="mum-stat-card clickable"
+              onClick={() => navigate('/portfolio/detail?metric=capture_rate')}
+              style={{ cursor: 'pointer' }}
+            >
               <div className="mum-stat-value">+41%</div>
               <div className="mum-stat-sublabel">Above Industry Avg</div>
               <div className="mum-stat-label">CAPTURE RATE ALPHA</div>
             </div>
-            <div className="mum-stat-card">
+            <div
+              className="mum-stat-card clickable"
+              onClick={() => navigate('/portfolio/detail?metric=attrition_risk')}
+              style={{ cursor: 'pointer' }}
+            >
               <div className="mum-stat-value">12.4%</div>
               <div className="mum-stat-sublabel">At-Risk Clients</div>
               <div className="mum-stat-label">ATTRITION RISK INDEX</div>
@@ -431,23 +467,35 @@ function Portfolio() {
           </div>
 
           <div className="mum-stats-grid mum-opportunities-row">
-            <div className="mum-stat-card opportunity-card">
-              <div className="mum-stat-value">74</div>
+            <div
+              className="mum-stat-card opportunity-card clickable"
+              onClick={() => navigate('/portfolio/detail?metric=rate_rebound')}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="mum-stat-value">{mumMetrics?.rate_rebound_opportunities || 0}</div>
               <div className="mum-stat-sublabel">Clients Eligible</div>
               <div className="mum-stat-label">RATE REBOUND OPPS</div>
-              <div className="opportunity-highlight">18 High-Priority</div>
+              <div className="opportunity-highlight">High rates ready to refi</div>
             </div>
-            <div className="mum-stat-card opportunity-card">
-              <div className="mum-stat-value">112</div>
-              <div className="mum-stat-sublabel">Clients > $150K Equity</div>
-              <div className="mum-stat-label">EQUITY ACCESS OPPS</div>
-              <div className="opportunity-highlight">37 Ready Now</div>
+            <div
+              className="mum-stat-card opportunity-card clickable"
+              onClick={() => navigate('/portfolio/detail?metric=heloc')}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="mum-stat-value">{mumMetrics?.heloc_opportunities || 0}</div>
+              <div className="mum-stat-sublabel">Clients with High Equity</div>
+              <div className="mum-stat-label">HELOC OPPORTUNITIES</div>
+              <div className="opportunity-highlight">Ready for equity access</div>
             </div>
-            <div className="mum-stat-card opportunity-card">
-              <div className="mum-stat-value">32</div>
+            <div
+              className="mum-stat-card opportunity-card clickable"
+              onClick={() => navigate('/portfolio/detail?metric=refinance')}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="mum-stat-value">{mumMetrics?.refinance_opportunities || 0}</div>
               <div className="mum-stat-sublabel">High-Priority Files</div>
-              <div className="mum-stat-label">HELOC / REFI HEATMAP</div>
-              <div className="opportunity-highlight">rate drop + equity + LTV</div>
+              <div className="mum-stat-label">REFINANCE OPPORTUNITIES</div>
+              <div className="opportunity-highlight">Rate drop opportunities</div>
             </div>
           </div>
 
@@ -457,17 +505,29 @@ function Portfolio() {
           </div>
 
           <div className="mum-stats-grid mum-revenue-row">
-            <div className="mum-stat-card">
-              <div className="mum-stat-value">$2,180</div>
+            <div
+              className="mum-stat-card clickable"
+              onClick={() => navigate('/portfolio/detail?metric=annual_revenue')}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className="mum-stat-value">{formatCurrency(mumMetrics?.avg_annual_revenue_per_client || 0)}</div>
               <div className="mum-stat-sublabel">per Client</div>
               <div className="mum-stat-label">ANNUAL REVENUE / CL</div>
             </div>
-            <div className="mum-stat-card">
+            <div
+              className="mum-stat-card clickable"
+              onClick={() => navigate('/portfolio/detail?metric=referral_rate')}
+              style={{ cursor: 'pointer' }}
+            >
               <div className="mum-stat-value">0.64</div>
               <div className="mum-stat-sublabel">Referrals/yr</div>
               <div className="mum-stat-label">REFERRAL RATE / CLIENT</div>
             </div>
-            <div className="mum-stat-card">
+            <div
+              className="mum-stat-card clickable"
+              onClick={() => navigate('/portfolio/detail?metric=repeat_purchase')}
+              style={{ cursor: 'pointer' }}
+            >
               <div className="mum-stat-value">21%</div>
               <div className="mum-stat-sublabel">5-Yr Rolling</div>
               <div className="mum-stat-label">REPEAT PURCHASE RATE</div>
@@ -480,16 +540,28 @@ function Portfolio() {
           </div>
 
           <div className="mum-stats-grid mum-health-row">
-            <div className="mum-stat-card">
+            <div
+              className="mum-stat-card clickable"
+              onClick={() => navigate('/portfolio/detail?metric=portfolio_stability')}
+              style={{ cursor: 'pointer' }}
+            >
               <div className="mum-stat-value">89/100</div>
               <div className="mum-stat-label">PORTFOLIO STABILITY</div>
             </div>
-            <div className="mum-stat-card">
+            <div
+              className="mum-stat-card clickable"
+              onClick={() => navigate('/portfolio/detail?metric=volume_variance')}
+              style={{ cursor: 'pointer' }}
+            >
               <div className="mum-stat-value">±14%</div>
               <div className="mum-stat-sublabel">Month-to-Month</div>
               <div className="mum-stat-label">VARIANCE IN VOLUME</div>
             </div>
-            <div className="mum-stat-card">
+            <div
+              className="mum-stat-card clickable"
+              onClick={() => navigate('/portfolio/detail?metric=max_drawdown')}
+              style={{ cursor: 'pointer' }}
+            >
               <div className="mum-stat-value">-28%</div>
               <div className="mum-stat-sublabel">Last 12 Months</div>
               <div className="mum-stat-label">PIPELINE MAX DRAWDOWN</div>
@@ -502,19 +574,35 @@ function Portfolio() {
           </div>
 
           <div className="mum-stats-grid mum-segments-row">
-            <div className="mum-stat-card segment-card">
+            <div
+              className="mum-stat-card segment-card clickable"
+              onClick={() => navigate('/portfolio/detail?metric=primary_residence')}
+              style={{ cursor: 'pointer' }}
+            >
               <div className="mum-stat-value">62%</div>
               <div className="mum-stat-label">PRIMARY RESIDENCE</div>
             </div>
-            <div className="mum-stat-card segment-card">
+            <div
+              className="mum-stat-card segment-card clickable"
+              onClick={() => navigate('/portfolio/detail?metric=investors')}
+              style={{ cursor: 'pointer' }}
+            >
               <div className="mum-stat-value">18%</div>
               <div className="mum-stat-label">INVESTORS</div>
             </div>
-            <div className="mum-stat-card segment-card">
+            <div
+              className="mum-stat-card segment-card clickable"
+              onClick={() => navigate('/portfolio/detail?metric=builders')}
+              style={{ cursor: 'pointer' }}
+            >
               <div className="mum-stat-value">12%</div>
               <div className="mum-stat-label">BUILDERS / RTO</div>
             </div>
-            <div className="mum-stat-card segment-card">
+            <div
+              className="mum-stat-card segment-card clickable"
+              onClick={() => navigate('/portfolio/detail?metric=refinance_other')}
+              style={{ cursor: 'pointer' }}
+            >
               <div className="mum-stat-value">8%</div>
               <div className="mum-stat-label">REFINANCE / OTHER</div>
             </div>
@@ -621,20 +709,20 @@ function Portfolio() {
                     style={{ cursor: 'pointer' }}
                   >
                     <td>
-                      <strong>{client.name}</strong>
+                      <strong>{client.client_name}</strong>
                     </td>
-                    <td>{client.loan_number}</td>
+                    <td>{client.servicing_loan_number}</td>
                     <td>
-                      {new Date(client.original_close_date).toLocaleDateString()}
+                      {new Date(client.closing_date).toLocaleDateString()}
                     </td>
                     <td>
                       <span className={`days-badge ${getDaysSinceFundingColor(client.days_since_funding)}`}>
                         {client.days_since_funding} days
                       </span>
                     </td>
-                    <td>{client.original_rate ? `${client.original_rate}%` : 'N/A'}</td>
-                    <td>{client.current_rate ? `${client.current_rate}%` : 'N/A'}</td>
-                    <td>${client.loan_balance?.toLocaleString() || 0}</td>
+                    <td>{client.interest_rate ? `${client.interest_rate}%` : 'N/A'}</td>
+                    <td>{client.interest_rate ? `${client.interest_rate}%` : 'N/A'}</td>
+                    <td>${client.current_loan_amount?.toLocaleString() || 0}</td>
                     <td>
                       {client.refinance_opportunity ? (
                         <span className="opportunity-yes">Yes</span>
@@ -654,7 +742,10 @@ function Portfolio() {
                         <button className="btn-contact">Contact</button>
                         <button
                           className="btn-delete-small"
-                          onClick={() => handleDeleteClient(client.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteClient(client.id);
+                          }}
                         >
                           ×
                         </button>

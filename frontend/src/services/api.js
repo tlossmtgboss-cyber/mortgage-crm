@@ -208,7 +208,11 @@ export const partnersAPI = {
 // MUM Clients
 export const mumAPI = {
   getAll: async (params = {}) => {
-    const response = await api.get('/api/v1/mum-clients/', { params });
+    const response = await api.get('/api/v1/mum/clients', { params });
+    return response.data.clients || [];
+  },
+  getMetrics: async () => {
+    const response = await api.get('/api/v1/mum/metrics');
     return response.data;
   },
   getById: async (id) => {
