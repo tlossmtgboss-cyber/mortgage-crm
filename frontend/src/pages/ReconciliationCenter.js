@@ -27,6 +27,7 @@ function ReconciliationCenter() {
   useEffect(() => {
     fetchPendingItems();
     fetchCompletedItems();
+    loadSampleData(); // Load sample data
 
     // Auto-sync emails every 5 minutes
     const syncInterval = setInterval(() => {
@@ -38,6 +39,87 @@ function ReconciliationCenter() {
 
     return () => clearInterval(syncInterval);
   }, []);
+
+  // Load sample data for demonstration
+  const loadSampleData = () => {
+    // Generate 20 completed reconciliations
+    const sampleCompleted = Array.from({ length: 20 }, (_, i) => {
+      const statuses = ['approved', 'rejected'];
+      const status = i < 15 ? 'approved' : 'rejected';
+      const intents = [
+        'Rate Lock Request',
+        'Document Submission',
+        'Application Update',
+        'Question About Process',
+        'Closing Date Inquiry',
+        'Income Verification',
+        'Property Appraisal Update',
+        'Title Document Request'
+      ];
+      const entityTypes = ['lead', 'loan', 'client'];
+
+      return {
+        id: `comp-${i + 1}`,
+        email_subject: `${intents[i % intents.length]} - ${['John Smith', 'Sarah Johnson', 'Michael Brown', 'Emily Davis'][i % 4]}`,
+        email_from: `${['john.smith', 'sarah.j', 'michael.b', 'emily.d'][i % 4]}@example.com`,
+        email_received_at: new Date(Date.now() - (i + 1) * 86400000).toISOString(),
+        status: status,
+        reviewed_at: new Date(Date.now() - i * 3600000).toISOString(),
+        reviewed_by: 'demo@example.com',
+        email_intent: intents[i % intents.length],
+        match_entity_type: entityTypes[i % 3],
+        match_entity_id: `entity-${i + 1}`,
+        match_confidence: 0.85 + (Math.random() * 0.15),
+        fields: {
+          loan_amount: { value: `$${(250000 + i * 15000).toLocaleString()}`, confidence: 0.95 },
+          property_address: { value: `${100 + i} Main St, ${['San Francisco', 'Oakland', 'San Jose', 'Berkeley'][i % 4]}, CA`, confidence: 0.92 },
+          loan_type: { value: ['Conventional', 'FHA', 'VA', 'Jumbo'][i % 4], confidence: 0.88 },
+          rate: { value: `${(3.5 + (i % 10) * 0.1).toFixed(2)}%`, confidence: 0.90 }
+        }
+      };
+    });
+
+    // Generate 12 pending review items
+    const samplePendingReview = Array.from({ length: 12 }, (_, i) => {
+      const intents = [
+        'Rate Lock Request',
+        'Document Upload',
+        'Application Question',
+        'Closing Coordination',
+        'Income Update',
+        'Appraisal Status',
+        'Title Question',
+        'Refinance Inquiry'
+      ];
+
+      return {
+        id: `review-${i + 1}`,
+        email_subject: `${intents[i % intents.length]} - ${['Robert Wilson', 'Jennifer Lee', 'David Martinez', 'Lisa Anderson'][i % 4]}`,
+        email_from: `${['robert.w', 'jennifer.l', 'david.m', 'lisa.a'][i % 4]}@example.com`,
+        email_received_at: new Date(Date.now() - i * 7200000).toISOString(),
+        status: 'pending_review',
+        email_intent: intents[i % intents.length],
+        match_entity_type: ['lead', 'loan', 'client'][i % 3],
+        match_entity_id: `entity-review-${i + 1}`,
+        match_confidence: 0.75 + (Math.random() * 0.20),
+        needs_human_review: true,
+        review_reason: i % 3 === 0 ? 'Low confidence match' : i % 3 === 1 ? 'Complex document' : 'Unusual request pattern',
+        fields: {
+          loan_amount: { value: `$${(300000 + i * 25000).toLocaleString()}`, confidence: 0.70 + (Math.random() * 0.20) },
+          borrower_name: { value: ['Robert Wilson', 'Jennifer Lee', 'David Martinez', 'Lisa Anderson'][i % 4], confidence: 0.88 },
+          property_type: { value: ['Single Family', 'Condo', 'Townhouse', 'Multi-Family'][i % 4], confidence: 0.82 },
+          down_payment: { value: `${15 + (i % 5) * 5}%`, confidence: 0.75 }
+        },
+        recommended_action: {
+          title: 'Review and Approve',
+          description: 'AI suggests manual review due to ' + (i % 3 === 0 ? 'low confidence match' : i % 3 === 1 ? 'complex document structure' : 'unusual request pattern')
+        }
+      };
+    });
+
+    setCompletedItems(sampleCompleted);
+    setPendingReviewItems(samplePendingReview);
+  };
 
   const fetchPendingItems = async () => {
     try {
@@ -389,7 +471,13 @@ function ReconciliationCenter() {
                 className={`tab-button ${activeTab === 'pending' ? 'active' : ''}`}
                 onClick={() => setActiveTab('pending')}
               >
-                Pending Review ({pendingItems.length})
+                Auto-Processing ({pendingItems.length})
+              </button>
+              <button
+                className={`tab-button ${activeTab === 'pendingReview' ? 'active' : ''}`}
+                onClick={() => setActiveTab('pendingReview')}
+              >
+                Pending Review ({pendingReviewItems.length})
               </button>
               <button
                 className={`tab-button ${activeTab === 'completed' ? 'active' : ''}`}
@@ -745,6 +833,166 @@ function ReconciliationCenter() {
                       </span>
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : null}
+
+        {/* Pending Review Tab Content */}
+        {activeTab === 'pendingReview' && pendingReviewItems.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-icon">✓</div>
+            <h2>All Reviewed!</h2>
+            <p>No items pending review. Items flagged by AI for manual review will appear here.</p>
+          </div>
+        ) : activeTab === 'pendingReview' && pendingReviewItems.length > 0 ? (
+          <div className="reconciliation-content">
+            {/* Pending Review Items List */}
+            <div className="items-list">
+              {pendingReviewItems.map((item) => (
+                <div
+                  key={item.id}
+                  className={`reconciliation-item ${selectedItem?.id === item.id ? 'selected' : ''}`}
+                  onClick={() => setSelectedItem(item)}
+                >
+                  <div className="item-content">
+                    <div className="item-header">
+                      <div className="item-category">
+                        {item.email_intent || 'UNKNOWN'}
+                      </div>
+                      <div className="status-badge warning">
+                        ⚠️ NEEDS REVIEW
+                      </div>
+                    </div>
+                    <div className="item-subject">{item.email_subject}</div>
+                    <div className="item-meta">
+                      <span className="item-from">From: {item.email_from}</span>
+                      <span className="item-date">
+                        {new Date(item.email_received_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                    {item.review_reason && (
+                      <div className="review-reason">
+                        <strong>Review Reason:</strong> {item.review_reason}
+                      </div>
+                    )}
+                    <div className="item-confidence">
+                      <span className="confidence-label">Match Confidence:</span>
+                      <span className="confidence-value" style={{ color: getConfidenceColor(item.match_confidence) }}>
+                        {Math.round(item.match_confidence * 100)}%
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Detail Panel for Pending Review */}
+            {selectedItem && (
+              <div className="item-detail-panel">
+                <div className="detail-header">
+                  <h2>Review Required</h2>
+                  <button className="close-detail" onClick={() => setSelectedItem(null)}>×</button>
+                </div>
+
+                <div className="email-preview-section">
+                  <div className="email-header-info">
+                    <div className="email-meta">
+                      <div className="meta-row">
+                        <strong>From:</strong> {selectedItem.email_from}
+                      </div>
+                      <div className="meta-row">
+                        <strong>Subject:</strong> {selectedItem.email_subject}
+                      </div>
+                      <div className="meta-row">
+                        <strong>Received:</strong>{' '}
+                        {new Date(selectedItem.email_received_at).toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+
+                  {selectedItem.review_reason && (
+                    <div className="review-alert">
+                      <div className="alert-icon">⚠️</div>
+                      <div className="alert-content">
+                        <strong>Flagged for Review:</strong> {selectedItem.review_reason}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Entity Match Section */}
+                {selectedItem.match_entity_id && (
+                  <div className="match-section">
+                    <h3>Matched Entity</h3>
+                    <div className="match-card">
+                      <div className="match-details">
+                        <div className="entity-type">
+                          {selectedItem.match_entity_type === 'lead' ? 'Lead' :
+                           selectedItem.match_entity_type === 'loan' ? 'Loan' :
+                           selectedItem.match_entity_type === 'client' ? 'Client' :
+                           selectedItem.match_entity_type}
+                        </div>
+                        <div className="entity-confidence">
+                          Match Confidence: {Math.round(selectedItem.match_confidence * 100)}%
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Extracted Fields */}
+                <div className="extracted-fields">
+                  <h3>Extracted Fields</h3>
+                  <div className="fields-grid">
+                    {Object.entries(selectedItem.fields || {}).map(([fieldName, fieldData]) => {
+                      const confidence = fieldData.confidence || 0;
+                      const value = fieldData.value;
+                      const isEdited = fieldName in editedFields;
+                      const displayValue = isEdited
+                        ? editedFields[fieldName]
+                        : value;
+
+                      return (
+                        <div key={fieldName} className="field-row">
+                          <div className="field-label">
+                            <span>{formatFieldName(fieldName)}</span>
+                            <span
+                              className="field-confidence"
+                              style={{ color: getConfidenceColor(confidence) }}
+                            >
+                              {Math.round(confidence * 100)}%
+                            </span>
+                          </div>
+                          <input
+                            type="text"
+                            className={`field-input ${isEdited ? 'edited' : ''}`}
+                            value={isEdited ? editedFields[fieldName] : value || ''}
+                            onChange={(e) => handleFieldEdit(fieldName, e.target.value)}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="detail-actions">
+                  <button
+                    className="btn-approve"
+                    onClick={() => approveItem(selectedItem.id)}
+                    disabled={processingAction}
+                  >
+                    {processingAction ? 'Processing...' : '✓ Approve & Continue'}
+                  </button>
+                  <button
+                    className="btn-reject"
+                    onClick={() => rejectItem(selectedItem.id)}
+                    disabled={processingAction}
+                  >
+                    ✕ Reject
+                  </button>
                 </div>
               </div>
             )}
