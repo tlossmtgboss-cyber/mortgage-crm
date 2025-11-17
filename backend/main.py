@@ -6248,6 +6248,133 @@ async def add_ab_testing_tables_migration(
             "error": str(e)
         }
 
+@app.post("/api/v1/migrations/add-onboarding-tables")
+async def add_onboarding_tables_migration(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Add onboarding tables and user verification fields
+    Creates onboarding_progress, onboarding_errors, verification_tokens tables
+    and adds onboarding fields to users table
+    """
+    try:
+        logger.info(f"Running migration: add onboarding tables (user: {current_user.id})")
+
+        migration_results = []
+
+        # Add fields to users table
+        logger.info("Adding fields to users table...")
+        db.execute(text("""
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS phone VARCHAR(20),
+            ADD COLUMN IF NOT EXISTS nmls_number VARCHAR(50),
+            ADD COLUMN IF NOT EXISTS business_address VARCHAR(500),
+            ADD COLUMN IF NOT EXISTS current_role VARCHAR(100),
+            ADD COLUMN IF NOT EXISTS business_hours JSON,
+            ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMP,
+            ADD COLUMN IF NOT EXISTS phone_verified_at TIMESTAMP;
+        """))
+        migration_results.append("Added fields to users table")
+
+        # Create indexes on users table
+        db.execute(text("CREATE INDEX IF NOT EXISTS idx_users_nmls_number ON users(nmls_number);"))
+        db.execute(text("CREATE INDEX IF NOT EXISTS idx_users_email_verified_at ON users(email_verified_at);"))
+        db.execute(text("CREATE INDEX IF NOT EXISTS idx_users_phone_verified_at ON users(phone_verified_at);"))
+        migration_results.append("Created indexes on users table")
+
+        # Create onboarding_progress table
+        logger.info("Creating onboarding_progress table...")
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS onboarding_progress (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+                current_step INTEGER NOT NULL DEFAULT 1,
+                step_1_data JSON,
+                step_2_data JSON,
+                step_3_data JSON,
+                step_4_data JSON,
+                step_5_data JSON,
+                step_6_data JSON,
+                step_7_data JSON,
+                step_8_data JSON,
+                step_9_data JSON,
+                step_10_data JSON,
+                completed_at TIMESTAMP,
+                last_updated TIMESTAMP DEFAULT NOW(),
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+        """))
+        migration_results.append("Created onboarding_progress table")
+
+        # Create indexes on onboarding_progress
+        db.execute(text("CREATE INDEX IF NOT EXISTS idx_onboarding_progress_user_id ON onboarding_progress(user_id);"))
+        db.execute(text("CREATE INDEX IF NOT EXISTS idx_onboarding_progress_current_step ON onboarding_progress(current_step);"))
+        migration_results.append("Created indexes on onboarding_progress")
+
+        # Create onboarding_errors table
+        logger.info("Creating onboarding_errors table...")
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS onboarding_errors (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                error_code VARCHAR(20) NOT NULL,
+                step_number INTEGER NOT NULL,
+                error_message TEXT NOT NULL,
+                error_context JSON,
+                user_action VARCHAR(50),
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+        """))
+        migration_results.append("Created onboarding_errors table")
+
+        # Create indexes on onboarding_errors
+        db.execute(text("CREATE INDEX IF NOT EXISTS idx_onboarding_errors_user_id ON onboarding_errors(user_id);"))
+        db.execute(text("CREATE INDEX IF NOT EXISTS idx_onboarding_errors_error_code ON onboarding_errors(error_code);"))
+        db.execute(text("CREATE INDEX IF NOT EXISTS idx_onboarding_errors_step_number ON onboarding_errors(step_number);"))
+        db.execute(text("CREATE INDEX IF NOT EXISTS idx_onboarding_errors_created_at ON onboarding_errors(created_at);"))
+        migration_results.append("Created indexes on onboarding_errors")
+
+        # Create verification_tokens table
+        logger.info("Creating verification_tokens table...")
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS verification_tokens (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                token_type VARCHAR(20) NOT NULL,
+                token VARCHAR(10) NOT NULL,
+                expires_at TIMESTAMP NOT NULL,
+                used_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+        """))
+        migration_results.append("Created verification_tokens table")
+
+        # Create indexes on verification_tokens
+        db.execute(text("CREATE INDEX IF NOT EXISTS idx_verification_tokens_user_id ON verification_tokens(user_id);"))
+        db.execute(text("CREATE INDEX IF NOT EXISTS idx_verification_tokens_token ON verification_tokens(token);"))
+        db.execute(text("CREATE INDEX IF NOT EXISTS idx_verification_tokens_expires_at ON verification_tokens(expires_at);"))
+        migration_results.append("Created indexes on verification_tokens")
+
+        db.commit()
+
+        logger.info("Successfully completed onboarding tables migration")
+
+        return {
+            "success": True,
+            "message": "Successfully completed onboarding tables migration",
+            "steps": migration_results
+        }
+
+    except Exception as e:
+        logger.error(f"Onboarding tables migration failed: {e}")
+        db.rollback()
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e)
+        }
+
 @app.post("/api/v1/migrations/add-ai-receptionist-dashboard-tables")
 async def add_ai_receptionist_dashboard_tables_migration(
     current_user: User = Depends(get_current_user),
