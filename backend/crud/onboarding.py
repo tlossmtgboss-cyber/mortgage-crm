@@ -1,15 +1,13 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 import random
-import sys
-import os
 
-# Add parent directory to path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from main import OnboardingProgress, OnboardingError, VerificationToken
+# Avoid circular import - models are accessed through db.query()
+# Type hints use string literals to avoid import at runtime
+if TYPE_CHECKING:
+    from main import VerificationToken
 
 
 def generate_verification_code() -> str:
@@ -21,8 +19,11 @@ def create_verification_token(
     db: Session,
     user_id: int,
     token_type: str
-) -> VerificationToken:
+):
     """Create a new verification token"""
+    # Import here to avoid circular import
+    from main import VerificationToken
+
     token = generate_verification_code()
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
 
@@ -44,8 +45,11 @@ def verify_token(
     user_id: int,
     token: str,
     token_type: str
-) -> Optional[VerificationToken]:
+):
     """Verify a token and mark it as used"""
+    # Import here to avoid circular import
+    from main import VerificationToken
+
     token_obj = db.query(VerificationToken).filter(
         and_(
             VerificationToken.user_id == user_id,
@@ -71,6 +75,9 @@ def count_recent_verifications(
     hours: int = 1
 ) -> int:
     """Count verification attempts in the last N hours"""
+    # Import here to avoid circular import
+    from main import VerificationToken
+
     cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
 
     count = db.query(VerificationToken).filter(
@@ -86,6 +93,9 @@ def count_recent_verifications(
 
 def cleanup_expired_tokens(db: Session) -> int:
     """Delete expired tokens (run as scheduled job)"""
+    # Import here to avoid circular import
+    from main import VerificationToken
+
     cutoff = datetime.now(timezone.utc) - timedelta(days=1)
 
     deleted = db.query(VerificationToken).filter(
