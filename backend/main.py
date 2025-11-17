@@ -17629,6 +17629,45 @@ async def seed_demo_people(
         raise HTTPException(status_code=500, detail=f"Error seeding data: {str(e)}")
 
 
+@app.post("/api/v1/admin/assign-demo-data")
+async def assign_demo_data_to_user(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Assign all demo leads and loans to the current user.
+    Useful for making demo data visible in your dashboard.
+    """
+    try:
+        # Update all leads to current user
+        leads_updated = db.execute(text("""
+            UPDATE leads
+            SET owner_id = :user_id
+            WHERE email LIKE '%@email.com'
+        """), {"user_id": current_user.id})
+
+        # Update all loans to current user
+        loans_updated = db.execute(text("""
+            UPDATE loans
+            SET loan_officer_id = :user_id
+            WHERE loan_number LIKE '2025-%'
+        """), {"user_id": current_user.id})
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": f"Assigned demo data to {current_user.email}",
+            "leads_updated": leads_updated.rowcount,
+            "loans_updated": loans_updated.rowcount
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error assigning demo data: {e}")
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+
 @app.post("/admin/initialize-ai-system")
 async def initialize_ai_system_endpoint(request: dict):
     """
