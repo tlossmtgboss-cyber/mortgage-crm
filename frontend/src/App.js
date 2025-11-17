@@ -115,10 +115,7 @@ function App() {
     setCoachOpen(!coachOpen);
   };
 
-  const handleDismissOnboardingPrompt = () => {
-    // Temporarily dismiss the onboarding prompt (until next login)
-    setShowOnboarding(false);
-  };
+  // Removed dismiss handler - onboarding is now mandatory until completion
 
   useEffect(() => {
     const checkOnboardingStatus = async () => {
@@ -256,9 +253,9 @@ function App() {
                     taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    {/* Show onboarding prompt for users who haven't completed it */}
+                    {/* Show onboarding prompt for users who haven't completed it - persistent until completion */}
                     {showOnboarding && !checkingOnboarding && (
-                      <OnboardingPrompt onDismiss={handleDismissOnboardingPrompt} />
+                      <OnboardingPrompt />
                     )}
                     <LazyPage><Dashboard /></LazyPage>
                   </main>
