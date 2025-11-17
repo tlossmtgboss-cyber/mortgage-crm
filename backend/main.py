@@ -4507,7 +4507,49 @@ async def drop_voicemail(
 
         session_id = None
 
-        if provider == "slybroadcast":
+        if provider == "zapier":
+            # ZAPIER + SLYBROADCAST INTEGRATION (Interim Solution)
+            logger.info("Using Zapier webhook to trigger Slybroadcast")
+
+            zapier_webhook_url = os.getenv("ZAPIER_VOICEMAIL_WEBHOOK_URL")
+            if not zapier_webhook_url:
+                raise HTTPException(status_code=503, detail="Zapier webhook URL not configured. Set ZAPIER_VOICEMAIL_WEBHOOK_URL in environment variables.")
+
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                # Send data to Zapier webhook
+                zapier_payload = {
+                    "phone_number": clean_number,
+                    "message": full_message,
+                    "recipient_name": recipient_name or "Customer",
+                    "caller_id": os.getenv("SLYBROADCAST_CALLER_ID", "8438345251"),
+                    "voicemail_id": voicemail_drop.id
+                }
+
+                logger.info(f"Sending to Zapier webhook: {zapier_webhook_url}")
+                logger.info(f"Zapier payload: {dict(phone_number=clean_number, recipient_name=recipient_name)}")
+
+                zapier_response = await client.post(
+                    zapier_webhook_url,
+                    json=zapier_payload,
+                    timeout=30.0
+                )
+
+                if zapier_response.status_code not in [200, 201]:
+                    error_msg = zapier_response.text
+                    logger.error(f"Zapier webhook error: {error_msg}")
+                    voicemail_drop.delivery_status = 'failed'
+                    voicemail_drop.error_message = f"Zapier error: {error_msg}"
+                    db.commit()
+                    raise HTTPException(status_code=500, detail=f"Zapier webhook error: {error_msg}")
+
+                # Zapier webhook triggered successfully
+                session_id = f"zapier_{voicemail_drop.id}"
+                voicemail_drop.vapi_call_id = session_id
+                voicemail_drop.delivery_status = 'sent_to_zapier'
+                db.commit()
+                logger.info(f"Zapier webhook triggered successfully")
+
+        elif provider == "slybroadcast":
             # SLYBROADCAST RINGLESS VOICEMAIL
             logger.info("Using Slybroadcast for ringless voicemail")
 

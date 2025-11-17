@@ -84,7 +84,8 @@ function VoicemailDrop({ phoneNumber, recipientName, onClose }) {
       const response = await voiceAPI.dropVoicemail({
         to_number: phoneNumber,
         message: message,
-        recipient_name: recipientName
+        recipient_name: recipientName,
+        provider: "zapier"  // Use Zapier for ringless voicemail (interim solution)
       });
 
       if (response.success) {

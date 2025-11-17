@@ -1,0 +1,24 @@
+Subject: API Access Request for Account tloss@cmgfi.com
+
+Hello Slybroadcast Support Team,
+
+I am writing to request API access for my Slybroadcast account.
+
+Account Details:
+- Email: tloss@cmgfi.com
+- Company: The Tim Loss Team (Mortgage)
+- Phone: 843-834-5251
+
+I am integrating Slybroadcast's ringless voicemail service into our mortgage CRM system to streamline client communications. We plan to use the API to deliver pre-approval updates, closing reminders, and other important mortgage-related notifications to our clients.
+
+Our integration is complete and ready to go - we just need API access enabled on our account to begin using the service.
+
+Could you please enable API access for this account at your earliest convenience?
+
+Thank you for your assistance!
+
+Best regards,
+Tim Loss
+The Tim Loss Team
+tloss@cmgfi.com
+843-834-5251
