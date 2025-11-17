@@ -4,6 +4,8 @@
  * Provides all API calls for managing user goals, key results, and assessments
  */
 
+import { ensureArray } from '../utils/arrayHelpers';
+
 const API_BASE = '/api/v1';
 
 // Helper to get auth headers
@@ -38,7 +40,8 @@ export const getUserGoals = async (userId, params = {}) => {
   const response = await fetch(url, {
     headers: getAuthHeaders()
   });
-  return handleResponse(response);
+  const data = await handleResponse(response);
+  return ensureArray(data, 'goals');
 };
 
 export const createGoal = async (userId, data) => {

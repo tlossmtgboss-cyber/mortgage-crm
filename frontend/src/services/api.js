@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { ensureArray } from '../utils/arrayHelpers';
 
 // Use direct Railway URL for production, localhost for development
 // Bypassing Vercel proxy due to POST request issues
@@ -83,7 +84,7 @@ export const dashboardAPI = {
 export const leadsAPI = {
   getAll: async (params = {}) => {
     const response = await api.get('/api/v1/leads/', { params });
-    return response.data;
+    return ensureArray(response.data, 'leads');
   },
   getById: async (id) => {
     const response = await api.get(`/api/v1/leads/${id}`);
@@ -106,7 +107,7 @@ export const leadsAPI = {
 export const loansAPI = {
   getAll: async (params = {}) => {
     const response = await api.get('/api/v1/loans/', { params });
-    return response.data;
+    return ensureArray(response.data, 'loans');
   },
   getById: async (id) => {
     const response = await api.get(`/api/v1/loans/${id}`);
@@ -163,7 +164,7 @@ export const loansAPI = {
 export const tasksAPI = {
   getAll: async (params = {}) => {
     const response = await api.get('/api/v1/tasks/', { params });
-    return response.data;
+    return ensureArray(response.data, 'tasks');
   },
   getById: async (id) => {
     const response = await api.get(`/api/v1/tasks/${id}`);
@@ -186,7 +187,7 @@ export const tasksAPI = {
 export const partnersAPI = {
   getAll: async (params = {}) => {
     const response = await api.get('/api/v1/referral-partners/', { params });
-    return response.data;
+    return ensureArray(response.data, 'partners');
   },
   getById: async (id) => {
     const response = await api.get(`/api/v1/referral-partners/${id}`);
@@ -236,7 +237,7 @@ export const mumAPI = {
 export const activitiesAPI = {
   getAll: async (params = {}) => {
     const response = await api.get('/api/v1/activities/', { params });
-    return response.data;
+    return ensureArray(response.data, 'activities');
   },
   create: async (data) => {
     const response = await api.post('/api/v1/activities/', data);
@@ -293,14 +294,14 @@ export const aiAPI = {
   },
   getSuggestions: async () => {
     const response = await api.get('/api/v1/ai/suggestions');
-    return response.data;
+    return ensureArray(response.data, 'suggestions');
   },
 };
 
 export const conversationsAPI = {
   getAll: async (params = {}) => {
     const response = await api.get('/api/v1/conversations', { params });
-    return response.data;
+    return ensureArray(response.data, 'conversations');
   },
   create: async (data) => {
     const response = await api.post('/api/v1/conversations/', data);
@@ -312,7 +313,7 @@ export const conversationsAPI = {
 export const portfolioAPI = {
   getAll: async (params = {}) => {
     const response = await api.get('/api/v1/portfolio/', { params });
-    return response.data;
+    return ensureArray(response.data, 'portfolio');
   },
   getStats: async () => {
     const response = await api.get('/api/v1/portfolio/stats');
@@ -324,7 +325,7 @@ export const portfolioAPI = {
 export const calendarAPI = {
   getAll: async (params = {}) => {
     const response = await api.get('/api/v1/calendar/events', { params });
-    return response.data;
+    return ensureArray(response.data, 'events');
   },
   getById: async (id) => {
     const response = await api.get(`/api/v1/calendar/events/${id}`);
@@ -347,15 +348,15 @@ export const calendarAPI = {
 export const processTemplatesAPI = {
   getAll: async () => {
     const response = await api.get('/api/v1/process-templates/');
-    return response.data;
+    return ensureArray(response.data, 'templates');
   },
   getByRole: async (roleName) => {
     const response = await api.get(`/api/v1/process-templates/?role_name=${encodeURIComponent(roleName)}`);
-    return response.data;
+    return ensureArray(response.data, 'templates');
   },
   getRoles: async () => {
     const response = await api.get('/api/v1/process-templates/roles');
-    return response.data;
+    return ensureArray(response.data, 'roles');
   },
   create: async (data) => {
     const response = await api.post('/api/v1/process-templates/', data);
@@ -407,11 +408,11 @@ export const onboardingAPI = {
   },
   getRoles: async () => {
     const response = await api.get('/api/v1/onboarding/roles');
-    return response.data;
+    return ensureArray(response.data, 'roles');
   },
   getMilestones: async () => {
     const response = await api.get('/api/v1/onboarding/milestones');
-    return response.data;
+    return ensureArray(response.data, 'milestones');
   },
   getTasks: async (roleId = null, milestoneId = null) => {
     let url = '/api/v1/onboarding/tasks';
@@ -421,7 +422,7 @@ export const onboardingAPI = {
     if (params.toString()) url += `?${params.toString()}`;
 
     const response = await api.get(url);
-    return response.data;
+    return ensureArray(response.data, 'tasks');
   },
   updateTask: async (taskId, data) => {
     const response = await api.patch(`/api/v1/onboarding/tasks/${taskId}`, data);
@@ -453,11 +454,11 @@ export const onboardingAPI = {
 export const teamAPI = {
   getMembers: async () => {
     const response = await api.get('/api/v1/team/members');
-    return response.data;
+    return ensureArray(response.data, 'team_members');
   },
   getWorkflowMembers: async () => {
     const response = await api.get('/api/v1/team/workflow-members');
-    return response.data;
+    return ensureArray(response.data, 'members');
   },
   getMemberDetail: async (userId) => {
     const response = await api.get(`/api/v1/team/members/${userId}`);
@@ -484,7 +485,7 @@ export const voiceAPI = {
   },
   getCallHistory: async (params = {}) => {
     const response = await api.get('/api/v1/voice/call-history', { params });
-    return response.data;
+    return ensureArray(response.data, 'calls');
   },
   getCallStats: async () => {
     const response = await api.get('/api/v1/voice/call-stats');
@@ -526,7 +527,7 @@ export const voicemailAPI = {
   getTemplates: async (category = null) => {
     const params = category ? { category } : {};
     const response = await api.get('/api/v1/voicemail/templates', { params });
-    return response.data;
+    return ensureArray(response.data, 'templates');
   },
 
   // Create voicemail template
@@ -538,7 +539,7 @@ export const voicemailAPI = {
   // Get voicemail history
   getHistory: async (params = {}) => {
     const response = await api.get('/api/v1/voicemail/history', { params });
-    return response.data;
+    return ensureArray(response.data, 'history');
   },
 
   // Get voicemail analytics
@@ -556,7 +557,7 @@ export const aiReceptionistDashboardAPI = {
   // Activity Feed
   getActivityFeed: async (params = {}) => {
     const response = await api.get('/api/v1/ai-receptionist/dashboard/activity/feed', { params });
-    return response.data;
+    return ensureArray(response.data, 'activities');
   },
   getActivityCount: async (params = {}) => {
     const response = await api.get('/api/v1/ai-receptionist/dashboard/activity/count', { params });
@@ -568,7 +569,7 @@ export const aiReceptionistDashboardAPI = {
     const response = await api.get('/api/v1/ai-receptionist/dashboard/metrics/daily', {
       params: { start_date: startDate, end_date: endDate }
     });
-    return response.data;
+    return ensureArray(response.data, 'metrics');
   },
   getRealtimeMetrics: async () => {
     const response = await api.get('/api/v1/ai-receptionist/dashboard/metrics/realtime');
@@ -578,7 +579,7 @@ export const aiReceptionistDashboardAPI = {
   // Skills
   getSkills: async (params = {}) => {
     const response = await api.get('/api/v1/ai-receptionist/dashboard/skills', { params });
-    return response.data;
+    return ensureArray(response.data, 'skills');
   },
   getSkillDetail: async (skillName) => {
     const response = await api.get(`/api/v1/ai-receptionist/dashboard/skills/${skillName}`);
@@ -597,7 +598,7 @@ export const aiReceptionistDashboardAPI = {
   // Errors
   getErrors: async (params = {}) => {
     const response = await api.get('/api/v1/ai-receptionist/dashboard/errors', { params });
-    return response.data;
+    return ensureArray(response.data, 'errors');
   },
   approveErrorFix: async (errorId) => {
     const response = await api.post(`/api/v1/ai-receptionist/dashboard/errors/${errorId}/approve-fix`);
@@ -617,7 +618,7 @@ export const aiReceptionistDashboardAPI = {
   // Conversations
   getConversations: async (params = {}) => {
     const response = await api.get('/api/v1/ai-receptionist/dashboard/conversations', { params });
-    return response.data;
+    return ensureArray(response.data, 'conversations');
   },
   getConversationDetail: async (conversationId) => {
     const response = await api.get(`/api/v1/ai-receptionist/dashboard/conversations/${conversationId}`);
@@ -637,7 +638,7 @@ export const permissionsAPI = {
   },
   getAvailablePermissions: async () => {
     const response = await api.get('/api/v1/permissions/available');
-    return response.data;
+    return ensureArray(response.data, 'permissions');
   },
   applyTemplate: async (userId, templateName) => {
     const response = await api.post(`/api/v1/users/${userId}/permissions/apply-template`, {
@@ -682,11 +683,11 @@ export const accessAuditAPI = {
   },
   getImpersonationHistory: async (userId) => {
     const response = await api.get(`/api/v1/users/${userId}/impersonation-history`);
-    return response.data;
+    return ensureArray(response.data, 'history');
   },
   getActiveSessions: async (userId) => {
     const response = await api.get(`/api/v1/users/${userId}/active-sessions`);
-    return response.data;
+    return ensureArray(response.data, 'sessions');
   },
   revokeSession: async (userId, sessionId, reason = null) => {
     const response = await api.delete(`/api/v1/users/${userId}/sessions/${sessionId}`, {
@@ -755,7 +756,7 @@ export const notificationsApi = {
   getNotifications: async (unreadOnly = false, limit = 50) => {
     const params = { unread_only: unreadOnly, limit };
     const response = await api.get('/api/v1/notifications', { params });
-    return response;
+    return { ...response, data: ensureArray(response.data, 'notifications') };
   },
 
   // Mark notification as read
@@ -777,7 +778,7 @@ export const certificationsApi = {
   getDueCertifications: async (status = null) => {
     const params = status ? { status } : {};
     const response = await api.get('/api/v1/certifications/due', { params });
-    return response;
+    return { ...response, data: ensureArray(response.data, 'certifications') };
   },
 
   // Get certification details
@@ -801,7 +802,7 @@ export const certificationsApi = {
   // Get certification history for employee
   getCertificationHistory: async (userId) => {
     const response = await api.get(`/api/v1/users/${userId}/certifications/history`);
-    return response;
+    return { ...response, data: ensureArray(response.data, 'history') };
   },
 };
 
