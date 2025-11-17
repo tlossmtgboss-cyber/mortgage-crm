@@ -17742,7 +17742,18 @@ async def update_permission_roles(
     Admin, Leadership, Management, Sales, Processing, Operations
     """
     try:
-        # Define new permission templates
+        # Step 1: Drop old check constraint and create new one
+        db.execute(text("""
+            ALTER TABLE permission_templates DROP CONSTRAINT IF EXISTS template_category_check;
+        """))
+        db.execute(text("""
+            ALTER TABLE permission_templates
+            ADD CONSTRAINT template_category_check
+            CHECK (category IN ('admin', 'leadership', 'management', 'sales', 'processing', 'operations', 'custom'));
+        """))
+        db.commit()
+
+        # Step 2: Define new permission templates
         admin_perms = {
             "dashboard.view_all_widgets": True, "leads.view_all": True, "clients.view_all": True,
             "loans.view_all": True, "team.view_all": True, "team.impersonate": True,
@@ -17775,10 +17786,10 @@ async def update_permission_roles(
             "loans.process": True, "operations.manage": True
         }
 
-        # Delete old templates
+        # Step 3: Delete old templates
         db.execute(text("DELETE FROM permission_templates WHERE is_system_default = TRUE"))
 
-        # Insert new templates
+        # Step 4: Insert new templates
         db.execute(text("""
             INSERT INTO permission_templates
             (name, description, permissions, is_system_default, category, created_at)
