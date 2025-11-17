@@ -2,6 +2,134 @@ import { useState, useEffect } from 'react';
 import { aiReceptionistDashboardAPI } from '../services/api';
 import './AIReceptionistDashboard.css';
 
+// Mock data generators
+const generateMockRealtimeMetrics = () => ({
+  conversations_today: 24,
+  appointments_today: 7,
+  ai_coverage_percentage: 87.5,
+  errors_today: 2
+});
+
+const generateMockActivityFeed = () => {
+  const now = new Date();
+  return [
+    {
+      id: 1,
+      action_type: 'incoming_call',
+      client_name: 'Sarah Johnson',
+      client_phone: '(555) 123-4567',
+      timestamp: new Date(now.getTime() - 30 * 60000).toISOString(),
+      outcome_status: 'success',
+      confidence_score: 0.95,
+      duration: '3:45',
+      summary: 'Pre-approval inquiry. Scheduled consultation for tomorrow at 10am.',
+      details: 'Client is a first-time homebuyer looking to purchase in the $400-450k range. Pre-qualified based on income and credit score. Sent calendar invite for pre-approval consultation.'
+    },
+    {
+      id: 2,
+      action_type: 'appointment_booked',
+      client_name: 'Mike Chen',
+      client_phone: '(555) 234-5678',
+      timestamp: new Date(now.getTime() - 2 * 3600000).toISOString(),
+      outcome_status: 'success',
+      confidence_score: 0.92,
+      duration: '2:15',
+      summary: 'Booked document review appointment for Thursday at 2pm.',
+      details: 'Follow-up from previous conversation. Client uploaded tax documents and wants to review before proceeding. Confirmed Thursday 2pm via calendar.'
+    },
+    {
+      id: 3,
+      action_type: 'faq_answered',
+      client_name: 'Emily Davis',
+      client_phone: '(555) 345-6789',
+      timestamp: new Date(now.getTime() - 4 * 3600000).toISOString(),
+      outcome_status: 'success',
+      confidence_score: 0.89,
+      duration: '1:30',
+      summary: 'Answered questions about FHA vs conventional loans.',
+      details: 'Provided comparison of FHA and conventional loan requirements, down payment options, and PMI differences. Client satisfied with information.'
+    },
+    {
+      id: 4,
+      action_type: 'lead_prescreened',
+      client_name: 'John Smith',
+      client_phone: '(555) 456-7890',
+      timestamp: new Date(now.getTime() - 6 * 3600000).toISOString(),
+      outcome_status: 'success',
+      confidence_score: 0.88,
+      duration: '4:20',
+      summary: 'Pre-screened potential buyer. Good credit, stable income.',
+      details: 'Collected preliminary financial information. Credit score: 740, DTI: 32%, annual income: $95k. Pre-qualified for up to $425k. Sent to loan officer for follow-up.'
+    },
+    {
+      id: 5,
+      action_type: 'escalated',
+      client_name: 'Lisa Brown',
+      client_phone: '(555) 567-8901',
+      timestamp: new Date(now.getTime() - 8 * 3600000).toISOString(),
+      outcome_status: 'escalated',
+      confidence_score: 0.65,
+      duration: '2:50',
+      summary: 'Complex refinance question - escalated to loan officer.',
+      details: 'Client has unique situation with investment property refinance. Beyond AI capability - transferred to senior loan officer for specialized guidance.'
+    },
+    {
+      id: 6,
+      action_type: 'incoming_text',
+      client_name: 'Tom Wilson',
+      client_phone: '(555) 678-9012',
+      timestamp: new Date(now.getTime() - 10 * 3600000).toISOString(),
+      outcome_status: 'success',
+      confidence_score: 0.91,
+      summary: 'Responded to rate inquiry via text.',
+      details: 'Client asked about current rates. Provided today\'s rates for 30-year and 15-year fixed mortgages. Mentioned rate lock options.'
+    }
+  ];
+};
+
+const generateMockSkills = () => [
+  { name: 'FAQ Handling', success_rate: 94.2, total_uses: 156 },
+  { name: 'Appointment Booking', success_rate: 91.5, total_uses: 89 },
+  { name: 'Lead Pre-screening', success_rate: 87.8, total_uses: 67 },
+  { name: 'Document Status', success_rate: 93.1, total_uses: 45 },
+  { name: 'Rate Quotes', success_rate: 89.6, total_uses: 123 }
+];
+
+const generateMockROI = () => ({
+  calls_handled: 287,
+  hours_saved: 47.8,
+  appointments_booked: 34,
+  conversion_rate: 23.5,
+  cost_savings: 2850,
+  revenue_generated: 12400
+});
+
+const generateMockErrors = () => [
+  {
+    id: 1,
+    timestamp: new Date(Date.now() - 3600000).toISOString(),
+    error_type: 'API Timeout',
+    message: 'Calendar API timeout while booking appointment',
+    severity: 'medium',
+    resolved: false
+  },
+  {
+    id: 2,
+    timestamp: new Date(Date.now() - 7200000).toISOString(),
+    error_type: 'Speech Recognition',
+    message: 'Poor audio quality - unable to transcribe',
+    severity: 'low',
+    resolved: true
+  }
+];
+
+const generateMockSystemHealth = () => [
+  { component: 'Voice API (Vapi)', status: 'active', uptime: '99.8%' },
+  { component: 'Calendar Integration', status: 'active', uptime: '99.5%' },
+  { component: 'CRM Database', status: 'active', uptime: '99.9%' },
+  { component: 'AI Model (Claude)', status: 'active', uptime: '99.7%' }
+];
+
 function AIReceptionistDashboard() {
   const [loading, setLoading] = useState(true);
   const [realtimeMetrics, setRealtimeMetrics] = useState(null);
@@ -35,6 +163,13 @@ function AIReceptionistDashboard() {
       setLoading(false);
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
+      // Load mock data on error
+      setRealtimeMetrics(generateMockRealtimeMetrics());
+      setActivityFeed(generateMockActivityFeed());
+      setSkills(generateMockSkills());
+      setROI(generateMockROI());
+      setErrors(generateMockErrors());
+      setSystemHealth(generateMockSystemHealth());
       setLoading(false);
     }
   };

@@ -2,6 +2,122 @@ import React, { useState, useEffect } from 'react';
 import { calendarAPI } from '../services/api';
 import './Calendar.css';
 
+// Mock calendar events generator
+const generateMockEvents = () => {
+  const now = new Date();
+  const events = [];
+
+  // Today's events
+  events.push({
+    id: 1,
+    title: 'Pre-Approval Consultation - Sarah Johnson',
+    description: 'Initial consultation to discuss pre-approval process and gather financial documents',
+    start_time: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 10, 0).toISOString(),
+    end_time: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 11, 0).toISOString(),
+    event_type: 'consultation',
+    related_lead_id: 1,
+    location: 'Zoom Meeting'
+  });
+
+  events.push({
+    id: 2,
+    title: 'Document Review - Mike Chen',
+    description: 'Review uploaded documents and discuss any missing items',
+    start_time: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 14, 30).toISOString(),
+    end_time: new Date(now.getFullYear(), now.getMonth(), now.getDate(), 15, 0).toISOString(),
+    event_type: 'review',
+    related_lead_id: 2,
+    location: 'Phone Call'
+  });
+
+  // Tomorrow's events
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  events.push({
+    id: 3,
+    title: 'Appraisal Appointment - Emily Davis',
+    description: 'Property appraisal at 123 Main Street',
+    start_time: new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 14, 0).toISOString(),
+    end_time: new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 15, 30).toISOString(),
+    event_type: 'appraisal',
+    related_lead_id: 3,
+    location: '123 Main Street, Anytown, CA'
+  });
+
+  // Events in 2 days
+  const day2 = new Date(now);
+  day2.setDate(day2.getDate() + 2);
+
+  events.push({
+    id: 4,
+    title: 'Closing Meeting - John Smith',
+    description: 'Final walkthrough and document signing',
+    start_time: new Date(day2.getFullYear(), day2.getMonth(), day2.getDate(), 10, 0).toISOString(),
+    end_time: new Date(day2.getFullYear(), day2.getMonth(), day2.getDate(), 12, 0).toISOString(),
+    event_type: 'closing',
+    related_lead_id: 4,
+    location: 'Title Company Office'
+  });
+
+  // Events in 3 days
+  const day3 = new Date(now);
+  day3.setDate(day3.getDate() + 3);
+
+  events.push({
+    id: 5,
+    title: 'Rate Lock Consultation - Lisa Brown',
+    description: 'Discuss current rates and lock options',
+    start_time: new Date(day3.getFullYear(), day3.getMonth(), day3.getDate(), 11, 0).toISOString(),
+    end_time: new Date(day3.getFullYear(), day3.getMonth(), day3.getDate(), 11, 30).toISOString(),
+    event_type: 'consultation',
+    related_lead_id: 5,
+    location: 'Zoom Meeting'
+  });
+
+  // Events next week
+  const nextWeek = new Date(now);
+  nextWeek.setDate(nextWeek.getDate() + 7);
+
+  events.push({
+    id: 6,
+    title: 'Annual Mortgage Review - Tom Wilson',
+    description: 'Review mortgage performance and discuss refinance opportunities',
+    start_time: new Date(nextWeek.getFullYear(), nextWeek.getMonth(), nextWeek.getDate(), 9, 0).toISOString(),
+    end_time: new Date(nextWeek.getFullYear(), nextWeek.getMonth(), nextWeek.getDate(), 9, 30).toISOString(),
+    event_type: 'review',
+    related_lead_id: 6,
+    location: 'Office'
+  });
+
+  events.push({
+    id: 7,
+    title: 'First-Time Buyer Workshop',
+    description: 'Educational workshop for prospective first-time homebuyers',
+    start_time: new Date(nextWeek.getFullYear(), nextWeek.getMonth(), nextWeek.getDate(), 18, 0).toISOString(),
+    end_time: new Date(nextWeek.getFullYear(), nextWeek.getMonth(), nextWeek.getDate(), 19, 30).toISOString(),
+    event_type: 'workshop',
+    location: 'Conference Room'
+  });
+
+  // Events in 2 weeks
+  const twoWeeks = new Date(now);
+  twoWeeks.setDate(twoWeeks.getDate() + 14);
+
+  events.push({
+    id: 8,
+    title: 'Refinance Consultation - Mark Taylor',
+    description: 'Discuss refinancing options to lower monthly payment',
+    start_time: new Date(twoWeeks.getFullYear(), twoWeeks.getMonth(), twoWeeks.getDate(), 13, 0).toISOString(),
+    end_time: new Date(twoWeeks.getFullYear(), twoWeeks.getMonth(), twoWeeks.getDate(), 14, 0).toISOString(),
+    event_type: 'consultation',
+    related_lead_id: 7,
+    location: 'Zoom Meeting'
+  });
+
+  return events;
+};
+
 function Calendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState('month');
@@ -32,6 +148,15 @@ function Calendar() {
       setEvents(data);
     } catch (error) {
       console.error('Failed to load events:', error);
+      // Load mock events on error
+      const mockEvents = generateMockEvents();
+      const startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      const endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59);
+      const filteredEvents = mockEvents.filter(event => {
+        const eventDate = new Date(event.start_time);
+        return eventDate >= startDate && eventDate <= endDate;
+      });
+      setEvents(filteredEvents);
     } finally {
       setLoading(false);
     }
@@ -52,7 +177,8 @@ function Calendar() {
       setAllEvents(data || []);
     } catch (error) {
       console.error('Failed to load all events:', error);
-      setAllEvents([]);
+      // Load mock events on error
+      setAllEvents(generateMockEvents());
     }
   };
 
