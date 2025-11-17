@@ -81,15 +81,13 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
             </Link>
           )}
 
-          {/* PHASE 4: Partners only visible to Management */}
-          {userRole === 'management' && (
-            <Link
-              to="/referral-partners"
-              className={`nav-link ${isActive('/referral-partners') ? 'active' : ''}`}
-            >
-              Partners {renderBadge(taskCounts.partners)}
-            </Link>
-          )}
+          {/* Referral Partners - visible to all users */}
+          <Link
+            to="/referral-partners"
+            className={`nav-link ${isActive('/referral-partners') ? 'active' : ''}`}
+          >
+            Partners {renderBadge(taskCounts.partners)}
+          </Link>
 
           {/* Compliance Dashboard - Management/Admin only */}
           {(userRole === 'management' || userRole === 'admin') && (
