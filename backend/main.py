@@ -7729,7 +7729,7 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     processing_alerts = sum(1 for loan in processing if loan.days_in_stage and loan.days_in_stage > 14)
 
     underwriting_volume = sum(loan.amount for loan in underwriting if loan.amount)
-    underwriting_alerts = sum(1 for loan in underwriting if loan.status == "suspended")
+    underwriting_alerts = sum(1 for loan in underwriting if loan.stage == LoanStage.SUSPENDED)
 
     ctc_volume = sum(loan.amount for loan in ctc if loan.amount)
 
