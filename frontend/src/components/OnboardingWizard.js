@@ -3,7 +3,7 @@ import { onboardingAPI, teamAPI } from '../services/api';
 import './OnboardingWizard.css';
 
 const OnboardingWizard = ({ onComplete, onSkip }) => {
-  const [currentStep, setCurrentStep] = useState(1);
+  const [currentStep, setCurrentStep] = useState(0); // Start at overview page
   const [activeMilestone, setActiveMilestone] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [connectionModal, setConnectionModal] = useState(null);
@@ -15,7 +15,16 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
   const [newRoleForm, setNewRoleForm] = useState({ role_title: '', role_name: '', responsibilities: '', skills_required: [], key_activities: [] });
   const [teamMembers, setTeamMembers] = useState([]);
   const [formData, setFormData] = useState({
-    // Step 1: Upload Documents
+    // Step 1: User Registration
+    userName: '',
+    userEmail: '',
+    userPhone: '',
+    businessAddress: '',
+    currentRole: '',
+    businessHoursStart: '09:00',
+    businessHoursEnd: '17:00',
+
+    // Step 3: Upload Documents
     sopFiles: [],
     processTree: null,
 
@@ -61,7 +70,7 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
     }
   });
 
-  const totalSteps = 9;
+  const totalSteps = 10;
 
   // Load existing onboarding data when component mounts
   useEffect(() => {
@@ -725,26 +734,769 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
     setRoleAddModal(false);
   };
 
+  // STEP 0: Overview Page
+  const renderOverview = () => {
+    const steps = [
+      { num: 1, title: 'User Registration', description: 'Set up your account with basic information', time: '5 min', icon: '👤' },
+      { num: 2, title: 'Team Setup', description: 'Add team members and assign permissions', time: '10 min', icon: '👥' },
+      { num: 3, title: 'Process Documents', description: 'Upload roles, responsibilities, and process docs for AI analysis', time: '15 min', icon: '📄' },
+      { num: 4, title: 'Assign Roles', description: 'Map team members to roles and responsibilities', time: '10 min', icon: '🎯' },
+      { num: 5, title: 'Review Tasks', description: 'Review and approve each team member\'s task assignments', time: '10 min', icon: '✅' },
+      { num: 6, title: 'Data Preview', description: 'Upload sample emails to see AI parsing in action', time: '5 min', icon: '🔍' },
+      { num: 7, title: 'Data Upload', description: 'Import your leads, active loans, and closed clients', time: '15 min', icon: '📊' },
+      { num: 8, title: 'Review Data', description: 'Verify and approve data before import', time: '10 min', icon: '📋' },
+      { num: 9, title: 'Connect Integrations', description: 'Link calendar, email, and other services', time: '10 min', icon: '🔗' },
+      { num: 10, title: 'AI Receptionist Setup', description: 'Configure phone, voice, and call routing', time: '10 min', icon: '🤖' }
+    ];
+
+    const totalTime = steps.reduce((sum, step) => sum + parseInt(step.time), 0);
+
+    return (
+      <div className="overview-page">
+        <div className="overview-header">
+          <h1>Welcome to Your CRM Onboarding</h1>
+          <p className="overview-subtitle">
+            Let's get you set up in {totalTime} minutes. You can save your progress at any time and return later.
+          </p>
+        </div>
+
+        <div className="overview-steps">
+          {steps.map((step) => (
+            <div key={step.num} className="overview-step-card">
+              <div className="overview-step-icon">{step.icon}</div>
+              <div className="overview-step-content">
+                <div className="overview-step-header">
+                  <h3>Step {step.num}: {step.title}</h3>
+                  <span className="overview-step-time">{step.time}</span>
+                </div>
+                <p className="overview-step-description">{step.description}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="overview-actions">
+          <div className="overview-time-budget">
+            <div className="time-icon">⏱️</div>
+            <div>
+              <strong>Total Time:</strong> Approximately {totalTime} minutes<br/>
+              <span className="time-note">You can save and resume anytime</span>
+            </div>
+          </div>
+          <button className="btn-start-onboarding" onClick={() => setCurrentStep(1)}>
+            Get Started →
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // STEP 1: User Registration
+  const renderUserRegistration = () => {
+    const handleInputChange = (field, value) => {
+      setFormData(prevData => ({
+        ...prevData,
+        [field]: value
+      }));
+      // Auto-save to localStorage
+      const updatedData = { ...formData, [field]: value };
+      localStorage.setItem('onboarding_user_registration', JSON.stringify(updatedData));
+    };
+
+    const isFormValid = () => {
+      return formData.userName &&
+             formData.userEmail &&
+             formData.userPhone &&
+             formData.businessAddress &&
+             formData.currentRole;
+    };
+
+    return (
+      <div className="step-content">
+        <div className="step-header">
+          <div className="step-icon">👤</div>
+          <h2>User Registration</h2>
+          <p className="step-description">
+            Let's start by setting up your account with your basic information.
+          </p>
+        </div>
+
+        <div className="registration-form">
+          <div className="form-group">
+            <label htmlFor="userName">Full Name *</label>
+            <input
+              type="text"
+              id="userName"
+              placeholder="Enter your full name"
+              value={formData.userName}
+              onChange={(e) => handleInputChange('userName', e.target.value)}
+              className="form-input"
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="userEmail">Email Address *</label>
+            <input
+              type="email"
+              id="userEmail"
+              placeholder="your.email@company.com"
+              value={formData.userEmail}
+              onChange={(e) => handleInputChange('userEmail', e.target.value)}
+              className="form-input"
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="userPhone">Phone Number *</label>
+            <input
+              type="tel"
+              id="userPhone"
+              placeholder="(555) 123-4567"
+              value={formData.userPhone}
+              onChange={(e) => handleInputChange('userPhone', e.target.value)}
+              className="form-input"
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="businessAddress">Business Address *</label>
+            <textarea
+              id="businessAddress"
+              placeholder="Enter your business address"
+              value={formData.businessAddress}
+              onChange={(e) => handleInputChange('businessAddress', e.target.value)}
+              className="form-textarea"
+              rows="3"
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="currentRole">Current Role *</label>
+            <select
+              id="currentRole"
+              value={formData.currentRole}
+              onChange={(e) => handleInputChange('currentRole', e.target.value)}
+              className="form-select"
+            >
+              <option value="">Select your role</option>
+              <option value="Loan Officer">Loan Officer</option>
+              <option value="Branch Manager">Branch Manager</option>
+              <option value="Loan Processor">Loan Processor</option>
+              <option value="Underwriter">Underwriter</option>
+              <option value="Operations Manager">Operations Manager</option>
+              <option value="Sales Manager">Sales Manager</option>
+              <option value="Executive">Executive</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+
+          <div className="form-group-row">
+            <div className="form-group">
+              <label htmlFor="businessHoursStart">Business Hours Start</label>
+              <input
+                type="time"
+                id="businessHoursStart"
+                value={formData.businessHoursStart}
+                onChange={(e) => handleInputChange('businessHoursStart', e.target.value)}
+                className="form-input"
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="businessHoursEnd">Business Hours End</label>
+              <input
+                type="time"
+                id="businessHoursEnd"
+                value={formData.businessHoursEnd}
+                onChange={(e) => handleInputChange('businessHoursEnd', e.target.value)}
+                className="form-input"
+              />
+            </div>
+          </div>
+
+          <div className="form-info">
+            <span className="info-icon">ℹ️</span>
+            <p>Your progress is automatically saved. You can return to complete this later.</p>
+          </div>
+
+          {!isFormValid() && (
+            <div className="form-warning">
+              <span className="warning-icon">⚠️</span>
+              <p>Please fill in all required fields (*) to continue.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // STEP 2: Team Setup
+  const renderTeamSetup = () => {
+    const handleAddMember = () => {
+      setFormData(prevData => ({
+        ...prevData,
+        members: [...prevData.members, { firstName: '', lastName: '', email: '', phone: '', role: '', permissions: 'Standard' }]
+      }));
+    };
+
+    const handleRemoveMember = (index) => {
+      setFormData(prevData => ({
+        ...prevData,
+        members: prevData.members.filter((_, i) => i !== index)
+      }));
+    };
+
+    const handleMemberChange = (index, field, value) => {
+      setFormData(prevData => {
+        const updatedMembers = [...prevData.members];
+        updatedMembers[index] = { ...updatedMembers[index], [field]: value };
+        // Auto-save to localStorage
+        localStorage.setItem('onboarding_team_setup', JSON.stringify({ members: updatedMembers }));
+        return { ...prevData, members: updatedMembers };
+      });
+    };
+
+    const handleCSVUpload = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const text = event.target.result;
+          const lines = text.split('\n');
+          const headers = lines[0].split(',').map(h => h.trim());
+
+          const newMembers = lines.slice(1)
+            .filter(line => line.trim())
+            .map(line => {
+              const values = line.split(',').map(v => v.trim());
+              return {
+                firstName: values[0] || '',
+                lastName: values[1] || '',
+                email: values[2] || '',
+                phone: values[3] || '',
+                role: values[4] || '',
+                permissions: values[5] || 'Standard'
+              };
+            });
+
+          setFormData(prevData => ({
+            ...prevData,
+            members: newMembers
+          }));
+          localStorage.setItem('onboarding_team_setup', JSON.stringify({ members: newMembers }));
+        };
+        reader.readAsText(file);
+      }
+    };
+
+    const downloadCSVTemplate = () => {
+      const csvContent = 'First Name,Last Name,Email,Phone,Role,Permissions\nJohn,Doe,john.doe@example.com,(555) 123-4567,Loan Officer,Standard\n';
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'team_members_template.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    };
+
+    return (
+      <div className="step-content">
+        <div className="step-header">
+          <div className="step-icon">👥</div>
+          <h2>Team Setup</h2>
+          <p className="step-description">
+            Add your team members and assign their permissions. You can add them individually or upload a CSV file.
+          </p>
+        </div>
+
+        <div className="team-setup-container">
+          <div className="upload-options">
+            <div className="csv-upload-section">
+              <h3>Quick Upload</h3>
+              <p>Upload a CSV file with all your team members at once</p>
+              <div className="csv-buttons">
+                <button className="btn-secondary" onClick={downloadCSVTemplate}>
+                  📥 Download CSV Template
+                </button>
+                <label className="btn-primary file-upload-btn">
+                  📤 Upload CSV File
+                  <input
+                    type="file"
+                    accept=".csv,.xlsx"
+                    onChange={handleCSVUpload}
+                    style={{ display: 'none' }}
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="divider">
+              <span>OR</span>
+            </div>
+
+            <div className="manual-entry-section">
+              <h3>Add Manually</h3>
+              <p>Enter team members one by one</p>
+            </div>
+          </div>
+
+          <div className="team-members-list">
+            {formData.members.map((member, index) => (
+              <div key={index} className="team-member-card">
+                <div className="member-header">
+                  <h4>Team Member {index + 1}</h4>
+                  {formData.members.length > 1 && (
+                    <button
+                      className="btn-remove"
+                      onClick={() => handleRemoveMember(index)}
+                      title="Remove member"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+
+                <div className="member-fields">
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>First Name *</label>
+                      <input
+                        type="text"
+                        placeholder="First name"
+                        value={member.firstName}
+                        onChange={(e) => handleMemberChange(index, 'firstName', e.target.value)}
+                        className="form-input"
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label>Last Name *</label>
+                      <input
+                        type="text"
+                        placeholder="Last name"
+                        value={member.lastName}
+                        onChange={(e) => handleMemberChange(index, 'lastName', e.target.value)}
+                        className="form-input"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Email *</label>
+                      <input
+                        type="email"
+                        placeholder="email@company.com"
+                        value={member.email}
+                        onChange={(e) => handleMemberChange(index, 'email', e.target.value)}
+                        className="form-input"
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label>Phone</label>
+                      <input
+                        type="tel"
+                        placeholder="(555) 123-4567"
+                        value={member.phone}
+                        onChange={(e) => handleMemberChange(index, 'phone', e.target.value)}
+                        className="form-input"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Role</label>
+                      <input
+                        type="text"
+                        placeholder="e.g., Loan Processor"
+                        value={member.role}
+                        onChange={(e) => handleMemberChange(index, 'role', e.target.value)}
+                        className="form-input"
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label>Permissions *</label>
+                      <select
+                        value={member.permissions || 'Standard'}
+                        onChange={(e) => handleMemberChange(index, 'permissions', e.target.value)}
+                        className="form-select"
+                      >
+                        <option value="Admin">Admin - Full Access</option>
+                        <option value="Manager">Manager - Team Oversight</option>
+                        <option value="Standard">Standard - Basic Access</option>
+                        <option value="View Only">View Only - Read Access</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <button className="btn-add-member" onClick={handleAddMember}>
+            + Add Another Team Member
+          </button>
+
+          <div className="form-info">
+            <span className="info-icon">ℹ️</span>
+            <p>Team members will receive invitation emails once onboarding is complete.</p>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // STEP 4: Assign Roles
+  const renderAssignRoles = () => {
+    return (
+      <div className="step-content">
+        <div className="step-header">
+          <div className="step-icon">🎯</div>
+          <h2>Assign Users to Roles</h2>
+          <p className="step-description">
+            Map your team members to the roles identified from your process documents. You can also modify roles and add additional tasks.
+          </p>
+        </div>
+
+        <div className="role-assignment-container">
+          {formData.extractedRoles && formData.extractedRoles.length > 0 ? (
+            formData.extractedRoles.map((role, index) => (
+              <div key={role.id || index} className="role-assignment-card">
+                <h3>{role.role_title || role.role_name}</h3>
+                <p>{role.responsibilities}</p>
+                <div className="assign-member-section">
+                  <label>Assign Team Member:</label>
+                  <select className="form-select">
+                    <option value="">Select a team member</option>
+                    {formData.members.map((member, mIndex) => (
+                      <option key={mIndex} value={member.email}>
+                        {member.firstName} {member.lastName} - {member.email}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="no-data-message">
+              <p>No roles have been extracted yet. Please complete Step 3 to upload and analyze your process documents.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // STEP 5: Review Tasks
+  const renderReviewTasks = () => {
+    return (
+      <div className="step-content">
+        <div className="step-header">
+          <div className="step-icon">✅</div>
+          <h2>Review Individual Team Members</h2>
+          <p className="step-description">
+            Review each team member's assigned tasks. Add any missing tasks and approve the assignments.
+          </p>
+        </div>
+
+        <div className="member-tasks-container">
+          {formData.members && formData.members.length > 0 ? (
+            formData.members.map((member, index) => (
+              <div key={index} className="member-tasks-card">
+                <h3>{member.firstName} {member.lastName}</h3>
+                <p className="member-role">{member.role}</p>
+                <div className="tasks-list">
+                  <h4>Assigned Tasks:</h4>
+                  {formData.extractedTasks && formData.extractedTasks.length > 0 ? (
+                    <ul>
+                      {formData.extractedTasks.slice(0, 3).map((task, tIndex) => (
+                        <li key={tIndex}>{task.task_name || task.title}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="no-tasks">No tasks assigned yet</p>
+                  )}
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="no-data-message">
+              <p>No team members added yet. Please complete Step 2 to add your team.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // STEP 6: Data Preview
+  const renderDataPreview = () => {
+    return (
+      <div className="step-content">
+        <div className="step-header">
+          <div className="step-icon">🔍</div>
+          <h2>Data Parsing Demo</h2>
+          <p className="step-description">
+            Upload 3 sample emails to see how our AI parses and extracts lead information. This preview matches what you'll see in the reconciliation page.
+          </p>
+        </div>
+
+        <div className="data-preview-container">
+          <div className="upload-section">
+            <h3>Upload Sample Emails</h3>
+            <input
+              type="file"
+              accept=".eml,.msg,.txt"
+              multiple
+              className="file-input"
+              onChange={(e) => console.log('Files uploaded:', e.target.files)}
+            />
+            <p className="upload-hint">Upload up to 3 email files (.eml, .msg, or .txt)</p>
+          </div>
+
+          <div className="preview-section">
+            <h3>AI Parsing Preview</h3>
+            <div className="preview-placeholder">
+              <p>Upload emails to see the AI parsing results here</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // STEP 7: Data Upload
+  const renderDataUpload = () => {
+    const downloadTemplate = (type) => {
+      let csvContent = '';
+      let filename = '';
+
+      switch(type) {
+        case 'leads':
+          csvContent = 'Name,Email,Phone,Source,Status,Created Date\nJohn Smith,john@example.com,(555) 123-4567,Website,New,2024-01-15\n';
+          filename = 'leads_template.csv';
+          break;
+        case 'loans':
+          csvContent = 'Borrower Name,Loan Number,Loan Amount,Status,Loan Officer,Application Date\nJane Doe,LN-12345,$350000,In Process,John Smith,2024-01-10\n';
+          filename = 'active_loans_template.csv';
+          break;
+        case 'mum':
+          csvContent = 'Client Name,Email,Phone,Loan Number,Close Date,Loan Amount,Interest Rate\nBob Johnson,bob@example.com,(555) 987-6543,LN-98765,2023-06-15,$400000,6.5%\n';
+          filename = 'closed_clients_template.csv';
+          break;
+      }
+
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    };
+
+    return (
+      <div className="step-content">
+        <div className="step-header">
+          <div className="step-icon">📊</div>
+          <h2>Data Upload Templates</h2>
+          <p className="step-description">
+            Download the templates, fill them with your data, and upload them back to import your leads, active loans, and closed clients.
+          </p>
+        </div>
+
+        <div className="data-upload-container">
+          <div className="template-card">
+            <h3>1. Leads</h3>
+            <p>Import your current leads and prospects</p>
+            <button className="btn-secondary" onClick={() => downloadTemplate('leads')}>
+              📥 Download Template
+            </button>
+            <label className="btn-primary">
+              📤 Upload Data
+              <input type="file" accept=".csv,.xlsx" style={{ display: 'none' }} />
+            </label>
+          </div>
+
+          <div className="template-card">
+            <h3>2. Active Loans</h3>
+            <p>Import loans currently in your pipeline</p>
+            <button className="btn-secondary" onClick={() => downloadTemplate('loans')}>
+              📥 Download Template
+            </button>
+            <label className="btn-primary">
+              📤 Upload Data
+              <input type="file" accept=".csv,.xlsx" style={{ display: 'none' }} />
+            </label>
+          </div>
+
+          <div className="template-card">
+            <h3>3. Closed Clients (MUM)</h3>
+            <p>Import your closed clients for MUM tracking</p>
+            <button className="btn-secondary" onClick={() => downloadTemplate('mum')}>
+              📥 Download Template
+            </button>
+            <label className="btn-primary">
+              📤 Upload Data
+              <input type="file" accept=".csv,.xlsx" style={{ display: 'none' }} />
+            </label>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // STEP 8: Review Data
+  const renderReviewData = () => {
+    return (
+      <div className="step-content">
+        <div className="step-header">
+          <div className="step-icon">📋</div>
+          <h2>Review Data to Import</h2>
+          <p className="step-description">
+            Review all the data you've uploaded before we import it into your CRM.
+          </p>
+        </div>
+
+        <div className="data-review-container">
+          <div className="review-section">
+            <h3>Leads to Import</h3>
+            <p className="count">0 leads ready for import</p>
+          </div>
+
+          <div className="review-section">
+            <h3>Active Loans to Import</h3>
+            <p className="count">0 active loans ready for import</p>
+          </div>
+
+          <div className="review-section">
+            <h3>Closed Clients to Import</h3>
+            <p className="count">0 closed clients ready for import</p>
+          </div>
+
+          <div className="approval-section">
+            <label className="checkbox-label">
+              <input type="checkbox" />
+              <span>I have reviewed the data and approve the import</span>
+            </label>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // STEP 10: AI Setup
+  const renderAISetup = () => {
+    return (
+      <div className="step-content">
+        <div className="step-header">
+          <div className="step-icon">🤖</div>
+          <h2>AI Receptionist Setup</h2>
+          <p className="step-description">
+            Configure your Smart AI Receptionist with phone number, voice selection, and call routing rules.
+          </p>
+        </div>
+
+        <div className="ai-setup-container">
+          <div className="form-group">
+            <label>Phone Number</label>
+            <input
+              type="tel"
+              placeholder="(555) 123-4567"
+              className="form-input"
+            />
+            <p className="field-hint">This will be your main business line managed by the AI receptionist</p>
+          </div>
+
+          <div className="form-group">
+            <label>Choose AI Voice</label>
+            <select className="form-select">
+              <option value="samantha">Samantha - Professional Female</option>
+              <option value="james">James - Professional Male</option>
+              <option value="sarah">Sarah - Warm Female</option>
+              <option value="michael">Michael - Confident Male</option>
+            </select>
+            <button className="btn-secondary">▶️ Preview Voice</button>
+          </div>
+
+          <div className="routing-rules">
+            <h3>Call Routing Rules</h3>
+            <div className="rule-card">
+              <h4>Leads → Production Partner</h4>
+              <p>New inquiries will be routed to your production partner</p>
+              <select className="form-select">
+                <option value="">Select team member</option>
+                {formData.members.map((member, index) => (
+                  <option key={index} value={member.email}>
+                    {member.firstName} {member.lastName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="rule-card">
+              <h4>Active Loans → Processing Assistant</h4>
+              <p>Existing loan inquiries go to processing team</p>
+              <select className="form-select">
+                <option value="">Select team member</option>
+                {formData.members.map((member, index) => (
+                  <option key={index} value={member.email}>
+                    {member.firstName} {member.lastName}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="rule-card">
+              <h4>MUM Clients → Schedule on LO Calendar</h4>
+              <p>Closed clients get scheduled on loan officer calendar</p>
+              <select className="form-select">
+                <option value="">Select loan officer</option>
+                {formData.members.map((member, index) => (
+                  <option key={index} value={member.email}>
+                    {member.firstName} {member.lastName}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderStep = () => {
     switch (currentStep) {
+      case 0:
+        return renderOverview();
       case 1:
-        return renderProcessUpload();
+        return renderUserRegistration();
       case 2:
-        return renderRoleReview();
+        return renderTeamSetup();
       case 3:
-        return renderTaskReview();
+        return renderProcessUpload();
       case 4:
-        return renderTeamRoles();
+        return renderAssignRoles();
       case 5:
-        return renderProcessTree();
+        return renderReviewTasks();
       case 6:
-        return renderIntegrations();
+        return renderDataPreview();
       case 7:
-        return renderCompliance();
+        return renderDataUpload();
       case 8:
-        return renderAIAgent();
+        return renderReviewData();
       case 9:
-        return renderTestGoLive();
+        return renderIntegrations();
+      case 10:
+        return renderAISetup();
       default:
         return null;
     }
@@ -1977,15 +2729,16 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
         {/* Step Indicators */}
         <div className="step-indicators">
           {[
-            { num: 1, label: 'Process' },
-            { num: 2, label: 'Roles' },
-            { num: 3, label: 'Tasks' },
-            { num: 4, label: 'Team' },
-            { num: 5, label: 'Ownership' },
-            { num: 6, label: 'Integrations' },
-            { num: 7, label: 'Compliance' },
-            { num: 8, label: 'AI Agent' },
-            { num: 9, label: 'Go-Live' }
+            { num: 1, label: 'Registration', time: '5 min' },
+            { num: 2, label: 'Team Setup', time: '10 min' },
+            { num: 3, label: 'Process Docs', time: '15 min' },
+            { num: 4, label: 'Assign Roles', time: '10 min' },
+            { num: 5, label: 'Review Tasks', time: '10 min' },
+            { num: 6, label: 'Data Preview', time: '5 min' },
+            { num: 7, label: 'Data Upload', time: '15 min' },
+            { num: 8, label: 'Review Data', time: '10 min' },
+            { num: 9, label: 'Integrations', time: '10 min' },
+            { num: 10, label: 'AI Setup', time: '10 min' }
           ].map((step) => (
             <div
               key={step.num}
