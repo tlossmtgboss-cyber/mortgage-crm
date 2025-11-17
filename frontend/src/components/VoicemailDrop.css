@@ -25,9 +25,10 @@
   background: white;
   border-radius: 12px;
   width: 90%;
-  max-width: 650px;
-  max-height: 90vh;
-  overflow-y: auto;
+  max-width: 550px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
   animation: slideUp 0.3s ease;
 }
@@ -47,13 +48,14 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 24px;
+  padding: 14px 18px;
   border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
 }
 
 .voicemail-drop-header h3 {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: 1.1rem;
   font-weight: 600;
   color: #1a1a1a;
 }
@@ -80,21 +82,22 @@
 }
 
 .voicemail-drop-body {
-  padding: 24px;
-  min-height: 350px;
+  padding: 16px 18px;
+  overflow-y: auto;
+  flex: 1;
 }
 
 .recipient-info {
   background: #f9fafb;
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 20px;
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
   border: 1px solid #e5e7eb;
 }
 
 .recipient-row {
-  margin: 6px 0;
-  font-size: 0.95rem;
+  margin: 4px 0;
+  font-size: 0.875rem;
   color: #374151;
 }
 
@@ -106,14 +109,14 @@
 /* Input Method Tabs */
 .input-method-tabs {
   display: flex;
-  gap: 8px;
-  margin-bottom: 24px;
+  gap: 6px;
+  margin-bottom: 14px;
   border-bottom: 2px solid #e5e7eb;
 }
 
 .tab-btn {
   flex: 1;
-  padding: 12px 16px;
+  padding: 8px 12px;
   background: none;
   border: none;
   border-bottom: 3px solid transparent;
@@ -121,7 +124,7 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
-  font-size: 0.95rem;
+  font-size: 0.875rem;
   margin-bottom: -2px;
 }
 
@@ -137,26 +140,27 @@
 
 /* Input Section */
 .input-section {
-  min-height: 280px;
+  /* Removed min-height for more compact layout */
 }
 
 .input-section label {
   display: block;
-  font-size: 0.875rem;
+  font-size: 0.85rem;
   font-weight: 600;
   color: #374151;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .message-textarea {
   width: 100%;
-  padding: 12px;
+  padding: 10px;
   border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 1rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
   font-family: inherit;
   resize: vertical;
   transition: border-color 0.2s;
+  min-height: 80px;
 }
 
 .message-textarea:focus {
@@ -166,16 +170,16 @@
 }
 
 .hint-text {
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   color: #6b7280;
-  margin-top: 8px;
+  margin-top: 6px;
   font-style: italic;
 }
 
 /* Recording States */
 .record-prompt {
   text-align: center;
-  padding: 40px 20px;
+  padding: 24px 16px;
 }
 
 .btn-record {
@@ -199,13 +203,13 @@
 
 .recording-active {
   text-align: center;
-  padding: 40px 20px;
+  padding: 24px 16px;
 }
 
 .pulse-icon {
-  font-size: 4rem;
+  font-size: 3rem;
   animation: pulse 1.5s ease-in-out infinite;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 @keyframes pulse {
@@ -242,7 +246,7 @@
 
 .transcribing {
   text-align: center;
-  padding: 40px 20px;
+  padding: 24px 16px;
 }
 
 .spinner {
@@ -287,26 +291,26 @@
 /* Template Cards */
 .templates-list label {
   display: block;
-  font-size: 0.875rem;
+  font-size: 0.85rem;
   font-weight: 600;
   color: #374151;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 
 .template-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 12px;
-  max-height: 380px;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  max-height: 280px;
   overflow-y: auto;
-  padding: 4px;
+  padding: 2px;
 }
 
 .template-card {
   background: #f9fafb;
   border: 2px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 16px;
+  border-radius: 6px;
+  padding: 10px 12px;
   cursor: pointer;
   transition: all 0.2s;
 }
@@ -320,25 +324,28 @@
 
 .template-name {
   font-weight: 600;
-  font-size: 1rem;
+  font-size: 0.9rem;
   color: #1a1a1a;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .template-category {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: #6b7280;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
 }
 
 .template-preview {
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   color: #4b5563;
-  line-height: 1.4;
+  line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .selected-template {
@@ -430,19 +437,20 @@
 /* Footer Actions */
 .voicemail-drop-footer {
   display: flex;
-  gap: 12px;
-  padding: 20px 24px;
+  gap: 10px;
+  padding: 14px 18px;
   border-top: 1px solid #e5e7eb;
   background: #f9fafb;
   border-radius: 0 0 12px 12px;
+  flex-shrink: 0;
 }
 
 .btn-cancel,
 .btn-send {
   flex: 1;
-  padding: 14px 24px;
-  border-radius: 8px;
-  font-size: 1rem;
+  padding: 10px 18px;
+  border-radius: 6px;
+  font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
@@ -480,29 +488,29 @@
 /* Instructions */
 .instructions {
   background: #eff6ff;
-  border-radius: 8px;
-  padding: 20px;
-  margin-top: 20px;
+  border-radius: 6px;
+  padding: 12px 14px;
+  margin-top: 12px;
   border: 1px solid #bfdbfe;
 }
 
 .instructions h4 {
-  margin: 0 0 12px 0;
-  font-size: 0.95rem;
+  margin: 0 0 8px 0;
+  font-size: 0.85rem;
   color: #1e40af;
   font-weight: 600;
 }
 
 .instructions ol {
   margin: 0;
-  padding-left: 20px;
+  padding-left: 18px;
 }
 
 .instructions li {
-  margin: 8px 0;
-  font-size: 0.9rem;
+  margin: 5px 0;
+  font-size: 0.8rem;
   color: #1e3a8a;
-  line-height: 1.5;
+  line-height: 1.4;
 }
 
 /* Responsive */
