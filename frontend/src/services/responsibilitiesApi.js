@@ -24,6 +24,22 @@ const handleResponse = async (response) => {
   return await response.json();
 };
 
+// Helper to ensure array response
+const ensureArray = (data) => {
+  if (Array.isArray(data)) {
+    return data;
+  }
+  if (data && typeof data === 'object') {
+    // Check for common array wrapper properties
+    if (Array.isArray(data.responsibilities)) return data.responsibilities;
+    if (Array.isArray(data.skills)) return data.skills;
+    if (Array.isArray(data.data)) return data.data;
+    if (Array.isArray(data.items)) return data.items;
+  }
+  console.warn('Expected array but got:', data);
+  return [];
+};
+
 /**
  * Responsibilities API
  */
@@ -32,14 +48,16 @@ export const fetchResponsibilities = async (userId) => {
   const response = await fetch(`${API_BASE}/users/${userId}/responsibilities`, {
     headers: getAuthHeaders()
   });
-  return handleResponse(response);
+  const data = await handleResponse(response);
+  return ensureArray(data);
 };
 
 export const fetchArchivedResponsibilities = async (userId) => {
   const response = await fetch(`${API_BASE}/users/${userId}/responsibilities/archived`, {
     headers: getAuthHeaders()
   });
-  return handleResponse(response);
+  const data = await handleResponse(response);
+  return ensureArray(data);
 };
 
 export const createResponsibility = async (userId, data) => {
@@ -93,7 +111,8 @@ export const fetchSkillsLibrary = async () => {
   const response = await fetch(`${API_BASE}/skills/library`, {
     headers: getAuthHeaders()
   });
-  return handleResponse(response);
+  const data = await handleResponse(response);
+  return ensureArray(data);
 };
 
 export const addSkillToLibrary = async (skillData) => {
@@ -113,7 +132,8 @@ export const getUserSkills = async (userId) => {
   const response = await fetch(`${API_BASE}/users/${userId}/skills`, {
     headers: getAuthHeaders()
   });
-  return handleResponse(response);
+  const data = await handleResponse(response);
+  return ensureArray(data);
 };
 
 export const addUserSkill = async (userId, data) => {
