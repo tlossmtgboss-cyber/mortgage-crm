@@ -163,6 +163,14 @@ class User(Base):
     onboarding_completed = Column(Boolean, default=False)
     user_metadata = Column(JSON)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    # Onboarding fields
+    phone = Column(String)
+    nmls_number = Column(String, index=True)
+    business_address = Column(String)
+    current_role = Column(String)
+    business_hours = Column(JSON)
+    email_verified_at = Column(DateTime)
+    phone_verified_at = Column(DateTime)
     branch = relationship("Branch", back_populates="users")
     leads = relationship("Lead", back_populates="owner")
     loans = relationship("Loan", back_populates="loan_officer")
@@ -191,6 +199,53 @@ class ImpersonationSession(Base):
     expires_at = Column(DateTime, nullable=False)
     ended_at = Column(DateTime, nullable=True)
     is_active = Column(Boolean, default=True)
+
+class OnboardingProgress(Base):
+    __tablename__ = "onboarding_progress"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
+    current_step = Column(Integer, default=1, nullable=False, index=True)
+    # JSON columns for each step's data
+    step_1_data = Column(JSON)
+    step_2_data = Column(JSON)
+    step_3_data = Column(JSON)
+    step_4_data = Column(JSON)
+    step_5_data = Column(JSON)
+    step_6_data = Column(JSON)
+    step_7_data = Column(JSON)
+    step_8_data = Column(JSON)
+    step_9_data = Column(JSON)
+    step_10_data = Column(JSON)
+    completed_at = Column(DateTime)
+    last_updated = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    # Relationship
+    user = relationship("User", backref="onboarding_progress")
+
+class OnboardingError(Base):
+    __tablename__ = "onboarding_errors"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    error_code = Column(String, nullable=False, index=True)
+    step_number = Column(Integer, nullable=False, index=True)
+    error_message = Column(Text, nullable=False)
+    error_context = Column(JSON)
+    user_action = Column(String)  # 'retry', 'skip', 'contact_support', 'resolved'
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    # Relationship
+    user = relationship("User", backref="onboarding_errors")
+
+class VerificationToken(Base):
+    __tablename__ = "verification_tokens"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    token_type = Column(String, nullable=False)  # 'email' or 'sms'
+    token = Column(String, nullable=False, index=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    used_at = Column(DateTime)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    # Relationship
+    user = relationship("User", backref="verification_tokens")
 
 class Lead(Base):
     __tablename__ = "leads"
