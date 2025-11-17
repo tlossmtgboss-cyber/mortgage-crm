@@ -12992,12 +12992,9 @@ async def get_available_permissions(
     Get all available permissions with descriptions and categories
 
     Returns a structured list of all permissions in the system
+    NOTE: This endpoint is accessible to all authenticated users so they can see what permissions exist
     """
     try:
-        # Check permission
-        if not has_permission(current_user.id, 'team.manage_permissions', db):
-            raise HTTPException(status_code=403, detail="Access denied")
-
         # Define all available permissions organized by category
         permissions = {
             "dashboard_widgets": {
@@ -13104,8 +13101,21 @@ async def get_available_permissions(
             }
         }
 
+        # Flatten permissions for frontend compatibility
+        # Frontend expects: { permissions: { key: { name, description, category } } }
+        flattened_permissions = {}
+        for category_key, category_data in permissions.items():
+            category_name = category_data["name"]
+            for perm_key, perm_description in category_data["permissions"].items():
+                flattened_permissions[perm_key] = {
+                    "name": perm_key.replace('.', ' ').replace('_', ' ').title(),
+                    "description": perm_description,
+                    "category": category_name
+                }
+
         return {
-            "categories": permissions,
+            "permissions": flattened_permissions,
+            "categories": permissions,  # Keep for backwards compatibility
             "total_permissions": sum(len(cat["permissions"]) for cat in permissions.values())
         }
 
