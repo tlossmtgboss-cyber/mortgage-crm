@@ -35,7 +35,8 @@ class ContextAwareAI:
         current_message: str,
         lead_id: Optional[int] = None,
         loan_id: Optional[int] = None,
-        include_context: bool = True
+        include_context: bool = True,
+        coaching_context: Optional[str] = None
     ) -> Dict:
         """
         Generate AI response with relevant context from past conversations
@@ -85,7 +86,8 @@ class ContextAwareAI:
             system_prompt = self._build_system_prompt(
                 relevant_history,
                 lead_context,
-                loan_context
+                loan_context,
+                coaching_context
             )
 
             # 4. Generate response with Claude
@@ -156,7 +158,8 @@ class ContextAwareAI:
         self,
         relevant_history: List[Dict],
         lead_context: str,
-        loan_context: str
+        loan_context: str,
+        coaching_context: Optional[str] = None
     ) -> str:
         """Build enhanced system prompt with all available context"""
 
@@ -190,6 +193,11 @@ You have access to conversation history and context. Use this information to pro
         if loan_context:
             context_sections.append("\n## ⭐ CURRENT LOAN INFORMATION (Use this for answering questions!):")
             context_sections.append(loan_context)
+
+        # Add coaching context if available
+        if coaching_context:
+            context_sections.append("\n## ⭐ YOUR CRM DATA (Use this for coaching and prioritization!):")
+            context_sections.append(coaching_context)
 
         # Add guidelines
         context_sections.append("""

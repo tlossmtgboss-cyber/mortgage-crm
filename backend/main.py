@@ -3100,6 +3100,51 @@ async def update_ai_action_outcome(
 # AI MEMORY / SMART CHAT ENDPOINT
 # ============================================================================
 
+async def _get_coaching_context(db: Session, user_id: int) -> str:
+    """Fetch CRM data for coaching context"""
+    from datetime import datetime, timedelta
+    from sqlalchemy import func
+
+    context_parts = []
+
+    # Get leads stats
+    leads = db.query(Lead).filter(Lead.user_id == user_id).all()
+    new_leads = [l for l in leads if l.created_at and l.created_at >= datetime.now() - timedelta(days=1)]
+    pending_leads = [l for l in leads if l.status in ['new', 'contacted']]
+
+    context_parts.append(f"## LEADS DATA:")
+    context_parts.append(f"- Total leads: {len(leads)}")
+    context_parts.append(f"- New leads (last 24h): {len(new_leads)}")
+    context_parts.append(f"- Pending follow-up: {len(pending_leads)}")
+
+    # Get loans/pipeline stats
+    loans = db.query(Loan).filter(Loan.user_id == user_id).all()
+    active_loans = [l for l in loans if l.status not in ['funded', 'cancelled', 'denied']]
+    stuck_loans = [l for l in active_loans if l.updated_at and l.updated_at <= datetime.now() - timedelta(days=10)]
+
+    context_parts.append(f"\n## PIPELINE DATA:")
+    context_parts.append(f"- Total loans: {len(loans)}")
+    context_parts.append(f"- Active in pipeline: {len(active_loans)}")
+    context_parts.append(f"- Stalled (10+ days): {len(stuck_loans)}")
+
+    if stuck_loans:
+        context_parts.append(f"\nStalled deals:")
+        for loan in stuck_loans[:5]:
+            days_stuck = (datetime.now() - loan.updated_at).days
+            context_parts.append(f"  - {loan.borrower_name}: {loan.status} ({days_stuck} days)")
+
+    # Get tasks stats
+    tasks = db.query(Task).filter(Task.assignee_id == user_id).all()
+    overdue_tasks = [t for t in tasks if t.due_date and t.due_date < datetime.now().date() and t.status != 'completed']
+    today_tasks = [t for t in tasks if t.due_date == datetime.now().date() and t.status != 'completed']
+
+    context_parts.append(f"\n## TASKS DATA:")
+    context_parts.append(f"- Total tasks: {len(tasks)}")
+    context_parts.append(f"- Overdue: {len(overdue_tasks)}")
+    context_parts.append(f"- Due today: {len(today_tasks)}")
+
+    return "\n".join(context_parts)
+
 @app.post("/api/v1/ai/smart-chat")
 async def smart_chat_with_memory(
     request: Request,
@@ -3118,9 +3163,16 @@ async def smart_chat_with_memory(
         lead_id = data.get("lead_id")
         loan_id = data.get("loan_id")
         include_context = data.get("include_context", True)
+        coaching_mode = data.get("coaching_mode")
+        context_type = data.get("context_type")
 
         if not message:
             raise HTTPException(status_code=400, detail="Message is required")
+
+        # Fetch CRM data for coaching requests
+        coaching_context = None
+        if coaching_mode or context_type == "coaching":
+            coaching_context = await _get_coaching_context(db, current_user.id)
 
         # ✅ FIX: Log to Mission Control FIRST (before trying AI response)
         action_id = await log_ai_action_to_mission_control(
@@ -3145,7 +3197,8 @@ async def smart_chat_with_memory(
                 current_message=message,
                 lead_id=lead_id,
                 loan_id=loan_id,
-                include_context=include_context
+                include_context=include_context,
+                coaching_context=coaching_context
             )
 
             # ✅ Update outcome as SUCCESS
