@@ -4509,38 +4509,69 @@ async def drop_voicemail(
         api_url = os.getenv("API_URL", "https://mortgage-crm-production-7a9a.up.railway.app")
 
         # Call Vapi API to initiate outbound voicemail drop
+        # Get optional phone number ID if configured
+        vapi_phone_number_id = os.getenv("VAPI_PHONE_NUMBER_ID")
+
         async with httpx.AsyncClient(timeout=30.0) as client:
+            # Build the request payload
+            vapi_payload = {
+                "phoneNumber": to_number,
+                "assistantId": vapi_assistant_id,
+                "assistantOverrides": {
+                    "firstMessage": full_message,
+                    "voicemailMessage": full_message
+                },
+                "serverMessages": ["end-of-call-report"],
+                "serverUrl": f"{api_url}/api/v1/webhooks/vapi/voicemail-status?voicemail_id={voicemail_drop.id}"
+            }
+
+            # Add phoneNumberId if configured
+            if vapi_phone_number_id:
+                vapi_payload["phoneNumberId"] = vapi_phone_number_id
+
+            logger.info(f"Sending Vapi request to https://api.vapi.ai/call/phone")
+            logger.info(f"Vapi payload: {vapi_payload}")
+
             vapi_response = await client.post(
                 "https://api.vapi.ai/call/phone",
                 headers={
                     "Authorization": f"Bearer {vapi_api_key}",
                     "Content-Type": "application/json"
                 },
-                json={
-                    "phoneNumber": to_number,
-                    "assistantId": vapi_assistant_id,
-                    "assistantOverrides": {
-                        "firstMessage": full_message,
-                        "voicemailMessage": full_message
-                    },
-                    "serverMessages": ["end-of-call-report"],
-                    "serverUrl": f"{api_url}/api/v1/webhooks/vapi/voicemail-status?voicemail_id={voicemail_drop.id}"
-                }
+                json=vapi_payload
             )
 
+            # Log the response for debugging
+            response_text = vapi_response.text
+            logger.info(f"Vapi response status={vapi_response.status_code}")
+            logger.info(f"Vapi response body: {response_text}")
+
             vapi_data = vapi_response.json()
-            logger.info(f"Vapi response status={vapi_response.status_code}: {vapi_data}")
 
             if vapi_response.status_code not in [200, 201]:
                 # Handle error response - could be dict or string
+                error_details = f"Status {vapi_response.status_code}: {response_text}"
+
                 if isinstance(vapi_data, dict):
-                    error_msg = vapi_data.get("error", {}).get("message") if isinstance(vapi_data.get("error"), dict) else str(vapi_data.get("error", "Unknown Vapi error"))
+                    # Try to extract error message from various possible formats
+                    if "message" in vapi_data:
+                        error_msg = vapi_data["message"]
+                    elif "error" in vapi_data:
+                        error_data = vapi_data["error"]
+                        if isinstance(error_data, dict):
+                            error_msg = error_data.get("message", str(error_data))
+                        else:
+                            error_msg = str(error_data)
+                    else:
+                        error_msg = str(vapi_data)
                 else:
                     error_msg = str(vapi_data)
 
                 voicemail_drop.delivery_status = 'failed'
-                voicemail_drop.error_message = error_msg
+                voicemail_drop.error_message = error_details
                 db.commit()
+
+                logger.error(f"Vapi API error: {error_details}")
                 raise HTTPException(status_code=500, detail=f"Vapi API error: {error_msg}")
 
             # Update voicemail drop with Vapi call ID
