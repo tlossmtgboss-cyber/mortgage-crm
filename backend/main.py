@@ -17520,7 +17520,7 @@ async def seed_demo_people(
                 })
                 team_count += 1
 
-        # LEADS
+        # LEADS - Use enum string values (not keys)
         leads_data = [
             {"name": "James Wilson", "email": "james.wilson@email.com", "phone": "(555) 234-5678", "stage": "New", "source": "Website", "loan_type": "Purchase - Conventional", "credit_score": 750, "annual_income": 125000, "property_value": 450000, "down_payment": 90000},
             {"name": "Maria Hernandez", "email": "maria.hernandez@email.com", "phone": "(555) 345-6789", "stage": "Prospect", "source": "Referral Partner", "loan_type": "Purchase - FHA", "credit_score": 680, "annual_income": 85000, "property_value": 325000, "down_payment": 11375},
@@ -17543,7 +17543,7 @@ async def seed_demo_people(
                 """), {**lead, "loan_amount": loan_amount, "owner_id": owner_id, "income": lead.get("annual_income")})
                 leads_count += 1
 
-        # ACTIVE LOANS
+        # ACTIVE LOANS - Use enum string values (not keys)
         loans_data = [
             {"loan_number": "2025-001234", "borrower_name": "Michael Roberts", "coborrower_name": "Sarah Roberts", "stage": "Processing", "program": "Conventional 30-Year Fixed", "loan_type": "Purchase", "amount": 420000, "purchase_price": 525000, "down_payment": 105000, "rate": 6.875, "term": 360, "property_address": "1234 Oak Street, Austin, TX 78701"},
             {"loan_number": "2025-001235", "borrower_name": "Jennifer Kim", "stage": "UW Received", "program": "FHA 30-Year Fixed", "loan_type": "Purchase", "amount": 285000, "purchase_price": 300000, "down_payment": 10500, "rate": 6.625, "term": 360, "property_address": "5678 Elm Avenue, Houston, TX 77002"},
