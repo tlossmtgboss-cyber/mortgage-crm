@@ -648,20 +648,6 @@ class Workflow(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
-class OnboardingProgress(Base):
-    __tablename__ = "onboarding_progress"
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), unique=True)
-    current_step = Column(Integer, default=1)  # 1-5
-    steps_completed = Column(JSON, default=list)  # Array of completed step numbers
-    uploaded_documents = Column(JSON)  # Files uploaded
-    team_members_added = Column(Integer, default=0)
-    workflows_generated = Column(Integer, default=0)
-    is_complete = Column(Boolean, default=False)
-    completed_at = Column(DateTime)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
-
 class EmailVerificationToken(Base):
     __tablename__ = "email_verification_tokens"
     id = Column(Integer, primary_key=True, index=True)
