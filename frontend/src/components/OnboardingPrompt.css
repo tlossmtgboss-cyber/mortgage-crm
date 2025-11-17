@@ -9,19 +9,7 @@
 }
 
 .onboarding-prompt.persistent {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  border: 3px solid #fca5a5;
-  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
-  animation: pulse-border 2s ease-in-out infinite;
-}
-
-@keyframes pulse-border {
-  0%, 100% {
-    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
-  }
-  50% {
-    box-shadow: 0 6px 24px rgba(239, 68, 68, 0.6);
-  }
+  /* Keep same styling as regular - no red/pulsing */
 }
 
 @keyframes slideDown {
@@ -86,21 +74,6 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
-.onboarding-prompt.persistent .btn-start-onboarding {
-  background: white;
-  color: #dc2626;
-  animation: button-pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes button-pulse {
-  0%, 100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.05);
-  }
-}
-
 .btn-start-onboarding:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
@@ -113,10 +86,10 @@
 
 .onboarding-requirement-note {
   color: white;
-  font-size: 12px;
+  font-size: 11px;
   text-align: center;
-  margin-top: 12px;
-  opacity: 0.9;
+  margin-top: 8px;
+  opacity: 0.85;
   font-style: italic;
 }
 
