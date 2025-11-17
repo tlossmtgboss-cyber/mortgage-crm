@@ -26,6 +26,7 @@ const LeadDetail = lazy(() => import('./pages/LeadDetail'));
 const Loans = lazy(() => import('./pages/Loans'));
 const LoanDetail = lazy(() => import('./pages/LoanDetail'));
 const Portfolio = lazy(() => import('./pages/Portfolio'));
+const PortfolioDetail = lazy(() => import('./pages/PortfolioDetail'));
 const MumClientDetail = lazy(() => import('./pages/MumClientDetail'));
 const YearOverYear = lazy(() => import('./pages/YearOverYear'));
 const Tasks = lazy(() => import('./pages/Tasks'));
@@ -367,6 +368,26 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><Portfolio /></LazyPage>
+                  </main>
+                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/portfolio/detail"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><PortfolioDetail /></LazyPage>
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />

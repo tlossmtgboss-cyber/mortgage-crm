@@ -1,0 +1,266 @@
+.portfolio-detail-container {
+  padding: 30px;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.detail-header {
+  margin-bottom: 30px;
+}
+
+.btn-back {
+  background: #f0f0f0;
+  border: 1px solid #ddd;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  margin-bottom: 20px;
+  transition: all 0.2s;
+}
+
+.btn-back:hover {
+  background: #e0e0e0;
+}
+
+.detail-title-section h1 {
+  font-size: 28px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 10px 0;
+}
+
+.detail-description {
+  font-size: 15px;
+  color: #666;
+  margin: 0;
+}
+
+/* Stats Summary */
+.detail-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.detail-stat-card {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+}
+
+.detail-stat-card .stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1a73e8;
+  margin-bottom: 8px;
+}
+
+.detail-stat-card .stat-label {
+  font-size: 13px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Search Bar */
+.search-bar-container {
+  position: relative;
+  margin-bottom: 20px;
+}
+
+.search-bar {
+  width: 100%;
+  padding: 12px 40px 12px 15px;
+  font-size: 14px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+
+.search-bar:focus {
+  outline: none;
+  border-color: #1a73e8;
+}
+
+.clear-search {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #999;
+  cursor: pointer;
+  padding: 0 10px;
+}
+
+.clear-search:hover {
+  color: #333;
+}
+
+/* Clients Table */
+.clients-table-container {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.clients-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.clients-table thead {
+  background: #f8f9fa;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.clients-table th {
+  padding: 15px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.clients-table tbody tr {
+  border-bottom: 1px solid #f0f0f0;
+  transition: background-color 0.2s;
+}
+
+.clients-table tbody tr:hover {
+  background-color: #f8f9fa;
+}
+
+.clients-table td {
+  padding: 15px;
+  font-size: 14px;
+  color: #333;
+}
+
+.client-row {
+  cursor: pointer;
+}
+
+/* Client Name Cell with Badges */
+.client-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.opp-badge {
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.opp-badge.refi {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.opp-badge.heloc {
+  background: #e8f5e9;
+  color: #388e3c;
+}
+
+.opp-badge.rebound {
+  background: #fff3e0;
+  color: #f57c00;
+}
+
+.opp-badge.equity {
+  background: #f3e5f5;
+  color: #7b1fa2;
+}
+
+/* Days Badge */
+.days-badge {
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.days-badge.recent {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.days-badge.medium {
+  background: #fff8e1;
+  color: #f57f17;
+}
+
+.days-badge.old {
+  background: #fbe9e7;
+  color: #d84315;
+}
+
+/* Text Formatting */
+.mono {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+}
+
+.currency {
+  font-weight: 500;
+}
+
+.currency.positive {
+  color: #2e7d32;
+}
+
+/* Empty State */
+.empty-state {
+  padding: 60px 20px;
+  text-align: center;
+  color: #999;
+  font-size: 15px;
+}
+
+/* Loading State */
+.loading {
+  padding: 60px 20px;
+  text-align: center;
+  color: #666;
+  font-size: 15px;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+  .detail-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .portfolio-detail-container {
+    padding: 15px;
+  }
+
+  .detail-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .clients-table-container {
+    overflow-x: auto;
+  }
+
+  .clients-table {
+    min-width: 1200px;
+  }
+}
