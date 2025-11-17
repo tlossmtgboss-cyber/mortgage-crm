@@ -4450,7 +4450,10 @@ async def drop_voicemail(
             from_=from_number,
             url=f"{api_url}/api/v1/voice/voicemail-twiml?message={encoded_message}",
             method='GET',
-            machine_detection='DetectMessageEnd',
+            machine_detection='Enable',
+            async_amd='true',
+            async_amd_status_callback=f"{api_url}/api/v1/voice/amd-callback",
+            async_amd_status_callback_method='POST',
             status_callback=f"{api_url}/api/v1/voice/call-status",
             status_callback_event=['completed'],
             status_callback_method='POST'
@@ -4496,14 +4499,43 @@ async def drop_voicemail(
         }
 
 
+@app.post("/api/v1/voice/amd-callback")
+async def amd_callback(request: Request):
+    """Handle AMD (Answering Machine Detection) callback"""
+    try:
+        form_data = await request.form()
+        amd_status = form_data.get("AnsweredBy")
+        call_sid = form_data.get("CallSid")
+
+        logger.info(f"AMD Callback - CallSid: {call_sid}, AnsweredBy: {amd_status}")
+
+        return {"status": "received", "answered_by": amd_status}
+    except Exception as e:
+        logger.error(f"Error in AMD callback: {e}")
+        return {"status": "error"}
+
+
 @app.get("/api/v1/voice/voicemail-twiml")
-async def voicemail_twiml(message: str = ""):
-    """Generate TwiML for voicemail message"""
+async def voicemail_twiml(
+    message: str = "",
+    AnsweredBy: str = None,
+    request: Request = None
+):
+    """Generate TwiML for voicemail message - only plays if voicemail detected"""
     from twilio.twiml.voice_response import VoiceResponse
 
     response = VoiceResponse()
-    response.say(message, voice='Polly.Joanna', language='en-US')
-    response.hangup()
+
+    # If AMD detected a human, hang up immediately
+    if AnsweredBy == 'human':
+        logger.info("Human detected, hanging up to avoid disturbing")
+        response.hangup()
+    else:
+        # Machine or unknown - play the message
+        # Pause briefly to ensure we're past the beep
+        response.pause(length=1)
+        response.say(message, voice='Polly.Joanna', language='en-US')
+        response.hangup()
 
     return Response(content=str(response), media_type="application/xml")
 
