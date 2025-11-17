@@ -90,7 +90,7 @@ class ContextAwareAI:
 
             # 4. Generate response with Claude
             response = self.client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model="claude-sonnet-4-20250514",
                 max_tokens=2000,
                 system=system_prompt,
                 messages=[{
@@ -218,7 +218,7 @@ Email: {lead.email or 'N/A'}
 Stage: {lead.stage}
 Source: {lead.source or 'N/A'}
 Credit Score: {lead.credit_score or 'N/A'}
-Loan Amount Estimate: ${lead.loan_amount_estimate or 0:,.0f}
+Loan Amount: ${lead.loan_amount or 0:,.0f}
 Property Value: ${lead.property_value or 0:,.0f}
 Notes: {lead.notes or 'None'}"""
 
@@ -275,7 +275,7 @@ Extract and return ONLY a JSON object with:
 Return ONLY valid JSON, no other text."""
 
             response = self.client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model="claude-sonnet-4-20250514",
                 max_tokens=500,
                 messages=[{
                     "role": "user",
