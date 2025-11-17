@@ -4435,16 +4435,19 @@ async def drop_voicemail(
         # Store audio file path temporarily for retrieval
         # In production, you'd upload this to S3 or similar
         import uuid
+        from urllib.parse import quote
         audio_id = str(uuid.uuid4())
 
         # For now, we'll use Twilio's message service with a text message
         # In a full implementation, you'd need to host the audio file and deliver it
 
         # Alternative: Use Twilio's answering machine detection to drop voicemail
+        # URL-encode the message to ensure it's a valid URL
+        encoded_message = quote(full_message)
         call = twilio_client.calls.create(
             to=to_number,
             from_=from_number,
-            url=f"{api_url}/api/v1/voice/voicemail-twiml?message={full_message}",
+            url=f"{api_url}/api/v1/voice/voicemail-twiml?message={encoded_message}",
             method='GET',
             machine_detection='DetectMessageEnd',
             status_callback=f"{api_url}/api/v1/voice/call-status",
