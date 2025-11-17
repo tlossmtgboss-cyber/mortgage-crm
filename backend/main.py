@@ -7808,11 +7808,11 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
         func.count(case((Lead.created_at >= today_start, 1))).label('new_today'),
         func.count(case((
             (Lead.ai_score >= 80) &
-            (Lead.stage.in_([LeadStage.NEW, LeadStage.CONTACTED])), 1
+            (Lead.stage.in_([LeadStage.NEW, LeadStage.ATTEMPTED_CONTACT])), 1
         ))).label('hot_leads'),
         func.count(case((
             (Lead.ai_score >= 75) &
-            (Lead.stage == LeadStage.CONTACTED), 1
+            (Lead.stage == LeadStage.ATTEMPTED_CONTACT), 1
         ))).label('high_intent')
     ).filter(
         Lead.owner_id == current_user.id
