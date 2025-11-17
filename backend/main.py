@@ -156,7 +156,7 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     full_name = Column(String)
     role = Column(String, default="loan_officer")  # Legacy role field
-    permission_role = Column(String, default="sales")  # Phase 2: 'management', 'sales', or 'operations'
+    permission_role = Column(String, default="sales")  # Phase 2: 'admin', 'leadership', 'management', 'sales', 'processing', or 'operations'
     branch_id = Column(Integer, ForeignKey("branches.id"))
     is_active = Column(Boolean, default=True)
     email_verified = Column(Boolean, default=False)
@@ -17729,6 +17729,86 @@ async def fix_loan_stages(
     except Exception as e:
         db.rollback()
         logger.error(f"Error fixing loan stages: {e}")
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+
+@app.post("/api/v1/admin/update-permission-roles")
+async def update_permission_roles(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Update permission templates to new role structure:
+    Admin, Leadership, Management, Sales, Processing, Operations
+    """
+    try:
+        # Define new permission templates
+        admin_perms = {
+            "dashboard.view_all_widgets": True, "leads.view_all": True, "clients.view_all": True,
+            "loans.view_all": True, "team.view_all": True, "team.impersonate": True,
+            "permissions.manage": True, "settings.manage": True, "system.admin": True
+        }
+
+        leadership_perms = {
+            "dashboard.view_all_widgets": True, "leads.view_all": True, "clients.view_all": True,
+            "loans.view_all": True, "team.view_all": True, "analytics.view_all": True,
+            "reports.executive": True
+        }
+
+        management_perms = {
+            "dashboard.view_all_widgets": True, "leads.view_team": True, "clients.view_team": True,
+            "loans.view_team": True, "team.view_team": True, "team.manage": True
+        }
+
+        sales_perms = {
+            "leads.view_assigned": True, "leads.edit_own": True, "leads.create": True,
+            "clients.view_assigned": True, "loans.view_assigned": True
+        }
+
+        processing_perms = {
+            "loans.view_all": True, "loans.process": True, "loans.edit_documents": True,
+            "clients.view_all": True, "dashboard.view_processing": True
+        }
+
+        operations_perms = {
+            "leads.view_all": True, "clients.view_all": True, "loans.view_all": True,
+            "loans.process": True, "operations.manage": True
+        }
+
+        # Delete old templates
+        db.execute(text("DELETE FROM permission_templates WHERE is_system_default = TRUE"))
+
+        # Insert new templates
+        db.execute(text("""
+            INSERT INTO permission_templates
+            (name, description, permissions, is_system_default, category, created_at)
+            VALUES
+            ('Admin', 'Full system access', CAST(:admin AS jsonb), TRUE, 'admin', CURRENT_TIMESTAMP),
+            ('Leadership', 'Executive level access', CAST(:leadership AS jsonb), TRUE, 'leadership', CURRENT_TIMESTAMP),
+            ('Management', 'Team management access', CAST(:management AS jsonb), TRUE, 'management', CURRENT_TIMESTAMP),
+            ('Sales', 'Sales focused access', CAST(:sales AS jsonb), TRUE, 'sales', CURRENT_TIMESTAMP),
+            ('Processing', 'Loan processing access', CAST(:processing AS jsonb), TRUE, 'processing', CURRENT_TIMESTAMP),
+            ('Operations', 'Operations access', CAST(:operations AS jsonb), TRUE, 'operations', CURRENT_TIMESTAMP)
+        """), {
+            'admin': json.dumps(admin_perms),
+            'leadership': json.dumps(leadership_perms),
+            'management': json.dumps(management_perms),
+            'sales': json.dumps(sales_perms),
+            'processing': json.dumps(processing_perms),
+            'operations': json.dumps(operations_perms)
+        })
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": "Permission templates updated",
+            "roles": ["Admin", "Leadership", "Management", "Sales", "Processing", "Operations"]
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating permission roles: {e}")
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
 
