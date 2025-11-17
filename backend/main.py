@@ -4468,17 +4468,25 @@ async def drop_voicemail(
             )
 
             vapi_data = vapi_response.json()
-            logger.info(f"Vapi response: {vapi_data}")
+            logger.info(f"Vapi response status={vapi_response.status_code}: {vapi_data}")
 
             if vapi_response.status_code not in [200, 201]:
-                error_msg = vapi_data.get("error", {}).get("message", "Unknown Vapi error")
+                # Handle error response - could be dict or string
+                if isinstance(vapi_data, dict):
+                    error_msg = vapi_data.get("error", {}).get("message") if isinstance(vapi_data.get("error"), dict) else str(vapi_data.get("error", "Unknown Vapi error"))
+                else:
+                    error_msg = str(vapi_data)
+
                 voicemail_drop.delivery_status = 'failed'
                 voicemail_drop.error_message = error_msg
                 db.commit()
                 raise HTTPException(status_code=500, detail=f"Vapi API error: {error_msg}")
 
             # Update voicemail drop with Vapi call ID
-            vapi_call_id = vapi_data.get("id")
+            vapi_call_id = vapi_data.get("id") if isinstance(vapi_data, dict) else None
+            if not vapi_call_id:
+                raise HTTPException(status_code=500, detail="No call ID returned from Vapi")
+
             voicemail_drop.vapi_call_id = vapi_call_id
             db.commit()
 
