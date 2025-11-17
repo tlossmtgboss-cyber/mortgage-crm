@@ -783,9 +783,6 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
               <span className="time-note">You can save and resume anytime</span>
             </div>
           </div>
-          <button className="btn-start-onboarding" onClick={() => setCurrentStep(1)}>
-            Get Started →
-          </button>
         </div>
       </div>
     );
@@ -2774,6 +2771,8 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
           >
             {currentStep === totalSteps ? (
               <>Activate Account & Go Live! 🚀</>
+            ) : currentStep === 0 ? (
+              <>Get Started</>
             ) : (
               <>Next →</>
             )}
