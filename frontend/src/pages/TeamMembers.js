@@ -66,8 +66,34 @@ function TeamMembers() {
     try {
       setLoading(true);
       const data = await teamAPI.getMembers();
-      // Backend returns { team_members: [...], available_roles: [...] }
-      setMembers(Array.isArray(data.team_members) ? data.team_members : Array.isArray(data) ? data : []);
+
+      console.log('Team API response:', data);
+      console.log('Type of data:', typeof data);
+
+      // Handle different response formats
+      let membersList = [];
+
+      if (Array.isArray(data)) {
+        // Direct array response
+        membersList = data;
+      } else if (data && typeof data === 'object') {
+        // Object with team_members property
+        if (Array.isArray(data.team_members)) {
+          membersList = data.team_members;
+        } else if (data.team_members && typeof data.team_members === 'string') {
+          // Handle case where backend returns stringified data
+          try {
+            const parsed = JSON.parse(data.team_members);
+            membersList = Array.isArray(parsed) ? parsed : [];
+          } catch (e) {
+            console.error('Failed to parse team_members string:', e);
+            membersList = [];
+          }
+        }
+      }
+
+      console.log('Processed members list:', membersList);
+      setMembers(membersList);
     } catch (error) {
       console.error('Failed to load team members:', error);
       setMembers([]);
@@ -187,16 +213,21 @@ function TeamMembers() {
     return <div className="loading">Loading team members...</div>;
   }
 
-  // Filter by search query
-  let filteredMembers = members;
+  // Filter by search query - ensure members is always an array
+  const safeMembers = Array.isArray(members) ? members : [];
+  let filteredMembers = safeMembers;
+
   if (searchQuery.trim()) {
     const query = searchQuery.toLowerCase();
-    filteredMembers = members.filter(member =>
-      `${member.first_name} ${member.last_name}`.toLowerCase().includes(query) ||
-      member.email?.toLowerCase().includes(query) ||
-      member.phone?.toLowerCase().includes(query) ||
-      member.role?.toLowerCase().includes(query) ||
-      member.title?.toLowerCase().includes(query)
+    filteredMembers = safeMembers.filter(member =>
+      member &&
+      (
+        `${member.first_name || ''} ${member.last_name || ''}`.toLowerCase().includes(query) ||
+        member.email?.toLowerCase().includes(query) ||
+        member.phone?.toLowerCase().includes(query) ||
+        member.role?.toLowerCase().includes(query) ||
+        member.title?.toLowerCase().includes(query)
+      )
     );
   }
 
@@ -205,7 +236,7 @@ function TeamMembers() {
       <div className="page-header">
         <div>
           <h1>Team Members</h1>
-          <p>{members.length} total team members</p>
+          <p>{safeMembers.length} total team members</p>
         </div>
         <button className="btn-primary" onClick={handleAddMember}>
           + Add Team Member
@@ -251,43 +282,46 @@ function TeamMembers() {
               </tr>
             </thead>
             <tbody>
-              {filteredMembers.map((member) => (
-                <tr
-                  key={member.id}
-                  onClick={() => navigate(`/team-members/${member.id}`)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <td className="lead-name">
-                    <strong>
-                      {member.first_name} {member.last_name}
-                    </strong>
-                  </td>
-                  <td>{member.email || 'N/A'}</td>
-                  <td>{member.phone || 'N/A'}</td>
-                  <td>
-                    <span className="status-badge status-prospect">{member.role || 'Team Member'}</span>
-                  </td>
-                  <td>{member.title || 'N/A'}</td>
-                  <td>
-                    <div className="table-actions">
-                      <button
-                        className="btn-icon"
-                        onClick={(e) => { e.stopPropagation(); handleEditMember(member); }}
-                        title="Edit"
-                      >
-                        ✏️
-                      </button>
-                      <button
-                        className="btn-icon"
-                        onClick={(e) => { e.stopPropagation(); handleDeleteMember(member.id); }}
-                        title="Delete"
-                      >
-                        🗑️
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {filteredMembers.map((member) => {
+                if (!member || !member.id) return null;
+                return (
+                  <tr
+                    key={member.id}
+                    onClick={() => navigate(`/team-members/${member.id}`)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <td className="lead-name">
+                      <strong>
+                        {member.first_name || ''} {member.last_name || ''}
+                      </strong>
+                    </td>
+                    <td>{member.email || 'N/A'}</td>
+                    <td>{member.phone || 'N/A'}</td>
+                    <td>
+                      <span className="status-badge status-prospect">{member.role || 'Team Member'}</span>
+                    </td>
+                    <td>{member.title || 'N/A'}</td>
+                    <td>
+                      <div className="table-actions">
+                        <button
+                          className="btn-icon"
+                          onClick={(e) => { e.stopPropagation(); handleEditMember(member); }}
+                          title="Edit"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          className="btn-icon"
+                          onClick={(e) => { e.stopPropagation(); handleDeleteMember(member.id); }}
+                          title="Delete"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
