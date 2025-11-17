@@ -12288,37 +12288,52 @@ async def get_team_member_detail(
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        # Get roles assigned to the admin
-        process_roles = db.query(ProcessRole).filter(
-            ProcessRole.user_id == current_user.id,
-            ProcessRole.is_active == True
-        ).all()
+        # Parse user_metadata if it exists
+        user_metadata = {}
+        if hasattr(user, 'user_metadata') and user.user_metadata:
+            try:
+                user_metadata = json.loads(user.user_metadata) if isinstance(user.user_metadata, str) else user.user_metadata
+            except:
+                user_metadata = {}
 
-        # Get tasks for this user's role
-        # In a real app, you'd have a user_role_assignments table
-        # For now, we'll just return all roles and tasks
+        # Split full_name into first_name and last_name if not in metadata
+        first_name = user_metadata.get('first_name', '')
+        last_name = user_metadata.get('last_name', '')
 
-        roles_with_tasks = []
-        for role in process_roles:
-            tasks = db.query(ProcessTask).filter(
-                ProcessTask.role_id == role.id,
-                ProcessTask.is_active == True
-            ).order_by(ProcessTask.milestone_id, ProcessTask.sequence_order).all()
+        if not first_name and not last_name and user.full_name:
+            name_parts = user.full_name.split(' ', 1)
+            first_name = name_parts[0] if len(name_parts) > 0 else ''
+            last_name = name_parts[1] if len(name_parts) > 1 else ''
 
-            roles_with_tasks.append({
-                "role": ProcessRoleResponse.model_validate(role),
-                "tasks": [ProcessTaskResponse.model_validate(t) for t in tasks]
-            })
-
+        # Return data structure expected by frontend
         return {
-            "user": {
-                "id": user.id,
-                "email": user.email,
-                "full_name": user.full_name,
-                "created_at": user.created_at.isoformat() if user.created_at else None,
-                "onboarding_completed": user.onboarding_completed
-            },
-            "roles_with_tasks": roles_with_tasks
+            "id": user.id,
+            "email": user.email,
+            "first_name": first_name,
+            "last_name": last_name,
+            "full_name": user.full_name or f"{first_name} {last_name}",
+            "role": user.role or "employee",
+            "phone": user_metadata.get('phone', user.phone if hasattr(user, 'phone') else ''),
+            "photo_url": user_metadata.get('photo_url', user.photo_url if hasattr(user, 'photo_url') else None),
+            "employee_id": user_metadata.get('employee_id', ''),
+            "start_date": user_metadata.get('start_date', user.created_at.strftime('%Y-%m-%d') if user.created_at else ''),
+            "department": user_metadata.get('department', getattr(user, 'department', '')),
+            "manager": user_metadata.get('manager', ''),
+            "title": user_metadata.get('title', ''),
+            "disc_d": user_metadata.get('disc_d', 50),
+            "disc_i": user_metadata.get('disc_i', 50),
+            "disc_s": user_metadata.get('disc_s', 50),
+            "disc_c": user_metadata.get('disc_c', 50),
+            "disc_summary": user_metadata.get('disc_summary', ''),
+            "birthday": user_metadata.get('birthday', ''),
+            "anniversary": user_metadata.get('anniversary', ''),
+            "spouse_name": user_metadata.get('spouse_name', ''),
+            "children": user_metadata.get('children', ''),
+            "hobbies": user_metadata.get('hobbies', ''),
+            "emergency_contact": user_metadata.get('emergency_contact', ''),
+            "emergency_phone": user_metadata.get('emergency_phone', ''),
+            "created_at": user.created_at.isoformat() if user.created_at else None,
+            "onboarding_completed": user.onboarding_completed if hasattr(user, 'onboarding_completed') else False
         }
 
     except HTTPException:
