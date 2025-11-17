@@ -17706,14 +17706,15 @@ async def fix_loan_stages(
     """
     try:
         # Update loans with NULL stages to have proper stage values
+        # NOTE: Using enum keys (PROCESSING, UW_RECEIVED, etc.) rather than values
         db.execute(text("""
             UPDATE loans
             SET stage = (CASE
-                WHEN loan_number LIKE '%-001234' THEN 'Processing'
-                WHEN loan_number LIKE '%-001235' THEN 'UW Received'
-                WHEN loan_number LIKE '%-001236' THEN 'Approved'
+                WHEN loan_number LIKE '%-001234' THEN 'PROCESSING'
+                WHEN loan_number LIKE '%-001235' THEN 'UW_RECEIVED'
+                WHEN loan_number LIKE '%-001236' THEN 'APPROVED'
                 WHEN loan_number LIKE '%-001237' THEN 'CTC'
-                ELSE 'Processing'
+                ELSE 'PROCESSING'
             END)::loanstage
             WHERE stage IS NULL
         """))
