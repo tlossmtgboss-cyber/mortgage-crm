@@ -49,6 +49,10 @@ from security_middleware import (
     SecurityLoggingMiddleware
 )
 
+# Import onboarding modules
+from schemas.onboarding import Step1Data, OnboardingProgressResponse, VerifyCodeRequest, SendVerificationRequest
+from crud import onboarding as onboarding_crud
+
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -19463,6 +19467,478 @@ async def get_mum_metrics(
 
     except Exception as e:
         logger.error(f"Get MUM metrics error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# ONBOARDING ENDPOINTS
+# ============================================================================
+
+@app.post("/api/v1/onboarding/start")
+async def start_onboarding(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Initialize onboarding for a new user
+    Creates OnboardingProgress record if it doesn't exist
+    """
+    try:
+        # Check if onboarding already exists
+        progress = db.query(OnboardingProgress).filter(
+            OnboardingProgress.user_id == current_user.id
+        ).first()
+
+        if progress:
+            return {
+                "message": "Onboarding already started",
+                "current_step": progress.current_step,
+                "progress_id": progress.id
+            }
+
+        # Create new onboarding progress
+        new_progress = OnboardingProgress(
+            user_id=current_user.id,
+            current_step=1
+        )
+        db.add(new_progress)
+        db.commit()
+        db.refresh(new_progress)
+
+        logger.info(f"Started onboarding for user {current_user.id}")
+        return {
+            "message": "Onboarding started successfully",
+            "current_step": 1,
+            "progress_id": new_progress.id
+        }
+
+    except Exception as e:
+        logger.error(f"Start onboarding error for user {current_user.id}: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/onboarding/progress", response_model=OnboardingProgressResponse)
+async def get_onboarding_progress(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Get current onboarding progress for the authenticated user
+    """
+    try:
+        progress = db.query(OnboardingProgress).filter(
+            OnboardingProgress.user_id == current_user.id
+        ).first()
+
+        if not progress:
+            raise HTTPException(
+                status_code=404,
+                detail="Onboarding not started. Call /api/v1/onboarding/start first."
+            )
+
+        return progress
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Get onboarding progress error for user {current_user.id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/onboarding/resume")
+async def should_resume_onboarding(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Check if user should resume onboarding (incomplete onboarding exists)
+    """
+    try:
+        progress = db.query(OnboardingProgress).filter(
+            OnboardingProgress.user_id == current_user.id
+        ).first()
+
+        if not progress:
+            return {"should_resume": False, "current_step": None}
+
+        if progress.completed_at:
+            return {"should_resume": False, "current_step": None, "completed": True}
+
+        return {
+            "should_resume": True,
+            "current_step": progress.current_step,
+            "last_updated": progress.last_updated
+        }
+
+    except Exception as e:
+        logger.error(f"Check resume onboarding error for user {current_user.id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/onboarding/step-1/save")
+async def save_step_1(
+    data: Step1Data,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Save Step 1 data (registration information)
+    """
+    try:
+        # Get or create onboarding progress
+        progress = db.query(OnboardingProgress).filter(
+            OnboardingProgress.user_id == current_user.id
+        ).first()
+
+        if not progress:
+            progress = OnboardingProgress(user_id=current_user.id, current_step=1)
+            db.add(progress)
+
+        # Save data
+        progress.step_1_data = data.model_dump()
+        progress.last_updated = datetime.now(timezone.utc)
+
+        # Update user fields
+        current_user.full_name = data.name
+        current_user.email = data.email
+        current_user.phone = data.phone
+        current_user.nmls_number = data.nmls_number
+        current_user.business_address = data.business_address
+        current_user.current_role = data.current_role
+        current_user.business_hours = data.business_hours.model_dump()
+
+        # Update verification status if verified
+        if data.email_verified and not current_user.email_verified_at:
+            current_user.email_verified_at = datetime.now(timezone.utc)
+            current_user.email_verified = True
+        if data.phone_verified and not current_user.phone_verified_at:
+            current_user.phone_verified_at = datetime.now(timezone.utc)
+
+        db.commit()
+
+        logger.info(f"Saved Step 1 data for user {current_user.id}")
+        return {"message": "Step 1 data saved successfully", "current_step": progress.current_step}
+
+    except Exception as e:
+        logger.error(f"Save Step 1 error for user {current_user.id}: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/onboarding/auto-save")
+async def auto_save_step(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Auto-save any step's data (called every 30 seconds)
+    """
+    try:
+        data = await request.json()
+        step_number = data.get("step_number")
+        step_data = data.get("data")
+
+        if not step_number or not step_data:
+            raise HTTPException(status_code=400, detail="step_number and data are required")
+
+        # Get onboarding progress
+        progress = db.query(OnboardingProgress).filter(
+            OnboardingProgress.user_id == current_user.id
+        ).first()
+
+        if not progress:
+            raise HTTPException(status_code=404, detail="Onboarding not started")
+
+        # Save to appropriate step data column
+        step_column = f"step_{step_number}_data"
+        if hasattr(progress, step_column):
+            setattr(progress, step_column, step_data)
+            progress.last_updated = datetime.now(timezone.utc)
+            db.commit()
+
+            return {"message": f"Step {step_number} auto-saved successfully"}
+        else:
+            raise HTTPException(status_code=400, detail=f"Invalid step number: {step_number}")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Auto-save error for user {current_user.id}: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/onboarding/step/{step_number}/complete")
+async def complete_step(
+    step_number: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Mark a step as complete and advance to next step
+    """
+    try:
+        if step_number < 1 or step_number > 10:
+            raise HTTPException(status_code=400, detail="Step number must be between 1 and 10")
+
+        # Get onboarding progress
+        progress = db.query(OnboardingProgress).filter(
+            OnboardingProgress.user_id == current_user.id
+        ).first()
+
+        if not progress:
+            raise HTTPException(status_code=404, detail="Onboarding not started")
+
+        # Verify step data exists
+        step_column = f"step_{step_number}_data"
+        if not getattr(progress, step_column, None):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot complete step {step_number}: no data saved"
+            )
+
+        # Advance to next step
+        if step_number == progress.current_step:
+            if step_number < 10:
+                progress.current_step = step_number + 1
+            else:
+                # Mark onboarding as complete
+                progress.completed_at = datetime.now(timezone.utc)
+                current_user.onboarding_completed = True
+
+        progress.last_updated = datetime.now(timezone.utc)
+        db.commit()
+
+        logger.info(f"User {current_user.id} completed step {step_number}")
+
+        return {
+            "message": f"Step {step_number} completed successfully",
+            "current_step": progress.current_step,
+            "is_complete": progress.completed_at is not None
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Complete step error for user {current_user.id}, step {step_number}: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/onboarding/step-1/send-email-verification")
+async def send_email_verification(
+    request: SendVerificationRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Send email verification code
+    """
+    try:
+        email = request.email or current_user.email
+
+        if not email:
+            raise HTTPException(status_code=400, detail="Email is required")
+
+        # Check rate limiting
+        recent_count = onboarding_crud.count_recent_verifications(
+            db, current_user.id, "email", hours=1
+        )
+        if recent_count >= 5:
+            raise HTTPException(
+                status_code=429,
+                detail="Too many verification attempts. Please try again in 1 hour."
+            )
+
+        # Create verification token
+        token = onboarding_crud.create_verification_token(
+            db, current_user.id, "email"
+        )
+
+        # TODO: Send actual email with token.token
+        # For now, return the code in response (DEVELOPMENT ONLY)
+        logger.info(f"Email verification code for user {current_user.id}: {token.token}")
+
+        return {
+            "message": "Verification code sent to email",
+            "code": token.token,  # REMOVE IN PRODUCTION
+            "expires_at": token.expires_at
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Send email verification error for user {current_user.id}: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/onboarding/step-1/verify-email")
+async def verify_email(
+    request: VerifyCodeRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Verify email with 6-digit code
+    """
+    try:
+        # Verify token
+        token = onboarding_crud.verify_token(
+            db, current_user.id, request.code, "email"
+        )
+
+        if not token:
+            # Log error
+            error = OnboardingError(
+                user_id=current_user.id,
+                error_code="OB-01-001",
+                step_number=1,
+                error_message="Invalid or expired email verification code",
+                error_context={"code": request.code},
+                user_action="retry"
+            )
+            db.add(error)
+            db.commit()
+
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid or expired verification code"
+            )
+
+        # Mark email as verified
+        current_user.email_verified_at = datetime.now(timezone.utc)
+        current_user.email_verified = True
+
+        # Update step 1 data if exists
+        progress = db.query(OnboardingProgress).filter(
+            OnboardingProgress.user_id == current_user.id
+        ).first()
+        if progress and progress.step_1_data:
+            step_1_data = progress.step_1_data
+            step_1_data["email_verified"] = True
+            progress.step_1_data = step_1_data
+            progress.last_updated = datetime.now(timezone.utc)
+
+        db.commit()
+
+        logger.info(f"Email verified for user {current_user.id}")
+        return {"message": "Email verified successfully"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Verify email error for user {current_user.id}: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/onboarding/step-1/send-sms-verification")
+async def send_sms_verification(
+    request: SendVerificationRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Send SMS verification code
+    """
+    try:
+        phone = request.phone or current_user.phone
+
+        if not phone:
+            raise HTTPException(status_code=400, detail="Phone number is required")
+
+        # Check rate limiting (stricter for SMS)
+        recent_count = onboarding_crud.count_recent_verifications(
+            db, current_user.id, "sms", hours=1
+        )
+        if recent_count >= 5:
+            raise HTTPException(
+                status_code=429,
+                detail="Too many SMS attempts. Please try again in 1 hour."
+            )
+
+        # Create verification token
+        token = onboarding_crud.create_verification_token(
+            db, current_user.id, "sms"
+        )
+
+        # TODO: Send actual SMS with token.token
+        # For now, return the code in response (DEVELOPMENT ONLY)
+        logger.info(f"SMS verification code for user {current_user.id}: {token.token}")
+
+        return {
+            "message": "Verification code sent via SMS",
+            "code": token.token,  # REMOVE IN PRODUCTION
+            "expires_at": token.expires_at
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Send SMS verification error for user {current_user.id}: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/onboarding/step-1/verify-sms")
+async def verify_sms(
+    request: VerifyCodeRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Verify phone with 6-digit code
+    """
+    try:
+        # Verify token
+        token = onboarding_crud.verify_token(
+            db, current_user.id, request.code, "sms"
+        )
+
+        if not token:
+            # Log error
+            error = OnboardingError(
+                user_id=current_user.id,
+                error_code="OB-01-002",
+                step_number=1,
+                error_message="Invalid or expired SMS verification code",
+                error_context={"code": request.code},
+                user_action="retry"
+            )
+            db.add(error)
+            db.commit()
+
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid or expired verification code"
+            )
+
+        # Mark phone as verified
+        current_user.phone_verified_at = datetime.now(timezone.utc)
+
+        # Update step 1 data if exists
+        progress = db.query(OnboardingProgress).filter(
+            OnboardingProgress.user_id == current_user.id
+        ).first()
+        if progress and progress.step_1_data:
+            step_1_data = progress.step_1_data
+            step_1_data["phone_verified"] = True
+            progress.step_1_data = step_1_data
+            progress.last_updated = datetime.now(timezone.utc)
+
+        db.commit()
+
+        logger.info(f"Phone verified for user {current_user.id}")
+        return {"message": "Phone verified successfully"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Verify SMS error for user {current_user.id}: {e}")
+        db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
 
