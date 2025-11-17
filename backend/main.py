@@ -17047,8 +17047,28 @@ async def initialize_mission_control(db: Session = Depends(get_db)):
 
 async def auto_sync_emails():
     """Background task to automatically sync emails for all users with sync enabled"""
+    db = None
     try:
-        db = SessionLocal()
+        # Test database connection before proceeding
+        try:
+            db = SessionLocal()
+            # Quick connection test
+            db.execute(text("SELECT 1"))
+        except Exception as conn_error:
+            # Database not available - silently skip this run
+            if db:
+                db.close()
+            # Only log every 10th failure to reduce spam
+            if not hasattr(auto_sync_emails, '_failure_count'):
+                auto_sync_emails._failure_count = 0
+            auto_sync_emails._failure_count += 1
+            if auto_sync_emails._failure_count % 10 == 1:
+                logger.warning(f"⚠️  Auto-sync skipped: Database unavailable (failures: {auto_sync_emails._failure_count})")
+            return
+
+        # Reset failure count on successful connection
+        if hasattr(auto_sync_emails, '_failure_count'):
+            auto_sync_emails._failure_count = 0
 
         # Get all users with Microsoft sync enabled
         oauth_tokens = db.query(MicrosoftOAuthToken).filter(
@@ -17102,10 +17122,11 @@ async def auto_sync_emails():
                 db.rollback()
                 continue
 
-        db.close()
-
     except Exception as e:
         logger.error(f"Auto-sync task error: {e}")
+    finally:
+        if db:
+            db.close()
 
 def init_db_with_retry(max_retries=5, initial_delay=2):
     """Initialize database with retry logic for Railway startup"""
