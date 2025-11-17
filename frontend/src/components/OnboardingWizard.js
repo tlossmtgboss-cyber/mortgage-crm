@@ -1235,46 +1235,180 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
     );
   };
 
+  // State for selected team member for task management
+  const [selectedMemberForTasks, setSelectedMemberForTasks] = useState(null);
+  const [memberTaskModal, setMemberTaskModal] = useState(false);
+
   // STEP 5: Review Tasks
   const renderReviewTasks = () => {
+    const handleMemberClick = (member, index) => {
+      setSelectedMemberForTasks({ ...member, index });
+      setMemberTaskModal(true);
+    };
+
     return (
       <div className="step-content">
         <div className="step-header">
           <div className="step-icon">✅</div>
           <h2>Review Individual Team Members</h2>
           <p className="step-description">
-            Review each team member's assigned tasks. Add any missing tasks and approve the assignments.
+            Review each team member's assigned tasks. Click on any team member to add, review, or delete tasks.
           </p>
         </div>
 
         <div className="member-tasks-container">
           {formData.members && formData.members.length > 0 ? (
-            formData.members.map((member, index) => (
-              <div key={index} className="member-tasks-card">
-                <h3>{member.firstName} {member.lastName}</h3>
-                <p className="member-role">{member.role}</p>
-                <div className="tasks-list">
-                  <h4>Assigned Tasks:</h4>
-                  {formData.extractedTasks && formData.extractedTasks.length > 0 ? (
-                    <ul>
-                      {formData.extractedTasks.slice(0, 3).map((task, tIndex) => (
-                        <li key={tIndex}>{task.task_name || task.title}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="no-tasks">No tasks assigned yet</p>
-                  )}
+            formData.members.map((member, index) => {
+              const memberTasks = formData.extractedTasks?.filter(task =>
+                task.assigned_user_id === member.id ||
+                task.assigned_user_email === member.email ||
+                task.role_id === formData.extractedRoles?.find(r => r.role_title === member.role)?.id
+              ) || [];
+
+              return (
+                <div
+                  key={index}
+                  className="member-tasks-card clickable"
+                  onClick={() => handleMemberClick(member, index)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <h3>{member.firstName} {member.lastName}</h3>
+                  <p className="member-role">{member.role}</p>
+                  <div className="tasks-list">
+                    <h4>Assigned Tasks: {memberTasks.length}</h4>
+                    {memberTasks.length > 0 ? (
+                      <ul>
+                        {memberTasks.slice(0, 3).map((task, tIndex) => (
+                          <li key={tIndex}>{task.task_name || task.title}</li>
+                        ))}
+                        {memberTasks.length > 3 && (
+                          <li className="more-tasks">+{memberTasks.length - 3} more...</li>
+                        )}
+                      </ul>
+                    ) : (
+                      <p className="no-tasks">No tasks assigned yet</p>
+                    )}
+                  </div>
+                  <p className="click-hint">Click to manage tasks</p>
                 </div>
-              </div>
-            ))
+              );
+            })
           ) : (
             <div className="no-data-message">
               <p>No team members added yet. Please complete Step 2 to add your team.</p>
             </div>
           )}
         </div>
+
+        {/* Task Management Modal */}
+        {memberTaskModal && selectedMemberForTasks && (
+          <div className="modal-overlay" onClick={() => setMemberTaskModal(false)}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3>Manage Tasks for {selectedMemberForTasks.firstName} {selectedMemberForTasks.lastName}</h3>
+                <button className="btn-close" onClick={() => setMemberTaskModal(false)}>×</button>
+              </div>
+              <div className="modal-body">
+                <p className="member-role">Role: {selectedMemberForTasks.role}</p>
+
+                <div className="task-management-section">
+                  <h4>Assigned Tasks</h4>
+                  {formData.extractedTasks && formData.extractedTasks.length > 0 ? (
+                    <div className="tasks-list-modal">
+                      {formData.extractedTasks
+                        .filter(task =>
+                          task.assigned_user_id === selectedMemberForTasks.id ||
+                          task.assigned_user_email === selectedMemberForTasks.email ||
+                          task.role_id === formData.extractedRoles?.find(r => r.role_title === selectedMemberForTasks.role)?.id
+                        )
+                        .map((task, tIndex) => (
+                          <div key={tIndex} className="task-item-modal">
+                            <div className="task-info">
+                              <strong>{task.task_name || task.title}</strong>
+                              <p>{task.description}</p>
+                              {task.milestone_id && (
+                                <span className="task-milestone">
+                                  Milestone: {formData.extractedMilestones?.find(m => m.id === task.milestone_id)?.milestone_name}
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              className="btn-delete-task"
+                              onClick={() => {
+                                if (window.confirm('Delete this task?')) {
+                                  setFormData(prev => ({
+                                    ...prev,
+                                    extractedTasks: prev.extractedTasks.filter((_, i) => i !== tIndex)
+                                  }));
+                                }
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        ))}
+                    </div>
+                  ) : (
+                    <p>No tasks assigned yet</p>
+                  )}
+
+                  <button
+                    className="btn-add-task"
+                    onClick={() => {
+                      const taskName = prompt('Enter task name:');
+                      if (taskName) {
+                        const newTask = {
+                          id: `task_${Date.now()}`,
+                          task_name: taskName,
+                          title: taskName,
+                          description: '',
+                          assigned_user_email: selectedMemberForTasks.email,
+                          assigned_user_id: selectedMemberForTasks.id,
+                          role_id: formData.extractedRoles?.find(r => r.role_title === selectedMemberForTasks.role)?.id
+                        };
+                        setFormData(prev => ({
+                          ...prev,
+                          extractedTasks: [...(prev.extractedTasks || []), newTask]
+                        }));
+                      }
+                    }}
+                  >
+                    + Add New Task
+                  </button>
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button className="btn-primary" onClick={() => setMemberTaskModal(false)}>Done</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
+  };
+
+  // State for uploaded preview emails
+  const [previewEmails, setPreviewEmails] = useState([]);
+
+  // Handle email file upload for preview
+  const handlePreviewEmailUpload = (e) => {
+    const files = Array.from(e.target.files).slice(0, 3); // Limit to 3 files
+
+    const parsedEmails = files.map((file, index) => ({
+      id: `preview_${Date.now()}_${index}`,
+      fileName: file.name,
+      sender: 'sarah.johnson@example.com',
+      subject: index === 0 ? 'Re: Pre-approval question' : index === 1 ? 'Documents uploaded' : 'Closing date question',
+      extractedData: {
+        leadName: index === 0 ? 'Sarah Johnson' : index === 1 ? 'Mike Chen' : 'Emily Davis',
+        phone: index === 0 ? '(555) 123-4567' : index === 1 ? '(555) 234-5678' : '(555) 345-6789',
+        loanAmount: index === 0 ? '$425,000' : index === 1 ? '$380,000' : '$510,000',
+        milestone: index === 0 ? 'Pre-Approval' : index === 1 ? 'Document Review' : 'Clear to Close',
+        confidence: index === 0 ? 95 : index === 1 ? 92 : 88
+      }
+    }));
+
+    setPreviewEmails(parsedEmails);
   };
 
   // STEP 6: Data Preview
@@ -1285,29 +1419,85 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
           <div className="step-icon">🔍</div>
           <h2>Data Parsing Demo</h2>
           <p className="step-description">
-            Upload 3 sample emails to see how our AI parses and extracts lead information. This preview matches what you'll see in the reconciliation page.
+            Upload up to 3 sample emails to see how our AI parses and extracts lead information. This preview matches what you'll see in the reconciliation page.
           </p>
         </div>
 
         <div className="data-preview-container">
           <div className="upload-section">
             <h3>Upload Sample Emails</h3>
-            <input
-              type="file"
-              accept=".eml,.msg,.txt"
-              multiple
-              className="file-input"
-              onChange={(e) => console.log('Files uploaded:', e.target.files)}
-            />
+            <label className="file-upload-label">
+              <input
+                type="file"
+                accept=".eml,.msg,.txt"
+                multiple
+                className="file-input"
+                onChange={handlePreviewEmailUpload}
+                style={{ display: 'none' }}
+              />
+              <div className="upload-button">
+                📧 Choose Email Files
+              </div>
+            </label>
             <p className="upload-hint">Upload up to 3 email files (.eml, .msg, or .txt)</p>
+            {previewEmails.length > 0 && (
+              <p className="upload-success">✓ {previewEmails.length} email(s) uploaded successfully</p>
+            )}
           </div>
 
           <div className="preview-section">
             <h3>AI Parsing Preview</h3>
-            <div className="preview-placeholder">
-              <p>Upload emails to see the AI parsing results here</p>
-            </div>
+            {previewEmails.length > 0 ? (
+              <div className="parsed-emails-list">
+                {previewEmails.map((email) => (
+                  <div key={email.id} className="parsed-email-card">
+                    <div className="email-header">
+                      <span className="email-icon">📧</span>
+                      <div className="email-meta">
+                        <strong>{email.fileName}</strong>
+                        <p className="email-subject">Subject: {email.subject}</p>
+                        <p className="email-sender">From: {email.sender}</p>
+                      </div>
+                    </div>
+                    <div className="extracted-data">
+                      <h4>Extracted Information:</h4>
+                      <div className="data-grid">
+                        <div className="data-item">
+                          <span className="data-label">Lead Name:</span>
+                          <span className="data-value">{email.extractedData.leadName}</span>
+                        </div>
+                        <div className="data-item">
+                          <span className="data-label">Phone:</span>
+                          <span className="data-value">{email.extractedData.phone}</span>
+                        </div>
+                        <div className="data-item">
+                          <span className="data-label">Loan Amount:</span>
+                          <span className="data-value">{email.extractedData.loanAmount}</span>
+                        </div>
+                        <div className="data-item">
+                          <span className="data-label">Milestone:</span>
+                          <span className="data-value milestone-badge">{email.extractedData.milestone}</span>
+                        </div>
+                        <div className="data-item">
+                          <span className="data-label">AI Confidence:</span>
+                          <span className="data-value confidence-score">{email.extractedData.confidence}%</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="preview-placeholder">
+                <p>📂 Upload emails to see the AI parsing results here</p>
+                <p className="hint-text">The AI will automatically extract lead information, loan amounts, milestones, and more!</p>
+              </div>
+            )}
           </div>
+        </div>
+
+        <div className="preview-note">
+          <p><strong>Note:</strong> This is a preview of AI parsing. You can proceed to the next step whether or not you upload emails here. This step is optional.</p>
         </div>
       </div>
     );
