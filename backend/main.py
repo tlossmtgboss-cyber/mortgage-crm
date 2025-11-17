@@ -206,6 +206,7 @@ class ImpersonationSession(Base):
 
 class OnboardingProgress(Base):
     __tablename__ = "onboarding_progress"
+    __table_args__ = {'extend_existing': True}
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True, nullable=False, index=True)
     current_step = Column(Integer, default=1, nullable=False, index=True)
@@ -228,6 +229,7 @@ class OnboardingProgress(Base):
 
 class OnboardingError(Base):
     __tablename__ = "onboarding_errors"
+    __table_args__ = {'extend_existing': True}
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     error_code = Column(String, nullable=False, index=True)
@@ -241,6 +243,7 @@ class OnboardingError(Base):
 
 class VerificationToken(Base):
     __tablename__ = "verification_tokens"
+    __table_args__ = {'extend_existing': True}
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     token_type = Column(String, nullable=False)  # 'email' or 'sms'
