@@ -4358,11 +4358,9 @@ async def drop_voicemail(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Drop a voicemail using AI-generated speech"""
+    """Drop a voicemail using AI receptionist voice"""
     try:
         from twilio.rest import Client as TwilioClient
-        from openai import OpenAI
-        import tempfile
 
         data = await request.json()
         to_number = data.get("to_number")
@@ -4403,47 +4401,25 @@ async def drop_voicemail(
         if not from_number:
             raise HTTPException(status_code=503, detail="Twilio phone number not configured")
 
-        # Get OpenAI client
-        openai_key = os.getenv("OPENAI_API_KEY")
-        if not openai_key:
-            raise HTTPException(status_code=503, detail="OpenAI API key not configured")
-
-        client = OpenAI(api_key=openai_key)
-
-        # Format the message professionally
+        # Format the message to sound natural and conversational like an AI receptionist
         greeting = f"Hi {recipient_name}, " if recipient_name else "Hello, "
-        full_message = f"{greeting}this is {current_user.full_name or 'your loan officer'}. {message}"
 
-        # Generate speech using OpenAI TTS
-        logger.info(f"Generating voicemail audio for: {full_message}")
-        response = client.audio.speech.create(
-            model="tts-1",
-            voice="alloy",  # Professional voice
-            input=full_message
+        # Add natural pauses and phrasing with SSML-like formatting
+        full_message = (
+            f"{greeting}this is the AI assistant calling from "
+            f"{current_user.full_name or 'your loan officer'}'s office. "
+            f"<break time='300ms'/>{message} "
+            f"<break time='300ms'/>Feel free to call us back at your convenience. "
+            f"Have a great day!"
         )
 
-        # Save audio to temporary file
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as temp_file:
-            temp_file.write(response.content)
-            audio_path = temp_file.name
+        logger.info(f"Voicemail message prepared: {full_message}")
 
-        # Upload audio to a temporary hosting (you may need to implement this)
-        # For now, we'll use Twilio's direct call and play the audio via TwiML
-
-        # Create TwiML URL that plays the audio
+        # Create TwiML URL that plays the voicemail using AI receptionist voice
         api_url = os.getenv("API_URL", "https://mortgage-crm-production-7a9a.up.railway.app")
 
-        # Store audio file path temporarily for retrieval
-        # In production, you'd upload this to S3 or similar
-        import uuid
+        # URL-encode the message to ensure it's a valid URL parameter
         from urllib.parse import quote
-        audio_id = str(uuid.uuid4())
-
-        # For now, we'll use Twilio's message service with a text message
-        # In a full implementation, you'd need to host the audio file and deliver it
-
-        # Alternative: Use Twilio's answering machine detection to drop voicemail
-        # URL-encode the message to ensure it's a valid URL
         encoded_message = quote(full_message)
         call = twilio_client.calls.create(
             to=to_number,
@@ -4476,12 +4452,6 @@ async def drop_voicemail(
         )
         db.add(activity)
         db.commit()
-
-        # Clean up temp file
-        try:
-            os.unlink(audio_path)
-        except:
-            pass
 
         return {
             "success": True,
@@ -4522,7 +4492,7 @@ async def voicemail_twiml(
     request: Request = None
 ):
     """Generate TwiML for voicemail message - only plays if voicemail detected"""
-    from twilio.twiml.voice_response import VoiceResponse
+    from twilio.twiml.voice_response import VoiceResponse, Say
 
     response = VoiceResponse()
 
@@ -4531,10 +4501,20 @@ async def voicemail_twiml(
         logger.info("Human detected, hanging up to avoid disturbing")
         response.hangup()
     else:
-        # Machine or unknown - play the message
+        # Machine or unknown - play the message with AI receptionist voice
         # Pause briefly to ensure we're past the beep
+        response.pause(length=2)
+
+        # Use neural voice for more natural AI receptionist sound
+        # Format message with SSML for more natural delivery
+        response.say(
+            message,
+            voice='Polly.Ruth-Neural',  # Natural conversational female voice
+            language='en-US'
+        )
+
+        # Brief pause before hanging up
         response.pause(length=1)
-        response.say(message, voice='Polly.Joanna', language='en-US')
         response.hangup()
 
     return Response(content=str(response), media_type="application/xml")
