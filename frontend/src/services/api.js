@@ -504,6 +504,53 @@ export const voiceAPI = {
   },
 };
 
+// Voicemail Drop System API
+export const voicemailAPI = {
+  // Drop a single voicemail
+  drop: async (data) => {
+    const response = await api.post('/api/v1/voicemail/drop', data);
+    return response.data;
+  },
+
+  // Transcribe voice recording
+  transcribe: async (formData) => {
+    const response = await api.post('/api/v1/voicemail/transcribe', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    return response.data;
+  },
+
+  // Get voicemail templates
+  getTemplates: async (category = null) => {
+    const params = category ? { category } : {};
+    const response = await api.get('/api/v1/voicemail/templates', { params });
+    return response.data;
+  },
+
+  // Create voicemail template
+  createTemplate: async (data) => {
+    const response = await api.post('/api/v1/voicemail/templates', data);
+    return response.data;
+  },
+
+  // Get voicemail history
+  getHistory: async (params = {}) => {
+    const response = await api.get('/api/v1/voicemail/history', { params });
+    return response.data;
+  },
+
+  // Get voicemail analytics
+  getAnalytics: async (startDate = null, endDate = null) => {
+    const params = {};
+    if (startDate) params.start_date = startDate;
+    if (endDate) params.end_date = endDate;
+    const response = await api.get('/api/v1/voicemail/analytics', { params });
+    return response.data;
+  },
+};
+
 // AI Receptionist Dashboard API
 export const aiReceptionistDashboardAPI = {
   // Activity Feed

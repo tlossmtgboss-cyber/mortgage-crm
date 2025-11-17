@@ -25,7 +25,7 @@
   background: white;
   border-radius: 12px;
   width: 90%;
-  max-width: 550px;
+  max-width: 650px;
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
@@ -81,45 +81,319 @@
 
 .voicemail-drop-body {
   padding: 24px;
+  min-height: 350px;
 }
 
 .recipient-info {
   background: #f9fafb;
   border-radius: 8px;
   padding: 16px;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
   border: 1px solid #e5e7eb;
 }
 
-.recipient-name,
-.recipient-phone {
+.recipient-row {
   margin: 6px 0;
   font-size: 0.95rem;
   color: #374151;
 }
 
-.recipient-name strong,
-.recipient-phone strong {
+.recipient-row strong {
   color: #1a1a1a;
   margin-right: 8px;
+}
+
+/* Input Method Tabs */
+.input-method-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: #6b7280;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.95rem;
+  margin-bottom: -2px;
+}
+
+.tab-btn:hover {
+  color: #374151;
+  background: #f9fafb;
+}
+
+.tab-btn.active {
+  color: #3b82f6;
+  border-bottom-color: #3b82f6;
+}
+
+/* Input Section */
+.input-section {
+  min-height: 280px;
+}
+
+.input-section label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+.message-textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-family: inherit;
+  resize: vertical;
+  transition: border-color 0.2s;
+}
+
+.message-textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.hint-text {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-top: 8px;
+  font-style: italic;
+}
+
+/* Recording States */
+.record-prompt {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.btn-record {
+  background: #3b82f6;
+  color: white;
+  padding: 16px 32px;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: 16px;
+}
+
+.btn-record:hover {
+  background: #2563eb;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.recording-active {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.pulse-icon {
+  font-size: 4rem;
+  animation: pulse 1.5s ease-in-out infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0.7;
+  }
+}
+
+.recording-active p {
+  font-size: 1.1rem;
+  color: #374151;
+  margin-bottom: 20px;
+}
+
+.btn-stop {
+  padding: 12px 28px;
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.btn-stop:hover {
+  background: #dc2626;
+}
+
+.transcribing {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid #e5e7eb;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  margin: 0 auto 20px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.transcribing p {
+  font-size: 1rem;
+  color: #6b7280;
+}
+
+.transcribed-message .btn-rerecord {
+  margin-top: 12px;
+  padding: 10px 20px;
+  background: white;
+  color: #3b82f6;
+  border: 1px solid #3b82f6;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.transcribed-message .btn-rerecord:hover {
+  background: #3b82f6;
+  color: white;
+}
+
+/* Template Cards */
+.templates-list label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 16px;
+}
+
+.template-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  max-height: 380px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.template-card {
+  background: #f9fafb;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.template-card:hover {
+  border-color: #3b82f6;
+  background: white;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.template-name {
+  font-weight: 600;
+  font-size: 1rem;
+  color: #1a1a1a;
+  margin-bottom: 6px;
+}
+
+.template-category {
+  font-size: 0.75rem;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 10px;
+}
+
+.template-preview {
+  font-size: 0.875rem;
+  color: #4b5563;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.selected-template {
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+}
+
+.template-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.template-header strong {
+  color: #1a1a1a;
+  font-size: 1.05rem;
+}
+
+.btn-change-template {
+  padding: 8px 14px;
+  background: white;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.2s;
+}
+
+.btn-change-template:hover {
+  background: #f3f4f6;
+  color: #374151;
 }
 
 /* Status Messages */
 .status-message {
   text-align: center;
-  padding: 32px 24px;
+  padding: 20px;
   border-radius: 8px;
-  margin-bottom: 24px;
+  margin: 16px 0;
+  animation: slideDown 0.3s ease;
 }
 
-.status-message.listening {
-  background: rgba(59, 130, 246, 0.1);
-  border: 2px solid #3b82f6;
-}
-
-.status-message.processing {
-  background: rgba(245, 158, 11, 0.1);
-  border: 2px solid #f59e0b;
+@keyframes slideDown {
+  from {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 .status-message.success {
@@ -132,42 +406,18 @@
   border: 2px solid #ef4444;
 }
 
-.pulse-icon {
-  font-size: 3rem;
-  animation: pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.1);
-    opacity: 0.8;
-  }
-}
-
 .success-icon,
 .error-icon {
-  font-size: 3rem;
-  margin-bottom: 12px;
+  font-size: 2.5rem;
+  margin-bottom: 8px;
 }
 
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid #f59e0b;
-  border-top-color: transparent;
-  border-radius: 50%;
-  margin: 0 auto 16px;
-  animation: spin 1s linear infinite;
+.success-icon {
+  color: #22c55e;
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+.error-icon {
+  color: #ef4444;
 }
 
 .status-message p {
@@ -177,89 +427,20 @@
   font-weight: 500;
 }
 
-.btn-stop,
-.btn-retry {
-  margin-top: 16px;
-  padding: 10px 24px;
-  background: white;
-  color: #374151;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 500;
-  transition: all 0.2s;
-}
-
-.btn-stop:hover,
-.btn-retry:hover {
-  background: #f3f4f6;
-  border-color: #9ca3af;
-}
-
-/* Message Preview */
-.message-preview {
-  background: #f9fafb;
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 20px;
-  border: 1px solid #e5e7eb;
-}
-
-.message-preview label {
-  display: block;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #6b7280;
-  margin-bottom: 8px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.message-text {
-  background: white;
-  padding: 12px;
-  border-radius: 6px;
-  font-size: 1rem;
-  line-height: 1.6;
-  color: #1a1a1a;
-  border: 1px solid #e5e7eb;
-  margin-bottom: 12px;
-}
-
-.message-actions {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.btn-rerecord {
-  padding: 8px 16px;
-  background: white;
-  color: #3b82f6;
-  border: 1px solid #3b82f6;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.875rem;
-  font-weight: 500;
-  transition: all 0.2s;
-}
-
-.btn-rerecord:hover {
-  background: #3b82f6;
-  color: white;
-}
-
-/* Action Buttons */
-.voicemail-actions {
+/* Footer Actions */
+.voicemail-drop-footer {
   display: flex;
   gap: 12px;
-  justify-content: center;
-  margin-top: 24px;
+  padding: 20px 24px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+  border-radius: 0 0 12px 12px;
 }
 
-.btn-record,
-.btn-send-voicemail,
-.btn-cancel {
-  padding: 14px 28px;
+.btn-cancel,
+.btn-send {
+  flex: 1;
+  padding: 14px 24px;
   border-radius: 8px;
   font-size: 1rem;
   font-weight: 600;
@@ -268,39 +449,32 @@
   border: none;
 }
 
-.btn-record {
-  background: #3b82f6;
-  color: white;
-  width: 100%;
+.btn-cancel {
+  background: white;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
 }
 
-.btn-record:hover {
-  background: #2563eb;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+.btn-cancel:hover:not(:disabled) {
+  background: #f3f4f6;
+  color: #374151;
 }
 
-.btn-send-voicemail {
+.btn-send {
   background: #22c55e;
   color: white;
-  flex: 1;
 }
 
-.btn-send-voicemail:hover {
+.btn-send:hover:not(:disabled) {
   background: #16a34a;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);
 }
 
-.btn-cancel {
-  background: #f3f4f6;
-  color: #6b7280;
-  border: 1px solid #d1d5db;
-}
-
-.btn-cancel:hover {
-  background: #e5e7eb;
-  color: #374151;
+.btn-send:disabled,
+.btn-cancel:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Instructions */
@@ -308,7 +482,7 @@
   background: #eff6ff;
   border-radius: 8px;
   padding: 20px;
-  margin-top: 24px;
+  margin-top: 20px;
   border: 1px solid #bfdbfe;
 }
 
@@ -338,11 +512,31 @@
     max-height: 95vh;
   }
 
-  .voicemail-actions {
+  .input-method-tabs {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .tab-btn {
+    border-bottom: 1px solid #e5e7eb;
+    border-left: 3px solid transparent;
+    border-right: none;
+  }
+
+  .tab-btn.active {
+    border-bottom-color: #e5e7eb;
+    border-left-color: #3b82f6;
+  }
+
+  .template-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .voicemail-drop-footer {
     flex-direction: column;
   }
 
-  .btn-send-voicemail,
+  .btn-send,
   .btn-cancel {
     width: 100%;
   }
