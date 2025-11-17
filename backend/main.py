@@ -17762,13 +17762,14 @@ async def update_permission_roles(
 
         leadership_perms = {
             "dashboard.view_all_widgets": True, "leads.view_all": True, "clients.view_all": True,
-            "loans.view_all": True, "team.view_all": True, "analytics.view_all": True,
-            "reports.executive": True
+            "loans.view_all": True, "team.view_all": True, "team.impersonate": True,
+            "analytics.view_all": True, "reports.executive": True
         }
 
         management_perms = {
             "dashboard.view_all_widgets": True, "leads.view_team": True, "clients.view_team": True,
-            "loans.view_team": True, "team.view_team": True, "team.manage": True
+            "loans.view_team": True, "team.view_team": True, "team.manage": True,
+            "team.impersonate": True
         }
 
         sales_perms = {
