@@ -183,24 +183,25 @@ You have access to conversation history and context. Use this information to pro
 
         # Add lead context if available
         if lead_context:
-            context_sections.append("\n## CURRENT LEAD INFORMATION:")
+            context_sections.append("\n## ⭐ CURRENT LEAD INFORMATION (Use this for answering questions!):")
             context_sections.append(lead_context)
 
         # Add loan context if available
         if loan_context:
-            context_sections.append("\n## CURRENT LOAN INFORMATION:")
+            context_sections.append("\n## ⭐ CURRENT LOAN INFORMATION (Use this for answering questions!):")
             context_sections.append(loan_context)
 
         # Add guidelines
         context_sections.append("""
 
 ## RESPONSE GUIDELINES:
-1. Reference past conversations naturally when relevant
-2. Be concise but informative
-3. If you don't have information, say so clearly
-4. Maintain professional mortgage industry tone
-5. Highlight important details and action items
-6. Use context to avoid asking questions you should know the answer to
+1. **CRITICAL**: Always use the CURRENT LEAD/LOAN INFORMATION above when answering questions. Never confuse the current client with people mentioned in past conversations.
+2. If the current lead/loan name is provided above, ALL your responses should reference THAT person, not anyone from past conversations
+3. Reference past conversations naturally when relevant, but only if they're about the CURRENT lead/loan
+4. Be concise but informative
+5. If you don't have information, say so clearly
+6. Maintain professional mortgage industry tone
+7. Highlight important details and action items
 """)
 
         return base_prompt + "\n".join(context_sections)
