@@ -419,8 +419,11 @@ class MUMClient(Base):
     __tablename__ = "mum_clients"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
+    email = Column(String)
+    phone = Column(String)
     loan_number = Column(String, unique=True, index=True)
     original_close_date = Column(DateTime, nullable=False)
+    close_date = Column(DateTime)  # Alias for original_close_date
     days_since_funding = Column(Integer)
     original_rate = Column(Float)
     current_rate = Column(Float)
@@ -429,7 +432,21 @@ class MUMClient(Base):
     estimated_savings = Column(Float)
     engagement_score = Column(Integer)
     status = Column(String)
+    notes = Column(Text)
     last_contact = Column(DateTime)
+    next_touchpoint = Column(DateTime)
+    referrals_sent = Column(Integer, default=0)
+    opportunity_notes = Column(Text)
+    # Team members
+    loan_officer = Column(String)
+    loan_officer_email = Column(String)
+    processor = Column(String)
+    processor_email = Column(String)
+    underwriter = Column(String)
+    underwriter_email = Column(String)
+    closer = Column(String)
+    closer_email = Column(String)
+    user_id = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 class Activity(Base):
@@ -439,6 +456,7 @@ class Activity(Base):
     content = Column(Text)
     lead_id = Column(Integer, ForeignKey("leads.id"))
     loan_id = Column(Integer, ForeignKey("loans.id"))
+    mum_client_id = Column(Integer, ForeignKey("mum_clients.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
     duration = Column(String)
     sentiment = Column(String)
@@ -1954,19 +1972,64 @@ class MUMClientCreate(BaseModel):
     loan_balance: float
 
 class MUMClientUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    loan_number: Optional[str] = None
+    original_close_date: Optional[datetime] = None
+    close_date: Optional[datetime] = None
+    days_since_funding: Optional[int] = None
+    original_rate: Optional[float] = None
     current_rate: Optional[float] = None
+    loan_balance: Optional[float] = None
+    refinance_opportunity: Optional[bool] = None
+    estimated_savings: Optional[float] = None
+    engagement_score: Optional[int] = None
     status: Optional[str] = None
+    notes: Optional[str] = None
     last_contact: Optional[datetime] = None
+    next_touchpoint: Optional[datetime] = None
+    referrals_sent: Optional[int] = None
+    opportunity_notes: Optional[str] = None
+    loan_officer: Optional[str] = None
+    loan_officer_email: Optional[str] = None
+    processor: Optional[str] = None
+    processor_email: Optional[str] = None
+    underwriter: Optional[str] = None
+    underwriter_email: Optional[str] = None
+    closer: Optional[str] = None
+    closer_email: Optional[str] = None
 
 class MUMClientResponse(BaseModel):
     id: int
     name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
     loan_number: str
-    days_since_funding: Optional[int]
-    original_rate: Optional[float]
-    current_rate: Optional[float]
-    refinance_opportunity: bool
-    estimated_savings: Optional[float]
+    original_close_date: datetime
+    close_date: Optional[datetime] = None
+    days_since_funding: Optional[int] = None
+    original_rate: Optional[float] = None
+    current_rate: Optional[float] = None
+    loan_balance: Optional[float] = None
+    refinance_opportunity: bool = False
+    estimated_savings: Optional[float] = None
+    engagement_score: Optional[int] = None
+    status: Optional[str] = None
+    notes: Optional[str] = None
+    last_contact: Optional[datetime] = None
+    next_touchpoint: Optional[datetime] = None
+    referrals_sent: Optional[int] = 0
+    opportunity_notes: Optional[str] = None
+    loan_officer: Optional[str] = None
+    loan_officer_email: Optional[str] = None
+    processor: Optional[str] = None
+    processor_email: Optional[str] = None
+    underwriter: Optional[str] = None
+    underwriter_email: Optional[str] = None
+    closer: Optional[str] = None
+    closer_email: Optional[str] = None
+    user_id: Optional[int] = None
     created_at: datetime
     class Config:
         from_attributes = True
@@ -2185,13 +2248,17 @@ class ActivityCreate(BaseModel):
     content: str
     lead_id: Optional[int] = None
     loan_id: Optional[int] = None
+    mum_client_id: Optional[int] = None
     sentiment: Optional[str] = None
 
 class ActivityResponse(BaseModel):
     id: int
     type: ActivityType
     content: str
-    sentiment: Optional[str]
+    lead_id: Optional[int] = None
+    loan_id: Optional[int] = None
+    mum_client_id: Optional[int] = None
+    sentiment: Optional[str] = None
     created_at: datetime
     class Config:
         from_attributes = True
@@ -9796,6 +9863,13 @@ async def create_activity(activity: ActivityCreate, db: Session = Depends(get_db
             lead.last_contact = datetime.now(timezone.utc)
             db.commit()
 
+    # Update last_contact on MUM client if applicable
+    if activity.mum_client_id:
+        mum_client = db.query(MUMClient).filter(MUMClient.id == activity.mum_client_id).first()
+        if mum_client:
+            mum_client.last_contact = datetime.now(timezone.utc)
+            db.commit()
+
     logger.info(f"Activity created: {db_activity.type.value}")
     return db_activity
 
@@ -9805,6 +9879,7 @@ async def get_activities(
     limit: int = 100,
     lead_id: Optional[int] = None,
     loan_id: Optional[int] = None,
+    mum_client_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -9814,6 +9889,8 @@ async def get_activities(
         query = query.filter(Activity.lead_id == lead_id)
     if loan_id:
         query = query.filter(Activity.loan_id == loan_id)
+    if mum_client_id:
+        query = query.filter(Activity.mum_client_id == mum_client_id)
 
     activities = query.order_by(Activity.created_at.desc()).offset(skip).limit(limit).all()
     return activities

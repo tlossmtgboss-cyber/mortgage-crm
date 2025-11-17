@@ -19,10 +19,11 @@ class ContextAwareAI:
     """Enhanced AI service with memory and context retrieval"""
 
     def __init__(self):
-        self.anthropic_api_key = anthropic.api_key
+        import os
+        self.anthropic_api_key = os.getenv("ANTHROPIC_API_KEY", "")
+
         if not self.anthropic_api_key:
-            import os
-            self.anthropic_api_key = os.getenv("ANTHROPIC_API_KEY", "")
+            logger.warning("ANTHROPIC_API_KEY not found in environment variables")
 
         self.client = anthropic.Anthropic(api_key=self.anthropic_api_key)
         self.vector_memory = vector_memory
