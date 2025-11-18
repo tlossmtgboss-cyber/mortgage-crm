@@ -3118,8 +3118,8 @@ async def _get_coaching_context(db: Session, user_id: int) -> str:
     context_parts.append(f"- New leads (last 24h): {len(new_leads)}")
     context_parts.append(f"- Pending follow-up: {len(pending_leads)}")
 
-    # Get loans/pipeline stats (Loan uses owner_id, not user_id)
-    loans = db.query(Loan).filter(Loan.owner_id == user_id).all()
+    # Get loans/pipeline stats (Loan uses loan_officer_id)
+    loans = db.query(Loan).filter(Loan.loan_officer_id == user_id).all()
     # Loan model uses 'stage' not 'status' - match actual enum values
     active_loans = [l for l in loans if l.stage and l.stage.value not in ['Funded']]
     stuck_loans = [l for l in active_loans if l.updated_at and l.updated_at <= datetime.now() - timedelta(days=10)]
