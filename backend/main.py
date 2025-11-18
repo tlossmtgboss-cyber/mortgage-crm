@@ -3107,19 +3107,21 @@ async def _get_coaching_context(db: Session, user_id: int) -> str:
 
     context_parts = []
 
-    # Get leads stats
-    leads = db.query(Lead).filter(Lead.user_id == user_id).all()
+    # Get leads stats (Lead uses owner_id, not user_id)
+    leads = db.query(Lead).filter(Lead.owner_id == user_id).all()
     new_leads = [l for l in leads if l.created_at and l.created_at >= datetime.now() - timedelta(days=1)]
-    pending_leads = [l for l in leads if l.status in ['new', 'contacted']]
+    # Lead model uses 'stage' not 'status'
+    pending_leads = [l for l in leads if l.stage in [LeadStage.NEW, LeadStage.CONTACTED]]
 
     context_parts.append(f"## LEADS DATA:")
     context_parts.append(f"- Total leads: {len(leads)}")
     context_parts.append(f"- New leads (last 24h): {len(new_leads)}")
     context_parts.append(f"- Pending follow-up: {len(pending_leads)}")
 
-    # Get loans/pipeline stats
-    loans = db.query(Loan).filter(Loan.user_id == user_id).all()
-    active_loans = [l for l in loans if l.status not in ['funded', 'cancelled', 'denied']]
+    # Get loans/pipeline stats (Loan uses owner_id, not user_id)
+    loans = db.query(Loan).filter(Loan.owner_id == user_id).all()
+    # Loan model uses 'stage' not 'status'
+    active_loans = [l for l in loans if l.stage not in [LoanStage.FUNDED, LoanStage.CANCELLED, LoanStage.DENIED]]
     stuck_loans = [l for l in active_loans if l.updated_at and l.updated_at <= datetime.now() - timedelta(days=10)]
 
     context_parts.append(f"\n## PIPELINE DATA:")
@@ -3131,7 +3133,7 @@ async def _get_coaching_context(db: Session, user_id: int) -> str:
         context_parts.append(f"\nStalled deals:")
         for loan in stuck_loans[:5]:
             days_stuck = (datetime.now() - loan.updated_at).days
-            context_parts.append(f"  - {loan.borrower_name}: {loan.status} ({days_stuck} days)")
+            context_parts.append(f"  - {loan.borrower_name}: {loan.stage.value} ({days_stuck} days)")
 
     # Get tasks stats
     tasks = db.query(Task).filter(Task.assignee_id == user_id).all()
