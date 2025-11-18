@@ -472,9 +472,11 @@ function LoanDetail() {
       </div>
 
       {/* Tab Content */}
-      <div className="tab-content-container">
-        {/* Personal Information Tab */}
-        {activeTab === 'personal' && (
+      <div className="detail-content">
+        {/* Left Column - Loan Information */}
+        <div className="left-column">
+          {/* Personal Information Tab */}
+          {activeTab === 'personal' && (
           <div className="tab-content">
             <h2>Personal Information</h2>
             <div className="form-section">
@@ -1015,11 +1017,14 @@ function LoanDetail() {
             </div>
           </div>
         )}
+        </div>
 
-        {/* Quick Actions */}
-        <div className="actions-card">
-          <h3>Quick Actions</h3>
-          <div className="action-buttons">
+        {/* Right Column - Actions & Email History */}
+        <div className="right-column">
+          {/* Quick Actions */}
+          <div className="actions-card">
+            <h3>Quick Actions</h3>
+            <div className="action-buttons">
             <button
               className="action-btn call"
               onClick={() => handleAction('call')}
@@ -1088,10 +1093,13 @@ function LoanDetail() {
           </div>
         </div>
 
-        {/* Smart AI Chat for Borrowers */}
-        <div className="smart-ai-section">
-          <h3>Smart AI Assistant</h3>
-          <SmartAIChat loanId={loan.id} context={{ borrower_name: loan.borrower_name || loan.borrower, loan_stage: loan.stage }} />
+        {/* Email History */}
+        <div className="email-history-card">
+          <h3>Email History</h3>
+          <div className="email-list">
+            <p className="no-emails">No emails yet</p>
+          </div>
+        </div>
         </div>
       </div>
 
