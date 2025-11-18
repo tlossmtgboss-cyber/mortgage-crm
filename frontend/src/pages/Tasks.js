@@ -1272,29 +1272,25 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
           className={`tab-button ${activeTab === 'outstanding' ? 'active' : ''}`}
           onClick={() => setActiveTab('outstanding')}
         >
-          Outstanding Tasks
-          <span className="tab-badge">{allTasks.length}</span>
+          Outstanding Tasks ({allTasks.length})
         </button>
         <button
           className={`tab-button ${activeTab === 'ai-approval' ? 'active' : ''}`}
           onClick={() => setActiveTab('ai-approval')}
         >
-          🤖 Pending Your Approval
-          <span className="tab-badge">{aiTasks.pending.length + aiTasks.waiting.length}</span>
+          🤖 Pending Your Approval ({aiTasks.pending.length + aiTasks.waiting.length})
         </button>
         <button
           className={`tab-button ${activeTab === 'messages' ? 'active' : ''}`}
           onClick={() => setActiveTab('messages')}
         >
-          📬 Unified Messages
-          <span className="tab-badge">{messages.filter(m => !m.read).length}</span>
+          📬 Unified Messages ({messages.filter(m => !m.read).length})
         </button>
         <button
           className={`tab-button ${activeTab === 'mum' ? 'active' : ''}`}
           onClick={() => setActiveTab('mum')}
         >
-          ♻️ Client for Life Engine (MUM)
-          <span className="tab-badge">{mumAlerts.length}</span>
+          ♻️ Client for Life Engine (MUM) ({mumAlerts.length})
         </button>
       </div>
 

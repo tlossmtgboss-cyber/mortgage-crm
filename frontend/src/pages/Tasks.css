@@ -473,49 +473,33 @@
 /* Tabs */
 .task-tabs {
   display: flex;
-  gap: var(--space-sm);
-  margin-bottom: var(--space-xl);
-  border-bottom: 2px solid var(--color-border-light);
+  gap: 8px;
+  margin-bottom: 24px;
+  border-bottom: 2px solid #e5e7eb;
 }
 
 .tab-button {
-  padding: var(--space-md) var(--space-lg);
+  padding: 12px 24px;
   background: transparent;
   border: none;
   border-bottom: 3px solid transparent;
-  font-size: var(--font-base);
-  font-weight: var(--weight-medium);
-  color: var(--color-text-secondary);
   cursor: pointer;
-  transition: all 250ms ease;
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  margin-bottom: -2px;
+  font-size: 15px;
+  font-weight: 500;
+  color: #666;
+  transition: all 0.2s;
+  position: relative;
+  bottom: -2px;
 }
 
 .tab-button:hover {
-  color: var(--color-text-primary);
-  background: var(--color-bg-secondary);
+  color: #18a0a6;
 }
 
 .tab-button.active {
-  color: var(--color-primary);
-  border-bottom-color: var(--color-primary);
-  font-weight: var(--weight-semibold);
-}
-
-.tab-badge {
-  background: var(--color-primary);
-  color: white;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: var(--font-sm);
-  font-weight: var(--weight-semibold);
-}
-
-.tab-button.active .tab-badge {
-  background: var(--color-primary);
+  color: #18a0a6;
+  border-bottom-color: #18a0a6;
+  font-weight: 600;
 }
 
 .tab-content {
