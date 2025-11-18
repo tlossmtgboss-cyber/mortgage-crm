@@ -99,7 +99,7 @@ app.get('/api/voice/calls', async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 8080;
+const PORT = parseInt(process.env.PORT || '8080', 10);
 const HOST = '0.0.0.0'; // Railway requires binding to 0.0.0.0
 
 server.listen(PORT, HOST, () => {
