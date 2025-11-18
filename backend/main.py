@@ -3135,8 +3135,8 @@ async def _get_coaching_context(db: Session, user_id: int) -> str:
             days_stuck = (datetime.now() - loan.updated_at).days
             context_parts.append(f"  - {loan.borrower_name}: {loan.stage.value} ({days_stuck} days)")
 
-    # Get tasks stats
-    tasks = db.query(Task).filter(Task.assignee_id == user_id).all()
+    # Get tasks stats (Task uses owner_id)
+    tasks = db.query(Task).filter(Task.owner_id == user_id).all()
     overdue_tasks = [t for t in tasks if t.due_date and t.due_date < datetime.now().date() and t.status != 'completed']
     today_tasks = [t for t in tasks if t.due_date == datetime.now().date() and t.status != 'completed']
 
