@@ -281,11 +281,20 @@ export const aiAPI = {
       lead_id: context.lead_id,
       loan_id: context.loan_id,
       include_context: context.include_context !== false, // Default to true
+      coaching_mode: context.coaching_mode,
+      context_type: context.context_type,
     });
     return response.data;
   },
   getMemoryStats: async () => {
     const response = await api.get('/api/v1/ai/memory-stats');
+    return response.data;
+  },
+  coach: async (mode, message = null) => {
+    const response = await api.post('/api/v1/coach', {
+      mode: mode,
+      message: message
+    });
     return response.data;
   },
   completeTask: async (taskId) => {

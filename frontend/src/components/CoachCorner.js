@@ -189,12 +189,8 @@ const CoachCorner = ({ isOpen, onClose }) => {
       const coachPrompt = coachingPrompts[selectedMode] || coachingPrompts.daily_briefing;
       const fullMessage = message ? `${coachPrompt}\n\nMy question: ${message}` : coachPrompt;
 
-      // Use Smart AI Chat with coaching context
-      const aiResponse = await aiAPI.smartChat(fullMessage, {
-        include_context: true,
-        coaching_mode: selectedMode,
-        context_type: 'coaching'
-      });
+      // Call the dedicated coach API endpoint
+      const aiResponse = await aiAPI.coach(selectedMode, message);
 
       // Add to conversation history
       setConversationHistory(prev => [
@@ -207,9 +203,9 @@ const CoachCorner = ({ isOpen, onClose }) => {
       setResponse({
         mode: selectedMode,
         response: aiResponse.response,
-        context_used: aiResponse.context_used,
-        context_count: aiResponse.context_count,
-        has_memory: aiResponse.has_memory
+        priorities: aiResponse.priorities,
+        metrics: aiResponse.metrics,
+        action_items: aiResponse.action_items
       });
 
       // Refresh memory stats
