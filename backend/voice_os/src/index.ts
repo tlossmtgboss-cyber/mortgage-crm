@@ -100,8 +100,10 @@ app.get('/api/voice/calls', async (req, res) => {
 });
 
 const PORT = process.env.PORT || 8080;
-server.listen(PORT, () => {
-  logger.info(`Voice Orchestrator running on port ${PORT}`);
+const HOST = '0.0.0.0'; // Railway requires binding to 0.0.0.0
+
+server.listen(PORT, HOST, () => {
+  logger.info(`Voice Orchestrator running on ${HOST}:${PORT}`);
 });
 
 // Graceful shutdown
