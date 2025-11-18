@@ -422,6 +422,16 @@ function ReconciliationCenter() {
       .join(' ');
   };
 
+  const extractNameFromEmail = (email) => {
+    // Extract name from email address (e.g., robert.w@example.com -> Robert W)
+    if (!email) return 'Unknown';
+    const namePart = email.split('@')[0];
+    return namePart
+      .split('.')
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+  };
+
   const formatFieldValue = (fieldName, value) => {
     if (!value) return 'N/A';
 
@@ -888,116 +898,169 @@ function ReconciliationCenter() {
               ))}
             </div>
 
-            {/* Detail Panel for Pending Review */}
+            {/* Detail Panel for Pending Review - Matches Task Detail Layout */}
             {selectedItem && (
               <div className="item-detail-panel">
                 <div className="detail-header">
-                  <h2>Review Required</h2>
+                  <div className="detail-title-section">
+                    <div className="detail-source">
+                      <span className="source-icon-large">🎯</span>
+                      <span className="source-name">MANUAL PRIORITY</span>
+                    </div>
+                    <h2 className="detail-title">{selectedItem.email_intent || 'Review Required'}</h2>
+                  </div>
                   <button className="close-detail" onClick={() => setSelectedItem(null)}>×</button>
                 </div>
 
-                <div className="email-preview-section">
-                  <div className="email-header-info">
-                    <div className="email-meta">
-                      <div className="meta-row">
-                        <strong>From:</strong> {selectedItem.email_from}
-                      </div>
-                      <div className="meta-row">
-                        <strong>Subject:</strong> {selectedItem.email_subject}
-                      </div>
-                      <div className="meta-row">
-                        <strong>Received:</strong>{' '}
+                <div className="detail-body">
+                  <div className="detail-info-grid">
+                    <div className="detail-info-item">
+                      <span className="detail-label">CLIENT</span>
+                      <span className="detail-value">{selectedItem.fields?.borrower_name?.value || extractNameFromEmail(selectedItem.email_from)}</span>
+                    </div>
+                    <div className="detail-info-item">
+                      <span className="detail-label">STAGE</span>
+                      <span className="detail-value">{selectedItem.match_entity_type === 'lead' ? 'Pre-Approved' : selectedItem.match_entity_type === 'loan' ? 'Processing' : 'Client Retention'}</span>
+                    </div>
+                    <div className="detail-info-item">
+                      <span className="detail-label">PRIORITY</span>
+                      <span className="detail-urgency-badge priority-high">HIGH</span>
+                    </div>
+                    <div className="detail-info-item">
+                      <span className="detail-label">SOURCE</span>
+                      <span className="detail-value">Manual Priority</span>
+                    </div>
+                    <div className="detail-info-item">
+                      <span className="detail-label">OWNER</span>
+                      <span className="detail-value">Loan Officer</span>
+                    </div>
+                    <div className="detail-info-item">
+                      <span className="detail-label">DATE CREATED</span>
+                      <span className="detail-value">
                         {new Date(selectedItem.email_received_at).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="detail-info-item detail-comm-method-item">
+                      <span className="detail-label">SEND VIA</span>
+                      <div className="comm-method-selector">
+                        <button className="comm-method-btn active">
+                          📧 Email
+                        </button>
+                        <button className="comm-method-btn">
+                          💬 Text
+                        </button>
+                        <button className="comm-method-btn">
+                          📞 Phone
+                        </button>
+                        <button className="comm-method-btn">
+                          🎙️ Voicemail
+                        </button>
                       </div>
                     </div>
                   </div>
 
                   {selectedItem.review_reason && (
-                    <div className="review-alert">
+                    <div className="review-alert-banner">
                       <div className="alert-icon">⚠️</div>
                       <div className="alert-content">
                         <strong>Flagged for Review:</strong> {selectedItem.review_reason}
+                        <br />
+                        <span className="match-confidence-text">
+                          Match Confidence: <strong>{Math.round(selectedItem.match_confidence * 100)}%</strong>
+                        </span>
                       </div>
                     </div>
                   )}
-                </div>
 
-                {/* Entity Match Section */}
-                {selectedItem.match_entity_id && (
-                  <div className="match-section">
+                  {/* Entity Match Section with Extracted Fields */}
+                  <div className="extracted-fields-section">
                     <h3>Matched Entity</h3>
-                    <div className="match-card">
-                      <div className="match-details">
-                        <div className="entity-type">
-                          {selectedItem.match_entity_type === 'lead' ? 'Lead' :
-                           selectedItem.match_entity_type === 'loan' ? 'Loan' :
-                           selectedItem.match_entity_type === 'client' ? 'Client' :
-                           selectedItem.match_entity_type}
-                        </div>
-                        <div className="entity-confidence">
-                          Match Confidence: {Math.round(selectedItem.match_confidence * 100)}%
-                        </div>
+                    <div className="entity-match-info">
+                      <div className="entity-type-badge">
+                        {selectedItem.match_entity_type === 'lead' ? 'Lead' :
+                         selectedItem.match_entity_type === 'loan' ? 'Loan' :
+                         selectedItem.match_entity_type === 'client' ? 'Client' :
+                         selectedItem.match_entity_type}
+                      </div>
+                      <div className="entity-confidence">
+                        Match Confidence: <span style={{ color: getConfidenceColor(selectedItem.match_confidence) }}>
+                          {Math.round(selectedItem.match_confidence * 100)}%
+                        </span>
+                      </div>
+                    </div>
+                    <h4>EXTRACTED FIELDS</h4>
+                    <div className="fields-grid-recon">
+                      {Object.entries(selectedItem.fields || {}).map(([fieldName, fieldData]) => {
+                        const confidence = fieldData.confidence || 0;
+                        const value = fieldData.value;
+                        const isEdited = fieldName in editedFields;
+
+                        return (
+                          <div key={fieldName} className="field-row-recon">
+                            <div className="field-header-recon">
+                              <span className="field-name">{formatFieldName(fieldName)}</span>
+                              <span
+                                className="field-confidence-badge"
+                                style={{
+                                  backgroundColor: confidence > 0.8 ? '#10b981' : confidence > 0.6 ? '#f59e0b' : '#ef4444',
+                                  color: 'white'
+                                }}
+                              >
+                                {Math.round(confidence * 100)}%
+                              </span>
+                            </div>
+                            <div className="field-value-display">{value || 'N/A'}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Email Details Section */}
+                  <div className="email-details-section">
+                    <button
+                      className="history-accordion-button"
+                      onClick={() => {}}
+                    >
+                      <span className="history-icon">📧</span>
+                      <span className="history-title">Email Details</span>
+                      <span className="history-toggle">▼</span>
+                    </button>
+                    <div className="email-details-content">
+                      <div className="email-meta-row">
+                        <strong>From:</strong> {selectedItem.email_from}
+                      </div>
+                      <div className="email-meta-row">
+                        <strong>Subject:</strong> {selectedItem.email_subject}
+                      </div>
+                      <div className="email-meta-row">
+                        <strong>Received:</strong> {new Date(selectedItem.email_received_at).toLocaleString()}
                       </div>
                     </div>
                   </div>
-                )}
 
-                {/* Extracted Fields */}
-                <div className="extracted-fields">
-                  <h3>Extracted Fields</h3>
-                  <div className="fields-grid">
-                    {Object.entries(selectedItem.fields || {}).map(([fieldName, fieldData]) => {
-                      const confidence = fieldData.confidence || 0;
-                      const value = fieldData.value;
-                      const isEdited = fieldName in editedFields;
-                      const displayValue = isEdited
-                        ? editedFields[fieldName]
-                        : value;
-
-                      return (
-                        <div key={fieldName} className="field-row">
-                          <div className="field-label">
-                            <span>{formatFieldName(fieldName)}</span>
-                            <span
-                              className="field-confidence"
-                              style={{ color: getConfidenceColor(confidence) }}
-                            >
-                              {Math.round(confidence * 100)}%
-                            </span>
-                          </div>
-                          <input
-                            type="text"
-                            className={`field-input ${isEdited ? 'edited' : ''}`}
-                            value={isEdited ? editedFields[fieldName] : value || ''}
-                            onChange={(e) => handleFieldEdit(fieldName, e.target.value)}
-                          />
-                        </div>
-                      );
-                    })}
+                  {/* Action Buttons - Match Task Layout */}
+                  <div className="detail-action-buttons">
+                    <button
+                      className="btn-approve-recon"
+                      onClick={() => handleApprove(selectedItem.id)}
+                      disabled={processingAction}
+                    >
+                      {processingAction ? 'Processing...' : '✓ APPROVE & CONTINUE'}
+                    </button>
+                    <button
+                      className="btn-reject-recon"
+                      onClick={() => {
+                        const reason = prompt('Reason for rejection (optional):');
+                        if (reason !== null) {
+                          handleReject(selectedItem.id, reason);
+                        }
+                      }}
+                      disabled={processingAction}
+                    >
+                      ✕ REJECT
+                    </button>
                   </div>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="detail-actions">
-                  <button
-                    className="btn-approve"
-                    onClick={() => handleApprove(selectedItem.id)}
-                    disabled={processingAction}
-                  >
-                    {processingAction ? 'Processing...' : '✓ Approve & Continue'}
-                  </button>
-                  <button
-                    className="btn-reject"
-                    onClick={() => {
-                      const reason = prompt('Reason for rejection (optional):');
-                      if (reason !== null) {
-                        handleReject(selectedItem.id, reason);
-                      }
-                    }}
-                    disabled={processingAction}
-                  >
-                    ✕ Reject
-                  </button>
                 </div>
               </div>
             )}
