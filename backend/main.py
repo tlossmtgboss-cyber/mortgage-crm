@@ -3110,8 +3110,8 @@ async def _get_coaching_context(db: Session, user_id: int) -> str:
     # Get leads stats (Lead uses owner_id, not user_id)
     leads = db.query(Lead).filter(Lead.owner_id == user_id).all()
     new_leads = [l for l in leads if l.created_at and l.created_at >= datetime.now() - timedelta(days=1)]
-    # Lead model uses 'stage' not 'status'
-    pending_leads = [l for l in leads if l.stage in [LeadStage.NEW, LeadStage.CONTACTED]]
+    # Lead model uses 'stage' not 'status' - compare with string values
+    pending_leads = [l for l in leads if l.stage and l.stage.value in ['new', 'contacted']]
 
     context_parts.append(f"## LEADS DATA:")
     context_parts.append(f"- Total leads: {len(leads)}")
@@ -3120,8 +3120,8 @@ async def _get_coaching_context(db: Session, user_id: int) -> str:
 
     # Get loans/pipeline stats (Loan uses owner_id, not user_id)
     loans = db.query(Loan).filter(Loan.owner_id == user_id).all()
-    # Loan model uses 'stage' not 'status'
-    active_loans = [l for l in loans if l.stage not in [LoanStage.FUNDED, LoanStage.CANCELLED, LoanStage.DENIED]]
+    # Loan model uses 'stage' not 'status' - compare with string values
+    active_loans = [l for l in loans if l.stage and l.stage.value not in ['funded', 'cancelled', 'denied']]
     stuck_loans = [l for l in active_loans if l.updated_at and l.updated_at <= datetime.now() - timedelta(days=10)]
 
     context_parts.append(f"\n## PIPELINE DATA:")
