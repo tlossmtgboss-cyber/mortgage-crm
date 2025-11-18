@@ -60,6 +60,7 @@ function LoanDetail() {
   const [showSMSModal, setShowSMSModal] = useState(false);
   const [showTeamsModal, setShowTeamsModal] = useState(false);
   const [showRecordingModal, setShowRecordingModal] = useState(false);
+  const [isListening, setIsListening] = useState(false);
 
   useEffect(() => {
     loadLoanData();
@@ -165,6 +166,49 @@ function LoanDetail() {
     }
   };
 
+  const handleVoiceCommand = () => {
+    // Check if browser supports Web Speech API
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      alert('Sorry, your browser does not support speech recognition. Please try Chrome or Edge.');
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      setIsListening(true);
+      console.log('Voice recognition started. Speak now...');
+    };
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      console.log('Voice command received:', transcript);
+
+      // Send the transcript to the SmartAI chat
+      window.dispatchEvent(new CustomEvent('voiceCommand', {
+        detail: { transcript, loanId: loan.id }
+      }));
+    };
+
+    recognition.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
+      setIsListening(false);
+      alert(`Voice recognition error: ${event.error}`);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      console.log('Voice recognition ended.');
+    };
+
+    recognition.start();
+  };
+
   const handleAction = async (action) => {
     const borrowerPhone = loan.borrower_phone || formData.borrower_phone;
     const borrowerEmail = loan.borrower_email || formData.borrower_email;
@@ -193,6 +237,9 @@ function LoanDetail() {
         break;
       case 'voicemail':
         setShowVoicemailDrop(true);
+        break;
+      case 'voice':
+        handleVoiceCommand();
         break;
       default:
         break;
@@ -1017,6 +1064,11 @@ function LoanDetail() {
             </div>
           </div>
         )}
+
+          {/* Smart AI Chat - Always Visible */}
+          <div className="smart-chat-card">
+            <SmartAIChat loanId={loan.id} context={{ borrower_name: loan.borrower_name || loan.borrower, loan_stage: loan.stage }} />
+          </div>
         </div>
 
         {/* Right Column - Actions & Email History */}
@@ -1089,6 +1141,14 @@ function LoanDetail() {
             >
               <span className="icon">📞</span>
               <span>Voicemail Drop</span>
+            </button>
+            <button
+              className={`action-btn voice ${isListening ? 'listening' : ''}`}
+              onClick={() => handleAction('voice')}
+              title="Give voice command to AI assistant"
+            >
+              <span className="icon">🎤</span>
+              <span>{isListening ? 'Listening...' : 'Voice Command'}</span>
             </button>
           </div>
         </div>
