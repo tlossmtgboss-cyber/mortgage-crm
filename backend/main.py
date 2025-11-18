@@ -20489,7 +20489,8 @@ async def bootstrap_admin_user(
 @app.post("/api/v1/migrations/run-phase2-permissions", response_model=None)
 async def run_phase2_permission_migration(
     migration_key: str = "",
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """
     Run Phase 2 Permission System Migration
