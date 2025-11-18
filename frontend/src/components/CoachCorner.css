@@ -4,9 +4,10 @@
   top: 60px;
   bottom: 0;
   width: 450px;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-  color: #fff;
-  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.3);
+  background: #FFFFFF;
+  color: #1a1a1a;
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.1);
+  border-left: 1px solid rgba(139, 92, 68, 0.15);
   z-index: 99;
   display: flex;
   flex-direction: column;
@@ -18,7 +19,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 20px 24px;
-  border-bottom: 2px solid rgba(255, 215, 0, 0.2);
+  border-bottom: 2px solid rgba(139, 92, 68, 0.15);
   flex-shrink: 0;
 }
 
@@ -32,14 +33,14 @@
   font-size: 28px;
   font-weight: 700;
   margin: 0;
-  color: #ffd700;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  color: #217F8D;
+  text-shadow: none;
 }
 
 .coach-header .memory-badge {
-  background: rgba(255, 215, 0, 0.15);
-  border: 1px solid rgba(255, 215, 0, 0.3);
-  color: #ffd700;
+  background: rgba(33, 127, 141, 0.1);
+  border: 1px solid rgba(33, 127, 141, 0.3);
+  color: #217F8D;
   padding: 4px 12px;
   border-radius: 12px;
   font-size: 12px;
@@ -47,28 +48,28 @@
 }
 
 .context-indicator {
-  background: rgba(100, 200, 255, 0.15);
-  border-left: 3px solid #64c8ff;
+  background: rgba(33, 127, 141, 0.08);
+  border-left: 3px solid #217F8D;
   padding: 12px 16px;
   margin-bottom: 16px;
   border-radius: 4px;
   font-size: 13px;
-  color: #a8b2d1;
+  color: #666666;
 }
 
 .coach-subtitle {
   font-size: 14px;
-  color: #a8b2d1;
+  color: #666666;
   margin: 0;
   padding: 0 24px 16px 24px;
   font-weight: 400;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(139, 92, 68, 0.15);
 }
 
 .btn-back {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #fff;
+  background: #FFFFFF;
+  border: 1px solid rgba(139, 92, 68, 0.2);
+  color: #1a1a1a;
   padding: 8px 16px;
   border-radius: 8px;
   cursor: pointer;
@@ -77,12 +78,13 @@
 }
 
 .btn-back:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(139, 92, 68, 0.05);
+  border-color: #217F8D;
 }
 
 .coach-intro {
-  background: rgba(255, 255, 255, 0.05);
-  border-left: 4px solid #ffd700;
+  background: rgba(33, 127, 141, 0.05);
+  border-left: 4px solid #217F8D;
   padding: 16px;
   border-radius: 8px;
   margin: 24px;
@@ -92,11 +94,11 @@
 .coach-intro p {
   margin: 8px 0;
   line-height: 1.6;
-  color: #e0e0e0;
+  color: #1a1a1a;
 }
 
 .coach-intro strong {
-  color: #ffd700;
+  color: #217F8D;
 }
 
 .coach-modes-grid {
@@ -108,21 +110,22 @@
 }
 
 .coach-mode-button {
-  background: rgba(255, 255, 255, 0.08);
-  border: 2px solid rgba(255, 255, 255, 0.15);
+  background: #FFFFFF;
+  border: 2px solid rgba(139, 92, 68, 0.15);
   border-radius: 12px;
   padding: 20px;
   cursor: pointer;
   transition: all 0.3s ease;
   text-align: left;
-  color: #fff;
+  color: #1a1a1a;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .coach-mode-button:hover {
-  background: rgba(255, 255, 255, 0.15);
-  border-color: #ffd700;
+  background: rgba(33, 127, 141, 0.05);
+  border-color: #217F8D;
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(255, 215, 0, 0.2);
+  box-shadow: 0 6px 20px rgba(33, 127, 141, 0.15);
 }
 
 .mode-icon {
@@ -134,12 +137,12 @@
   font-size: 16px;
   font-weight: 600;
   margin-bottom: 6px;
-  color: #fff;
+  color: #1a1a1a;
 }
 
 .mode-description {
   font-size: 13px;
-  color: #a8b2d1;
+  color: #666666;
   line-height: 1.4;
 }
 
@@ -149,8 +152,8 @@
 }
 
 .loading-spinner {
-  border: 4px solid rgba(255, 255, 255, 0.1);
-  border-top: 4px solid #ffd700;
+  border: 4px solid rgba(139, 92, 68, 0.1);
+  border-top: 4px solid #217F8D;
   border-radius: 50%;
   width: 50px;
   height: 50px;
@@ -175,19 +178,20 @@
 
 .coach-mode-badge {
   display: inline-block;
-  background: #ffd700;
-  color: #1a1a2e;
+  background: #217F8D;
+  color: #FFFFFF;
   padding: 6px 14px;
   border-radius: 20px;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.5px;
   margin-bottom: 16px;
+  text-transform: uppercase;
 }
 
 .coach-message {
-  background: rgba(255, 255, 255, 0.08);
-  border-left: 4px solid #ffd700;
+  background: rgba(33, 127, 141, 0.05);
+  border-left: 4px solid #217F8D;
   padding: 20px;
   border-radius: 8px;
   margin-bottom: 24px;
@@ -197,11 +201,11 @@
 
 .coach-message p {
   margin: 12px 0;
-  color: #f0f0f0;
+  color: #1a1a1a;
 }
 
 .coach-message strong {
-  color: #ffd700;
+  color: #217F8D;
   font-weight: 600;
 }
 
@@ -212,27 +216,29 @@
 .priorities-section h3 {
   font-size: 18px;
   margin-bottom: 16px;
-  color: #ffd700;
+  color: #217F8D;
 }
 
 .priority-item {
-  background: rgba(255, 255, 255, 0.06);
+  background: #FFFFFF;
   border-radius: 10px;
   padding: 16px;
   margin-bottom: 12px;
+  border: 1px solid rgba(139, 92, 68, 0.15);
   border-left: 4px solid #4caf50;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .priority-item.urgency-critical {
-  border-left-color: #f44336;
+  border-left-color: #C0152F;
 }
 
 .priority-item.urgency-high {
-  border-left-color: #ff9800;
+  border-left-color: #A84B2F;
 }
 
 .priority-item.urgency-medium {
-  border-left-color: #4caf50;
+  border-left-color: #217F8D;
 }
 
 .priority-header {
@@ -243,8 +249,8 @@
 }
 
 .priority-number {
-  background: rgba(255, 215, 0, 0.2);
-  color: #ffd700;
+  background: rgba(33, 127, 141, 0.15);
+  color: #217F8D;
   font-weight: 700;
   padding: 4px 10px;
   border-radius: 6px;
@@ -253,7 +259,7 @@
 
 .priority-category {
   font-size: 14px;
-  color: #a8b2d1;
+  color: #666666;
 }
 
 .urgency-badge {
@@ -266,37 +272,38 @@
 }
 
 .urgency-badge.critical {
-  background: #f44336;
+  background: #C0152F;
   color: #fff;
 }
 
 .urgency-badge.high {
-  background: #ff9800;
+  background: #A84B2F;
   color: #fff;
 }
 
 .urgency-badge.medium {
-  background: #4caf50;
+  background: #217F8D;
   color: #fff;
 }
 
 .priority-action {
   font-size: 15px;
   font-weight: 500;
-  color: #f0f0f0;
+  color: #1a1a1a;
 }
 
 .action-items-section {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(33, 127, 141, 0.05);
   padding: 20px;
   border-radius: 10px;
   margin-bottom: 24px;
+  border: 1px solid rgba(139, 92, 68, 0.15);
 }
 
 .action-items-section h3 {
   font-size: 18px;
   margin-bottom: 16px;
-  color: #ffd700;
+  color: #217F8D;
 }
 
 .action-items-section ul {
@@ -309,7 +316,7 @@
   padding: 12px 0;
   padding-left: 28px;
   position: relative;
-  color: #e0e0e0;
+  color: #1a1a1a;
   font-size: 14px;
   line-height: 1.6;
 }
@@ -318,7 +325,7 @@
   content: '▸';
   position: absolute;
   left: 8px;
-  color: #ffd700;
+  color: #217F8D;
   font-weight: bold;
 }
 
@@ -329,16 +336,18 @@
 }
 
 .metric-card {
-  background: rgba(255, 255, 255, 0.08);
+  background: #FFFFFF;
   padding: 16px;
   border-radius: 10px;
   text-align: center;
+  border: 1px solid rgba(139, 92, 68, 0.15);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
 .metric-label {
   display: block;
   font-size: 12px;
-  color: #a8b2d1;
+  color: #666666;
   margin-bottom: 8px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -347,15 +356,15 @@
 .metric-value {
   font-size: 24px;
   font-weight: 700;
-  color: #ffd700;
+  color: #217F8D;
 }
 
 .metric-value.health-good {
-  color: #4caf50;
+  color: #217F8D;
 }
 
 .metric-value.health-needs_attention {
-  color: #ff9800;
+  color: #A84B2F;
 }
 
 .coach-quick-actions {
@@ -367,21 +376,22 @@
 
 .quick-action-btn {
   width: 100%;
-  background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+  background: #217F8D;
   border: none;
   border-radius: 10px;
   padding: 14px 20px;
   font-size: 14px;
   font-weight: 600;
-  color: #1a1a2e;
+  color: #FFFFFF;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
+  box-shadow: 0 4px 12px rgba(33, 127, 141, 0.2);
 }
 
 .quick-action-btn:hover {
+  background: #1a6670;
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(255, 215, 0, 0.5);
+  box-shadow: 0 6px 20px rgba(33, 127, 141, 0.3);
 }
 
 .custom-input-modal {
@@ -399,27 +409,27 @@
 }
 
 .modal-content {
-  background: #16213e;
+  background: #FFFFFF;
   border-radius: 16px;
   padding: 32px;
   max-width: 500px;
   width: 90%;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
 }
 
 .modal-content h3 {
-  color: #ffd700;
+  color: #217F8D;
   margin-bottom: 20px;
   font-size: 22px;
 }
 
 .modal-content textarea {
   width: 100%;
-  background: rgba(255, 255, 255, 0.08);
-  border: 2px solid rgba(255, 255, 255, 0.15);
+  background: #FFFFFF;
+  border: 2px solid rgba(139, 92, 68, 0.2);
   border-radius: 10px;
   padding: 16px;
-  color: #fff;
+  color: #1a1a1a;
   font-size: 15px;
   font-family: inherit;
   resize: vertical;
@@ -428,7 +438,7 @@
 
 .modal-content textarea:focus {
   outline: none;
-  border-color: #ffd700;
+  border-color: #217F8D;
 }
 
 .modal-actions {
@@ -438,9 +448,9 @@
 }
 
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #fff;
+  background: #FFFFFF;
+  border: 1px solid rgba(139, 92, 68, 0.2);
+  color: #1a1a1a;
   padding: 10px 20px;
   border-radius: 8px;
   cursor: pointer;
@@ -449,13 +459,14 @@
 }
 
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(139, 92, 68, 0.05);
+  border-color: #217F8D;
 }
 
 .btn-primary {
-  background: linear-gradient(135deg, #ffd700 0%, #ffed4e 100%);
+  background: #217F8D;
   border: none;
-  color: #1a1a2e;
+  color: #FFFFFF;
   padding: 10px 20px;
   border-radius: 8px;
   cursor: pointer;
@@ -465,8 +476,9 @@
 }
 
 .btn-primary:hover {
+  background: #1a6670;
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(255, 215, 0, 0.4);
+  box-shadow: 0 4px 12px rgba(33, 127, 141, 0.3);
 }
 
 .close-button {
@@ -474,7 +486,7 @@
   border: none;
   font-size: 28px;
   line-height: 1;
-  color: rgba(255, 255, 255, 0.6);
+  color: #666666;
   cursor: pointer;
   padding: 0;
   width: 32px;
@@ -487,8 +499,8 @@
 }
 
 .close-button:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: rgba(139, 92, 68, 0.1);
+  color: #1a1a1a;
 }
 
 .coach-header-actions {
