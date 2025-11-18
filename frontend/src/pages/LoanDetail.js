@@ -4,6 +4,9 @@ import { loansAPI, activitiesAPI } from '../services/api';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import SmartAIChat from '../components/SmartAIChat';
 import VoicemailDrop from '../components/VoicemailDrop';
+import SMSModal from '../components/SMSModal';
+import TeamsModal from '../components/TeamsModal';
+import RecordingModal from '../components/RecordingModal';
 import './LeadDetail.css';
 
 // Mock loans data (same as Loans.js)
@@ -54,6 +57,9 @@ function LoanDetail() {
   const [activeBorrower, setActiveBorrower] = useState(0);
   const [saveTimeout, setSaveTimeout] = useState(null);
   const [showVoicemailDrop, setShowVoicemailDrop] = useState(false);
+  const [showSMSModal, setShowSMSModal] = useState(false);
+  const [showTeamsModal, setShowTeamsModal] = useState(false);
+  const [showRecordingModal, setShowRecordingModal] = useState(false);
 
   useEffect(() => {
     loadLoanData();
@@ -156,6 +162,40 @@ function LoanDetail() {
     const borrower = borrowers[borrowerIndex];
     if (borrower && borrower.data) {
       setFormData({...formData, ...borrower.data});
+    }
+  };
+
+  const handleAction = async (action) => {
+    const borrowerPhone = loan.borrower_phone || formData.borrower_phone;
+    const borrowerEmail = loan.borrower_email || formData.borrower_email;
+
+    switch(action) {
+      case 'call':
+        window.open(`tel:${borrowerPhone}`, '_self');
+        break;
+      case 'sms':
+        setShowSMSModal(true);
+        break;
+      case 'email':
+        window.open(`mailto:${borrowerEmail}`, '_blank');
+        break;
+      case 'task':
+        navigate('/tasks');
+        break;
+      case 'calendar':
+        navigate('/calendar');
+        break;
+      case 'teams':
+        setShowTeamsModal(true);
+        break;
+      case 'record':
+        setShowRecordingModal(true);
+        break;
+      case 'voicemail':
+        setShowVoicemailDrop(true);
+        break;
+      default:
+        break;
     }
   };
 
@@ -976,6 +1016,78 @@ function LoanDetail() {
           </div>
         )}
 
+        {/* Quick Actions */}
+        <div className="actions-card">
+          <h3>Quick Actions</h3>
+          <div className="action-buttons">
+            <button
+              className="action-btn call"
+              onClick={() => handleAction('call')}
+              disabled={!loan.borrower_phone && !formData.borrower_phone}
+              title="Click to call using your phone"
+            >
+              <span className="icon">📞</span>
+              <span>Call</span>
+            </button>
+            <button
+              className="action-btn sms"
+              onClick={() => handleAction('sms')}
+              disabled={!loan.borrower_phone && !formData.borrower_phone}
+              title="Send SMS using your phone"
+            >
+              <span className="icon">💬</span>
+              <span>SMS Text</span>
+            </button>
+            <button
+              className="action-btn email"
+              onClick={() => handleAction('email')}
+              disabled={!loan.borrower_email && !formData.borrower_email}
+            >
+              <span className="icon">✉️</span>
+              <span>Send Email</span>
+            </button>
+            <button
+              className="action-btn task"
+              onClick={() => handleAction('task')}
+            >
+              <span className="icon">✓</span>
+              <span>Create Task</span>
+            </button>
+            <button
+              className="action-btn calendar"
+              onClick={() => handleAction('calendar')}
+            >
+              <span className="icon">📅</span>
+              <span>Set Appointment</span>
+            </button>
+            <button
+              className="action-btn teams"
+              onClick={() => handleAction('teams')}
+              title="Create Microsoft Teams meeting"
+            >
+              <span className="icon">👥</span>
+              <span>Teams Meeting</span>
+            </button>
+            <button
+              className="action-btn record"
+              onClick={() => handleAction('record')}
+              title="Record meeting with Recall.ai bot"
+            >
+              <span className="icon">🎥</span>
+              <span>Record Meeting</span>
+            </button>
+            <button
+              className="action-btn voicemail"
+              onClick={() => handleAction('voicemail')}
+              disabled={!loan.borrower_phone && !formData.borrower_phone}
+              title="Drop voicemail message"
+            >
+              <span className="icon">📞</span>
+              <span>Voicemail Drop</span>
+            </button>
+          </div>
+        </div>
+
         {/* Smart AI Chat for Borrowers */}
         <div className="smart-ai-section">
           <h3>Smart AI Assistant</h3>
@@ -989,6 +1101,32 @@ function LoanDetail() {
           phoneNumber={loan.borrower_phone}
           recipientName={loan.borrower_name || loan.borrower}
           onClose={() => setShowVoicemailDrop(false)}
+        />
+      )}
+
+      {/* SMS Modal */}
+      {loan && showSMSModal && (
+        <SMSModal
+          phoneNumber={loan.borrower_phone || formData.borrower_phone}
+          recipientName={loan.borrower_name || loan.borrower}
+          onClose={() => setShowSMSModal(false)}
+        />
+      )}
+
+      {/* Teams Modal */}
+      {loan && showTeamsModal && (
+        <TeamsModal
+          recipientEmail={loan.borrower_email || formData.borrower_email}
+          recipientName={loan.borrower_name || loan.borrower}
+          onClose={() => setShowTeamsModal(false)}
+        />
+      )}
+
+      {/* Recording Modal */}
+      {loan && showRecordingModal && (
+        <RecordingModal
+          meetingTitle={`Loan Discussion - ${loan.borrower_name || loan.borrower}`}
+          onClose={() => setShowRecordingModal(false)}
         />
       )}
     </div>
