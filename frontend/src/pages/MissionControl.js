@@ -175,7 +175,9 @@ function MissionControl() {
             <div className="summary-label">Autonomous</div>
             <div className="summary-value">{health?.metrics?.autonomous_actions || 0}</div>
             <div className="summary-percent">
-              {((health?.metrics?.autonomous_actions / health?.metrics?.total_actions * 100) || 0).toFixed(0)}%
+              {(health?.metrics?.total_actions > 0
+                ? ((health.metrics.autonomous_actions / health.metrics.total_actions * 100) || 0).toFixed(0)
+                : 0)}%
             </div>
           </div>
           <div className="summary-card">
@@ -264,7 +266,7 @@ function MissionControl() {
           </div>
 
           <div className="agents-grid">
-            {Object.entries(metrics.agents).map(([agentName, agentMetrics]) => (
+            {Object.entries(metrics.agents || {}).map(([agentName, agentMetrics]) => (
               <div key={agentName} className="agent-card">
                 <div className="agent-header">
                   <h3>{agentName}</h3>

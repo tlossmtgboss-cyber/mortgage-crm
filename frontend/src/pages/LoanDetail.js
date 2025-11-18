@@ -262,7 +262,9 @@ function LoanDetail() {
     );
   }
 
-  const currentBorrower = borrowers[activeBorrower] || borrowers[0];
+  const currentBorrower = borrowers[activeBorrower] || borrowers[0] || {
+    data: { name: '', email: '', phone: '' }
+  };
 
   return (
     <div className="lead-detail-page">

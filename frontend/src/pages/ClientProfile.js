@@ -498,13 +498,13 @@ function ClientProfile() {
   const handleAction = async (action) => {
     switch(action) {
       case 'call':
-        window.open(`tel:${client.phone}`, '_self');
+        window.open(`tel:${client.borrower_phone || client.phone}`, '_self');
         break;
       case 'sms':
         setShowSMSModal(true);
         break;
       case 'email':
-        window.open(`mailto:${client.email}`, '_blank');
+        window.open(`mailto:${client.borrower_email || client.email}`, '_blank');
         break;
       case 'task':
         navigate('/tasks');
@@ -1435,7 +1435,7 @@ function ClientProfile() {
               <button
                 className="action-btn call"
                 onClick={() => handleAction('call')}
-                disabled={!client.phone}
+                disabled={!(client.borrower_phone || client.phone)}
                 title="Click to call using your phone"
               >
                 <span className="icon">📞</span>
@@ -1444,7 +1444,7 @@ function ClientProfile() {
               <button
                 className="action-btn sms"
                 onClick={() => handleAction('sms')}
-                disabled={!client.phone}
+                disabled={!(client.borrower_phone || client.phone)}
                 title="Send SMS using your phone"
               >
                 <span className="icon">💬</span>
@@ -1453,7 +1453,7 @@ function ClientProfile() {
               <button
                 className="action-btn email"
                 onClick={() => handleAction('email')}
-                disabled={!client.email}
+                disabled={!(client.borrower_email || client.email)}
               >
                 <span className="icon">✉️</span>
                 <span>Send Email</span>
@@ -1491,7 +1491,7 @@ function ClientProfile() {
               <button
                 className="action-btn voicemail"
                 onClick={() => handleAction('voicemail')}
-                disabled={!client.phone}
+                disabled={!(client.borrower_phone || client.phone)}
                 title="Drop voicemail message"
               >
                 <span className="icon">📞</span>
@@ -1575,8 +1575,8 @@ function ClientProfile() {
       {/* Voicemail Drop */}
       {client && showVoicemailDrop && (
         <VoicemailDrop
-          phoneNumber={client.phone}
-          recipientName={client.name}
+          phoneNumber={client.borrower_phone || client.phone}
+          recipientName={client.borrower_name || client.name}
           onClose={() => setShowVoicemailDrop(false)}
         />
       )}

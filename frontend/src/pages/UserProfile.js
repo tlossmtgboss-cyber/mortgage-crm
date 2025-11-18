@@ -99,7 +99,7 @@ function UserProfile() {
 
         <div className="header-content">
           <div className="profile-avatar-large">
-            {user.full_name ? user.full_name.charAt(0).toUpperCase() : user.email.charAt(0).toUpperCase()}
+            {user.full_name ? user.full_name.charAt(0).toUpperCase() : (user.email || 'U').charAt(0).toUpperCase()}
           </div>
           <div className="profile-info">
             <h1>{user.full_name || user.email}</h1>

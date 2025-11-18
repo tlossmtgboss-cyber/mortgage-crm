@@ -90,6 +90,7 @@ function YearOverYear() {
   };
 
   const getMaxValue = (key) => {
+    if (!yearlyData || yearlyData.length === 0) return 0;
     return Math.max(...yearlyData.map(d => d[key] || 0));
   };
 
