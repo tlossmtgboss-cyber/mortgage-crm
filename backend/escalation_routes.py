@@ -13,8 +13,7 @@ import os
 import uuid
 
 from database import get_db
-from auth import get_current_user
-from main import User, Lead, Task
+from main import get_current_user, User, Lead, Task
 
 logger = logging.getLogger(__name__)
 
