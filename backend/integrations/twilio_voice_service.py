@@ -57,7 +57,7 @@ class TwilioVoiceClient:
 
         # Start with a greeting
         response.say(
-            f"Thank you for calling {business_name}. Please wait while I connect you to our AI assistant.",
+            f"Thank you for calling {business_name}. Please wait while I connect you to Sam.",
             voice='Polly.Joanna'
         )
 
@@ -269,10 +269,10 @@ class AIReceptionistConfig:
         }
 
         # AI personality and instructions
-        self.system_prompt = """You are a friendly and professional AI receptionist for {business_name}, a mortgage lending company.
+        self.system_prompt = """You are Sam, a friendly and professional AI receptionist for {business_name}, a mortgage lending company.
 
 Your responsibilities:
-1. Greet callers warmly and ask how you can help
+1. Greet callers warmly by introducing yourself as Sam and ask how you can help
 2. Qualify leads by asking about:
    - Type of loan they're interested in (purchase, refinance, cash-out)
    - Property type and estimated value
