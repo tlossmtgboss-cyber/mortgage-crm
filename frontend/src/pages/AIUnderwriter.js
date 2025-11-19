@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { aiAPI } from '../services/api';
+import GuidelineUpdatesSidebar from '../components/GuidelineUpdatesSidebar';
+import GuidelineNotificationBadge from '../components/GuidelineNotificationBadge';
 import './AIUnderwriter.css';
 
 function AIUnderwriter() {
@@ -13,6 +15,7 @@ function AIUnderwriter() {
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [memoryStats, setMemoryStats] = useState(null);
+  const [currentUserId, setCurrentUserId] = useState(null);
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -25,7 +28,22 @@ function AIUnderwriter() {
 
   useEffect(() => {
     loadMemoryStats();
+    loadCurrentUser();
   }, []);
+
+  const loadCurrentUser = () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (token) {
+        // Decode JWT to get user ID
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        setCurrentUserId(payload.user_id || payload.sub || 1); // Fallback to 1 if not found
+      }
+    } catch (error) {
+      console.error('Failed to load user ID:', error);
+      setCurrentUserId(1); // Fallback to user ID 1
+    }
+  };
 
   const loadMemoryStats = async () => {
     try {
@@ -105,7 +123,10 @@ function AIUnderwriter() {
     <div className="ai-underwriter-page">
       <div className="underwriter-header">
         <div className="header-content">
-          <h1>🧠 Smart AI Underwriter</h1>
+          <h1>
+            🧠 Smart AI Underwriter
+            {currentUserId && <GuidelineNotificationBadge userId={currentUserId} />}
+          </h1>
           <p className="subtitle">Ask any mortgage lending question and get answers with sources</p>
           {memoryStats && (
             <div className="memory-stats-badge">
@@ -115,7 +136,8 @@ function AIUnderwriter() {
         </div>
       </div>
 
-      <div className="underwriter-container">
+      <div className="underwriter-page-container">
+        <div className="underwriter-container">
         <div className="messages-container">
           {messages.map((message, index) => (
             <div
@@ -208,6 +230,9 @@ function AIUnderwriter() {
             </button>
           </div>
         </form>
+        </div>
+
+        {currentUserId && <GuidelineUpdatesSidebar userId={currentUserId} />}
       </div>
     </div>
   );

@@ -16,6 +16,8 @@
   margin: 0 0 8px 0;
   font-size: 32px;
   font-weight: 700;
+  display: flex;
+  align-items: center;
 }
 
 .header-content .subtitle {
@@ -23,6 +25,18 @@
   font-size: 16px;
   opacity: 0.95;
   font-weight: 400;
+}
+
+.memory-stats-badge {
+  margin-top: 12px;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.underwriter-page-container {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
 }
 
 .underwriter-container {
@@ -320,6 +334,18 @@
 
   .header-content h1 {
     font-size: 24px;
+  }
+
+  .underwriter-page-container {
+    flex-direction: column;
+  }
+
+  .guideline-sidebar {
+    width: 100%;
+    height: auto;
+    max-height: 40vh;
+    border-left: none;
+    border-top: 1px solid #e5e7eb;
   }
 
   .underwriter-container {

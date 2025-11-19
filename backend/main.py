@@ -3670,6 +3670,10 @@ app.include_router(voice_router, tags=["Voice AI"])
 from vapi_routes import router as vapi_router
 app.include_router(vapi_router, tags=["Vapi AI"])
 
+# Include Guideline Updates routes
+from guideline_updates_routes import router as guideline_updates_router
+app.include_router(guideline_updates_router, tags=["Guideline Updates"])
+
 # ============================================================================
 # API KEY HELPER FUNCTIONS
 # ============================================================================
