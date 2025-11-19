@@ -155,6 +155,67 @@ class ConversationDetail(BaseModel):
 # ACTIVITY FEED ENDPOINTS
 # ============================================================================
 
+class CreateActivityRequest(BaseModel):
+    """Request model for creating a new activity"""
+    client_name: Optional[str] = None
+    client_phone: Optional[str] = None
+    client_email: Optional[str] = None
+    action_type: str
+    channel: Optional[str] = None
+    message_in: Optional[str] = None
+    message_out: Optional[str] = None
+    confidence_score: Optional[float] = None
+    lead_stage: Optional[str] = None
+    outcome_status: Optional[str] = None
+    conversation_id: Optional[str] = None
+    transcript_url: Optional[str] = None
+    extra_data: Optional[Dict[str, Any]] = None
+
+
+@router.post("/activity", response_model=ActivityFeedItem)
+async def create_activity(
+    activity_data: CreateActivityRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Create a new AI Receptionist activity
+    Used by Voice OS and other integrations to log activities
+    """
+    try:
+        import uuid
+
+        activity = AIReceptionistActivity(
+            id=str(uuid.uuid4()),
+            timestamp=datetime.now(timezone.utc),
+            client_name=activity_data.client_name,
+            client_phone=activity_data.client_phone,
+            client_email=activity_data.client_email,
+            action_type=activity_data.action_type,
+            channel=activity_data.channel,
+            message_in=activity_data.message_in,
+            message_out=activity_data.message_out,
+            confidence_score=activity_data.confidence_score,
+            lead_stage=activity_data.lead_stage,
+            outcome_status=activity_data.outcome_status,
+            conversation_id=activity_data.conversation_id,
+            transcript_url=activity_data.transcript_url,
+            extra_data=activity_data.extra_data
+        )
+
+        db.add(activity)
+        db.commit()
+        db.refresh(activity)
+
+        logger.info(f"Activity created: {activity.id} - {activity.action_type}")
+
+        return activity
+
+    except Exception as e:
+        logger.error(f"Error creating activity: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/activity/feed", response_model=List[ActivityFeedItem])
 async def get_activity_feed(
     limit: int = Query(50, le=200, description="Number of items to return"),
@@ -754,4 +815,38 @@ async def seed_dashboard_data(db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Error seeding data: {e}")
         db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/admin/aggregate-metrics")
+async def trigger_metrics_aggregation(
+    days: int = Query(7, description="Number of days to aggregate"),
+    db: Session = Depends(get_db)
+):
+    """
+    Manually trigger metrics aggregation
+    Useful for backfilling historical data or testing
+
+    This aggregates activity data into daily metrics for KPI calculations
+    """
+    try:
+        from jobs.aggregate_dashboard_metrics import aggregate_metrics_range
+
+        results = aggregate_metrics_range(db, days=days)
+
+        success_count = sum(1 for r in results.values() if r.get('success'))
+        total_conversations = sum(r.get('conversations', 0) for r in results.values() if r.get('success'))
+
+        return {
+            "success": True,
+            "message": f"Aggregated metrics for {days} days",
+            "days_processed": days,
+            "successful": success_count,
+            "failed": days - success_count,
+            "total_conversations": total_conversations,
+            "results": results
+        }
+
+    except Exception as e:
+        logger.error(f"Error aggregating metrics: {e}")
         raise HTTPException(status_code=500, detail=str(e))

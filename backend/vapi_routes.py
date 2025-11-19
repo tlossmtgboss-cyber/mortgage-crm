@@ -513,9 +513,36 @@ async def schedule_appointment_function(
         )
 
         db.add(task)
+
+        # Log appointment to AI Receptionist Dashboard
+        from ai_receptionist_dashboard_models import AIReceptionistActivity
+        import uuid as uuid_lib
+
+        appointment_activity = AIReceptionistActivity(
+            id=str(uuid_lib.uuid4()),
+            timestamp=appointment_time or datetime.now(timezone.utc),
+            client_phone=phone,
+            client_name=lead.name if lead else None,
+            action_type='appointment_booked',
+            channel='voice',
+            message_in=f"Appointment request: {appointment_type}",
+            message_out=f"Scheduled {appointment_type} for {appointment_time.strftime('%Y-%m-%d %H:%M') if appointment_time else 'TBD'}",
+            confidence_score=0.95,
+            outcome_status='success',
+            extra_data={
+                'appointment_type': appointment_type,
+                'scheduled_time': appointment_time.isoformat() if appointment_time else None,
+                'task_id': task.id,
+                'activity_id': activity.id,
+                'notes': notes
+            }
+        )
+        db.add(appointment_activity)
+
         db.commit()
         db.refresh(activity)
         db.refresh(task)
+        db.refresh(appointment_activity)
 
         return {
             "success": True,

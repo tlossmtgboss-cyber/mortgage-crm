@@ -258,6 +258,7 @@ class VapiCRMIntegration:
                 Lead.phone == vapi_call.phone_number
             ).first()
 
+            was_new_lead = False
             if not lead:
                 # Create new lead
                 lead = Lead(
@@ -268,8 +269,30 @@ class VapiCRMIntegration:
                 )
                 self.db.add(lead)
                 self.db.flush()
+                was_new_lead = True
 
             vapi_call.lead_id = lead.id
+
+            # Log new lead creation to dashboard
+            if was_new_lead:
+                lead_activity = AIReceptionistActivity(
+                    id=str(uuid.uuid4()),
+                    timestamp=datetime.now(),
+                    client_phone=vapi_call.phone_number,
+                    client_name=vapi_call.caller_name,
+                    action_type='lead_captured',
+                    channel='voice',
+                    message_in="New lead identified from call",
+                    message_out=f"Lead created: {vapi_call.caller_name or vapi_call.phone_number}",
+                    confidence_score=0.9,
+                    outcome_status='success',
+                    extra_data={
+                        'lead_id': lead.id,
+                        'vapi_call_id': vapi_call.vapi_call_id,
+                        'source': 'vapi_call'
+                    }
+                )
+                self.db.add(lead_activity)
 
         except Exception as e:
             logger.error(f"Error creating/updating lead: {e}")
@@ -329,14 +352,18 @@ class VapiCRMIntegration:
             self.db.flush()  # Get the conversation ID
 
             # Create activity feed record
+            # Determine action type based on call direction
+            action_type = 'outbound_call' if vapi_call.direction == 'outbound' else 'incoming_call'
+            message_prefix = "Outbound call to" if vapi_call.direction == 'outbound' else "Incoming call from"
+
             activity = AIReceptionistActivity(
                 id=str(uuid.uuid4()),
                 timestamp=vapi_call.ended_at or datetime.now(),
                 client_phone=vapi_call.phone_number,
                 client_name=vapi_call.caller_name,
-                action_type='incoming_call',
+                action_type=action_type,
                 channel='voice',
-                message_in=f"Incoming call from {vapi_call.caller_name or vapi_call.phone_number}",
+                message_in=f"{message_prefix} {vapi_call.caller_name or vapi_call.phone_number}",
                 message_out=vapi_call.summary or "Call completed",
                 confidence_score=0.9,
                 outcome_status='success' if vapi_call.status == 'ended' else 'failed',
