@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import './setupConsole'; // Disable console.log in production
 import './index.css';
 import App from './App';
 import ErrorBoundary from './ErrorBoundary';
@@ -13,3 +14,4 @@ root.render(
   </React.StrictMode>
 );
 /* Trigger rebuild - Sat Nov 15 07:18:33 EST 2025 */
+// Force rebuild $(date)

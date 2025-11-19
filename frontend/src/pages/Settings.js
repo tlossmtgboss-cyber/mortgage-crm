@@ -5,6 +5,7 @@ import MissionControl from './MissionControl';
 import AIReceptionist from '../components/AIReceptionist';
 import MyProfile from './MyProfile';
 import ExperimentsDashboard from './ExperimentsDashboard';
+import TaskWorkflowManager from '../components/TaskWorkflowManager';
 import './Settings.css';
 
 function Settings() {
@@ -1381,6 +1382,14 @@ const API_BASE_URL = isProduction
             <span>A/B Testing</span>
           </button>
 
+          <button
+            className={`sidebar-btn ${activeSection === 'task-workflow' ? 'active' : ''}`}
+            onClick={() => setActiveSection('task-workflow')}
+          >
+            <span className="icon">📋</span>
+            <span>Task & Workflow Management</span>
+          </button>
+
           {/* Integrations - Conditionally Expandable based on connected apps */}
           {(microsoftStatus.connected || calendlyEventTypes.length > 0 || twilioStatus.configured) ? (
             <>
@@ -1617,6 +1626,10 @@ const API_BASE_URL = isProduction
 
           {activeSection === 'experiments' && (
             <ExperimentsDashboard />
+          )}
+
+          {activeSection === 'task-workflow' && (
+            <TaskWorkflowManager />
           )}
 
           {/* OUTLOOK EMAIL */}

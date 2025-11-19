@@ -111,6 +111,12 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
           >
             AI Receptionist
           </Link>
+          <Link
+            to="/voice-os-dashboard"
+            className={`nav-link ${isActive('/voice-os-dashboard') ? 'active' : ''}`}
+          >
+            Voice OS
+          </Link>
         </div>
 
         <div className="nav-actions">

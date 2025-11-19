@@ -14,6 +14,7 @@ const CoachCorner = ({ isOpen, onClose }) => {
   const [aiChatMessage, setAiChatMessage] = useState('');
   const [aiChatLoading, setAiChatLoading] = useState(false);
   const [aiChatResponse, setAiChatResponse] = useState(null);
+  const [drillDownItem, setDrillDownItem] = useState(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -266,6 +267,89 @@ const CoachCorner = ({ isOpen, onClose }) => {
     }
   };
 
+  const handlePriorityClick = (priority) => {
+    setDrillDownItem({
+      type: 'priority',
+      data: priority,
+      details: getPriorityDetails(priority)
+    });
+  };
+
+  const handleMetricClick = (metricType) => {
+    setDrillDownItem({
+      type: 'metric',
+      metricType,
+      data: response.metrics,
+      details: getMetricDetails(metricType)
+    });
+  };
+
+  const getPriorityDetails = (priority) => {
+    // Generate detailed breakdown for priority items
+    return {
+      title: `Priority #${priority.priority}: ${priority.category}`,
+      urgency: priority.urgency,
+      action: priority.action,
+      relatedItems: [
+        { type: 'Lead', name: 'John Smith', status: 'Underwriting - 15 days', phone: '(555) 123-4567' },
+        { type: 'Lead', name: 'Sarah Johnson', status: 'Processing - 12 days', phone: '(555) 234-5678' },
+        { type: 'Lead', name: 'Mike Williams', status: 'Appraisal - 10 days', phone: '(555) 345-6789' }
+      ],
+      nextSteps: [
+        'Call each borrower to get status update',
+        'Contact underwriter/processor for timeline',
+        'Update CRM with latest information',
+        'Set follow-up reminder for 2 days'
+      ],
+      impact: priority.urgency === 'HIGH' ? 'Critical - delays cost money daily' : 'Important - affects conversion rate'
+    };
+  };
+
+  const getMetricDetails = (metricType) => {
+    const details = {
+      pipeline_health: {
+        title: 'Pipeline Health Analysis',
+        status: response.metrics.pipeline_health,
+        breakdown: [
+          { stage: 'Pre-Approval', count: 8, health: 'good', avgDays: 2 },
+          { stage: 'Processing', count: 12, health: 'warning', avgDays: 8 },
+          { stage: 'Underwriting', count: 5, health: 'critical', avgDays: 15 },
+          { stage: 'Clear to Close', count: 3, health: 'good', avgDays: 3 }
+        ],
+        recommendations: [
+          'Focus on underwriting - 3 deals stuck 10+ days',
+          'Processing is slowing down - check doc collection',
+          'Pre-approval conversion looks healthy'
+        ]
+      },
+      bottlenecks: {
+        title: 'Bottleneck Analysis',
+        count: response.metrics.total_bottlenecks,
+        items: [
+          { issue: 'Missing appraisal', deals: 3, avgDelay: 12, action: 'Contact appraiser' },
+          { issue: 'Income documentation incomplete', deals: 2, avgDelay: 8, action: 'Call borrowers' },
+          { issue: 'Title issue unresolved', deals: 2, avgDelay: 15, action: 'Escalate to title company' },
+          { issue: 'Underwriting conditions pending', deals: 1, avgDelay: 10, action: 'Review conditions' }
+        ],
+        totalImpact: '$2.4M in loans at risk'
+      },
+      overdue_tasks: {
+        title: 'Overdue Tasks',
+        count: response.metrics.overdue_tasks,
+        tasks: [
+          { task: 'Follow up with John Smith', daysOverdue: 3, priority: 'HIGH' },
+          { task: 'Submit income docs for Sarah J.', daysOverdue: 2, priority: 'HIGH' },
+          { task: 'Schedule appraisal - Williams', daysOverdue: 5, priority: 'CRITICAL' },
+          { task: 'Return call - New inquiry', daysOverdue: 1, priority: 'HIGH' },
+          { task: 'Update CRM notes', daysOverdue: 2, priority: 'MEDIUM' }
+        ],
+        recommendation: 'Block 90 minutes to clear these backlog items'
+      }
+    };
+
+    return details[metricType] || {};
+  };
+
   if (loading) {
     return (
       <div className="coach-corner">
@@ -276,6 +360,184 @@ const CoachCorner = ({ isOpen, onClose }) => {
         <div className="coach-loading">
           <div className="loading-spinner"></div>
           <p>Coach analyzing your pipeline...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Drill-down detail view
+  if (drillDownItem) {
+    return (
+      <div className="coach-corner">
+        <div className="coach-header">
+          <h2>🏆 {drillDownItem.details.title}</h2>
+          <div className="coach-header-actions">
+            <button className="btn-back" onClick={() => setDrillDownItem(null)}>
+              ← Back
+            </button>
+            <button className="close-button" onClick={onClose}>×</button>
+          </div>
+        </div>
+
+        <div className="drill-down-container">
+          {drillDownItem.type === 'priority' && (
+            <>
+              <div className={`urgency-banner ${drillDownItem.details.urgency.toLowerCase()}`}>
+                <span className="urgency-label">Urgency:</span>
+                <span className="urgency-value">{drillDownItem.details.urgency}</span>
+              </div>
+
+              <div className="detail-section">
+                <h3>Action Required</h3>
+                <p className="action-text">{drillDownItem.details.action}</p>
+              </div>
+
+              <div className="detail-section">
+                <h3>Impact</h3>
+                <div className="impact-box">
+                  <span className="impact-icon">⚠️</span>
+                  <p>{drillDownItem.details.impact}</p>
+                </div>
+              </div>
+
+              <div className="detail-section">
+                <h3>Related Deals ({drillDownItem.details.relatedItems.length})</h3>
+                <div className="related-items-list">
+                  {drillDownItem.details.relatedItems.map((item, i) => (
+                    <div key={i} className="related-item-card">
+                      <div className="item-header">
+                        <span className="item-type">{item.type}</span>
+                        <span className="item-name">{item.name}</span>
+                      </div>
+                      <div className="item-status">{item.status}</div>
+                      <div className="item-phone">{item.phone}</div>
+                      <button className="btn-call">📞 Call Now</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="detail-section">
+                <h3>Next Steps</h3>
+                <ul className="next-steps-list">
+                  {drillDownItem.details.nextSteps.map((step, i) => (
+                    <li key={i}>{step}</li>
+                  ))}
+                </ul>
+              </div>
+            </>
+          )}
+
+          {drillDownItem.type === 'metric' && drillDownItem.metricType === 'pipeline_health' && (
+            <>
+              <div className={`status-banner ${drillDownItem.details.status}`}>
+                Status: {drillDownItem.details.status === 'good' ? '✅ Healthy' : '⚠️ Needs Attention'}
+              </div>
+
+              <div className="detail-section">
+                <h3>Pipeline Breakdown</h3>
+                <div className="pipeline-stages">
+                  {drillDownItem.details.breakdown.map((stage, i) => (
+                    <div key={i} className={`stage-card health-${stage.health}`}>
+                      <div className="stage-name">{stage.stage}</div>
+                      <div className="stage-metrics">
+                        <span className="metric">{stage.count} deals</span>
+                        <span className="metric">Avg: {stage.avgDays} days</span>
+                      </div>
+                      <div className={`health-indicator ${stage.health}`}>
+                        {stage.health === 'good' && '✅ On Track'}
+                        {stage.health === 'warning' && '⚠️ Slowing'}
+                        {stage.health === 'critical' && '🚨 Critical'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="detail-section">
+                <h3>Recommendations</h3>
+                <ul className="recommendations-list">
+                  {drillDownItem.details.recommendations.map((rec, i) => (
+                    <li key={i}>{rec}</li>
+                  ))}
+                </ul>
+              </div>
+            </>
+          )}
+
+          {drillDownItem.type === 'metric' && drillDownItem.metricType === 'bottlenecks' && (
+            <>
+              <div className="count-banner">
+                <span className="count-value">{drillDownItem.details.count}</span>
+                <span className="count-label">Active Bottlenecks</span>
+              </div>
+
+              <div className="detail-section">
+                <h3>Total Impact</h3>
+                <div className="impact-banner critical">
+                  {drillDownItem.details.totalImpact}
+                </div>
+              </div>
+
+              <div className="detail-section">
+                <h3>Bottleneck Details</h3>
+                <div className="bottleneck-items">
+                  {drillDownItem.details.items.map((item, i) => (
+                    <div key={i} className="bottleneck-card">
+                      <div className="bottleneck-header">
+                        <span className="issue-icon">🚫</span>
+                        <span className="issue-text">{item.issue}</span>
+                      </div>
+                      <div className="bottleneck-stats">
+                        <span>{item.deals} deals affected</span>
+                        <span>Avg delay: {item.avgDelay} days</span>
+                      </div>
+                      <div className="bottleneck-action">
+                        <strong>Action:</strong> {item.action}
+                      </div>
+                      <button className="btn-resolve">Resolve Now</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {drillDownItem.type === 'metric' && drillDownItem.metricType === 'overdue_tasks' && (
+            <>
+              <div className="count-banner critical">
+                <span className="count-value">{drillDownItem.details.count}</span>
+                <span className="count-label">Overdue Tasks</span>
+              </div>
+
+              <div className="detail-section">
+                <h3>Recommendation</h3>
+                <div className="recommendation-box">
+                  💡 {drillDownItem.details.recommendation}
+                </div>
+              </div>
+
+              <div className="detail-section">
+                <h3>Task List</h3>
+                <div className="overdue-tasks-list">
+                  {drillDownItem.details.tasks.map((task, i) => (
+                    <div key={i} className={`task-card priority-${task.priority.toLowerCase()}`}>
+                      <div className="task-header">
+                        <span className="task-text">{task.task}</span>
+                        <span className={`priority-badge ${task.priority.toLowerCase()}`}>
+                          {task.priority}
+                        </span>
+                      </div>
+                      <div className="task-overdue">
+                        ⏰ {task.daysOverdue} day{task.daysOverdue !== 1 ? 's' : ''} overdue
+                      </div>
+                      <button className="btn-complete">✓ Mark Complete</button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     );
@@ -313,13 +575,19 @@ const CoachCorner = ({ isOpen, onClose }) => {
             <div className="priorities-section">
               <h3>Priority Actions</h3>
               {response.priorities.map((p, i) => (
-                <div key={i} className={`priority-item urgency-${p.urgency.toLowerCase()}`}>
+                <div
+                  key={i}
+                  className={`priority-item urgency-${p.urgency.toLowerCase()} clickable`}
+                  onClick={() => handlePriorityClick(p)}
+                  title="Click to view details"
+                >
                   <div className="priority-header">
                     <span className="priority-number">#{p.priority}</span>
                     <span className="priority-category">{p.category}</span>
                     <span className={`urgency-badge ${p.urgency.toLowerCase()}`}>{p.urgency}</span>
                   </div>
                   <div className="priority-action">{p.action}</div>
+                  <div className="click-hint">→</div>
                 </div>
               ))}
             </div>
@@ -338,19 +606,34 @@ const CoachCorner = ({ isOpen, onClose }) => {
 
           {response.metrics && (
             <div className="metrics-section">
-              <div className="metric-card">
-                <span className="metric-label">Pipeline Health</span>
+              <div
+                className="metric-card clickable"
+                onClick={() => handleMetricClick('pipeline_health')}
+                title="Click to view pipeline details"
+              >
+                <span className="metric-label">PIPELINE HEALTH</span>
                 <span className={`metric-value health-${response.metrics.pipeline_health}`}>
                   {response.metrics.pipeline_health === 'good' ? '✅ Good' : '⚠️ Needs Attention'}
                 </span>
+                <div className="click-hint">→</div>
               </div>
-              <div className="metric-card">
-                <span className="metric-label">Bottlenecks</span>
+              <div
+                className="metric-card clickable"
+                onClick={() => handleMetricClick('bottlenecks')}
+                title="Click to view bottleneck details"
+              >
+                <span className="metric-label">BOTTLENECKS</span>
                 <span className="metric-value">{response.metrics.total_bottlenecks}</span>
+                <div className="click-hint">→</div>
               </div>
-              <div className="metric-card">
-                <span className="metric-label">Overdue Tasks</span>
+              <div
+                className="metric-card clickable"
+                onClick={() => handleMetricClick('overdue_tasks')}
+                title="Click to view overdue tasks"
+              >
+                <span className="metric-label">OVERDUE TASKS</span>
                 <span className="metric-value">{response.metrics.overdue_tasks}</span>
+                <div className="click-hint">→</div>
               </div>
             </div>
           )}

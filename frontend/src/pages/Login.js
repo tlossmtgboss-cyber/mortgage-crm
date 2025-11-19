@@ -1,15 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { authAPI } from '../services/api';
+import { authAPI, API_BASE_URL } from '../services/api';
 import { setAuth } from '../utils/auth';
 import './Login.css';
-
-// Use HTTPS Railway URL in production, localhost for development
-const isProduction = window.location.hostname.includes('vercel.app');
-const API_BASE_URL = isProduction
-  ? 'https://mortgage-crm-production-7a9a.up.railway.app'
-  : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
 function Login() {
   const [email, setEmail] = useState('');

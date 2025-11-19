@@ -1,0 +1,455 @@
+.task-workflow-manager {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  margin: 20px 0;
+}
+
+.manager-header {
+  margin-bottom: 24px;
+}
+
+.manager-header h2 {
+  font-size: 24px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 8px 0;
+}
+
+.manager-header p {
+  font-size: 14px;
+  color: #666;
+  margin: 0;
+}
+
+.message-banner {
+  padding: 12px 16px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+}
+
+.message-banner.success {
+  background: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.message-banner.error {
+  background: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+.message-banner .close-btn {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: inherit;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+}
+
+.manager-tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 2px solid #e0e0e0;
+  margin-bottom: 24px;
+}
+
+.tab-btn {
+  padding: 12px 20px;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
+  transition: all 0.2s;
+  position: relative;
+  bottom: -2px;
+}
+
+.tab-btn:hover {
+  color: #0066cc;
+}
+
+.tab-btn.active {
+  color: #0066cc;
+  border-bottom-color: #0066cc;
+}
+
+.manager-content {
+  min-height: 400px;
+}
+
+/* Bulk Upload Section */
+.bulk-upload-section {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.upload-instructions {
+  background: #f8f9fa;
+  padding: 20px;
+  border-radius: 6px;
+  border-left: 4px solid #0066cc;
+}
+
+.upload-instructions h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 12px 0;
+  color: #1a1a1a;
+}
+
+.upload-instructions p {
+  font-size: 14px;
+  color: #666;
+  margin: 0 0 12px 0;
+}
+
+.upload-instructions code {
+  display: block;
+  background: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  margin: 12px 0;
+}
+
+.example-box {
+  background: white;
+  padding: 16px;
+  border-radius: 4px;
+  margin-top: 12px;
+}
+
+.example-box pre {
+  margin: 8px 0 0 0;
+  font-size: 12px;
+  overflow-x: auto;
+  background: #f8f9fa;
+  padding: 12px;
+  border-radius: 4px;
+}
+
+.upload-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+}
+
+.user-select,
+.workflow-select,
+.select-input {
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.user-select:focus,
+.workflow-select:focus,
+.select-input:focus {
+  outline: none;
+  border-color: #0066cc;
+}
+
+.file-input {
+  padding: 10px;
+  border: 2px dashed #ddd;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.file-input:hover {
+  border-color: #0066cc;
+}
+
+.csv-preview {
+  background: #f8f9fa;
+  padding: 16px;
+  border-radius: 6px;
+  margin-top: 16px;
+}
+
+.csv-preview h4 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0 0 12px 0;
+  color: #333;
+}
+
+.preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border-radius: 4px;
+  overflow: hidden;
+  font-size: 13px;
+}
+
+.preview-table th {
+  background: #e9ecef;
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 600;
+  color: #495057;
+  border-bottom: 2px solid #dee2e6;
+}
+
+.preview-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #e9ecef;
+  color: #495057;
+}
+
+.preview-table tr:last-child td {
+  border-bottom: none;
+}
+
+.upload-btn,
+.assign-btn,
+.create-btn {
+  padding: 12px 24px;
+  background: #0066cc;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+  align-self: flex-start;
+}
+
+.upload-btn:hover:not(:disabled),
+.assign-btn:hover:not(:disabled),
+.create-btn:hover:not(:disabled) {
+  background: #0052a3;
+}
+
+.upload-btn:disabled,
+.assign-btn:disabled,
+.create-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 12px;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #0066cc, #0052a3);
+  transition: width 0.3s;
+}
+
+/* Workflow Assignment Section */
+.workflow-assign-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.workflow-assign-section h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+  color: #1a1a1a;
+}
+
+.workflow-assign-section > p {
+  font-size: 14px;
+  color: #666;
+  margin: -8px 0 0 0;
+}
+
+.assign-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.workflow-preview {
+  background: #f8f9fa;
+  padding: 20px;
+  border-radius: 6px;
+  border-left: 4px solid #0066cc;
+}
+
+.workflow-preview h4 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+  color: #1a1a1a;
+}
+
+.workflow-preview p {
+  font-size: 14px;
+  color: #666;
+  margin: 0 0 16px 0;
+}
+
+.workflow-tasks {
+  margin-top: 12px;
+}
+
+.workflow-tasks strong {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 8px;
+  color: #333;
+}
+
+.workflow-tasks ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.workflow-tasks li {
+  padding: 8px 12px;
+  background: white;
+  border-radius: 4px;
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.task-title {
+  font-size: 13px;
+  color: #333;
+}
+
+.priority-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.priority-badge.low {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.priority-badge.medium {
+  background: #fff3e0;
+  color: #f57c00;
+}
+
+.priority-badge.high {
+  background: #ffebee;
+  color: #d32f2f;
+}
+
+.priority-badge.urgent {
+  background: #f3e5f5;
+  color: #7b1fa2;
+}
+
+/* Single Task Section */
+.single-task-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.single-task-section h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+  color: #1a1a1a;
+}
+
+.task-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 800px;
+}
+
+.text-input,
+.textarea-input,
+.date-input {
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+
+.text-input:focus,
+.textarea-input:focus,
+.date-input:focus {
+  outline: none;
+  border-color: #0066cc;
+}
+
+.textarea-input {
+  resize: vertical;
+  min-height: 100px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 768px) {
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .manager-tabs {
+    flex-direction: column;
+  }
+
+  .tab-btn {
+    border-left: 3px solid transparent;
+    border-bottom: none;
+    text-align: left;
+    bottom: 0;
+  }
+
+  .tab-btn.active {
+    border-left-color: #0066cc;
+    border-bottom-color: transparent;
+  }
+}

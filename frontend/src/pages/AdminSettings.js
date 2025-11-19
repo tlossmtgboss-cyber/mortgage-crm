@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { API_BASE_URL } from '../services/api';
 import './AdminSettings.css';
 
 const AdminSettings = () => {
@@ -10,7 +11,7 @@ const AdminSettings = () => {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(
-        `https://mortgage-crm-production-7a9a.up.railway.app/api/v1/admin/certification-jobs/${jobType}`,
+        `${API_BASE_URL}/api/v1/admin/certification-jobs/${jobType}`,
         {
           method: 'POST',
           headers: {

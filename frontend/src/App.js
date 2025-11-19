@@ -57,6 +57,7 @@ const BuyerIntake = lazy(() => import('./pages/BuyerIntake'));
 const VerizonTest = lazy(() => import('./pages/VerizonTest'));
 const PipelineEfficiency = lazy(() => import('./pages/PipelineEfficiency'));
 const AIReceptionistDashboard = lazy(() => import('./pages/AIReceptionistDashboard'));
+const VoiceOSDashboard = lazy(() => import('./pages/VoiceOSDashboard'));
 
 // Simple loading component
 const PageLoader = () => (
@@ -538,6 +539,26 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><AIReceptionistDashboard /></LazyPage>
+                  </main>
+                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/voice-os-dashboard"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><VoiceOSDashboard /></LazyPage>
                   </main>
                   <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />

@@ -236,7 +236,7 @@ function TeamMembers() {
       <div className="page-header">
         <div>
           <h1>Team Members</h1>
-          <p>{safeMembers.length} total team members</p>
+          <p>{String(safeMembers.length)} total team members</p>
         </div>
         <button className="btn-primary" onClick={handleAddMember}>
           + Add Team Member
@@ -292,15 +292,15 @@ function TeamMembers() {
                   >
                     <td className="lead-name">
                       <strong>
-                        {member.first_name || ''} {member.last_name || ''}
+                        {`${member.first_name || ''} ${member.last_name || ''}`.trim() || 'No Name'}
                       </strong>
                     </td>
-                    <td>{member.email || 'N/A'}</td>
-                    <td>{member.phone || 'N/A'}</td>
+                    <td>{String(member.email || 'N/A')}</td>
+                    <td>{String(member.phone || 'N/A')}</td>
                     <td>
-                      <span className="status-badge status-prospect">{member.role || 'Team Member'}</span>
+                      <span className="status-badge status-prospect">{String(member.role || 'Team Member')}</span>
                     </td>
-                    <td>{member.title || 'N/A'}</td>
+                    <td>{String(member.title || 'N/A')}</td>
                     <td>
                       <div className="table-actions">
                         <button
