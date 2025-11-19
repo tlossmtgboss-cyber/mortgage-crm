@@ -12581,83 +12581,97 @@ If you're not certain about specific current limits or requirements, acknowledge
 
         answer = message.content[0].text
 
-        # Generate intelligent source links based on question topic
+        # Generate intelligent source links from official guideline updates database
         sources = []
         question_lower = question.lower()
 
-        # Map common topics to relevant guideline pages
-        if 'fha' in question_lower:
-            sources.append({
-                "title": "FHA Loan Guidelines",
-                "url": "https://my.mortgageguidelines.com/single-family/fha"
-            })
+        # Import guideline updates model
+        from guideline_updates_models import GuidelineUpdate
 
-        if 'va' in question_lower or 'veteran' in question_lower:
-            sources.append({
-                "title": "VA Loan Guidelines",
-                "url": "https://my.mortgageguidelines.com/single-family/va"
-            })
+        # Get database session
+        db = SessionLocal()
 
-        if 'usda' in question_lower or 'rural' in question_lower:
-            sources.append({
-                "title": "USDA Loan Guidelines",
-                "url": "https://my.mortgageguidelines.com/single-family/usda"
-            })
+        try:
+            # Determine which sources to query based on question keywords
+            sources_to_query = []
 
-        if 'conventional' in question_lower or 'fannie' in question_lower or 'freddie' in question_lower:
-            sources.append({
-                "title": "Conventional Loan Guidelines",
-                "url": "https://my.mortgageguidelines.com/single-family/conventional"
-            })
+            if 'fha' in question_lower:
+                sources_to_query.append('fha')
+            if 'va' in question_lower or 'veteran' in question_lower:
+                sources_to_query.append('va')
+            if 'usda' in question_lower or 'rural' in question_lower:
+                sources_to_query.append('usda')
+            if 'fannie' in question_lower or 'fannie mae' in question_lower:
+                sources_to_query.append('fannie_mae')
+            if 'freddie' in question_lower or 'freddie mac' in question_lower:
+                sources_to_query.append('freddie_mac')
+            if 'conventional' in question_lower:
+                sources_to_query.extend(['fannie_mae', 'freddie_mac'])
 
-        if 'dti' in question_lower or 'debt' in question_lower:
-            sources.append({
-                "title": "DTI Requirements",
-                "url": "https://my.mortgageguidelines.com/topics/debt-to-income"
-            })
+            # If no specific source identified, search all sources
+            if not sources_to_query:
+                sources_to_query = ['fannie_mae', 'freddie_mac', 'fha', 'va', 'usda']
 
-        if 'credit' in question_lower or 'score' in question_lower:
-            sources.append({
-                "title": "Credit Score Requirements",
-                "url": "https://my.mortgageguidelines.com/topics/credit"
-            })
+            # Remove duplicates
+            sources_to_query = list(set(sources_to_query))
 
-        if 'self-employed' in question_lower or 'self employed' in question_lower:
-            sources.append({
-                "title": "Self-Employed Borrower Guidelines",
-                "url": "https://my.mortgageguidelines.com/topics/self-employed"
-            })
+            # Query recent guideline updates from identified sources
+            for source_name in sources_to_query:
+                recent_updates = db.query(GuidelineUpdate).filter(
+                    GuidelineUpdate.source == source_name
+                ).order_by(
+                    GuidelineUpdate.published_date.desc()
+                ).limit(2).all()
 
-        if 'investment' in question_lower or 'rental' in question_lower:
-            sources.append({
-                "title": "Investment Property Guidelines",
-                "url": "https://my.mortgageguidelines.com/topics/investment-properties"
-            })
+                for update in recent_updates:
+                    sources.append({
+                        "title": update.title,
+                        "url": update.url,
+                        "section_code": update.section_code
+                    })
 
-        if 'cash-out' in question_lower or 'refinance' in question_lower:
-            sources.append({
-                "title": "Refinance Guidelines",
-                "url": "https://my.mortgageguidelines.com/topics/refinance"
-            })
+            # Limit to 5 most relevant sources
+            sources = sources[:5]
 
-        if 'ltv' in question_lower or 'loan-to-value' in question_lower:
-            sources.append({
-                "title": "LTV Requirements",
-                "url": "https://my.mortgageguidelines.com/topics/ltv"
-            })
+            # If no sources found in database, add official guideline home pages
+            if not sources:
+                if 'fha' in question_lower:
+                    sources.append({
+                        "title": "FHA Single Family Housing Policy Handbook",
+                        "url": "https://www.hud.gov/program_offices/administration/hudclips/handbooks/hsgh"
+                    })
+                if 'va' in question_lower:
+                    sources.append({
+                        "title": "VA Lender's Handbook",
+                        "url": "https://www.benefits.va.gov/HOMELOANS/documents/docs/va_lenders_handbook.pdf"
+                    })
+                if 'usda' in question_lower:
+                    sources.append({
+                        "title": "USDA Single Family Housing Guaranteed Loan Program",
+                        "url": "https://www.rd.usda.gov/programs-services/single-family-housing-programs/single-family-housing-guaranteed-loan-program"
+                    })
+                if 'fannie' in question_lower or 'conventional' in question_lower:
+                    sources.append({
+                        "title": "Fannie Mae Selling Guide",
+                        "url": "https://selling-guide.fanniemae.com/"
+                    })
+                if 'freddie' in question_lower or 'conventional' in question_lower:
+                    sources.append({
+                        "title": "Freddie Mac Single-Family Seller/Servicer Guide",
+                        "url": "https://guide.freddiemac.com/"
+                    })
 
-        if 'reserve' in question_lower:
-            sources.append({
-                "title": "Reserve Requirements",
-                "url": "https://my.mortgageguidelines.com/topics/reserves"
-            })
-
-        # If no specific sources matched, add general guidelines page
-        if not sources:
-            sources.append({
-                "title": "Mortgage Guidelines",
-                "url": "https://my.mortgageguidelines.com/"
-            })
+                # If still no sources, add all official guideline home pages
+                if not sources:
+                    sources = [
+                        {"title": "Fannie Mae Selling Guide", "url": "https://selling-guide.fanniemae.com/"},
+                        {"title": "Freddie Mac Seller/Servicer Guide", "url": "https://guide.freddiemac.com/"},
+                        {"title": "FHA Single Family Housing", "url": "https://www.hud.gov/program_offices/housing/sfh"},
+                        {"title": "VA Home Loans", "url": "https://www.benefits.va.gov/homeloans/"},
+                        {"title": "USDA Rural Development", "url": "https://www.rd.usda.gov/"}
+                    ]
+        finally:
+            db.close()
 
         # Calculate confidence based on message usage
         # Higher token usage generally indicates more comprehensive, confident answers
