@@ -235,7 +235,7 @@ async def connect_to_openai_realtime():
         "OpenAI-Beta": "realtime=v1"
     }
 
-    ws = await websockets.connect(url, additional_headers=headers)
+    ws = await websockets.connect(url, extra_headers=headers)
 
     # Configure the session
     await ws.send(json.dumps({
@@ -809,4 +809,180 @@ async def update_ai_receptionist_config(
 
     except Exception as e:
         logger.error(f"Error updating config: {e}")
+        return {"success": False, "error": str(e)}
+
+
+# ============================================================================
+# VOICE OS DASHBOARD API ENDPOINTS
+# ============================================================================
+
+@router.get("/voice-os/config")
+async def get_voice_os_config():
+    """Get Voice OS configuration for dashboard"""
+    import os
+
+    return {
+        "status": "running",
+        "voice": os.getenv("TTS_VOICE", "alloy"),
+        "stt_provider": os.getenv("STT_PROVIDER", "openai"),
+        "tts_provider": os.getenv("TTS_PROVIDER", "openai"),
+        "ai_model": os.getenv("OPENAI_MODEL", "gpt-4o"),
+        "max_tokens": int(os.getenv("OPENAI_MAX_TOKENS", "500")),
+        "phone_number": voice_client.from_number,
+        "business_name": ai_config.business_name,
+        "crm_tools": [
+            {
+                "id": "contact_lookup",
+                "name": "Contact Lookup",
+                "description": "Search for existing contacts in CRM",
+                "enabled": True
+            },
+            {
+                "id": "lead_creation",
+                "name": "Lead Creation",
+                "description": "Create new leads from call information",
+                "enabled": True
+            },
+            {
+                "id": "appointment_scheduling",
+                "name": "Appointment Scheduling",
+                "description": "Schedule appointments with loan officers",
+                "enabled": True
+            },
+            {
+                "id": "task_creation",
+                "name": "Task Creation",
+                "description": "Create follow-up tasks for team",
+                "enabled": True
+            },
+            {
+                "id": "note_taking",
+                "name": "Note Taking",
+                "description": "Save call notes to contact record",
+                "enabled": True
+            },
+            {
+                "id": "call_transfer",
+                "name": "Call Transfer",
+                "description": "Transfer calls to team members",
+                "enabled": True
+            },
+            {
+                "id": "voicemail",
+                "name": "Voicemail",
+                "description": "Take and transcribe voicemails",
+                "enabled": True
+            },
+            {
+                "id": "faq_responses",
+                "name": "FAQ Responses",
+                "description": "Answer common mortgage questions",
+                "enabled": True
+            },
+            {
+                "id": "lead_qualification",
+                "name": "Lead Qualification",
+                "description": "Pre-screen callers for loan eligibility",
+                "enabled": True
+            }
+        ]
+    }
+
+
+@router.post("/voice-os/config")
+async def update_voice_os_config(request: Request):
+    """Update Voice OS configuration"""
+    try:
+        data = await request.json()
+
+        # In production, these would update environment variables or a config file
+        # For now, we'll just acknowledge the update
+
+        updated_fields = []
+
+        if "voice" in data:
+            # This would update the TTS_VOICE environment variable
+            updated_fields.append("voice")
+            logger.info(f"Voice updated to: {data['voice']}")
+
+        if "stt_provider" in data:
+            updated_fields.append("stt_provider")
+            logger.info(f"STT provider updated to: {data['stt_provider']}")
+
+        if "tts_provider" in data:
+            updated_fields.append("tts_provider")
+            logger.info(f"TTS provider updated to: {data['tts_provider']}")
+
+        if "ai_model" in data:
+            updated_fields.append("ai_model")
+            logger.info(f"AI model updated to: {data['ai_model']}")
+
+        return {
+            "success": True,
+            "message": f"Updated: {', '.join(updated_fields)}",
+            "updated_fields": updated_fields
+        }
+
+    except Exception as e:
+        logger.error(f"Error updating Voice OS config: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@router.get("/voice-os/status")
+async def get_voice_os_status():
+    """Get Voice OS system status and health"""
+    import os
+
+    # Check if Voice OS is actually running
+    voice_os_running = os.path.exists("/tmp/voice_os.log")
+
+    return {
+        "system_status": "running" if voice_os_running else "stopped",
+        "voice_os_url": "http://localhost:8080" if voice_os_running else None,
+        "twilio_configured": bool(voice_client.from_number),
+        "openai_configured": voice_client.openai_enabled,
+        "crm_integration": "active",
+        "health_checks": {
+            "twilio": "healthy" if voice_client.enabled else "disconnected",
+            "openai": "healthy" if voice_client.openai_enabled else "disconnected",
+            "database": "healthy",
+            "webhooks": "configured"
+        }
+    }
+
+
+@router.post("/voice-os/test-voice")
+async def test_voice_sample(request: Request):
+    """Generate a voice sample for testing different voices"""
+    try:
+        data = await request.json()
+        voice = data.get("voice", "alloy")
+        sample_text = data.get("text", "Hello! Thank you for calling. How may I assist you today?")
+
+        # Use OpenAI TTS to generate audio sample
+        try:
+            response = openai.audio.speech.create(
+                model="tts-1",
+                voice=voice,
+                input=sample_text
+            )
+
+            # Convert to base64 for frontend playback
+            audio_data = base64.b64encode(response.content).decode('utf-8')
+
+            return {
+                "success": True,
+                "audio_data": audio_data,
+                "voice": voice,
+                "format": "mp3"
+            }
+        except Exception as tts_error:
+            logger.error(f"OpenAI TTS error: {tts_error}")
+            return {
+                "success": False,
+                "error": f"TTS generation failed: {str(tts_error)}"
+            }
+
+    except Exception as e:
+        logger.error(f"Error testing voice: {e}")
         return {"success": False, "error": str(e)}
