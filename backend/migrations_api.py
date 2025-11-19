@@ -90,13 +90,13 @@ async def update_guideline_urls(
             'fannie_mae': [
                 {
                     'title': 'Selling Guide Announcement SEL-2024-08',
-                    'url': 'https://singlefamily.fanniemae.com/originating-underwriting/mortgage-products/conventional-mortgage-loans',
-                    'description': 'Conventional mortgage loan requirements and eligibility criteria'
+                    'url': 'https://singlefamily.fanniemae.com/originating-underwriting',
+                    'description': 'Fannie Mae originating and underwriting guidelines'
                 },
                 {
                     'title': 'Selling Guide Announcement SEL-2024-07',
-                    'url': 'https://singlefamily.fanniemae.com/originating-underwriting/credit-assessment',
-                    'description': 'Credit assessment and income verification guidelines'
+                    'url': 'https://singlefamily.fanniemae.com/delivering-selling',
+                    'description': 'Fannie Mae delivering and selling guidelines'
                 }
             ],
 
@@ -104,13 +104,13 @@ async def update_guideline_urls(
             'freddie_mac': [
                 {
                     'title': 'Bulletin 2024-15: Updated DTI Requirements',
-                    'url': 'https://sf.freddiemac.com/working-with-us/origination-underwriting/mortgage-eligibility',
-                    'description': 'Debt-to-income ratio requirements and mortgage eligibility'
+                    'url': 'https://sf.freddiemac.com/working-with-us',
+                    'description': 'Freddie Mac seller/servicer guidelines and resources'
                 },
                 {
                     'title': 'Bulletin 2024-14: Appraisal Modernization',
-                    'url': 'https://sf.freddiemac.com/working-with-us/origination-underwriting/appraisal-property',
-                    'description': 'Property appraisal and valuation requirements'
+                    'url': 'https://sf.freddiemac.com/tools-learning',
+                    'description': 'Freddie Mac tools and learning resources'
                 }
             ],
 
@@ -118,13 +118,13 @@ async def update_guideline_urls(
             'fha': [
                 {
                     'title': 'Mortgagee Letter 2024-11: Credit Score Requirements',
-                    'url': 'https://www.hud.gov/program_offices/housing/sfh/ins/203b',
-                    'description': 'FHA 203(b) mortgage insurance program requirements'
+                    'url': 'https://www.hud.gov/program_offices/housing/sfh/ins',
+                    'description': 'FHA mortgage insurance programs and requirements'
                 },
                 {
                     'title': 'Mortgagee Letter 2024-10: Property Flip Requirements',
-                    'url': 'https://www.hud.gov/program_offices/housing/sfh/handbook_4000-1',
-                    'description': 'FHA Single Family Housing Policy Handbook'
+                    'url': 'https://www.hud.gov/program_offices/administration/hudclips/letters/mortgagee',
+                    'description': 'FHA mortgagee letters and policy updates'
                 }
             ],
 
