@@ -124,8 +124,15 @@ async def voice_stream_websocket(websocket: WebSocket, db: Session = Depends(get
     WebSocket endpoint for Twilio Media Streams -> OpenAI Realtime API
     Handles bidirectional audio streaming for AI conversations
     """
-    await websocket.accept()
-    logger.info("Voice stream WebSocket connected")
+    logger.info(f"🔌 WebSocket connection attempt from: {websocket.client}")
+    logger.info(f"🔌 Headers: {dict(websocket.headers)}")
+
+    try:
+        await websocket.accept()
+        logger.info("✅ Voice stream WebSocket connected successfully!")
+    except Exception as e:
+        logger.error(f"❌ Failed to accept WebSocket: {e}")
+        raise
 
     # Store call context
     call_context = {
