@@ -218,3 +218,40 @@ async def scrape_mortgage_guidelines(
     except Exception as e:
         logger.error(f"Scraper error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/clear-guidelines")
+async def clear_guideline_updates(
+    admin: Any = Depends(get_admin_user)
+):
+    """
+    Clear all guideline updates and user views from database
+    Use this before running the scraper to get fresh data
+    """
+    try:
+        from database import SessionLocal
+        from guideline_updates_models import GuidelineUpdate, UserUpdateView
+
+        db = SessionLocal()
+
+        # Delete user views first (foreign key)
+        view_count = db.query(UserUpdateView).delete()
+        logger.info(f"Deleted {view_count} user views")
+
+        # Delete all updates
+        update_count = db.query(GuidelineUpdate).delete()
+        logger.info(f"Deleted {update_count} guideline updates")
+
+        db.commit()
+        db.close()
+
+        return {
+            "status": "success",
+            "message": f"Cleared {update_count} guideline updates and {view_count} user views",
+            "updates_deleted": update_count,
+            "views_deleted": view_count
+        }
+
+    except Exception as e:
+        logger.error(f"Clear error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
