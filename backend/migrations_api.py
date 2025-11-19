@@ -192,3 +192,29 @@ async def update_guideline_urls(
     except Exception as e:
         logger.error(f"URL update error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/scrape-mortgage-guidelines")
+async def scrape_mortgage_guidelines(
+    admin: Any = Depends(get_admin_user)
+):
+    """
+    Scrape real guideline updates from my.mortgageguidelines.com
+    Logs in with credentials and retrieves latest updates from all 5 sources
+    """
+    try:
+        from mortgage_guidelines_scraper import run_scraper
+
+        logger.info("Starting mortgage guidelines scraper...")
+        count = run_scraper(limit_per_source=5)
+
+        return {
+            "status": "success",
+            "message": f"Successfully scraped and added {count} new guideline updates",
+            "count": count,
+            "sources": ["fannie_mae", "freddie_mac", "fha", "va", "usda"]
+        }
+
+    except Exception as e:
+        logger.error(f"Scraper error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
