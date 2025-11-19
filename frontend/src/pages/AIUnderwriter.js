@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { aiAPI } from '../services/api';
 import GuidelineUpdatesSidebar from '../components/GuidelineUpdatesSidebar';
 import GuidelineNotificationBadge from '../components/GuidelineNotificationBadge';
+import EscalationPanel from '../components/EscalationPanel';
 import './AIUnderwriter.css';
 
 function AIUnderwriter() {
@@ -235,7 +236,10 @@ function AIUnderwriter() {
         </form>
         </div>
 
-        <GuidelineUpdatesSidebar userId={currentUserId || 1} />
+        <div className="sidebar-container">
+          <GuidelineUpdatesSidebar userId={currentUserId || 1} />
+          <EscalationPanel />
+        </div>
       </div>
     </div>
   );

@@ -3674,6 +3674,10 @@ app.include_router(vapi_router, tags=["Vapi AI"])
 from guideline_updates_routes import router as guideline_updates_router
 app.include_router(guideline_updates_router, tags=["Guideline Updates"])
 
+# Include Escalation routes
+from escalation_routes import router as escalation_router
+app.include_router(escalation_router, tags=["Escalations"])
+
 # Include Migrations API routes
 from migrations_api import router as migrations_router
 app.include_router(migrations_router, tags=["Migrations"])
