@@ -51,18 +51,12 @@ class TwilioVoiceClient:
     def create_greeting_response(self, business_name: str = "our office") -> VoiceResponse:
         """
         Create initial greeting TwiML response
-        This connects to OpenAI Realtime API for AI conversation
+        This connects directly to Sam (OpenAI Realtime API) - no robot voice
         """
         response = VoiceResponse()
 
-        # Start with a greeting
-        response.say(
-            f"Thank you for calling {business_name}. Please wait while I connect you to Sam.",
-            voice='Polly.Joanna'
-        )
-
-        # Connect to OpenAI Realtime API via WebSocket
-        # This uses Twilio Media Streams to pipe audio to OpenAI
+        # Connect DIRECTLY to Sam via OpenAI Realtime API
+        # Sam will greet the caller with his natural AI voice
         # Use PRODUCTION_DOMAIN if available, fallback to RAILWAY_PUBLIC_DOMAIN
         domain = os.getenv('PRODUCTION_DOMAIN') or os.getenv('RAILWAY_PUBLIC_DOMAIN', 'localhost')
         connect = response.connect()
@@ -271,8 +265,11 @@ class AIReceptionistConfig:
         # AI personality and instructions
         self.system_prompt = """You are Sam, a friendly and professional AI receptionist for {business_name}, a mortgage lending company.
 
+IMPORTANT: As soon as the call connects, immediately greet the caller warmly with:
+"Hi, this is Sam with {business_name}. How can I help you today?"
+
 Your responsibilities:
-1. Greet callers warmly by introducing yourself as Sam and ask how you can help
+1. Greet callers warmly and naturally (you answer the phone directly - no robot answers first)
 2. Qualify leads by asking about:
    - Type of loan they're interested in (purchase, refinance, cash-out)
    - Property type and estimated value
