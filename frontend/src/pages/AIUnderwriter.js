@@ -38,6 +38,9 @@ function AIUnderwriter() {
         // Decode JWT to get user ID
         const payload = JSON.parse(atob(token.split('.')[1]));
         setCurrentUserId(payload.user_id || payload.sub || 1); // Fallback to 1 if not found
+      } else {
+        // No token, default to user ID 1
+        setCurrentUserId(1);
       }
     } catch (error) {
       console.error('Failed to load user ID:', error);
@@ -125,7 +128,7 @@ function AIUnderwriter() {
         <div className="header-content">
           <h1>
             🧠 Smart AI Underwriter
-            {currentUserId && <GuidelineNotificationBadge userId={currentUserId} />}
+            <GuidelineNotificationBadge userId={currentUserId || 1} />
           </h1>
           <p className="subtitle">Ask any mortgage lending question and get answers with sources</p>
           {memoryStats && (
@@ -232,7 +235,7 @@ function AIUnderwriter() {
         </form>
         </div>
 
-        {currentUserId && <GuidelineUpdatesSidebar userId={currentUserId} />}
+        <GuidelineUpdatesSidebar userId={currentUserId || 1} />
       </div>
     </div>
   );
