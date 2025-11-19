@@ -21,7 +21,8 @@ class MortgageGuidelinesScraper:
     """Scraper for my.mortgageguidelines.com with authentication"""
 
     BASE_URL = "https://my.mortgageguidelines.com"
-    LOGIN_URL = f"{BASE_URL}/account-login/"
+    LOGIN_PAGE_URL = f"{BASE_URL}/account-login/"
+    LOGIN_POST_URL = f"{BASE_URL}/mg-admin/"
 
     # Credentials
     USERNAME = "tloss@cmghomeloans.com"
@@ -51,38 +52,29 @@ class MortgageGuidelinesScraper:
         try:
             logger.info("Attempting to log in to Mortgage Guidelines...")
 
-            # First, get the login page to retrieve any CSRF tokens
-            login_page = self.session.get(self.LOGIN_URL)
+            # First, get the login page to retrieve any CSRF tokens/nonces
+            login_page = self.session.get(self.LOGIN_PAGE_URL)
             soup = BeautifulSoup(login_page.content, 'html.parser')
 
-            # Look for CSRF token or nonce
-            csrf_token = None
-            csrf_input = soup.find('input', {'name': 'csrf_token'}) or \
-                        soup.find('input', {'name': '_wpnonce'}) or \
-                        soup.find('input', {'name': 'token'})
+            # Look for nonce in the recovery form
+            nonce_input = soup.find('input', {'name': 'mg_recovery_nonce'})
+            nonce_value = nonce_input.get('value') if nonce_input else None
 
-            if csrf_input:
-                csrf_token = csrf_input.get('value')
-                logger.info(f"Found CSRF token: {csrf_token[:20]}...")
+            if nonce_value:
+                logger.info(f"Found nonce: {nonce_value[:20]}...")
 
-            # Prepare login data
+            # Prepare login data matching the actual form structure
             login_data = {
-                'username': self.USERNAME,
-                'password': self.PASSWORD,
-                'log': self.USERNAME,  # WordPress often uses 'log' for username
-                'pwd': self.PASSWORD,  # WordPress often uses 'pwd' for password
-                'wp-submit': 'Log In',
-                'redirect_to': self.BASE_URL,
-                'testcookie': '1'
+                'log': self.USERNAME,
+                'pwd': self.PASSWORD,
+                'wp-submit': 'Sign In',
+                'redirect_to': self.LOGIN_PAGE_URL,
+                'rememberme': 'forever'
             }
 
-            if csrf_token:
-                login_data['_wpnonce'] = csrf_token
-                login_data['csrf_token'] = csrf_token
-
-            # Attempt login
+            # Attempt login to the correct action URL
             response = self.session.post(
-                self.LOGIN_URL,
+                self.LOGIN_POST_URL,
                 data=login_data,
                 allow_redirects=True
             )
