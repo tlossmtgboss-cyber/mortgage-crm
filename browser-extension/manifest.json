@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "Mortgage Guidelines Scraper for CRM",
+  "version": "1.0.0",
+  "description": "Extract guideline updates from my.mortgageguidelines.com and sync to your CRM",
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://my.mortgageguidelines.com/*",
+    "https://mortgage-crm-production-7a9a.up.railway.app/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://my.mortgageguidelines.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}

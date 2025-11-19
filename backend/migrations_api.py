@@ -255,3 +255,99 @@ async def clear_guideline_updates(
     except Exception as e:
         logger.error(f"Clear error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/import-browser-guidelines")
+async def import_browser_guidelines(
+    request: dict,
+    admin: Any = Depends(get_admin_user)
+):
+    """
+    Import guideline updates scraped by browser extension
+    Receives data from the Chrome/Firefox extension while user is logged into mortgageguidelines.com
+    """
+    try:
+        from database import SessionLocal
+        from guideline_updates_models import GuidelineUpdate
+        from datetime import datetime, timedelta
+        import hashlib
+        import re
+
+        guidelines = request.get('guidelines', [])
+
+        if not guidelines:
+            return {
+                "status": "error",
+                "message": "No guidelines provided"
+            }
+
+        db = SessionLocal()
+        added_count = 0
+        skipped_count = 0
+
+        for guideline_data in guidelines:
+            try:
+                # Parse date
+                date_str = guideline_data.get('date_str', '')
+                published_date = datetime.utcnow()
+
+                if date_str:
+                    # Try to parse various date formats
+                    for fmt in ['%B %d, %Y', '%b %d, %Y', '%m/%d/%Y', '%Y-%m-%d']:
+                        try:
+                            published_date = datetime.strptime(date_str, fmt)
+                            break
+                        except:
+                            continue
+
+                # Generate hash
+                content_hash = hashlib.sha256(
+                    f"{guideline_data['title']}{guideline_data['url']}".encode()
+                ).hexdigest()
+
+                # Check if exists
+                existing = db.query(GuidelineUpdate).filter_by(
+                    content_hash=content_hash
+                ).first()
+
+                if existing:
+                    skipped_count += 1
+                    continue
+
+                # Create new guideline update
+                new_guideline = GuidelineUpdate(
+                    source=guideline_data['source'],
+                    title=guideline_data['title'],
+                    section_code=guideline_data.get('section_code'),
+                    description=guideline_data.get('description', guideline_data['title']),
+                    url=guideline_data['url'],
+                    published_date=published_date,
+                    scraped_date=datetime.utcnow(),
+                    is_new=True,
+                    content_hash=content_hash
+                )
+
+                db.add(new_guideline)
+                db.commit()
+                added_count += 1
+
+                logger.info(f"Added guideline: {guideline_data['title'][:50]}...")
+
+            except Exception as e:
+                db.rollback()
+                logger.error(f"Error adding guideline: {e}")
+                continue
+
+        db.close()
+
+        return {
+            "status": "success",
+            "message": f"Imported {added_count} new guidelines, skipped {skipped_count} duplicates",
+            "added": added_count,
+            "skipped": skipped_count,
+            "total_received": len(guidelines)
+        }
+
+    except Exception as e:
+        logger.error(f"Import error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

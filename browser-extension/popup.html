@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      width: 350px;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+      background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
+      color: white;
+      margin: 0;
+    }
+
+    h1 {
+      margin: 0 0 20px 0;
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .section {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 15px;
+    }
+
+    .section h3 {
+      margin: 0 0 10px 0;
+      font-size: 14px;
+      opacity: 0.9;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      background: white;
+      color: #218D8D;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 10px;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+
+    button:disabled {
+      background: #ccc;
+      color: #666;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .status {
+      padding: 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      margin-top: 10px;
+      text-align: center;
+    }
+
+    .status.success {
+      background: rgba(76, 175, 80, 0.3);
+      border: 1px solid rgba(76, 175, 80, 0.6);
+    }
+
+    .status.error {
+      background: rgba(244, 67, 54, 0.3);
+      border: 1px solid rgba(244, 67, 54, 0.6);
+    }
+
+    .status.info {
+      background: rgba(33, 150, 243, 0.3);
+      border: 1px solid rgba(33, 150, 243, 0.6);
+    }
+
+    .counter {
+      font-size: 24px;
+      font-weight: bold;
+      text-align: center;
+      margin: 10px 0;
+    }
+
+    .progress {
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 2px;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+
+    .progress-bar {
+      height: 100%;
+      background: white;
+      width: 0%;
+      transition: width 0.3s;
+    }
+
+    .info-text {
+      font-size: 12px;
+      opacity: 0.8;
+      line-height: 1.5;
+      margin-top: 10px;
+    }
+
+    .source-status {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      margin-bottom: 6px;
+      font-size: 13px;
+    }
+
+    .source-count {
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>📋 Guideline Updates Scraper</h1>
+
+  <div class="section">
+    <h3>Current Page</h3>
+    <div id="pageStatus" class="info-text">Loading...</div>
+  </div>
+
+  <div class="section">
+    <h3>Scrape Guidelines</h3>
+    <button id="scrapeBtn">🚀 Extract & Sync to CRM</button>
+    <button id="scrapeAllBtn">📚 Scrape All Sources</button>
+
+    <div id="progress" class="progress" style="display: none;">
+      <div id="progressBar" class="progress-bar"></div>
+    </div>
+
+    <div id="status"></div>
+  </div>
+
+  <div id="results" class="section" style="display: none;">
+    <h3>Extraction Results</h3>
+    <div id="sourceResults"></div>
+    <div class="counter" id="totalCount">0</div>
+    <div class="info-text">total updates found</div>
+  </div>
+
+  <div class="section">
+    <h3>Instructions</h3>
+    <div class="info-text">
+      1. Log into my.mortgageguidelines.com<br>
+      2. Navigate to any update page (Fannie Mae, FHA, etc.)<br>
+      3. Click "Extract & Sync" to scrape current page<br>
+      4. Or click "Scrape All" to get updates from all 5 sources
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
