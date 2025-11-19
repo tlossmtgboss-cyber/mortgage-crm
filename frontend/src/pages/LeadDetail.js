@@ -7,6 +7,7 @@ import SMSModal from '../components/SMSModal';
 import TeamsModal from '../components/TeamsModal';
 import RecordingModal from '../components/RecordingModal';
 import VoicemailModal from '../components/VoicemailModal';
+import EscalationModal from '../components/EscalationModal';
 import VoicemailDrop from '../components/VoicemailDrop';
 import SmartAIChat from '../components/SmartAIChat';
 import './LeadDetail.css';
@@ -55,6 +56,7 @@ function LeadDetail() {
   const [showRecordingModal, setShowRecordingModal] = useState(false);
   const [showVoicemailModal, setShowVoicemailModal] = useState(false);
   const [showVoicemailDrop, setShowVoicemailDrop] = useState(false);
+  const [showEscalationModal, setShowEscalationModal] = useState(false);
   const [teamMembers, setTeamMembers] = useState([]);
   const [assignedTeamMembers, setAssignedTeamMembers] = useState({});
   const [isListening, setIsListening] = useState(false);
@@ -523,6 +525,9 @@ function LeadDetail() {
         break;
       case 'voice':
         handleVoiceCommand();
+        break;
+      case 'escalation':
+        setShowEscalationModal(true);
         break;
       default:
         break;
@@ -1505,6 +1510,14 @@ function LeadDetail() {
                 <span className="icon">🎤</span>
                 <span>{isListening ? 'Listening...' : 'Voice Command'}</span>
               </button>
+              <button
+                className="action-btn escalation"
+                onClick={() => handleAction('escalation')}
+                title="Escalate issue to team member"
+              >
+                <span className="icon">🚨</span>
+                <span>Escalation</span>
+              </button>
             </div>
           </div>
 
@@ -1578,6 +1591,15 @@ function LeadDetail() {
           phoneNumber={lead.phone}
           recipientName={lead.name}
           onClose={() => setShowVoicemailDrop(false)}
+        />
+      )}
+
+      {/* Escalation Modal */}
+      {lead && (
+        <EscalationModal
+          isOpen={showEscalationModal}
+          onClose={() => setShowEscalationModal(false)}
+          lead={lead}
         />
       )}
     </div>

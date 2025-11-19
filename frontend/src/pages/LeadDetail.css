@@ -792,7 +792,8 @@
 .action-btn.teams,
 .action-btn.record,
 .action-btn.voicemail,
-.action-btn.voice {
+.action-btn.voice,
+.action-btn.escalation {
   background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
   border-color: #218D8D;
   color: white;
@@ -807,7 +808,8 @@
 .action-btn.teams:hover:not(:disabled),
 .action-btn.record:hover:not(:disabled),
 .action-btn.voicemail:hover:not(:disabled),
-.action-btn.voice:hover:not(:disabled) {
+.action-btn.voice:hover:not(:disabled),
+.action-btn.escalation:hover:not(:disabled) {
   background: linear-gradient(135deg, #1a7070 0%, #155858 100%);
   border-color: #1a7070;
   box-shadow: 0 8px 24px rgba(33, 141, 141, 0.4);
@@ -821,7 +823,8 @@
 .action-btn.teams .icon,
 .action-btn.record .icon,
 .action-btn.voicemail .icon,
-.action-btn.voice .icon {
+.action-btn.voice .icon,
+.action-btn.escalation .icon {
   color: white;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
 }

@@ -1,0 +1,9 @@
+title,description,priority,due_date,category,status
+Complete employee information form,Fill out all required personal and tax information,high,2025-12-01,onboarding,pending
+Review company handbook,Read and acknowledge company policies and procedures,high,2025-12-03,onboarding,pending
+Set up workstation and accounts,Configure email computer and necessary software accounts,high,2025-12-01,setup,pending
+Complete compliance training,Finish all required regulatory and compliance training modules,high,2025-12-07,training,pending
+Schedule 1-on-1 with manager,Initial check-in meeting to discuss role and expectations,high,2025-12-02,meeting,pending
+Meet the team,Introduction meetings with key team members and stakeholders,medium,2025-12-05,meeting,pending
+Review systems and tools,Training on CRM communication tools and other systems,high,2025-12-07,training,pending
+30-day check-in,Review progress and address any questions or concerns,medium,2025-12-30,review,pending

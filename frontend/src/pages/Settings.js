@@ -1375,6 +1375,14 @@ const API_BASE_URL = isProduction
           </button>
 
           <button
+            className={`sidebar-btn ${activeSection === 'voice-os' ? 'active' : ''}`}
+            onClick={() => navigate('/voice-os-dashboard')}
+          >
+            <span className="icon">🎙️</span>
+            <span>Voice OS</span>
+          </button>
+
+          <button
             className={`sidebar-btn ${activeSection === 'experiments' ? 'active' : ''}`}
             onClick={() => setActiveSection('experiments')}
           >
