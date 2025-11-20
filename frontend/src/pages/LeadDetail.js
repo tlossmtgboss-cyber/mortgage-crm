@@ -1123,45 +1123,41 @@ function LeadDetail() {
                 real estate agents, and other key contacts involved in the loan process.
               </p>
 
-              <div className="circle-grid">
-                <div className="circle-card">
-                  <div className="circle-header">
-                    <h3>👥 Co-Borrowers</h3>
-                    <button className="btn-add-circle">+ Add</button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #e9ecef' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span style={{ fontSize: '18px' }}>👥</span>
+                    <span style={{ fontWeight: '500' }}>Co-Borrowers</span>
+                    <span style={{ color: '#999', fontSize: '13px' }}>No co-borrowers added</span>
                   </div>
-                  <div className="circle-list">
-                    <div className="empty-state">No co-borrowers added yet</div>
-                  </div>
+                  <button className="btn-add-circle">+ Add</button>
                 </div>
 
-                <div className="circle-card">
-                  <div className="circle-header">
-                    <h3>🏡 Real Estate Agent</h3>
-                    <button className="btn-add-circle">+ Add</button>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #e9ecef' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span style={{ fontSize: '18px' }}>🏡</span>
+                    <span style={{ fontWeight: '500' }}>Real Estate Agent</span>
+                    <span style={{ color: '#999', fontSize: '13px' }}>No agent assigned</span>
                   </div>
-                  <div className="circle-list">
-                    <div className="empty-state">No agent assigned yet</div>
-                  </div>
+                  <button className="btn-add-circle">+ Add</button>
                 </div>
 
-                <div className="circle-card">
-                  <div className="circle-header">
-                    <h3>👨‍👩‍👧 Family Members</h3>
-                    <button className="btn-add-circle">+ Add</button>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #e9ecef' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span style={{ fontSize: '18px' }}>👨‍👩‍👧</span>
+                    <span style={{ fontWeight: '500' }}>Family Members</span>
+                    <span style={{ color: '#999', fontSize: '13px' }}>No family members added</span>
                   </div>
-                  <div className="circle-list">
-                    <div className="empty-state">No family members added yet</div>
-                  </div>
+                  <button className="btn-add-circle">+ Add</button>
                 </div>
 
-                <div className="circle-card">
-                  <div className="circle-header">
-                    <h3>🤝 Other Contacts</h3>
-                    <button className="btn-add-circle">+ Add</button>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #e9ecef' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span style={{ fontSize: '18px' }}>🤝</span>
+                    <span style={{ fontWeight: '500' }}>Other Contacts</span>
+                    <span style={{ color: '#999', fontSize: '13px' }}>No contacts added</span>
                   </div>
-                  <div className="circle-list">
-                    <div className="empty-state">No other contacts added yet</div>
-                  </div>
+                  <button className="btn-add-circle">+ Add</button>
                 </div>
               </div>
             </div>
