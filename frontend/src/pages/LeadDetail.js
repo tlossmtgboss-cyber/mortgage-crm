@@ -9,6 +9,8 @@ import RecordingModal from '../components/RecordingModal';
 import VoicemailModal from '../components/VoicemailModal';
 import EscalationModal from '../components/EscalationModal';
 import VoicemailDrop from '../components/VoicemailDrop';
+import CreateTaskModal from '../components/CreateTaskModal';
+import AppointmentModal from '../components/AppointmentModal';
 import SmartAIChat from '../components/SmartAIChat';
 import './LeadDetail.css';
 
@@ -56,6 +58,8 @@ function LeadDetail() {
   const [showRecordingModal, setShowRecordingModal] = useState(false);
   const [showVoicemailModal, setShowVoicemailModal] = useState(false);
   const [showVoicemailDrop, setShowVoicemailDrop] = useState(false);
+  const [showTaskModal, setShowTaskModal] = useState(false);
+  const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [showEscalationModal, setShowEscalationModal] = useState(false);
   const [teamMembers, setTeamMembers] = useState([]);
   const [assignedTeamMembers, setAssignedTeamMembers] = useState({});
@@ -509,10 +513,10 @@ function LeadDetail() {
         window.open(`mailto:${lead.email}`, '_blank');
         break;
       case 'task':
-        navigate('/tasks');
+        setShowTaskModal(true);
         break;
       case 'calendar':
-        navigate('/calendar');
+        setShowAppointmentModal(true);
         break;
       case 'teams':
         setShowTeamsModal(true);
@@ -1599,6 +1603,24 @@ function LeadDetail() {
         <EscalationModal
           isOpen={showEscalationModal}
           onClose={() => setShowEscalationModal(false)}
+          lead={lead}
+        />
+      )}
+
+      {/* Create Task Modal */}
+      {lead && (
+        <CreateTaskModal
+          isOpen={showTaskModal}
+          onClose={() => setShowTaskModal(false)}
+          lead={lead}
+        />
+      )}
+
+      {/* Appointment Modal */}
+      {lead && (
+        <AppointmentModal
+          isOpen={showAppointmentModal}
+          onClose={() => setShowAppointmentModal(false)}
           lead={lead}
         />
       )}
