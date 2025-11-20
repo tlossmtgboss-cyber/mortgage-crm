@@ -182,22 +182,25 @@ function SmartAIChat({ leadId, loanId, context = {} }) {
   return (
     <div className="smart-ai-chat-wrapper">
       {/* Floating toggle button */}
-      <button
-        className={`smart-ai-toggle-button ${isOpen ? 'open' : ''}`}
-        onClick={() => setIsOpen(!isOpen)}
-        title={isOpen ? 'Close AI Assistant' : 'Open AI Assistant'}
-      >
-        {isOpen ? '✕' : (
-          <img
-            src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=80&h=80&fit=crop&crop=face"
-            alt="AI Assistant"
-            className="toggle-avatar"
-          />
-        )}
-        {!isOpen && memoryStats && memoryStats.total_memories > 0 && (
-          <span className="toggle-badge">{memoryStats.total_memories}</span>
-        )}
-      </button>
+      <div className="smart-ai-toggle-wrapper">
+        <button
+          className={`smart-ai-toggle-button ${isOpen ? 'open' : ''}`}
+          onClick={() => setIsOpen(!isOpen)}
+          title={isOpen ? 'Close AI Assistant' : 'Open AI Assistant'}
+        >
+          {isOpen ? '✕' : (
+            <img
+              src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=80&h=80&fit=crop&crop=face"
+              alt="AI Assistant"
+              className="toggle-avatar"
+            />
+          )}
+          {!isOpen && memoryStats && memoryStats.total_memories > 0 && (
+            <span className="toggle-badge">{memoryStats.total_memories}</span>
+          )}
+        </button>
+        {!isOpen && <span className="toggle-label">Ask me a Question</span>}
+      </div>
 
       {/* Chat panel */}
       {isOpen && (
