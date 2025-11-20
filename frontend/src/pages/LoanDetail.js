@@ -7,6 +7,10 @@ import VoicemailDrop from '../components/VoicemailDrop';
 import SMSModal from '../components/SMSModal';
 import TeamsModal from '../components/TeamsModal';
 import RecordingModal from '../components/RecordingModal';
+import CreateTaskModal from '../components/CreateTaskModal';
+import AppointmentModal from '../components/AppointmentModal';
+import EscalationModal from '../components/EscalationModal';
+import TeamAssignment from '../components/TeamAssignment';
 import './LeadDetail.css';
 
 // Mock loans data (same as Loans.js)
@@ -60,6 +64,9 @@ function LoanDetail() {
   const [showSMSModal, setShowSMSModal] = useState(false);
   const [showTeamsModal, setShowTeamsModal] = useState(false);
   const [showRecordingModal, setShowRecordingModal] = useState(false);
+  const [showTaskModal, setShowTaskModal] = useState(false);
+  const [showAppointmentModal, setShowAppointmentModal] = useState(false);
+  const [showEscalationModal, setShowEscalationModal] = useState(false);
   const [isListening, setIsListening] = useState(false);
 
   useEffect(() => {
@@ -224,10 +231,10 @@ function LoanDetail() {
         window.open(`mailto:${borrowerEmail}`, '_blank');
         break;
       case 'task':
-        navigate('/tasks');
+        setShowTaskModal(true);
         break;
       case 'calendar':
-        navigate('/calendar');
+        setShowAppointmentModal(true);
         break;
       case 'teams':
         setShowTeamsModal(true);
@@ -240,6 +247,9 @@ function LoanDetail() {
         break;
       case 'voice':
         handleVoiceCommand();
+        break;
+      case 'escalation':
+        setShowEscalationModal(true);
         break;
       default:
         break;
@@ -1152,6 +1162,14 @@ function LoanDetail() {
               <span className="icon">🎤</span>
               <span>{isListening ? 'Listening...' : 'Voice Command'}</span>
             </button>
+            <button
+              className="action-btn escalation"
+              onClick={() => handleAction('escalation')}
+              title="Escalate issue to team member"
+            >
+              <span className="icon">🚨</span>
+              <span>Escalation</span>
+            </button>
           </div>
         </div>
 
@@ -1197,6 +1215,33 @@ function LoanDetail() {
         <RecordingModal
           meetingTitle={`Loan Discussion - ${loan.borrower_name || loan.borrower}`}
           onClose={() => setShowRecordingModal(false)}
+        />
+      )}
+
+      {/* Create Task Modal */}
+      {loan && (
+        <CreateTaskModal
+          isOpen={showTaskModal}
+          onClose={() => setShowTaskModal(false)}
+          lead={{ id: loan.id, name: loan.borrower_name || loan.borrower, loan_number: loan.loan_number }}
+        />
+      )}
+
+      {/* Appointment Modal */}
+      {loan && (
+        <AppointmentModal
+          isOpen={showAppointmentModal}
+          onClose={() => setShowAppointmentModal(false)}
+          lead={{ id: loan.id, name: loan.borrower_name || loan.borrower, phone: loan.borrower_phone, email: loan.borrower_email }}
+        />
+      )}
+
+      {/* Escalation Modal */}
+      {loan && (
+        <EscalationModal
+          isOpen={showEscalationModal}
+          onClose={() => setShowEscalationModal(false)}
+          lead={{ id: loan.id, name: loan.borrower_name || loan.borrower, loan_number: loan.loan_number }}
         />
       )}
     </div>
