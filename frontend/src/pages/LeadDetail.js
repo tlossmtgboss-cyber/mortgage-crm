@@ -148,6 +148,44 @@ function LeadDetail() {
     setCircleContacts(circleContacts.filter(c => c.id !== contactId));
   };
 
+  const handleEditCircleContact = (contact) => {
+    setCircleForm({
+      name: contact.name,
+      email: contact.email || '',
+      phone: contact.phone || '',
+      type: contact.type,
+      notes: contact.notes || '',
+      editId: contact.id,
+      leadId: contact.leadId
+    });
+    setShowCircleModal(true);
+  };
+
+  const handleAddCircleContactSubmit = () => {
+    if (!circleForm.name.trim()) return;
+
+    if (circleForm.editId) {
+      // Editing existing contact
+      setCircleContacts(circleContacts.map(c =>
+        c.id === circleForm.editId
+          ? { ...c, name: circleForm.name, email: circleForm.email, phone: circleForm.phone, type: circleForm.type, notes: circleForm.notes }
+          : c
+      ));
+    } else {
+      // Adding new contact
+      const newContact = {
+        id: Date.now(),
+        leadId: searchResults.find(r => r.name === circleForm.name)?.id || null,
+        ...circleForm
+      };
+      setCircleContacts([...circleContacts, newContact]);
+    }
+
+    setCircleForm({ name: '', email: '', phone: '', type: 'Co-Borrower', notes: '' });
+    setShowCircleModal(false);
+    setShowSearchResults(false);
+  };
+
   const getContactIcon = (type) => {
     const found = circleContactTypes.find(t => t.value === type);
     return found ? found.icon : '🤝';
@@ -1251,7 +1289,18 @@ function LeadDetail() {
                         <span style={{ fontSize: '18px' }}>{getContactIcon(contact.type)}</span>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ fontWeight: '500' }}>{contact.name}</span>
+                            {contact.leadId ? (
+                              <span
+                                onClick={() => navigate(`/leads/${contact.leadId}`)}
+                                style={{ fontWeight: '500', color: '#217f8d', cursor: 'pointer', textDecoration: 'none' }}
+                                onMouseEnter={e => e.target.style.textDecoration = 'underline'}
+                                onMouseLeave={e => e.target.style.textDecoration = 'none'}
+                              >
+                                {contact.name}
+                              </span>
+                            ) : (
+                              <span style={{ fontWeight: '500' }}>{contact.name}</span>
+                            )}
                             <span style={{ fontSize: '12px', padding: '2px 8px', backgroundColor: '#e0f2f1', color: '#00695c', borderRadius: '12px' }}>{contact.type}</span>
                           </div>
                           <div style={{ fontSize: '13px', color: '#666' }}>
@@ -1262,13 +1311,22 @@ function LeadDetail() {
                           {contact.notes && <div style={{ fontSize: '12px', color: '#999', fontStyle: 'italic' }}>{contact.notes}</div>}
                         </div>
                       </div>
-                      <button
-                        onClick={() => handleDeleteCircleContact(contact.id)}
-                        style={{ background: 'none', border: 'none', color: '#dc3545', cursor: 'pointer', fontSize: '16px', padding: '4px 8px' }}
-                        title="Remove contact"
-                      >
-                        ×
-                      </button>
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        <button
+                          onClick={() => handleEditCircleContact(contact)}
+                          style={{ background: 'none', border: 'none', color: '#217f8d', cursor: 'pointer', fontSize: '14px', padding: '4px 8px' }}
+                          title="Edit contact"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          onClick={() => handleDeleteCircleContact(contact.id)}
+                          style={{ background: 'none', border: 'none', color: '#dc3545', cursor: 'pointer', fontSize: '16px', padding: '4px 8px' }}
+                          title="Remove contact"
+                        >
+                          ×
+                        </button>
+                      </div>
                     </div>
                   ))
                 )}
@@ -1279,8 +1337,8 @@ function LeadDetail() {
                 <div className="modal-overlay" onClick={() => { setShowCircleModal(false); setShowSearchResults(false); }}>
                   <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
                     <div className="modal-header">
-                      <h3>Add Referral Partner</h3>
-                      <button className="modal-close" onClick={() => { setShowCircleModal(false); setShowSearchResults(false); }}>×</button>
+                      <h3>{circleForm.editId ? 'Edit Referral Partner' : 'Add Referral Partner'}</h3>
+                      <button className="modal-close" onClick={() => { setShowCircleModal(false); setShowSearchResults(false); setCircleForm({ name: '', email: '', phone: '', type: 'Co-Borrower', notes: '' }); }}>×</button>
                     </div>
                     <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                       <div className="form-group">
@@ -1384,10 +1442,10 @@ function LeadDetail() {
                       <button className="btn-secondary" onClick={() => setShowCircleModal(false)}>Cancel</button>
                       <button
                         className="btn-primary"
-                        onClick={handleAddCircleContact}
+                        onClick={handleAddCircleContactSubmit}
                         disabled={!circleForm.name.trim()}
                       >
-                        Add Contact
+                        {circleForm.editId ? 'Save Changes' : 'Add Contact'}
                       </button>
                     </div>
                   </div>
