@@ -9,7 +9,6 @@ import CoachCorner from './components/CoachCorner';
 import OnboardingPrompt from './components/OnboardingPrompt';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import ErrorBoundary from './components/ErrorBoundary';
-import ErrorTestButton from './components/ErrorTestButton';
 import './App.css';
 
 // Landing/Auth pages (keep these as regular imports for faster initial load)
@@ -991,9 +990,6 @@ function App() {
             }
           />
         </Routes>
-
-          {/* Global Error Test Button - appears on all pages */}
-          <ErrorTestButton />
         </div>
       </Router>
         </PermissionProvider>
