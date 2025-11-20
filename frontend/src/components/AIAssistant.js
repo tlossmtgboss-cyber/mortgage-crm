@@ -177,7 +177,7 @@ function AIAssistant({ isOpen, onClose, context = {} }) {
         <div className="header-content">
           <h3>
             <img
-              src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=40&h=40&fit=crop&crop=face"
+              src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=40&h=40&fit=crop&crop=face"
               alt="AI Assistant"
               className="ai-avatar"
             />

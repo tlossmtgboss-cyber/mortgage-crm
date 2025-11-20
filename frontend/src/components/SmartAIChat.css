@@ -8,12 +8,12 @@
 
 /* Toggle button */
 .smart-ai-toggle-button {
-  width: 60px;
-  height: 60px;
+  width: 70px;
+  height: 70px;
   border-radius: 50%;
   background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
   color: white;
-  border: none;
+  border: 3px solid #218D8D;
   cursor: pointer;
   font-size: 28px;
   display: flex;
@@ -22,6 +22,8 @@
   box-shadow: 0 4px 20px rgba(33, 141, 141, 0.4);
   transition: all 250ms ease;
   position: relative;
+  padding: 0;
+  overflow: hidden;
 }
 
 .smart-ai-toggle-button:hover {
