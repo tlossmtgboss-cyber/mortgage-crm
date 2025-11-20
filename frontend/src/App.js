@@ -259,7 +259,6 @@ function App() {
                     )}
                     <LazyPage><Dashboard /></LazyPage>
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -279,7 +278,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><PipelineEfficiency /></LazyPage>
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -299,7 +297,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><Leads /></LazyPage>
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -319,7 +316,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><LeadDetail /></LazyPage>
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -339,7 +335,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><Loans /></LazyPage>
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -359,7 +354,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><LoanDetail /></LazyPage>
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -379,7 +373,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><Portfolio /></LazyPage>
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -399,7 +392,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><PortfolioDetail /></LazyPage>
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -419,7 +411,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><YearOverYear /></LazyPage>
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -439,7 +430,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><MumClientDetail /></LazyPage>
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -459,7 +449,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><Tasks /></LazyPage>
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -479,7 +468,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><Calendar /></LazyPage>
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -499,7 +487,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><Scorecard /></LazyPage>
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -519,7 +506,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><Assistant /></LazyPage>
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -539,7 +525,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><AIReceptionistDashboard /></LazyPage>
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -559,7 +544,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><VoiceOSDashboard /></LazyPage>
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -579,7 +563,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><ClientProfile /></LazyPage>
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -599,7 +582,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><ReferralPartners /></LazyPage>
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -619,7 +601,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><ReferralPartnerDetail /></LazyPage>
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -639,7 +620,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><AIUnderwriter /></LazyPage>
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -659,7 +639,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><GoalTracker /></LazyPage>
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -679,7 +658,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><Coach /></LazyPage>
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -699,7 +677,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><ReconciliationCenter /></LazyPage>
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -719,7 +696,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <MergeCenter />
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -739,7 +715,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><Settings /></LazyPage>
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -759,7 +734,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <TeamMembers />
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -779,7 +753,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <TeamMemberProfile />
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -800,7 +773,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><MyProfile /></LazyPage>
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -821,7 +793,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><MyPermissions /></LazyPage>
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -842,7 +813,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><ComplianceDashboard /></LazyPage>
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -863,7 +833,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><AdminSettings /></LazyPage>
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -883,7 +852,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <DataUpload />
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -903,7 +871,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <VerizonTest />
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -923,7 +890,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <UserProfile />
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -943,7 +909,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <Users />
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -963,7 +928,6 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <UserProfile />
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
@@ -983,13 +947,16 @@ function App() {
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <ProcessTemplates />
                   </main>
-                  <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
               </PrivateRoute>
             }
           />
         </Routes>
+        {/* Global AI Assistant - available on all pages when authenticated */}
+        {isAuthenticated() && (
+          <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+        )}
         </div>
       </Router>
         </PermissionProvider>
