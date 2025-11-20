@@ -5,6 +5,21 @@ import './index.css';
 import App from './App';
 import ErrorBoundary from './ErrorBoundary';
 
+// Global handler for chunk load errors (stale cache after deployment)
+window.addEventListener('error', (event) => {
+  if (event.message && (event.message.includes('Loading chunk') || event.message.includes('Loading CSS chunk'))) {
+    window.location.reload();
+  }
+});
+
+// Handle unhandled promise rejections for dynamic imports
+window.addEventListener('unhandledrejection', (event) => {
+  if (event.reason && event.reason.message &&
+      (event.reason.message.includes('Loading chunk') || event.reason.message.includes('Loading CSS chunk'))) {
+    window.location.reload();
+  }
+});
+
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>

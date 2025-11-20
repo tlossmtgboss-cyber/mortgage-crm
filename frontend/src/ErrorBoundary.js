@@ -12,6 +12,16 @@ class ErrorBoundary extends React.Component {
 
   componentDidCatch(error, errorInfo) {
     console.error('Error caught by boundary:', error, errorInfo);
+
+    // Auto-reload on ChunkLoadError (stale chunks after deployment)
+    if (error.name === 'ChunkLoadError' ||
+        (error.message && error.message.includes('Loading chunk')) ||
+        (error.message && error.message.includes('Loading CSS chunk'))) {
+      // Clear cache and reload
+      window.location.reload();
+      return;
+    }
+
     this.setState({
       error,
       errorInfo
