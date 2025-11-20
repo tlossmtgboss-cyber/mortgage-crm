@@ -3686,6 +3686,10 @@ app.include_router(migrations_router, tags=["Migrations"])
 from circle_of_cashflow_routes import router as circle_of_cashflow_router
 app.include_router(circle_of_cashflow_router, tags=["Circle of Cashflow"])
 
+# Include AI Command routes for Pipeline 360 Landing Page
+from ai_command_routes import router as ai_command_router
+app.include_router(ai_command_router, tags=["AI Commands"])
+
 # ============================================================================
 # API KEY HELPER FUNCTIONS
 # ============================================================================
