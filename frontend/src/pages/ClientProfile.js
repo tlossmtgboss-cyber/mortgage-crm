@@ -1,7 +1,7 @@
 // VERSION: 2024-11-14-v2 - MOCK DATA FIX
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { loansAPI, activitiesAPI, aiAPI, teamAPI } from '../services/api';
+import { loansAPI, activitiesAPI } from '../services/api';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import SMSModal from '../components/SMSModal';
 import TeamsModal from '../components/TeamsModal';
@@ -9,6 +9,7 @@ import RecordingModal from '../components/RecordingModal';
 import VoicemailModal from '../components/VoicemailModal';
 import VoicemailDrop from '../components/VoicemailDrop';
 import SmartAIChat from '../components/SmartAIChat';
+import TeamAssignment from '../components/TeamAssignment';
 import './LeadDetail.css';
 
 // Mock lead data generator (same as Leads.js)
@@ -55,15 +56,12 @@ function ClientProfile() {
   const [showRecordingModal, setShowRecordingModal] = useState(false);
   const [showVoicemailModal, setShowVoicemailModal] = useState(false);
   const [showVoicemailDrop, setShowVoicemailDrop] = useState(false);
-  const [teamMembers, setTeamMembers] = useState([]);
-  const [assignedTeamMembers, setAssignedTeamMembers] = useState({});
   const [isListening, setIsListening] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState('');
 
   useEffect(() => {
     loadClientData();
     loadEmails();
-    loadTeamMembers();
     markLoanAsViewed();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -171,16 +169,6 @@ function ClientProfile() {
       setEmails(emailActivities || []);
     } catch (error) {
       console.error('Failed to load emails:', error);
-    }
-  };
-
-  const loadTeamMembers = async () => {
-    try {
-      const members = await teamAPI.getMembers();
-      setTeamMembers(Array.isArray(members) ? members : []);
-    } catch (error) {
-      console.error('Failed to load team members:', error);
-      setTeamMembers([]);
     }
   };
 
@@ -526,43 +514,6 @@ function ClientProfile() {
         break;
       default:
         break;
-    }
-  };
-
-  // Group team members by role
-  const getTeamMembersByRole = () => {
-    const grouped = {};
-    teamMembers.forEach(member => {
-      const role = member.role || 'Other';
-      if (!grouped[role]) {
-        grouped[role] = [];
-      }
-      grouped[role].push(member);
-    });
-    return grouped;
-  };
-
-  // Handle team member assignment
-  const handleAssignTeamMember = async (role, member) => {
-    try {
-      const updatedAssignments = {
-        ...assignedTeamMembers,
-        [role]: member
-      };
-      setAssignedTeamMembers(updatedAssignments);
-
-      // Save to backend - store as JSON or separate fields
-      const teamAssignmentData = {
-        [`team_${role.toLowerCase().replace(/\s+/g, '_')}_id`]: member.id,
-        [`team_${role.toLowerCase().replace(/\s+/g, '_')}_name`]: `${member.first_name} ${member.last_name}`,
-        [`team_${role.toLowerCase().replace(/\s+/g, '_')}_email`]: member.email
-      };
-
-      await loansAPI.update(id, teamAssignmentData);
-      alert(`${member.first_name} ${member.last_name} assigned as ${role}`);
-    } catch (error) {
-      console.error('Failed to assign team member:', error);
-      alert('Failed to assign team member');
     }
   };
 
@@ -1045,70 +996,7 @@ function ClientProfile() {
           {activeTab === 'team' && (
           <div className="info-section">
             <h2>Team Members</h2>
-            <div className="team-description">
-              <p>Assign internal team members who are working on this lead/loan.</p>
-            </div>
-
-            {Object.keys(getTeamMembersByRole()).length === 0 ? (
-              <div className="empty-state">
-                <p>No team members have been created yet.</p>
-                <p>Go to Settings → Team Members to add your team.</p>
-              </div>
-            ) : (
-              <div className="team-roles-list">
-                {Object.entries(getTeamMembersByRole()).map(([role, members]) => (
-                  <div key={role} className="team-role-section">
-                    <div className="team-role-header">
-                      <h3>{role}</h3>
-                      <span className="member-count">{members.length} available</span>
-                    </div>
-
-                    {assignedTeamMembers[role] ? (
-                      <div className="assigned-member">
-                        <div className="member-info">
-                          <div className="member-name">
-                            {assignedTeamMembers[role].first_name} {assignedTeamMembers[role].last_name}
-                          </div>
-                          <div className="member-contact">
-                            {assignedTeamMembers[role].email && (
-                              <span className="member-email">{assignedTeamMembers[role].email}</span>
-                            )}
-                            {assignedTeamMembers[role].phone && (
-                              <span className="member-phone">{assignedTeamMembers[role].phone}</span>
-                            )}
-                          </div>
-                        </div>
-                        <button
-                          className="btn-change-member"
-                          onClick={() => setAssignedTeamMembers({...assignedTeamMembers, [role]: null})}
-                        >
-                          Change
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="member-selection">
-                        <select
-                          className="member-select"
-                          onChange={(e) => {
-                            const member = members.find(m => m.id === parseInt(e.target.value));
-                            if (member) handleAssignTeamMember(role, member);
-                          }}
-                          defaultValue=""
-                        >
-                          <option value="" disabled>Select a team member...</option>
-                          {members.map(member => (
-                            <option key={member.id} value={member.id}>
-                              {member.first_name} {member.last_name}
-                              {member.title && ` - ${member.title}`}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+            <TeamAssignment leadId={id} />
           </div>
           )}
 
