@@ -72,6 +72,48 @@ function LeadDetail() {
   const [cashflowPartners, setCashflowPartners] = useState([]);
   const [cashflowLoading, setCashflowLoading] = useState(false);
 
+  // Circle of Influence state
+  const [circleContacts, setCircleContacts] = useState([]);
+  const [showCircleModal, setShowCircleModal] = useState(false);
+  const [circleForm, setCircleForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    type: 'Co-Borrower',
+    notes: ''
+  });
+
+  const circleContactTypes = [
+    { value: 'Co-Borrower', icon: '👥' },
+    { value: 'Real Estate Agent', icon: '🏡' },
+    { value: 'Family Member', icon: '👨‍👩‍👧' },
+    { value: 'Attorney', icon: '⚖️' },
+    { value: 'Financial Advisor', icon: '💼' },
+    { value: 'Insurance Agent', icon: '🛡️' },
+    { value: 'Accountant', icon: '📊' },
+    { value: 'Other Contact', icon: '🤝' }
+  ];
+
+  const handleAddCircleContact = () => {
+    if (!circleForm.name.trim()) return;
+    const newContact = {
+      id: Date.now(),
+      ...circleForm
+    };
+    setCircleContacts([...circleContacts, newContact]);
+    setCircleForm({ name: '', email: '', phone: '', type: 'Co-Borrower', notes: '' });
+    setShowCircleModal(false);
+  };
+
+  const handleDeleteCircleContact = (contactId) => {
+    setCircleContacts(circleContacts.filter(c => c.id !== contactId));
+  };
+
+  const getContactIcon = (type) => {
+    const found = circleContactTypes.find(t => t.value === type);
+    return found ? found.icon : '🤝';
+  };
+
   useEffect(() => {
     loadLeadData();
     loadEmails();
@@ -1143,49 +1185,131 @@ function LeadDetail() {
               </div>
 
               {/* Circle of Influence Section */}
-              <h3 style={{ marginBottom: '15px' }}>Circle of Influence</h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                <h3 style={{ margin: 0 }}>Circle of Influence</h3>
+                <button
+                  className="btn-add-circle"
+                  onClick={() => setShowCircleModal(true)}
+                  style={{ padding: '8px 16px' }}
+                >
+                  + Add Contact
+                </button>
+              </div>
               <p className="circle-description">
-                View and manage the borrower's circle of influence - family members, co-borrowers,
+                Add and manage the borrower's circle of influence - family members, co-borrowers,
                 real estate agents, and other key contacts involved in the loan process.
               </p>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #e9ecef' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span style={{ fontSize: '18px' }}>👥</span>
-                    <span style={{ fontWeight: '500' }}>Co-Borrowers</span>
-                    <span style={{ color: '#999', fontSize: '13px' }}>No co-borrowers added</span>
+                {circleContacts.length === 0 ? (
+                  <div style={{ padding: '20px', textAlign: 'center', color: '#999', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #e9ecef' }}>
+                    No contacts added yet. Click "+ Add Contact" to add someone to the circle of influence.
                   </div>
-                  <button className="btn-add-circle">+ Add</button>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #e9ecef' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span style={{ fontSize: '18px' }}>🏡</span>
-                    <span style={{ fontWeight: '500' }}>Real Estate Agent</span>
-                    <span style={{ color: '#999', fontSize: '13px' }}>No agent assigned</span>
-                  </div>
-                  <button className="btn-add-circle">+ Add</button>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #e9ecef' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span style={{ fontSize: '18px' }}>👨‍👩‍👧</span>
-                    <span style={{ fontWeight: '500' }}>Family Members</span>
-                    <span style={{ color: '#999', fontSize: '13px' }}>No family members added</span>
-                  </div>
-                  <button className="btn-add-circle">+ Add</button>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #e9ecef' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <span style={{ fontSize: '18px' }}>🤝</span>
-                    <span style={{ fontWeight: '500' }}>Other Contacts</span>
-                    <span style={{ color: '#999', fontSize: '13px' }}>No contacts added</span>
-                  </div>
-                  <button className="btn-add-circle">+ Add</button>
-                </div>
+                ) : (
+                  circleContacts.map(contact => (
+                    <div key={contact.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #e9ecef' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+                        <span style={{ fontSize: '18px' }}>{getContactIcon(contact.type)}</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontWeight: '500' }}>{contact.name}</span>
+                            <span style={{ fontSize: '12px', padding: '2px 8px', backgroundColor: '#e0f2f1', color: '#00695c', borderRadius: '12px' }}>{contact.type}</span>
+                          </div>
+                          <div style={{ fontSize: '13px', color: '#666' }}>
+                            {contact.email && <span>{contact.email}</span>}
+                            {contact.email && contact.phone && <span> • </span>}
+                            {contact.phone && <span>{contact.phone}</span>}
+                          </div>
+                          {contact.notes && <div style={{ fontSize: '12px', color: '#999', fontStyle: 'italic' }}>{contact.notes}</div>}
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteCircleContact(contact.id)}
+                        style={{ background: 'none', border: 'none', color: '#dc3545', cursor: 'pointer', fontSize: '16px', padding: '4px 8px' }}
+                        title="Remove contact"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
+
+              {/* Add Contact Modal */}
+              {showCircleModal && (
+                <div className="modal-overlay" onClick={() => setShowCircleModal(false)}>
+                  <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+                    <div className="modal-header">
+                      <h3>Add Contact to Circle of Influence</h3>
+                      <button className="modal-close" onClick={() => setShowCircleModal(false)}>×</button>
+                    </div>
+                    <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      <div className="form-group">
+                        <label>Contact Type *</label>
+                        <select
+                          value={circleForm.type}
+                          onChange={e => setCircleForm({...circleForm, type: e.target.value})}
+                          className="form-control"
+                        >
+                          {circleContactTypes.map(type => (
+                            <option key={type.value} value={type.value}>{type.icon} {type.value}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label>Name *</label>
+                        <input
+                          type="text"
+                          value={circleForm.name}
+                          onChange={e => setCircleForm({...circleForm, name: e.target.value})}
+                          className="form-control"
+                          placeholder="Enter contact name"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Email</label>
+                        <input
+                          type="email"
+                          value={circleForm.email}
+                          onChange={e => setCircleForm({...circleForm, email: e.target.value})}
+                          className="form-control"
+                          placeholder="Enter email address"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Phone</label>
+                        <input
+                          type="tel"
+                          value={circleForm.phone}
+                          onChange={e => setCircleForm({...circleForm, phone: e.target.value})}
+                          className="form-control"
+                          placeholder="Enter phone number"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Notes</label>
+                        <textarea
+                          value={circleForm.notes}
+                          onChange={e => setCircleForm({...circleForm, notes: e.target.value})}
+                          className="form-control"
+                          placeholder="Add any notes about this contact"
+                          rows={3}
+                        />
+                      </div>
+                    </div>
+                    <div className="modal-footer">
+                      <button className="btn-secondary" onClick={() => setShowCircleModal(false)}>Cancel</button>
+                      <button
+                        className="btn-primary"
+                        onClick={handleAddCircleContact}
+                        disabled={!circleForm.name.trim()}
+                      >
+                        Add Contact
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
           )}
