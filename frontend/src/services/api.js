@@ -839,4 +839,54 @@ export const complianceApi = {
   },
 };
 
+// Circle of Cashflow API
+export const circleOfCashflowAPI = {
+  // Opportunities
+  getOpportunities: async (contactId = null) => {
+    const params = contactId ? { contact_id: contactId } : {};
+    const response = await api.get('/api/v1/circle-of-cashflow/opportunities', { params });
+    return response.data;
+  },
+  acknowledgeOpportunity: async (opportunityId, data) => {
+    const response = await api.post(`/api/v1/circle-of-cashflow/opportunities/${opportunityId}/acknowledge`, data);
+    return response.data;
+  },
+  suggestPartner: async (opportunityId) => {
+    const response = await api.get(`/api/v1/circle-of-cashflow/opportunities/${opportunityId}/suggest-partner`);
+    return response.data;
+  },
+  sendIntroduction: async (opportunityId, partnerId, method = 'email') => {
+    const response = await api.post(`/api/v1/circle-of-cashflow/opportunities/${opportunityId}/send?partner_id=${partnerId}&introduction_method=${method}`);
+    return response.data;
+  },
+
+  // Partners
+  getPartners: async (category = null) => {
+    const params = category ? { category } : {};
+    const response = await api.get('/api/v1/circle-of-cashflow/partners', { params });
+    return response.data;
+  },
+
+  // Referrals
+  getReferrals: async (contactId = null) => {
+    const params = contactId ? { contact_id: contactId } : {};
+    const response = await api.get('/api/v1/circle-of-cashflow/referrals', { params });
+    return response.data;
+  },
+  createReferral: async (data) => {
+    const response = await api.post('/api/v1/circle-of-cashflow/referrals', data);
+    return response.data;
+  },
+
+  // Questionnaires
+  submitQuestionnaire: async (data) => {
+    const response = await api.post('/api/v1/circle-of-cashflow/questionnaires', data);
+    return response.data;
+  },
+  getQuestionnaire: async (id) => {
+    const response = await api.get(`/api/v1/circle-of-cashflow/questionnaires/${id}`);
+    return response.data;
+  },
+};
+
 export default api;

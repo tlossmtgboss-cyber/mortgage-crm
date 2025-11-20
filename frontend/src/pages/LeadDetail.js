@@ -1,7 +1,7 @@
 // VERSION: 2024-11-14-v2 - MOCK DATA FIX
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { leadsAPI, activitiesAPI } from '../services/api';
+import { leadsAPI, activitiesAPI, circleOfCashflowAPI } from '../services/api';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import SMSModal from '../components/SMSModal';
 import TeamsModal from '../components/TeamsModal';
@@ -65,6 +65,12 @@ function LeadDetail() {
   const [showEscalationModal, setShowEscalationModal] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState('');
+
+  // Circle of Cashflow state
+  const [cashflowOpportunities, setCashflowOpportunities] = useState([]);
+  const [cashflowReferrals, setCashflowReferrals] = useState([]);
+  const [cashflowPartners, setCashflowPartners] = useState([]);
+  const [cashflowLoading, setCashflowLoading] = useState(false);
 
   useEffect(() => {
     loadLeadData();
@@ -187,6 +193,32 @@ function LeadDetail() {
       console.error('Failed to load emails:', error);
     }
   };
+
+  const loadCircleOfCashflow = async () => {
+    try {
+      setCashflowLoading(true);
+      const [oppsData, refsData, partnersData] = await Promise.all([
+        circleOfCashflowAPI.getOpportunities(id),
+        circleOfCashflowAPI.getReferrals(id),
+        circleOfCashflowAPI.getPartners()
+      ]);
+      setCashflowOpportunities(oppsData.opportunities || []);
+      setCashflowReferrals(refsData.referrals || []);
+      setCashflowPartners(partnersData.partners || []);
+    } catch (error) {
+      console.error('Failed to load Circle of Cashflow data:', error);
+    } finally {
+      setCashflowLoading(false);
+    }
+  };
+
+  // Load Circle of Cashflow data when Circle tab is selected
+  useEffect(() => {
+    if (activeTab === 'circle') {
+      loadCircleOfCashflow();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   const handleSave = async () => {
     try {
@@ -1002,6 +1034,90 @@ function LeadDetail() {
           <div className="info-section">
             <h2>Circle</h2>
             <div className="circle-content">
+              {/* Circle of Cashflow Section */}
+              <div className="cashflow-section" style={{ marginBottom: '30px' }}>
+                <h3 style={{ marginBottom: '15px', color: '#2e7d32' }}>Circle of Cashflow - Referral Opportunities</h3>
+
+                {cashflowLoading ? (
+                  <p>Loading referral data...</p>
+                ) : (
+                  <>
+                    {/* Opportunities */}
+                    {cashflowOpportunities.length > 0 ? (
+                      <div className="circle-grid" style={{ marginBottom: '20px' }}>
+                        {cashflowOpportunities.map(opp => (
+                          <div key={opp.id} className="circle-card" style={{ borderLeft: '4px solid #ff9800' }}>
+                            <div className="circle-header">
+                              <h3>💡 {opp.category.replace('_', ' ').toUpperCase()}</h3>
+                              <span style={{
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                fontSize: '12px',
+                                backgroundColor: opp.status === 'detected' ? '#fff3e0' : opp.status === 'sent' ? '#e8f5e9' : '#e3f2fd',
+                                color: opp.status === 'detected' ? '#e65100' : opp.status === 'sent' ? '#2e7d32' : '#1565c0'
+                              }}>
+                                {opp.status}
+                              </span>
+                            </div>
+                            <div className="circle-list">
+                              <p style={{ fontSize: '14px', color: '#666', margin: '8px 0' }}>{opp.ai_reasoning}</p>
+                              <p style={{ fontSize: '12px', color: '#999' }}>Priority: {opp.priority}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p style={{ color: '#999', fontStyle: 'italic', marginBottom: '20px' }}>
+                        No referral opportunities detected. Submit a financial questionnaire to identify opportunities.
+                      </p>
+                    )}
+
+                    {/* Referral History */}
+                    {cashflowReferrals.length > 0 && (
+                      <div style={{ marginBottom: '20px' }}>
+                        <h4 style={{ marginBottom: '10px' }}>Referral History</h4>
+                        <div className="circle-grid">
+                          {cashflowReferrals.map(ref => (
+                            <div key={ref.id} className="circle-card" style={{ borderLeft: '4px solid #4caf50' }}>
+                              <div className="circle-header">
+                                <h3>📤 {ref.partner_name || 'Partner'}</h3>
+                                <span style={{ fontSize: '12px', color: '#666' }}>{ref.status}</span>
+                              </div>
+                              <div className="circle-list">
+                                <p style={{ fontSize: '14px' }}>{ref.category.replace('_', ' ')}</p>
+                                <p style={{ fontSize: '12px', color: '#999' }}>{new Date(ref.referral_date).toLocaleDateString()}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Available Partners */}
+                    {cashflowPartners.length > 0 && (
+                      <div>
+                        <h4 style={{ marginBottom: '10px' }}>Partner Network ({cashflowPartners.length})</h4>
+                        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                          {cashflowPartners.slice(0, 6).map(partner => (
+                            <div key={partner.id} style={{
+                              padding: '8px 12px',
+                              backgroundColor: '#f5f5f5',
+                              borderRadius: '6px',
+                              fontSize: '13px'
+                            }}>
+                              <strong>{partner.business_name}</strong>
+                              <span style={{ color: '#666', marginLeft: '8px' }}>{partner.category.replace('_', ' ')}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Circle of Influence Section */}
+              <h3 style={{ marginBottom: '15px' }}>Circle of Influence</h3>
               <p className="circle-description">
                 View and manage the borrower's circle of influence - family members, co-borrowers,
                 real estate agents, and other key contacts involved in the loan process.
