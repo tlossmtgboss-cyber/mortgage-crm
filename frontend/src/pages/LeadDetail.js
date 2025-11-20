@@ -96,6 +96,23 @@ function LeadDetail() {
     { value: 'Other Contact', icon: '🤝' }
   ];
 
+  // Custom fields state
+  const [customFields, setCustomFields] = useState([]);
+  const [showAddFieldModal, setShowAddFieldModal] = useState(false);
+  const [newFieldName, setNewFieldName] = useState('');
+
+  const handleAddCustomField = () => {
+    if (!newFieldName.trim()) return;
+    const fieldKey = newFieldName.toLowerCase().replace(/\s+/g, '_');
+    setCustomFields([...customFields, { key: fieldKey, label: newFieldName }]);
+    setNewFieldName('');
+    setShowAddFieldModal(false);
+  };
+
+  const handleRemoveCustomField = (fieldKey) => {
+    setCustomFields(customFields.filter(f => f.key !== fieldKey));
+  };
+
   const searchContacts = async (query) => {
     if (query.length < 2) {
       setSearchResults([]);
@@ -969,7 +986,29 @@ function LeadDetail() {
           {/* Personal Information Tab */}
           {activeTab === 'personal' && (
           <div className="info-section">
-            <h2>Personal Information</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h2 style={{ margin: 0 }}>Personal Information</h2>
+              <button
+                onClick={() => setShowAddFieldModal(true)}
+                style={{
+                  background: '#007bff',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '32px',
+                  height: '32px',
+                  fontSize: '20px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  lineHeight: 1
+                }}
+                title="Add custom field"
+              >
+                +
+              </button>
+            </div>
             <div className="info-grid compact">
               <div className="info-field">
                 <label>First Name</label>
@@ -1003,15 +1042,69 @@ function LeadDetail() {
                   onChange={(e) => handleFieldChange('phone', e.target.value)}
                 />
               </div>
-              <div className="info-field">
-                <label>Loan Number</label>
-                <input
-                  type="text"
-                  value={formData.loan_number || ''}
-                  onChange={(e) => handleFieldChange('loan_number', e.target.value)}
-                />
-              </div>
+              {/* Custom Fields */}
+              {customFields.map((field) => (
+                <div className="info-field" key={field.key}>
+                  <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    {field.label}
+                    <button
+                      onClick={() => handleRemoveCustomField(field.key)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#dc3545',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        padding: '0 4px'
+                      }}
+                      title="Remove field"
+                    >
+                      ×
+                    </button>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData[field.key] || ''}
+                    onChange={(e) => handleFieldChange(field.key, e.target.value)}
+                  />
+                </div>
+              ))}
             </div>
+
+            {/* Add Field Modal */}
+            {showAddFieldModal && (
+              <div className="modal-overlay" onClick={() => setShowAddFieldModal(false)}>
+                <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+                  <div className="modal-header">
+                    <h3>Add Custom Field</h3>
+                    <button className="modal-close" onClick={() => setShowAddFieldModal(false)}>×</button>
+                  </div>
+                  <div className="modal-body">
+                    <div className="form-group">
+                      <label>Field Name</label>
+                      <input
+                        type="text"
+                        value={newFieldName}
+                        onChange={e => setNewFieldName(e.target.value)}
+                        className="form-control"
+                        placeholder="Enter field name"
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+                  <div className="modal-footer">
+                    <button className="btn-secondary" onClick={() => setShowAddFieldModal(false)}>Cancel</button>
+                    <button
+                      className="btn-primary"
+                      onClick={handleAddCustomField}
+                      disabled={!newFieldName.trim()}
+                    >
+                      Add Field
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
           )}
 
