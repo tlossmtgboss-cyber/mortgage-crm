@@ -71,15 +71,13 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
             Calendar
           </Link>
 
-          {/* PHASE 4: Scorecard only visible to Management */}
-          {userRole === 'management' && (
-            <Link
-              to="/scorecard"
-              className={`nav-link ${isActive('/scorecard') ? 'active' : ''}`}
-            >
-              Scorecard
-            </Link>
-          )}
+          {/* Scorecard visible to all users */}
+          <Link
+            to="/scorecard"
+            className={`nav-link ${isActive('/scorecard') ? 'active' : ''}`}
+          >
+            Scorecard
+          </Link>
 
           {/* Referral Partners - visible to all users */}
           <Link
