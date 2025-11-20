@@ -16,7 +16,8 @@ function Settings() {
     organizational: false,
     scheduling: false,
     onboarding: false,
-    masterAdmin: false
+    masterAdmin: false,
+    landingPages: false
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [connectedIntegrations, setConnectedIntegrations] = useState(new Set());
@@ -1397,6 +1398,32 @@ const API_BASE_URL = isProduction
             <span className="icon">📋</span>
             <span>Task & Workflow Management</span>
           </button>
+
+          {/* Landing Pages */}
+          <button
+            className={`sidebar-btn parent ${expandedSections.landingPages ? 'expanded' : ''}`}
+            onClick={() => toggleSection('landingPages')}
+          >
+            <span className="icon">🌐</span>
+            <span>Landing Pages</span>
+            <span className="expand-icon">{expandedSections.landingPages ? '▼' : '▶'}</span>
+          </button>
+          {expandedSections.landingPages && (
+            <div className="sidebar-children">
+              <button
+                className="sidebar-btn child"
+                onClick={() => navigate('/apply')}
+              >
+                <span>📝 Buyer Application</span>
+              </button>
+              <button
+                className="sidebar-btn child"
+                onClick={() => navigate('/questionnaire')}
+              >
+                <span>📊 Mortgage Planning Questionnaire</span>
+              </button>
+            </div>
+          )}
 
           {/* Integrations - Conditionally Expandable based on connected apps */}
           {(microsoftStatus.connected || calendlyEventTypes.length > 0 || twilioStatus.configured) ? (
