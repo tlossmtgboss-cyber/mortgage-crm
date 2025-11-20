@@ -1,0 +1,132 @@
+.employment-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.employment-section {
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 1.25rem;
+}
+
+.employment-section h3 {
+  margin: 0 0 1rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #333;
+  border-bottom: 1px solid #e0e0e0;
+  padding-bottom: 0.75rem;
+}
+
+.employment-section .info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+.employment-section .info-grid.compact {
+  gap: 0.75rem;
+}
+
+.employment-section .info-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.employment-section .info-field.full-width {
+  grid-column: 1 / -1;
+}
+
+.employment-section .info-field label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.employment-section .info-field input,
+.employment-section .info-field select {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  background: white;
+}
+
+.employment-section .info-field input:focus,
+.employment-section .info-field select:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.1);
+}
+
+.employment-section .info-field input.ai-calculated {
+  background: #f5f5f5;
+  color: #666;
+  font-style: italic;
+}
+
+.employment-section .radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.employment-section .radio-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #333;
+  cursor: pointer;
+}
+
+.employment-section .radio-option input[type="radio"] {
+  margin: 0;
+}
+
+.employment-section .field-hint {
+  font-size: 0.75rem;
+  color: #888;
+  margin-top: 0.5rem;
+  font-style: italic;
+}
+
+/* Referral Score Section */
+.referral-score-section {
+  background: linear-gradient(135deg, #f0f7ff 0%, #e8f4fd 100%);
+  border-color: #b8d4f1;
+}
+
+.referral-score-display {
+  text-align: center;
+  padding: 1.5rem;
+}
+
+.referral-score-display .star-rating {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.referral-score-display .score-value {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 0.5rem;
+}
+
+.referral-score-display .score-factors {
+  font-size: 0.75rem;
+  color: #666;
+}
+
+@media (max-width: 768px) {
+  .employment-section .info-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -10148,6 +10148,152 @@ async def delete_lead(lead_id: int, db: Session = Depends(get_db), current_user:
     logger.info(f"Lead deleted: {lead.name}")
     return None
 
+@app.post("/api/v1/leads/{lead_id}/calculate-referral-scores")
+async def calculate_lead_referral_scores(lead_id: int, data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Calculate AI-based referral intelligence scores for a lead"""
+    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    # Calculate scores based on employment data
+    scores = calculate_referral_scores(data)
+
+    # Update lead with calculated scores
+    for key, value in scores.items():
+        if hasattr(lead, key):
+            setattr(lead, key, value)
+
+    db.commit()
+    db.refresh(lead)
+
+    return scores
+
+@app.post("/api/v1/loans/{loan_id}/calculate-referral-scores")
+async def calculate_loan_referral_scores(loan_id: int, data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Calculate AI-based referral intelligence scores for a loan"""
+    loan = db.query(Loan).filter(Loan.id == loan_id).first()
+    if not loan:
+        raise HTTPException(status_code=404, detail="Loan not found")
+
+    scores = calculate_referral_scores(data)
+
+    for key, value in scores.items():
+        if hasattr(loan, key):
+            setattr(loan, key, value)
+
+    db.commit()
+    db.refresh(loan)
+
+    return scores
+
+@app.post("/api/v1/mum/{client_id}/calculate-referral-scores")
+async def calculate_mum_referral_scores(client_id: int, data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Calculate AI-based referral intelligence scores for a MUM client"""
+    client = db.query(MumClient).filter(MumClient.id == client_id).first()
+    if not client:
+        raise HTTPException(status_code=404, detail="MUM client not found")
+
+    scores = calculate_referral_scores(data)
+
+    for key, value in scores.items():
+        if hasattr(client, key):
+            setattr(client, key, value)
+
+    db.commit()
+    db.refresh(client)
+
+    return scores
+
+def calculate_referral_scores(data: dict) -> dict:
+    """Calculate referral intelligence scores based on employment data"""
+    # Default scores
+    scores = {
+        'influence_score': 'Low',
+        'referral_industry_flag': 'Low',
+        'career_stability_score': 'Medium',
+        'referral_source_score': 50,
+        'referral_source_rating': '...'
+    }
+
+    score = 0
+
+    # Leadership level scoring
+    leadership = data.get('leadership_level', '')
+    if leadership in ['Executive', 'Business Owner']:
+        score += 25
+        scores['influence_score'] = 'Strategic Source'
+    elif leadership in ['Manager', 'Team Lead']:
+        score += 15
+        scores['influence_score'] = 'High'
+    elif leadership == 'Individual Contributor':
+        score += 5
+        scores['influence_score'] = 'Medium'
+
+    # Employees managed scoring
+    employees = int(data.get('employees_managed', 0) or 0)
+    if employees >= 20:
+        score += 20
+    elif employees >= 5:
+        score += 10
+    elif employees >= 1:
+        score += 5
+
+    # Company size scoring
+    company_size = data.get('company_size', '')
+    if company_size in ['200-1000', '1000+']:
+        score += 15
+    elif company_size in ['51-200']:
+        score += 10
+    elif company_size in ['11-50']:
+        score += 5
+
+    # Industry detection based on job title
+    job_title = (data.get('job_title', '') or '').lower()
+    high_referral_keywords = ['teacher', 'nurse', 'doctor', 'police', 'fire', 'military', 'hr', 'recruiter', 'realtor', 'agent']
+    if any(keyword in job_title for keyword in high_referral_keywords):
+        score += 15
+        scores['referral_industry_flag'] = 'High'
+    elif any(keyword in job_title for keyword in ['manager', 'director', 'engineer', 'developer']):
+        score += 10
+        scores['referral_industry_flag'] = 'Medium'
+
+    # Career stability based on years and income
+    years = float(data.get('years_at_job', 0) or 0)
+    income = float(data.get('annual_income', 0) or 0)
+
+    if years >= 5 and income >= 100000:
+        score += 15
+        scores['career_stability_score'] = 'High'
+    elif years >= 2 and income >= 60000:
+        score += 10
+        scores['career_stability_score'] = 'Medium'
+    else:
+        score += 5
+        scores['career_stability_score'] = 'Low'
+
+    # Referral comfort level
+    comfort = data.get('referral_comfort_level', '')
+    if comfort == 'Very comfortable':
+        score += 10
+    elif comfort == 'Somewhat comfortable':
+        score += 5
+
+    # Set final score and rating
+    scores['referral_source_score'] = min(100, score)
+
+    if score >= 80:
+        scores['referral_source_rating'] = 'Strong Referral Source'
+    elif score >= 60:
+        scores['referral_source_rating'] = 'Good Referral Source'
+    elif score >= 40:
+        scores['referral_source_rating'] = 'Moderate Referral Source'
+    elif score >= 20:
+        scores['referral_source_rating'] = 'Limited Referral Source'
+    else:
+        scores['referral_source_rating'] = 'Low Referral Source'
+
+    return scores
+
 # ============================================================================
 # LOANS CRUD
 # ============================================================================

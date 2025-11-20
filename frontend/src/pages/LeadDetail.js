@@ -13,6 +13,7 @@ import CreateTaskModal from '../components/CreateTaskModal';
 import AppointmentModal from '../components/AppointmentModal';
 import TeamAssignment from '../components/TeamAssignment';
 import SmartAIChat from '../components/SmartAIChat';
+import EmploymentTab from '../components/EmploymentTab';
 import './LeadDetail.css';
 
 // Mock lead data generator (same as Leads.js)
@@ -866,75 +867,12 @@ function LeadDetail() {
 
           {/* Employment Tab */}
           {activeTab === 'employment' && (
-          <div className="info-section">
-            <h2>Employment Information</h2>
-            <div className="info-grid compact">
-              <div className="info-field">
-                <label>Employment Status</label>
-                <input
-                  type="text"
-                  value={formData.employment_status || ''}
-                  onChange={(e) => handleFieldChange('employment_status', e.target.value)}
-                />
-              </div>
-              <div className="info-field">
-                <label>Employer Name</label>
-                <input
-                  type="text"
-                  value={formData.employer_name || ''}
-                  onChange={(e) => handleFieldChange('employer_name', e.target.value)}
-                />
-              </div>
-              <div className="info-field">
-                <label>Job Title</label>
-                <input
-                  type="text"
-                  value={formData.job_title || ''}
-                  onChange={(e) => handleFieldChange('job_title', e.target.value)}
-                />
-              </div>
-              <div className="info-field">
-                <label>Years at Job</label>
-                <input
-                  type="number"
-                  value={formData.years_at_job || ''}
-                  onChange={(e) => handleFieldChange('years_at_job', parseFloat(e.target.value))}
-                />
-              </div>
-              <div className="info-field">
-                <label>Annual Income</label>
-                <input
-                  type="number"
-                  value={formData.annual_income || ''}
-                  onChange={(e) => handleFieldChange('annual_income', parseFloat(e.target.value))}
-                />
-              </div>
-              <div className="info-field">
-                <label>Monthly Income</label>
-                <input
-                  type="number"
-                  value={formData.monthly_income || ''}
-                  onChange={(e) => handleFieldChange('monthly_income', parseFloat(e.target.value))}
-                />
-              </div>
-              <div className="info-field">
-                <label>Other Income</label>
-                <input
-                  type="number"
-                  value={formData.other_income || ''}
-                  onChange={(e) => handleFieldChange('other_income', parseFloat(e.target.value))}
-                />
-              </div>
-              <div className="info-field">
-                <label>Income Source</label>
-                <input
-                  type="text"
-                  value={formData.income_source || ''}
-                  onChange={(e) => handleFieldChange('income_source', e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
+            <EmploymentTab
+              leadId={id}
+              formData={formData}
+              onFieldChange={handleFieldChange}
+              entityType="leads"
+            />
           )}
 
           {/* Loan Information Tab */}
