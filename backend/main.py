@@ -3682,6 +3682,10 @@ app.include_router(escalation_router, tags=["Escalations"])
 from migrations_api import router as migrations_router
 app.include_router(migrations_router, tags=["Migrations"])
 
+# Include Circle of Cashflow routes
+from circle_of_cashflow_routes import router as circle_of_cashflow_router
+app.include_router(circle_of_cashflow_router, tags=["Circle of Cashflow"])
+
 # ============================================================================
 # API KEY HELPER FUNCTIONS
 # ============================================================================
