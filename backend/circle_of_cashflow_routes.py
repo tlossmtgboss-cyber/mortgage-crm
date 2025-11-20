@@ -116,6 +116,15 @@ async def submit_questionnaire(data: QuestionnaireCreate, db: Session = Depends(
         "message": f"Questionnaire submitted. {len(opportunities)} referral opportunities detected."
     }
 
+@router.get("/questionnaires/{questionnaire_id}")
+async def get_questionnaire(questionnaire_id: int, db: Session = Depends(get_db)):
+    """Get a questionnaire by ID"""
+    result = db.execute(text("SELECT * FROM mortgage_questionnaires WHERE id = :id"), {"id": questionnaire_id})
+    questionnaire = result.fetchone()
+    if not questionnaire:
+        raise HTTPException(status_code=404, detail="Questionnaire not found")
+    return {"questionnaire": dict(questionnaire._mapping)}
+
 def detect_opportunities(db: Session, questionnaire_id: int, data: QuestionnaireCreate):
     """AI-powered opportunity detection based on questionnaire responses"""
     opportunities = []
