@@ -1,12 +1,82 @@
+/* Floating wrapper - fixed to bottom right */
+.smart-ai-chat-wrapper {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1000;
+}
+
+/* Toggle button */
+.smart-ai-toggle-button {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%);
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(33, 141, 141, 0.4);
+  transition: all 250ms ease;
+  position: relative;
+}
+
+.smart-ai-toggle-button:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 24px rgba(33, 141, 141, 0.5);
+}
+
+.smart-ai-toggle-button.open {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  box-shadow: 0 4px 20px rgba(239, 68, 68, 0.4);
+}
+
+.smart-ai-toggle-button.open:hover {
+  box-shadow: 0 6px 24px rgba(239, 68, 68, 0.5);
+}
+
+.toggle-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: #10b981;
+  color: white;
+  font-size: 11px;
+  font-weight: bold;
+  padding: 2px 6px;
+  border-radius: 10px;
+  min-width: 18px;
+  text-align: center;
+}
+
 .smart-ai-chat {
+  position: absolute;
+  bottom: 70px;
+  right: 0;
+  width: 400px;
   display: flex;
   flex-direction: column;
-  height: 600px;
+  height: 500px;
   background: var(--color-bg-surface);
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
   overflow: hidden;
+  animation: slideUp 200ms ease;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .smart-ai-chat-header {
@@ -339,8 +409,22 @@
 }
 
 @media (max-width: 768px) {
+  .smart-ai-chat-wrapper {
+    bottom: 10px;
+    right: 10px;
+  }
+
+  .smart-ai-toggle-button {
+    width: 50px;
+    height: 50px;
+    font-size: 24px;
+  }
+
   .smart-ai-chat {
-    height: 500px;
+    width: calc(100vw - 40px);
+    max-width: 350px;
+    height: 450px;
+    bottom: 60px;
   }
 
   .message {

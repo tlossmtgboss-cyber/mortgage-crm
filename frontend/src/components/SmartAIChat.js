@@ -3,6 +3,7 @@ import { aiAPI } from '../services/api';
 import './SmartAIChat.css';
 
 function SmartAIChat({ leadId, loanId, context = {} }) {
+  const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
     {
       id: 1,
@@ -179,24 +180,39 @@ function SmartAIChat({ leadId, loanId, context = {} }) {
   };
 
   return (
-    <div className="smart-ai-chat">
-      <div className="smart-ai-chat-header">
-        <div className="header-content">
-          <h3>Smart AI Assistant</h3>
-          {memoryStats && (
-            <span className="memory-badge" title="Conversation memories stored">
-              {memoryStats.total_memories} memories
-            </span>
-          )}
-        </div>
-        <button
-          className="stats-toggle"
-          onClick={() => setShowStats(!showStats)}
-          title="View memory statistics"
-        >
-          {showStats ? '📊 Hide Stats' : '📊 Stats'}
-        </button>
-      </div>
+    <div className="smart-ai-chat-wrapper">
+      {/* Floating toggle button */}
+      <button
+        className={`smart-ai-toggle-button ${isOpen ? 'open' : ''}`}
+        onClick={() => setIsOpen(!isOpen)}
+        title={isOpen ? 'Close AI Assistant' : 'Open AI Assistant'}
+      >
+        {isOpen ? '✕' : '🤖'}
+        {!isOpen && memoryStats && memoryStats.total_memories > 0 && (
+          <span className="toggle-badge">{memoryStats.total_memories}</span>
+        )}
+      </button>
+
+      {/* Chat panel */}
+      {isOpen && (
+        <div className="smart-ai-chat">
+          <div className="smart-ai-chat-header">
+            <div className="header-content">
+              <h3>Smart AI Assistant</h3>
+              {memoryStats && (
+                <span className="memory-badge" title="Conversation memories stored">
+                  {memoryStats.total_memories} memories
+                </span>
+              )}
+            </div>
+            <button
+              className="stats-toggle"
+              onClick={() => setShowStats(!showStats)}
+              title="View memory statistics"
+            >
+              {showStats ? '📊 Hide Stats' : '📊 Stats'}
+            </button>
+          </div>
 
       {showStats && memoryStats && (
         <div className="memory-stats">
@@ -294,6 +310,8 @@ function SmartAIChat({ leadId, loanId, context = {} }) {
           </div>
         </div>
       </form>
+        </div>
+      )}
     </div>
   );
 }
