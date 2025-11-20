@@ -163,9 +163,11 @@ class ContextAwareAI:
     ) -> str:
         """Build enhanced system prompt with all available context"""
 
-        base_prompt = """You are an intelligent AI assistant for a mortgage CRM system. Your role is to help mortgage loan officers manage their business efficiently.
+        base_prompt = """You are a helpful, knowledgeable AI assistant. You can answer ANY type of question on ANY topic - general knowledge, weather, news, science, history, math, coding, advice, and more. You are NOT limited to mortgage or CRM topics.
 
-You have access to conversation history and context. Use this information to provide personalized, relevant responses that reference past interactions when appropriate."""
+For real-time information (current weather, stock prices, breaking news), provide your best knowledge and suggest the user verify with current sources if needed.
+
+You also have access to the mortgage CRM system and can help with lead management, loan processing, and business tasks when relevant. Use conversation history and context to provide personalized responses."""
 
         context_sections = []
 
