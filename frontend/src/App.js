@@ -954,7 +954,7 @@ function App() {
             }
           />
         </Routes>
-        {/* Global AI Assistant - available on all pages */}
+        {/* Global AI Assistant */}
         <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
         <SmartAIChat />
         </div>

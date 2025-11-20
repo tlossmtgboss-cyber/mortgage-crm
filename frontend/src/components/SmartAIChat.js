@@ -3,6 +3,9 @@ import { aiAPI } from '../services/api';
 import './SmartAIChat.css';
 
 function SmartAIChat({ leadId, loanId, context = {} }) {
+  // Don't render on login/public pages
+  const isAuthPage = ['/', '/login', '/register', '/verify-email', '/verify-email-sent', '/onboarding'].includes(window.location.pathname);
+
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
     {
@@ -22,7 +25,10 @@ function SmartAIChat({ leadId, loanId, context = {} }) {
   const recognitionRef = useRef(null);
 
   useEffect(() => {
-    loadMemoryStats();
+    // Only load memory stats if authenticated
+    if (localStorage.getItem('token')) {
+      loadMemoryStats();
+    }
 
     // Listen for voice commands
     const handleVoiceCommand = (event) => {
@@ -178,6 +184,11 @@ function SmartAIChat({ leadId, loanId, context = {} }) {
     recognitionRef.current = recognition;
     recognition.start();
   };
+
+  // Don't render on auth pages or without token
+  if (isAuthPage || !localStorage.getItem('token')) {
+    return null;
+  }
 
   return (
     <div className="smart-ai-chat-wrapper">
