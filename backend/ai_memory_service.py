@@ -199,8 +199,9 @@ You have access to conversation history and context. Use this information to pro
             context_sections.append("\n## ⭐ YOUR CRM DATA (Use this for coaching and prioritization!):")
             context_sections.append(coaching_context)
 
-        # Add guidelines
-        context_sections.append("""
+        # Add guidelines - different based on whether we have current lead context
+        if lead_context or loan_context:
+            context_sections.append("""
 
 ## RESPONSE GUIDELINES:
 1. **CRITICAL**: Always use the CURRENT LEAD/LOAN INFORMATION above when answering questions. Never confuse the current client with people mentioned in past conversations.
@@ -210,6 +211,18 @@ You have access to conversation history and context. Use this information to pro
 5. If you don't have information, say so clearly
 6. Maintain professional mortgage industry tone
 7. Highlight important details and action items
+""")
+        else:
+            context_sections.append("""
+
+## RESPONSE GUIDELINES:
+1. **CRITICAL**: The user is NOT currently viewing a specific lead or loan. Do NOT assume they want to discuss any particular client unless they specifically mention one by name.
+2. Do NOT bring up specific lead names (like "John Smith" or "Sarah Johnson") from past conversations unless the user explicitly asks about them
+3. When asked about general tasks, bottlenecks, or workflows, provide GENERAL advice - not advice specific to any particular lead
+4. If the user wants help with a specific client, they will either mention them by name or navigate to that client's page
+5. Be concise but informative
+6. Maintain professional mortgage industry tone
+7. If the user asks to email something, ask WHO they want to email it to - don't assume
 """)
 
         return base_prompt + "\n".join(context_sections)
