@@ -28,13 +28,13 @@ class MortgageGuidelinesScraper:
     USERNAME = "tloss@cmghomeloans.com"
     PASSWORD = "Woodwindow00!"
 
-    # Source URLs after login
+    # Source URLs after login (using events/category structure)
     SOURCES = {
-        'fannie_mae': '/fannie-mae-updates/',
-        'freddie_mac': '/freddie-mac-updates/',
-        'fha': '/fha-updates/',
-        'va': '/va-updates/',
-        'usda': '/usda-updates/'
+        'fannie_mae': '/events/category/fannie-mae/',
+        'freddie_mac': '/events/category/freddie-mac/',
+        'fha': '/events/category/fha/',
+        'va': '/events/category/va/',
+        'usda': '/events/category/usda/'
     }
 
     def __init__(self):
@@ -140,6 +140,7 @@ class MortgageGuidelinesScraper:
             return []
 
         updates = []
+        seen_urls = set()  # Track unique URLs to avoid duplicates
 
         try:
             url = f"{self.BASE_URL}{source_path}"
@@ -150,71 +151,64 @@ class MortgageGuidelinesScraper:
 
             soup = BeautifulSoup(response.content, 'html.parser')
 
-            # Look for update entries - adjust selectors based on actual HTML structure
-            # Common patterns for update listings
-            update_containers = (
-                soup.find_all('article', class_=re.compile(r'post|update|entry')) or
-                soup.find_all('div', class_=re.compile(r'post|update|entry|item')) or
-                soup.find_all('li', class_=re.compile(r'post|update|entry'))
-            )
+            # Find event containers using The Events Calendar (Tribe) structure
+            event_containers = soup.find_all('article', class_='type-tribe_events')
 
-            if not update_containers:
-                # Try finding by heading tags
-                update_containers = soup.find_all(['h2', 'h3'], limit=limit * 2)
-                logger.info(f"Found {len(update_containers)} heading-based containers")
+            if not event_containers:
+                # Fallback: look for any tribe events structure
+                event_containers = soup.find_all(class_=re.compile(r'tribe-events.*event'))
 
-            logger.info(f"Found {len(update_containers)} potential updates for {source_name}")
+            logger.info(f"Found {len(event_containers)} event containers for {source_name}")
 
-            for container in update_containers[:limit]:
+            for container in event_containers:
                 try:
-                    # Extract title
-                    title_elem = (
-                        container.find(['h1', 'h2', 'h3', 'h4']) or
-                        container.find('a', class_=re.compile(r'title|headline'))
-                    )
+                    # Extract from tooltip structure (most reliable)
+                    tooltip = container.find(class_=re.compile(r'tooltip-content|calendar-event-tooltip$'))
 
-                    if title_elem:
-                        title = title_elem.get_text(strip=True)
-                    else:
-                        title = container.get_text(strip=True)[:100]
+                    # Extract title and URL
+                    title_link = None
+                    if tooltip:
+                        title_link = tooltip.find('a', class_=re.compile(r'title-link'))
+                    if not title_link:
+                        # Try other locations
+                        title_link = container.find('a', href=re.compile(r'/event/'))
+
+                    if not title_link:
+                        continue
+
+                    title = title_link.get_text(strip=True)
+                    update_url = title_link.get('href', '')
 
                     if not title or len(title) < 5:
                         continue
 
-                    # Extract URL
-                    link_elem = container.find('a', href=True)
-                    if link_elem:
-                        update_url = link_elem['href']
-                        if not update_url.startswith('http'):
-                            update_url = f"{self.BASE_URL}{update_url}"
-                    else:
-                        update_url = url
+                    # Skip duplicates (same event appears multiple times in calendar view)
+                    if update_url in seen_urls:
+                        continue
+                    seen_urls.add(update_url)
 
-                    # Extract date
-                    date_elem = (
-                        container.find('time') or
-                        container.find(class_=re.compile(r'date|time|published')) or
-                        container.find('span', class_=re.compile(r'date|time'))
-                    )
+                    # Make URL absolute
+                    if update_url and not update_url.startswith('http'):
+                        update_url = f"{self.BASE_URL}{update_url}"
 
+                    # Extract date from time element
+                    date_elem = container.find('time', datetime=True)
                     if date_elem:
-                        date_str = date_elem.get('datetime') or date_elem.get_text(strip=True)
+                        date_str = date_elem.get('datetime', '')
                         published_date = self.parse_update_date(date_str)
                     else:
-                        # Default to recent date if not found
                         published_date = datetime.utcnow() - timedelta(days=len(updates))
 
-                    # Extract description/excerpt
-                    desc_elem = (
-                        container.find('p') or
-                        container.find(class_=re.compile(r'excerpt|summary|description'))
-                    )
-
-                    description = desc_elem.get_text(strip=True)[:500] if desc_elem else title
+                    # Extract description from tooltip
+                    description = title  # Default
+                    if tooltip:
+                        desc_elem = tooltip.find(class_=re.compile(r'description'))
+                        if desc_elem:
+                            description = desc_elem.get_text(strip=True)[:500]
 
                     # Extract section code if present (e.g., "SEL-2024-08", "ML 2024-11")
                     section_code = None
-                    code_match = re.search(r'(SEL|ML|CIRC|BULL|RD)[\s-]?\d{4}[-]?\d{1,2}', title, re.IGNORECASE)
+                    code_match = re.search(r'(SEL|ML|CIRC|BULL|RD|LL)[\s-]?\d{4}[-]?\d{1,2}', title, re.IGNORECASE)
                     if code_match:
                         section_code = code_match.group(0)
 
@@ -230,6 +224,10 @@ class MortgageGuidelinesScraper:
 
                     updates.append(update)
                     logger.info(f"  ✅ {source_name}: {title[:60]}... ({published_date.date()})")
+
+                    # Stop if we have enough
+                    if len(updates) >= limit:
+                        break
 
                 except Exception as e:
                     logger.error(f"Error parsing update container: {e}")
