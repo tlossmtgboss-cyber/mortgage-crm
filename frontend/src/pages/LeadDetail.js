@@ -1284,7 +1284,7 @@ function LeadDetail() {
                   </div>
                 ) : (
                   circleContacts.map(contact => (
-                    <div key={contact.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #e9ecef' }}>
+                    <div key={contact.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 12px', backgroundColor: '#f8f9fa', borderRadius: '6px', border: '1px solid #e9ecef' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
                         <span style={{ fontSize: '18px' }}>{getContactIcon(contact.type)}</span>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
