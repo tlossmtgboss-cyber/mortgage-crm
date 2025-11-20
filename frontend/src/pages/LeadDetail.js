@@ -11,6 +11,7 @@ import EscalationModal from '../components/EscalationModal';
 import VoicemailDrop from '../components/VoicemailDrop';
 import CreateTaskModal from '../components/CreateTaskModal';
 import AppointmentModal from '../components/AppointmentModal';
+import TeamAssignment from '../components/TeamAssignment';
 import SmartAIChat from '../components/SmartAIChat';
 import './LeadDetail.css';
 
@@ -1437,6 +1438,9 @@ function LeadDetail() {
 
         {/* Right Column - Actions & Email History */}
         <div className="right-column">
+          {/* Team Members on File */}
+          <TeamAssignment leadId={id} />
+
           {/* Action Buttons */}
           <div className="actions-card">
             <h3>Quick Actions</h3>

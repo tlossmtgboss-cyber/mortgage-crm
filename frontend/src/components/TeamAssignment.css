@@ -1,0 +1,131 @@
+.team-assignment-container {
+  background: white;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  margin-bottom: 16px;
+}
+
+.team-assignment-header {
+  margin-bottom: 12px;
+}
+
+.team-assignment-header h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.team-assignment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.no-members-message {
+  padding: 12px;
+  text-align: center;
+  color: #888;
+  font-size: 13px;
+  background: #f8f9fa;
+  border-radius: 6px;
+}
+
+.team-member-slot {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.member-select {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  background: white;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.member-select:focus {
+  outline: none;
+  border-color: #218D8D;
+}
+
+.member-select:hover {
+  border-color: #bbb;
+}
+
+.remove-member-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: #f8f9fa;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 18px;
+  color: #666;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.remove-member-btn:hover {
+  background: #fee;
+  border-color: #e74c3c;
+  color: #e74c3c;
+}
+
+.add-member-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 16px;
+  background: #f8f9fa;
+  border: 2px dashed #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.add-member-btn:hover:not(:disabled) {
+  background: #e8f5f5;
+  border-color: #218D8D;
+  color: #218D8D;
+}
+
+.add-member-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.plus-icon {
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.team-assignment-loading {
+  padding: 20px;
+  text-align: center;
+  color: #888;
+  font-size: 14px;
+}
+
+@media (max-width: 768px) {
+  .team-assignment-container {
+    padding: 12px;
+  }
+}
