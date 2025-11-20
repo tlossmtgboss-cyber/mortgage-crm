@@ -10112,6 +10112,33 @@ async def get_leads(
     leads = query.order_by(Lead.created_at.desc()).offset(skip).limit(limit).all()
     return leads
 
+@app.get("/api/v1/leads/search", response_model=List[LeadResponse])
+async def search_leads(
+    q: str,
+    limit: int = 10,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Search leads by name (first name, last name, or full name)"""
+    if not q or len(q.strip()) < 2:
+        return []
+
+    search_term = q.strip().lower()
+
+    # Build query with permission filtering
+    query = db.query(Lead)
+    query = filter_leads_by_permissions(query, current_user, db)
+
+    # Search by name (case-insensitive)
+    query = query.filter(
+        func.lower(Lead.name).contains(search_term)
+    )
+
+    # Order by relevance (exact matches first, then alphabetically)
+    leads = query.order_by(Lead.name).limit(limit).all()
+
+    return leads
+
 @app.get("/api/v1/leads/{lead_id}", response_model=LeadResponse)
 async def get_lead(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
     lead = db.query(Lead).filter(Lead.id == lead_id, Lead.owner_id == current_user.id).first()

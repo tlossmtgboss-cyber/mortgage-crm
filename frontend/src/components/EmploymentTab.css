@@ -20,6 +20,21 @@
   padding-bottom: 0.75rem;
 }
 
+.employment-section h3.section-header-with-score {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.employment-section .header-score {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #007bff;
+  background: #f0f7ff;
+  padding: 0.25rem 0.75rem;
+  border-radius: 4px;
+}
+
 .employment-section .info-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);

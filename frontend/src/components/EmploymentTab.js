@@ -63,7 +63,12 @@ export default function EmploymentTab({ leadId, formData, onFieldChange, entityT
     <div className="employment-tab">
       {/* SECTION 1: Employment Overview */}
       <div className="employment-section">
-        <h3>Employment Overview</h3>
+        <h3 className="section-header-with-score">
+          <span>Employment Overview</span>
+          <span className="header-score">
+            {formData.referral_source_rating || '...'} {formData.referral_source_score || 0}/100
+          </span>
+        </h3>
         <div className="info-grid compact">
           <div className="info-field">
             <label>Employment Status</label>
@@ -341,22 +346,6 @@ export default function EmploymentTab({ leadId, formData, onFieldChange, entityT
               />
               Not comfortable
             </label>
-          </div>
-        </div>
-      </div>
-
-      {/* SECTION 6: Overall Referral Source Rating */}
-      <div className="employment-section referral-score-section">
-        <h3>Overall Referral Source Rating</h3>
-        <div className="referral-score-display">
-          <div className="star-rating">
-            {formData.referral_source_rating || '...'}
-          </div>
-          <div className="score-value">
-            Score: {formData.referral_source_score || 0}/100
-          </div>
-          <div className="score-factors">
-            Based on: Leadership level, Employees managed, Industry type, Income level, Career stability, Referral comfort
           </div>
         </div>
       </div>
