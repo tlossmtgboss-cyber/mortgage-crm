@@ -954,13 +954,9 @@ function App() {
             }
           />
         </Routes>
-        {/* Global AI Assistant - available on all pages when authenticated */}
-        {isAuthenticated() && (
-          <>
-            <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
-            <SmartAIChat />
-          </>
-        )}
+        {/* Global AI Assistant - available on all pages */}
+        <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+        <SmartAIChat />
         </div>
       </Router>
         </PermissionProvider>
