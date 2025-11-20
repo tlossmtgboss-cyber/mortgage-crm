@@ -124,7 +124,16 @@ function LeadDetail() {
 
       console.log('✨ Setting lead data:', leadData);
       setLead(leadData);
-      setFormData(leadData);
+
+      // Split name into first_name and last_name if not already present
+      let processedData = { ...leadData };
+      if (leadData.name && (!leadData.first_name || !leadData.last_name)) {
+        const nameParts = leadData.name.split(' ');
+        processedData.first_name = nameParts[0] || '';
+        processedData.last_name = nameParts.slice(1).join(' ') || '';
+      }
+
+      setFormData(processedData);
       setActivities(activitiesData || []);
 
       // Initialize borrowers array
