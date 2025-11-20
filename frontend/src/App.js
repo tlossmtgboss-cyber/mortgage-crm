@@ -58,6 +58,7 @@ const VerizonTest = lazy(() => import('./pages/VerizonTest'));
 const PipelineEfficiency = lazy(() => import('./pages/PipelineEfficiency'));
 const AIReceptionistDashboard = lazy(() => import('./pages/AIReceptionistDashboard'));
 const VoiceOSDashboard = lazy(() => import('./pages/VoiceOSDashboard'));
+const AILandingPage = lazy(() => import('./pages/AILandingPage'));
 
 // Simple loading component
 const PageLoader = () => (
@@ -236,6 +237,16 @@ function App() {
                 <LazyPage>
                   <OnboardingWizard />
                 </LazyPage>
+              </PrivateRoute>
+            }
+          />
+
+          {/* AI Landing Page - standalone interface */}
+          <Route
+            path="/ai"
+            element={
+              <PrivateRoute>
+                <LazyPage><AILandingPage /></LazyPage>
               </PrivateRoute>
             }
           />

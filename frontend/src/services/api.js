@@ -305,6 +305,20 @@ export const aiAPI = {
     const response = await api.get('/api/v1/ai/suggestions');
     return ensureArray(response.data, 'suggestions');
   },
+  processCommand: async (message, context = {}) => {
+    const response = await api.post('/api/v1/ai/process-command', {
+      message,
+      conversation_context: context.conversation_context || [],
+    });
+    return response.data;
+  },
+  executeAction: async (actionId, modifications = {}) => {
+    const response = await api.post('/api/v1/ai/execute-action', {
+      action_id: actionId,
+      modifications,
+    });
+    return response.data;
+  },
 };
 
 export const conversationsAPI = {
