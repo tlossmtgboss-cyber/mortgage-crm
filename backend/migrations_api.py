@@ -351,3 +351,28 @@ async def import_browser_guidelines(
     except Exception as e:
         logger.error(f"Import error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/add-circle-of-cashflow-tables")
+async def run_circle_of_cashflow_migration(
+    admin: Any = Depends(get_admin_user)
+):
+    """
+    Run the Circle of Cashflow tables migration
+    Creates mortgage_questionnaires, referral_partners, referral_opportunities,
+    referrals, and partner_touchpoints tables
+    """
+    try:
+        from migrations.add_circle_of_cashflow import run_migration
+
+        logger.info("Starting Circle of Cashflow tables migration...")
+        run_migration()
+
+        return {
+            "status": "success",
+            "message": "Circle of Cashflow tables created successfully"
+        }
+
+    except Exception as e:
+        logger.error(f"Migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
