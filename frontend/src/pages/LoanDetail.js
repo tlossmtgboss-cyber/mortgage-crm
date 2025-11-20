@@ -684,6 +684,14 @@ function LoanDetail() {
                 ))
               )}
             </div>
+
+            {/* Email History */}
+            <div className="email-history-section">
+              <h3>Email History</h3>
+              <div className="email-list">
+                <p className="no-emails">No emails yet</p>
+              </div>
+            </div>
           </div>
         )}
 
@@ -1086,14 +1094,6 @@ function LoanDetail() {
               <span className="icon">🚨</span>
               <span>Escalation</span>
             </button>
-          </div>
-        </div>
-
-        {/* Email History */}
-        <div className="email-history-card">
-          <h3>Email History</h3>
-          <div className="email-list">
-            <p className="no-emails">No emails yet</p>
           </div>
         </div>
         </div>

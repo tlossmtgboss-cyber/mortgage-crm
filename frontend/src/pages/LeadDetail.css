@@ -712,6 +712,22 @@
   letter-spacing: 0.5px;
 }
 
+/* Email History Section in Conversation Tab */
+.email-history-section {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.email-history-section h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #64748b;
+  margin: 0 0 1rem 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
 /* Action Buttons */
 .action-buttons {
   display: grid !important;

@@ -976,6 +976,32 @@ function MumClientDetail() {
                 <div className="empty-state">No activities yet</div>
               )}
             </div>
+
+            {/* Email History */}
+            <div className="email-history-section">
+              <h3>Email History</h3>
+              <div className="email-list">
+                {emails.length > 0 ? (
+                  emails.map((email) => (
+                    <div key={email.id} className="email-item">
+                      <div className="email-header">
+                        <span className="email-subject">
+                          {(email.description || email.content || '').split('\n')[0] || 'No subject'}
+                        </span>
+                        <span className="email-date">
+                          {new Date(email.created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <div className="email-preview">
+                        {(email.description || email.content || '').substring(0, 100)}...
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="empty-state">No emails yet</div>
+                )}
+              </div>
+            </div>
           </div>
           )}
 
@@ -1331,32 +1357,6 @@ function MumClientDetail() {
                 <span className="icon">🎤</span>
                 <span>{isListening ? 'Listening...' : 'Voice Command'}</span>
               </button>
-            </div>
-          </div>
-
-          {/* Email History */}
-          <div className="email-history-card">
-            <h3>Email History</h3>
-            <div className="email-list">
-              {emails.length > 0 ? (
-                emails.map((email) => (
-                  <div key={email.id} className="email-item">
-                    <div className="email-header">
-                      <span className="email-subject">
-                        {(email.description || email.content || '').split('\n')[0] || 'No subject'}
-                      </span>
-                      <span className="email-date">
-                        {new Date(email.created_at).toLocaleDateString()}
-                      </span>
-                    </div>
-                    <div className="email-preview">
-                      {(email.description || email.content || '').substring(0, 100)}...
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="empty-state">No emails yet</div>
-              )}
             </div>
           </div>
         </div>
