@@ -1252,7 +1252,7 @@ function LeadDetail() {
                           className="form-control"
                         >
                           {circleContactTypes.map(type => (
-                            <option key={type.value} value={type.value}>{type.icon} {type.value}</option>
+                            <option key={type.value} value={type.value}>{type.value}</option>
                           ))}
                         </select>
                       </div>
