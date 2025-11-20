@@ -66,7 +66,7 @@ export default function EmploymentTab({ leadId, formData, onFieldChange, entityT
         <h3 className="section-header-with-score">
           <span>Employment Overview</span>
           <span className="header-score">
-            {formData.referral_source_rating || '...'} {formData.referral_source_score || 0}/100
+            Referral Score: {formData.referral_source_rating || '...'} {formData.referral_source_score || 0}/100
           </span>
         </h3>
         <div className="info-grid compact">
