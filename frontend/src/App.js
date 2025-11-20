@@ -5,6 +5,7 @@ import { ImpersonationProvider } from './contexts/ImpersonationContext';
 import { PermissionProvider } from './contexts/PermissionContext';
 import Navigation from './components/Navigation';
 import AIAssistant from './components/AIAssistant';
+import SmartAIChat from './components/SmartAIChat';
 import CoachCorner from './components/CoachCorner';
 import OnboardingPrompt from './components/OnboardingPrompt';
 import ImpersonationBanner from './components/ImpersonationBanner';
@@ -955,7 +956,10 @@ function App() {
         </Routes>
         {/* Global AI Assistant - available on all pages when authenticated */}
         {isAuthenticated() && (
-          <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+          <>
+            <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
+            <SmartAIChat />
+          </>
         )}
         </div>
       </Router>

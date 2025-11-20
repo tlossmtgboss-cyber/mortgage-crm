@@ -187,7 +187,13 @@ function SmartAIChat({ leadId, loanId, context = {} }) {
         onClick={() => setIsOpen(!isOpen)}
         title={isOpen ? 'Close AI Assistant' : 'Open AI Assistant'}
       >
-        {isOpen ? '✕' : '🤖'}
+        {isOpen ? '✕' : (
+          <img
+            src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=40&h=40&fit=crop&crop=face"
+            alt="AI Assistant"
+            className="toggle-avatar"
+          />
+        )}
         {!isOpen && memoryStats && memoryStats.total_memories > 0 && (
           <span className="toggle-badge">{memoryStats.total_memories}</span>
         )}
