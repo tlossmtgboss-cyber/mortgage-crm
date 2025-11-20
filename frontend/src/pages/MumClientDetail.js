@@ -8,7 +8,6 @@ import TeamsModal from '../components/TeamsModal';
 import RecordingModal from '../components/RecordingModal';
 import VoicemailModal from '../components/VoicemailModal';
 import VoicemailDrop from '../components/VoicemailDrop';
-import SmartAIChat from '../components/SmartAIChat';
 import TeamAssignment from '../components/TeamAssignment';
 import EmploymentTab from '../components/EmploymentTab';
 import './LeadDetail.css';
@@ -1272,10 +1271,6 @@ function MumClientDetail() {
           </div>
           )}
 
-          {/* Smart AI Assistant - Always Visible */}
-          <div className="smart-chat-card">
-            <SmartAIChat leadId={client.id} />
-          </div>
         </div>
 
         {/* Right Column - Actions & Email History */}

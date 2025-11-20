@@ -12,7 +12,6 @@ import VoicemailDrop from '../components/VoicemailDrop';
 import CreateTaskModal from '../components/CreateTaskModal';
 import AppointmentModal from '../components/AppointmentModal';
 import TeamAssignment from '../components/TeamAssignment';
-import SmartAIChat from '../components/SmartAIChat';
 import EmploymentTab from '../components/EmploymentTab';
 import './LeadDetail.css';
 
@@ -1667,10 +1666,6 @@ function LeadDetail() {
           </div>
           )}
 
-          {/* Smart AI Assistant - Always Visible */}
-          <div className="smart-chat-card">
-            <SmartAIChat leadId={lead.id} />
-          </div>
         </div>
 
         {/* Right Column - Actions & Email History */}

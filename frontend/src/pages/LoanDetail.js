@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { loansAPI, activitiesAPI } from '../services/api';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
-import SmartAIChat from '../components/SmartAIChat';
 import VoicemailDrop from '../components/VoicemailDrop';
 import SMSModal from '../components/SMSModal';
 import TeamsModal from '../components/TeamsModal';
@@ -1001,10 +1000,6 @@ function LoanDetail() {
           </div>
         )}
 
-          {/* Smart AI Chat - Always Visible */}
-          <div className="smart-chat-card">
-            <SmartAIChat loanId={loan.id} context={{ borrower_name: loan.borrower_name || loan.borrower, loan_stage: loan.stage }} />
-          </div>
         </div>
 
         {/* Right Column - Actions & Email History */}
