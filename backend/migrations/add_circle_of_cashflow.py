@@ -12,6 +12,13 @@ def run_migration():
     engine = create_engine(DATABASE_URL)
 
     with engine.connect() as conn:
+        # Drop existing tables in reverse order (due to foreign keys)
+        conn.execute(text("DROP TABLE IF EXISTS partner_touchpoints CASCADE"))
+        conn.execute(text("DROP TABLE IF EXISTS referrals CASCADE"))
+        conn.execute(text("DROP TABLE IF EXISTS referral_opportunities CASCADE"))
+        conn.execute(text("DROP TABLE IF EXISTS referral_partners CASCADE"))
+        conn.execute(text("DROP TABLE IF EXISTS mortgage_questionnaires CASCADE"))
+
         # Create mortgage_questionnaires table
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS mortgage_questionnaires (
