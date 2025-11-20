@@ -21376,6 +21376,70 @@ async def fix_mum_schema_migration(
         }
 
 
+@app.post("/api/v1/migrations/add-referral-intelligence", response_model=None)
+async def add_referral_intelligence_migration(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Add referral intelligence fields for Employment Tab redesign
+    """
+    try:
+        logger.info(f"Running migration: add referral intelligence fields (user: {current_user.id})")
+
+        new_columns = [
+            ("leadership_level", "VARCHAR(50)"),
+            ("employees_managed", "INTEGER DEFAULT 0"),
+            ("company_size", "VARCHAR(50)"),
+            ("influence_score", "VARCHAR(50)"),
+            ("referral_industry_flag", "VARCHAR(20)"),
+            ("career_stability_score", "VARCHAR(20)"),
+            ("future_purchase_likelihood", "VARCHAR(20)"),
+            ("future_purchase_timeline", "VARCHAR(20)"),
+            ("manages_potential_buyers", "VARCHAR(20)"),
+            ("employer_hiring_frequency", "VARCHAR(50)"),
+            ("referral_comfort_level", "VARCHAR(50)"),
+            ("referral_source_score", "INTEGER DEFAULT 0"),
+            ("referral_source_rating", "VARCHAR(50)"),
+        ]
+
+        tables = ["leads", "active_loans", "mum_clients"]
+        results = []
+
+        for table in tables:
+            table_results = {"table": table, "columns_added": [], "columns_existing": []}
+            for col_name, col_type in new_columns:
+                try:
+                    check_sql = text(f"SELECT column_name FROM information_schema.columns WHERE table_name = '{table}' AND column_name = '{col_name}'")
+                    result = db.execute(check_sql)
+                    if result.fetchone() is None:
+                        alter_sql = text(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}")
+                        db.execute(alter_sql)
+                        table_results["columns_added"].append(col_name)
+                    else:
+                        table_results["columns_existing"].append(col_name)
+                except Exception as e:
+                    logger.error(f"Error adding {col_name} to {table}: {e}")
+            results.append(table_results)
+
+        db.commit()
+        logger.info("Migration completed: referral intelligence fields added")
+
+        return {
+            "success": True,
+            "message": "Referral intelligence migration completed",
+            "results": results
+        }
+
+    except Exception as e:
+        logger.error(f"Migration failed: {str(e)}")
+        db.rollback()
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e)
+        }
+
 # ============================================================================
 # MUM (MORTGAGES UNDER MANAGEMENT) API
 # ============================================================================
