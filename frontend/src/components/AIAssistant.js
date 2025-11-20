@@ -175,7 +175,14 @@ function AIAssistant({ isOpen, onClose, context = {} }) {
     <div className="ai-assistant">
       <div className="ai-assistant-header">
         <div className="header-content">
-          <h3>🤖 Smart AI Assistant</h3>
+          <h3>
+            <img
+              src="https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=40&h=40&fit=crop&crop=face"
+              alt="AI Assistant"
+              className="ai-avatar"
+            />
+            Smart AI Assistant
+          </h3>
           {memoryStats && (
             <span className="memory-badge" title="Conversations remembered">
               🧠 {memoryStats.total_memories} memories
