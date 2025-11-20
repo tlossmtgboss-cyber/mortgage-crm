@@ -78,20 +78,20 @@
 .loan-toolbar {
   background: white;
   border-radius: 8px;
-  padding: 20px 24px;
-  margin-bottom: 24px;
+  padding: 10px 16px;
+  margin-bottom: 16px;
   box-shadow: 0 1px 2px rgba(0,0,0,0.05);
   border: 1px solid #e2e8f0;
 }
 
 .toolbar-header {
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 2px solid #e2e8f0;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e2e8f0;
 }
 
 .toolbar-header h3 {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 600;
   color: #64748b;
   margin: 0;
@@ -102,17 +102,17 @@
 .loan-fields-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
+  gap: 8px;
 }
 
 .loan-field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
 }
 
 .loan-field label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   color: #64748b;
   text-transform: uppercase;
@@ -120,27 +120,27 @@
 }
 
 .loan-field .value {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   color: #1a202c;
-  padding: 8px 12px;
+  padding: 4px 8px;
   background: #f8fafc;
-  border-radius: 6px;
+  border-radius: 4px;
   border: 1px solid #e2e8f0;
-  min-height: 36px;
+  min-height: 28px;
   display: flex;
   align-items: center;
 }
 
 .loan-field input,
 .loan-field select {
-  padding: 8px 12px;
+  padding: 4px 8px;
   border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  font-size: 13px;
+  border-radius: 4px;
+  font-size: 12px;
   font-family: inherit;
   transition: all 0.2s;
-  min-height: 36px;
+  min-height: 28px;
 }
 
 .loan-field input:focus,
