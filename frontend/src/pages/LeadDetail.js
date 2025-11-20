@@ -82,6 +82,9 @@ function LeadDetail() {
     type: 'Co-Borrower',
     notes: ''
   });
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [showSearchResults, setShowSearchResults] = useState(false);
 
   const circleContactTypes = [
     { value: 'Co-Borrower', icon: '👥' },
@@ -93,6 +96,42 @@ function LeadDetail() {
     { value: 'Accountant', icon: '📊' },
     { value: 'Other Contact', icon: '🤝' }
   ];
+
+  const searchContacts = async (query) => {
+    if (query.length < 2) {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+    setSearchLoading(true);
+    try {
+      const response = await leadsAPI.search(query);
+      setSearchResults(response.leads || []);
+      setShowSearchResults(true);
+    } catch (error) {
+      console.error('Search error:', error);
+      setSearchResults([]);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const handleNameChange = (e) => {
+    const value = e.target.value;
+    setCircleForm({...circleForm, name: value});
+    searchContacts(value);
+  };
+
+  const selectSearchResult = (contact) => {
+    setCircleForm({
+      ...circleForm,
+      name: contact.name,
+      email: contact.email || '',
+      phone: contact.phone || ''
+    });
+    setShowSearchResults(false);
+    setSearchResults([]);
+  };
 
   const handleAddCircleContact = () => {
     if (!circleForm.name.trim()) return;
@@ -1235,13 +1274,13 @@ function LeadDetail() {
                 )}
               </div>
 
-              {/* Add Contact Modal */}
+              {/* Add Referral Partner Modal */}
               {showCircleModal && (
-                <div className="modal-overlay" onClick={() => setShowCircleModal(false)}>
+                <div className="modal-overlay" onClick={() => { setShowCircleModal(false); setShowSearchResults(false); }}>
                   <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
                     <div className="modal-header">
-                      <h3>Add Contact to Circle of Influence</h3>
-                      <button className="modal-close" onClick={() => setShowCircleModal(false)}>×</button>
+                      <h3>Add Referral Partner</h3>
+                      <button className="modal-close" onClick={() => { setShowCircleModal(false); setShowSearchResults(false); }}>×</button>
                     </div>
                     <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                       <div className="form-group">
@@ -1256,15 +1295,59 @@ function LeadDetail() {
                           ))}
                         </select>
                       </div>
-                      <div className="form-group">
+                      <div className="form-group" style={{ position: 'relative' }}>
                         <label>Name *</label>
                         <input
                           type="text"
                           value={circleForm.name}
-                          onChange={e => setCircleForm({...circleForm, name: e.target.value})}
+                          onChange={handleNameChange}
+                          onFocus={() => circleForm.name.length >= 2 && setShowSearchResults(true)}
                           className="form-control"
-                          placeholder="Enter contact name"
+                          placeholder="Start typing to search..."
+                          autoComplete="off"
                         />
+                        {searchLoading && (
+                          <div style={{ position: 'absolute', right: '10px', top: '35px', color: '#999', fontSize: '12px' }}>
+                            Searching...
+                          </div>
+                        )}
+                        {showSearchResults && searchResults.length > 0 && (
+                          <div style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: 0,
+                            right: 0,
+                            backgroundColor: 'white',
+                            border: '1px solid #ddd',
+                            borderRadius: '4px',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                            maxHeight: '200px',
+                            overflowY: 'auto',
+                            zIndex: 1000
+                          }}>
+                            {searchResults.map(result => (
+                              <div
+                                key={result.id}
+                                onClick={() => selectSearchResult(result)}
+                                style={{
+                                  padding: '10px 12px',
+                                  cursor: 'pointer',
+                                  borderBottom: '1px solid #eee',
+                                  transition: 'background-color 0.15s'
+                                }}
+                                onMouseEnter={e => e.target.style.backgroundColor = '#f5f5f5'}
+                                onMouseLeave={e => e.target.style.backgroundColor = 'white'}
+                              >
+                                <div style={{ fontWeight: '500' }}>{result.name}</div>
+                                <div style={{ fontSize: '12px', color: '#666' }}>
+                                  {result.email && <span>{result.email}</span>}
+                                  {result.email && result.phone && <span> • </span>}
+                                  {result.phone && <span>{result.phone}</span>}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <div className="form-group">
                         <label>Email</label>
