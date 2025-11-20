@@ -17,7 +17,60 @@ function AIUnderwriter() {
   const [isLoading, setIsLoading] = useState(false);
   const [memoryStats, setMemoryStats] = useState(null);
   const [currentUserId, setCurrentUserId] = useState(null);
+  const [isListening, setIsListening] = useState(false);
   const messagesEndRef = useRef(null);
+  const recognitionRef = useRef(null);
+
+  // Initialize speech recognition
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onresult = (event) => {
+        const transcript = Array.from(event.results)
+          .map(result => result[0].transcript)
+          .join('');
+        setInputMessage(transcript);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        setIsListening(false);
+      };
+
+      recognitionRef.current = recognition;
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.abort();
+      }
+    };
+  }, []);
+
+  const toggleListening = () => {
+    if (!recognitionRef.current) {
+      alert('Speech recognition is not supported in your browser. Please use Chrome or Edge.');
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      setInputMessage('');
+      recognitionRef.current.start();
+      setIsListening(true);
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -221,12 +274,21 @@ function AIUnderwriter() {
 
         <form onSubmit={handleSubmit} className="input-form">
           <div className="input-container">
+            <button
+              type="button"
+              className={`voice-button ${isListening ? 'listening' : ''}`}
+              onClick={toggleListening}
+              disabled={isLoading}
+              title={isListening ? 'Stop listening' : 'Speak your question'}
+            >
+              {isListening ? '🔴' : '🎤'}
+            </button>
             <input
               type="text"
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
-              placeholder="Ask a mortgage lending question..."
-              className="message-input"
+              placeholder={isListening ? 'Listening...' : 'Ask a mortgage lending question...'}
+              className={`message-input ${isListening ? 'listening' : ''}`}
               disabled={isLoading}
             />
             <button type="submit" className="send-button" disabled={isLoading || !inputMessage.trim()}>

@@ -337,6 +337,52 @@
   transform: none;
 }
 
+/* Voice button */
+.voice-button {
+  padding: 16px;
+  background: #f8f9fa;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  font-size: 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 56px;
+}
+
+.voice-button:hover:not(:disabled) {
+  background: #e9ecef;
+  border-color: #218D8D;
+  transform: translateY(-2px);
+}
+
+.voice-button.listening {
+  background: #fee;
+  border-color: #e74c3c;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.voice-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.message-input.listening {
+  border-color: #e74c3c;
+  background: #fff5f5;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(231, 76, 60, 0);
+  }
+}
+
 /* Mobile responsive */
 @media (max-width: 768px) {
   .underwriter-header {
