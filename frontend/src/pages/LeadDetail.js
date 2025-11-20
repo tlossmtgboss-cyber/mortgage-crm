@@ -238,11 +238,13 @@ function LeadDetail() {
 
       try {
         // Try to fetch from API first
+        const leadIdInt = parseInt(id);
         [leadData, activitiesData] = await Promise.all([
-          leadsAPI.getById(id),
-          activitiesAPI.getAll({ lead_id: id })
+          leadsAPI.getById(leadIdInt),
+          activitiesAPI.getAll({ lead_id: leadIdInt })
         ]);
         console.log('✅ Loaded lead from API:', leadData);
+        console.log('✅ Loaded activities from API:', activitiesData);
       } catch (apiError) {
         console.log('⚠️ API failed, using mock data. Error:', apiError);
         // Fallback to mock data
