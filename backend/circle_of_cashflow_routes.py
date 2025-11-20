@@ -17,7 +17,7 @@ class QuestionnaireCreate(BaseModel):
     contact_id: int
     name: str
     email: str
-    phone: str
+    phone: str = ""
     is_veteran: bool = False
     owned_home_before: Optional[bool] = None
     current_housing_status: str = ""
