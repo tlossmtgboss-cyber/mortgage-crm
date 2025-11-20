@@ -57,11 +57,10 @@ def run_migration():
                 created_at TIMESTAMP DEFAULT NOW(),
                 updated_at TIMESTAMP DEFAULT NOW(),
                 submitted_via VARCHAR(50) DEFAULT 'web_form'
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_questionnaire_contact ON mortgage_questionnaires(contact_id);
-            CREATE INDEX IF NOT EXISTS idx_questionnaire_date ON mortgage_questionnaires(submission_date);
+            )
         """))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_questionnaire_contact ON mortgage_questionnaires(contact_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_questionnaire_date ON mortgage_questionnaires(submission_date)"))
 
         # Create referral_partners table
         conn.execute(text("""
@@ -109,12 +108,11 @@ def run_migration():
                 created_at TIMESTAMP DEFAULT NOW(),
                 updated_at TIMESTAMP DEFAULT NOW(),
                 created_by INTEGER
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_partner_category ON referral_partners(category);
-            CREATE INDEX IF NOT EXISTS idx_partner_trust ON referral_partners(trust_score DESC);
-            CREATE INDEX IF NOT EXISTS idx_partner_status ON referral_partners(relationship_status);
+            )
         """))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_partner_category ON referral_partners(category)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_partner_trust ON referral_partners(trust_score DESC)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_partner_status ON referral_partners(relationship_status)"))
 
         # Create referral_opportunities table
         conn.execute(text("""
@@ -150,12 +148,11 @@ def run_migration():
                 created_at TIMESTAMP DEFAULT NOW(),
                 updated_at TIMESTAMP DEFAULT NOW(),
                 created_by INTEGER
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_opportunity_contact ON referral_opportunities(contact_id);
-            CREATE INDEX IF NOT EXISTS idx_opportunity_status ON referral_opportunities(status);
-            CREATE INDEX IF NOT EXISTS idx_opportunity_category ON referral_opportunities(category);
+            )
         """))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_opportunity_contact ON referral_opportunities(contact_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_opportunity_status ON referral_opportunities(status)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_opportunity_category ON referral_opportunities(category)"))
 
         # Create referrals table
         conn.execute(text("""
@@ -198,13 +195,12 @@ def run_migration():
                 created_at TIMESTAMP DEFAULT NOW(),
                 updated_at TIMESTAMP DEFAULT NOW(),
                 created_by INTEGER
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_referral_direction ON referrals(direction);
-            CREATE INDEX IF NOT EXISTS idx_referral_contact ON referrals(contact_id);
-            CREATE INDEX IF NOT EXISTS idx_referral_partner ON referrals(partner_id);
-            CREATE INDEX IF NOT EXISTS idx_referral_status ON referrals(status);
+            )
         """))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_referral_direction ON referrals(direction)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_referral_contact ON referrals(contact_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_referral_partner ON referrals(partner_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_referral_status ON referrals(status)"))
 
         # Create partner_touchpoints table
         conn.execute(text("""
@@ -233,12 +229,11 @@ def run_migration():
                 -- Metadata
                 created_at TIMESTAMP DEFAULT NOW(),
                 created_by INTEGER
-            );
-
-            CREATE INDEX IF NOT EXISTS idx_touchpoint_partner ON partner_touchpoints(partner_id);
-            CREATE INDEX IF NOT EXISTS idx_touchpoint_date ON partner_touchpoints(touchpoint_date);
-            CREATE INDEX IF NOT EXISTS idx_touchpoint_type ON partner_touchpoints(touchpoint_type);
+            )
         """))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_touchpoint_partner ON partner_touchpoints(partner_id)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_touchpoint_date ON partner_touchpoints(touchpoint_date)"))
+        conn.execute(text("CREATE INDEX IF NOT EXISTS idx_touchpoint_type ON partner_touchpoints(touchpoint_type)"))
 
         conn.commit()
         print("Circle of Cashflow tables created successfully!")
