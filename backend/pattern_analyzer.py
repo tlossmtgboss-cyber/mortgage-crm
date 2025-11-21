@@ -75,7 +75,7 @@ class PatternAnalyzer:
                         preapproval_amount
                     FROM leads
                     WHERE owner_id = :user_id
-                    AND stage NOT IN ('Closed Won', 'Closed Lost')
+                    AND stage NOT IN ('CLOSED_WON', 'CLOSED_LOST')
                     AND created_at > NOW() - INTERVAL :window
                 )
                 SELECT
@@ -120,7 +120,7 @@ class PatternAnalyzer:
                     EXTRACT(EPOCH FROM (NOW() - l.created_at))/86400 as days_stale
                 FROM leads l
                 WHERE l.owner_id = :user_id
-                AND l.stage NOT IN ('Closed Won', 'Closed Lost')
+                AND l.stage NOT IN ('CLOSED_WON', 'CLOSED_LOST')
                 AND l.created_at < NOW() - INTERVAL :stale_days
                 ORDER BY l.created_at ASC
                 LIMIT 20
@@ -186,7 +186,7 @@ class PatternAnalyzer:
                 SELECT
                     loan_type,
                     COUNT(*) as total,
-                    COUNT(*) FILTER (WHERE stage = 'Closed Won') as won,
+                    COUNT(*) FILTER (WHERE stage = 'CLOSED_WON') as won,
                     AVG(preapproval_amount) as avg_amount
                 FROM leads
                 WHERE owner_id = :user_id
@@ -231,7 +231,7 @@ class PatternAnalyzer:
                 SELECT
                     source,
                     COUNT(*) as total_leads,
-                    COUNT(*) FILTER (WHERE stage = 'Closed Won') as won_leads,
+                    COUNT(*) FILTER (WHERE stage = 'CLOSED_WON') as won_leads,
                     AVG(preapproval_amount) as avg_amount,
                     SUM(preapproval_amount) as total_volume
                 FROM leads
@@ -240,7 +240,7 @@ class PatternAnalyzer:
                 AND source IS NOT NULL
                 GROUP BY source
                 HAVING COUNT(*) >= :min_samples
-                ORDER BY COUNT(*) FILTER (WHERE stage = 'Closed Won') DESC, COUNT(*) DESC
+                ORDER BY COUNT(*) FILTER (WHERE stage = 'CLOSED_WON') DESC, COUNT(*) DESC
                 LIMIT 10
             """), {
                 "user_id": user_id,
@@ -321,12 +321,12 @@ class PatternAnalyzer:
             result = db.execute(text("""
                 SELECT
                     COUNT(*) as total_leads,
-                    COUNT(*) FILTER (WHERE stage = 'Closed Won') as won,
-                    COUNT(*) FILTER (WHERE stage = 'Closed Lost') as lost,
-                    COUNT(*) FILTER (WHERE stage NOT IN ('Closed Won', 'Closed Lost')) as active,
-                    SUM(preapproval_amount) FILTER (WHERE stage NOT IN ('Closed Won', 'Closed Lost')) as active_pipeline_value,
-                    SUM(preapproval_amount) FILTER (WHERE stage = 'Closed Won') as won_value,
-                    AVG(preapproval_amount) FILTER (WHERE stage = 'Closed Won') as avg_deal_size
+                    COUNT(*) FILTER (WHERE stage = 'CLOSED_WON') as won,
+                    COUNT(*) FILTER (WHERE stage = 'CLOSED_LOST') as lost,
+                    COUNT(*) FILTER (WHERE stage NOT IN ('CLOSED_WON', 'CLOSED_LOST')) as active,
+                    SUM(preapproval_amount) FILTER (WHERE stage NOT IN ('CLOSED_WON', 'CLOSED_LOST')) as active_pipeline_value,
+                    SUM(preapproval_amount) FILTER (WHERE stage = 'CLOSED_WON') as won_value,
+                    AVG(preapproval_amount) FILTER (WHERE stage = 'CLOSED_WON') as avg_deal_size
                 FROM leads
                 WHERE owner_id = :user_id
                 AND created_at > NOW() - INTERVAL :window
