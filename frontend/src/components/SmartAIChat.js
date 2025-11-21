@@ -3,8 +3,8 @@ import { aiAPI } from '../services/api';
 import './SmartAIChat.css';
 
 function SmartAIChat({ leadId, loanId, context = {} }) {
-  // Don't render on login/public pages
-  const isAuthPage = ['/', '/login', '/register', '/verify-email', '/verify-email-sent', '/onboarding'].includes(window.location.pathname);
+  // Don't render on login/public pages or standalone AI page
+  const isAuthPage = ['/', '/login', '/register', '/verify-email', '/verify-email-sent', '/onboarding', '/ai'].includes(window.location.pathname);
 
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
