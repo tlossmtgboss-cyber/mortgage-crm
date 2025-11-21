@@ -10,10 +10,23 @@ function AILandingPage() {
   const [loading, setLoading] = useState(false);
   const [userName, setUserName] = useState('');
   const [conversationHistory, setConversationHistory] = useState([]);
+  const [actionContext, setActionContext] = useState({}); // Store action previews for context
   const [taskListData, setTaskListData] = useState(null); // Tasks to display below button
   const [selectedTask, setSelectedTask] = useState(null);
   const [tasksCompleted, setTasksCompleted] = useState(false); // Track if user completed tasks
+  const [selectedSendMethod, setSelectedSendMethod] = useState('email'); // Track selected send method
+  const [editingMessage, setEditingMessage] = useState(false);
+  const [editedMessage, setEditedMessage] = useState('');
   const chatAreaRef = useRef(null);
+
+  // Session ID for permanent memory - persists to localStorage
+  const [sessionId, setSessionId] = useState(() => {
+    const stored = localStorage.getItem('ai_session_id');
+    if (stored) return stored;
+    const newId = crypto.randomUUID();
+    localStorage.setItem('ai_session_id', newId);
+    return newId;
+  });
 
   useEffect(() => {
     // Get user name from token or localStorage
@@ -69,16 +82,52 @@ function AILandingPage() {
     setLoading(true);
 
     try {
-      // Call the AI processing endpoint with conversation history
+      // Call the AI processing endpoint with FULL conversation history and session_id for permanent memory
       const response = await aiAPI.processCommand(message, {
-        conversation_context: conversationHistory
+        session_id: sessionId, // For permanent memory tracking
+        conversation_context: conversationHistory.slice(-20), // Send last 20 messages
+        action_context: actionContext, // Include all action previews for context
+        current_state: {
+          last_action_id: Object.keys(actionContext).slice(-1)[0] || null,
+          total_actions: Object.keys(actionContext).length
+        }
       });
 
-      // Update conversation history
+      // Update session ID if server returns a new one
+      if (response.session_id && response.session_id !== sessionId) {
+        setSessionId(response.session_id);
+        localStorage.setItem('ai_session_id', response.session_id);
+      }
+
+      // Build detailed assistant response for history
+      let historyContent = response.explanation || '';
+
+      // If there's an action, add detailed context to history
+      if (response.action_id && response.preview) {
+        historyContent += `\n[Action ${response.action_id}: ${response.intent} - Preview: ${JSON.stringify(response.preview)}]`;
+
+        // Store action context for future reference
+        setActionContext(prev => ({
+          ...prev,
+          [response.action_id]: {
+            intent: response.intent,
+            preview: response.preview,
+            timestamp: new Date().toISOString(),
+            status: 'previewed'
+          }
+        }));
+      }
+
+      // Update conversation history with full context
       setConversationHistory(prev => [
         ...prev,
         { role: 'user', content: message },
-        { role: 'assistant', content: response.explanation || '' }
+        {
+          role: 'assistant',
+          content: historyContent,
+          action_id: response.action_id || null,
+          intent: response.intent || null
+        }
       ]);
 
       // Handle different response types based on intent
@@ -350,7 +399,7 @@ function AILandingPage() {
 
     try {
       addMessage('Executing action...', 'assistant');
-      const result = await aiAPI.executeAction(actionId, modifications);
+      const result = await aiAPI.executeAction(actionId, modifications, sessionId);
 
       if (result.success) {
         addMessage(`✅ ${result.message}`, 'assistant');
@@ -373,6 +422,100 @@ function AILandingPage() {
       pipeline_report: '✅ Pipeline report generated and sent to your team!'
     };
     addMessage(confirmMessages[actionType] || '✅ Action completed successfully!', 'assistant');
+  };
+
+  // Task action handlers
+  const handleSendViaEmail = async () => {
+    if (!selectedTask) return;
+    const message = editingMessage ? editedMessage : selectedTask.aiDraftedMessage;
+    addMessage(`📧 Sending email to ${selectedTask.client}...`, 'assistant');
+
+    // Simulate API call
+    setTimeout(() => {
+      addMessage(`✅ Email sent successfully to ${selectedTask.client}!`, 'assistant');
+      // Remove task from list
+      removeTaskFromList(selectedTask.id);
+    }, 1000);
+  };
+
+  const handleApproveAIAction = async () => {
+    if (!selectedTask) return;
+    addMessage(`✅ Approving AI action for "${selectedTask.title}"...`, 'assistant');
+
+    // Execute the AI's recommended action based on send method
+    setTimeout(() => {
+      const methodMessages = {
+        email: `📧 Email sent to ${selectedTask.client}`,
+        text: `💬 Text message sent to ${selectedTask.client}`,
+        phone: `📞 Call initiated to ${selectedTask.client}`,
+        voicemail: `📱 Voicemail dropped for ${selectedTask.client}`
+      };
+      addMessage(`✅ Action completed! ${methodMessages[selectedSendMethod]}`, 'assistant');
+      removeTaskFromList(selectedTask.id);
+    }, 1000);
+  };
+
+  const handleSnooze = () => {
+    if (!selectedTask) return;
+    // Show snooze options
+    addMessage(`⏰ Snoozing "${selectedTask.title}". When would you like to be reminded?\n\n• 1 hour\n• 3 hours\n• Tomorrow morning\n• Next week`, 'assistant');
+
+    // For demo, snooze for "later today"
+    setTimeout(() => {
+      addMessage(`✅ Task snoozed! I'll remind you about "${selectedTask.title}" in 3 hours.`, 'assistant');
+      removeTaskFromList(selectedTask.id);
+    }, 1500);
+  };
+
+  const handleDelegate = () => {
+    if (!selectedTask) return;
+    addMessage(`👥 Delegating "${selectedTask.title}". Select a team member:\n\n• John (Processor)\n• Maria (Assistant)\n• David (Junior LO)`, 'assistant');
+
+    // For demo, delegate to a team member
+    setTimeout(() => {
+      addMessage(`✅ Task delegated to Maria! She'll receive a notification with all the details.`, 'assistant');
+      removeTaskFromList(selectedTask.id);
+    }, 1500);
+  };
+
+  const handleDeleteTask = () => {
+    if (!selectedTask) return;
+    addMessage(`🗑️ Are you sure you want to delete "${selectedTask.title}"? This action cannot be undone.`, 'assistant');
+
+    // For demo, confirm deletion
+    setTimeout(() => {
+      addMessage(`✅ Task deleted successfully.`, 'assistant');
+      removeTaskFromList(selectedTask.id);
+    }, 1000);
+  };
+
+  const handleEditMessage = () => {
+    if (selectedTask?.aiDraftedMessage) {
+      setEditedMessage(selectedTask.aiDraftedMessage);
+      setEditingMessage(true);
+    }
+  };
+
+  const handleSaveMessage = () => {
+    setEditingMessage(false);
+    addMessage('✅ Message updated successfully!', 'assistant');
+  };
+
+  const removeTaskFromList = (taskId) => {
+    setTaskListData(prev => {
+      const updated = prev.filter(t => t.id !== taskId);
+      if (updated.length === 0) {
+        setSelectedTask(null);
+        addMessage("🎉 Great job! You've completed all your tasks. Ask 'what's next?' for your upcoming priorities.", 'assistant');
+      } else {
+        setSelectedTask(updated[0]);
+      }
+      return updated;
+    });
+  };
+
+  const handleSendMethodChange = (method) => {
+    setSelectedSendMethod(method);
   };
 
   const renderSpecialContent = (message) => {
@@ -601,10 +744,22 @@ function AILandingPage() {
               <div className="ai-task-send-via">
                 <span className="ai-task-detail-label">SEND VIA</span>
                 <div className="ai-send-via-buttons">
-                  <button className="ai-send-via-btn active">📧 Email</button>
-                  <button className="ai-send-via-btn">💬 Text</button>
-                  <button className="ai-send-via-btn">📞 Phone</button>
-                  <button className="ai-send-via-btn">📱 Voicemail</button>
+                  <button
+                    className={`ai-send-via-btn ${selectedSendMethod === 'email' ? 'active' : ''}`}
+                    onClick={() => handleSendMethodChange('email')}
+                  >📧 Email</button>
+                  <button
+                    className={`ai-send-via-btn ${selectedSendMethod === 'text' ? 'active' : ''}`}
+                    onClick={() => handleSendMethodChange('text')}
+                  >💬 Text</button>
+                  <button
+                    className={`ai-send-via-btn ${selectedSendMethod === 'phone' ? 'active' : ''}`}
+                    onClick={() => handleSendMethodChange('phone')}
+                  >📞 Phone</button>
+                  <button
+                    className={`ai-send-via-btn ${selectedSendMethod === 'voicemail' ? 'active' : ''}`}
+                    onClick={() => handleSendMethodChange('voicemail')}
+                  >📱 Voicemail</button>
                 </div>
               </div>
 
@@ -622,20 +777,33 @@ function AILandingPage() {
                 <div className="ai-drafted-message">
                   <div className="ai-drafted-header">
                     <span>🤖 AI-Drafted Message</span>
-                    <button className="ai-edit-message-btn">✏️ Edit Message</button>
+                    {editingMessage ? (
+                      <button className="ai-edit-message-btn" onClick={handleSaveMessage}>💾 Save</button>
+                    ) : (
+                      <button className="ai-edit-message-btn" onClick={handleEditMessage}>✏️ Edit Message</button>
+                    )}
                   </div>
-                  <div className="ai-drafted-content">
-                    {selectedTask.aiDraftedMessage}
-                  </div>
+                  {editingMessage ? (
+                    <textarea
+                      className="ai-drafted-content-edit"
+                      value={editedMessage}
+                      onChange={(e) => setEditedMessage(e.target.value)}
+                      rows={6}
+                    />
+                  ) : (
+                    <div className="ai-drafted-content">
+                      {selectedTask.aiDraftedMessage}
+                    </div>
+                  )}
                 </div>
               )}
 
               <div className="ai-task-actions">
-                <button className="ai-action-btn send">📧 Send via Email</button>
-                <button className="ai-action-btn approve">✅ Approve AI Action</button>
-                <button className="ai-action-btn snooze">⏰ Snooze</button>
-                <button className="ai-action-btn delegate">👥 Delegate</button>
-                <button className="ai-action-btn delete">🗑️ Delete</button>
+                <button className="ai-action-btn send" onClick={handleSendViaEmail}>📧 Send via Email</button>
+                <button className="ai-action-btn approve" onClick={handleApproveAIAction}>✅ Approve AI Action</button>
+                <button className="ai-action-btn snooze" onClick={handleSnooze}>⏰ Snooze</button>
+                <button className="ai-action-btn delegate" onClick={handleDelegate}>👥 Delegate</button>
+                <button className="ai-action-btn delete" onClick={handleDeleteTask}>🗑️ Delete</button>
               </div>
             </div>
           )}

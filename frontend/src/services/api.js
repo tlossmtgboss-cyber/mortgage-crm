@@ -308,13 +308,17 @@ export const aiAPI = {
   processCommand: async (message, context = {}) => {
     const response = await api.post('/api/v1/ai/process-command', {
       message,
+      session_id: context.session_id || null,
       conversation_context: context.conversation_context || [],
+      action_context: context.action_context || {},
+      current_state: context.current_state || {},
     });
     return response.data;
   },
-  executeAction: async (actionId, modifications = {}) => {
+  executeAction: async (actionId, modifications = {}, sessionId = null) => {
     const response = await api.post('/api/v1/ai/execute-action', {
       action_id: actionId,
+      session_id: sessionId,
       modifications,
     });
     return response.data;

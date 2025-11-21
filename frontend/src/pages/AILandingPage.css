@@ -933,6 +933,24 @@
   white-space: pre-wrap;
 }
 
+.ai-drafted-content-edit {
+  width: 100%;
+  font-size: 14px;
+  color: #3c4858;
+  line-height: 1.6;
+  padding: 12px;
+  border: 2px solid #e57254;
+  border-radius: 6px;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 120px;
+}
+
+.ai-drafted-content-edit:focus {
+  outline: none;
+  border-color: #c66647;
+}
+
 .ai-task-actions {
   display: flex;
   flex-wrap: wrap;
