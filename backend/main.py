@@ -21660,6 +21660,155 @@ async def add_referral_intelligence_migration(
             "error": str(e)
         }
 
+
+@app.post("/api/v1/migrations/add-post-closing-workflow", response_model=None)
+async def add_post_closing_workflow_migration(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Add post-closing workflow tables
+    Creates: employer_records, opportunities, recurring_tasks, workflow_executions
+    """
+    try:
+        logger.info(f"Running migration: add post-closing workflow tables (user: {current_user.id})")
+
+        results = {"tables_created": [], "tables_existing": [], "columns_added": [], "indexes_created": []}
+
+        # Add missing columns to leads
+        new_lead_columns = [
+            ("employer_name", "VARCHAR(255)"),
+            ("industry", "VARCHAR(100)"),
+        ]
+
+        for col_name, col_type in new_lead_columns:
+            try:
+                check_sql = text(f"SELECT column_name FROM information_schema.columns WHERE table_name = 'leads' AND column_name = '{col_name}'")
+                result = db.execute(check_sql)
+                if result.fetchone() is None:
+                    db.execute(text(f"ALTER TABLE leads ADD COLUMN {col_name} {col_type}"))
+                    results["columns_added"].append(f"leads.{col_name}")
+            except Exception as e:
+                logger.warning(f"Column {col_name}: {e}")
+
+        # Create employer_records table
+        try:
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS employer_records (
+                    id SERIAL PRIMARY KEY,
+                    company_name VARCHAR(255) NOT NULL,
+                    champion_lead_id INTEGER REFERENCES leads(id),
+                    status VARCHAR(50) DEFAULT 'Opportunity Identified',
+                    employee_count INTEGER,
+                    source VARCHAR(100),
+                    notes TEXT,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    created_by INTEGER REFERENCES users(id)
+                )
+            """))
+            results["tables_created"].append("employer_records")
+        except Exception as e:
+            if "already exists" in str(e):
+                results["tables_existing"].append("employer_records")
+            else:
+                logger.warning(f"employer_records: {e}")
+
+        # Create opportunities table
+        try:
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS opportunities (
+                    id SERIAL PRIMARY KEY,
+                    type VARCHAR(100) NOT NULL,
+                    primary_lead_id INTEGER NOT NULL REFERENCES leads(id),
+                    company_name VARCHAR(255),
+                    stage VARCHAR(50) DEFAULT 'Initial Discovery',
+                    estimated_value NUMERIC(10, 2),
+                    estimated_employee_count INTEGER,
+                    champion_name VARCHAR(255),
+                    source VARCHAR(100),
+                    status VARCHAR(50) DEFAULT 'Active',
+                    notes TEXT,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    assigned_to INTEGER REFERENCES users(id)
+                )
+            """))
+            results["tables_created"].append("opportunities")
+        except Exception as e:
+            if "already exists" in str(e):
+                results["tables_existing"].append("opportunities")
+            else:
+                logger.warning(f"opportunities: {e}")
+
+        # Create recurring_tasks table
+        try:
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS recurring_tasks (
+                    id SERIAL PRIMARY KEY,
+                    lead_id INTEGER NOT NULL REFERENCES leads(id),
+                    title VARCHAR(255) NOT NULL,
+                    recurrence_pattern VARCHAR(50),
+                    recurrence_interval_days INTEGER,
+                    priority VARCHAR(20) DEFAULT 'medium',
+                    category VARCHAR(100),
+                    notes TEXT,
+                    assigned_to INTEGER REFERENCES users(id),
+                    next_due_date TIMESTAMP WITH TIME ZONE,
+                    last_completed_date TIMESTAMP WITH TIME ZONE,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            results["tables_created"].append("recurring_tasks")
+        except Exception as e:
+            if "already exists" in str(e):
+                results["tables_existing"].append("recurring_tasks")
+            else:
+                logger.warning(f"recurring_tasks: {e}")
+
+        # Create workflow_executions table
+        try:
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS workflow_executions (
+                    id SERIAL PRIMARY KEY,
+                    workflow_id VARCHAR(100) NOT NULL,
+                    workflow_name VARCHAR(255),
+                    lead_id INTEGER REFERENCES leads(id),
+                    loan_id INTEGER REFERENCES loans(id),
+                    trigger_event VARCHAR(100),
+                    execution_status VARCHAR(50),
+                    actions_completed JSONB,
+                    error_message TEXT,
+                    executed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            results["tables_created"].append("workflow_executions")
+        except Exception as e:
+            if "already exists" in str(e):
+                results["tables_existing"].append("workflow_executions")
+            else:
+                logger.warning(f"workflow_executions: {e}")
+
+        db.commit()
+        logger.info(f"Migration completed: {results}")
+
+        return {
+            "success": True,
+            "message": "Post-closing workflow migration completed",
+            "results": results
+        }
+
+    except Exception as e:
+        logger.error(f"Migration failed: {str(e)}")
+        db.rollback()
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e)
+        }
+
+
 # ============================================================================
 # MUM (MORTGAGES UNDER MANAGEMENT) API
 # ============================================================================
