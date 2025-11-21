@@ -323,7 +323,11 @@ function AILandingPage() {
 
     // If no tasks found, show summary message
     if (tasks.length === 0) {
-      addMessage(`Your pipeline: ${data.summary?.active_leads || 0} active leads, ${data.summary?.loans_in_pipeline || 0} loans in pipeline (${data.summary?.pipeline_volume || '$0'})`, 'assistant');
+      // Handle both field naming conventions from AI
+      const activeLeads = data.summary?.active_leads || data.summary?.leads_needing_attention || 0;
+      const loansInPipeline = data.summary?.loans_in_pipeline || data.summary?.deals_in_pipeline || 0;
+      const pipelineVolume = data.summary?.pipeline_volume || '$0';
+      addMessage(`Your pipeline: ${activeLeads} active leads, ${loansInPipeline} loans in pipeline (${pipelineVolume})`, 'assistant');
     } else {
       setTaskListData(tasks);
       setSelectedTask(tasks[0]);
