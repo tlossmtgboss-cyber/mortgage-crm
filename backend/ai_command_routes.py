@@ -21,6 +21,7 @@ import anthropic
 from database import get_db
 from conversation_memory_service import ConversationMemory
 from crm_context_service import CRMContextService
+from pattern_analyzer import PatternAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -841,6 +842,14 @@ IMPORTANT: Use the EXACT numbers above in your response. Do NOT say "0 active le
                 system += f"- {partner['name']} ({partner.get('company', 'N/A')}) | {partner.get('total_referrals', 0)} referrals | ${partner.get('total_volume', 0):,.0f}\n"
 
         system += "\n=== END CRM DATA ===\n"
+
+    # ADD PATTERN ANALYSIS & INSIGHTS
+    try:
+        patterns = PatternAnalyzer.analyze_user_patterns(db, user_id)
+        if patterns:
+            system += PatternAnalyzer.format_patterns_for_claude(patterns)
+    except Exception as e:
+        logger.warning(f"Failed to add pattern analysis: {e}")
 
     # ADD PERMANENT MEMORY CONTEXT
     if total_messages > 0:
