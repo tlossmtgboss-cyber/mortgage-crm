@@ -32,38 +32,81 @@ class ConversationMemory:
             result = db.execute(text("""
                 SELECT COALESCE(MAX(message_index), -1) + 1
                 FROM ai_conversation_memory
-                WHERE session_id = :session_id
+                WHERE session_id = CAST(:session_id AS uuid)
             """), {"session_id": session_id})
-            message_index = result.scalar()
+            message_index = result.scalar() or 0
 
             # Prepare action data
             action_id_val = action_id if action_id else None
             action_data_val = json.dumps(action_data) if action_data else None
 
             # Insert message
-            db.execute(text("""
-                INSERT INTO ai_conversation_memory
-                (id, user_id, session_id, message_index, role, content, action_id, action_data, created_at)
-                VALUES (
-                    gen_random_uuid(),
-                    :user_id,
-                    :session_id::uuid,
-                    :message_index,
-                    :role,
-                    :content,
-                    :action_id::uuid,
-                    :action_data::jsonb,
-                    NOW()
-                )
-            """), {
-                "user_id": user_id,
-                "session_id": session_id,
-                "message_index": message_index,
-                "role": role,
-                "content": content,
-                "action_id": action_id_val,
-                "action_data": action_data_val
-            })
+            if action_id_val and action_data_val:
+                db.execute(text("""
+                    INSERT INTO ai_conversation_memory
+                    (id, user_id, session_id, message_index, role, content, action_id, action_data, created_at)
+                    VALUES (
+                        gen_random_uuid(),
+                        :user_id,
+                        CAST(:session_id AS uuid),
+                        :message_index,
+                        :role,
+                        :content,
+                        CAST(:action_id AS uuid),
+                        CAST(:action_data AS jsonb),
+                        NOW()
+                    )
+                """), {
+                    "user_id": user_id,
+                    "session_id": session_id,
+                    "message_index": message_index,
+                    "role": role,
+                    "content": content,
+                    "action_id": action_id_val,
+                    "action_data": action_data_val
+                })
+            elif action_id_val:
+                db.execute(text("""
+                    INSERT INTO ai_conversation_memory
+                    (id, user_id, session_id, message_index, role, content, action_id, created_at)
+                    VALUES (
+                        gen_random_uuid(),
+                        :user_id,
+                        CAST(:session_id AS uuid),
+                        :message_index,
+                        :role,
+                        :content,
+                        CAST(:action_id AS uuid),
+                        NOW()
+                    )
+                """), {
+                    "user_id": user_id,
+                    "session_id": session_id,
+                    "message_index": message_index,
+                    "role": role,
+                    "content": content,
+                    "action_id": action_id_val
+                })
+            else:
+                db.execute(text("""
+                    INSERT INTO ai_conversation_memory
+                    (id, user_id, session_id, message_index, role, content, created_at)
+                    VALUES (
+                        gen_random_uuid(),
+                        :user_id,
+                        CAST(:session_id AS uuid),
+                        :message_index,
+                        :role,
+                        :content,
+                        NOW()
+                    )
+                """), {
+                    "user_id": user_id,
+                    "session_id": session_id,
+                    "message_index": message_index,
+                    "role": role,
+                    "content": content
+                })
             db.commit()
             logger.info(f"Saved message for user {user_id}, session {session_id}")
 
@@ -140,9 +183,9 @@ class ConversationMemory:
                 VALUES (
                     gen_random_uuid(),
                     :user_id,
-                    :action_id::uuid,
+                    CAST(:action_id AS uuid),
                     :action_type,
-                    :preview_data::jsonb,
+                    CAST(:preview_data AS jsonb),
                     'previewed',
                     NOW()
                 )
@@ -171,17 +214,28 @@ class ConversationMemory:
         try:
             exec_data = json.dumps(execution_data) if execution_data else None
 
-            db.execute(text("""
-                UPDATE ai_action_history
-                SET status = :status,
-                    execution_data = :exec_data::jsonb,
-                    executed_at = CASE WHEN :status = 'executed' THEN NOW() ELSE NULL END
-                WHERE action_id = :action_id::uuid
-            """), {
-                "status": status,
-                "exec_data": exec_data,
-                "action_id": action_id
-            })
+            if exec_data:
+                db.execute(text("""
+                    UPDATE ai_action_history
+                    SET status = :status,
+                        execution_data = CAST(:exec_data AS jsonb),
+                        executed_at = CASE WHEN :status = 'executed' THEN NOW() ELSE NULL END
+                    WHERE action_id = CAST(:action_id AS uuid)
+                """), {
+                    "status": status,
+                    "exec_data": exec_data,
+                    "action_id": action_id
+                })
+            else:
+                db.execute(text("""
+                    UPDATE ai_action_history
+                    SET status = :status,
+                        executed_at = CASE WHEN :status = 'executed' THEN NOW() ELSE NULL END
+                    WHERE action_id = CAST(:action_id AS uuid)
+                """), {
+                    "status": status,
+                    "action_id": action_id
+                })
             db.commit()
             logger.info(f"Updated action {action_id} to status {status}")
 
@@ -260,7 +314,7 @@ class ConversationMemory:
             result = db.execute(text("""
                 SELECT role, content, action_id, action_data, created_at
                 FROM ai_conversation_memory
-                WHERE session_id = :session_id::uuid
+                WHERE session_id = CAST(:session_id AS uuid)
                 ORDER BY message_index ASC
             """), {"session_id": session_id})
 
