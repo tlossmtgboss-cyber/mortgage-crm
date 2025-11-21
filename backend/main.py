@@ -12849,6 +12849,24 @@ async def execute_ai_function(
                 ]
             }
 
+        elif function_name == "get_lead_stats":
+            # Get lead counts by stage
+            leads = db.query(Lead).filter(Lead.owner_id == current_user.id).all()
+            total = len(leads)
+
+            # Count by stage
+            stage_counts = {}
+            for lead in leads:
+                stage_name = lead.stage.value if lead.stage else "Unknown"
+                stage_counts[stage_name] = stage_counts.get(stage_name, 0) + 1
+
+            return {
+                "success": True,
+                "total_leads": total,
+                "by_stage": stage_counts,
+                "summary": f"You have {total} total leads" + (f" across {len(stage_counts)} stages" if stage_counts else "")
+            }
+
         else:
             return {"success": False, "error": f"Unknown function: {function_name}"}
 
@@ -13030,6 +13048,17 @@ async def ai_chat(
                         }
                     },
                     "required": ["query"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_lead_stats",
+                "description": "Get statistics about leads including total count, counts by stage, and pipeline summary. Use this when asked about how many leads, lead counts, or pipeline status.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {}
                 }
             }
         }
