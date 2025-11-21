@@ -19,6 +19,7 @@ import anthropic
 
 from database import get_db
 from conversation_memory_service import ConversationMemory
+from crm_context_service import CRMContextService
 
 logger = logging.getLogger(__name__)
 
@@ -289,7 +290,8 @@ async def process_with_claude(
     user_id: int,
     action_context: Optional[Dict[str, Any]] = None,
     relevant_past: Optional[List[Dict]] = None,
-    total_messages: int = 0
+    total_messages: int = 0,
+    crm_context: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """Process the message with Claude AI"""
 
@@ -312,6 +314,44 @@ async def process_with_claude(
 
     # Build enhanced system prompt with memory context
     system = SYSTEM_PROMPT
+
+    # ADD COMPLETE CRM DATA CONTEXT
+    if crm_context:
+        system += "\n\n=== COMPLETE CRM DATA (You have full access to all this data) ===\n"
+        system += CRMContextService.format_context_for_claude(crm_context)
+
+        # Add detailed data for specific queries
+        leads = crm_context.get("leads", {})
+        if leads.get("recent_leads"):
+            system += "\n\nDETAILED LEAD DATA:\n"
+            for lead in leads["recent_leads"][:20]:
+                system += f"- {lead['name']} | {lead['status']} | {lead.get('loan_type', 'N/A')} | ${lead.get('loan_amount', 0):,.0f} | {lead.get('email', 'N/A')}\n"
+
+        loans = crm_context.get("loans", {})
+        if loans.get("recent_loans"):
+            system += "\n\nDETAILED LOAN/DEAL DATA:\n"
+            for loan in loans["recent_loans"][:20]:
+                system += f"- {loan['borrower_name']} | {loan['stage']} | {loan.get('loan_type', 'N/A')} | ${loan.get('loan_amount', 0):,.0f} | {loan.get('property_address', 'N/A')}\n"
+
+        tasks = crm_context.get("tasks", {})
+        if tasks.get("todays_tasks"):
+            system += "\n\nTODAY'S TASKS:\n"
+            for task in tasks["todays_tasks"]:
+                system += f"- [{task.get('priority', 'N/A')}] {task['title']} | {task.get('status', 'N/A')}\n"
+
+        mum = crm_context.get("mum_clients", {})
+        if mum.get("clients"):
+            system += "\n\nMUM CLIENTS:\n"
+            for client in mum["clients"][:15]:
+                system += f"- {client['name']} | ${client.get('loan_amount', 0):,.0f} | {client.get('interest_rate', 0)}% | Next review: {client.get('next_review_date', 'N/A')}\n"
+
+        partners = crm_context.get("referral_partners", {})
+        if partners.get("partners"):
+            system += "\n\nTOP REFERRAL PARTNERS:\n"
+            for partner in partners["partners"][:10]:
+                system += f"- {partner['name']} ({partner.get('company', 'N/A')}) | {partner.get('total_referrals', 0)} referrals | ${partner.get('total_volume', 0):,.0f}\n"
+
+        system += "\n=== END CRM DATA ===\n"
 
     # ADD PERMANENT MEMORY CONTEXT
     if total_messages > 0:
@@ -495,11 +535,14 @@ async def process_command(
             current_message=request.message
         )
 
-        # 3. BUILD ENHANCED CONTEXT FOR CLAUDE
+        # 3. GET FULL CRM DATA CONTEXT
+        crm_context = CRMContextService.get_full_crm_context(db, current_user_id)
+
+        # 4. BUILD ENHANCED CONTEXT FOR CLAUDE
         # Combine permanent memory with current session context
         combined_context = context['recent_messages'] if context['recent_messages'] else request.conversation_context
 
-        # Process with Claude AI - pass full context including action history
+        # Process with Claude AI - pass full context including action history and CRM data
         result = await process_with_claude(
             request.message,
             combined_context,
@@ -507,7 +550,8 @@ async def process_command(
             current_user_id,
             request.action_context,  # Include action context for memory
             context.get('relevant_past', []),
-            context.get('total_messages', 0)
+            context.get('total_messages', 0),
+            crm_context  # Include full CRM data
         )
 
         # Generate action ID if this is an actionable command
