@@ -115,6 +115,12 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
           >
             AI Receptionist
           </Link>
+          <Link
+            to="/market"
+            className={`nav-link ${isActive('/market') ? 'active' : ''}`}
+          >
+            Market
+          </Link>
         </div>
 
         <div className="nav-actions">
