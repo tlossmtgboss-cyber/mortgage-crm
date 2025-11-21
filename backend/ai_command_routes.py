@@ -22,6 +22,7 @@ from database import get_db
 from conversation_memory_service import ConversationMemory
 from crm_context_service import CRMContextService
 from pattern_analyzer import PatternAnalyzer
+from query_executor import QueryExecutor, execute_query, format_results
 
 logger = logging.getLogger(__name__)
 
@@ -238,6 +239,119 @@ AI_TOOLS = [
             },
             "required": []
         }
+    },
+    # Analytical Query Tools
+    {
+        "name": "query_pipeline_analysis",
+        "description": "Get detailed pipeline analysis by stage including lead counts, values, and age",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    },
+    {
+        "name": "query_lead_source_performance",
+        "description": "Analyze lead source performance including close rates and revenue",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "date_range_days": {
+                    "type": "integer",
+                    "description": "Number of days to analyze (default 90)",
+                    "default": 90
+                }
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "query_conversion_funnel",
+        "description": "Analyze conversion rates through pipeline stages",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    },
+    {
+        "name": "query_loan_type_performance",
+        "description": "Get performance breakdown by loan type including win rates",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    },
+    {
+        "name": "query_monthly_trends",
+        "description": "Get monthly trends for leads and closings",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "months": {
+                    "type": "integer",
+                    "description": "Number of months to analyze (default 6)",
+                    "default": 6
+                }
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "query_stale_leads",
+        "description": "Find stale leads that need attention",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "stale_days": {
+                    "type": "integer",
+                    "description": "Days since created to consider stale (default 14)",
+                    "default": 14
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum results to return (default 20)",
+                    "default": 20
+                }
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "query_high_value_opportunities",
+        "description": "Find high-value leads in pipeline",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "min_amount": {
+                    "type": "integer",
+                    "description": "Minimum loan amount to include (default 500000)",
+                    "default": 500000
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum results to return (default 20)",
+                    "default": 20
+                }
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "query_activity_summary",
+        "description": "Get summary of recent activities by type",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "days": {
+                    "type": "integer",
+                    "description": "Number of days to analyze (default 30)",
+                    "default": 30
+                }
+            },
+            "required": []
+        }
     }
 ]
 
@@ -262,8 +376,15 @@ class ActionValidator:
         parameters = action.get("parameters", {})
 
         # Check 1: Known action type
-        valid_actions = ["get_daily_summary", "search_crm", "update_lead_status",
-                        "create_task", "send_email_campaign", "get_pipeline_report"]
+        valid_actions = [
+            "get_daily_summary", "search_crm", "update_lead_status",
+            "create_task", "send_email_campaign", "get_pipeline_report",
+            # Analytical query tools
+            "query_pipeline_analysis", "query_lead_source_performance",
+            "query_conversion_funnel", "query_loan_type_performance",
+            "query_monthly_trends", "query_stale_leads",
+            "query_high_value_opportunities", "query_activity_summary"
+        ]
         if action_name not in valid_actions:
             return ValidationResult(False, f"Unknown action: {action_name}")
 
@@ -467,6 +588,22 @@ You can perform the following actions:
 5. PIPELINE_REPORT - Generate pipeline analysis reports
 6. SEARCH - Search for clients, deals, or tasks
 7. GENERAL_QUERY - Answer questions about the CRM data
+8. ANALYTICAL_QUERY - Run advanced analytics on CRM data
+
+ANALYTICAL QUERIES AVAILABLE:
+When user asks analytical questions, use these query types:
+- "pipeline analysis" or "how is my pipeline doing" → query_pipeline_analysis
+- "lead source performance" or "best lead sources" → query_lead_source_performance
+- "conversion rates" or "funnel analysis" → query_conversion_funnel
+- "loan type performance" or "best loan types" → query_loan_type_performance
+- "monthly trends" or "month over month" → query_monthly_trends
+- "stale leads" or "leads need attention" → query_stale_leads
+- "high value opportunities" or "big deals" → query_high_value_opportunities
+- "activity summary" or "what have I done" → query_activity_summary
+
+For ANALYTICAL_QUERY, include:
+- query_type: The specific query to run
+- params: Any parameters like date_range_days, min_amount, limit
 
 When responding, you MUST return a valid JSON object with these fields:
 - intent: The action type from the list above
@@ -760,6 +897,40 @@ def get_clients_by_filter(db: Session, user_id: int, filter_criteria: Dict[str, 
     return query.limit(100).all()
 
 
+def execute_analytical_query(db: Session, user_id: int, query_type: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
+    """Execute an analytical query and return formatted results"""
+    if params is None:
+        params = {}
+
+    # Map tool names to query types
+    query_type_map = {
+        "query_pipeline_analysis": "pipeline_analysis",
+        "query_lead_source_performance": "lead_source_performance",
+        "query_conversion_funnel": "conversion_funnel",
+        "query_loan_type_performance": "loan_type_performance",
+        "query_monthly_trends": "monthly_trends",
+        "query_stale_leads": "stale_leads_report",
+        "query_high_value_opportunities": "high_value_opportunities",
+        "query_activity_summary": "activity_summary",
+    }
+
+    actual_query_type = query_type_map.get(query_type, query_type)
+
+    # Execute the query
+    result = execute_query(db, actual_query_type, params, user_id)
+
+    # Format for Claude
+    formatted = format_results(actual_query_type, result)
+
+    return {
+        "query_type": actual_query_type,
+        "success": result.get("success", False),
+        "data": result.get("data", []),
+        "count": result.get("count", 0),
+        "formatted_text": formatted
+    }
+
+
 async def process_with_claude(
     message: str,
     context: List[Dict[str, str]],
@@ -987,6 +1158,19 @@ PERMANENT MEMORY STATUS:
                         logger.warning(f"AI returned placeholder '0 loans' but actual count is {actual_loans}")
 
                     logger.info(f"DAILY_VIEW response validated - Leads: {actual_leads}, Loans: {actual_loans}")
+
+                # INJECT QUERY RESULTS for ANALYTICAL_QUERY
+                if result.get("intent") == "ANALYTICAL_QUERY":
+                    query_type = result.get("data", {}).get("query_type", "")
+                    params = result.get("data", {}).get("params", {})
+
+                    if query_type:
+                        query_result = execute_analytical_query(db, user_id, query_type, params)
+                        result["data"]["query_result"] = query_result
+                        # Append formatted results to explanation
+                        if query_result.get("success"):
+                            result["explanation"] += "\n\n" + query_result.get("formatted_text", "")
+                        logger.info(f"ANALYTICAL_QUERY executed: {query_type}, success={query_result.get('success')}")
 
                 # Log metrics for successful response
                 execution_time = (time.time() - start_time) * 1000
