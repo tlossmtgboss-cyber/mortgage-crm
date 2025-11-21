@@ -9,6 +9,7 @@ function AILandingPage() {
   const [inputValue, setInputValue] = useState('');
   const [loading, setLoading] = useState(false);
   const [userName, setUserName] = useState('');
+  const [conversationHistory, setConversationHistory] = useState([]);
   const chatAreaRef = useRef(null);
 
   useEffect(() => {
@@ -65,22 +66,55 @@ function AILandingPage() {
     setLoading(true);
 
     try {
-      // Call the AI processing endpoint
-      const response = await aiAPI.processCommand(message);
+      // Call the AI processing endpoint with conversation history
+      const response = await aiAPI.processCommand(message, {
+        conversation_context: conversationHistory
+      });
 
-      // Handle different response types
-      if (response.preview) {
-        addMessage(response.explanation || "Here's what I found:", 'assistant', {
+      // Update conversation history
+      setConversationHistory(prev => [
+        ...prev,
+        { role: 'user', content: message },
+        { role: 'assistant', content: response.explanation || '' }
+      ]);
+
+      // Handle different response types based on intent
+      if (response.intent === 'DAILY_VIEW' && response.data) {
+        addMessage(response.explanation || "Here's your daily overview:", 'assistant');
+        addMessage('daily_view', 'assistant', {
+          isSpecialContent: true,
+          contentType: 'daily_view',
+          backendData: response.data
+        });
+      } else if (response.intent === 'SEARCH' && response.data) {
+        addMessage(response.explanation || "Here are your search results:", 'assistant');
+        // Show search results
+        const results = response.data;
+        if (results.leads?.length > 0 || results.deals?.length > 0) {
+          const resultText = [
+            results.leads?.length > 0 ? `Found ${results.leads.length} leads` : '',
+            results.deals?.length > 0 ? `Found ${results.deals.length} deals` : ''
+          ].filter(Boolean).join(', ');
+          addMessage(resultText, 'assistant');
+        }
+      } else if (response.preview && response.action_id) {
+        // Actionable command with preview
+        addMessage(response.explanation || "Here's what I can do:", 'assistant', {
           preview: response.preview,
           actionId: response.action_id,
           actionType: response.intent
         });
+      } else if (response.preview) {
+        // Preview without action (like reports)
+        addMessage(response.explanation || "Here's what I found:", 'assistant', {
+          preview: response.preview,
+          actionType: response.intent
+        });
       } else {
-        addMessage(response.response || response.explanation || "I understand your request.", 'assistant');
+        addMessage(response.explanation || "I understand your request.", 'assistant');
       }
     } catch (error) {
       console.error('AI processing error:', error);
-
       // For demo purposes, route to simulated responses
       routeMessage(message);
     } finally {
@@ -126,28 +160,79 @@ function AILandingPage() {
     addMessage('pipeline_report', 'assistant', { isSpecialContent: true, contentType: 'pipeline_report' });
   };
 
-  const executeAction = async (actionType) => {
+  const executeAction = async (actionId, modifications = {}) => {
+    if (!actionId) {
+      // Fallback for demo mode without actionId
+      addMessage('Action executed successfully!', 'assistant');
+      return;
+    }
+
+    try {
+      addMessage('Executing action...', 'assistant');
+      const result = await aiAPI.executeAction(actionId, modifications);
+
+      if (result.success) {
+        addMessage(`✅ ${result.message}`, 'assistant');
+      } else {
+        addMessage(`❌ ${result.message || 'Action failed'}`, 'assistant');
+      }
+    } catch (error) {
+      console.error('Action execution error:', error);
+      addMessage('Failed to execute action. Please try again.', 'assistant');
+    }
+  };
+
+  // Demo mode execute (for fallback without backend)
+  const executeDemoAction = (actionType) => {
     const confirmMessages = {
-      email_campaign: 'Email sent successfully to 47 clients!',
-      bulk_update: 'Successfully updated 14 deals. Processors have been notified.',
-      voicemail_campaign: 'Voicemail drops initiated! All 10 calls are being placed now.',
-      pipeline_report: 'Pipeline report generated and sent to your team!'
+      email_campaign: '✅ Email sent successfully to 47 clients!',
+      bulk_update: '✅ Successfully updated 14 deals. Processors have been notified.',
+      voicemail_campaign: '✅ Voicemail drops initiated! All 10 calls are being placed now.',
+      pipeline_report: '✅ Pipeline report generated and sent to your team!'
     };
-    addMessage(confirmMessages[actionType] || 'Action completed successfully!', 'assistant');
+    addMessage(confirmMessages[actionType] || '✅ Action completed successfully!', 'assistant');
   };
 
   const renderSpecialContent = (message) => {
+    const actionId = message.actionId;
+    const preview = message.preview;
+    const backendData = message.backendData;
+
     switch (message.contentType) {
       case 'daily_view':
-        return <DailyView onAction={executeAction} />;
+        return <DailyView onAction={executeDemoAction} data={backendData} />;
       case 'email_campaign':
-        return <EmailCampaignPreview onExecute={() => executeAction('email_campaign')} onEdit={() => addMessage('What changes would you like to make?', 'assistant')} />;
+        return (
+          <EmailCampaignPreview
+            preview={preview}
+            onExecute={() => actionId ? executeAction(actionId) : executeDemoAction('email_campaign')}
+            onEdit={() => addMessage('What changes would you like to make?', 'assistant')}
+          />
+        );
       case 'bulk_update':
-        return <BulkUpdatePreview onExecute={() => executeAction('bulk_update')} onEdit={() => addMessage('What would you like to modify?', 'assistant')} />;
+        return (
+          <BulkUpdatePreview
+            preview={preview}
+            onExecute={() => actionId ? executeAction(actionId) : executeDemoAction('bulk_update')}
+            onEdit={() => addMessage('What would you like to modify?', 'assistant')}
+          />
+        );
       case 'voicemail_campaign':
-        return <VoicemailCampaignPreview onExecute={() => executeAction('voicemail_campaign')} onEdit={() => addMessage('What would you like to change in the script?', 'assistant')} />;
+        return (
+          <VoicemailCampaignPreview
+            preview={preview}
+            onExecute={() => actionId ? executeAction(actionId) : executeDemoAction('voicemail_campaign')}
+            onEdit={() => addMessage('What would you like to change in the script?', 'assistant')}
+          />
+        );
       case 'pipeline_report':
-        return <PipelineReportPreview onExecute={() => executeAction('pipeline_report')} onEdit={() => addMessage('How would you like to customize this report?', 'assistant')} />;
+        return (
+          <PipelineReportPreview
+            preview={preview}
+            onExecute={() => actionId ? executeAction(actionId) : executeDemoAction('pipeline_report')}
+            onEdit={() => addMessage('How would you like to customize this report?', 'assistant')}
+          />
+        );
       default:
         return null;
     }
@@ -349,33 +434,46 @@ function DailyView({ onAction }) {
 }
 
 // Email Campaign Preview Component
-function EmailCampaignPreview({ onExecute, onEdit }) {
+function EmailCampaignPreview({ preview, onExecute, onEdit }) {
+  // Use backend data if available, otherwise use demo data
+  const recipients = preview?.recipients || ['47 mortgages under management clients'];
+  const recipientCount = preview?.count || recipients.length || 47;
+  const subject = preview?.subject || 'Unlock More Financial Flexibility with the All In One Loan';
+  const body = preview?.body || `Hi [First Name],
+
+I wanted to reach out to share an exciting loan option that could help you maximize your home's equity while maintaining financial flexibility.
+
+The All In One loan combines your mortgage with a checking account and line of credit, allowing you to:
+• Pay down your mortgage faster by applying your income directly to principal
+• Access your equity when needed without a separate HELOC
+• Reduce interest costs through daily balance calculations
+
+With today's economic landscape, having this kind of financial flexibility could be valuable for your situation. I'd love to discuss whether this might be a good fit for your goals.
+
+Would you be available for a quick call this week?
+
+Best regards,
+Tim
+TL Development, LLC`;
+
   return (
     <div className="ai-message-content ai-special-content">
-      I've drafted an email for 47 mortgages under management clients:
+      I've drafted an email for {recipientCount} clients:
 
       <div className="ai-action-preview">
         <h3>📧 Email Preview</h3>
         <div style={{ marginBottom: '12px' }}>
-          <strong>To:</strong> 47 mortgages under management clients<br/>
-          <strong>Subject:</strong> Unlock More Financial Flexibility with the All In One Loan
+          <strong>To:</strong> {recipientCount} clients<br/>
+          <strong>Subject:</strong> {subject}
         </div>
         <div className="ai-preview-content">
-          Hi [First Name],<br/><br/>
-          I wanted to reach out to share an exciting loan option that could help you maximize your home's equity while maintaining financial flexibility.<br/><br/>
-          The All In One loan combines your mortgage with a checking account and line of credit, allowing you to:<br/>
-          • Pay down your mortgage faster by applying your income directly to principal<br/>
-          • Access your equity when needed without a separate HELOC<br/>
-          • Reduce interest costs through daily balance calculations<br/><br/>
-          With today's economic landscape, having this kind of financial flexibility could be valuable for your situation. I'd love to discuss whether this might be a good fit for your goals.<br/><br/>
-          Would you be available for a quick call this week?<br/><br/>
-          Best regards,<br/>
-          Tim<br/>
-          TL Development, LLC
+          {body.split('\n').map((line, i) => (
+            <React.Fragment key={i}>{line}<br/></React.Fragment>
+          ))}
         </div>
         <div className="ai-action-buttons">
           <button className="ai-btn ai-btn-edit" onClick={onEdit}>Edit Draft</button>
-          <button className="ai-btn ai-btn-approve" onClick={onExecute}>Send to 47 Clients</button>
+          <button className="ai-btn ai-btn-approve" onClick={onExecute}>Send to {recipientCount} Clients</button>
         </div>
       </div>
     </div>
@@ -383,7 +481,7 @@ function EmailCampaignPreview({ onExecute, onEdit }) {
 }
 
 // Bulk Update Preview Component
-function BulkUpdatePreview({ onExecute, onEdit }) {
+function BulkUpdatePreview({ preview, onExecute, onEdit }) {
   return (
     <div className="ai-message-content ai-special-content">
       I found 14 deals in underwriting that need the new appraisal waiver guidelines added.
@@ -414,7 +512,7 @@ function BulkUpdatePreview({ onExecute, onEdit }) {
 }
 
 // Voicemail Campaign Preview Component
-function VoicemailCampaignPreview({ onExecute, onEdit }) {
+function VoicemailCampaignPreview({ preview, onExecute, onEdit }) {
   return (
     <div className="ai-message-content ai-special-content">
       I've identified your top 10 referral partners for Q4 2024 based on deal volume and value.
@@ -458,7 +556,7 @@ function VoicemailCampaignPreview({ onExecute, onEdit }) {
 }
 
 // Pipeline Report Preview Component
-function PipelineReportPreview({ onExecute, onEdit }) {
+function PipelineReportPreview({ preview, onExecute, onEdit }) {
   return (
     <div className="ai-message-content ai-special-content">
       I've generated your pipeline report for December 2024 closings.
