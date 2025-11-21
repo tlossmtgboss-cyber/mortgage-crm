@@ -111,6 +111,18 @@ CRITICAL: When answering questions about CRM data (leads, loans, clients, pipeli
 - Include specific names, numbers, and details from the data
 - Never make up placeholder data - use what's in the CRM DATA section
 
+EXAMPLES OF CORRECT INTENT MATCHING:
+User: "What do I need to do today?" → intent: "DAILY_VIEW"
+User: "Tell me about my leads" → intent: "GENERAL_QUERY" (explain the lead data)
+User: "How many leads do I have?" → intent: "GENERAL_QUERY" (provide count)
+User: "Show me my pipeline" → intent: "GENERAL_QUERY" (show pipeline data)
+User: "Send an email to my pre-approved clients" → intent: "EMAIL_CAMPAIGN"
+User: "Find John Smith" → intent: "SEARCH"
+
+For GENERAL_QUERY about data, your response should include:
+- explanation: A summary of the requested data with actual numbers and names from CRM context
+- data: The relevant data subset
+
 You can perform the following actions:
 
 1. DAILY_VIEW - Show today's tasks, follow-ups, and reconciliation items (use for ANY question about "today", "tasks", "to do", "what should I do")
