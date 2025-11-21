@@ -190,38 +190,83 @@ Always be helpful, concise, and focus on actionable results. If you can't determ
 # ============================================================================
 
 def get_daily_summary(db: Session, user_id: int) -> Dict[str, Any]:
-    """Get daily summary data for the user"""
+    """Get daily summary data for the user - includes REAL CRM data"""
     main = get_main_module()
     Task = main.Task
+    Lead = main.Lead
+    Loan = main.Loan
 
     today = datetime.now().date()
 
-    # Get today's tasks
+    # Get today's tasks (using owner_id)
     tasks = db.query(Task).filter(
-        Task.assigned_to_id == user_id,
+        Task.owner_id == user_id,
         func.date(Task.due_date) == today,
         Task.status != 'completed'
     ).order_by(Task.priority.desc()).limit(10).all()
 
-    # Get follow-ups (tasks with type follow_up due today or overdue)
-    follow_ups = db.query(Task).filter(
-        Task.assigned_to_id == user_id,
-        Task.task_type == 'follow_up',
-        func.date(Task.due_date) <= today,
-        Task.status != 'completed'
-    ).limit(5).all()
+    # Get ACTUAL LEAD DATA
+    all_leads = db.query(Lead).filter(Lead.owner_id == user_id).all()
+    total_leads = len(all_leads)
 
-    # Get task statistics
-    pending_tasks = db.query(Task).filter(
-        Task.assigned_to_id == user_id,
-        Task.status == 'pending'
-    ).count()
+    # Group leads by status
+    lead_status_breakdown = {}
+    for lead in all_leads:
+        status = lead.stage.value if lead.stage else 'Unassigned'
+        lead_status_breakdown[status] = lead_status_breakdown.get(status, 0) + 1
 
-    completed_today = db.query(Task).filter(
-        Task.assigned_to_id == user_id,
-        Task.status == 'completed',
-        func.date(Task.updated_at) == today
-    ).count()
+    # Get leads needing follow-up (New, Attempted Contact)
+    new_leads = [l for l in all_leads if l.stage and l.stage.value in ['New', 'Attempted Contact']]
+
+    # Get ACTUAL LOAN DATA
+    all_loans = db.query(Loan).filter(Loan.loan_officer_id == user_id).all()
+    total_loans = len(all_loans)
+    total_pipeline_value = sum(float(loan.amount or 0) for loan in all_loans)
+
+    # Group loans by stage
+    loan_stage_breakdown = {}
+    for loan in all_loans:
+        stage = loan.stage or 'Unknown'
+        loan_stage_breakdown[stage] = loan_stage_breakdown.get(stage, 0) + 1
+
+    # Build follow-ups from leads needing attention
+    follow_ups = []
+
+    # New leads need initial contact
+    new_stage_leads = [l for l in all_leads if l.stage and l.stage.value == 'New']
+    if new_stage_leads:
+        follow_ups.append({
+            "type": "New Leads Follow-up",
+            "items": [f"{l.name} ({l.loan_type or 'N/A'})" for l in new_stage_leads[:5]],
+            "priority": "High"
+        })
+
+    # Application started leads need follow-up
+    app_leads = [l for l in all_leads if l.stage and l.stage.value == 'Application Started']
+    if app_leads:
+        follow_ups.append({
+            "type": "Application Started Follow-up",
+            "items": [f"{l.name} (${l.preapproval_amount or 0:,.0f})" for l in app_leads[:5]],
+            "priority": "High"
+        })
+
+    # Prospects need nurturing
+    prospects = [l for l in all_leads if l.stage and l.stage.value == 'Prospect']
+    if prospects:
+        follow_ups.append({
+            "type": "Prospect Nurturing",
+            "items": [f"{l.name}" for l in prospects[:5]],
+            "priority": "Medium"
+        })
+
+    # Build reconciliations from loans in pipeline
+    reconciliations = []
+    if all_loans:
+        loan_items = [f"{loan.borrower_name} ({loan.stage} - ${loan.amount or 0:,.0f})" for loan in all_loans[:5]]
+        reconciliations.append({
+            "type": "Loan Status Updates",
+            "items": loan_items
+        })
 
     return {
         "tasks": [
@@ -234,48 +279,45 @@ def get_daily_summary(db: Session, user_id: int) -> Dict[str, Any]:
                 "lead_id": t.lead_id
             } for t in tasks
         ],
-        "follow_ups": [
-            {
-                "id": t.id,
-                "title": t.title,
-                "lead_id": t.lead_id,
-                "due_date": t.due_date.isoformat() if t.due_date else None
-            } for t in follow_ups
-        ],
-        "reconciliations": [],  # Add reconciliation logic if you have that model
+        "follow_ups": follow_ups,
+        "reconciliations": reconciliations,
         "summary": {
-            "pending_tasks": pending_tasks,
-            "completed_today": completed_today,
-            "follow_ups_due": len(follow_ups)
+            "total_tasks": len(tasks),
+            "overdue_tasks": 0,
+            "active_leads": total_leads,
+            "hot_prospects": len([l for l in all_leads if l.stage and l.stage.value in ['Prospect', 'Pre-Approved']]),
+            "loans_in_pipeline": total_loans,
+            "pipeline_volume": f"${total_pipeline_value:,.0f}",
+            "lead_status_breakdown": lead_status_breakdown,
+            "loan_stage_breakdown": loan_stage_breakdown
         }
     }
 
 
 def search_records(db: Session, user_id: int, query: str) -> Dict[str, Any]:
-    """Search across leads, deals, and tasks"""
+    """Search across leads and loans"""
     main = get_main_module()
     Lead = main.Lead
-    Deal = main.Deal
+    Loan = main.Loan
 
     search_term = f"%{query}%"
 
-    # Search leads
+    # Search leads (using owner_id and name field)
     leads = db.query(Lead).filter(
-        Lead.user_id == user_id,
+        Lead.owner_id == user_id,
         or_(
-            Lead.first_name.ilike(search_term),
-            Lead.last_name.ilike(search_term),
+            Lead.name.ilike(search_term),
             Lead.email.ilike(search_term),
             Lead.phone.ilike(search_term)
         )
     ).limit(10).all()
 
-    # Search deals
-    deals = db.query(Deal).filter(
-        Deal.user_id == user_id,
+    # Search loans
+    loans = db.query(Loan).filter(
+        Loan.loan_officer_id == user_id,
         or_(
-            Deal.borrower_name.ilike(search_term),
-            Deal.property_address.ilike(search_term)
+            Loan.borrower_name.ilike(search_term),
+            Loan.property_address.ilike(search_term)
         )
     ).limit(10).all()
 
@@ -283,19 +325,19 @@ def search_records(db: Session, user_id: int, query: str) -> Dict[str, Any]:
         "leads": [
             {
                 "id": l.id,
-                "name": f"{l.first_name} {l.last_name}",
+                "name": l.name,
                 "email": l.email,
                 "phone": l.phone,
-                "status": l.status
+                "status": l.stage.value if l.stage else "Unassigned"
             } for l in leads
         ],
-        "deals": [
+        "loans": [
             {
-                "id": d.id,
-                "borrower_name": d.borrower_name,
-                "loan_amount": float(d.loan_amount) if d.loan_amount else 0,
-                "stage": d.stage
-            } for d in deals
+                "id": loan.id,
+                "borrower_name": loan.borrower_name,
+                "loan_amount": float(loan.amount) if loan.amount else 0,
+                "stage": loan.stage
+            } for loan in loans
         ],
         "query": query
     }
@@ -306,7 +348,7 @@ def get_clients_by_filter(db: Session, user_id: int, filter_criteria: Dict[str, 
     main = get_main_module()
     Lead = main.Lead
 
-    query = db.query(Lead).filter(Lead.user_id == user_id)
+    query = db.query(Lead).filter(Lead.owner_id == user_id)
 
     if "loan_type" in filter_criteria:
         query = query.filter(Lead.loan_type == filter_criteria["loan_type"])
