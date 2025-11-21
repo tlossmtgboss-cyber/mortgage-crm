@@ -601,9 +601,19 @@ When user asks analytical questions, use these query types:
 - "high value opportunities" or "big deals" → query_high_value_opportunities
 - "activity summary" or "what have I done" → query_activity_summary
 
-For ANALYTICAL_QUERY, include:
-- query_type: The specific query to run
-- params: Any parameters like date_range_days, min_amount, limit
+For ANALYTICAL_QUERY, data MUST include:
+- query_type: One of: "query_pipeline_analysis", "query_lead_source_performance", "query_conversion_funnel", "query_loan_type_performance", "query_monthly_trends", "query_stale_leads", "query_high_value_opportunities", "query_activity_summary"
+- params: Any parameters like date_range_days (default 90), min_amount (default 500000), limit (default 20), stale_days (default 14), months (default 6), days (default 30)
+
+EXAMPLE ANALYTICAL_QUERY RESPONSE:
+{
+  "intent": "ANALYTICAL_QUERY",
+  "explanation": "I'll run that analysis for you.",
+  "data": {
+    "query_type": "query_monthly_trends",
+    "params": {"months": 6}
+  }
+}
 
 When responding, you MUST return a valid JSON object with these fields:
 - intent: The action type from the list above
