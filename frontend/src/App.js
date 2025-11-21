@@ -61,6 +61,7 @@ const VoiceOSDashboard = lazy(() => import('./pages/VoiceOSDashboard'));
 const AILandingPage = lazy(() => import('./pages/AILandingPage'));
 const WorkflowDashboard = lazy(() => import('./pages/WorkflowDashboard'));
 const WorkflowStagePage = lazy(() => import('./pages/WorkflowStagePage'));
+const MarketDashboard = lazy(() => import('./pages/MarketDashboard'));
 
 // Simple loading component
 const PageLoader = () => (
@@ -303,6 +304,16 @@ function App() {
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
+              </PrivateRoute>
+            }
+          />
+
+          {/* Market Dashboard - Full screen embed */}
+          <Route
+            path="/market"
+            element={
+              <PrivateRoute>
+                <LazyPage><MarketDashboard /></LazyPage>
               </PrivateRoute>
             }
           />

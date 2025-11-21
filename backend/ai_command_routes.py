@@ -198,12 +198,15 @@ def get_daily_summary(db: Session, user_id: int) -> Dict[str, Any]:
 
     today = datetime.now().date()
 
-    # Get today's tasks (using owner_id)
-    tasks = db.query(Task).filter(
+    # Get ALL pending tasks (not just today's)
+    all_tasks = db.query(Task).filter(
         Task.owner_id == user_id,
-        func.date(Task.due_date) == today,
         Task.status != 'completed'
-    ).order_by(Task.priority.desc()).limit(10).all()
+    ).order_by(Task.priority.desc(), Task.due_date.asc()).limit(20).all()
+
+    # Separate today's tasks and overdue tasks
+    today_tasks = [t for t in all_tasks if t.due_date and t.due_date.date() == today]
+    overdue_tasks = [t for t in all_tasks if t.due_date and t.due_date.date() < today]
 
     # Get ACTUAL LEAD DATA
     all_leads = db.query(Lead).filter(Lead.owner_id == user_id).all()
@@ -214,9 +217,6 @@ def get_daily_summary(db: Session, user_id: int) -> Dict[str, Any]:
     for lead in all_leads:
         status = lead.stage.value if lead.stage else 'Unassigned'
         lead_status_breakdown[status] = lead_status_breakdown.get(status, 0) + 1
-
-    # Get leads needing follow-up (New, Attempted Contact)
-    new_leads = [l for l in all_leads if l.stage and l.stage.value in ['New', 'Attempted Contact']]
 
     # Get ACTUAL LOAN DATA
     all_loans = db.query(Loan).filter(Loan.loan_officer_id == user_id).all()
@@ -229,8 +229,36 @@ def get_daily_summary(db: Session, user_id: int) -> Dict[str, Any]:
         stage = loan.stage or 'Unknown'
         loan_stage_breakdown[stage] = loan_stage_breakdown.get(stage, 0) + 1
 
+    # Get MUM clients
+    mum_clients = []
+    try:
+        MUMClient = main.MUMClient
+        mum_clients = db.query(MUMClient).filter(MUMClient.loan_officer_id == user_id).limit(10).all()
+    except Exception:
+        pass  # MUM table might not exist
+
+    # Get unread emails/messages
+    unread_messages = 0
+    try:
+        EmailMessage = main.EmailMessage
+        unread_messages = db.query(EmailMessage).filter(
+            EmailMessage.user_id == user_id,
+            EmailMessage.direction == 'inbound',
+            EmailMessage.status == 'received'
+        ).count()
+    except Exception:
+        pass
+
     # Build follow-ups from leads needing attention
     follow_ups = []
+
+    # Overdue tasks need immediate attention
+    if overdue_tasks:
+        follow_ups.append({
+            "type": "Overdue Tasks",
+            "items": [f"{t.title} (Due: {t.due_date.strftime('%m/%d') if t.due_date else 'N/A'})" for t in overdue_tasks[:5]],
+            "priority": "High"
+        })
 
     # New leads need initial contact
     new_stage_leads = [l for l in all_leads if l.stage and l.stage.value == 'New']
@@ -250,6 +278,15 @@ def get_daily_summary(db: Session, user_id: int) -> Dict[str, Any]:
             "priority": "High"
         })
 
+    # Pre-approved leads - rate lock opportunities
+    preapproved = [l for l in all_leads if l.stage and l.stage.value == 'Pre-Approved']
+    if preapproved:
+        follow_ups.append({
+            "type": "Pre-Approved - Rate Lock Check",
+            "items": [f"{l.name} (${l.preapproval_amount or 0:,.0f})" for l in preapproved[:5]],
+            "priority": "High"
+        })
+
     # Prospects need nurturing
     prospects = [l for l in all_leads if l.stage and l.stage.value == 'Prospect']
     if prospects:
@@ -261,11 +298,34 @@ def get_daily_summary(db: Session, user_id: int) -> Dict[str, Any]:
 
     # Build reconciliations from loans in pipeline
     reconciliations = []
-    if all_loans:
-        loan_items = [f"{loan.borrower_name} ({loan.stage} - ${loan.amount or 0:,.0f})" for loan in all_loans[:5]]
+
+    # Loans needing attention by stage
+    processing_loans = [l for l in all_loans if l.stage == 'Processing']
+    if processing_loans:
         reconciliations.append({
-            "type": "Loan Status Updates",
-            "items": loan_items
+            "type": "Processing - Document Collection",
+            "items": [f"{loan.borrower_name} (${loan.amount or 0:,.0f})" for loan in processing_loans[:3]]
+        })
+
+    uw_loans = [l for l in all_loans if l.stage in ['UW Received', 'Approved']]
+    if uw_loans:
+        reconciliations.append({
+            "type": "Underwriting Review",
+            "items": [f"{loan.borrower_name} ({loan.stage} - ${loan.amount or 0:,.0f})" for loan in uw_loans[:3]]
+        })
+
+    ctc_loans = [l for l in all_loans if l.stage == 'CTC']
+    if ctc_loans:
+        reconciliations.append({
+            "type": "Clear to Close - Schedule Closing",
+            "items": [f"{loan.borrower_name} (${loan.amount or 0:,.0f})" for loan in ctc_loans[:3]]
+        })
+
+    # MUM clients needing attention
+    if mum_clients:
+        reconciliations.append({
+            "type": "MUM Client Check-ins",
+            "items": [f"{c.borrower_name} ({c.loan_type or 'N/A'})" for c in mum_clients[:3]]
         })
 
     return {
@@ -277,17 +337,19 @@ def get_daily_summary(db: Session, user_id: int) -> Dict[str, Any]:
                 "priority": t.priority,
                 "due_date": t.due_date.isoformat() if t.due_date else None,
                 "lead_id": t.lead_id
-            } for t in tasks
+            } for t in all_tasks[:10]
         ],
         "follow_ups": follow_ups,
         "reconciliations": reconciliations,
         "summary": {
-            "total_tasks": len(tasks),
-            "overdue_tasks": 0,
+            "total_tasks": len(all_tasks),
+            "overdue_tasks": len(overdue_tasks),
             "active_leads": total_leads,
             "hot_prospects": len([l for l in all_leads if l.stage and l.stage.value in ['Prospect', 'Pre-Approved']]),
             "loans_in_pipeline": total_loans,
             "pipeline_volume": f"${total_pipeline_value:,.0f}",
+            "unread_messages": unread_messages,
+            "mum_clients": len(mum_clients),
             "lead_status_breakdown": lead_status_breakdown,
             "loan_stage_breakdown": loan_stage_breakdown
         }
