@@ -23512,10 +23512,10 @@ async def get_workflow_stage_team_members(
         elif stage_key == "active_loan":
             count = db.query(Loan).filter(Loan.loan_officer_id == user.id).count()
         else:  # portfolio
-            # Count closed/funded loans as portfolio clients
+            # Count funded loans as portfolio clients
             count = db.query(Loan).filter(
                 Loan.loan_officer_id == user.id,
-                Loan.stage.in_(["Closed", "Funded", "Post-Closing"])
+                Loan.stage == LoanStage.FUNDED
             ).count()
 
         if count > 0:
