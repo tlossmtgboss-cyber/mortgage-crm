@@ -435,11 +435,11 @@ async function fetchTreasuryHistory() {
   return [];
 }
 
-// Generate simulated MBS price history
-function generateMBSHistory() {
+// Generate simulated MBS price history for a specific coupon
+function generateMBSHistory(basePrice = 100.5) {
   const data = [];
   const now = new Date();
-  let price = 100.5;
+  let price = basePrice - 0.5; // Start slightly below current
 
   for (let i = 30; i >= 0; i--) {
     const date = new Date(now);
@@ -482,7 +482,7 @@ function generateTreasuryHistory() {
 }
 
 function MarketDashboard() {
-  const [mbsData, setMbsData] = useState([]);
+  const [mbsDataByCoupon, setMbsDataByCoupon] = useState({});
   const [treasuryData, setTreasuryData] = useState([]);
   const [currentPrices, setCurrentPrices] = useState({
     mbs45: 97.46,
@@ -510,8 +510,14 @@ function MarketDashboard() {
   const currentCouponPrice = currentPrices[currentCouponData.key];
 
   useEffect(() => {
-    // Initial data
-    setMbsData(generateMBSHistory());
+    // Generate history for all coupons
+    setMbsDataByCoupon({
+      '4.5': generateMBSHistory(97.46),
+      '5.0': generateMBSHistory(99.44),
+      '5.5': generateMBSHistory(100.98),
+      '6.0': generateMBSHistory(102.21),
+      '6.5': generateMBSHistory(103.52)
+    });
 
     // Fetch real Treasury data from FRED
     const loadRealData = async () => {
@@ -609,7 +615,7 @@ function MarketDashboard() {
             </div>
             <div className="chart-container">
               <ResponsiveContainer width="100%" height={300}>
-                <AreaChart data={mbsData}>
+                <AreaChart data={mbsDataByCoupon[selectedCoupon] || []}>
                   <defs>
                     <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#00d4aa" stopOpacity={0.3}/>
