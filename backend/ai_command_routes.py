@@ -18,6 +18,7 @@ import uuid
 import anthropic
 
 from database import get_db
+from conversation_memory_service import ConversationMemory
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,10 @@ action_cache: Dict[str, Dict[str, Any]] = {}
 
 class AICommandRequest(BaseModel):
     message: str
+    session_id: Optional[str] = None  # For permanent memory tracking
     conversation_context: Optional[List[Dict[str, str]]] = []
+    action_context: Optional[Dict[str, Any]] = {}  # Store action previews for context
+    current_state: Optional[Dict[str, Any]] = {}  # Current conversation state
 
 
 class AICommandResponse(BaseModel):
@@ -55,10 +59,12 @@ class AICommandResponse(BaseModel):
     preview: Optional[Dict[str, Any]] = None
     action_id: Optional[str] = None
     data: Optional[Dict[str, Any]] = None
+    session_id: Optional[str] = None  # Return session ID for tracking
 
 
 class ActionExecuteRequest(BaseModel):
     action_id: str
+    session_id: Optional[str] = None  # For permanent memory tracking
     modifications: Optional[Dict[str, Any]] = {}
 
 
@@ -73,6 +79,21 @@ class ActionExecuteResponse(BaseModel):
 # ============================================================================
 
 SYSTEM_PROMPT = """You are Pipeline 360's AI assistant, designed to help mortgage professionals manage their CRM efficiently through natural language commands.
+
+CRITICAL MEMORY INSTRUCTIONS:
+- You have access to the FULL conversation history - use it!
+- When user says "it", "that", "the email", "the update" - CHECK HISTORY to find what they're referring to
+- NEVER ask "what email?" if we just discussed an email
+- NEVER start over if user asks to modify something - build on what was already created
+- When user asks to modify previous work, find it in history and make the specific change
+- Always reference previous context when relevant to the current request
+- If user says "make it shorter" or "make it more urgent", modify the PREVIOUS draft
+
+CONVERSATION CONTINUITY EXAMPLES:
+- If we just drafted an email and user says "make it shorter" → modify that email
+- If we previewed a bulk update and user says "change the reason" → update that action
+- If user refers to "the last one" or "that" → find it in conversation history
+- Maintain context across multiple turns without losing track
 
 You can perform the following actions:
 
@@ -265,7 +286,10 @@ async def process_with_claude(
     message: str,
     context: List[Dict[str, str]],
     db: Session,
-    user_id: int
+    user_id: int,
+    action_context: Optional[Dict[str, Any]] = None,
+    relevant_past: Optional[List[Dict]] = None,
+    total_messages: int = 0
 ) -> Dict[str, Any]:
     """Process the message with Claude AI"""
 
@@ -273,9 +297,9 @@ async def process_with_claude(
         # Return mock response if no API key
         return generate_mock_response(message, db, user_id)
 
-    # Build conversation history
+    # Build conversation history - use more context (50 messages for permanent memory)
     messages = []
-    for ctx in context[-10:]:  # Keep last 10 messages for context
+    for ctx in context[-50:]:  # Keep last 50 messages for better context
         messages.append({
             "role": ctx.get("role", "user"),
             "content": ctx.get("content", "")
@@ -286,11 +310,48 @@ async def process_with_claude(
         "content": message
     })
 
+    # Build enhanced system prompt with memory context
+    system = SYSTEM_PROMPT
+
+    # ADD PERMANENT MEMORY CONTEXT
+    if total_messages > 0:
+        system += f"""
+
+PERMANENT MEMORY STATUS:
+- You have had {total_messages} total messages with this user
+- You have COMPLETE MEMORY of everything we've discussed
+- When user references "yesterday", "last week", or past conversations, check the context below
+- ALWAYS use your memory - never claim to not remember something from our history
+"""
+
+    # Add relevant past conversations if available
+    if relevant_past and len(relevant_past) > 0:
+        system += "\n\nRELEVANT PAST CONVERSATIONS (from your permanent memory):\n"
+        for msg in relevant_past:
+            content_preview = msg.get('content', '')[:300]
+            system += f"[{msg.get('timestamp', 'unknown')}] {msg.get('role', 'unknown')}: {content_preview}...\n"
+
+    # Add action context
+    if action_context:
+        action_summary = "\n\nRECENT ACTIONS IN THIS CONVERSATION:\n"
+        for action_id, action_data in action_context.items():
+            intent = action_data.get('intent', 'unknown')
+            status = action_data.get('status', 'unknown')
+            preview = action_data.get('preview', {})
+            action_summary += f"- Action {action_id}: {intent} ({status})\n"
+            if preview:
+                if intent == 'EMAIL_CAMPAIGN':
+                    action_summary += f"  Subject: {preview.get('subject', 'N/A')}\n"
+                    action_summary += f"  Body: {preview.get('body', 'N/A')[:200]}...\n"
+                elif intent == 'BULK_UPDATE':
+                    action_summary += f"  Field: {preview.get('field', 'N/A')}, Count: {preview.get('count', 'N/A')}\n"
+        system += action_summary
+
     try:
         response = anthropic_client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=2000,
-            system=SYSTEM_PROMPT,
+            system=system,
             messages=messages
         )
 
@@ -411,13 +472,42 @@ async def process_command(
     # In production, this should use proper auth
     current_user_id = 1  # Default to demo user
 
+    # Get or create session ID for permanent memory
+    session_id = request.session_id or str(uuid.uuid4())
+
     try:
-        # Process with Claude AI
+        # 1. SAVE USER MESSAGE TO PERMANENT MEMORY
+        try:
+            ConversationMemory.save_message(
+                db=db,
+                user_id=current_user_id,
+                session_id=session_id,
+                role='user',
+                content=request.message
+            )
+        except Exception as mem_error:
+            logger.warning(f"Failed to save user message to memory: {mem_error}")
+
+        # 2. GET FULL CONTEXT FROM PERMANENT MEMORY
+        context = ConversationMemory.get_full_context(
+            db=db,
+            user_id=current_user_id,
+            current_message=request.message
+        )
+
+        # 3. BUILD ENHANCED CONTEXT FOR CLAUDE
+        # Combine permanent memory with current session context
+        combined_context = context['recent_messages'] if context['recent_messages'] else request.conversation_context
+
+        # Process with Claude AI - pass full context including action history
         result = await process_with_claude(
             request.message,
-            request.conversation_context,
+            combined_context,
             db,
-            current_user_id
+            current_user_id,
+            request.action_context,  # Include action context for memory
+            context.get('relevant_past', []),
+            context.get('total_messages', 0)
         )
 
         # Generate action ID if this is an actionable command
@@ -429,15 +519,43 @@ async def process_command(
                 "intent": result["intent"],
                 "preview": result.get("preview"),
                 "user_id": current_user_id,
-                "created_at": datetime.now().isoformat()
+                "created_at": datetime.now().isoformat(),
+                "session_id": session_id
             }
+
+            # 4. SAVE ACTION TO PERMANENT MEMORY
+            try:
+                ConversationMemory.save_action(
+                    db=db,
+                    user_id=current_user_id,
+                    action_id=action_id,
+                    action_type=result["intent"],
+                    preview_data=result.get("preview", {})
+                )
+            except Exception as action_error:
+                logger.warning(f"Failed to save action to memory: {action_error}")
+
+        # 5. SAVE ASSISTANT RESPONSE TO PERMANENT MEMORY
+        try:
+            ConversationMemory.save_message(
+                db=db,
+                user_id=current_user_id,
+                session_id=session_id,
+                role='assistant',
+                content=result.get("explanation", ""),
+                action_id=action_id,
+                action_data=result.get("preview")
+            )
+        except Exception as mem_error:
+            logger.warning(f"Failed to save assistant message to memory: {mem_error}")
 
         return AICommandResponse(
             intent=result.get("intent", "GENERAL_QUERY"),
             explanation=result.get("explanation", ""),
             preview=result.get("preview"),
             action_id=action_id,
-            data=result.get("data")
+            data=result.get("data"),
+            session_id=session_id
         )
 
     except Exception as e:
@@ -470,6 +588,7 @@ async def execute_action(
         intent = action_data["intent"]
         preview = action_data.get("preview", {})
         modifications = request.modifications
+        session_id = request.session_id or action_data.get("session_id")
 
         # Execute based on intent
         if intent == "EMAIL_CAMPAIGN":
@@ -486,6 +605,30 @@ async def execute_action(
             )
         else:
             raise HTTPException(status_code=400, detail=f"Unknown action type: {intent}")
+
+        # UPDATE ACTION STATUS IN PERMANENT MEMORY
+        try:
+            ConversationMemory.update_action_status(
+                db=db,
+                action_id=request.action_id,
+                status='executed' if result.get('message') else 'failed',
+                execution_data=result
+            )
+        except Exception as mem_error:
+            logger.warning(f"Failed to update action status in memory: {mem_error}")
+
+        # SAVE EXECUTION RESULT TO CONVERSATION
+        if session_id:
+            try:
+                ConversationMemory.save_message(
+                    db=db,
+                    user_id=current_user_id,
+                    session_id=session_id,
+                    role='assistant',
+                    content=f"Action executed: {result.get('message', 'Success')}"
+                )
+            except Exception as mem_error:
+                logger.warning(f"Failed to save execution result to memory: {mem_error}")
 
         # Remove from cache after execution
         del action_cache[request.action_id]

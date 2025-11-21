@@ -1,0 +1,48 @@
+"""
+AI Conversation Memory Models
+Stores permanent conversation history for AI assistant
+"""
+
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Index
+from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.sql import text
+from database import Base
+
+
+class AIConversationMemory(Base):
+    """Store every message forever"""
+    __tablename__ = 'ai_conversation_memory'
+
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text('gen_random_uuid()'))
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    session_id = Column(UUID(as_uuid=True), nullable=False)
+    message_index = Column(Integer, nullable=False)
+    role = Column(String(20), nullable=False)  # 'user' or 'assistant'
+    content = Column(Text, nullable=False)
+    action_id = Column(UUID(as_uuid=True), nullable=True)
+    action_data = Column(JSONB, nullable=True)
+    created_at = Column(DateTime, nullable=False, server_default=text('NOW()'))
+
+    __table_args__ = (
+        Index('idx_conv_user_date', 'user_id', 'created_at'),
+        Index('idx_conv_session', 'session_id', 'message_index'),
+    )
+
+
+class AIActionHistory(Base):
+    """Store action history"""
+    __tablename__ = 'ai_action_history'
+
+    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text('gen_random_uuid()'))
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    action_id = Column(UUID(as_uuid=True), nullable=False, unique=True)
+    action_type = Column(String(50), nullable=False)
+    preview_data = Column(JSONB, nullable=False)
+    execution_data = Column(JSONB, nullable=True)
+    status = Column(String(20), nullable=False)  # 'previewed', 'executed', 'failed'
+    created_at = Column(DateTime, nullable=False, server_default=text('NOW()'))
+    executed_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        Index('idx_action_user_date', 'user_id', 'created_at'),
+    )

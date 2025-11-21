@@ -7509,6 +7509,106 @@ async def add_conversation_memory_migration(
             "error": str(e)
         }
 
+@app.post("/api/v1/migrations/add-permanent-memory")
+async def add_permanent_memory_migration(
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Add permanent AI conversation memory tables
+    Creates ai_conversation_memory and ai_action_history tables
+    """
+    try:
+        logger.info("Running migration: add permanent AI memory tables")
+
+        tables_created = []
+
+        # Check if ai_conversation_memory exists
+        result = db.execute(text("""
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'ai_conversation_memory'
+        """))
+
+        if not result.fetchone():
+            # Create ai_conversation_memory table
+            db.execute(text("""
+                CREATE TABLE ai_conversation_memory (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    session_id UUID NOT NULL,
+                    message_index INTEGER NOT NULL,
+                    role VARCHAR(20) NOT NULL,
+                    content TEXT NOT NULL,
+                    action_id UUID,
+                    action_data JSONB,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+                )
+            """))
+
+            # Create indexes
+            db.execute(text("CREATE INDEX idx_conv_user_date ON ai_conversation_memory(user_id, created_at)"))
+            db.execute(text("CREATE INDEX idx_conv_session ON ai_conversation_memory(session_id, message_index)"))
+            db.execute(text("CREATE INDEX idx_conv_search ON ai_conversation_memory USING gin(to_tsvector('english', content))"))
+
+            tables_created.append("ai_conversation_memory")
+            logger.info("Created ai_conversation_memory table with indexes")
+        else:
+            logger.info("ai_conversation_memory already exists")
+
+        # Check if ai_action_history exists
+        result = db.execute(text("""
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'ai_action_history'
+        """))
+
+        if not result.fetchone():
+            # Create ai_action_history table
+            db.execute(text("""
+                CREATE TABLE ai_action_history (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    action_id UUID NOT NULL UNIQUE,
+                    action_type VARCHAR(50) NOT NULL,
+                    preview_data JSONB NOT NULL,
+                    execution_data JSONB,
+                    status VARCHAR(20) NOT NULL,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+                    executed_at TIMESTAMP WITH TIME ZONE
+                )
+            """))
+
+            # Create index
+            db.execute(text("CREATE INDEX idx_action_user_date ON ai_action_history(user_id, created_at)"))
+
+            tables_created.append("ai_action_history")
+            logger.info("Created ai_action_history table with indexes")
+        else:
+            logger.info("ai_action_history already exists")
+
+        db.commit()
+
+        if tables_created:
+            return {
+                "success": True,
+                "message": f"Successfully created permanent memory tables: {', '.join(tables_created)}",
+                "tables_created": tables_created
+            }
+        else:
+            return {
+                "success": True,
+                "message": "All permanent memory tables already exist",
+                "tables_created": []
+            }
+
+    except Exception as e:
+        logger.error(f"Migration failed: {e}")
+        db.rollback()
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e)
+        }
+
+
 @app.post("/api/v1/migrations/add-ab-testing-tables")
 async def add_ab_testing_tables_migration(
     current_user: User = Depends(get_current_user),
