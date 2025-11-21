@@ -352,6 +352,35 @@ AI_TOOLS = [
             },
             "required": []
         }
+    },
+    # Market Intelligence Tools
+    {
+        "name": "get_market_intelligence",
+        "description": "Get current market conditions including treasury yields, mortgage rates, MBS prices, and rate lock recommendations",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    },
+    {
+        "name": "get_rate_lock_recommendation",
+        "description": "Get specific rate lock recommendation based on lock period and current market conditions",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "lock_days": {
+                    "type": "integer",
+                    "description": "Number of days for rate lock (15, 30, 45, 60)",
+                    "default": 30
+                },
+                "loan_amount": {
+                    "type": "number",
+                    "description": "Loan amount for context"
+                }
+            },
+            "required": []
+        }
     }
 ]
 
@@ -383,7 +412,8 @@ class ActionValidator:
             "query_pipeline_analysis", "query_lead_source_performance",
             "query_conversion_funnel", "query_loan_type_performance",
             "query_monthly_trends", "query_stale_leads",
-            "query_high_value_opportunities", "query_activity_summary"
+            "query_high_value_opportunities", "query_activity_summary",
+            "get_market_intelligence", "get_rate_lock_recommendation"
         ]
         if action_name not in valid_actions:
             return ValidationResult(False, f"Unknown action: {action_name}")
@@ -589,6 +619,27 @@ You can perform the following actions:
 6. SEARCH - Search for clients, deals, or tasks
 7. GENERAL_QUERY - Answer questions about the CRM data
 8. ANALYTICAL_QUERY - Run advanced analytics on CRM data
+9. MARKET_INTELLIGENCE - Get rate lock recommendations and market conditions
+
+MARKET INTELLIGENCE QUERIES:
+When user asks about rate locks, market conditions, or whether to lock:
+- "should I lock?" or "rate lock recommendation" → intent: "MARKET_INTELLIGENCE"
+- "what are current rates?" or "market conditions" → intent: "MARKET_INTELLIGENCE"
+- "when should I lock?" or "lock or float?" → intent: "MARKET_INTELLIGENCE"
+- "MBS prices" or "treasury yields" → intent: "MARKET_INTELLIGENCE"
+
+For MARKET_INTELLIGENCE, data should include:
+- lock_days: Optional number of days for lock (15, 30, 45, 60). Default 30.
+- loan_amount: Optional loan amount for context
+
+EXAMPLE MARKET_INTELLIGENCE RESPONSE:
+{
+  "intent": "MARKET_INTELLIGENCE",
+  "explanation": "Based on current market conditions, here's my rate lock recommendation.",
+  "data": {
+    "lock_days": 30
+  }
+}
 
 ANALYTICAL QUERIES AVAILABLE:
 When user asks analytical questions, use these query types:
@@ -953,6 +1004,86 @@ def execute_analytical_query(db: Session, user_id: int, query_type: str, params:
     }
 
 
+def get_market_intelligence(lock_days: int = 30) -> Dict[str, Any]:
+    """Fetch current market intelligence for rate lock recommendations"""
+    try:
+        from scrapers import MarketDataOrchestrator
+
+        orchestrator = MarketDataOrchestrator()
+        snapshot = orchestrator.get_market_snapshot()
+
+        if not snapshot:
+            snapshot = get_fallback_market_data()
+
+        # Get rate lock context for specific days
+        lock_context = orchestrator.get_rate_lock_context(lock_days)
+
+        return {
+            "current_rates": {
+                "30yr_fixed": snapshot.get("mortgage_rates", {}).get("rate_30yr", 6.50),
+                "15yr_fixed": snapshot.get("mortgage_rates", {}).get("rate_15yr", 5.75),
+                "spread_to_10yr": snapshot.get("mortgage_rates", {}).get("spread_to_10yr", 2.35)
+            },
+            "treasury_yields": {
+                "2yr": snapshot.get("treasury", {}).get("2yr", 4.25),
+                "5yr": snapshot.get("treasury", {}).get("5yr", 4.10),
+                "10yr": snapshot.get("treasury", {}).get("10yr", 4.15),
+                "30yr": snapshot.get("treasury", {}).get("30yr", 4.35),
+                "spread_2s10s": snapshot.get("treasury", {}).get("spread_2s10s", -0.10)
+            },
+            "market_conditions": {
+                "volatility": snapshot.get("volatility", {}).get("assessment", "moderate"),
+                "vix": snapshot.get("volatility", {}).get("vix", 18.5),
+                "market_score": snapshot.get("market_score", 55)
+            },
+            "rate_lock_recommendation": {
+                "overall": snapshot.get("recommendation", "CAUTIOUS"),
+                "lock_period": lock_days,
+                "context": lock_context
+            },
+            "timestamp": snapshot.get("timestamp")
+        }
+    except Exception as e:
+        logger.error(f"Error fetching market intelligence: {e}")
+        return get_fallback_market_data()
+
+
+def get_fallback_market_data() -> Dict[str, Any]:
+    """Fallback market data when scrapers unavailable"""
+    from datetime import datetime
+
+    return {
+        "current_rates": {
+            "30yr_fixed": 6.50,
+            "15yr_fixed": 5.75,
+            "spread_to_10yr": 2.35
+        },
+        "treasury_yields": {
+            "2yr": 4.25,
+            "5yr": 4.10,
+            "10yr": 4.15,
+            "30yr": 4.35,
+            "spread_2s10s": -0.10
+        },
+        "market_conditions": {
+            "volatility": "moderate",
+            "vix": 18.5,
+            "market_score": 55
+        },
+        "rate_lock_recommendation": {
+            "overall": "CAUTIOUS",
+            "guidance": "Market conditions suggest careful evaluation. Consider locking if rate is acceptable and closing within 30 days. For longer timelines, monitor for better opportunities.",
+            "factors": [
+                "Treasury yields relatively stable",
+                "Moderate volatility environment",
+                "Mortgage spreads within normal range"
+            ]
+        },
+        "timestamp": datetime.now().isoformat(),
+        "is_fallback": True
+    }
+
+
 async def process_with_claude(
     message: str,
     context: List[Dict[str, str]],
@@ -1193,6 +1324,33 @@ PERMANENT MEMORY STATUS:
                         if query_result.get("success"):
                             result["explanation"] += "\n\n" + query_result.get("formatted_text", "")
                         logger.info(f"ANALYTICAL_QUERY executed: {query_type}, success={query_result.get('success')}")
+
+                # INJECT MARKET DATA for MARKET_INTELLIGENCE
+                if result.get("intent") == "MARKET_INTELLIGENCE":
+                    lock_days = result.get("data", {}).get("lock_days", 30)
+                    market_data = get_market_intelligence(lock_days)
+                    result["data"]["market_data"] = market_data
+
+                    # Format market data for explanation
+                    rates = market_data.get("current_rates", {})
+                    conditions = market_data.get("market_conditions", {})
+                    recommendation = market_data.get("rate_lock_recommendation", {})
+
+                    market_summary = f"""
+
+**Current Market Conditions:**
+- 30-Year Fixed: {rates.get('30yr_fixed', 'N/A')}%
+- 15-Year Fixed: {rates.get('15yr_fixed', 'N/A')}%
+- 10-Year Treasury: {market_data.get('treasury_yields', {}).get('10yr', 'N/A')}%
+- Market Volatility: {conditions.get('volatility', 'Unknown')} (VIX: {conditions.get('vix', 'N/A')})
+- Market Score: {conditions.get('market_score', 'N/A')}/100
+
+**Rate Lock Recommendation: {recommendation.get('overall', 'CAUTIOUS')}**
+
+{recommendation.get('guidance', '')}
+"""
+                    result["explanation"] += market_summary
+                    logger.info(f"MARKET_INTELLIGENCE executed: lock_days={lock_days}, recommendation={recommendation.get('overall')}")
 
                 # Log metrics for successful response
                 execution_time = (time.time() - start_time) * 1000
