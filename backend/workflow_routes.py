@@ -211,40 +211,42 @@ async def get_scheduled_messages(
 ):
     """Get scheduled theme day messages"""
     try:
+        # Query theme_day_messages table which has scheduled content
         query = """
-            SELECT tds.id, tds.loan_id, tds.lead_id, tds.theme_name,
-                   tds.scheduled_date, tds.message_content, tds.channel,
-                   tds.status, le.first_name, le.last_name
-            FROM theme_day_schedule tds
-            JOIN leads le ON tds.lead_id = le.id
+            SELECT tdm.id, tdm.loan_id, tdm.week_number, tdm.theme_name,
+                   tdm.scheduled_send_date, tdm.ai_generated_content,
+                   tdm.status, l.lead_id, le.first_name, le.last_name
+            FROM theme_day_messages tdm
+            LEFT JOIN loans l ON tdm.loan_id = l.id
+            LEFT JOIN leads le ON l.lead_id = le.id
             WHERE 1=1
         """
         params = {"limit": limit}
 
         if date_filter:
-            query += " AND tds.scheduled_date = :date"
+            query += " AND tdm.scheduled_send_date = :date"
             params["date"] = date_filter
         else:
-            query += " AND tds.scheduled_date >= :today"
+            query += " AND tdm.scheduled_send_date >= :today"
             params["today"] = date.today()
 
         if status:
-            query += " AND tds.status = :status"
+            query += " AND tdm.status = :status"
             params["status"] = status
 
-        query += " ORDER BY tds.scheduled_date DESC LIMIT :limit"
+        query += " ORDER BY tdm.scheduled_send_date DESC LIMIT :limit"
 
         result = db.execute(text(query), params)
         messages = [{
             "id": str(r[0]),
             "loan_id": r[1],
-            "lead_id": r[2],
+            "week_number": r[2],
             "theme_name": r[3],
             "scheduled_date": r[4].isoformat() if r[4] else None,
             "message": r[5],
-            "channel": r[6],
-            "status": r[7],
-            "borrower": f"{r[8]} {r[9]}"
+            "status": r[6],
+            "lead_id": r[7],
+            "borrower": f"{r[8] or ''} {r[9] or ''}".strip() or "Unknown"
         } for r in result]
 
         return {"messages": messages, "count": len(messages)}
@@ -341,31 +343,37 @@ async def schedule_post_closing(
 
 @router.get("/post-closing/calls")
 async def get_post_closing_calls(
-    status: Optional[str] = "scheduled",
+    completed: bool = False,
     limit: int = 50,
     db: Session = Depends(get_db)
 ):
-    """Get scheduled post-closing calls"""
+    """Get post-closing calls"""
     try:
-        result = db.execute(text("""
-            SELECT pc.id, pc.loan_id, pc.lead_id, pc.call_purpose,
-                   pc.scheduled_date, pc.status, le.first_name, le.last_name,
+        if completed:
+            where_clause = "pc.completed_date IS NOT NULL"
+        else:
+            where_clause = "pc.completed_date IS NULL AND pc.scheduled_date >= NOW()"
+
+        result = db.execute(text(f"""
+            SELECT pc.id, pc.loan_id, pc.scheduled_date, pc.completed_date,
+                   pc.experience_rating, l.lead_id, le.first_name, le.last_name,
                    le.phone
             FROM post_closing_calls pc
-            JOIN leads le ON pc.lead_id = le.id
-            WHERE pc.status = :status
+            LEFT JOIN loans l ON pc.loan_id = l.id
+            LEFT JOIN leads le ON l.lead_id = le.id
+            WHERE {where_clause}
             ORDER BY pc.scheduled_date ASC
             LIMIT :limit
-        """), {"status": status, "limit": limit}).fetchall()
+        """), {"limit": limit}).fetchall()
 
         calls = [{
             "id": str(r[0]),
             "loan_id": r[1],
-            "lead_id": r[2],
-            "purpose": r[3],
-            "scheduled_date": r[4].isoformat() if r[4] else None,
-            "status": r[5],
-            "borrower": f"{r[6]} {r[7]}",
+            "scheduled_date": r[2].isoformat() if r[2] else None,
+            "completed_date": r[3].isoformat() if r[3] else None,
+            "rating": r[4],
+            "lead_id": r[5],
+            "borrower": f"{r[6] or ''} {r[7] or ''}".strip() or "Unknown",
             "phone": r[8]
         } for r in result]
 
