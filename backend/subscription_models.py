@@ -127,8 +127,8 @@ class AdminAction(Base):
 SUBSCRIPTION_TIERS = {
     'lead_management': {
         'name': 'Lead Management',
-        'price_monthly': 99,
-        'price_annual': 999,
+        'price_monthly': 299,
+        'price_annual': 2999,
         'stages': ['lead_received', 'contacted', 'qualified', 'pre_approved', 'application', 'ratified_contract'],
         'features': {
             'leads': True,
@@ -143,8 +143,8 @@ SUBSCRIPTION_TIERS = {
     },
     'lead_and_active': {
         'name': 'Lead + Active Loan',
-        'price_monthly': 199,
-        'price_annual': 1999,
+        'price_monthly': 399,
+        'price_annual': 3999,
         'stages': ['lead_received', 'contacted', 'qualified', 'pre_approved', 'application',
                    'ratified_contract', 'processing', 'underwriting', 'conditional_approval',
                    'clear_to_close', 'closing', 'funding'],
@@ -162,8 +162,8 @@ SUBSCRIPTION_TIERS = {
     },
     'full_pipeline': {
         'name': 'Full Pipeline 360',
-        'price_monthly': 299,
-        'price_annual': 2999,
+        'price_monthly': 499,
+        'price_annual': 4999,
         'stages': 'all',
         'features': {
             'leads': True,
