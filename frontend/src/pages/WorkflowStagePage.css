@@ -1,0 +1,501 @@
+.workflow-stage-page {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.stage-page-header {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border-left: 4px solid var(--stage-color, #3b82f6);
+}
+
+.back-button {
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  padding: 8px 12px;
+  margin: -8px -12px 16px -12px;
+  font-size: 14px;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.back-button:hover {
+  background: #f5f5f5;
+  color: #333;
+}
+
+.header-content h1 {
+  font-size: 28px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+  color: #111;
+}
+
+.header-content p {
+  color: #666;
+  margin: 0 0 12px 0;
+  font-size: 15px;
+}
+
+.header-content .task-count {
+  display: inline-block;
+  background: var(--stage-color, #3b82f6);
+  color: white;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.message-banner {
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.message-banner.success {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.message-banner.error {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.message-banner .close-btn {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.tasks-container {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.tasks-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.tasks-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.add-task-btn {
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.add-task-btn:hover {
+  background: #e5e7eb;
+}
+
+.save-workflow-btn {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.save-workflow-btn:hover {
+  background: #2563eb;
+}
+
+.save-workflow-btn:disabled {
+  background: #93c5fd;
+  cursor: not-allowed;
+}
+
+.tasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.task-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  transition: all 0.2s;
+}
+
+.task-item:hover {
+  border-color: #d1d5db;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
+}
+
+.task-order {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 40px;
+}
+
+.task-order .order-number {
+  font-weight: 600;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.move-btn {
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: #9ca3af;
+  font-size: 10px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.move-btn:hover:not(:disabled) {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.move-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.task-content {
+  flex: 1;
+}
+
+.task-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.task-title-row strong {
+  font-size: 15px;
+  color: #111;
+}
+
+.trigger-badge {
+  font-size: 11px;
+  background: #e5e7eb;
+  color: #4b5563;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: capitalize;
+}
+
+.task-desc {
+  color: #6b7280;
+  font-size: 13px;
+  margin: 0 0 4px 0;
+}
+
+.days-offset {
+  font-size: 12px;
+  color: #3b82f6;
+  font-weight: 500;
+}
+
+.task-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.edit-task-btn,
+.delete-task-btn {
+  background: none;
+  border: none;
+  padding: 8px;
+  cursor: pointer;
+  font-size: 16px;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.edit-task-btn {
+  color: #6b7280;
+}
+
+.edit-task-btn:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.delete-task-btn {
+  color: #9ca3af;
+  font-size: 20px;
+}
+
+.delete-task-btn:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+/* Edit Form */
+.task-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.task-edit-form input[type="text"],
+.task-edit-form textarea,
+.task-edit-form select {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.task-edit-form input:focus,
+.task-edit-form textarea:focus,
+.task-edit-form select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.task-edit-form .form-row {
+  display: flex;
+  gap: 12px;
+}
+
+.task-edit-form .form-row select {
+  flex: 2;
+}
+
+.task-edit-form .form-row input[type="number"] {
+  flex: 1;
+  max-width: 100px;
+}
+
+.done-edit-btn {
+  align-self: flex-start;
+  background: #10b981;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.done-edit-btn:hover {
+  background: #059669;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.add-task-modal {
+  background: white;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 500px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.close-modal {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+}
+
+.close-modal:hover {
+  color: #111;
+}
+
+.modal-body {
+  padding: 24px;
+}
+
+.modal-body .form-group {
+  margin-bottom: 16px;
+}
+
+.modal-body .form-group:last-child {
+  margin-bottom: 0;
+}
+
+.modal-body label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+.modal-body input,
+.modal-body textarea,
+.modal-body select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.modal-body input:focus,
+.modal-body textarea:focus,
+.modal-body select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.modal-body .form-row {
+  display: flex;
+  gap: 16px;
+}
+
+.modal-body .form-row .form-group {
+  flex: 1;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+  border-radius: 0 0 12px 12px;
+}
+
+.modal-footer .cancel-btn {
+  background: white;
+  border: 1px solid #d1d5db;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.modal-footer .cancel-btn:hover {
+  background: #f3f4f6;
+}
+
+.modal-footer .add-btn {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.modal-footer .add-btn:hover {
+  background: #2563eb;
+}
+
+.modal-footer .add-btn:disabled {
+  background: #93c5fd;
+  cursor: not-allowed;
+}
+
+.loading-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #6b7280;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .workflow-stage-page {
+    padding: 16px;
+  }
+
+  .tasks-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .task-item {
+    flex-direction: column;
+  }
+
+  .task-order {
+    flex-direction: row;
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .task-actions {
+    align-self: flex-end;
+  }
+}

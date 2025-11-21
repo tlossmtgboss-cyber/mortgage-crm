@@ -60,6 +60,7 @@ const AIReceptionistDashboard = lazy(() => import('./pages/AIReceptionistDashboa
 const VoiceOSDashboard = lazy(() => import('./pages/VoiceOSDashboard'));
 const AILandingPage = lazy(() => import('./pages/AILandingPage'));
 const WorkflowDashboard = lazy(() => import('./pages/WorkflowDashboard'));
+const WorkflowStagePage = lazy(() => import('./pages/WorkflowStagePage'));
 
 // Simple loading component
 const PageLoader = () => (
@@ -277,6 +278,28 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><WorkflowDashboard /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+
+          {/* Workflow Stage Management */}
+          <Route
+            path="/workflow/:stage"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><WorkflowStagePage /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>

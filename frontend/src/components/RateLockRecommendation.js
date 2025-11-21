@@ -47,12 +47,14 @@ function RateLockRecommendation({ loan }) {
   };
 
   const getActionIcon = (action) => {
+    if (!action) return '❓';
     if (action === 'lock_now') return '🔒';
-    if (action.includes('float')) return '⏳';
+    if (action.includes && action.includes('float')) return '⏳';
     return '👁️';
   };
 
   const formatAction = (action) => {
+    if (!action) return 'Unknown';
     return action
       .replace(/_/g, ' ')
       .replace(/\b\w/g, l => l.toUpperCase());

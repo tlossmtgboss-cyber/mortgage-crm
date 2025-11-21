@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
 import './TaskWorkflowManager.css';
 
 function TaskWorkflowManager() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
@@ -265,13 +267,13 @@ function TaskWorkflowManager() {
             className={`stage-card ${activeStage === key ? 'active' : ''}`}
             style={{ '--stage-color': stage.color }}
           >
-            <div className="stage-header" onClick={() => setActiveStage(activeStage === key ? null : key)}>
+            <div className="stage-header" onClick={() => navigate(`/workflow/${key}`)}>
               <div className="stage-title">
                 <h3>{stage.name}</h3>
               </div>
               <div className="stage-meta">
                 <span className="task-count">{stage.tasks.length} tasks</span>
-                <span className="expand-icon">{activeStage === key ? '▼' : '▶'}</span>
+                <span className="expand-icon">▶</span>
               </div>
             </div>
             <p className="stage-description">{stage.description}</p>
