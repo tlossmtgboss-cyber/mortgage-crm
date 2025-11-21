@@ -331,13 +331,30 @@ class CRMContextService:
 
     @staticmethod
     def _get_referral_partners(db: Session, user_id: int) -> Dict[str, Any]:
-        """Get referral partners"""
+        """Get referral partners with performance metrics"""
         try:
+            # First try to get partners with lead performance data
             result = db.execute(text("""
-                SELECT id, name, company, email, phone, total_referrals, total_volume
-                FROM referral_partners
-                WHERE user_id = :user_id
-                ORDER BY total_volume DESC
+                SELECT
+                    rp.id,
+                    rp.name,
+                    rp.company,
+                    rp.email,
+                    rp.phone,
+                    COUNT(l.id) as total_leads,
+                    COUNT(l.id) FILTER (WHERE l.stage = 'Closed Won') as closed_deals,
+                    COALESCE(SUM(l.preapproval_amount) FILTER (WHERE l.stage = 'Closed Won'), 0) as total_revenue,
+                    COALESCE(AVG(l.preapproval_amount) FILTER (WHERE l.stage = 'Closed Won'), 0) as avg_deal_size,
+                    CASE
+                        WHEN COUNT(l.id) > 0
+                        THEN ROUND(COUNT(l.id) FILTER (WHERE l.stage = 'Closed Won')::numeric / COUNT(l.id) * 100, 1)
+                        ELSE 0
+                    END as close_rate_pct
+                FROM referral_partners rp
+                LEFT JOIN leads l ON l.source = rp.name AND l.owner_id = :user_id
+                WHERE rp.user_id = :user_id
+                GROUP BY rp.id, rp.name, rp.company, rp.email, rp.phone
+                ORDER BY total_revenue DESC NULLS LAST, total_leads DESC
                 LIMIT 20
             """), {"user_id": user_id})
 
@@ -349,17 +366,34 @@ class CRMContextService:
                     "company": row[2],
                     "email": row[3],
                     "phone": row[4],
-                    "total_referrals": row[5] or 0,
-                    "total_volume": float(row[6]) if row[6] else 0
+                    "total_leads": row[5] or 0,
+                    "closed_deals": row[6] or 0,
+                    "total_revenue": float(row[7]) if row[7] else 0,
+                    "avg_deal_size": float(row[8]) if row[8] else 0,
+                    "close_rate_pct": float(row[9]) if row[9] else 0
                 })
+
+            # Identify most profitable partner
+            most_profitable = None
+            if partners and partners[0]["total_revenue"] > 0:
+                most_profitable = {
+                    "name": partners[0]["name"],
+                    "revenue": partners[0]["total_revenue"],
+                    "deals": partners[0]["closed_deals"]
+                }
 
             return {
                 "total": len(partners),
-                "partners": partners
+                "partners": partners,
+                "most_profitable": most_profitable
             }
         except Exception as e:
             logger.error(f"Error getting referral partners: {e}")
-            return {"total": 0, "partners": []}
+            try:
+                db.rollback()
+            except:
+                pass
+            return {"total": 0, "partners": [], "most_profitable": None}
 
     @staticmethod
     def format_context_for_claude(context: Dict[str, Any]) -> str:
@@ -394,9 +428,22 @@ class CRMContextService:
         closing = pipeline.get("closing_this_month", {})
         lines.append(f"\nPIPELINE: {closing.get('count', 0)} closing this month (${closing.get('volume', 0):,.0f})")
 
-        # Referral partners
+        # Referral partners with performance metrics
         partners = context.get("referral_partners", {})
         lines.append(f"\nREFERRAL PARTNERS: {partners.get('total', 0)}")
+
+        # Show most profitable partner prominently
+        most_profitable = partners.get("most_profitable")
+        if most_profitable:
+            lines.append(f"  MOST PROFITABLE: {most_profitable['name']} - ${most_profitable['revenue']:,.0f} from {most_profitable['deals']} closed deals")
+
+        # Show top partners with metrics
+        partner_list = partners.get("partners", [])
+        if partner_list:
+            lines.append("  Top Partners by Revenue:")
+            for p in partner_list[:5]:
+                if p["total_revenue"] > 0:
+                    lines.append(f"    - {p['name']}: ${p['total_revenue']:,.0f} revenue, {p['closed_deals']} deals, {p['close_rate_pct']:.0f}% close rate")
 
         return "\n".join(lines)
 

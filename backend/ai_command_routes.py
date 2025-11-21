@@ -388,6 +388,21 @@ SYSTEM_PROMPT = """You are Pipeline 360's AI assistant, designed to help mortgag
    ✅ CORRECT: "You have 16 active leads with $2,845,000 in pipeline"
    ❌ WRONG: "You have 0 active leads with $0 in pipeline"
 
+5. FOR REFERRAL PARTNER QUESTIONS:
+   When user asks "who is my most profitable referral partner":
+   - You MUST name the specific partner from the data
+   - You MUST include revenue amount and deal count
+   - NEVER say "Let me show you..." without showing actual data
+
+6. FORBIDDEN GENERIC RESPONSES:
+   ❌ "Let me show you your tasks and priorities..."
+   ❌ "I'll look at your referral partner data..."
+   ❌ "Here's an overview of your pipeline..."
+
+   These are WRONG because they don't include actual data.
+
+   ALWAYS include specific names, numbers, and amounts from the CRM DATA section.
+
 === END CRITICAL RULES ===
 
 INTENT CLASSIFICATION:
@@ -837,9 +852,23 @@ IMPORTANT: Use the EXACT numbers above in your response. Do NOT say "0 active le
 
         partners = crm_context.get("referral_partners", {})
         if partners.get("partners"):
-            system += "\n\nTOP REFERRAL PARTNERS:\n"
-            for partner in partners["partners"][:10]:
-                system += f"- {partner['name']} ({partner.get('company', 'N/A')}) | {partner.get('total_referrals', 0)} referrals | ${partner.get('total_volume', 0):,.0f}\n"
+            system += "\n\nREFERRAL PARTNER PERFORMANCE:\n"
+
+            # Highlight most profitable first
+            most_profitable = partners.get("most_profitable")
+            if most_profitable:
+                system += f"*** MOST PROFITABLE: {most_profitable['name']} - ${most_profitable['revenue']:,.0f} from {most_profitable['deals']} closed deals ***\n\n"
+
+            system += "All Partners (ranked by revenue):\n"
+            for i, partner in enumerate(partners["partners"][:10], 1):
+                system += f"{i}. {partner['name']}"
+                if partner.get('company'):
+                    system += f" ({partner['company']})"
+                system += f"\n   - Total Leads: {partner.get('total_leads', 0)}\n"
+                system += f"   - Closed Deals: {partner.get('closed_deals', 0)}\n"
+                system += f"   - Total Revenue: ${partner.get('total_revenue', 0):,.0f}\n"
+                system += f"   - Avg Deal Size: ${partner.get('avg_deal_size', 0):,.0f}\n"
+                system += f"   - Close Rate: {partner.get('close_rate_pct', 0):.0f}%\n\n"
 
         system += "\n=== END CRM DATA ===\n"
 
