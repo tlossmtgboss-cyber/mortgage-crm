@@ -3700,6 +3700,10 @@ app.include_router(circle_of_cashflow_router, tags=["Circle of Cashflow"])
 from ai_command_routes import router as ai_command_router
 app.include_router(ai_command_router, tags=["AI Commands"])
 
+# Include Subscription routes for Pipeline 360
+from subscription_routes import router as subscription_router
+app.include_router(subscription_router, tags=["Subscriptions"])
+
 # ============================================================================
 # API KEY HELPER FUNCTIONS
 # ============================================================================
@@ -7611,6 +7615,205 @@ async def add_permanent_memory_migration(
 
     except Exception as e:
         logger.error(f"Migration failed: {e}")
+        db.rollback()
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e)
+        }
+
+
+@app.post("/api/v1/migrations/add-subscription-system")
+async def add_subscription_system_migration(
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Add subscription and permission system tables
+    Creates organization_subscriptions, feature_definitions, feature_usage, usage_warnings, admin_actions
+    """
+    try:
+        logger.info("Running migration: add subscription system tables")
+
+        tables_created = []
+
+        # 1. Create organization_subscriptions table
+        result = db.execute(text("""
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'organization_subscriptions'
+        """))
+
+        if not result.fetchone():
+            db.execute(text("""
+                CREATE TABLE organization_subscriptions (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    organization_id INTEGER NOT NULL UNIQUE,
+                    tier VARCHAR(50) NOT NULL DEFAULT 'lead_management',
+                    stripe_customer_id VARCHAR(255),
+                    stripe_subscription_id VARCHAR(255),
+                    billing_cycle VARCHAR(20) DEFAULT 'monthly',
+                    monthly_price NUMERIC(10, 2) NOT NULL DEFAULT 99.00,
+                    status VARCHAR(20) DEFAULT 'active',
+                    trial_ends_at TIMESTAMP WITH TIME ZONE,
+                    current_period_start TIMESTAMP WITH TIME ZONE,
+                    current_period_end TIMESTAMP WITH TIME ZONE,
+                    enabled_addons JSONB DEFAULT '[]'::jsonb,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+                )
+            """))
+            db.execute(text("CREATE INDEX idx_org_sub_org ON organization_subscriptions(organization_id)"))
+            db.execute(text("CREATE INDEX idx_org_sub_tier ON organization_subscriptions(tier)"))
+            db.execute(text("CREATE INDEX idx_org_sub_status ON organization_subscriptions(status)"))
+            tables_created.append("organization_subscriptions")
+            logger.info("Created organization_subscriptions table")
+        else:
+            logger.info("organization_subscriptions already exists")
+
+        # 2. Create feature_definitions table
+        result = db.execute(text("""
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'feature_definitions'
+        """))
+
+        if not result.fetchone():
+            db.execute(text("""
+                CREATE TABLE feature_definitions (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    feature_key VARCHAR(100) NOT NULL UNIQUE,
+                    name VARCHAR(255) NOT NULL,
+                    description TEXT,
+                    category VARCHAR(50) NOT NULL,
+                    min_tier VARCHAR(50) NOT NULL,
+                    monthly_limit INTEGER,
+                    is_addon BOOLEAN DEFAULT FALSE,
+                    addon_price NUMERIC(10, 2),
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+                )
+            """))
+            db.execute(text("CREATE INDEX idx_feature_key ON feature_definitions(feature_key)"))
+            db.execute(text("CREATE INDEX idx_feature_tier ON feature_definitions(min_tier)"))
+            tables_created.append("feature_definitions")
+            logger.info("Created feature_definitions table")
+
+            # Seed default feature definitions
+            db.execute(text("""
+                INSERT INTO feature_definitions (feature_key, name, category, min_tier, monthly_limit)
+                VALUES
+                ('ai_queries', 'AI Assistant Queries', 'ai', 'lead_management', 100),
+                ('emails', 'Email Sends', 'communications', 'lead_management', 500),
+                ('sms', 'SMS Messages', 'communications', 'lead_management', 100),
+                ('leads', 'Lead Management', 'leads', 'lead_management', NULL),
+                ('active_loans', 'Active Loan Tracking', 'loans', 'lead_and_active', NULL),
+                ('mum_clients', 'MUM Client Management', 'mum', 'full_pipeline', NULL),
+                ('referral_partners', 'Referral Partner Network', 'partners', 'full_pipeline', NULL),
+                ('advanced_analytics', 'Advanced Analytics', 'analytics', 'full_pipeline', NULL),
+                ('api_access', 'API Access', 'integration', 'full_pipeline', NULL)
+            """))
+            logger.info("Seeded default feature definitions")
+        else:
+            logger.info("feature_definitions already exists")
+
+        # 3. Create feature_usage table
+        result = db.execute(text("""
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'feature_usage'
+        """))
+
+        if not result.fetchone():
+            db.execute(text("""
+                CREATE TABLE feature_usage (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    organization_id INTEGER NOT NULL,
+                    feature_key VARCHAR(100) NOT NULL,
+                    usage_count INTEGER DEFAULT 0,
+                    period_start TIMESTAMP WITH TIME ZONE NOT NULL,
+                    period_end TIMESTAMP WITH TIME ZONE NOT NULL,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+                )
+            """))
+            db.execute(text("CREATE INDEX idx_usage_org ON feature_usage(organization_id)"))
+            db.execute(text("CREATE INDEX idx_usage_feature ON feature_usage(feature_key)"))
+            db.execute(text("CREATE INDEX idx_usage_period ON feature_usage(period_start, period_end)"))
+            db.execute(text("CREATE UNIQUE INDEX idx_usage_unique ON feature_usage(organization_id, feature_key, period_start)"))
+            tables_created.append("feature_usage")
+            logger.info("Created feature_usage table")
+        else:
+            logger.info("feature_usage already exists")
+
+        # 4. Create usage_warnings table
+        result = db.execute(text("""
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'usage_warnings'
+        """))
+
+        if not result.fetchone():
+            db.execute(text("""
+                CREATE TABLE usage_warnings (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    organization_id INTEGER NOT NULL,
+                    feature_key VARCHAR(100) NOT NULL,
+                    warning_type VARCHAR(50) NOT NULL,
+                    threshold_percent INTEGER,
+                    message TEXT,
+                    acknowledged BOOLEAN DEFAULT FALSE,
+                    acknowledged_at TIMESTAMP WITH TIME ZONE,
+                    acknowledged_by INTEGER REFERENCES users(id),
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+                )
+            """))
+            db.execute(text("CREATE INDEX idx_warning_org ON usage_warnings(organization_id)"))
+            db.execute(text("CREATE INDEX idx_warning_ack ON usage_warnings(acknowledged)"))
+            tables_created.append("usage_warnings")
+            logger.info("Created usage_warnings table")
+        else:
+            logger.info("usage_warnings already exists")
+
+        # 5. Create admin_actions table
+        result = db.execute(text("""
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'admin_actions'
+        """))
+
+        if not result.fetchone():
+            db.execute(text("""
+                CREATE TABLE admin_actions (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    admin_user_id INTEGER NOT NULL REFERENCES users(id),
+                    organization_id INTEGER,
+                    action_type VARCHAR(100) NOT NULL,
+                    description TEXT,
+                    previous_value JSONB,
+                    new_value JSONB,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+                )
+            """))
+            db.execute(text("CREATE INDEX idx_admin_action_user ON admin_actions(admin_user_id)"))
+            db.execute(text("CREATE INDEX idx_admin_action_org ON admin_actions(organization_id)"))
+            db.execute(text("CREATE INDEX idx_admin_action_type ON admin_actions(action_type)"))
+            tables_created.append("admin_actions")
+            logger.info("Created admin_actions table")
+        else:
+            logger.info("admin_actions already exists")
+
+        db.commit()
+
+        if tables_created:
+            return {
+                "success": True,
+                "message": f"Successfully created subscription system tables: {', '.join(tables_created)}",
+                "tables_created": tables_created
+            }
+        else:
+            return {
+                "success": True,
+                "message": "All subscription system tables already exist",
+                "tables_created": []
+            }
+
+    except Exception as e:
+        logger.error(f"Subscription migration failed: {e}")
         db.rollback()
         return {
             "success": False,
