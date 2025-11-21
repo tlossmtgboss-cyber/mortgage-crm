@@ -8,7 +8,7 @@ function TaskWorkflowManager() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
-  const [activeStage, setActiveStage] = useState(null);
+  const [activeStage] = useState(null);
   const [viewMode, setViewMode] = useState('team'); // 'team' or 'edit'
   const [editingTask, setEditingTask] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);

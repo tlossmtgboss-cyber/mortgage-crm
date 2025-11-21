@@ -27,6 +27,7 @@ function RateLockRecommendation({ loan }) {
         dti: loan.dti,
         appraisal_value: loan.appraisal_value,
       });
+      console.log('Rate Lock Recommendation:', rec);
       setRecommendation(rec);
     } catch (err) {
       console.error('Failed to get rate lock recommendation:', err);
@@ -54,7 +55,7 @@ function RateLockRecommendation({ loan }) {
   };
 
   const formatAction = (action) => {
-    if (!action) return 'Unknown';
+    if (!action || typeof action !== 'string') return 'Unknown';
     return action
       .replace(/_/g, ' ')
       .replace(/\b\w/g, l => l.toUpperCase());

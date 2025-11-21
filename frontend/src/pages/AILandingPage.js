@@ -323,9 +323,9 @@ function AILandingPage() {
 
     // If no tasks found, show summary message
     if (tasks.length === 0) {
-      // Handle all field naming conventions from AI
-      const activeLeads = data.summary?.active_leads || data.summary?.leads_needing_attention || 0;
-      const loansInPipeline = data.summary?.loans_in_pipeline || data.summary?.deals_in_pipeline || data.summary?.active_deals || 0;
+      // Handle all field naming conventions from Claude AI (varies between responses)
+      const activeLeads = data.summary?.active_leads || data.summary?.leads_needing_attention || data.summary?.total_leads || 0;
+      const loansInPipeline = data.summary?.loans_in_pipeline || data.summary?.deals_in_pipeline || data.summary?.active_deals || data.summary?.deals_in_progress || 0;
       const pipelineVolume = data.summary?.pipeline_volume || data.summary?.pipeline_value || '$0';
       addMessage(`Your pipeline: ${activeLeads} active leads, ${loansInPipeline} loans in pipeline (${pipelineVolume})`, 'assistant');
     } else {
