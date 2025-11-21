@@ -592,7 +592,11 @@ Loan Officer`,
 function Tasks() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [completedTasks, setCompletedTasks] = useState(new Set());
+  // Load completed tasks from localStorage on initial render
+  const [completedTasks, setCompletedTasks] = useState(() => {
+    const saved = localStorage.getItem('completedTasks');
+    return saved ? new Set(JSON.parse(saved)) : new Set();
+  });
   const [activeTab, setActiveTab] = useState('outstanding');
   const [selectedTask, setSelectedTask] = useState(null);
   const [editingMessage, setEditingMessage] = useState(false);
@@ -607,6 +611,11 @@ function Tasks() {
   const [dontAskAgainDelete, setDontAskAgainDelete] = useState(false);
   const [snoozedTasks, setSnoozedTasks] = useState(new Set());
   const [teamMembers, setTeamMembers] = useState([]);
+
+  // Save completed tasks to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('completedTasks', JSON.stringify([...completedTasks]));
+  }, [completedTasks]);
 
   // Dashboard data states
   const [prioritizedTasks, setPrioritizedTasks] = useState([]);
@@ -741,6 +750,10 @@ function Tasks() {
 
   // Get tasks filtered by active tab
   const getTasksForTab = () => {
+    if (activeTab === 'completed') {
+      return getCompletedTasks();
+    }
+
     const allTasks = getAggregatedTasks();
 
     switch (activeTab) {
@@ -755,6 +768,121 @@ function Tasks() {
       default:
         return allTasks.filter(task => !snoozedTasks.has(task.id));
     }
+  };
+
+  // Get all completed tasks for the completed tab
+  const getCompletedTasks = () => {
+    const tasks = [];
+
+    // Add completed manual prioritized tasks
+    prioritizedTasks.forEach((task, idx) => {
+      if (completedTasks.has(`priority-${idx}`)) {
+        tasks.push({
+          id: `priority-${idx}`,
+          ...task,
+          source: 'Manual Priority',
+          sourceIcon: '🎯'
+        });
+      }
+    });
+
+    // Add completed loan issues
+    loanIssues.forEach((issue, idx) => {
+      if (completedTasks.has(`issue-${idx}`)) {
+        tasks.push({
+          id: `issue-${idx}`,
+          ...issue,
+          title: issue.issue,
+          stage: 'Milestone Alert',
+          urgency: 'critical',
+          source: 'Milestone Risk',
+          sourceIcon: '🔥'
+        });
+      }
+    });
+
+    // Add completed AI pending tasks
+    aiTasks.pending.forEach((task, idx) => {
+      if (completedTasks.has(`ai-pending-${idx}`)) {
+        tasks.push({
+          id: `ai-pending-${idx}`,
+          ...task,
+          title: task.task,
+          stage: 'AI Suggested',
+          urgency: task.urgency || 'medium',
+          ai_action: `AI confidence: ${task.confidence}%`,
+          source: 'AI Engine',
+          sourceIcon: '🤖'
+        });
+      }
+    });
+
+    // Add completed AI waiting tasks
+    aiTasks.waiting.forEach((task, idx) => {
+      if (completedTasks.has(`ai-waiting-${idx}`)) {
+        tasks.push({
+          id: `ai-waiting-${idx}`,
+          ...task,
+          title: task.task,
+          stage: 'Needs Approval',
+          urgency: task.urgency || 'low',
+          source: 'AI Engine',
+          sourceIcon: '🤖'
+        });
+      }
+    });
+
+    // Add completed MUM alerts
+    mumAlerts.forEach((alert, idx) => {
+      if (completedTasks.has(`mum-${idx}`)) {
+        tasks.push({
+          id: `mum-${idx}`,
+          ...alert,
+          borrower: alert.client,
+          stage: 'Client Retention',
+          urgency: alert.urgency || 'medium',
+          source: 'Client for Life',
+          sourceIcon: '💎'
+        });
+      }
+    });
+
+    // Add completed lead alerts
+    if (leadMetrics.alerts) {
+      leadMetrics.alerts.forEach((alert, idx) => {
+        if (alert && completedTasks.has(`lead-${idx}`)) {
+          tasks.push({
+            id: `lead-${idx}`,
+            title: alert,
+            borrower: '',
+            stage: 'Leads',
+            urgency: 'high',
+            ai_action: null,
+            source: 'Leads Engine',
+            sourceIcon: '🚀'
+          });
+        }
+      });
+    }
+
+    // Add completed messages
+    messages.filter(m => !m.read).forEach((msg, idx) => {
+      if (completedTasks.has(`message-${idx}`)) {
+        tasks.push({
+          id: `message-${idx}`,
+          ...msg,
+          title: `Message from ${msg.from}`,
+          borrower: msg.from,
+          stage: 'Communication',
+          urgency: msg.urgency || 'medium',
+          ai_action: msg.ai_summary ? `AI Summary: ${msg.ai_summary}` : null,
+          source: 'Messages',
+          sourceIcon: '💬'
+        });
+      }
+    });
+
+    return tasks;
   };
 
   // Aggregate all tasks from different containers (same logic as dashboard)
@@ -1292,6 +1420,12 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
         >
           ♻️ Client for Life Engine (MUM) ({mumAlerts.length})
         </button>
+        <button
+          className={`tab-button ${activeTab === 'completed' ? 'active' : ''}`}
+          onClick={() => setActiveTab('completed')}
+        >
+          ✅ Completed Tasks ({completedTasks.size})
+        </button>
       </div>
 
       {/* Outstanding Tasks Tab */}
@@ -1319,6 +1453,13 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
       {activeTab === 'mum' && (
         <div className="tab-content">
           <TaskEmailLayout tasks={tabTasks} emptyMessage="No client retention actions needed" />
+        </div>
+      )}
+
+      {/* Completed Tasks Tab */}
+      {activeTab === 'completed' && (
+        <div className="tab-content">
+          <TaskEmailLayout tasks={tabTasks} emptyMessage="No completed tasks yet" />
         </div>
       )}
 
