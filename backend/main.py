@@ -8229,11 +8229,16 @@ async def seed_workflow_rules_migration(
         for i, (name, trigger_type, trigger_config, action_type, action_config) in enumerate(rules):
             db.execute(text("""
                 INSERT INTO workflow_rules
-                (rule_name, trigger_type, trigger_config, action_type, action_config, priority)
-                VALUES (:name, :trigger_type, CAST(:trigger_config AS jsonb),
+                (rule_name, trigger_field, rule_type, action_description,
+                 trigger_type, trigger_config, action_type, action_config, priority)
+                VALUES (:name, :trigger_field, :rule_type, :action_desc,
+                        :trigger_type, CAST(:trigger_config AS jsonb),
                         :action_type, CAST(:action_config AS jsonb), :priority)
             """), {
                 "name": name,
+                "trigger_field": trigger_type,
+                "rule_type": action_type,
+                "action_desc": action_config.get("title", action_config.get("message", "Workflow action")),
                 "trigger_type": trigger_type,
                 "trigger_config": json.dumps(trigger_config),
                 "action_type": action_type,
