@@ -145,10 +145,10 @@ class QueryExecutor:
         result = db.execute(text("""
             WITH stage_counts AS (
                 SELECT
-                    COUNT(*) FILTER (WHERE stage IN ('New', 'Prospect', 'Application Started', 'Pre-Approved', 'Pre-Approved')) as total_leads,
-                    COUNT(*) FILTER (WHERE stage IN ('Prospect', 'Application Started', 'Pre-Approved', 'Pre-Approved')) as reached_prospect,
-                    COUNT(*) FILTER (WHERE stage IN ('Application Started', 'Pre-Approved', 'Pre-Approved')) as reached_application,
-                    COUNT(*) FILTER (WHERE stage IN ('Pre-Approved', 'Pre-Approved')) as reached_preapproved,
+                    COUNT(*) as total_leads,
+                    COUNT(*) FILTER (WHERE stage IN ('PROSPECT', 'APPLICATION_STARTED', 'PRE_APPROVED')) as reached_prospect,
+                    COUNT(*) FILTER (WHERE stage IN ('APPLICATION_STARTED', 'PRE_APPROVED')) as reached_application,
+                    COUNT(*) FILTER (WHERE stage = 'PRE_APPROVED') as reached_preapproved,
                     0 as closed_won
                 FROM leads
                 WHERE owner_id = :user_id
@@ -179,7 +179,7 @@ class QueryExecutor:
                 0 as closed_lost,
                 ROUND(
                     (0::numeric /
-                     NULLIF(COUNT(*) FILTER (WHERE stage IN ('Pre-Approved', 'New')), 0) * 100), 1
+                     NULLIF(COUNT(*) FILTER (WHERE stage IN ('PRE_APPROVED', 'NEW')), 0) * 100), 1
                 ) as win_rate_pct,
                 COALESCE(SUM(preapproval_amount), 0) as total_volume,
                 COALESCE(AVG(preapproval_amount), 0) as avg_loan_amount
