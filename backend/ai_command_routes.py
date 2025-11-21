@@ -191,6 +191,12 @@ Always be helpful, concise, and focus on actionable results. If you can't determ
 
 def get_daily_summary(db: Session, user_id: int) -> Dict[str, Any]:
     """Get daily summary data for the user - includes REAL CRM data"""
+    # Clear any previous failed transaction state
+    try:
+        db.rollback()
+    except Exception:
+        pass
+
     main = get_main_module()
     Task = main.Task
     Lead = main.Lead
