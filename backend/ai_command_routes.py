@@ -229,25 +229,30 @@ def get_daily_summary(db: Session, user_id: int) -> Dict[str, Any]:
         stage = loan.stage or 'Unknown'
         loan_stage_breakdown[stage] = loan_stage_breakdown.get(stage, 0) + 1
 
-    # Get MUM clients
+    # Get MUM clients (safely check if table exists)
     mum_clients = []
     try:
-        MUMClient = main.MUMClient
-        mum_clients = db.query(MUMClient).filter(MUMClient.loan_officer_id == user_id).limit(10).all()
-    except Exception:
-        pass  # MUM table might not exist
+        # Check if MUMClient model exists and query
+        if hasattr(main, 'MUMClient'):
+            MUMClient = main.MUMClient
+            mum_clients = db.query(MUMClient).filter(MUMClient.loan_officer_id == user_id).limit(10).all()
+    except Exception as e:
+        db.rollback()  # Rollback to clear failed transaction
+        logger.debug(f"MUM query failed (table may not exist): {e}")
 
-    # Get unread emails/messages
+    # Get unread emails/messages (safely check if table exists)
     unread_messages = 0
     try:
-        EmailMessage = main.EmailMessage
-        unread_messages = db.query(EmailMessage).filter(
-            EmailMessage.user_id == user_id,
-            EmailMessage.direction == 'inbound',
-            EmailMessage.status == 'received'
-        ).count()
-    except Exception:
-        pass
+        if hasattr(main, 'EmailMessage'):
+            EmailMessage = main.EmailMessage
+            unread_messages = db.query(EmailMessage).filter(
+                EmailMessage.user_id == user_id,
+                EmailMessage.direction == 'inbound',
+                EmailMessage.status == 'received'
+            ).count()
+    except Exception as e:
+        db.rollback()  # Rollback to clear failed transaction
+        logger.debug(f"EmailMessage query failed (table may not exist): {e}")
 
     # Build follow-ups from leads needing attention
     follow_ups = []

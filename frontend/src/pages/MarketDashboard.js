@@ -5,6 +5,58 @@ import {
 } from 'recharts';
 import './MarketDashboard.css';
 
+const FRED_API_KEY = '1dc7b79a0de274ac6198c520405425a0';
+
+// Fetch Treasury yields from FRED API
+async function fetchTreasuryYields() {
+  const series = {
+    treasury2yr: 'DGS2',
+    treasury5yr: 'DGS5',
+    treasury10yr: 'DGS10',
+    treasury30yr: 'DGS30'
+  };
+
+  const results = {};
+
+  for (const [key, seriesId] of Object.entries(series)) {
+    try {
+      const response = await fetch(
+        `https://api.stlouisfed.org/fred/series/observations?series_id=${seriesId}&api_key=${FRED_API_KEY}&file_type=json&limit=1&sort_order=desc`
+      );
+      const data = await response.json();
+      if (data.observations && data.observations[0]) {
+        results[key] = parseFloat(data.observations[0].value);
+      }
+    } catch (error) {
+      console.error(`Failed to fetch ${seriesId}:`, error);
+    }
+  }
+
+  return results;
+}
+
+// Fetch Treasury history for chart
+async function fetchTreasuryHistory() {
+  try {
+    const response = await fetch(
+      `https://api.stlouisfed.org/fred/series/observations?series_id=DGS10&api_key=${FRED_API_KEY}&file_type=json&limit=30&sort_order=asc`
+    );
+    const data = await response.json();
+
+    if (data.observations) {
+      return data.observations
+        .filter(obs => obs.value !== '.')
+        .map(obs => ({
+          date: new Date(obs.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+          yield: parseFloat(obs.value)
+        }));
+    }
+  } catch (error) {
+    console.error('Failed to fetch Treasury history:', error);
+  }
+  return [];
+}
+
 // Generate simulated MBS price history
 function generateMBSHistory() {
   const data = [];
@@ -67,22 +119,51 @@ function MarketDashboard() {
   useEffect(() => {
     // Initial data
     setMbsData(generateMBSHistory());
-    setTreasuryData(generateTreasuryHistory());
 
-    // Simulate real-time updates every 5 seconds
-    const interval = setInterval(() => {
+    // Fetch real Treasury data from FRED
+    const loadRealData = async () => {
+      const yields = await fetchTreasuryYields();
+      const history = await fetchTreasuryHistory();
+
+      if (Object.keys(yields).length > 0) {
+        setCurrentPrices(prev => ({
+          ...prev,
+          treasury2yr: yields.treasury2yr || prev.treasury2yr,
+          treasury5yr: yields.treasury5yr || 3.618,
+          treasury10yr: yields.treasury10yr || prev.treasury10yr,
+          treasury30yr: yields.treasury30yr || prev.treasury30yr
+        }));
+      }
+
+      if (history.length > 0) {
+        setTreasuryData(history);
+      } else {
+        setTreasuryData(generateTreasuryHistory());
+      }
+
+      setLastUpdate(new Date());
+    };
+
+    loadRealData();
+
+    // Refresh Treasury data every 5 minutes
+    const interval = setInterval(loadRealData, 300000);
+
+    // Simulate MBS price updates every 5 seconds (MBS needs paid API)
+    const mbsInterval = setInterval(() => {
       setCurrentPrices(prev => ({
+        ...prev,
         mbs55: parseFloat((prev.mbs55 + (Math.random() - 0.5) * 0.05).toFixed(2)),
         mbs50: parseFloat((prev.mbs50 + (Math.random() - 0.5) * 0.05).toFixed(2)),
-        mbs60: parseFloat((prev.mbs60 + (Math.random() - 0.5) * 0.05).toFixed(2)),
-        treasury10yr: parseFloat((prev.treasury10yr + (Math.random() - 0.5) * 0.01).toFixed(3)),
-        treasury2yr: parseFloat((prev.treasury2yr + (Math.random() - 0.5) * 0.01).toFixed(3)),
-        treasury30yr: parseFloat((prev.treasury30yr + (Math.random() - 0.5) * 0.01).toFixed(3))
+        mbs60: parseFloat((prev.mbs60 + (Math.random() - 0.5) * 0.05).toFixed(2))
       }));
       setLastUpdate(new Date());
     }, 5000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      clearInterval(mbsInterval);
+    };
   }, []);
 
   const getChangeColor = (value) => {
