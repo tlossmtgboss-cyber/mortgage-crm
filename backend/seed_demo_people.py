@@ -469,16 +469,26 @@ def create_leads(db):
     """Create demo leads at various stages"""
     logger.info("🎯 Creating demo leads...")
 
-    # Get a random loan officer to assign to
-    loan_officer = db.execute(text("""
-        SELECT id FROM users WHERE role IN ('loan_officer', 'sales') LIMIT 1
+    # First try to find demo@example.com user (for AI chat to work)
+    demo_user = db.execute(text("""
+        SELECT id FROM users WHERE email = 'demo@example.com' LIMIT 1
     """)).fetchone()
 
-    if not loan_officer:
-        logger.warning("   ⚠️  No loan officers found, skipping leads")
-        return 0
+    if demo_user:
+        owner_id = demo_user.id
+        logger.info(f"   📧 Assigning leads to demo user (ID: {owner_id})")
+    else:
+        # Fall back to loan officer
+        loan_officer = db.execute(text("""
+            SELECT id FROM users WHERE role IN ('loan_officer', 'sales') LIMIT 1
+        """)).fetchone()
 
-    owner_id = loan_officer.id
+        if not loan_officer:
+            logger.warning("   ⚠️  No loan officers found, skipping leads")
+            return 0
+
+        owner_id = loan_officer.id
+        logger.info(f"   👤 Assigning leads to loan officer (ID: {owner_id})")
     created_count = 0
 
     for lead in DEMO_LEADS:
@@ -547,16 +557,26 @@ def create_active_loans(db):
     """Create demo active loans"""
     logger.info("💰 Creating active loans...")
 
-    # Get a random loan officer
-    loan_officer = db.execute(text("""
-        SELECT id FROM users WHERE role IN ('loan_officer', 'sales') LIMIT 1
+    # First try to find demo@example.com user (for AI chat to work)
+    demo_user = db.execute(text("""
+        SELECT id FROM users WHERE email = 'demo@example.com' LIMIT 1
     """)).fetchone()
 
-    if not loan_officer:
-        logger.warning("   ⚠️  No loan officers found, skipping loans")
-        return 0
+    if demo_user:
+        lo_id = demo_user.id
+        logger.info(f"   📧 Assigning loans to demo user (ID: {lo_id})")
+    else:
+        # Fall back to loan officer
+        loan_officer = db.execute(text("""
+            SELECT id FROM users WHERE role IN ('loan_officer', 'sales') LIMIT 1
+        """)).fetchone()
 
-    lo_id = loan_officer.id
+        if not loan_officer:
+            logger.warning("   ⚠️  No loan officers found, skipping loans")
+            return 0
+
+        lo_id = loan_officer.id
+        logger.info(f"   👤 Assigning loans to loan officer (ID: {lo_id})")
     created_count = 0
 
     for loan in DEMO_LOANS:

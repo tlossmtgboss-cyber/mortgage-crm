@@ -22680,6 +22680,95 @@ async def add_post_closing_workflow_migration(
         }
 
 
+@app.post("/api/v1/migrations/fix-demo-user-ownership", response_model=None)
+async def fix_demo_user_ownership_migration(
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Fix demo user ownership of leads, loans, and tasks.
+    Updates all records to be owned by demo@example.com for AI chat to work.
+    """
+    try:
+        logger.info("Running migration: fix demo user ownership")
+
+        # Get demo user ID
+        result = db.execute(text("""
+            SELECT id, email FROM users WHERE email = 'demo@example.com' LIMIT 1
+        """))
+        demo_user = result.fetchone()
+
+        if not demo_user:
+            return {
+                "success": False,
+                "message": "Demo user not found",
+                "error": "No user with email demo@example.com"
+            }
+
+        demo_user_id = demo_user[0]
+        logger.info(f"Found demo user: {demo_user[1]} (ID: {demo_user_id})")
+
+        # Update leads owner_id
+        result = db.execute(text("""
+            UPDATE leads
+            SET owner_id = :user_id
+            WHERE owner_id IS NULL OR owner_id != :user_id
+        """), {"user_id": demo_user_id})
+        leads_updated = result.rowcount
+
+        # Update loans loan_officer_id
+        result = db.execute(text("""
+            UPDATE loans
+            SET loan_officer_id = :user_id
+            WHERE loan_officer_id IS NULL OR loan_officer_id != :user_id
+        """), {"user_id": demo_user_id})
+        loans_updated = result.rowcount
+
+        # Update tasks owner_id
+        result = db.execute(text("""
+            UPDATE tasks
+            SET owner_id = :user_id
+            WHERE owner_id IS NULL OR owner_id != :user_id
+        """), {"user_id": demo_user_id})
+        tasks_updated = result.rowcount
+
+        db.commit()
+
+        # Verify counts
+        result = db.execute(text("""
+            SELECT
+                (SELECT COUNT(*) FROM leads WHERE owner_id = :user_id) as leads,
+                (SELECT COUNT(*) FROM loans WHERE loan_officer_id = :user_id) as loans,
+                (SELECT COUNT(*) FROM tasks WHERE owner_id = :user_id) as tasks
+        """), {"user_id": demo_user_id})
+        counts = result.fetchone()
+
+        logger.info(f"Migration completed: {leads_updated} leads, {loans_updated} loans, {tasks_updated} tasks updated")
+
+        return {
+            "success": True,
+            "message": "Demo user ownership fixed",
+            "updated": {
+                "leads": leads_updated,
+                "loans": loans_updated,
+                "tasks": tasks_updated
+            },
+            "totals": {
+                "leads": counts[0],
+                "loans": counts[1],
+                "tasks": counts[2]
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Migration failed: {str(e)}")
+        db.rollback()
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e)
+        }
+
+
 # ============================================================================
 # MUM (MORTGAGES UNDER MANAGEMENT) API
 # ============================================================================

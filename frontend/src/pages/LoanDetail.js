@@ -10,6 +10,7 @@ import CreateTaskModal from '../components/CreateTaskModal';
 import AppointmentModal from '../components/AppointmentModal';
 import EscalationModal from '../components/EscalationModal';
 import TeamAssignment from '../components/TeamAssignment';
+import RateLockRecommendation from '../components/RateLockRecommendation';
 import './LeadDetail.css';
 
 // Mock loans data (same as Loans.js)
@@ -1004,6 +1005,9 @@ function LoanDetail() {
 
         {/* Right Column - Actions & Email History */}
         <div className="right-column">
+          {/* Rate Lock Recommendation */}
+          <RateLockRecommendation loan={loan} />
+
           {/* Quick Actions */}
           <div className="actions-card">
             <h3>Quick Actions</h3>
