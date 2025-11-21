@@ -9,6 +9,9 @@ from sqlalchemy.orm import sessionmaker
 
 # Database URL from environment
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./mortgage_crm.db")
+# Fix postgres:// to postgresql:// for SQLAlchemy
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 # Create Base
 Base = declarative_base()
