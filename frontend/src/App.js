@@ -308,12 +308,24 @@ function App() {
             }
           />
 
-          {/* Market Dashboard - Full screen embed */}
+          {/* Market Dashboard */}
           <Route
             path="/market"
             element={
               <PrivateRoute>
-                <LazyPage><MarketDashboard /></LazyPage>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><MarketDashboard /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
               </PrivateRoute>
             }
           />
