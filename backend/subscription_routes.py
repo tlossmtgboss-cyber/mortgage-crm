@@ -196,10 +196,8 @@ async def admin_list_subscriptions(
     try:
         query = """
             SELECT os.id, os.organization_id, os.tier, os.status, os.billing_cycle,
-                   os.monthly_price, os.current_period_end, os.created_at,
-                   o.name as org_name
+                   os.monthly_price, os.current_period_end, os.created_at
             FROM organization_subscriptions os
-            LEFT JOIN organizations o ON os.organization_id = o.id
             WHERE 1=1
         """
         params = {}
@@ -228,8 +226,7 @@ async def admin_list_subscriptions(
                 "billing_cycle": row[4],
                 "monthly_price": float(row[5]) if row[5] else 0,
                 "current_period_end": row[6].isoformat() if row[6] else None,
-                "created_at": row[7].isoformat() if row[7] else None,
-                "organization_name": row[8]
+                "created_at": row[7].isoformat() if row[7] else None
             })
 
         # Get total count
