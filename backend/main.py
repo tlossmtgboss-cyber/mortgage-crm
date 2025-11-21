@@ -3722,6 +3722,10 @@ app.include_router(subscription_router, tags=["Subscriptions"])
 from workflow_routes import router as workflow_router
 app.include_router(workflow_router, tags=["Workflow"])
 
+# Include Market Chat routes
+from market_chat_routes import router as market_chat_router
+app.include_router(market_chat_router, tags=["Market Chat"])
+
 # ============================================================================
 # API KEY HELPER FUNCTIONS
 # ============================================================================

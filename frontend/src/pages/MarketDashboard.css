@@ -163,187 +163,130 @@
   gap: 16px;
 }
 
-/* Rate Lock Advisor */
-.advisor-card {
+/* Market Chat */
+.market-chat-card {
   background: #161b22;
   border: 1px solid #30363d;
   border-radius: 8px;
   padding: 12px;
+  display: flex;
+  flex-direction: column;
+  height: 300px;
 }
 
-.advisor-card h3 {
+.market-chat-card h3 {
   margin: 0 0 12px 0;
   font-size: 14px;
   font-weight: 600;
 }
 
-.advisor-inputs {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.advisor-inputs .input-row {
-  display: flex;
-  gap: 8px;
-}
-
-.advisor-inputs label {
+.chat-messages {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  font-size: 10px;
-  color: #8b949e;
-  gap: 4px;
+  overflow-y: auto;
+  padding-right: 8px;
+  margin-bottom: 12px;
 }
 
-.advisor-inputs input,
-.advisor-inputs select {
-  background: #0d1117;
-  border: 1px solid #30363d;
-  border-radius: 4px;
-  padding: 6px 8px;
-  font-size: 12px;
-  color: #e6edf3;
+.chat-messages::-webkit-scrollbar {
+  width: 6px;
 }
 
-.advisor-inputs input:focus,
-.advisor-inputs select:focus {
-  outline: none;
-  border-color: #58a6ff;
-}
-
-.analyze-btn {
-  background: #238636;
-  color: #fff;
-  border: none;
-  border-radius: 4px;
-  padding: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  margin-top: 4px;
-}
-
-.analyze-btn:hover {
-  background: #2ea043;
-}
-
-.analyze-btn:disabled {
+.chat-messages::-webkit-scrollbar-track {
   background: #21262d;
-  cursor: not-allowed;
+  border-radius: 3px;
 }
 
-.advisor-error {
-  color: #f85149;
-  font-size: 11px;
+.chat-messages::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 3px;
+}
+
+.no-messages {
+  color: #8b949e;
+  font-size: 12px;
+  text-align: center;
+  padding: 20px;
+}
+
+.chat-message {
+  margin-bottom: 10px;
   padding: 8px;
-  background: rgba(248, 81, 73, 0.1);
-  border-radius: 4px;
-  margin-top: 8px;
-}
-
-.advisor-result {
-  margin-top: 12px;
-  padding: 10px;
-  border-radius: 6px;
   background: rgba(0, 0, 0, 0.2);
-  border-left: 3px solid #8b949e;
+  border-radius: 6px;
+  border-left: 2px solid #30363d;
 }
 
-.advisor-result.urgency-immediate {
-  border-left-color: #f85149;
-  background: rgba(248, 81, 73, 0.1);
-}
-
-.advisor-result.urgency-high {
-  border-left-color: #d29922;
-  background: rgba(210, 153, 34, 0.1);
-}
-
-.advisor-result.urgency-moderate {
+.chat-message.own-message {
   border-left-color: #58a6ff;
   background: rgba(88, 166, 255, 0.1);
 }
 
-.advisor-result.urgency-low {
-  border-left-color: #3fb950;
-  background: rgba(63, 185, 80, 0.1);
-}
-
-.result-header {
+.message-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 6px;
-}
-
-.result-action {
-  font-size: 14px;
-  font-weight: 700;
-  color: #e6edf3;
-}
-
-.result-confidence {
-  font-size: 10px;
-  color: #8b949e;
-  background: rgba(0, 0, 0, 0.3);
-  padding: 2px 6px;
-  border-radius: 3px;
-}
-
-.result-urgency {
-  font-size: 11px;
-  color: #8b949e;
-  margin-bottom: 8px;
-}
-
-.result-urgency strong {
-  color: #e6edf3;
-}
-
-.result-reasons {
-  font-size: 11px;
-  margin-bottom: 8px;
-}
-
-.result-reasons strong {
-  color: #8b949e;
-  display: block;
   margin-bottom: 4px;
 }
 
-.result-reasons ul {
-  margin: 0;
-  padding: 0 0 0 14px;
-  color: #e6edf3;
+.message-user {
+  font-size: 11px;
+  font-weight: 600;
+  color: #58a6ff;
 }
 
-.result-reasons li {
-  padding: 2px 0;
-}
-
-.result-summary {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  background: rgba(0, 0, 0, 0.2);
-  padding: 8px;
-  border-radius: 4px;
-}
-
-.summary-item {
-  display: flex;
-  justify-content: space-between;
+.message-time {
   font-size: 10px;
-}
-
-.summary-item span {
   color: #8b949e;
 }
 
-.summary-item strong {
+.message-content {
+  font-size: 12px;
   color: #e6edf3;
+  line-height: 1.4;
+}
+
+.chat-input-form {
+  display: flex;
+  gap: 8px;
+}
+
+.chat-input-form input {
+  flex: 1;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #e6edf3;
+}
+
+.chat-input-form input:focus {
+  outline: none;
+  border-color: #58a6ff;
+}
+
+.chat-input-form input::placeholder {
+  color: #8b949e;
+}
+
+.chat-input-form button {
+  background: #238636;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chat-input-form button:hover {
+  background: #2ea043;
+}
+
+.chat-input-form button:disabled {
+  background: #21262d;
+  cursor: not-allowed;
 }
 
 /* Rates Card */
