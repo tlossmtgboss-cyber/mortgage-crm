@@ -807,7 +807,7 @@ IMPORTANT: Use the EXACT numbers above in your response. Do NOT say "0 active le
     # ADD COMPLETE CRM DATA CONTEXT
     if crm_context:
         system += "\n\n=== COMPLETE CRM DATA (You have full access to all this data) ===\n"
-        system += CRMContextService.format_context_for_claude(crm_context)
+        system += CRMContextService.format_complete_context_for_claude(crm_context)
 
         # Add detailed data for specific queries
         leads = crm_context.get("leads", {})

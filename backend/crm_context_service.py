@@ -399,3 +399,246 @@ class CRMContextService:
         lines.append(f"\nREFERRAL PARTNERS: {partners.get('total', 0)}")
 
         return "\n".join(lines)
+
+    @staticmethod
+    def get_schema_context() -> Dict[str, Any]:
+        """Get database schema information for AI"""
+        return {
+            "tables": {
+                "leads": {
+                    "description": "Primary table for mortgage leads/opportunities",
+                    "key_fields": {
+                        "id": "Unique identifier",
+                        "owner_id": "User who owns this lead",
+                        "name": "Lead's full name",
+                        "stage": "Current stage (New, Prospect, Application Started, Pre-Approved, Closed Won, Closed Lost)",
+                        "loan_type": "FHA, VA, Conventional, USDA, Jumbo",
+                        "preapproval_amount": "Requested loan amount in dollars",
+                        "email": "Contact email",
+                        "phone": "Contact phone",
+                        "source": "Where lead came from (Website, Referral, etc.)",
+                        "created_at": "When lead was created"
+                    },
+                    "valid_stages": ["New", "Prospect", "Application Started", "Pre-Approved", "Closed Won", "Closed Lost"],
+                    "valid_loan_types": ["FHA", "VA", "Conventional", "USDA", "Jumbo", "Purchase", "Refinance"]
+                },
+                "loans": {
+                    "description": "Active loans in pipeline",
+                    "key_fields": {
+                        "id": "Unique identifier",
+                        "loan_officer_id": "Assigned loan officer",
+                        "borrower_name": "Borrower's name",
+                        "amount": "Loan amount",
+                        "stage": "Pipeline stage (Processing, UW Received, Approved, CTC, Funded)",
+                        "loan_type": "Loan program type",
+                        "rate": "Interest rate",
+                        "closing_date": "Expected closing date",
+                        "property_address": "Property address"
+                    },
+                    "valid_stages": ["Processing", "UW Received", "Approved", "CTC", "Funded", "Closed"]
+                },
+                "tasks": {
+                    "description": "Action items and follow-ups",
+                    "key_fields": {
+                        "id": "Unique identifier",
+                        "owner_id": "Assigned user",
+                        "lead_id": "Associated lead (optional)",
+                        "title": "Task description",
+                        "due_date": "When task is due",
+                        "status": "pending, in_progress, completed",
+                        "priority": "high, medium, low"
+                    }
+                },
+                "mum_clients": {
+                    "description": "Mortgages Under Management - past clients for retention",
+                    "key_fields": {
+                        "id": "Unique identifier",
+                        "user_id": "Loan officer ID",
+                        "borrower_name": "Client name",
+                        "loan_amount": "Current loan balance",
+                        "interest_rate": "Current rate",
+                        "loan_type": "Loan type",
+                        "next_review_date": "Next scheduled review"
+                    }
+                },
+                "referral_partners": {
+                    "description": "Realtors, builders, and other referral sources",
+                    "key_fields": {
+                        "id": "Unique identifier",
+                        "name": "Partner name",
+                        "company": "Company name",
+                        "total_referrals": "Number of referrals sent",
+                        "total_volume": "Total loan volume referred"
+                    }
+                }
+            }
+        }
+
+    @staticmethod
+    def get_business_rules() -> Dict[str, Any]:
+        """Get business rules and workflows for AI"""
+        return {
+            "lead_lifecycle": {
+                "description": "How leads move through the pipeline",
+                "stages": [
+                    {
+                        "name": "New",
+                        "description": "Just entered system, not yet contacted",
+                        "typical_duration_days": 1,
+                        "required_actions": ["Initial contact within 24 hours"],
+                        "next_stages": ["Prospect", "Closed Lost"]
+                    },
+                    {
+                        "name": "Prospect",
+                        "description": "Initial contact made, qualifying borrower",
+                        "typical_duration_days": 7,
+                        "required_actions": ["Gather financial info", "Pre-qualification call"],
+                        "next_stages": ["Application Started", "Closed Lost"]
+                    },
+                    {
+                        "name": "Application Started",
+                        "description": "Borrower has begun loan application",
+                        "typical_duration_days": 14,
+                        "required_actions": ["Collect documents", "Submit to underwriting"],
+                        "next_stages": ["Pre-Approved", "Closed Lost"]
+                    },
+                    {
+                        "name": "Pre-Approved",
+                        "description": "Borrower approved pending property and conditions",
+                        "typical_duration_days": 30,
+                        "required_actions": ["Find property", "Lock rate", "Complete conditions"],
+                        "next_stages": ["Closed Won", "Closed Lost"]
+                    }
+                ],
+                "status_rules": {
+                    "New_to_Prospect": "After first successful contact",
+                    "Prospect_to_Application_Started": "When application form submitted",
+                    "Application_Started_to_Pre_Approved": "When pre-approval issued",
+                    "Pre_Approved_to_Closed_Won": "When loan funds and closes",
+                    "any_to_Closed_Lost": "When lead explicitly declines or unresponsive 30+ days"
+                }
+            },
+            "loan_pipeline": {
+                "description": "How loans move through processing",
+                "stages": [
+                    {"name": "Processing", "description": "Collecting and verifying documents"},
+                    {"name": "UW Received", "description": "Submitted to underwriting"},
+                    {"name": "Approved", "description": "Underwriting approved with conditions"},
+                    {"name": "CTC", "description": "Clear to Close - all conditions satisfied"},
+                    {"name": "Funded", "description": "Loan has funded"},
+                    {"name": "Closed", "description": "Transaction complete"}
+                ]
+            },
+            "task_rules": {
+                "auto_create_tasks": {
+                    "New_lead": "Create 'Initial contact' task due within 24 hours",
+                    "Application_Started": "Create 'Collect documents' task due in 7 days",
+                    "Pre_Approved": "Create 'Rate lock check' task due in 3 days"
+                },
+                "priority_rules": {
+                    "overdue": "HIGH priority",
+                    "due_today": "HIGH priority",
+                    "high_value_lead": "HIGH if loan amount > $500k"
+                }
+            },
+            "validation_rules": {
+                "loan_amount": {"min": 50000, "max": 5000000},
+                "credit_score": {"min": 300, "max": 850}
+            }
+        }
+
+    @staticmethod
+    def get_knowledge_base() -> Dict[str, Any]:
+        """Get CRM knowledge base for AI"""
+        return {
+            "common_questions": [
+                {
+                    "question": "How do I move a lead to the next stage?",
+                    "answer": "Update the lead's stage field to the appropriate value. Valid stages are: New, Prospect, Application Started, Pre-Approved, Closed Won, Closed Lost."
+                },
+                {
+                    "question": "What is a stale lead?",
+                    "answer": "A lead with no activity for 14+ days that isn't in a closed status. These need immediate follow-up."
+                },
+                {
+                    "question": "How do I track my pipeline value?",
+                    "answer": "Pipeline value is the sum of all loan amounts for loans not yet closed. View this in the dashboard or ask for a pipeline report."
+                },
+                {
+                    "question": "What is MUM?",
+                    "answer": "Mortgages Under Management - these are past clients whose loans you originated. Important for retention and refinance opportunities."
+                }
+            ],
+            "business_glossary": {
+                "DTI": "Debt-to-Income ratio - monthly debt payments divided by gross monthly income",
+                "LTV": "Loan-to-Value ratio - loan amount divided by property value",
+                "Underwriting": "Process of evaluating borrower creditworthiness and property value",
+                "Clear to Close (CTC)": "Final approval stage before loan funding",
+                "Rate Lock": "Guaranteeing an interest rate for a specific period",
+                "Pre-Approval": "Conditional loan approval before finding a property",
+                "Closing Disclosure": "Final loan terms document provided 3 days before closing"
+            },
+            "workflow_examples": [
+                {
+                    "scenario": "New lead from website",
+                    "steps": [
+                        "1. Lead created with stage=New",
+                        "2. Contact within 24 hours",
+                        "3. After qualification, update to Prospect",
+                        "4. When application submitted, update to Application Started",
+                        "5. After pre-approval issued, update to Pre-Approved",
+                        "6. When loan closes, update to Closed Won"
+                    ]
+                },
+                {
+                    "scenario": "Daily morning routine",
+                    "steps": [
+                        "1. Check overdue tasks",
+                        "2. Review new leads needing contact",
+                        "3. Check loans in pipeline for status updates",
+                        "4. Follow up on stale prospects",
+                        "5. Check rate lock expirations"
+                    ]
+                }
+            ],
+            "best_practices": [
+                "Contact new leads within 24 hours - conversion rate drops 50% after that",
+                "Always create follow-up tasks when changing lead status",
+                "Check pipeline daily for loans approaching closing",
+                "Review MUM clients quarterly for refinance opportunities",
+                "Track referral partner performance monthly"
+            ]
+        }
+
+    @staticmethod
+    def format_complete_context_for_claude(context: Dict[str, Any]) -> str:
+        """Format complete CRM context including schema, rules, and knowledge base"""
+        lines = []
+
+        # Basic context (existing)
+        lines.append(CRMContextService.format_context_for_claude(context))
+
+        # Add schema
+        schema = CRMContextService.get_schema_context()
+        lines.append("\n\n=== DATABASE SCHEMA ===")
+        for table_name, table_info in schema["tables"].items():
+            lines.append(f"\n{table_name.upper()}: {table_info['description']}")
+            lines.append(f"  Key fields: {', '.join(table_info['key_fields'].keys())}")
+
+        # Add business rules summary
+        rules = CRMContextService.get_business_rules()
+        lines.append("\n\n=== BUSINESS RULES ===")
+        lines.append("Lead Stages: " + " → ".join([s["name"] for s in rules["lead_lifecycle"]["stages"]]))
+        lines.append("Loan Pipeline: " + " → ".join([s["name"] for s in rules["loan_pipeline"]["stages"]]))
+
+        # Add knowledge base highlights
+        kb = CRMContextService.get_knowledge_base()
+        lines.append("\n\n=== KEY TERMINOLOGY ===")
+        for term, definition in list(kb["business_glossary"].items())[:5]:
+            lines.append(f"- {term}: {definition}")
+
+        lines.append("\n=== BEST PRACTICES ===")
+        for practice in kb["best_practices"][:3]:
+            lines.append(f"- {practice}")
+
+        return "\n".join(lines)
