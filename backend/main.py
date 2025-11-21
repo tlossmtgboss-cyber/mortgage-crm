@@ -15796,8 +15796,8 @@ def filter_leads_by_permissions(query, user: User, db: Session):
         # Sales: See only their assigned leads
         return query.filter(Lead.owner_id == user.id)
 
-    # No permission to view leads
-    return query.filter(Lead.id == None)  # Returns empty result
+    # Default: Show leads owned by the user (backwards compatibility)
+    return query.filter(Lead.owner_id == user.id)
 
 
 def filter_clients_by_permissions(query, user: User, db: Session):
