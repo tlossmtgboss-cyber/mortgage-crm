@@ -37,21 +37,21 @@ class CRMContextService:
     def _get_leads_context(db: Session, user_id: int) -> Dict[str, Any]:
         """Get leads summary and details"""
         try:
-            # Get lead counts by status
+            # Get lead counts by stage
             result = db.execute(text("""
-                SELECT status, COUNT(*) as count
+                SELECT stage, COUNT(*) as count
                 FROM leads
                 WHERE owner_id = :user_id
-                GROUP BY status
+                GROUP BY stage
             """), {"user_id": user_id})
-            status_counts = {row[0]: row[1] for row in result}
+            status_counts = {str(row[0]): row[1] for row in result}
 
             # Get total leads
             total = sum(status_counts.values())
 
             # Get recent leads (last 30 days)
             result = db.execute(text("""
-                SELECT id, name, '', email, phone, status,
+                SELECT id, name, '', email, phone, stage,
                        loan_type, preapproval_amount, source, created_at
                 FROM leads
                 WHERE owner_id = :user_id
