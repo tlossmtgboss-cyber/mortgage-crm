@@ -59,6 +59,7 @@ const PipelineEfficiency = lazy(() => import('./pages/PipelineEfficiency'));
 const AIReceptionistDashboard = lazy(() => import('./pages/AIReceptionistDashboard'));
 const VoiceOSDashboard = lazy(() => import('./pages/VoiceOSDashboard'));
 const AILandingPage = lazy(() => import('./pages/AILandingPage'));
+const WorkflowDashboard = lazy(() => import('./pages/WorkflowDashboard'));
 
 // Simple loading component
 const PageLoader = () => (
@@ -257,6 +258,28 @@ function App() {
             element={
               <PrivateRoute>
                 <LazyPage><AILandingPage /></LazyPage>
+              </PrivateRoute>
+            }
+          />
+
+          {/* Workflow Dashboard */}
+          <Route
+            path="/workflow"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><WorkflowDashboard /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
               </PrivateRoute>
             }
           />

@@ -1,0 +1,371 @@
+.workflow-dashboard {
+  padding: 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.workflow-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.workflow-header h1 {
+  margin: 0;
+  color: #1a1a2e;
+}
+
+.theme-day-badge {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.workflow-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 300px;
+  font-size: 16px;
+  color: #666;
+}
+
+/* Metrics Cards */
+.workflow-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.metric-card {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  border-left: 4px solid #667eea;
+}
+
+.metric-card.warning {
+  border-left-color: #f59e0b;
+}
+
+.metric-card.danger {
+  border-left-color: #ef4444;
+}
+
+.metric-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1a1a2e;
+}
+
+.metric-label {
+  font-size: 12px;
+  color: #666;
+  margin-top: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Tabs */
+.workflow-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #e5e7eb;
+  padding-bottom: 8px;
+}
+
+.workflow-tabs button {
+  padding: 10px 20px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.workflow-tabs button:hover {
+  background: #f3f4f6;
+  color: #1a1a2e;
+}
+
+.workflow-tabs button.active {
+  background: #667eea;
+  color: white;
+}
+
+/* Content Area */
+.workflow-content {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.overview-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+@media (max-width: 768px) {
+  .overview-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.overview-section h3 {
+  margin: 0 0 16px 0;
+  color: #1a1a2e;
+  font-size: 16px;
+}
+
+.empty-state {
+  color: #999;
+  font-style: italic;
+  text-align: center;
+  padding: 20px;
+}
+
+/* Task List */
+.task-list, .alert-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.task-item, .alert-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  background: #f9fafb;
+  border-left: 3px solid #667eea;
+}
+
+.task-item.priority-high, .alert-item.severity-high {
+  border-left-color: #ef4444;
+  background: #fef2f2;
+}
+
+.task-item.priority-medium, .alert-item.severity-medium {
+  border-left-color: #f59e0b;
+  background: #fffbeb;
+}
+
+.task-info, .alert-info {
+  flex: 1;
+}
+
+.task-info strong, .alert-info strong {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.task-borrower, .alert-borrower {
+  font-size: 12px;
+  color: #666;
+}
+
+.task-due {
+  font-size: 11px;
+  color: #999;
+  display: block;
+  margin-top: 4px;
+}
+
+.alert-info p {
+  margin: 4px 0;
+  font-size: 13px;
+  color: #444;
+}
+
+/* Buttons */
+.btn-complete, .btn-acknowledge {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.btn-complete {
+  background: #10b981;
+  color: white;
+}
+
+.btn-complete:hover {
+  background: #059669;
+}
+
+.btn-acknowledge {
+  background: #667eea;
+  color: white;
+}
+
+.btn-acknowledge:hover {
+  background: #5a67d8;
+}
+
+.btn-refresh {
+  padding: 8px 16px;
+  border: 1px solid #e5e7eb;
+  background: white;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.btn-refresh:hover {
+  background: #f9fafb;
+}
+
+.btn-primary {
+  padding: 10px 20px;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.btn-primary:hover {
+  background: #5a67d8;
+}
+
+/* Tables */
+.workflow-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.workflow-table th,
+.workflow-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.workflow-table th {
+  background: #f9fafb;
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  color: #666;
+}
+
+.workflow-table tr:hover {
+  background: #f9fafb;
+}
+
+.task-desc {
+  font-size: 12px;
+  color: #666;
+  margin: 4px 0 0 0;
+}
+
+/* Badges */
+.priority-badge, .severity-badge, .status-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.priority-badge.high, .severity-badge.high {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.priority-badge.medium, .severity-badge.medium {
+  background: #fffbeb;
+  color: #d97706;
+}
+
+.priority-badge.normal, .priority-badge.low,
+.severity-badge.normal, .severity-badge.low {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
+.status-badge {
+  background: #e0e7ff;
+  color: #4f46e5;
+}
+
+.status-badge.sent {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.status-badge.draft {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+/* Section Headers */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.section-header h3 {
+  margin: 0;
+}
+
+/* Theme Day Section */
+.theme-today {
+  margin-bottom: 24px;
+}
+
+.theme-today h4 {
+  margin: 0 0 12px 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.theme-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 20px;
+  border-radius: 12px;
+  display: inline-block;
+}
+
+.theme-name {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.theme-focus {
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+/* Last Mile Section */
+.last-mile-section h4,
+.theme-day-section h4 {
+  margin: 16px 0 12px 0;
+  color: #1a1a2e;
+  font-size: 14px;
+}
