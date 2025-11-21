@@ -8179,6 +8179,21 @@ async def seed_workflow_rules_migration(
     Migration: Seed default workflow rules for Active Loan Workflow System
     """
     try:
+        # First, add missing columns if they don't exist
+        alter_statements = [
+            "ALTER TABLE workflow_rules ADD COLUMN IF NOT EXISTS trigger_type VARCHAR(100)",
+            "ALTER TABLE workflow_rules ADD COLUMN IF NOT EXISTS trigger_config JSONB",
+            "ALTER TABLE workflow_rules ADD COLUMN IF NOT EXISTS action_type VARCHAR(100)",
+            "ALTER TABLE workflow_rules ADD COLUMN IF NOT EXISTS action_config JSONB",
+            "ALTER TABLE workflow_rules ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true",
+        ]
+        for stmt in alter_statements:
+            try:
+                db.execute(text(stmt))
+            except Exception:
+                pass  # Column may already exist
+        db.commit()
+
         # Check if rules already exist
         result = db.execute(text("SELECT COUNT(*) FROM workflow_rules"))
         count = result.scalar()
