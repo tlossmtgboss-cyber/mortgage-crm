@@ -197,6 +197,16 @@ class ApiKey(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     last_used_at = Column(DateTime, nullable=True)
 
+class UserSettings(Base):
+    __tablename__ = "user_settings"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    setting_key = Column(String, nullable=False)
+    setting_value = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    __table_args__ = (UniqueConstraint('user_id', 'setting_key', name='uix_user_setting'),)
+
 class ImpersonationSession(Base):
     __tablename__ = "impersonation_sessions"
     id = Column(Integer, primary_key=True, index=True)
