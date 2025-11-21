@@ -147,7 +147,7 @@ class CRMContextService:
             result = db.execute(text("""
                 SELECT status, COUNT(*) as count
                 FROM tasks
-                WHERE assigned_to_id = :user_id
+                WHERE owner_id = :user_id
                 GROUP BY status
             """), {"user_id": user_id})
             status_counts = {row[0]: row[1] for row in result}
@@ -156,7 +156,7 @@ class CRMContextService:
             result = db.execute(text("""
                 SELECT COUNT(*)
                 FROM tasks
-                WHERE assigned_to_id = :user_id
+                WHERE owner_id = :user_id
                 AND status != 'completed'
                 AND due_date < :today
             """), {"user_id": user_id, "today": today})
@@ -166,7 +166,7 @@ class CRMContextService:
             result = db.execute(text("""
                 SELECT id, title, description, priority, due_date, status, lead_id
                 FROM tasks
-                WHERE assigned_to_id = :user_id
+                WHERE owner_id = :user_id
                 AND DATE(due_date) = :today
                 ORDER BY priority DESC, due_date ASC
             """), {"user_id": user_id, "today": today})
@@ -187,7 +187,7 @@ class CRMContextService:
             result = db.execute(text("""
                 SELECT id, title, priority, due_date, status
                 FROM tasks
-                WHERE assigned_to_id = :user_id
+                WHERE owner_id = :user_id
                 AND status != 'completed'
                 AND due_date BETWEEN :today AND :week_later
                 ORDER BY due_date ASC
