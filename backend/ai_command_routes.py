@@ -81,7 +81,34 @@ class ActionExecuteResponse(BaseModel):
 
 SYSTEM_PROMPT = """You are Pipeline 360's AI assistant, designed to help mortgage professionals manage their CRM efficiently through natural language commands.
 
-MOST IMPORTANT - INTENT CLASSIFICATION (read this first):
+=== CRITICAL RULES FOR DATA AND ACTIONS ===
+
+1. WHEN RESPONDING TO DATA REQUESTS:
+   - You MUST use the ACTUAL CRM DATA provided in this context
+   - NEVER say "0 active leads" when the data shows leads exist
+   - NEVER use placeholder or default values
+   - If you see "Active Leads: 16" in the context, say "16 active leads" in your response
+
+2. FORBIDDEN RESPONSES (never say these):
+   ❌ "0 active leads" when leads exist
+   ❌ "$0 pipeline" when pipeline has value
+   ❌ "0 tasks" when tasks are listed
+   ❌ Any response with placeholder zeros when real data is provided
+
+3. FOR DAILY_VIEW REQUESTS ("what do I need to do today"):
+   - Look at the DAILY VIEW DATA section below
+   - Use the EXACT numbers provided
+   - List actual client names from the data
+   - Mention specific tasks and follow-ups
+
+4. EXAMPLE OF CORRECT RESPONSE:
+   If data shows: Active Leads: 16, Pipeline: $2,845,000
+   ✅ CORRECT: "You have 16 active leads with $2,845,000 in pipeline"
+   ❌ WRONG: "You have 0 active leads with $0 in pipeline"
+
+=== END CRITICAL RULES ===
+
+INTENT CLASSIFICATION:
 You MUST classify each user message to one of these intents and return the appropriate JSON:
 
 - "What do I need to do today?" or "my tasks" or "daily overview" → intent: "DAILY_VIEW"
@@ -569,15 +596,23 @@ PERMANENT MEMORY STATUS:
         system += action_summary
 
     try:
+        # Log the request
+        logger.info(f"AI Request - User ID: {user_id}, Message: {message[:100]}...")
+
         response = anthropic_client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=2000,
+            temperature=0,  # Deterministic responses - same input = same output
             system=system,
             messages=messages
         )
 
+        # Log the response
+        logger.info(f"AI Response - Stop reason: {response.stop_reason}")
+
         # Parse Claude's response
         response_text = response.content[0].text
+        logger.info(f"AI Response text preview: {response_text[:200]}...")
 
         # Try to extract JSON from the response
         try:
@@ -607,6 +642,21 @@ PERMANENT MEMORY STATUS:
                         })
                     else:
                         result["data"]["summary"] = daily_data.get("summary", {})
+
+                    # VALIDATION: Check for placeholder values in AI response
+                    actual_leads = daily_data["summary"].get("active_leads", 0)
+                    actual_loans = daily_data["summary"].get("loans_in_pipeline", 0)
+                    explanation = result.get("explanation", "").lower()
+
+                    if "0 active leads" in explanation and actual_leads > 0:
+                        logger.warning(f"AI returned placeholder '0 leads' but actual count is {actual_leads}")
+                        # Override the explanation with correct data
+                        result["explanation"] = f"Here's your daily overview. You have {actual_leads} active leads and {actual_loans} loans in pipeline ({daily_data['summary'].get('pipeline_volume', '$0')})."
+
+                    if "0 loans in pipeline" in explanation and actual_loans > 0:
+                        logger.warning(f"AI returned placeholder '0 loans' but actual count is {actual_loans}")
+
+                    logger.info(f"DAILY_VIEW response validated - Leads: {actual_leads}, Loans: {actual_loans}")
 
                 return result
         except json.JSONDecodeError:
