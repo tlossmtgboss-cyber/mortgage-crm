@@ -354,6 +354,10 @@
   display: flex;
   flex-direction: column;
   height: 300px;
+  min-height: 150px;
+  max-height: 600px;
+  resize: vertical;
+  overflow: hidden;
 }
 
 .market-chat-card h3 {
@@ -437,7 +441,7 @@
   background: #ffffff;
   border: 1px solid #dee2e6;
   border-radius: 4px;
-  padding: 8px 12px;
+  padding: 3px 12px;
   font-size: 12px;
   color: #212529;
 }
@@ -456,7 +460,7 @@
   color: #fff;
   border: none;
   border-radius: 4px;
-  padding: 8px 16px;
+  padding: 3px 12px;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
