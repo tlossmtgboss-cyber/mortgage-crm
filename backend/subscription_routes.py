@@ -12,6 +12,7 @@ from pydantic import BaseModel
 import json
 import logging
 
+from database import get_db
 from subscription_service import SubscriptionService
 from subscription_models import SUBSCRIPTION_TIERS, FEATURE_ADDONS
 
@@ -82,8 +83,8 @@ async def get_available_addons():
 
 @router.get("/my-subscription")
 async def get_my_subscription(
-    db: Session,
-    organization_id: int
+    organization_id: int,
+    db: Session = Depends(get_db)
 ):
     """Get current user's organization subscription"""
     sub = SubscriptionService.get_organization_subscription(db, organization_id)
@@ -101,8 +102,8 @@ async def get_my_subscription(
 
 @router.get("/my-usage")
 async def get_my_usage(
-    db: Session,
-    organization_id: int
+    organization_id: int,
+    db: Session = Depends(get_db)
 ):
     """Get usage summary for current period"""
     usage = SubscriptionService.get_usage_summary(db, organization_id)
@@ -111,8 +112,8 @@ async def get_my_usage(
 
 @router.get("/my-allowed-stages")
 async def get_my_allowed_stages(
-    db: Session,
-    organization_id: int
+    organization_id: int,
+    db: Session = Depends(get_db)
 ):
     """Get pipeline stages allowed for current tier"""
     stages = SubscriptionService.get_allowed_stages(db, organization_id)
@@ -122,8 +123,8 @@ async def get_my_allowed_stages(
 @router.post("/check-feature/{feature_key}")
 async def check_feature_access(
     feature_key: str,
-    db: Session,
-    organization_id: int
+    organization_id: int,
+    db: Session = Depends(get_db)
 ):
     """Check if organization can access a specific feature"""
     access = SubscriptionService.can_access_feature(db, organization_id, feature_key)
@@ -132,8 +133,8 @@ async def check_feature_access(
 
 @router.get("/my-warnings")
 async def get_my_warnings(
-    db: Session,
-    organization_id: int
+    organization_id: int,
+    db: Session = Depends(get_db)
 ):
     """Get unacknowledged usage warnings"""
     try:
@@ -164,8 +165,8 @@ async def get_my_warnings(
 @router.post("/acknowledge-warning/{warning_id}")
 async def acknowledge_warning(
     warning_id: str,
-    db: Session,
-    user_id: int
+    user_id: int,
+    db: Session = Depends(get_db)
 ):
     """Acknowledge a usage warning"""
     try:
@@ -185,11 +186,11 @@ async def acknowledge_warning(
 
 @router.get("/admin/list")
 async def admin_list_subscriptions(
-    db: Session,
     limit: int = 50,
     offset: int = 0,
     status: Optional[str] = None,
-    tier: Optional[str] = None
+    tier: Optional[str] = None,
+    db: Session = Depends(get_db)
 ):
     """Admin: List all organization subscriptions"""
     try:
@@ -252,8 +253,8 @@ async def admin_list_subscriptions(
 @router.post("/admin/create")
 async def admin_create_subscription(
     data: SubscriptionCreate,
-    db: Session,
-    admin_user_id: int
+    admin_user_id: int,
+    db: Session = Depends(get_db)
 ):
     """Admin: Create subscription for an organization"""
     try:
@@ -322,8 +323,8 @@ async def admin_create_subscription(
 async def admin_upgrade_tier(
     organization_id: int,
     data: TierUpgrade,
-    db: Session,
-    admin_user_id: int
+    admin_user_id: int,
+    db: Session = Depends(get_db)
 ):
     """Admin: Upgrade organization tier"""
     result = SubscriptionService.upgrade_tier(db, organization_id, data.new_tier, admin_user_id)
@@ -338,8 +339,8 @@ async def admin_upgrade_tier(
 async def admin_set_subscription_status(
     organization_id: int,
     status: str,
-    db: Session,
-    admin_user_id: int
+    admin_user_id: int,
+    db: Session = Depends(get_db)
 ):
     """Admin: Set subscription status (active, trial, past_due, canceled)"""
     try:
@@ -392,8 +393,8 @@ async def admin_set_subscription_status(
 async def admin_toggle_addon(
     organization_id: int,
     data: AddonToggle,
-    db: Session,
-    admin_user_id: int
+    admin_user_id: int,
+    db: Session = Depends(get_db)
 ):
     """Admin: Enable or disable an addon for organization"""
     try:
@@ -448,7 +449,7 @@ async def admin_toggle_addon(
 @router.get("/admin/usage/{organization_id}")
 async def admin_get_organization_usage(
     organization_id: int,
-    db: Session
+    db: Session = Depends(get_db)
 ):
     """Admin: Get detailed usage for an organization"""
     usage = SubscriptionService.get_usage_summary(db, organization_id)
@@ -465,9 +466,9 @@ async def admin_get_organization_usage(
 
 @router.get("/admin/actions")
 async def admin_get_action_log(
-    db: Session,
     organization_id: Optional[int] = None,
-    limit: int = 50
+    limit: int = 50,
+    db: Session = Depends(get_db)
 ):
     """Admin: Get audit log of admin actions"""
     try:
