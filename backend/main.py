@@ -22727,6 +22727,161 @@ async def verify_sms(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ============================================================================
+# WORKFLOW STAGES ENDPOINTS
+# ============================================================================
+
+@app.get("/api/v1/workflow-stages")
+async def get_workflow_stages(db: Session = Depends(get_db)):
+    """Get all workflow stages with their tasks"""
+    # Default workflow stages configuration
+    stages = {
+        "lead": {
+            "name": "Lead",
+            "description": "Initial contact and qualification workflow",
+            "color": "#3b82f6",
+            "tasks": [
+                {"id": 1, "title": "Initial Contact", "description": "Make first contact with lead", "order": 1, "auto_trigger": "on_lead_create", "days_offset": 0},
+                {"id": 2, "title": "Send Introduction Email", "description": "Send welcome email with information", "order": 2, "auto_trigger": "after_previous", "days_offset": 0},
+                {"id": 3, "title": "Schedule Discovery Call", "description": "Set up initial consultation", "order": 3, "auto_trigger": "after_previous", "days_offset": 1},
+                {"id": 4, "title": "Pre-Qualification Check", "description": "Verify basic qualification criteria", "order": 4, "auto_trigger": "after_previous", "days_offset": 0},
+                {"id": 5, "title": "Collect Documents", "description": "Request income, assets, and ID documents", "order": 5, "auto_trigger": "after_previous", "days_offset": 1},
+                {"id": 6, "title": "Credit Pull Authorization", "description": "Get authorization for credit check", "order": 6, "auto_trigger": "after_previous", "days_offset": 0},
+                {"id": 7, "title": "Generate Pre-Approval Letter", "description": "Create pre-approval documentation", "order": 7, "auto_trigger": "after_previous", "days_offset": 1},
+                {"id": 8, "title": "Convert to Active Loan", "description": "Move to active loan processing", "order": 8, "auto_trigger": "manual", "days_offset": 0}
+            ]
+        },
+        "active_loan": {
+            "name": "Active Loan",
+            "description": "Loan processing and underwriting workflow",
+            "color": "#10b981",
+            "tasks": [
+                {"id": 9, "title": "Application Submitted", "description": "Formal loan application received", "order": 1, "auto_trigger": "on_conversion", "days_offset": 0},
+                {"id": 10, "title": "Order Appraisal", "description": "Request property appraisal", "order": 2, "auto_trigger": "after_previous", "days_offset": 1},
+                {"id": 11, "title": "Title Search", "description": "Order title search and insurance", "order": 3, "auto_trigger": "after_previous", "days_offset": 0},
+                {"id": 12, "title": "Submit to Underwriting", "description": "Package file for underwriter review", "order": 4, "auto_trigger": "after_previous", "days_offset": 2},
+                {"id": 13, "title": "Address Conditions", "description": "Clear underwriting conditions", "order": 5, "auto_trigger": "on_conditions", "days_offset": 0},
+                {"id": 14, "title": "Final Approval", "description": "Obtain clear to close", "order": 6, "auto_trigger": "after_previous", "days_offset": 3},
+                {"id": 15, "title": "Schedule Closing", "description": "Coordinate closing date and location", "order": 7, "auto_trigger": "after_previous", "days_offset": 1},
+                {"id": 16, "title": "Closing Day", "description": "Execute closing documents", "order": 8, "auto_trigger": "on_closing_date", "days_offset": 0},
+                {"id": 17, "title": "Fund Loan", "description": "Wire funds and record documents", "order": 9, "auto_trigger": "after_previous", "days_offset": 1},
+                {"id": 18, "title": "Move to Portfolio", "description": "Transfer to servicing/portfolio", "order": 10, "auto_trigger": "after_previous", "days_offset": 3}
+            ]
+        },
+        "portfolio": {
+            "name": "Portfolio",
+            "description": "Post-closing servicing and retention workflow",
+            "color": "#8b5cf6",
+            "tasks": [
+                {"id": 19, "title": "Welcome to Portfolio", "description": "Send post-closing welcome package", "order": 1, "auto_trigger": "on_portfolio_add", "days_offset": 0},
+                {"id": 20, "title": "30-Day Check-In", "description": "First payment follow-up call", "order": 2, "auto_trigger": "scheduled", "days_offset": 30},
+                {"id": 21, "title": "90-Day Review", "description": "Ensure smooth servicing transition", "order": 3, "auto_trigger": "scheduled", "days_offset": 90},
+                {"id": 22, "title": "Annual Review", "description": "Yearly financial checkup", "order": 4, "auto_trigger": "annual", "days_offset": 365},
+                {"id": 23, "title": "Refinance Opportunity Check", "description": "Review for refinance potential", "order": 5, "auto_trigger": "rate_trigger", "days_offset": 0},
+                {"id": 24, "title": "Birthday Outreach", "description": "Send birthday greeting", "order": 6, "auto_trigger": "birthday", "days_offset": 0},
+                {"id": 25, "title": "Loan Anniversary", "description": "Celebrate loan anniversary", "order": 7, "auto_trigger": "anniversary", "days_offset": 0},
+                {"id": 26, "title": "Referral Request", "description": "Ask for referrals at key moments", "order": 8, "auto_trigger": "milestone", "days_offset": 0}
+            ]
+        }
+    }
+    return {"stages": stages}
+
+
+@app.get("/api/v1/workflow-stages/{stage_key}/team-members")
+async def get_workflow_stage_team_members(
+    stage_key: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get team members with their workflow progress for a specific stage"""
+    # Map stage to query criteria
+    stage_map = {
+        "lead": {"model": Lead, "status_field": "stage", "name": "lead"},
+        "active_loan": {"model": Loan, "status_field": "stage", "name": "loan"},
+        "portfolio": {"model": MumClient if 'MumClient' in dir() else None, "status_field": None, "name": "client"}
+    }
+
+    if stage_key not in stage_map:
+        raise HTTPException(status_code=400, detail=f"Invalid stage: {stage_key}")
+
+    # Get all users (loan officers, processors, etc.)
+    users = db.query(User).filter(User.is_active == True).all()
+
+    team_members = []
+
+    # Define tasks for each stage
+    stage_tasks = {
+        "lead": [
+            {"id": 1, "title": "Initial Contact"},
+            {"id": 2, "title": "Send Introduction Email"},
+            {"id": 3, "title": "Schedule Discovery Call"},
+            {"id": 4, "title": "Pre-Qualification Check"},
+            {"id": 5, "title": "Collect Documents"},
+            {"id": 6, "title": "Credit Pull Authorization"},
+            {"id": 7, "title": "Generate Pre-Approval Letter"},
+            {"id": 8, "title": "Convert to Active Loan"}
+        ],
+        "active_loan": [
+            {"id": 9, "title": "Application Submitted"},
+            {"id": 10, "title": "Order Appraisal"},
+            {"id": 11, "title": "Title Search"},
+            {"id": 12, "title": "Submit to Underwriting"},
+            {"id": 13, "title": "Address Conditions"},
+            {"id": 14, "title": "Final Approval"},
+            {"id": 15, "title": "Schedule Closing"},
+            {"id": 16, "title": "Closing Day"},
+            {"id": 17, "title": "Fund Loan"},
+            {"id": 18, "title": "Move to Portfolio"}
+        ],
+        "portfolio": [
+            {"id": 19, "title": "Welcome to Portfolio"},
+            {"id": 20, "title": "30-Day Check-In"},
+            {"id": 21, "title": "90-Day Review"},
+            {"id": 22, "title": "Annual Review"},
+            {"id": 23, "title": "Refinance Opportunity Check"},
+            {"id": 24, "title": "Birthday Outreach"},
+            {"id": 25, "title": "Loan Anniversary"},
+            {"id": 26, "title": "Referral Request"}
+        ]
+    }
+
+    for user in users:
+        # Count items for this user based on stage
+        if stage_key == "lead":
+            count = db.query(Lead).filter(Lead.owner_id == user.id).count()
+        elif stage_key == "active_loan":
+            count = db.query(Loan).filter(Loan.loan_officer_id == user.id).count()
+        else:  # portfolio
+            count = 0  # Would count portfolio clients
+
+        if count > 0:
+            # Generate mock workflow progress for demo
+            import random
+            completed_count = random.randint(0, len(stage_tasks[stage_key]) - 1)
+            in_progress_idx = completed_count
+
+            tasks_with_status = []
+            for idx, task in enumerate(stage_tasks[stage_key]):
+                if idx < completed_count:
+                    status = "completed"
+                elif idx == in_progress_idx:
+                    status = "in_progress"
+                else:
+                    status = "pending"
+                tasks_with_status.append({**task, "status": status})
+
+            team_members.append({
+                "id": user.id,
+                "name": user.full_name or user.email,
+                "role": user.role or "Team Member",
+                "avatar": None,
+                "count": count,
+                "tasks": tasks_with_status
+            })
+
+    return {"team_members": team_members}
+
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
