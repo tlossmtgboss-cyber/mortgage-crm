@@ -54,6 +54,9 @@ from security_middleware import (
 from schemas.onboarding import Step1Data, OnboardingProgressResponse, VerifyCodeRequest, SendVerificationRequest
 from crud import onboarding as onboarding_crud
 
+# Import workflow models (must be imported after Base is available - done via lazy loading)
+# from workflow_models import EmployerRecord, Opportunity, RecurringTask, WorkflowExecution
+
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -314,6 +317,11 @@ class Lead(Base):
     owner = relationship("User", back_populates="leads")
     referral_partner = relationship("ReferralPartner", back_populates="leads")
     activities = relationship("Activity", back_populates="lead")
+    # Workflow relationships
+    employer_records = relationship("EmployerRecord", back_populates="champion_lead", foreign_keys="EmployerRecord.champion_lead_id")
+    opportunities = relationship("Opportunity", back_populates="primary_lead", foreign_keys="Opportunity.primary_lead_id")
+    recurring_tasks = relationship("RecurringTask", back_populates="lead", foreign_keys="RecurringTask.lead_id")
+    workflow_executions = relationship("WorkflowExecution", back_populates="lead", foreign_keys="WorkflowExecution.lead_id")
 
 class Loan(Base):
     __tablename__ = "loans"
@@ -350,6 +358,7 @@ class Loan(Base):
     loan_officer = relationship("User", back_populates="loans")
     tasks = relationship("AITask", back_populates="loan")
     activities = relationship("Activity", back_populates="loan")
+    workflow_executions = relationship("WorkflowExecution", back_populates="loan", foreign_keys="WorkflowExecution.loan_id")
 
 class AITask(Base):
     __tablename__ = "ai_tasks"
