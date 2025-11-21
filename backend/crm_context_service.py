@@ -41,7 +41,7 @@ class CRMContextService:
             result = db.execute(text("""
                 SELECT status, COUNT(*) as count
                 FROM leads
-                WHERE user_id = :user_id
+                WHERE owner_id = :user_id
                 GROUP BY status
             """), {"user_id": user_id})
             status_counts = {row[0]: row[1] for row in result}
@@ -51,10 +51,10 @@ class CRMContextService:
 
             # Get recent leads (last 30 days)
             result = db.execute(text("""
-                SELECT id, first_name, last_name, email, phone, status,
-                       loan_type, loan_amount, source, created_at
+                SELECT id, name, '', email, phone, status,
+                       loan_type, preapproval_amount, source, created_at
                 FROM leads
-                WHERE user_id = :user_id
+                WHERE owner_id = :user_id
                 ORDER BY created_at DESC
                 LIMIT 50
             """), {"user_id": user_id})
@@ -90,25 +90,25 @@ class CRMContextService:
             result = db.execute(text("""
                 SELECT stage, COUNT(*) as count
                 FROM loans
-                WHERE user_id = :user_id
+                WHERE loan_officer_id = :user_id
                 GROUP BY stage
             """), {"user_id": user_id})
             stage_counts = {row[0]: row[1] for row in result}
 
             # Get total volume
             result = db.execute(text("""
-                SELECT COALESCE(SUM(loan_amount), 0)
+                SELECT COALESCE(SUM(amount), 0)
                 FROM loans
-                WHERE user_id = :user_id
+                WHERE loan_officer_id = :user_id
             """), {"user_id": user_id})
             total_volume = float(result.scalar() or 0)
 
             # Get recent loans
             result = db.execute(text("""
-                SELECT id, borrower_name, loan_amount, loan_type, stage,
-                       property_address, interest_rate, estimated_close_date, created_at
+                SELECT id, borrower_name, amount, loan_type, stage,
+                       property_address, rate, closing_date, created_at
                 FROM loans
-                WHERE user_id = :user_id
+                WHERE loan_officer_id = :user_id
                 ORDER BY created_at DESC
                 LIMIT 50
             """), {"user_id": user_id})
@@ -263,10 +263,10 @@ class CRMContextService:
         try:
             # Get closing this month
             result = db.execute(text("""
-                SELECT COUNT(*), COALESCE(SUM(loan_amount), 0)
+                SELECT COUNT(*), COALESCE(SUM(amount), 0)
                 FROM loans
-                WHERE user_id = :user_id
-                AND DATE_TRUNC('month', estimated_close_date) = DATE_TRUNC('month', CURRENT_DATE)
+                WHERE loan_officer_id = :user_id
+                AND DATE_TRUNC('month', closing_date) = DATE_TRUNC('month', CURRENT_DATE)
             """), {"user_id": user_id})
             row = result.fetchone()
             closing_this_month = {"count": row[0], "volume": float(row[1])}
@@ -274,11 +274,11 @@ class CRMContextService:
             # Get conversion rates
             result = db.execute(text("""
                 SELECT
-                    COUNT(*) FILTER (WHERE status = 'pre-approved') as pre_approved,
-                    COUNT(*) FILTER (WHERE status = 'application') as applications,
-                    COUNT(*) FILTER (WHERE status = 'closed') as closed
+                    COUNT(*) FILTER (WHERE stage = 'pre-approved') as pre_approved,
+                    COUNT(*) FILTER (WHERE stage = 'application') as applications,
+                    COUNT(*) FILTER (WHERE stage = 'closed') as closed
                 FROM leads
-                WHERE user_id = :user_id
+                WHERE owner_id = :user_id
             """), {"user_id": user_id})
             row = result.fetchone()
 
