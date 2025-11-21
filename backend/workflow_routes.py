@@ -463,10 +463,10 @@ async def get_workflow_dashboard(
             WHERE due_date::date = CURRENT_DATE AND status = 'pending'
         """)).scalar() or 0
 
-        # High risk loans
+        # High risk loans (using confidence_score < 0.5 as risk indicator)
         high_risk = db.execute(text("""
             SELECT COUNT(DISTINCT loan_id) FROM ai_analysis
-            WHERE risk_score >= 15
+            WHERE confidence_score < 0.5
             AND created_at > NOW() - INTERVAL '24 hours'
         """)).scalar() or 0
 
