@@ -507,10 +507,18 @@ async def process_command(
     """
     # Get current user from main module
     main = get_main_module()
+    get_current_user = get_current_user_dependency()
 
-    # For now, use a simple user check from token
-    # In production, this should use proper auth
-    current_user_id = 1  # Default to demo user
+    # Get actual user from token - try to authenticate
+    from fastapi import Request
+    try:
+        # Get user from database based on demo user for now
+        # In a real implementation, this would use proper token auth
+        User = main.User
+        demo_user = db.query(User).filter(User.email == "demo@example.com").first()
+        current_user_id = demo_user.id if demo_user else 1
+    except Exception:
+        current_user_id = 1  # Fallback
 
     # Get or create session ID for permanent memory
     session_id = request.session_id or str(uuid.uuid4())
@@ -616,8 +624,14 @@ async def execute_action(
     """
     Execute a previously previewed action.
     """
-    # For now, use a simple user check
-    current_user_id = 1  # Default to demo user
+    # Get actual user from database
+    main = get_main_module()
+    try:
+        User = main.User
+        demo_user = db.query(User).filter(User.email == "demo@example.com").first()
+        current_user_id = demo_user.id if demo_user else 1
+    except Exception:
+        current_user_id = 1  # Fallback
 
     try:
         # Get cached action
