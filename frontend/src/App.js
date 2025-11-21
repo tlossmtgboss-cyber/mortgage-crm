@@ -1,5 +1,5 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { isAuthenticated } from './utils/auth';
 import { ImpersonationProvider } from './contexts/ImpersonationContext';
 import { PermissionProvider } from './contexts/PermissionContext';
@@ -91,6 +91,16 @@ function LazyPage({ children }) {
       {children}
     </Suspense>
   );
+}
+
+// Wrapper to hide SmartAIChat on AI landing page
+function ConditionalSmartAIChat() {
+  const location = useLocation();
+  // Hide on /ai route since it has its own chat interface
+  if (location.pathname === '/ai') {
+    return null;
+  }
+  return <SmartAIChat />;
 }
 
 function App() {
@@ -967,7 +977,7 @@ function App() {
         </Routes>
         {/* Global AI Assistant */}
         <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
-        <SmartAIChat />
+        <ConditionalSmartAIChat />
         </div>
       </Router>
         </PermissionProvider>
