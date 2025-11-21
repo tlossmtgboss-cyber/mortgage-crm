@@ -318,6 +318,97 @@
   font-size: 14px;
 }
 
+/* View Mode Toggle */
+.view-mode-toggle {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.view-mode-toggle button {
+  flex: 1;
+  padding: 10px 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  background: white;
+  color: #666;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.view-mode-toggle button:hover {
+  border-color: var(--stage-color);
+  color: var(--stage-color);
+}
+
+.view-mode-toggle button.active {
+  background: var(--stage-color);
+  border-color: var(--stage-color);
+  color: white;
+}
+
+/* Task Edit Form */
+.task-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.task-edit-form input,
+.task-edit-form textarea,
+.task-edit-form select {
+  padding: 8px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.task-edit-form input:focus,
+.task-edit-form textarea:focus,
+.task-edit-form select:focus {
+  outline: none;
+  border-color: var(--stage-color, #0066cc);
+}
+
+.done-edit-btn {
+  align-self: flex-end;
+  padding: 6px 12px;
+  background: var(--stage-color, #0066cc);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.done-edit-btn:hover {
+  opacity: 0.9;
+}
+
+/* Task Actions */
+.task-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.edit-task-btn {
+  background: none;
+  border: none;
+  color: #999;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px;
+  transition: color 0.2s;
+}
+
+.edit-task-btn:hover {
+  color: var(--stage-color, #0066cc);
+}
+
 /* Expanded Task List */
 .stage-tasks-expanded {
   margin-top: 16px;

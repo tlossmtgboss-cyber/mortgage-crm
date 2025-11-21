@@ -4,8 +4,18 @@ import './TaskWorkflowManager.css';
 
 function TaskWorkflowManager() {
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [activeStage, setActiveStage] = useState(null);
+  const [viewMode, setViewMode] = useState('team'); // 'team' or 'edit'
+  const [editingTask, setEditingTask] = useState(null);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newTask, setNewTask] = useState({
+    title: '',
+    description: '',
+    auto_trigger: 'after_previous',
+    days_offset: 0
+  });
 
   // Team members with their workflow progress (will be loaded from API)
   const [teamMembers, setTeamMembers] = useState([]);
@@ -66,10 +76,10 @@ function TaskWorkflowManager() {
   }, []);
 
   useEffect(() => {
-    if (activeStage) {
+    if (activeStage && viewMode === 'team') {
       loadTeamMembersForStage(activeStage);
     }
-  }, [activeStage]);
+  }, [activeStage, viewMode]);
 
   const loadTeamMembersForStage = async (stageKey) => {
     setLoading(true);
@@ -83,42 +93,7 @@ function TaskWorkflowManager() {
         const data = await response.json();
         setTeamMembers(data.team_members || []);
       } else {
-        // Use mock data if API not available
-        setTeamMembers([
-          {
-            id: 1,
-            name: 'Sarah Johnson',
-            role: 'Loan Officer',
-            avatar: null,
-            count: 12,
-            tasks: workflowStages[stageKey].tasks.map((task, idx) => ({
-              ...task,
-              status: idx < 3 ? 'completed' : idx === 3 ? 'in_progress' : 'pending'
-            }))
-          },
-          {
-            id: 2,
-            name: 'Mike Chen',
-            role: 'Loan Officer',
-            avatar: null,
-            count: 8,
-            tasks: workflowStages[stageKey].tasks.map((task, idx) => ({
-              ...task,
-              status: idx < 5 ? 'completed' : idx === 5 ? 'in_progress' : 'pending'
-            }))
-          },
-          {
-            id: 3,
-            name: 'Emily Davis',
-            role: 'Processor',
-            avatar: null,
-            count: 15,
-            tasks: workflowStages[stageKey].tasks.map((task, idx) => ({
-              ...task,
-              status: idx < 2 ? 'completed' : idx === 2 ? 'in_progress' : 'pending'
-            }))
-          }
-        ]);
+        setTeamMembers([]);
       }
     } catch (error) {
       console.error('Error loading team members:', error);
@@ -143,9 +118,130 @@ function TaskWorkflowManager() {
       }
     } catch (error) {
       console.error('Error loading workflow stages:', error);
-      // Keep default stages if API fails
     }
   };
+
+  const handleAddTask = (stageKey) => {
+    if (!newTask.title.trim()) return;
+
+    const stage = workflowStages[stageKey];
+    const maxId = Math.max(...Object.values(workflowStages).flatMap(s => s.tasks.map(t => t.id)), 0);
+    const newTaskObj = {
+      id: maxId + 1,
+      title: newTask.title,
+      description: newTask.description,
+      order: stage.tasks.length + 1,
+      auto_trigger: newTask.auto_trigger,
+      days_offset: parseInt(newTask.days_offset) || 0
+    };
+
+    setWorkflowStages(prev => ({
+      ...prev,
+      [stageKey]: {
+        ...prev[stageKey],
+        tasks: [...prev[stageKey].tasks, newTaskObj]
+      }
+    }));
+
+    setNewTask({ title: '', description: '', auto_trigger: 'after_previous', days_offset: 0 });
+    setShowAddForm(false);
+    setMessage({ type: 'success', text: 'Task added successfully' });
+    setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+  };
+
+  const handleDeleteTask = (stageKey, taskId) => {
+    setWorkflowStages(prev => ({
+      ...prev,
+      [stageKey]: {
+        ...prev[stageKey],
+        tasks: prev[stageKey].tasks
+          .filter(t => t.id !== taskId)
+          .map((t, idx) => ({ ...t, order: idx + 1 }))
+      }
+    }));
+    setMessage({ type: 'success', text: 'Task deleted' });
+    setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+  };
+
+  const handleMoveTask = (stageKey, taskId, direction) => {
+    const stage = workflowStages[stageKey];
+    const taskIndex = stage.tasks.findIndex(t => t.id === taskId);
+    if (
+      (direction === 'up' && taskIndex === 0) ||
+      (direction === 'down' && taskIndex === stage.tasks.length - 1)
+    ) return;
+
+    const newTasks = [...stage.tasks];
+    const swapIndex = direction === 'up' ? taskIndex - 1 : taskIndex + 1;
+    [newTasks[taskIndex], newTasks[swapIndex]] = [newTasks[swapIndex], newTasks[taskIndex]];
+
+    // Update order numbers
+    const reorderedTasks = newTasks.map((t, idx) => ({ ...t, order: idx + 1 }));
+
+    setWorkflowStages(prev => ({
+      ...prev,
+      [stageKey]: {
+        ...prev[stageKey],
+        tasks: reorderedTasks
+      }
+    }));
+  };
+
+  const handleEditTask = (stageKey, taskId, field, value) => {
+    setWorkflowStages(prev => ({
+      ...prev,
+      [stageKey]: {
+        ...prev[stageKey],
+        tasks: prev[stageKey].tasks.map(t =>
+          t.id === taskId ? { ...t, [field]: value } : t
+        )
+      }
+    }));
+  };
+
+  const handleSaveWorkflow = async (stageKey) => {
+    setSaving(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/workflow-stages/${stageKey}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          tasks: workflowStages[stageKey].tasks
+        })
+      });
+
+      if (response.ok) {
+        setMessage({ type: 'success', text: `${workflowStages[stageKey].name} workflow saved successfully!` });
+      } else {
+        setMessage({ type: 'error', text: 'Failed to save workflow' });
+      }
+    } catch (error) {
+      console.error('Error saving workflow:', error);
+      setMessage({ type: 'error', text: 'Error saving workflow' });
+    } finally {
+      setSaving(false);
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+    }
+  };
+
+  const triggerOptions = [
+    { value: 'on_lead_create', label: 'On Lead Create' },
+    { value: 'after_previous', label: 'After Previous Task' },
+    { value: 'manual', label: 'Manual' },
+    { value: 'on_conversion', label: 'On Conversion' },
+    { value: 'on_conditions', label: 'On Conditions' },
+    { value: 'on_closing_date', label: 'On Closing Date' },
+    { value: 'on_portfolio_add', label: 'On Portfolio Add' },
+    { value: 'scheduled', label: 'Scheduled' },
+    { value: 'annual', label: 'Annual' },
+    { value: 'rate_trigger', label: 'Rate Trigger' },
+    { value: 'birthday', label: 'Birthday' },
+    { value: 'anniversary', label: 'Anniversary' },
+    { value: 'milestone', label: 'Milestone' }
+  ];
 
   return (
     <div className="task-workflow-manager">
@@ -197,59 +293,246 @@ function TaskWorkflowManager() {
               </div>
             )}
 
-            {/* Expanded Team Members View */}
+            {/* Expanded View */}
             {activeStage === key && (
               <div className="stage-tasks-expanded">
-                {loading ? (
-                  <div className="loading-state">Loading team members...</div>
-                ) : teamMembers.length === 0 ? (
-                  <div className="empty-state">No team members with {stage.name.toLowerCase()}s</div>
-                ) : (
-                  <div className="team-members-list">
-                    {teamMembers.map((member) => (
-                      <div key={member.id} className="team-member-card">
-                        <div className="member-header">
-                          <div className="member-info">
-                            <div className="member-avatar">
-                              {member.avatar ? (
-                                <img src={member.avatar} alt={member.name} />
-                              ) : (
-                                <span>{member.name.split(' ').map(n => n[0]).join('')}</span>
-                              )}
-                            </div>
-                            <div className="member-details">
-                              <strong>{member.name}</strong>
-                              <span className="member-role">{member.role}</span>
-                            </div>
-                          </div>
-                          <div className="member-count">
-                            <span className="count-value">{member.count}</span>
-                            <span className="count-label">{stage.name.toLowerCase()}s</span>
-                          </div>
-                        </div>
-                        <div className="member-workflow">
-                          <div className="workflow-progress">
-                            {member.tasks.map((task) => (
-                              <div
-                                key={task.id}
-                                className={`workflow-step ${task.status}`}
-                                title={`${task.title} - ${task.status}`}
-                              >
-                                <div className="step-indicator">
-                                  {task.status === 'completed' ? '✓' : task.status === 'in_progress' ? '●' : '○'}
+                {/* View Mode Toggle */}
+                <div className="view-mode-toggle">
+                  <button
+                    className={viewMode === 'team' ? 'active' : ''}
+                    onClick={() => setViewMode('team')}
+                  >
+                    Team Progress
+                  </button>
+                  <button
+                    className={viewMode === 'edit' ? 'active' : ''}
+                    onClick={() => setViewMode('edit')}
+                  >
+                    Edit Tasks
+                  </button>
+                </div>
+
+                {/* Team View */}
+                {viewMode === 'team' && (
+                  <>
+                    {loading ? (
+                      <div className="loading-state">Loading team members...</div>
+                    ) : teamMembers.length === 0 ? (
+                      <div className="empty-state">No team members with {stage.name.toLowerCase()}s</div>
+                    ) : (
+                      <div className="team-members-list">
+                        {teamMembers.map((member) => (
+                          <div key={member.id} className="team-member-card">
+                            <div className="member-header">
+                              <div className="member-info">
+                                <div className="member-avatar">
+                                  {member.avatar ? (
+                                    <img src={member.avatar} alt={member.name} />
+                                  ) : (
+                                    <span>{member.name.split(' ').map(n => n[0]).join('')}</span>
+                                  )}
+                                </div>
+                                <div className="member-details">
+                                  <strong>{member.name}</strong>
+                                  <span className="member-role">{member.role}</span>
                                 </div>
                               </div>
-                            ))}
+                              <div className="member-count">
+                                <span className="count-value">{member.count}</span>
+                                <span className="count-label">{stage.name.toLowerCase()}s</span>
+                              </div>
+                            </div>
+                            <div className="member-workflow">
+                              <div className="workflow-progress">
+                                {member.tasks.map((task) => (
+                                  <div
+                                    key={task.id}
+                                    className={`workflow-step ${task.status}`}
+                                    title={`${task.title} - ${task.status}`}
+                                  >
+                                    <div className="step-indicator">
+                                      {task.status === 'completed' ? '✓' : task.status === 'in_progress' ? '●' : '○'}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="workflow-summary">
+                                <span className="completed-count">
+                                  {member.tasks.filter(t => t.status === 'completed').length}/{member.tasks.length} completed
+                                </span>
+                              </div>
+                            </div>
                           </div>
-                          <div className="workflow-summary">
-                            <span className="completed-count">
-                              {member.tasks.filter(t => t.status === 'completed').length}/{member.tasks.length} completed
-                            </span>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Edit View */}
+                {viewMode === 'edit' && (
+                  <>
+                    <div className="tasks-list">
+                      {stage.tasks.map((task, idx) => (
+                        <div key={task.id} className="task-item">
+                          <div className="task-order">
+                            <button
+                              className="move-btn"
+                              onClick={() => handleMoveTask(key, task.id, 'up')}
+                              disabled={idx === 0}
+                            >
+                              ▲
+                            </button>
+                            <span>{task.order}</span>
+                            <button
+                              className="move-btn"
+                              onClick={() => handleMoveTask(key, task.id, 'down')}
+                              disabled={idx === stage.tasks.length - 1}
+                            >
+                              ▼
+                            </button>
+                          </div>
+                          <div className="task-content">
+                            {editingTask === task.id ? (
+                              <div className="task-edit-form">
+                                <input
+                                  type="text"
+                                  value={task.title}
+                                  onChange={(e) => handleEditTask(key, task.id, 'title', e.target.value)}
+                                  placeholder="Task title"
+                                />
+                                <textarea
+                                  value={task.description}
+                                  onChange={(e) => handleEditTask(key, task.id, 'description', e.target.value)}
+                                  placeholder="Description"
+                                  rows={2}
+                                />
+                                <div className="form-row">
+                                  <select
+                                    value={task.auto_trigger}
+                                    onChange={(e) => handleEditTask(key, task.id, 'auto_trigger', e.target.value)}
+                                  >
+                                    {triggerOptions.map(opt => (
+                                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                    ))}
+                                  </select>
+                                  <input
+                                    type="number"
+                                    value={task.days_offset}
+                                    onChange={(e) => handleEditTask(key, task.id, 'days_offset', parseInt(e.target.value) || 0)}
+                                    min="0"
+                                    placeholder="Days"
+                                  />
+                                </div>
+                                <button className="done-edit-btn" onClick={() => setEditingTask(null)}>
+                                  Done
+                                </button>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="task-title-row">
+                                  <strong>{task.title}</strong>
+                                  <span className="trigger-badge">{task.auto_trigger}</span>
+                                </div>
+                                <p className="task-desc">{task.description}</p>
+                                {task.days_offset > 0 && (
+                                  <span className="days-offset">+{task.days_offset} days</span>
+                                )}
+                              </>
+                            )}
+                          </div>
+                          <div className="task-actions">
+                            <button
+                              className="edit-task-btn"
+                              onClick={() => setEditingTask(editingTask === task.id ? null : task.id)}
+                              title="Edit task"
+                            >
+                              ✎
+                            </button>
+                            <button
+                              className="remove-task-btn"
+                              onClick={() => handleDeleteTask(key, task.id)}
+                              title="Delete task"
+                            >
+                              ×
+                            </button>
                           </div>
                         </div>
+                      ))}
+                    </div>
+
+                    {/* Add Task Form */}
+                    {showAddForm ? (
+                      <div className="add-task-form">
+                        <h4>Add New Task</h4>
+                        <div className="form-group">
+                          <label>Title</label>
+                          <input
+                            type="text"
+                            value={newTask.title}
+                            onChange={(e) => setNewTask(prev => ({ ...prev, title: e.target.value }))}
+                            placeholder="Task title"
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Description</label>
+                          <textarea
+                            value={newTask.description}
+                            onChange={(e) => setNewTask(prev => ({ ...prev, description: e.target.value }))}
+                            placeholder="Task description"
+                            rows={2}
+                          />
+                        </div>
+                        <div className="form-row">
+                          <div className="form-group">
+                            <label>Trigger</label>
+                            <select
+                              value={newTask.auto_trigger}
+                              onChange={(e) => setNewTask(prev => ({ ...prev, auto_trigger: e.target.value }))}
+                            >
+                              {triggerOptions.map(opt => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="form-group">
+                            <label>Days Offset</label>
+                            <input
+                              type="number"
+                              value={newTask.days_offset}
+                              onChange={(e) => setNewTask(prev => ({ ...prev, days_offset: e.target.value }))}
+                              min="0"
+                            />
+                          </div>
+                        </div>
+                        <div className="form-actions">
+                          <button className="cancel-btn" onClick={() => setShowAddForm(false)}>Cancel</button>
+                          <button
+                            className="add-btn"
+                            onClick={() => handleAddTask(key)}
+                            disabled={!newTask.title.trim()}
+                          >
+                            Add Task
+                          </button>
+                        </div>
                       </div>
-                    ))}
-                  </div>
+                    ) : (
+                      <button className="add-task-btn" onClick={() => setShowAddForm(true)}>
+                        + Add Task
+                      </button>
+                    )}
+
+                    {/* Save Button */}
+                    <div className="stage-actions">
+                      <button
+                        className="save-workflow-btn"
+                        onClick={() => handleSaveWorkflow(key)}
+                        disabled={saving}
+                      >
+                        {saving ? 'Saving...' : 'Save Workflow'}
+                      </button>
+                    </div>
+                  </>
                 )}
               </div>
             )}

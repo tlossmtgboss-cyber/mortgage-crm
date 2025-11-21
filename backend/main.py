@@ -23082,6 +23082,67 @@ async def get_workflow_stage_team_members(
     return {"team_members": team_members}
 
 
+@app.put("/api/v1/workflow-stages/{stage_key}")
+async def update_workflow_stage(
+    stage_key: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update workflow tasks for a specific stage"""
+    valid_stages = ["lead", "active_loan", "portfolio"]
+    if stage_key not in valid_stages:
+        raise HTTPException(status_code=400, detail=f"Invalid stage: {stage_key}")
+
+    try:
+        data = await request.json()
+        tasks = data.get("tasks", [])
+
+        # Store workflow configuration in settings
+        # Get or create settings for this user/organization
+        settings_key = f"workflow_tasks_{stage_key}"
+
+        # Check if setting exists
+        existing = db.execute(text("""
+            SELECT id FROM user_settings
+            WHERE user_id = :user_id AND setting_key = :key
+        """), {"user_id": current_user.id, "key": settings_key}).fetchone()
+
+        if existing:
+            # Update existing
+            db.execute(text("""
+                UPDATE user_settings
+                SET setting_value = :value, updated_at = NOW()
+                WHERE user_id = :user_id AND setting_key = :key
+            """), {
+                "user_id": current_user.id,
+                "key": settings_key,
+                "value": json.dumps(tasks)
+            })
+        else:
+            # Insert new
+            db.execute(text("""
+                INSERT INTO user_settings (user_id, setting_key, setting_value, created_at, updated_at)
+                VALUES (:user_id, :key, :value, NOW(), NOW())
+            """), {
+                "user_id": current_user.id,
+                "key": settings_key,
+                "value": json.dumps(tasks)
+            })
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": f"{stage_key} workflow saved successfully",
+            "task_count": len(tasks)
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error saving workflow: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
