@@ -88,7 +88,6 @@ class QueryExecutor:
                 ROUND(AVG(EXTRACT(EPOCH FROM (NOW() - created_at))/86400)::numeric, 1) as avg_age_days
             FROM leads
             WHERE owner_id = :user_id
-            AND stage NOT IN ('CLOSED_WON', 'CLOSED_LOST')
             GROUP BY stage
             ORDER BY total_value DESC
         """), {"user_id": user_id})
@@ -113,13 +112,13 @@ class QueryExecutor:
             SELECT
                 COALESCE(source, 'Unknown') as source,
                 COUNT(*) as total_leads,
-                COUNT(*) FILTER (WHERE stage = 'CLOSED_WON') as closed_won,
+                0 as closed_won,
                 ROUND(
-                    (COUNT(*) FILTER (WHERE stage = 'CLOSED_WON')::numeric /
+                    (0::numeric /
                      NULLIF(COUNT(*), 0) * 100), 1
                 ) as close_rate_pct,
-                COALESCE(SUM(preapproval_amount) FILTER (WHERE stage = 'CLOSED_WON'), 0) as total_revenue,
-                COALESCE(AVG(preapproval_amount) FILTER (WHERE stage = 'CLOSED_WON'), 0) as avg_deal_size
+                0 as total_revenue,
+                0 as avg_deal_size
             FROM leads
             WHERE owner_id = :user_id
             AND created_at > NOW() - INTERVAL :date_range
@@ -146,11 +145,11 @@ class QueryExecutor:
         result = db.execute(text("""
             WITH stage_counts AS (
                 SELECT
-                    COUNT(*) FILTER (WHERE stage IN ('NEW', 'PROSPECT', 'APPLICATION_STARTED', 'PRE_APPROVED', 'CLOSED_WON')) as total_leads,
-                    COUNT(*) FILTER (WHERE stage IN ('PROSPECT', 'APPLICATION_STARTED', 'PRE_APPROVED', 'CLOSED_WON')) as reached_prospect,
-                    COUNT(*) FILTER (WHERE stage IN ('APPLICATION_STARTED', 'PRE_APPROVED', 'CLOSED_WON')) as reached_application,
-                    COUNT(*) FILTER (WHERE stage IN ('PRE_APPROVED', 'CLOSED_WON')) as reached_preapproved,
-                    COUNT(*) FILTER (WHERE stage = 'CLOSED_WON') as closed_won
+                    COUNT(*) FILTER (WHERE stage IN ('New', 'Prospect', 'Application Started', 'Pre-Approved', 'Pre-Approved')) as total_leads,
+                    COUNT(*) FILTER (WHERE stage IN ('Prospect', 'Application Started', 'Pre-Approved', 'Pre-Approved')) as reached_prospect,
+                    COUNT(*) FILTER (WHERE stage IN ('Application Started', 'Pre-Approved', 'Pre-Approved')) as reached_application,
+                    COUNT(*) FILTER (WHERE stage IN ('Pre-Approved', 'Pre-Approved')) as reached_preapproved,
+                    0 as closed_won
                 FROM leads
                 WHERE owner_id = :user_id
             )
@@ -176,11 +175,11 @@ class QueryExecutor:
             SELECT
                 COALESCE(loan_type, 'Unknown') as loan_type,
                 COUNT(*) as total_leads,
-                COUNT(*) FILTER (WHERE stage = 'CLOSED_WON') as closed_won,
-                COUNT(*) FILTER (WHERE stage = 'CLOSED_LOST') as closed_lost,
+                0 as closed_won,
+                0 as closed_lost,
                 ROUND(
-                    (COUNT(*) FILTER (WHERE stage = 'CLOSED_WON')::numeric /
-                     NULLIF(COUNT(*) FILTER (WHERE stage IN ('CLOSED_WON', 'CLOSED_LOST')), 0) * 100), 1
+                    (0::numeric /
+                     NULLIF(COUNT(*) FILTER (WHERE stage IN ('Pre-Approved', 'New')), 0) * 100), 1
                 ) as win_rate_pct,
                 COALESCE(SUM(preapproval_amount), 0) as total_volume,
                 COALESCE(AVG(preapproval_amount), 0) as avg_loan_amount
@@ -212,8 +211,8 @@ class QueryExecutor:
             SELECT
                 TO_CHAR(DATE_TRUNC('month', created_at), 'YYYY-MM') as month,
                 COUNT(*) as new_leads,
-                COUNT(*) FILTER (WHERE stage = 'CLOSED_WON') as closed_won,
-                COALESCE(SUM(preapproval_amount) FILTER (WHERE stage = 'CLOSED_WON'), 0) as revenue
+                0 as closed_won,
+                0 as revenue
             FROM leads
             WHERE owner_id = :user_id
             AND created_at > NOW() - INTERVAL :months
@@ -248,7 +247,7 @@ class QueryExecutor:
                 ROUND(EXTRACT(EPOCH FROM (NOW() - created_at))/86400) as days_since_created
             FROM leads
             WHERE owner_id = :user_id
-            AND stage NOT IN ('CLOSED_WON', 'CLOSED_LOST')
+            
             AND created_at < NOW() - INTERVAL :stale_days
             ORDER BY created_at ASC
             LIMIT :limit
@@ -285,7 +284,7 @@ class QueryExecutor:
                 created_at
             FROM leads
             WHERE owner_id = :user_id
-            AND stage NOT IN ('CLOSED_WON', 'CLOSED_LOST')
+            
             AND preapproval_amount >= :min_amount
             ORDER BY preapproval_amount DESC
             LIMIT :limit
