@@ -317,11 +317,11 @@ class Lead(Base):
     owner = relationship("User", back_populates="leads")
     referral_partner = relationship("ReferralPartner", back_populates="leads")
     activities = relationship("Activity", back_populates="lead")
-    # Workflow relationships
-    employer_records = relationship("EmployerRecord", back_populates="champion_lead", foreign_keys="EmployerRecord.champion_lead_id")
-    opportunities = relationship("Opportunity", back_populates="primary_lead", foreign_keys="Opportunity.primary_lead_id")
-    recurring_tasks = relationship("RecurringTask", back_populates="lead", foreign_keys="RecurringTask.lead_id")
-    workflow_executions = relationship("WorkflowExecution", back_populates="lead", foreign_keys="WorkflowExecution.lead_id")
+    # Workflow relationships (commented out until workflow_models imported)
+    # employer_records = relationship("EmployerRecord", back_populates="champion_lead", foreign_keys="EmployerRecord.champion_lead_id")
+    # opportunities = relationship("Opportunity", back_populates="primary_lead", foreign_keys="Opportunity.primary_lead_id")
+    # recurring_tasks = relationship("RecurringTask", back_populates="lead", foreign_keys="RecurringTask.lead_id")
+    # workflow_executions = relationship("WorkflowExecution", back_populates="lead", foreign_keys="WorkflowExecution.lead_id")
 
 class Loan(Base):
     __tablename__ = "loans"
@@ -10517,6 +10517,85 @@ async def delete_loan(loan_id: int, db: Session = Depends(get_db), current_user:
     db.commit()
     logger.info(f"Loan deleted: {loan.loan_number}")
     return None
+
+
+# ============================================================================
+# POST-CLOSING WORKFLOW ENDPOINTS
+# ============================================================================
+
+@app.post("/api/v1/loans/{loan_id}/trigger-workflow")
+async def trigger_post_closing_workflow(loan_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """
+    Manually trigger the post-closing referral workflow for a loan.
+    This analyzes the borrower's referral potential and creates appropriate tasks/tags.
+    """
+    from workflows.post_closing_workflow import (
+        PostClosingWorkflowEngine,
+        WorkflowTrigger,
+        LeadWorkflowData,
+        calculate_referral_score
+    )
+
+    # Get the loan
+    loan = db.query(Loan).filter(Loan.id == loan_id).first()
+    if not loan:
+        raise HTTPException(status_code=404, detail="Loan not found")
+
+    # Find matching lead by borrower name
+    lead = db.query(Lead).filter(Lead.name == loan.borrower_name).first()
+    if not lead:
+        # Try partial match
+        lead = db.query(Lead).filter(Lead.name.ilike(f"%{loan.borrower_name.split()[0]}%")).first()
+
+    if not lead:
+        return {
+            "success": False,
+            "message": f"No matching lead found for borrower: {loan.borrower_name}",
+            "suggestion": "Create a lead record for this borrower first"
+        }
+
+    # Calculate referral score if not set
+    if not lead.referral_source_score:
+        lead.referral_source_score = calculate_referral_score(lead)
+        db.commit()
+
+    # Create trigger
+    trigger = WorkflowTrigger(
+        loan_id=loan.id,
+        lead_id=lead.id,
+        loan_status=str(loan.stage.value) if loan.stage else "Unknown",
+        closed_date=loan.funded_date or datetime.now(timezone.utc),
+        loan_officer_id=loan.loan_officer_id or current_user.id
+    )
+
+    # Create lead data
+    lead_data = LeadWorkflowData(
+        id=lead.id,
+        name=lead.name,
+        referral_source_score=lead.referral_source_score or 0,
+        leadership_level=getattr(lead, 'leadership_level', None),
+        employees_managed=getattr(lead, 'employees_managed', 0) or 0,
+        referral_industry_flag=getattr(lead, 'referral_industry_flag', None),
+        company_size=getattr(lead, 'company_size', None),
+        employer_name=getattr(lead, 'employer_name', None),
+        industry=getattr(lead, 'industry', None)
+    )
+
+    # Run workflow
+    engine = PostClosingWorkflowEngine(db)
+    result = await engine.process_loan_closing(trigger, lead_data)
+
+    logger.info(f"Workflow triggered for loan {loan_id}: {result['action_count']} actions")
+
+    return {
+        "success": True,
+        "loan_id": loan_id,
+        "lead_id": lead.id,
+        "lead_name": lead.name,
+        "referral_score": lead.referral_source_score,
+        "actions_triggered": result['action_count'],
+        "actions": result['actions']
+    }
 
 # ============================================================================
 # CLIENT MANAGEMENT PROFILE (CMP) API ENDPOINTS
