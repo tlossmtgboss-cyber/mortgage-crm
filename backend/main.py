@@ -3708,6 +3708,10 @@ app.include_router(ai_command_router, tags=["AI Commands"])
 from subscription_routes import router as subscription_router
 app.include_router(subscription_router, tags=["Subscriptions"])
 
+# Include Workflow System routes
+from workflow_routes import router as workflow_router
+app.include_router(workflow_router, tags=["Workflow"])
+
 # ============================================================================
 # API KEY HELPER FUNCTIONS
 # ============================================================================
@@ -8165,6 +8169,74 @@ async def add_workflow_system_migration(
             "message": f"Migration failed: {str(e)}",
             "error": str(e)
         }
+
+
+@app.post("/api/v1/migrations/seed-workflow-rules")
+async def seed_workflow_rules_migration(
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Seed default workflow rules for Active Loan Workflow System
+    """
+    try:
+        # Check if rules already exist
+        result = db.execute(text("SELECT COUNT(*) FROM workflow_rules"))
+        count = result.scalar()
+        if count > 0:
+            return {"success": True, "message": f"Workflow rules already seeded ({count} rules)"}
+
+        # Default workflow rules
+        rules = [
+            # Stage-based triggers
+            ("Processing Started", "stage_entered", {"stage": "processing"}, "create_task",
+             {"task_type": "document_collection", "title": "Collect processing documents", "due_in_days": 1, "priority": "high"}),
+            ("Underwriting Started", "stage_entered", {"stage": "underwriting"}, "create_alert",
+             {"alert_type": "milestone", "message": "Loan entered underwriting", "severity": "low"}),
+            ("Clear to Close", "stage_entered", {"stage": "clear_to_close"}, "create_task",
+             {"task_type": "closing_prep", "title": "Prepare closing documents", "due_in_days": 2, "priority": "high"}),
+
+            # Document tracking
+            ("Missing Appraisal", "missing_document", {"document_field": "appraisal_received_date"}, "create_alert",
+             {"alert_type": "document", "message": "Appraisal not yet received", "severity": "medium"}),
+            ("Missing Title", "missing_document", {"document_field": "title_received_date"}, "create_alert",
+             {"alert_type": "document", "message": "Title work not received", "severity": "medium"}),
+            ("Missing HOI", "missing_document", {"document_field": "hoi_received_date"}, "create_alert",
+             {"alert_type": "document", "message": "Homeowner insurance not received", "severity": "medium"}),
+
+            # Date-based triggers
+            ("Closing Approaching 7 Days", "date_approaching", {"date_field": "estimated_closing_date", "days_before": 7}, "create_task",
+             {"task_type": "closing_prep", "title": "7-day closing checklist", "due_in_days": 1, "priority": "high"}),
+            ("Closing Approaching 3 Days", "date_approaching", {"date_field": "estimated_closing_date", "days_before": 3}, "create_alert",
+             {"alert_type": "urgent", "message": "Closing in 3 days - verify all clear", "severity": "high"}),
+        ]
+
+        import json
+        for i, (name, trigger_type, trigger_config, action_type, action_config) in enumerate(rules):
+            db.execute(text("""
+                INSERT INTO workflow_rules
+                (rule_name, trigger_type, trigger_config, action_type, action_config, priority)
+                VALUES (:name, :trigger_type, CAST(:trigger_config AS jsonb),
+                        :action_type, CAST(:action_config AS jsonb), :priority)
+            """), {
+                "name": name,
+                "trigger_type": trigger_type,
+                "trigger_config": json.dumps(trigger_config),
+                "action_type": action_type,
+                "action_config": json.dumps(action_config),
+                "priority": 100 - i
+            })
+
+        db.commit()
+        return {
+            "success": True,
+            "message": f"Successfully seeded {len(rules)} workflow rules",
+            "rules_created": len(rules)
+        }
+
+    except Exception as e:
+        logger.error(f"Workflow rules seeding failed: {e}")
+        db.rollback()
+        return {"success": False, "error": str(e)}
 
 
 @app.post("/api/v1/migrations/add-ab-testing-tables")
