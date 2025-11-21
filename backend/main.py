@@ -358,7 +358,8 @@ class Loan(Base):
     loan_officer = relationship("User", back_populates="loans")
     tasks = relationship("AITask", back_populates="loan")
     activities = relationship("Activity", back_populates="loan")
-    workflow_executions = relationship("WorkflowExecution", back_populates="loan", foreign_keys="WorkflowExecution.loan_id")
+    # Workflow relationship (commented out until workflow_models imported)
+    # workflow_executions = relationship("WorkflowExecution", back_populates="loan", foreign_keys="WorkflowExecution.loan_id")
 
 class AITask(Base):
     __tablename__ = "ai_tasks"
