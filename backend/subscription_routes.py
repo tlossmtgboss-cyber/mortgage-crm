@@ -296,7 +296,7 @@ async def admin_create_subscription(
         db.execute(text("""
             INSERT INTO admin_actions
             (admin_user_id, organization_id, action_type, description, new_value)
-            VALUES (:admin_id, :org_id, 'subscription_created', :desc, :value::jsonb)
+            VALUES (:admin_id, :org_id, 'subscription_created', :desc, CAST(:value AS jsonb))
         """), {
             "admin_id": admin_user_id,
             "org_id": data.organization_id,
@@ -367,7 +367,7 @@ async def admin_set_subscription_status(
         db.execute(text("""
             INSERT INTO admin_actions
             (admin_user_id, organization_id, action_type, description, previous_value, new_value)
-            VALUES (:admin_id, :org_id, 'status_change', :desc, :prev::jsonb, :new::jsonb)
+            VALUES (:admin_id, :org_id, 'status_change', :desc, CAST(:prev AS jsonb), CAST(:new AS jsonb))
         """), {
             "admin_id": admin_user_id,
             "org_id": organization_id,
@@ -417,7 +417,7 @@ async def admin_toggle_addon(
         # Save
         db.execute(text("""
             UPDATE organization_subscriptions
-            SET enabled_addons = :addons::jsonb, updated_at = NOW()
+            SET enabled_addons = CAST(:addons AS jsonb), updated_at = NOW()
             WHERE organization_id = :org_id
         """), {"org_id": organization_id, "addons": json.dumps(current_addons)})
 

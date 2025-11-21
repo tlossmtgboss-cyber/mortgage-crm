@@ -379,7 +379,7 @@ class SubscriptionService:
                     INSERT INTO admin_actions
                     (admin_user_id, organization_id, action_type, description, previous_value, new_value)
                     VALUES (:admin_id, :org_id, 'tier_upgrade', :desc,
-                            :prev::jsonb, :new::jsonb)
+                            CAST(:prev AS jsonb), CAST(:new AS jsonb))
                 """), {
                     "admin_id": admin_user_id,
                     "org_id": organization_id,
