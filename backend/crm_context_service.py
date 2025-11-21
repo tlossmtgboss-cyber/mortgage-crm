@@ -18,6 +18,12 @@ class CRMContextService:
     @staticmethod
     def get_full_crm_context(db: Session, user_id: int) -> Dict[str, Any]:
         """Get complete CRM data context for AI"""
+        # Clear any previous failed transaction state
+        try:
+            db.rollback()
+        except:
+            pass
+
         try:
             context = {
                 "leads": CRMContextService._get_leads_context(db, user_id),
@@ -31,6 +37,10 @@ class CRMContextService:
             return context
         except Exception as e:
             logger.error(f"Error getting CRM context: {e}")
+            try:
+                db.rollback()
+            except:
+                pass
             return {}
 
     @staticmethod
@@ -80,6 +90,10 @@ class CRMContextService:
             }
         except Exception as e:
             logger.error(f"Error getting leads context: {e}")
+            try:
+                db.rollback()
+            except:
+                pass
             return {"total": 0, "by_status": {}, "recent_leads": []}
 
     @staticmethod
