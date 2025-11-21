@@ -485,14 +485,29 @@ function MarketDashboard() {
   const [mbsData, setMbsData] = useState([]);
   const [treasuryData, setTreasuryData] = useState([]);
   const [currentPrices, setCurrentPrices] = useState({
-    mbs55: 100.98,
+    mbs45: 97.46,
     mbs50: 99.44,
+    mbs55: 100.98,
     mbs60: 102.21,
+    mbs65: 103.52,
     treasury10yr: 4.067,
     treasury2yr: 3.504,
     treasury30yr: 4.722
   });
+  const [selectedCoupon, setSelectedCoupon] = useState('5.5');
   const [lastUpdate, setLastUpdate] = useState(new Date());
+
+  // MBS coupon data mapping
+  const mbsCoupons = {
+    '4.5': { key: 'mbs45', baseline: 97.29, label: 'UMBS 4.5' },
+    '5.0': { key: 'mbs50', baseline: 99.33, label: 'UMBS 5.0' },
+    '5.5': { key: 'mbs55', baseline: 100.89, label: 'UMBS 5.5' },
+    '6.0': { key: 'mbs60', baseline: 102.17, label: 'UMBS 6.0' },
+    '6.5': { key: 'mbs65', baseline: 103.59, label: 'UMBS 6.5' }
+  };
+
+  const currentCouponData = mbsCoupons[selectedCoupon];
+  const currentCouponPrice = currentPrices[currentCouponData.key];
 
   useEffect(() => {
     // Initial data
@@ -531,9 +546,11 @@ function MarketDashboard() {
     const mbsInterval = setInterval(() => {
       setCurrentPrices(prev => ({
         ...prev,
-        mbs55: parseFloat((prev.mbs55 + (Math.random() - 0.5) * 0.05).toFixed(2)),
+        mbs45: parseFloat((prev.mbs45 + (Math.random() - 0.5) * 0.05).toFixed(2)),
         mbs50: parseFloat((prev.mbs50 + (Math.random() - 0.5) * 0.05).toFixed(2)),
-        mbs60: parseFloat((prev.mbs60 + (Math.random() - 0.5) * 0.05).toFixed(2))
+        mbs55: parseFloat((prev.mbs55 + (Math.random() - 0.5) * 0.05).toFixed(2)),
+        mbs60: parseFloat((prev.mbs60 + (Math.random() - 0.5) * 0.05).toFixed(2)),
+        mbs65: parseFloat((prev.mbs65 + (Math.random() - 0.5) * 0.05).toFixed(2))
       }));
       setLastUpdate(new Date());
     }, 5000);
@@ -576,19 +593,19 @@ function MarketDashboard() {
         <div className="chart-section">
           <div className="chart-card main-chart">
             <div className="chart-header">
-              <h2>30YR UMBS 5.5</h2>
+              <h2>30YR {currentCouponData.label}</h2>
               <div className="current-price">
-                <span className="price">{currentPrices.mbs55}</span>
-                <span className={`change ${getChangeColor(currentPrices.mbs55 - 100.89)}`}>
-                  ({formatChange(currentPrices.mbs55, 100.89)})
+                <span className="price">{currentCouponPrice}</span>
+                <span className={`change ${getChangeColor(currentCouponPrice - currentCouponData.baseline)}`}>
+                  ({formatChange(currentCouponPrice, currentCouponData.baseline)})
                 </span>
               </div>
             </div>
             <div className="chart-info">
-              <span>PREV: 100.89</span>
-              <span>OPEN: 100.97</span>
-              <span>LOW: 100.95</span>
-              <span>HIGH: 101.03</span>
+              <span>PREV: {currentCouponData.baseline}</span>
+              <span>OPEN: {(currentCouponData.baseline + 0.08).toFixed(2)}</span>
+              <span>LOW: {(currentCouponData.baseline + 0.06).toFixed(2)}</span>
+              <span>HIGH: {(currentCouponData.baseline + 0.14).toFixed(2)}</span>
             </div>
             <div className="chart-container">
               <ResponsiveContainer width="100%" height={300}>
@@ -621,51 +638,38 @@ function MarketDashboard() {
 
         {/* Right Panel */}
         <div className="right-panel">
-          {/* MBS Pricing */}
+          {/* MBS Coupon Selector */}
           <div className="pricing-card">
-            <h3>MBS Pricing</h3>
-            <table className="pricing-table">
-              <thead>
-                <tr>
-                  <th>Coupon</th>
-                  <th>Price</th>
-                  <th>Change</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>UMBS 4.5</td>
-                  <td>97.46</td>
-                  <td className="positive">+0.17</td>
-                </tr>
-                <tr className="highlighted">
-                  <td>UMBS 5.0</td>
-                  <td>{currentPrices.mbs50}</td>
-                  <td className={getChangeColor(currentPrices.mbs50 - 99.33)}>
-                    {formatChange(currentPrices.mbs50, 99.33)}
-                  </td>
-                </tr>
-                <tr className="current">
-                  <td>UMBS 5.5</td>
-                  <td>{currentPrices.mbs55}</td>
-                  <td className={getChangeColor(currentPrices.mbs55 - 100.89)}>
-                    {formatChange(currentPrices.mbs55, 100.89)}
-                  </td>
-                </tr>
-                <tr>
-                  <td>UMBS 6.0</td>
-                  <td>{currentPrices.mbs60}</td>
-                  <td className={getChangeColor(currentPrices.mbs60 - 102.17)}>
-                    {formatChange(currentPrices.mbs60, 102.17)}
-                  </td>
-                </tr>
-                <tr>
-                  <td>UMBS 6.5</td>
-                  <td>103.52</td>
-                  <td className="negative">-0.07</td>
-                </tr>
-              </tbody>
-            </table>
+            <h3>Select MBS Coupon</h3>
+            <div className="coupon-selector">
+              <select
+                value={selectedCoupon}
+                onChange={(e) => setSelectedCoupon(e.target.value)}
+                className="coupon-dropdown"
+              >
+                {Object.entries(mbsCoupons).map(([coupon, data]) => (
+                  <option key={coupon} value={coupon}>
+                    {data.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="selected-coupon-info">
+              <div className="coupon-price-display">
+                <span className="coupon-label">Current Price</span>
+                <span className="coupon-value">{currentCouponPrice}</span>
+              </div>
+              <div className="coupon-change-display">
+                <span className="coupon-label">Change</span>
+                <span className={`coupon-value ${getChangeColor(currentCouponPrice - currentCouponData.baseline)}`}>
+                  {formatChange(currentCouponPrice, currentCouponData.baseline)}
+                </span>
+              </div>
+              <div className="coupon-baseline-display">
+                <span className="coupon-label">Previous</span>
+                <span className="coupon-value">{currentCouponData.baseline}</span>
+              </div>
+            </div>
           </div>
 
           {/* Treasury Yields */}
