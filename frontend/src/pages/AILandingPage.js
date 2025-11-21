@@ -12,6 +12,7 @@ function AILandingPage() {
   const [conversationHistory, setConversationHistory] = useState([]);
   const [taskListData, setTaskListData] = useState(null); // Tasks to display below button
   const [selectedTask, setSelectedTask] = useState(null);
+  const [tasksCompleted, setTasksCompleted] = useState(false); // Track if user completed tasks
   const chatAreaRef = useRef(null);
 
   useEffect(() => {
@@ -123,7 +124,20 @@ function AILandingPage() {
   const routeMessage = (message) => {
     const lower = message.toLowerCase();
 
-    if (lower.includes('today') || lower.includes('do today')) {
+    // Handle task completion
+    if ((lower.includes('done') || lower.includes('completed') || lower.includes('finished')) &&
+        (lower.includes('task') || lower.includes('all'))) {
+      handleTasksCompleted();
+    }
+    // Handle "what's next" after task completion
+    else if (lower.includes('next') || lower.includes("what's next") || lower.includes('whats next')) {
+      if (tasksCompleted) {
+        showNextPriorities();
+      } else {
+        showDailyView();
+      }
+    }
+    else if (lower.includes('today') || lower.includes('do today')) {
       showDailyView();
     } else if (lower.includes('email') && (lower.includes('all in one') || lower.includes('mortgages under management'))) {
       showEmailCampaign();
@@ -138,6 +152,73 @@ function AILandingPage() {
     } else {
       addMessage("I understand your request. Let me pull the relevant data from your CRM and show you what I can do.", 'assistant');
     }
+  };
+
+  const handleTasksCompleted = () => {
+    setTasksCompleted(true);
+    setTaskListData(null); // Clear the task list
+    setSelectedTask(null);
+    addMessage("Great job! I've marked all of today's tasks as completed. You're making excellent progress!", 'assistant');
+
+    setTimeout(() => {
+      addMessage("When you're ready, just ask 'what's next?' and I'll show you your upcoming priorities and opportunities.", 'assistant');
+    }, 500);
+  };
+
+  const showNextPriorities = () => {
+    addMessage("Now that you've completed today's tasks, here are your next priorities:", 'assistant');
+
+    // Set different tasks - upcoming priorities
+    const nextTasks = [
+      {
+        id: 101,
+        title: 'Rate lock opportunity',
+        client: 'Jennifer Martinez',
+        stage: 'Pre-Approved',
+        priority: 'HIGH',
+        type: 'Opportunity',
+        source: 'AI Recommendation',
+        owner: 'Loan Officer',
+        dateCreated: 'Just now',
+        details: 'Rates dropped 0.25% - great time to lock for 3 pre-approved clients',
+        dueTime: 'Tomorrow 9:00 AM',
+        aiDraftedMessage: 'Hi Jennifer,\n\nGreat news! Interest rates have dropped, and I wanted to reach out about locking in your rate...'
+      },
+      {
+        id: 102,
+        title: 'Nurture cold leads',
+        client: '8 leads inactive 30+ days',
+        stage: 'Lead',
+        priority: 'MEDIUM',
+        type: 'Campaign',
+        source: 'AI Recommendation',
+        owner: 'Loan Officer',
+        dateCreated: 'Just now',
+        details: 'Re-engagement campaign for leads that have gone cold',
+        dueTime: 'This week'
+      },
+      {
+        id: 103,
+        title: 'Review denied applications',
+        client: '3 denials this month',
+        stage: 'Review',
+        priority: 'LOW',
+        type: 'Analysis',
+        source: 'Monthly Review',
+        owner: 'Loan Officer',
+        dateCreated: 'Just now',
+        details: 'Analyze denial reasons and identify improvement opportunities',
+        dueTime: 'Friday'
+      }
+    ];
+
+    setTaskListData(nextTasks);
+    setSelectedTask(nextTasks[0]);
+    setTasksCompleted(false); // Reset for next cycle
+
+    setTimeout(() => {
+      addMessage("These are proactive opportunities to grow your pipeline. Let me know which one you'd like to tackle first!", 'assistant');
+    }, 500);
   };
 
   const showDailyView = () => {
