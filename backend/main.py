@@ -3726,6 +3726,10 @@ app.include_router(workflow_router, tags=["Workflow"])
 from market_chat_routes import router as market_chat_router
 app.include_router(market_chat_router, tags=["Market Chat"])
 
+# Include Market Data routes (scrapers)
+from market_data_routes import router as market_data_router
+app.include_router(market_data_router, tags=["Market Data"])
+
 # ============================================================================
 # API KEY HELPER FUNCTIONS
 # ============================================================================
