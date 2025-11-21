@@ -597,6 +597,18 @@ When user asks analytical questions, use these query types:
 - "conversion rates" or "funnel analysis" → query_conversion_funnel
 - "loan type performance" or "best loan types" → query_loan_type_performance
 - "monthly trends" or "month over month" → query_monthly_trends
+- "stale leads" or "leads not spoken to" or "inactive leads" or "haven't contacted" → query_stale_leads
+
+CRITICAL - STALE LEADS QUERIES:
+When user asks about leads they haven't contacted, leads gone cold, or inactive leads:
+Examples:
+- "what leads have I not spoken to in a while?" → intent: "ANALYTICAL_QUERY", query_type: "query_stale_leads"
+- "show me stale leads" → intent: "ANALYTICAL_QUERY", query_type: "query_stale_leads"
+- "which leads need follow-up?" → intent: "ANALYTICAL_QUERY", query_type: "query_stale_leads"
+- "leads I haven't contacted recently" → intent: "ANALYTICAL_QUERY", query_type: "query_stale_leads"
+- "inactive leads" or "cold leads" → intent: "ANALYTICAL_QUERY", query_type: "query_stale_leads"
+
+DO NOT return DAILY_VIEW for these queries - they are specifically asking about STALE LEADS, not daily tasks.
 - "stale leads" or "leads need attention" → query_stale_leads
 - "high value opportunities" or "big deals" → query_high_value_opportunities
 - "activity summary" or "what have I done" → query_activity_summary
