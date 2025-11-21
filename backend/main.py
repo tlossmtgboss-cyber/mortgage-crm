@@ -7826,6 +7826,347 @@ async def add_subscription_system_migration(
         }
 
 
+@app.post("/api/v1/migrations/add-workflow-system")
+async def add_workflow_system_migration(
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Add complete Active Loan Workflow System tables
+    Creates workflow_rules, workflow_tasks, theme_day_*, last_mile_*, ai_analysis tables
+    """
+    try:
+        logger.info("Running migration: add workflow system tables")
+        tables_created = []
+
+        # 1. Workflow Rules
+        result = db.execute(text("""
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'workflow_rules'
+        """))
+        if not result.fetchone():
+            db.execute(text("""
+                CREATE TABLE workflow_rules (
+                    id SERIAL PRIMARY KEY,
+                    rule_name VARCHAR(200) NOT NULL,
+                    trigger_field VARCHAR(100) NOT NULL,
+                    rule_type VARCHAR(50) NOT NULL,
+                    action_description TEXT NOT NULL,
+                    assigned_role VARCHAR(50),
+                    timing_offset INTEGER DEFAULT 0,
+                    priority VARCHAR(20) DEFAULT 'medium',
+                    ai_action JSONB,
+                    conditions JSONB,
+                    active BOOLEAN DEFAULT true,
+                    company_id INTEGER,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            db.execute(text("CREATE INDEX idx_workflow_rules_trigger ON workflow_rules(trigger_field)"))
+            db.execute(text("CREATE INDEX idx_workflow_rules_active ON workflow_rules(active)"))
+            tables_created.append("workflow_rules")
+
+        # 2. Workflow Tasks
+        result = db.execute(text("""
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'workflow_tasks'
+        """))
+        if not result.fetchone():
+            db.execute(text("""
+                CREATE TABLE workflow_tasks (
+                    id SERIAL PRIMARY KEY,
+                    loan_id INTEGER REFERENCES loans(id),
+                    rule_id INTEGER,
+                    task_title VARCHAR(300) NOT NULL,
+                    task_description TEXT,
+                    assigned_to INTEGER REFERENCES users(id),
+                    assigned_role VARCHAR(50),
+                    due_date DATE,
+                    status VARCHAR(50) DEFAULT 'pending',
+                    priority VARCHAR(20) DEFAULT 'medium',
+                    created_by_system BOOLEAN DEFAULT true,
+                    trigger_date DATE,
+                    trigger_field VARCHAR(100),
+                    completed_at TIMESTAMP,
+                    completed_by INTEGER REFERENCES users(id),
+                    notes TEXT,
+                    parent_workflow VARCHAR(100),
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            db.execute(text("CREATE INDEX idx_workflow_tasks_loan ON workflow_tasks(loan_id)"))
+            db.execute(text("CREATE INDEX idx_workflow_tasks_status ON workflow_tasks(status)"))
+            db.execute(text("CREATE INDEX idx_workflow_tasks_due ON workflow_tasks(due_date)"))
+            tables_created.append("workflow_tasks")
+
+        # 3. Workflow Alerts
+        result = db.execute(text("""
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'workflow_alerts'
+        """))
+        if not result.fetchone():
+            db.execute(text("""
+                CREATE TABLE workflow_alerts (
+                    id SERIAL PRIMARY KEY,
+                    loan_id INTEGER REFERENCES loans(id),
+                    alert_type VARCHAR(50),
+                    alert_message TEXT,
+                    alert_level VARCHAR(20),
+                    triggered_by VARCHAR(100),
+                    triggered_field VARCHAR(100),
+                    acknowledged BOOLEAN DEFAULT false,
+                    acknowledged_by INTEGER REFERENCES users(id),
+                    acknowledged_at TIMESTAMP,
+                    auto_resolved BOOLEAN DEFAULT false,
+                    resolved_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            db.execute(text("CREATE INDEX idx_workflow_alerts_loan ON workflow_alerts(loan_id)"))
+            db.execute(text("CREATE INDEX idx_workflow_alerts_ack ON workflow_alerts(acknowledged)"))
+            tables_created.append("workflow_alerts")
+
+        # 4. Theme Day Config
+        result = db.execute(text("""
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'theme_day_config'
+        """))
+        if not result.fetchone():
+            db.execute(text("""
+                CREATE TABLE theme_day_config (
+                    id SERIAL PRIMARY KEY,
+                    company_id INTEGER,
+                    enabled BOOLEAN DEFAULT true,
+                    assigned_role VARCHAR(50),
+                    assigned_user_id INTEGER REFERENCES users(id),
+                    auto_send_enabled BOOLEAN DEFAULT false,
+                    send_day_of_week INTEGER DEFAULT 1,
+                    send_time TIME DEFAULT '09:00:00',
+                    include_lo_on_emails BOOLEAN DEFAULT true,
+                    skip_holidays BOOLEAN DEFAULT true,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            tables_created.append("theme_day_config")
+
+        # 5. Theme Day Schedule
+        result = db.execute(text("""
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'theme_day_schedule'
+        """))
+        if not result.fetchone():
+            db.execute(text("""
+                CREATE TABLE theme_day_schedule (
+                    id SERIAL PRIMARY KEY,
+                    loan_id INTEGER REFERENCES loans(id),
+                    disclosure_sent_date DATE NOT NULL,
+                    closing_date DATE,
+                    fast_closing BOOLEAN DEFAULT false,
+                    theme_days_enabled BOOLEAN DEFAULT true,
+                    paused BOOLEAN DEFAULT false,
+                    paused_reason TEXT,
+                    current_week INTEGER DEFAULT 0,
+                    total_weeks_planned INTEGER,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            db.execute(text("CREATE INDEX idx_theme_schedule_loan ON theme_day_schedule(loan_id)"))
+            tables_created.append("theme_day_schedule")
+
+        # 6. Theme Day Messages
+        result = db.execute(text("""
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'theme_day_messages'
+        """))
+        if not result.fetchone():
+            db.execute(text("""
+                CREATE TABLE theme_day_messages (
+                    id SERIAL PRIMARY KEY,
+                    loan_id INTEGER REFERENCES loans(id),
+                    schedule_id INTEGER,
+                    week_number INTEGER NOT NULL,
+                    theme_name VARCHAR(100),
+                    scheduled_send_date DATE NOT NULL,
+                    actual_send_date TIMESTAMP,
+                    ai_generated_content TEXT,
+                    user_edited_content TEXT,
+                    subject_line VARCHAR(200),
+                    status VARCHAR(50) DEFAULT 'draft',
+                    approved_by INTEGER REFERENCES users(id),
+                    approved_at TIMESTAMP,
+                    email_sent BOOLEAN DEFAULT false,
+                    email_opened BOOLEAN DEFAULT false,
+                    email_opened_at TIMESTAMP,
+                    borrower_replied BOOLEAN DEFAULT false,
+                    audit_flags JSONB,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            db.execute(text("CREATE INDEX idx_theme_messages_loan ON theme_day_messages(loan_id)"))
+            db.execute(text("CREATE INDEX idx_theme_messages_status ON theme_day_messages(status)"))
+            tables_created.append("theme_day_messages")
+
+        # 7. Last Mile Calls
+        result = db.execute(text("""
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'last_mile_calls'
+        """))
+        if not result.fetchone():
+            db.execute(text("""
+                CREATE TABLE last_mile_calls (
+                    id SERIAL PRIMARY KEY,
+                    loan_id INTEGER REFERENCES loans(id),
+                    assigned_concierge_id INTEGER REFERENCES users(id),
+                    scheduled_date TIMESTAMP,
+                    completed_date TIMESTAMP,
+                    call_duration_minutes INTEGER,
+                    cd_status_reviewed BOOLEAN DEFAULT false,
+                    wire_instructions_obtained BOOLEAN DEFAULT false,
+                    closing_details_confirmed BOOLEAN DEFAULT false,
+                    cd_reviewed BOOLEAN DEFAULT false,
+                    wire_instructions_sent BOOLEAN DEFAULT false,
+                    hybrid_closing_opted_in BOOLEAN DEFAULT false,
+                    post_closing_call_scheduled BOOLEAN DEFAULT false,
+                    borrower_confidence_level INTEGER,
+                    borrower_sentiment VARCHAR(50),
+                    outstanding_concerns TEXT,
+                    ai_talking_points JSONB,
+                    ai_analysis JSONB,
+                    follow_up_email_sent BOOLEAN DEFAULT false,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            db.execute(text("CREATE INDEX idx_last_mile_loan ON last_mile_calls(loan_id)"))
+            tables_created.append("last_mile_calls")
+
+        # 8. Last Mile Tasks
+        result = db.execute(text("""
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'last_mile_tasks'
+        """))
+        if not result.fetchone():
+            db.execute(text("""
+                CREATE TABLE last_mile_tasks (
+                    id SERIAL PRIMARY KEY,
+                    last_mile_call_id INTEGER,
+                    loan_id INTEGER REFERENCES loans(id),
+                    task_category VARCHAR(50),
+                    task_description TEXT,
+                    assigned_to INTEGER REFERENCES users(id),
+                    status VARCHAR(50) DEFAULT 'pending',
+                    due_date TIMESTAMP,
+                    completed_at TIMESTAMP,
+                    notes TEXT,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            tables_created.append("last_mile_tasks")
+
+        # 9. Post Closing Calls
+        result = db.execute(text("""
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'post_closing_calls'
+        """))
+        if not result.fetchone():
+            db.execute(text("""
+                CREATE TABLE post_closing_calls (
+                    id SERIAL PRIMARY KEY,
+                    loan_id INTEGER REFERENCES loans(id),
+                    concierge_id INTEGER REFERENCES users(id),
+                    scheduled_date TIMESTAMP,
+                    completed_date TIMESTAMP,
+                    experience_rating INTEGER,
+                    experience_feedback TEXT,
+                    mum_opted_in BOOLEAN DEFAULT false,
+                    review_requested BOOLEAN DEFAULT false,
+                    review_completed BOOLEAN DEFAULT false,
+                    referrals_received INTEGER DEFAULT 0,
+                    notes TEXT,
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    updated_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            tables_created.append("post_closing_calls")
+
+        # 10. AI Analysis
+        result = db.execute(text("""
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'ai_analysis'
+        """))
+        if not result.fetchone():
+            db.execute(text("""
+                CREATE TABLE ai_analysis (
+                    id SERIAL PRIMARY KEY,
+                    loan_id INTEGER REFERENCES loans(id),
+                    analysis_type VARCHAR(100),
+                    analysis_trigger VARCHAR(100),
+                    input_data JSONB,
+                    prompt_used TEXT,
+                    ai_response TEXT,
+                    parsed_response JSONB,
+                    confidence_score DECIMAL(3,2),
+                    recommendations JSONB,
+                    risks_identified JSONB,
+                    execution_time_ms INTEGER,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            db.execute(text("CREATE INDEX idx_ai_analysis_loan ON ai_analysis(loan_id)"))
+            tables_created.append("ai_analysis")
+
+        # 11. Workflow Execution Log
+        result = db.execute(text("""
+            SELECT table_name FROM information_schema.tables
+            WHERE table_schema = 'public' AND table_name = 'workflow_execution_log'
+        """))
+        if not result.fetchone():
+            db.execute(text("""
+                CREATE TABLE workflow_execution_log (
+                    id SERIAL PRIMARY KEY,
+                    loan_id INTEGER REFERENCES loans(id),
+                    rule_id INTEGER,
+                    trigger_field VARCHAR(100),
+                    trigger_value TEXT,
+                    action_type VARCHAR(50),
+                    execution_status VARCHAR(50),
+                    execution_result JSONB,
+                    error_message TEXT,
+                    execution_time_ms INTEGER,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """))
+            tables_created.append("workflow_execution_log")
+
+        db.commit()
+
+        if tables_created:
+            return {
+                "success": True,
+                "message": f"Successfully created workflow system tables: {', '.join(tables_created)}",
+                "tables_created": tables_created
+            }
+        else:
+            return {
+                "success": True,
+                "message": "All workflow system tables already exist",
+                "tables_created": []
+            }
+
+    except Exception as e:
+        logger.error(f"Workflow migration failed: {e}")
+        db.rollback()
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e)
+        }
+
+
 @app.post("/api/v1/migrations/add-ab-testing-tables")
 async def add_ab_testing_tables_migration(
     current_user: User = Depends(get_current_user),
