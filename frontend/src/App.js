@@ -93,7 +93,7 @@ function LazyPage({ children }) {
   );
 }
 
-// Wrapper to hide SmartAIChat on AI landing page
+// Wrapper to hide SmartAIChat on AI landing page (fixes gray overlay)
 function ConditionalSmartAIChat() {
   const location = useLocation();
   // Hide on /ai route since it has its own chat interface
