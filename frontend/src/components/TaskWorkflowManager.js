@@ -5,8 +5,10 @@ import './TaskWorkflowManager.css';
 function TaskWorkflowManager() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
-  const [activeStage, setActiveStage] = useState(null); // For editing a stage
-  const [showAddTask, setShowAddTask] = useState(false);
+  const [activeStage, setActiveStage] = useState(null);
+
+  // Team members with their workflow progress (will be loaded from API)
+  const [teamMembers, setTeamMembers] = useState([]);
 
   // Workflow stages with their tasks
   const [workflowStages, setWorkflowStages] = useState({
@@ -14,7 +16,6 @@ function TaskWorkflowManager() {
       name: 'Lead',
       description: 'Initial contact and qualification workflow',
       color: '#3b82f6',
-      icon: '🎯',
       tasks: [
         { id: 1, title: 'Initial Contact', description: 'Make first contact with lead', order: 1, auto_trigger: 'on_lead_create', days_offset: 0 },
         { id: 2, title: 'Send Introduction Email', description: 'Send welcome email with information', order: 2, auto_trigger: 'after_previous', days_offset: 0 },
@@ -30,7 +31,6 @@ function TaskWorkflowManager() {
       name: 'Active Loan',
       description: 'Loan processing and underwriting workflow',
       color: '#10b981',
-      icon: '📋',
       tasks: [
         { id: 9, title: 'Application Submitted', description: 'Formal loan application received', order: 1, auto_trigger: 'on_conversion', days_offset: 0 },
         { id: 10, title: 'Order Appraisal', description: 'Request property appraisal', order: 2, auto_trigger: 'after_previous', days_offset: 1 },
@@ -48,7 +48,6 @@ function TaskWorkflowManager() {
       name: 'Portfolio',
       description: 'Post-closing servicing and retention workflow',
       color: '#8b5cf6',
-      icon: '💼',
       tasks: [
         { id: 19, title: 'Welcome to Portfolio', description: 'Send post-closing welcome package', order: 1, auto_trigger: 'on_portfolio_add', days_offset: 0 },
         { id: 20, title: '30-Day Check-In', description: 'First payment follow-up call', order: 2, auto_trigger: 'scheduled', days_offset: 30 },
@@ -62,18 +61,72 @@ function TaskWorkflowManager() {
     }
   });
 
-  // New task form state
-  const [newTask, setNewTask] = useState({
-    title: '',
-    description: '',
-    order: 1,
-    auto_trigger: 'after_previous',
-    days_offset: 0
-  });
-
   useEffect(() => {
     loadWorkflowStages();
   }, []);
+
+  useEffect(() => {
+    if (activeStage) {
+      loadTeamMembersForStage(activeStage);
+    }
+  }, [activeStage]);
+
+  const loadTeamMembersForStage = async (stageKey) => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/workflow-stages/${stageKey}/team-members`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setTeamMembers(data.team_members || []);
+      } else {
+        // Use mock data if API not available
+        setTeamMembers([
+          {
+            id: 1,
+            name: 'Sarah Johnson',
+            role: 'Loan Officer',
+            avatar: null,
+            count: 12,
+            tasks: workflowStages[stageKey].tasks.map((task, idx) => ({
+              ...task,
+              status: idx < 3 ? 'completed' : idx === 3 ? 'in_progress' : 'pending'
+            }))
+          },
+          {
+            id: 2,
+            name: 'Mike Chen',
+            role: 'Loan Officer',
+            avatar: null,
+            count: 8,
+            tasks: workflowStages[stageKey].tasks.map((task, idx) => ({
+              ...task,
+              status: idx < 5 ? 'completed' : idx === 5 ? 'in_progress' : 'pending'
+            }))
+          },
+          {
+            id: 3,
+            name: 'Emily Davis',
+            role: 'Processor',
+            avatar: null,
+            count: 15,
+            tasks: workflowStages[stageKey].tasks.map((task, idx) => ({
+              ...task,
+              status: idx < 2 ? 'completed' : idx === 2 ? 'in_progress' : 'pending'
+            }))
+          }
+        ]);
+      }
+    } catch (error) {
+      console.error('Error loading team members:', error);
+      setTeamMembers([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadWorkflowStages = async () => {
     try {
@@ -92,122 +145,6 @@ function TaskWorkflowManager() {
       console.error('Error loading workflow stages:', error);
       // Keep default stages if API fails
     }
-  };
-
-  const saveWorkflowStage = async (stageKey) => {
-    setLoading(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/workflow-stages/${stageKey}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(workflowStages[stageKey])
-      });
-      if (response.ok) {
-        setMessage({ type: 'success', text: `${workflowStages[stageKey].name} workflow saved successfully` });
-      } else {
-        const error = await response.json();
-        setMessage({ type: 'error', text: error.detail || 'Failed to save workflow' });
-      }
-    } catch (error) {
-      console.error('Error saving workflow:', error);
-      setMessage({ type: 'error', text: 'Failed to save workflow' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const addTaskToStage = (stageKey) => {
-    const stage = workflowStages[stageKey];
-    const newTaskId = Math.max(...stage.tasks.map(t => t.id), 0) + 1;
-    const newOrder = stage.tasks.length + 1;
-
-    const taskToAdd = {
-      ...newTask,
-      id: newTaskId,
-      order: newOrder
-    };
-
-    setWorkflowStages({
-      ...workflowStages,
-      [stageKey]: {
-        ...stage,
-        tasks: [...stage.tasks, taskToAdd]
-      }
-    });
-
-    setNewTask({
-      title: '',
-      description: '',
-      order: 1,
-      auto_trigger: 'after_previous',
-      days_offset: 0
-    });
-    setShowAddTask(false);
-    setMessage({ type: 'success', text: 'Task added to workflow' });
-  };
-
-  const removeTaskFromStage = (stageKey, taskId) => {
-    const stage = workflowStages[stageKey];
-    const updatedTasks = stage.tasks
-      .filter(t => t.id !== taskId)
-      .map((t, idx) => ({ ...t, order: idx + 1 }));
-
-    setWorkflowStages({
-      ...workflowStages,
-      [stageKey]: {
-        ...stage,
-        tasks: updatedTasks
-      }
-    });
-  };
-
-  const moveTask = (stageKey, taskId, direction) => {
-    const stage = workflowStages[stageKey];
-    const taskIndex = stage.tasks.findIndex(t => t.id === taskId);
-
-    if (
-      (direction === 'up' && taskIndex === 0) ||
-      (direction === 'down' && taskIndex === stage.tasks.length - 1)
-    ) {
-      return;
-    }
-
-    const newTasks = [...stage.tasks];
-    const swapIndex = direction === 'up' ? taskIndex - 1 : taskIndex + 1;
-    [newTasks[taskIndex], newTasks[swapIndex]] = [newTasks[swapIndex], newTasks[taskIndex]];
-
-    // Update order numbers
-    const reorderedTasks = newTasks.map((t, idx) => ({ ...t, order: idx + 1 }));
-
-    setWorkflowStages({
-      ...workflowStages,
-      [stageKey]: {
-        ...stage,
-        tasks: reorderedTasks
-      }
-    });
-  };
-
-  const getTriggerLabel = (trigger) => {
-    const labels = {
-      'on_lead_create': 'On Lead Create',
-      'on_conversion': 'On Conversion',
-      'on_portfolio_add': 'On Portfolio Add',
-      'after_previous': 'After Previous',
-      'manual': 'Manual',
-      'scheduled': 'Scheduled',
-      'annual': 'Annual',
-      'rate_trigger': 'Rate Trigger',
-      'birthday': 'Birthday',
-      'anniversary': 'Anniversary',
-      'milestone': 'Milestone',
-      'on_conditions': 'On Conditions',
-      'on_closing_date': 'On Closing Date'
-    };
-    return labels[trigger] || trigger;
   };
 
   return (
@@ -234,7 +171,6 @@ function TaskWorkflowManager() {
           >
             <div className="stage-header" onClick={() => setActiveStage(activeStage === key ? null : key)}>
               <div className="stage-title">
-                <span className="stage-icon">{stage.icon}</span>
                 <h3>{stage.name}</h3>
               </div>
               <div className="stage-meta">
@@ -261,141 +197,60 @@ function TaskWorkflowManager() {
               </div>
             )}
 
-            {/* Expanded Task List */}
+            {/* Expanded Team Members View */}
             {activeStage === key && (
               <div className="stage-tasks-expanded">
-                <div className="tasks-list">
-                  {stage.tasks.map((task, idx) => (
-                    <div key={task.id} className="task-item">
-                      <div className="task-order">
-                        <button
-                          className="move-btn"
-                          onClick={() => moveTask(key, task.id, 'up')}
-                          disabled={idx === 0}
-                        >
-                          ↑
-                        </button>
-                        <span>{task.order}</span>
-                        <button
-                          className="move-btn"
-                          onClick={() => moveTask(key, task.id, 'down')}
-                          disabled={idx === stage.tasks.length - 1}
-                        >
-                          ↓
-                        </button>
-                      </div>
-                      <div className="task-content">
-                        <div className="task-title-row">
-                          <strong>{task.title}</strong>
-                          <span className="trigger-badge">{getTriggerLabel(task.auto_trigger)}</span>
-                        </div>
-                        <p className="task-desc">{task.description}</p>
-                        {task.days_offset > 0 && (
-                          <span className="days-offset">+{task.days_offset} days</span>
-                        )}
-                      </div>
-                      <button
-                        className="remove-task-btn"
-                        onClick={() => removeTaskFromStage(key, task.id)}
-                        title="Remove task"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Add Task Form */}
-                {showAddTask && activeStage === key ? (
-                  <div className="add-task-form">
-                    <h4>Add New Task</h4>
-                    <div className="form-group">
-                      <label>Task Title</label>
-                      <input
-                        type="text"
-                        value={newTask.title}
-                        onChange={(e) => setNewTask({...newTask, title: e.target.value})}
-                        placeholder="Enter task title..."
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label>Description</label>
-                      <textarea
-                        value={newTask.description}
-                        onChange={(e) => setNewTask({...newTask, description: e.target.value})}
-                        placeholder="Enter task description..."
-                        rows="2"
-                      />
-                    </div>
-                    <div className="form-row">
-                      <div className="form-group">
-                        <label>Trigger</label>
-                        <select
-                          value={newTask.auto_trigger}
-                          onChange={(e) => setNewTask({...newTask, auto_trigger: e.target.value})}
-                        >
-                          <option value="after_previous">After Previous</option>
-                          <option value="manual">Manual</option>
-                          <option value="scheduled">Scheduled</option>
-                          <option value="on_lead_create">On Lead Create</option>
-                          <option value="on_conversion">On Conversion</option>
-                          <option value="on_portfolio_add">On Portfolio Add</option>
-                          <option value="on_conditions">On Conditions</option>
-                          <option value="on_closing_date">On Closing Date</option>
-                          <option value="annual">Annual</option>
-                          <option value="birthday">Birthday</option>
-                          <option value="anniversary">Anniversary</option>
-                          <option value="milestone">Milestone</option>
-                          <option value="rate_trigger">Rate Trigger</option>
-                        </select>
-                      </div>
-                      <div className="form-group">
-                        <label>Days Offset</label>
-                        <input
-                          type="number"
-                          value={newTask.days_offset}
-                          onChange={(e) => setNewTask({...newTask, days_offset: parseInt(e.target.value) || 0})}
-                          min="0"
-                        />
-                      </div>
-                    </div>
-                    <div className="form-actions">
-                      <button
-                        className="cancel-btn"
-                        onClick={() => setShowAddTask(false)}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        className="add-btn"
-                        onClick={() => addTaskToStage(key)}
-                        disabled={!newTask.title}
-                      >
-                        Add Task
-                      </button>
-                    </div>
-                  </div>
+                {loading ? (
+                  <div className="loading-state">Loading team members...</div>
+                ) : teamMembers.length === 0 ? (
+                  <div className="empty-state">No team members with {stage.name.toLowerCase()}s</div>
                 ) : (
-                  activeStage === key && (
-                    <button
-                      className="add-task-btn"
-                      onClick={() => setShowAddTask(true)}
-                    >
-                      + Add Task
-                    </button>
-                  )
+                  <div className="team-members-list">
+                    {teamMembers.map((member) => (
+                      <div key={member.id} className="team-member-card">
+                        <div className="member-header">
+                          <div className="member-info">
+                            <div className="member-avatar">
+                              {member.avatar ? (
+                                <img src={member.avatar} alt={member.name} />
+                              ) : (
+                                <span>{member.name.split(' ').map(n => n[0]).join('')}</span>
+                              )}
+                            </div>
+                            <div className="member-details">
+                              <strong>{member.name}</strong>
+                              <span className="member-role">{member.role}</span>
+                            </div>
+                          </div>
+                          <div className="member-count">
+                            <span className="count-value">{member.count}</span>
+                            <span className="count-label">{stage.name.toLowerCase()}s</span>
+                          </div>
+                        </div>
+                        <div className="member-workflow">
+                          <div className="workflow-progress">
+                            {member.tasks.map((task) => (
+                              <div
+                                key={task.id}
+                                className={`workflow-step ${task.status}`}
+                                title={`${task.title} - ${task.status}`}
+                              >
+                                <div className="step-indicator">
+                                  {task.status === 'completed' ? '✓' : task.status === 'in_progress' ? '●' : '○'}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          <div className="workflow-summary">
+                            <span className="completed-count">
+                              {member.tasks.filter(t => t.status === 'completed').length}/{member.tasks.length} completed
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
-
-                {/* Stage Actions */}
-                <div className="stage-actions">
-                  <button
-                    className="save-workflow-btn"
-                    onClick={() => saveWorkflowStage(key)}
-                    disabled={loading}
-                  >
-                    {loading ? 'Saving...' : 'Save Workflow'}
-                  </button>
-                </div>
               </div>
             )}
           </div>
@@ -407,19 +262,16 @@ function TaskWorkflowManager() {
         <h3>Client Lifecycle Flow</h3>
         <div className="flow-visualization">
           <div className="flow-stage" style={{ '--stage-color': workflowStages.lead.color }}>
-            <div className="flow-icon">{workflowStages.lead.icon}</div>
             <span>Lead</span>
             <small>{workflowStages.lead.tasks.length} tasks</small>
           </div>
           <div className="flow-arrow">→</div>
           <div className="flow-stage" style={{ '--stage-color': workflowStages.active_loan.color }}>
-            <div className="flow-icon">{workflowStages.active_loan.icon}</div>
             <span>Active Loan</span>
             <small>{workflowStages.active_loan.tasks.length} tasks</small>
           </div>
           <div className="flow-arrow">→</div>
           <div className="flow-stage" style={{ '--stage-color': workflowStages.portfolio.color }}>
-            <div className="flow-icon">{workflowStages.portfolio.icon}</div>
             <span>Portfolio</span>
             <small>{workflowStages.portfolio.tasks.length} tasks</small>
           </div>
