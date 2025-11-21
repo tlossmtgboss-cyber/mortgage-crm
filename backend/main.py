@@ -23371,7 +23371,10 @@ async def verify_sms(
 # ============================================================================
 
 @app.get("/api/v1/workflow-stages")
-async def get_workflow_stages(db: Session = Depends(get_db)):
+async def get_workflow_stages(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
     """Get all workflow stages with their tasks"""
     # Default workflow stages configuration
     stages = {
@@ -23423,6 +23426,24 @@ async def get_workflow_stages(db: Session = Depends(get_db)):
             ]
         }
     }
+
+    # Load user customizations if authenticated
+    if current_user:
+        try:
+            for stage_key in stages.keys():
+                settings_key = f"workflow_tasks_{stage_key}"
+                result = db.execute(text("""
+                    SELECT setting_value FROM user_settings
+                    WHERE user_id = :user_id AND setting_key = :key
+                """), {"user_id": current_user.id, "key": settings_key}).fetchone()
+
+                if result and result[0]:
+                    custom_tasks = json.loads(result[0])
+                    if custom_tasks:
+                        stages[stage_key]["tasks"] = custom_tasks
+        except Exception as e:
+            logger.warning(f"Could not load user workflow settings: {e}")
+
     return {"stages": stages}
 
 

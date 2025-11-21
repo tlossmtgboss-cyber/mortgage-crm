@@ -47,11 +47,12 @@ async def get_workflow_tasks(
     """Get workflow tasks with optional filters"""
     try:
         query = """
-            SELECT wt.id, wt.loan_id, wt.lead_id, wt.task_type, wt.title,
-                   wt.description, wt.priority, wt.due_date, wt.status,
-                   wt.created_at, le.first_name, le.last_name
+            SELECT wt.id, wt.loan_id, wt.task_title, wt.task_description,
+                   wt.priority, wt.due_date, wt.status, wt.created_at,
+                   l.lead_id, le.first_name, le.last_name
             FROM workflow_tasks wt
-            JOIN leads le ON wt.lead_id = le.id
+            LEFT JOIN loans l ON wt.loan_id = l.id
+            LEFT JOIN leads le ON l.lead_id = le.id
             WHERE 1=1
         """
         params = {"limit": limit}
@@ -68,21 +69,20 @@ async def get_workflow_tasks(
             query += " AND wt.priority = :priority"
             params["priority"] = priority
 
-        query += " ORDER BY wt.due_date ASC LIMIT :limit"
+        query += " ORDER BY wt.due_date ASC NULLS LAST LIMIT :limit"
 
         result = db.execute(text(query), params)
         tasks = [{
             "id": str(r[0]),
             "loan_id": r[1],
-            "lead_id": r[2],
-            "task_type": r[3],
-            "title": r[4],
-            "description": r[5],
-            "priority": r[6],
-            "due_date": r[7].isoformat() if r[7] else None,
-            "status": r[8],
-            "created_at": r[9].isoformat() if r[9] else None,
-            "borrower": f"{r[10]} {r[11]}"
+            "title": r[2],
+            "description": r[3],
+            "priority": r[4],
+            "due_date": r[5].isoformat() if r[5] else None,
+            "status": r[6],
+            "created_at": r[7].isoformat() if r[7] else None,
+            "lead_id": r[8],
+            "borrower": f"{r[9] or ''} {r[10] or ''}".strip() or "Unknown"
         } for r in result]
 
         return {"tasks": tasks, "count": len(tasks)}
@@ -123,11 +123,12 @@ async def get_workflow_alerts(
     """Get workflow alerts with optional filters"""
     try:
         query = """
-            SELECT wa.id, wa.loan_id, wa.lead_id, wa.alert_type, wa.message,
-                   wa.severity, wa.acknowledged, wa.created_at,
-                   le.first_name, le.last_name
+            SELECT wa.id, wa.loan_id, wa.alert_type, wa.alert_message,
+                   wa.alert_level, wa.acknowledged, wa.created_at,
+                   l.lead_id, le.first_name, le.last_name
             FROM workflow_alerts wa
-            JOIN leads le ON wa.lead_id = le.id
+            LEFT JOIN loans l ON wa.loan_id = l.id
+            LEFT JOIN leads le ON l.lead_id = le.id
             WHERE wa.acknowledged = :ack
         """
         params = {"ack": acknowledged, "limit": limit}
@@ -137,7 +138,7 @@ async def get_workflow_alerts(
             params["loan_id"] = loan_id
 
         if severity:
-            query += " AND wa.severity = :severity"
+            query += " AND wa.alert_level = :severity"
             params["severity"] = severity
 
         query += " ORDER BY wa.created_at DESC LIMIT :limit"
@@ -146,13 +147,13 @@ async def get_workflow_alerts(
         alerts = [{
             "id": str(r[0]),
             "loan_id": r[1],
-            "lead_id": r[2],
-            "alert_type": r[3],
-            "message": r[4],
-            "severity": r[5],
-            "acknowledged": r[6],
-            "created_at": r[7].isoformat() if r[7] else None,
-            "borrower": f"{r[8]} {r[9]}"
+            "alert_type": r[2],
+            "message": r[3],
+            "severity": r[4],
+            "acknowledged": r[5],
+            "created_at": r[6].isoformat() if r[6] else None,
+            "lead_id": r[7],
+            "borrower": f"{r[8] or ''} {r[9] or ''}".strip() or "Unknown"
         } for r in result]
 
         return {"alerts": alerts, "count": len(alerts)}
@@ -443,31 +444,37 @@ async def get_workflow_dashboard(
         # Pending tasks count
         pending_tasks = db.execute(text("""
             SELECT COUNT(*) FROM workflow_tasks wt
-            JOIN leads le ON wt.lead_id = le.id
-            WHERE le.organization_id = :org_id AND wt.status = 'pending'
+            LEFT JOIN loans l ON wt.loan_id = l.id
+            LEFT JOIN leads le ON l.lead_id = le.id
+            WHERE (le.organization_id = :org_id OR le.organization_id IS NULL)
+            AND wt.status = 'pending'
         """), {"org_id": organization_id}).scalar() or 0
 
         # Overdue tasks
         overdue_tasks = db.execute(text("""
             SELECT COUNT(*) FROM workflow_tasks wt
-            JOIN leads le ON wt.lead_id = le.id
-            WHERE le.organization_id = :org_id
+            LEFT JOIN loans l ON wt.loan_id = l.id
+            LEFT JOIN leads le ON l.lead_id = le.id
+            WHERE (le.organization_id = :org_id OR le.organization_id IS NULL)
             AND wt.status = 'pending' AND wt.due_date < NOW()
         """), {"org_id": organization_id}).scalar() or 0
 
         # Unacknowledged alerts
         alerts = db.execute(text("""
             SELECT COUNT(*) FROM workflow_alerts wa
-            JOIN leads le ON wa.lead_id = le.id
-            WHERE le.organization_id = :org_id AND wa.acknowledged = FALSE
+            LEFT JOIN loans l ON wa.loan_id = l.id
+            LEFT JOIN leads le ON l.lead_id = le.id
+            WHERE (le.organization_id = :org_id OR le.organization_id IS NULL)
+            AND wa.acknowledged = FALSE
         """), {"org_id": organization_id}).scalar() or 0
 
         # Last Mile tasks today
         last_mile_today = db.execute(text("""
             SELECT COUNT(*) FROM last_mile_tasks lmt
-            JOIN leads le ON lmt.lead_id = le.id
-            WHERE le.organization_id = :org_id
-            AND lmt.task_date = CURRENT_DATE AND lmt.status = 'pending'
+            LEFT JOIN loans l ON lmt.loan_id = l.id
+            LEFT JOIN leads le ON l.lead_id = le.id
+            WHERE (le.organization_id = :org_id OR le.organization_id IS NULL)
+            AND lmt.due_date::date = CURRENT_DATE AND lmt.status = 'pending'
         """), {"org_id": organization_id}).scalar() or 0
 
         # High risk loans
