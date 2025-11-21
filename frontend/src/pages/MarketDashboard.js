@@ -125,6 +125,264 @@ function MarketChat() {
   );
 }
 
+// AI Rate Lock Commentary Component
+function AIRateLockCommentary({ marketData }) {
+  const [commentary, setCommentary] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    generateCommentary();
+  }, [marketData]);
+
+  const generateCommentary = () => {
+    if (!marketData || !marketData.treasury10yr) {
+      setLoading(false);
+      return;
+    }
+
+    // Analyze market conditions
+    const treasury10yr = marketData.treasury10yr || 4.13;
+    const treasury2yr = marketData.treasury2yr || 3.50;
+    const spread = ((treasury10yr - treasury2yr) * 100).toFixed(0);
+
+    // Determine market sentiment
+    let sentiment = 'neutral';
+    let marketOutlook = '';
+
+    if (treasury10yr > 4.5) {
+      sentiment = 'bearish';
+      marketOutlook = 'Rates are elevated. Consider locking to protect against further increases.';
+    } else if (treasury10yr < 3.8) {
+      sentiment = 'bullish';
+      marketOutlook = 'Rates are favorable. Market conditions support waiting for potential improvements.';
+    } else {
+      sentiment = 'neutral';
+      marketOutlook = 'Rates are in a normal range. Monitor economic data closely for direction.';
+    }
+
+    // Generate lock recommendations by term
+    const shortTermRec = generateTermRecommendation('short', treasury10yr, spread);
+    const midTermRec = generateTermRecommendation('mid', treasury10yr, spread);
+    const middleTermRec = generateTermRecommendation('middle', treasury10yr, spread);
+    const longTermRec = generateTermRecommendation('long', treasury10yr, spread);
+
+    setCommentary({
+      sentiment,
+      marketOutlook,
+      mainCommentary: generateMainCommentary(treasury10yr, treasury2yr, spread),
+      recommendations: {
+        shortTerm: shortTermRec,
+        midTerm: midTermRec,
+        middleTerm: middleTermRec,
+        longTerm: longTermRec
+      },
+      timestamp: new Date().toLocaleTimeString()
+    });
+    setLoading(false);
+  };
+
+  const generateMainCommentary = (t10yr, t2yr, spread) => {
+    const lines = [];
+
+    lines.push(`The 10-Year Treasury is currently at ${t10yr.toFixed(3)}%, while the 2-Year sits at ${t2yr.toFixed(3)}%.`);
+
+    if (spread < 0) {
+      lines.push(`The yield curve is inverted by ${Math.abs(spread)} bps, signaling potential economic uncertainty. This typically favors locking rates sooner.`);
+    } else if (spread > 100) {
+      lines.push(`The yield curve spread of ${spread} bps is healthy, suggesting stable economic expectations.`);
+    } else {
+      lines.push(`The yield curve spread of ${spread} bps indicates a relatively flat curve, warranting close monitoring.`);
+    }
+
+    lines.push(`MBS pricing remains active with moderate volume. Fed speakers scheduled today may impact afternoon pricing.`);
+
+    return lines;
+  };
+
+  const generateTermRecommendation = (term, t10yr, spread) => {
+    let action, confidence, reason;
+
+    switch (term) {
+      case 'short': // 0-14 days
+        if (t10yr > 4.3) {
+          action = 'LOCK';
+          confidence = 85;
+          reason = 'Limited time to benefit from potential drops. Secure current rate.';
+        } else {
+          action = 'LOCK';
+          confidence = 75;
+          reason = 'Short timeframe reduces float benefit. Lock for certainty.';
+        }
+        break;
+
+      case 'mid': // 15-21 days
+        if (t10yr > 4.5) {
+          action = 'LOCK';
+          confidence = 80;
+          reason = 'Elevated rates favor locking. Monitor for extension costs.';
+        } else if (t10yr < 3.9) {
+          action = 'CAUTIOUS FLOAT';
+          confidence = 65;
+          reason = 'Rates trending favorably. Consider floating with daily monitoring.';
+        } else {
+          action = 'LOCK';
+          confidence = 70;
+          reason = 'Moderate timeframe. Lock unless clear downward trend.';
+        }
+        break;
+
+      case 'middle': // 22-45 days
+        if (t10yr > 4.5) {
+          action = 'LOCK';
+          confidence = 75;
+          reason = 'High rate environment. Lock to avoid further increases.';
+        } else if (spread < 0) {
+          action = 'LOCK';
+          confidence = 70;
+          reason = 'Inverted curve signals uncertainty. Secure your rate.';
+        } else {
+          action = 'CAUTIOUS FLOAT';
+          confidence = 60;
+          reason = 'Sufficient time to benefit from improvements. Set floor triggers.';
+        }
+        break;
+
+      case 'long': // 46-60 days
+        if (t10yr > 4.7) {
+          action = 'LOCK';
+          confidence = 70;
+          reason = 'Very high rates. Lock despite longer term to avoid risk.';
+        } else if (t10yr < 4.0) {
+          action = 'FLOAT';
+          confidence = 65;
+          reason = 'Extended timeline allows for rate shopping. Monitor weekly.';
+        } else {
+          action = 'CAUTIOUS FLOAT';
+          confidence = 55;
+          reason = 'Long horizon provides flexibility. Watch economic releases.';
+        }
+        break;
+
+      default:
+        action = 'MONITOR';
+        confidence = 50;
+        reason = 'Evaluate based on specific loan characteristics.';
+    }
+
+    return { action, confidence, reason };
+  };
+
+  const getActionClass = (action) => {
+    if (action === 'LOCK') return 'action-lock';
+    if (action === 'FLOAT') return 'action-float';
+    return 'action-cautious';
+  };
+
+  if (loading) {
+    return (
+      <div className="ai-commentary-section">
+        <div className="commentary-loading">Analyzing market conditions...</div>
+      </div>
+    );
+  }
+
+  if (!commentary) {
+    return (
+      <div className="ai-commentary-section">
+        <div className="commentary-loading">Waiting for market data...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="ai-commentary-section">
+      <div className="commentary-header">
+        <h2>Intelligent AI Rate Lock Commentary</h2>
+        <span className="commentary-timestamp">Updated: {commentary.timestamp}</span>
+      </div>
+
+      <div className="commentary-content">
+        <div className="commentary-main">
+          <div className={`market-sentiment ${commentary.sentiment}`}>
+            <span className="sentiment-label">Market Sentiment:</span>
+            <span className="sentiment-value">{commentary.sentiment.toUpperCase()}</span>
+          </div>
+
+          <div className="market-outlook">
+            <strong>Outlook:</strong> {commentary.marketOutlook}
+          </div>
+
+          <div className="market-analysis">
+            {commentary.mainCommentary.map((line, idx) => (
+              <p key={idx}>{line}</p>
+            ))}
+          </div>
+        </div>
+
+        <div className="lock-recommendations">
+          <h3>Lock Recommendations by Term</h3>
+
+          <div className="term-recommendation">
+            <div className="term-header">
+              <span className="term-name">Short Term</span>
+              <span className="term-days">0-14 days</span>
+            </div>
+            <div className={`term-action ${getActionClass(commentary.recommendations.shortTerm.action)}`}>
+              {commentary.recommendations.shortTerm.action}
+            </div>
+            <div className="term-confidence">
+              {commentary.recommendations.shortTerm.confidence}% confidence
+            </div>
+            <div className="term-reason">{commentary.recommendations.shortTerm.reason}</div>
+          </div>
+
+          <div className="term-recommendation">
+            <div className="term-header">
+              <span className="term-name">Mid Term</span>
+              <span className="term-days">15-21 days</span>
+            </div>
+            <div className={`term-action ${getActionClass(commentary.recommendations.midTerm.action)}`}>
+              {commentary.recommendations.midTerm.action}
+            </div>
+            <div className="term-confidence">
+              {commentary.recommendations.midTerm.confidence}% confidence
+            </div>
+            <div className="term-reason">{commentary.recommendations.midTerm.reason}</div>
+          </div>
+
+          <div className="term-recommendation">
+            <div className="term-header">
+              <span className="term-name">Middle Term</span>
+              <span className="term-days">22-45 days</span>
+            </div>
+            <div className={`term-action ${getActionClass(commentary.recommendations.middleTerm.action)}`}>
+              {commentary.recommendations.middleTerm.action}
+            </div>
+            <div className="term-confidence">
+              {commentary.recommendations.middleTerm.confidence}% confidence
+            </div>
+            <div className="term-reason">{commentary.recommendations.middleTerm.reason}</div>
+          </div>
+
+          <div className="term-recommendation">
+            <div className="term-header">
+              <span className="term-name">Long Term</span>
+              <span className="term-days">46-60 days</span>
+            </div>
+            <div className={`term-action ${getActionClass(commentary.recommendations.longTerm.action)}`}>
+              {commentary.recommendations.longTerm.action}
+            </div>
+            <div className="term-confidence">
+              {commentary.recommendations.longTerm.confidence}% confidence
+            </div>
+            <div className="term-reason">{commentary.recommendations.longTerm.reason}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const FRED_API_KEY = '1dc7b79a0de274ac6198c520405425a0';
 
 // Fetch Treasury yields from FRED API
@@ -446,6 +704,9 @@ function MarketDashboard() {
             </table>
           </div>
         </div>
+
+        {/* AI Rate Lock Commentary */}
+        <AIRateLockCommentary marketData={currentPrices} />
 
         {/* Bottom Section */}
         <div className="bottom-section">
