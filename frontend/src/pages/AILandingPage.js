@@ -10,6 +10,8 @@ function AILandingPage() {
   const [loading, setLoading] = useState(false);
   const [userName, setUserName] = useState('');
   const [conversationHistory, setConversationHistory] = useState([]);
+  const [taskListData, setTaskListData] = useState(null); // Tasks to display below button
+  const [selectedTask, setSelectedTask] = useState(null);
   const chatAreaRef = useRef(null);
 
   useEffect(() => {
@@ -141,7 +143,84 @@ function AILandingPage() {
   };
 
   const showDailyView = () => {
-    addMessage('daily_view', 'assistant', { isSpecialContent: true, contentType: 'daily_view' });
+    // Add summary message in chat
+    addMessage("I'll show you your daily overview including all tasks, follow-ups, and reconciliation items scheduled for today.", 'assistant');
+
+    // Set task list data to display below the button
+    const tasks = [
+      {
+        id: 1,
+        title: 'Follow up on pre-approval',
+        client: 'Sarah Johnson',
+        stage: 'Pre-Approved',
+        priority: 'HIGH',
+        type: 'Follow-up Call',
+        source: 'Manual Priority',
+        owner: 'Loan Officer',
+        dateCreated: '11/9/2025, 10:30:00 AM',
+        details: 'Rate lock expires in 3 days - discuss extension options',
+        dueTime: 'Today 10:00 AM',
+        aiDraftedMessage: 'Hi Sarah,\n\nI wanted to reach out regarding your pre-approval...'
+      },
+      {
+        id: 2,
+        title: 'Upload missing documents',
+        client: 'Mike Chen',
+        stage: 'Processing',
+        priority: 'MEDIUM',
+        type: 'Document Upload',
+        source: 'System Alert',
+        owner: 'Loan Officer',
+        dateCreated: '11/8/2025, 2:15:00 PM',
+        details: 'Need W-2s and bank statements for underwriting',
+        dueTime: 'Today 2:00 PM'
+      },
+      {
+        id: 3,
+        title: 'Schedule appraisal',
+        client: 'Emily Davis',
+        stage: 'Application Complete',
+        priority: 'MEDIUM',
+        type: 'Scheduling',
+        source: 'Workflow',
+        owner: 'Loan Officer',
+        dateCreated: '11/7/2025, 9:00:00 AM',
+        details: 'Property at 123 Oak Street ready for appraisal',
+        dueTime: 'Today 4:00 PM'
+      },
+      {
+        id: 4,
+        title: 'Appraisal delay',
+        client: 'John Smith',
+        stage: 'Underwriting',
+        priority: 'HIGH',
+        type: 'Milestone Alert',
+        source: 'System Alert',
+        owner: 'Loan Officer',
+        dateCreated: '11/10/2025, 8:00:00 AM',
+        details: 'Appraisal came in $15K below purchase price'
+      },
+      {
+        id: 5,
+        title: 'Insurance missing',
+        client: 'Jane Doe',
+        stage: 'Clear to Close',
+        priority: 'HIGH',
+        type: 'Milestone Alert',
+        source: 'System Alert',
+        owner: 'Loan Officer',
+        dateCreated: '11/10/2025, 10:00:00 AM',
+        details: 'Need homeowners insurance binder before closing'
+      }
+    ];
+
+    setTaskListData(tasks);
+    setSelectedTask(tasks[0]);
+
+    // Add instruction to return when completed
+    setTimeout(() => {
+      addMessage("Here are your tasks for today. Complete these items and come back to let me know when you're done - I'll help you with the next steps!", 'assistant');
+    }, 500);
   };
 
   const showEmailCampaign = () => {
@@ -341,6 +420,118 @@ function AILandingPage() {
       <button className="ai-back-to-crm" onClick={() => navigate('/dashboard')}>
         Back to CRM Dashboard
       </button>
+
+      {/* Task List Display - Shows below button when tasks are available */}
+      {taskListData && taskListData.length > 0 && (
+        <div className="ai-task-list-container">
+          <div className="ai-task-sidebar">
+            <div className="ai-task-sidebar-header">
+              <h3>Tasks</h3>
+              <span className="ai-task-count">{taskListData.length}</span>
+            </div>
+            <div className="ai-task-list">
+              {taskListData.map(task => (
+                <div
+                  key={task.id}
+                  className={`ai-task-list-item ${selectedTask?.id === task.id ? 'selected' : ''}`}
+                  onClick={() => setSelectedTask(task)}
+                >
+                  <div className="ai-task-list-icon">
+                    {task.priority === 'HIGH' ? '🔴' : task.type === 'Milestone Alert' ? '⚡' : '📋'}
+                  </div>
+                  <div className="ai-task-list-content">
+                    <div className="ai-task-list-title">{task.title}</div>
+                    <div className="ai-task-list-client">{task.client}</div>
+                    <div className="ai-task-list-stage">{task.stage}</div>
+                  </div>
+                  {task.priority === 'HIGH' && <div className="ai-task-dot high"></div>}
+                  {task.priority === 'MEDIUM' && <div className="ai-task-dot medium"></div>}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {selectedTask && (
+            <div className="ai-task-detail-panel">
+              <div className="ai-task-detail-header">
+                <span className={`ai-task-detail-badge ${selectedTask.source === 'Manual Priority' ? 'manual' : 'system'}`}>
+                  {selectedTask.source === 'Manual Priority' ? '⚙️ MANUAL PRIORITY' : '🔔 ' + selectedTask.source.toUpperCase()}
+                </span>
+                <h2>{selectedTask.title}</h2>
+              </div>
+
+              <div className="ai-task-detail-info">
+                <div className="ai-task-detail-row">
+                  <span className="ai-task-detail-label">CLIENT</span>
+                  <span className="ai-task-detail-value">{selectedTask.client}</span>
+                </div>
+                <div className="ai-task-detail-row">
+                  <span className="ai-task-detail-label">STAGE</span>
+                  <span className="ai-task-detail-value">{selectedTask.stage}</span>
+                </div>
+                <div className="ai-task-detail-row">
+                  <span className="ai-task-detail-label">PRIORITY</span>
+                  <span className={`ai-priority-badge ${selectedTask.priority.toLowerCase()}`}>
+                    {selectedTask.priority}
+                  </span>
+                </div>
+                <div className="ai-task-detail-row">
+                  <span className="ai-task-detail-label">SOURCE</span>
+                  <span className="ai-task-detail-value">{selectedTask.source}</span>
+                </div>
+                <div className="ai-task-detail-row">
+                  <span className="ai-task-detail-label">OWNER</span>
+                  <span className="ai-task-detail-value">{selectedTask.owner}</span>
+                </div>
+                <div className="ai-task-detail-row">
+                  <span className="ai-task-detail-label">DATE CREATED</span>
+                  <span className="ai-task-detail-value">{selectedTask.dateCreated}</span>
+                </div>
+              </div>
+
+              <div className="ai-task-send-via">
+                <span className="ai-task-detail-label">SEND VIA</span>
+                <div className="ai-send-via-buttons">
+                  <button className="ai-send-via-btn active">📧 Email</button>
+                  <button className="ai-send-via-btn">💬 Text</button>
+                  <button className="ai-send-via-btn">📞 Phone</button>
+                  <button className="ai-send-via-btn">📱 Voicemail</button>
+                </div>
+              </div>
+
+              <div className="ai-train-section">
+                <div className="ai-train-header">
+                  <span>🎯 Train AI (Optional)</span>
+                </div>
+                <textarea
+                  className="ai-train-input"
+                  placeholder="Type instructions to teach AI how to handle similar tasks in the future... (e.g., 'Always mention our competitive rates when following up on pre-approvals')"
+                />
+              </div>
+
+              {selectedTask.aiDraftedMessage && (
+                <div className="ai-drafted-message">
+                  <div className="ai-drafted-header">
+                    <span>🤖 AI-Drafted Message</span>
+                    <button className="ai-edit-message-btn">✏️ Edit Message</button>
+                  </div>
+                  <div className="ai-drafted-content">
+                    {selectedTask.aiDraftedMessage}
+                  </div>
+                </div>
+              )}
+
+              <div className="ai-task-actions">
+                <button className="ai-action-btn send">📧 Send via Email</button>
+                <button className="ai-action-btn approve">✅ Approve AI Action</button>
+                <button className="ai-action-btn snooze">⏰ Snooze</button>
+                <button className="ai-action-btn delegate">👥 Delegate</button>
+                <button className="ai-action-btn delete">🗑️ Delete</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

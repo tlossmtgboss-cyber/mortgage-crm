@@ -23,6 +23,16 @@ function SmartAIChat({ leadId, loanId, context = {} }) {
   const [isListening, setIsListening] = useState(false);
   const messagesEndRef = useRef(null);
   const recognitionRef = useRef(null);
+  const textareaRef = useRef(null);
+
+  // Auto-resize textarea
+  const autoResize = () => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      textarea.style.height = Math.min(textarea.scrollHeight, 150) + 'px';
+    }
+  };
 
   useEffect(() => {
     // Only load memory stats if authenticated
@@ -294,10 +304,14 @@ function SmartAIChat({ leadId, loanId, context = {} }) {
 
       <form className="smart-ai-input" onSubmit={handleSend}>
         <textarea
+          ref={textareaRef}
           value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
+          onChange={(e) => {
+            setInputValue(e.target.value);
+            autoResize();
+          }}
           placeholder={isListening ? '🎤 Listening... Speak now!' : 'Ask me anything... I remember our conversations!'}
-          rows={3}
+          rows={1}
           disabled={loading}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
@@ -305,6 +319,7 @@ function SmartAIChat({ leadId, loanId, context = {} }) {
               handleSend(e);
             }
           }}
+          style={{ minHeight: '40px', maxHeight: '150px', resize: 'none' }}
         />
         <div className="input-footer">
           <span className="input-hint">
