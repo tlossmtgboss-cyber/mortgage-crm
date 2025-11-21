@@ -30,7 +30,7 @@ function SmartAIChat({ leadId, loanId, context = {} }) {
     const textarea = textareaRef.current;
     if (textarea) {
       textarea.style.height = 'auto';
-      textarea.style.height = Math.min(textarea.scrollHeight, 150) + 'px';
+      textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
     }
   };
 
@@ -319,7 +319,7 @@ function SmartAIChat({ leadId, loanId, context = {} }) {
               handleSend(e);
             }
           }}
-          style={{ minHeight: '40px', maxHeight: '150px', resize: 'none' }}
+          style={{ maxHeight: '200px' }}
         />
         <div className="input-footer">
           <span className="input-hint">

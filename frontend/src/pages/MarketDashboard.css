@@ -159,8 +159,191 @@
 .bottom-section {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 16px;
+}
+
+/* Rate Lock Advisor */
+.advisor-card {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.advisor-card h3 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.advisor-inputs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.advisor-inputs .input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.advisor-inputs label {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  font-size: 10px;
+  color: #8b949e;
+  gap: 4px;
+}
+
+.advisor-inputs input,
+.advisor-inputs select {
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: #e6edf3;
+}
+
+.advisor-inputs input:focus,
+.advisor-inputs select:focus {
+  outline: none;
+  border-color: #58a6ff;
+}
+
+.analyze-btn {
+  background: #238636;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+.analyze-btn:hover {
+  background: #2ea043;
+}
+
+.analyze-btn:disabled {
+  background: #21262d;
+  cursor: not-allowed;
+}
+
+.advisor-error {
+  color: #f85149;
+  font-size: 11px;
+  padding: 8px;
+  background: rgba(248, 81, 73, 0.1);
+  border-radius: 4px;
+  margin-top: 8px;
+}
+
+.advisor-result {
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.2);
+  border-left: 3px solid #8b949e;
+}
+
+.advisor-result.urgency-immediate {
+  border-left-color: #f85149;
+  background: rgba(248, 81, 73, 0.1);
+}
+
+.advisor-result.urgency-high {
+  border-left-color: #d29922;
+  background: rgba(210, 153, 34, 0.1);
+}
+
+.advisor-result.urgency-moderate {
+  border-left-color: #58a6ff;
+  background: rgba(88, 166, 255, 0.1);
+}
+
+.advisor-result.urgency-low {
+  border-left-color: #3fb950;
+  background: rgba(63, 185, 80, 0.1);
+}
+
+.result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.result-action {
+  font-size: 14px;
+  font-weight: 700;
+  color: #e6edf3;
+}
+
+.result-confidence {
+  font-size: 10px;
+  color: #8b949e;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.result-urgency {
+  font-size: 11px;
+  color: #8b949e;
+  margin-bottom: 8px;
+}
+
+.result-urgency strong {
+  color: #e6edf3;
+}
+
+.result-reasons {
+  font-size: 11px;
+  margin-bottom: 8px;
+}
+
+.result-reasons strong {
+  color: #8b949e;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.result-reasons ul {
+  margin: 0;
+  padding: 0 0 0 14px;
+  color: #e6edf3;
+}
+
+.result-reasons li {
+  padding: 2px 0;
+}
+
+.result-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 8px;
+  border-radius: 4px;
+}
+
+.summary-item {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+}
+
+.summary-item span {
+  color: #8b949e;
+}
+
+.summary-item strong {
+  color: #e6edf3;
 }
 
 /* Rates Card */
@@ -302,6 +485,12 @@
 .indicator .value.elevated { color: #f85149; }
 
 /* Responsive */
+@media (max-width: 1400px) {
+  .bottom-section {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 @media (max-width: 1200px) {
   .market-content {
     grid-template-columns: 1fr;
@@ -315,10 +504,6 @@
 
   .right-panel > * {
     flex: 1;
-  }
-
-  .bottom-section {
-    grid-template-columns: 1fr 1fr;
   }
 }
 

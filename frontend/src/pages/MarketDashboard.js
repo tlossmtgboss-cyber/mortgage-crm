@@ -3,7 +3,173 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   AreaChart, Area
 } from 'recharts';
+import { rateLockAPI } from '../services/rateLockApi';
 import './MarketDashboard.css';
+
+// Rate Lock Advisor Component
+function RateLockAdvisor() {
+  const [loanData, setLoanData] = useState({
+    amount: 400000,
+    rate: 6.5,
+    ltv: 80,
+    dti: 35,
+    closing_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    program: 'conventional'
+  });
+  const [recommendation, setRecommendation] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const analyzeRate = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const rec = await rateLockAPI.getQuickRecommendation(loanData);
+      setRecommendation(rec);
+    } catch (err) {
+      setError('Failed to analyze rate lock');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getUrgencyClass = (urgency) => {
+    switch (urgency) {
+      case 'immediate': return 'urgency-immediate';
+      case 'high': return 'urgency-high';
+      case 'moderate': return 'urgency-moderate';
+      case 'low': return 'urgency-low';
+      default: return '';
+    }
+  };
+
+  const formatAction = (action) => {
+    if (!action || typeof action !== 'string') return 'Unknown';
+    return action.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  };
+
+  return (
+    <div className="advisor-card">
+      <h3>Rate Lock Advisor</h3>
+
+      <div className="advisor-inputs">
+        <div className="input-row">
+          <label>
+            Loan Amount
+            <input
+              type="number"
+              value={loanData.amount}
+              onChange={(e) => setLoanData({...loanData, amount: parseInt(e.target.value) || 0})}
+            />
+          </label>
+          <label>
+            Rate (%)
+            <input
+              type="number"
+              step="0.125"
+              value={loanData.rate}
+              onChange={(e) => setLoanData({...loanData, rate: parseFloat(e.target.value) || 0})}
+            />
+          </label>
+        </div>
+        <div className="input-row">
+          <label>
+            LTV (%)
+            <input
+              type="number"
+              value={loanData.ltv}
+              onChange={(e) => setLoanData({...loanData, ltv: parseInt(e.target.value) || 0})}
+            />
+          </label>
+          <label>
+            DTI (%)
+            <input
+              type="number"
+              value={loanData.dti}
+              onChange={(e) => setLoanData({...loanData, dti: parseInt(e.target.value) || 0})}
+            />
+          </label>
+        </div>
+        <div className="input-row">
+          <label>
+            Closing Date
+            <input
+              type="date"
+              value={loanData.closing_date}
+              onChange={(e) => setLoanData({...loanData, closing_date: e.target.value})}
+            />
+          </label>
+          <label>
+            Program
+            <select
+              value={loanData.program}
+              onChange={(e) => setLoanData({...loanData, program: e.target.value})}
+            >
+              <option value="conventional">Conventional</option>
+              <option value="fha">FHA</option>
+              <option value="va">VA</option>
+              <option value="jumbo">Jumbo</option>
+            </select>
+          </label>
+        </div>
+
+        <button
+          className="analyze-btn"
+          onClick={analyzeRate}
+          disabled={loading}
+        >
+          {loading ? 'Analyzing...' : 'Analyze Lock/Float'}
+        </button>
+      </div>
+
+      {error && <div className="advisor-error">{error}</div>}
+
+      {recommendation && (
+        <div className={`advisor-result ${getUrgencyClass(recommendation.urgency)}`}>
+          <div className="result-header">
+            <span className="result-action">{formatAction(recommendation.recommendation)}</span>
+            <span className="result-confidence">{recommendation.confidence_score}% confidence</span>
+          </div>
+
+          <div className="result-urgency">
+            Urgency: <strong>{recommendation.urgency?.toUpperCase()}</strong>
+          </div>
+
+          {recommendation.key_reasons && recommendation.key_reasons.length > 0 && (
+            <div className="result-reasons">
+              <strong>Key Factors:</strong>
+              <ul>
+                {recommendation.key_reasons.slice(0, 3).map((reason, idx) => (
+                  <li key={idx}>{reason}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {recommendation.quantitative_summary && (
+            <div className="result-summary">
+              <div className="summary-item">
+                <span>Days to Close:</span>
+                <strong>{recommendation.quantitative_summary.days_to_close}</strong>
+              </div>
+              <div className="summary-item">
+                <span>Extension Risk:</span>
+                <strong>{recommendation.quantitative_summary.extension_risk_percentage?.toFixed(1)}%</strong>
+              </div>
+              {recommendation.suggested_lock_term_days && (
+                <div className="summary-item">
+                  <span>Suggested Lock:</span>
+                  <strong>{recommendation.suggested_lock_term_days} days</strong>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const FRED_API_KEY = '1dc7b79a0de274ac6198c520405425a0';
 
@@ -329,6 +495,9 @@ function MarketDashboard() {
 
         {/* Bottom Section */}
         <div className="bottom-section">
+          {/* Rate Lock Advisor */}
+          <RateLockAdvisor />
+
           {/* Mortgage Rates */}
           <div className="rates-card">
             <h3>Mortgage Rates</h3>

@@ -322,10 +322,12 @@
 
 .smart-ai-input textarea {
   resize: none;
-  min-height: 80px;
+  min-height: 60px;
+  max-height: 200px;
   width: 100%;
   font-family: var(--font-family);
   font-size: var(--font-base);
+  overflow-y: auto;
   padding: var(--space-sm) var(--space-md);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-base);
