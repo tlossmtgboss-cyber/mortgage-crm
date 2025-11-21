@@ -57,6 +57,10 @@ from crud import onboarding as onboarding_crud
 # Import workflow models (must be imported after Base is available - done via lazy loading)
 # from workflow_models import EmployerRecord, Opportunity, RecurringTask, WorkflowExecution
 
+# Import lead workflow automation engine
+from workflows.lead_workflow_engine import LeadWorkflowEngine, TimeBasedWorkflowEngine, LeadStatusChange
+from workflows.workflow_actions import WorkflowActionExecutor
+
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -10469,6 +10473,9 @@ async def update_lead(lead_id: int, lead_update: LeadUpdate, db: Session = Depen
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
+    # Capture old status for workflow trigger
+    old_status = lead.stage.value if lead.stage else None
+
     for key, value in lead_update.dict(exclude_unset=True).items():
         setattr(lead, key, value)
 
@@ -10479,6 +10486,41 @@ async def update_lead(lead_id: int, lead_update: LeadUpdate, db: Session = Depen
     db.commit()
     db.refresh(lead)
     logger.info(f"Lead updated: {lead.name}")
+
+    # Trigger workflow if status changed
+    new_status = lead.stage.value if lead.stage else None
+    if old_status != new_status and new_status:
+        try:
+            # Create status change event
+            status_change = LeadStatusChange(
+                lead_id=lead.id,
+                lead_name=lead.name,
+                lead_email=lead.email,
+                lead_phone=lead.phone,
+                old_status=old_status or "None",
+                new_status=new_status,
+                loan_officer_id=current_user.id,
+                loan_officer_name=current_user.name,
+                loan_officer_email=current_user.email,
+                loan_type=lead.loan_type if hasattr(lead, 'loan_type') else None,
+                loan_amount=lead.loan_amount if hasattr(lead, 'loan_amount') else None,
+                changed_at=datetime.now(timezone.utc)
+            )
+
+            # Process workflow
+            workflow_engine = LeadWorkflowEngine(db)
+            workflow_result = await workflow_engine.process_status_change(status_change)
+
+            # Execute actions
+            if workflow_result.get("actions"):
+                action_executor = WorkflowActionExecutor(db)
+                await action_executor.execute_actions(workflow_result["actions"])
+
+            logger.info(f"✅ Workflow triggered for {lead.name}: {old_status} → {new_status} ({workflow_result.get('action_count', 0)} actions)")
+        except Exception as e:
+            logger.error(f"⚠️ Workflow error for lead {lead.id}: {e}")
+            # Don't fail the update if workflow fails
+
     return lead
 
 @app.delete("/api/v1/leads/{lead_id}", status_code=204)
@@ -19790,6 +19832,36 @@ async def startup_event():
                 logger.warning(f"⚠️ Sample data creation skipped: {e}")
             finally:
                 db.close()
+
+            # Start workflow automation scheduler
+            try:
+                async def run_time_based_workflows():
+                    """Run time-based workflow checks"""
+                    db = SessionLocal()
+                    try:
+                        time_engine = TimeBasedWorkflowEngine(db)
+                        actions = await time_engine.check_stale_leads()
+                        if actions:
+                            executor = WorkflowActionExecutor(db)
+                            result = await executor.execute_actions(actions)
+                            logger.info(f"⏰ Time-based workflows: {result['successful']}/{result['total']} actions executed")
+                    except Exception as e:
+                        logger.error(f"Time-based workflow error: {e}")
+                    finally:
+                        db.close()
+
+                # Run every 15 minutes
+                scheduler.add_job(
+                    run_time_based_workflows,
+                    IntervalTrigger(minutes=15),
+                    id="time_based_workflows",
+                    replace_existing=True
+                )
+                scheduler.start()
+                logger.info("✅ Lead workflow automation scheduler started (runs every 15 minutes)")
+            except Exception as e:
+                logger.warning(f"⚠️ Workflow scheduler not started: {e}")
+
     except Exception as e:
         logger.warning(f"⚠️ Startup initialization skipped: {e}")
         logger.info("Application will still start, database will be initialized on first request")
@@ -22852,7 +22924,11 @@ async def get_workflow_stage_team_members(
         elif stage_key == "active_loan":
             count = db.query(Loan).filter(Loan.loan_officer_id == user.id).count()
         else:  # portfolio
-            count = 0  # Would count portfolio clients
+            # Count closed/funded loans as portfolio clients
+            count = db.query(Loan).filter(
+                Loan.loan_officer_id == user.id,
+                Loan.stage.in_(["Closed", "Funded", "Post-Closing"])
+            ).count()
 
         if count > 0:
             # Generate mock workflow progress for demo
