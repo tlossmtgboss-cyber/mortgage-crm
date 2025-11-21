@@ -186,7 +186,7 @@ function AILandingPage() {
         showDailyView();
       }
     }
-    else if (lower.includes('today') || lower.includes('do today')) {
+    else if (lower.includes('today') || lower.includes('do today') || lower.includes('task') || lower.includes('to do') || lower.includes('todo')) {
       showDailyView();
     } else if (lower.includes('email') && (lower.includes('all in one') || lower.includes('mortgages under management'))) {
       showEmailCampaign();
@@ -199,7 +199,9 @@ function AILandingPage() {
     } else if (lower.includes('report') || lower.includes('pipeline')) {
       showPipelineReport();
     } else {
-      addMessage("I understand your request. Let me pull the relevant data from your CRM and show you what I can do.", 'assistant');
+      // Default to showing daily view with tasks for any unrecognized query
+      addMessage("Let me show you your current tasks and priorities:", 'assistant');
+      showDailyView();
     }
   };
 
