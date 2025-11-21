@@ -530,20 +530,20 @@ class LeadWorkflowEngine:
         try:
             self.db.execute(text("""
                 INSERT INTO workflow_executions
-                (workflow_id, workflow_name, lead_id, trigger_event, execution_status, actions_completed, created_at)
-                VALUES (:workflow_id, :workflow_name, :lead_id, :trigger_event, :status, :actions, :created_at)
+                (workflow_id, workflow_name, lead_id, trigger_event, execution_status, actions_completed)
+                VALUES (:workflow_id, :workflow_name, :lead_id, :trigger_event, :status, :actions)
             """), {
                 "workflow_id": f"lead_status_{sc.old_status}_{sc.new_status}".lower().replace(" ", "_"),
                 "workflow_name": f"Lead Status Change: {sc.old_status} → {sc.new_status}",
                 "lead_id": sc.lead_id,
                 "trigger_event": "lead_status_change",
                 "status": "success",
-                "actions": json.dumps(actions),
-                "created_at": datetime.utcnow()
+                "actions": json.dumps(actions)
             })
             self.db.commit()
         except Exception as e:
             logger.warning(f"Could not log workflow execution: {e}")
+            self.db.rollback()
 
 
 class TimeBasedWorkflowEngine:

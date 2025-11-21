@@ -11122,9 +11122,9 @@ async def get_workflow_status(db: Session = Depends(get_db), current_user: User 
     try:
         # Get recent workflow executions
         result = db.execute(text("""
-            SELECT workflow_name, trigger_event, execution_status, created_at, lead_id
+            SELECT workflow_name, trigger_event, execution_status, lead_id
             FROM workflow_executions
-            ORDER BY created_at DESC
+            ORDER BY id DESC
             LIMIT 10
         """))
         executions = [dict(row._mapping) for row in result.fetchall()]
