@@ -23,7 +23,7 @@ function Login() {
       const data = await authAPI.login(email, password);
       console.log('Login successful:', data);
       setAuth(data.access_token, data.user);
-      navigate('/dashboard');
+      navigate('/ai');
     } catch (err) {
       console.error('Login error:', err);
       console.error('Error response:', err.response);
