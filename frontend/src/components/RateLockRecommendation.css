@@ -1,3 +1,68 @@
+/* Compact mode for header */
+.rate-lock-compact {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  background: white;
+  border: 1px solid #ddd;
+  height: 36px;
+  box-sizing: border-box;
+}
+
+.rate-lock-compact.urgency-immediate {
+  border-color: #dc3545;
+  background: #fff5f5;
+}
+
+.rate-lock-compact.urgency-high {
+  border-color: #fd7e14;
+  background: #fff8f0;
+}
+
+.rate-lock-compact.urgency-moderate {
+  border-color: #ffc107;
+  background: #fffdf5;
+}
+
+.rate-lock-compact.urgency-low {
+  border-color: #28a745;
+  background: #f5fff7;
+}
+
+.compact-icon {
+  font-size: 16px;
+}
+
+.compact-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.compact-action {
+  font-size: 12px;
+  font-weight: 600;
+  color: #333;
+  white-space: nowrap;
+}
+
+.compact-confidence {
+  font-size: 11px;
+  color: #666;
+  padding: 2px 6px;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 3px;
+}
+
+/* Header container */
+.header-rate-lock {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
 .rate-lock-widget {
   background: white;
   border-radius: 8px;

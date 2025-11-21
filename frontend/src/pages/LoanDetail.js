@@ -283,6 +283,12 @@ function LoanDetail() {
         <button className="btn-back" onClick={() => navigate('/loans')}>
           ← Back to Loans
         </button>
+
+        {/* Rate Lock Recommendation - Inline in header */}
+        <div className="header-rate-lock">
+          <RateLockRecommendation loan={loan} compact={true} />
+        </div>
+
         <div className="header-actions">
           {loan?.borrower_phone && (
             <button
@@ -1005,9 +1011,6 @@ function LoanDetail() {
 
         {/* Right Column - Actions & Email History */}
         <div className="right-column">
-          {/* Rate Lock Recommendation */}
-          <RateLockRecommendation loan={loan} />
-
           {/* Quick Actions */}
           <div className="actions-card">
             <h3>Quick Actions</h3>

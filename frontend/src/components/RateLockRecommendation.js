@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { rateLockAPI } from '../services/rateLockApi';
 import './RateLockRecommendation.css';
 
-function RateLockRecommendation({ loan }) {
+function RateLockRecommendation({ loan, compact = false }) {
   const [recommendation, setRecommendation] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -97,6 +97,19 @@ function RateLockRecommendation({ loan }) {
 
   if (!recommendation) {
     return null;
+  }
+
+  // Compact mode for header
+  if (compact) {
+    return (
+      <div className={`rate-lock-compact ${getUrgencyColor(recommendation.urgency)}`}>
+        <span className="compact-icon">{getActionIcon(recommendation.recommendation)}</span>
+        <div className="compact-text">
+          <div className="compact-action">{formatAction(recommendation.recommendation)}</div>
+          <div className="compact-confidence">{recommendation.confidence_score}%</div>
+        </div>
+      </div>
+    );
   }
 
   return (
