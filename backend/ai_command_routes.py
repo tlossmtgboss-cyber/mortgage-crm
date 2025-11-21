@@ -15,6 +15,7 @@ import logging
 import os
 import json
 import uuid
+import time
 import anthropic
 
 from database import get_db
@@ -22,6 +23,286 @@ from conversation_memory_service import ConversationMemory
 from crm_context_service import CRMContextService
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# AI Reliability Configuration
+# ============================================================================
+
+AI_CONFIG = {
+    "temperature": 0,           # No randomness - deterministic
+    "top_p": 1,                  # No nucleus sampling
+    "max_tokens": 2000,
+}
+
+
+# ============================================================================
+# Circuit Breaker Pattern
+# ============================================================================
+
+class AICircuitBreaker:
+    """Circuit breaker to prevent cascading AI failures"""
+
+    def __init__(self, failure_threshold=3, timeout=300):
+        self.failure_count = 0
+        self.failure_threshold = failure_threshold
+        self.timeout = timeout
+        self.last_failure_time = None
+        self.state = "CLOSED"  # CLOSED = working, OPEN = broken
+
+    def record_success(self):
+        """Record successful AI call"""
+        self.failure_count = 0
+        if self.state == "HALF_OPEN":
+            self.state = "CLOSED"
+            logger.info("AI Circuit breaker CLOSED - recovered")
+
+    def record_failure(self):
+        """Record failed AI call"""
+        self.failure_count += 1
+        self.last_failure_time = time.time()
+
+        if self.failure_count >= self.failure_threshold:
+            self.state = "OPEN"
+            logger.error(f"AI Circuit breaker OPEN after {self.failure_count} failures")
+
+    def can_execute(self) -> bool:
+        """Check if we can make an AI call"""
+        if self.state == "CLOSED":
+            return True
+
+        if self.state == "OPEN":
+            if time.time() - self.last_failure_time > self.timeout:
+                self.state = "HALF_OPEN"
+                logger.info("AI Circuit breaker HALF_OPEN - attempting recovery")
+                return True
+            return False
+
+        # HALF_OPEN - allow one test call
+        return True
+
+    def get_fallback(self) -> Dict[str, Any]:
+        """Return fallback response when circuit is open"""
+        return {
+            "intent": "GENERAL_QUERY",
+            "explanation": "The AI assistant is temporarily unavailable. Please try again in a few minutes.",
+            "data": {},
+            "fallback": True
+        }
+
+
+# Global circuit breaker instance
+ai_circuit_breaker = AICircuitBreaker(failure_threshold=3, timeout=300)
+
+
+# ============================================================================
+# AI Metrics Logging
+# ============================================================================
+
+class AIMetrics:
+    """Log AI interactions for monitoring and debugging"""
+
+    @staticmethod
+    def log_interaction(
+        user_id: int,
+        request_message: str,
+        response: Dict[str, Any],
+        execution_time_ms: float,
+        success: bool,
+        error: str = None,
+        function_calls_made: int = 0
+    ):
+        """Log an AI interaction"""
+        try:
+            logger.info(f"AI_METRIC | user_id={user_id} | "
+                       f"intent={response.get('intent', 'UNKNOWN')} | "
+                       f"success={success} | "
+                       f"time_ms={execution_time_ms:.0f} | "
+                       f"function_calls={function_calls_made} | "
+                       f"message_preview={request_message[:50]}...")
+
+            if error:
+                logger.error(f"AI_ERROR | user_id={user_id} | error={error}")
+        except Exception as e:
+            logger.warning(f"Failed to log AI metrics: {e}")
+
+
+# ============================================================================
+# Function Calling Tools Definition
+# ============================================================================
+
+AI_TOOLS = [
+    {
+        "name": "get_daily_summary",
+        "description": "Get the user's daily summary including tasks, leads, loans, and follow-ups",
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    },
+    {
+        "name": "search_crm",
+        "description": "Search for leads, loans, or clients by name, email, or phone",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "Search term (name, email, or phone)"
+                }
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "update_lead_status",
+        "description": "Update a lead's status/stage in the CRM",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "lead_id": {
+                    "type": "integer",
+                    "description": "The lead's ID"
+                },
+                "new_status": {
+                    "type": "string",
+                    "enum": ["New", "Prospect", "Application Started", "Pre-Approved", "Closed Won", "Closed Lost"],
+                    "description": "New status for the lead"
+                }
+            },
+            "required": ["lead_id", "new_status"]
+        }
+    },
+    {
+        "name": "create_task",
+        "description": "Create a new task in the CRM",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "description": "Task title"
+                },
+                "due_date": {
+                    "type": "string",
+                    "description": "Due date in ISO format (YYYY-MM-DD)"
+                },
+                "priority": {
+                    "type": "string",
+                    "enum": ["low", "medium", "high"],
+                    "description": "Task priority"
+                },
+                "lead_id": {
+                    "type": "integer",
+                    "description": "Optional lead ID to associate with task"
+                }
+            },
+            "required": ["title", "due_date"]
+        }
+    },
+    {
+        "name": "send_email_campaign",
+        "description": "Send an email campaign to selected clients",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "filter_criteria": {
+                    "type": "object",
+                    "description": "Criteria to select recipients (status, loan_type, etc.)"
+                },
+                "subject": {
+                    "type": "string",
+                    "description": "Email subject line"
+                },
+                "body": {
+                    "type": "string",
+                    "description": "Email body content"
+                }
+            },
+            "required": ["subject", "body"]
+        }
+    },
+    {
+        "name": "get_pipeline_report",
+        "description": "Generate a pipeline analysis report",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "date_range": {
+                    "type": "string",
+                    "enum": ["7d", "30d", "90d", "ytd"],
+                    "description": "Date range for the report"
+                }
+            },
+            "required": []
+        }
+    }
+]
+
+
+# ============================================================================
+# Validation Pipeline
+# ============================================================================
+
+class ValidationResult:
+    def __init__(self, is_valid: bool, reason: str = None):
+        self.is_valid = is_valid
+        self.reason = reason
+
+
+class ActionValidator:
+    """Validate AI actions before execution"""
+
+    @staticmethod
+    def validate_action(action: Dict[str, Any], user_id: int, db: Session) -> ValidationResult:
+        """Validate an action is safe to execute"""
+        action_name = action.get("name", "")
+        parameters = action.get("parameters", {})
+
+        # Check 1: Known action type
+        valid_actions = ["get_daily_summary", "search_crm", "update_lead_status",
+                        "create_task", "send_email_campaign", "get_pipeline_report"]
+        if action_name not in valid_actions:
+            return ValidationResult(False, f"Unknown action: {action_name}")
+
+        # Check 2: User owns the entity (for update operations)
+        if action_name == "update_lead_status":
+            lead_id = parameters.get("lead_id")
+            if lead_id:
+                main = get_main_module()
+                Lead = main.Lead
+                lead = db.query(Lead).filter(Lead.id == lead_id, Lead.owner_id == user_id).first()
+                if not lead:
+                    return ValidationResult(False, "Lead not found or not owned by user")
+
+        # Check 3: Parameter validation
+        if action_name == "create_task":
+            due_date_str = parameters.get("due_date", "")
+            try:
+                due_date = datetime.fromisoformat(due_date_str) if due_date_str else None
+                if due_date and due_date.date() < datetime.now().date():
+                    return ValidationResult(False, "Cannot create tasks with past due dates")
+            except ValueError:
+                return ValidationResult(False, "Invalid date format")
+
+        return ValidationResult(True)
+
+    @staticmethod
+    def pre_execution_check(action: Dict[str, Any], user_id: int, db: Session) -> ValidationResult:
+        """Verify data exists before attempting action"""
+        action_name = action.get("name", "")
+        parameters = action.get("parameters", {})
+
+        if action_name == "update_lead_status":
+            lead_id = parameters.get("lead_id")
+            main = get_main_module()
+            Lead = main.Lead
+            lead = db.query(Lead).filter(Lead.id == lead_id).first()
+            if not lead:
+                return ValidationResult(False, f"Lead {lead_id} not found")
+
+        return ValidationResult(True)
 
 # Lazy import helper for main module to avoid circular imports
 def get_main_module():
@@ -595,20 +876,31 @@ PERMANENT MEMORY STATUS:
                     action_summary += f"  Field: {preview.get('field', 'N/A')}, Count: {preview.get('count', 'N/A')}\n"
         system += action_summary
 
+    # Check circuit breaker before making AI call
+    if not ai_circuit_breaker.can_execute():
+        logger.warning("AI Circuit breaker is OPEN - using fallback")
+        return ai_circuit_breaker.get_fallback()
+
+    start_time = time.time()
+    function_calls_made = 0
+
     try:
         # Log the request
         logger.info(f"AI Request - User ID: {user_id}, Message: {message[:100]}...")
 
         response = anthropic_client.messages.create(
             model="claude-sonnet-4-20250514",
-            max_tokens=2000,
-            temperature=0,  # Deterministic responses - same input = same output
+            max_tokens=AI_CONFIG["max_tokens"],
+            temperature=AI_CONFIG["temperature"],  # Deterministic responses
             system=system,
             messages=messages
         )
 
         # Log the response
         logger.info(f"AI Response - Stop reason: {response.stop_reason}")
+
+        # Record success in circuit breaker
+        ai_circuit_breaker.record_success()
 
         # Parse Claude's response
         response_text = response.content[0].text
@@ -658,18 +950,56 @@ PERMANENT MEMORY STATUS:
 
                     logger.info(f"DAILY_VIEW response validated - Leads: {actual_leads}, Loans: {actual_loans}")
 
+                # Log metrics for successful response
+                execution_time = (time.time() - start_time) * 1000
+                AIMetrics.log_interaction(
+                    user_id=user_id,
+                    request_message=message,
+                    response=result,
+                    execution_time_ms=execution_time,
+                    success=True,
+                    function_calls_made=function_calls_made
+                )
+
                 return result
         except json.JSONDecodeError:
             pass
 
         # If no JSON found, create a general response
-        return {
+        result = {
             "intent": "GENERAL_QUERY",
             "explanation": response_text,
             "data": {}
         }
 
+        # Log metrics
+        execution_time = (time.time() - start_time) * 1000
+        AIMetrics.log_interaction(
+            user_id=user_id,
+            request_message=message,
+            response=result,
+            execution_time_ms=execution_time,
+            success=True,
+            function_calls_made=function_calls_made
+        )
+
+        return result
+
     except Exception as e:
+        # Record failure in circuit breaker
+        ai_circuit_breaker.record_failure()
+
+        # Log metrics for failed response
+        execution_time = (time.time() - start_time) * 1000
+        AIMetrics.log_interaction(
+            user_id=user_id,
+            request_message=message,
+            response={"intent": "ERROR"},
+            execution_time_ms=execution_time,
+            success=False,
+            error=str(e)
+        )
+
         logger.error(f"Claude API error: {str(e)}")
         return generate_mock_response(message, db, user_id)
 
