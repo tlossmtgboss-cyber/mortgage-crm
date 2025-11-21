@@ -468,6 +468,34 @@ async def process_with_claude(
     # Build enhanced system prompt with memory context
     system = SYSTEM_PROMPT
 
+    # CHECK IF THIS IS A DAILY_VIEW REQUEST - add explicit summary numbers
+    message_lower = message.lower()
+    if any(phrase in message_lower for phrase in ["today", "daily", "morning", "need to do", "what should i", "my tasks", "what's on"]):
+        # Fetch daily summary data to show exact numbers
+        daily_data = get_daily_summary(db, user_id)
+        summary = daily_data.get("summary", {})
+
+        system += f"""
+
+=== DAILY VIEW DATA (YOU MUST USE THESE EXACT NUMBERS) ===
+ACTUAL CRM DATA FOR TODAY:
+- Active Leads: {summary.get('active_leads', 0)}
+- Loans in Pipeline: {summary.get('loans_in_pipeline', 0)}
+- Pipeline Volume: {summary.get('pipeline_volume', '$0')}
+- Total Tasks: {summary.get('total_tasks', 0)}
+- Overdue Tasks: {summary.get('overdue_tasks', 0)}
+- Unread Messages: {summary.get('unread_messages', 0)}
+
+LEAD STATUS BREAKDOWN:
+{chr(10).join([f"- {status}: {count}" for status, count in summary.get('lead_status_breakdown', {}).items()])}
+
+LOAN STAGE BREAKDOWN:
+{chr(10).join([f"- {stage}: {count}" for stage, count in summary.get('loan_stage_breakdown', {}).items()])}
+
+IMPORTANT: Use the EXACT numbers above in your response. Do NOT say "0 active leads" - use "{summary.get('active_leads', 0)} active leads".
+=== END DAILY VIEW DATA ===
+"""
+
     # ADD COMPLETE CRM DATA CONTEXT
     if crm_context:
         system += "\n\n=== COMPLETE CRM DATA (You have full access to all this data) ===\n"
