@@ -548,6 +548,27 @@ PERMANENT MEMORY STATUS:
             if json_start >= 0 and json_end > json_start:
                 json_str = response_text[json_start:json_end]
                 result = json.loads(json_str)
+
+                # INJECT REAL CRM DATA for DAILY_VIEW
+                if result.get("intent") == "DAILY_VIEW":
+                    daily_data = get_daily_summary(db, user_id)
+                    # Merge Claude's response with actual CRM data
+                    if "data" not in result:
+                        result["data"] = {}
+                    result["data"]["tasks"] = daily_data.get("tasks", [])
+                    result["data"]["follow_ups"] = daily_data.get("follow_ups", [])
+                    result["data"]["reconciliations"] = daily_data.get("reconciliations", [])
+                    # Use Claude's summary if it has better formatting, but include all our data
+                    if "summary" in result["data"]:
+                        result["data"]["summary"].update({
+                            "lead_status_breakdown": daily_data["summary"].get("lead_status_breakdown", {}),
+                            "loan_stage_breakdown": daily_data["summary"].get("loan_stage_breakdown", {}),
+                            "unread_messages": daily_data["summary"].get("unread_messages", 0),
+                            "mum_clients": daily_data["summary"].get("mum_clients", 0),
+                        })
+                    else:
+                        result["data"]["summary"] = daily_data.get("summary", {})
+
                 return result
         except json.JSONDecodeError:
             pass
