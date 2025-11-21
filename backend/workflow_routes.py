@@ -49,10 +49,9 @@ async def get_workflow_tasks(
         query = """
             SELECT wt.id, wt.loan_id, wt.task_title, wt.task_description,
                    wt.priority, wt.due_date, wt.status, wt.created_at,
-                   l.lead_id, le.first_name, le.last_name
+                   l.borrower_name
             FROM workflow_tasks wt
             LEFT JOIN loans l ON wt.loan_id = l.id
-            LEFT JOIN leads le ON l.lead_id = le.id
             WHERE 1=1
         """
         params = {"limit": limit}
@@ -81,8 +80,7 @@ async def get_workflow_tasks(
             "due_date": r[5].isoformat() if r[5] else None,
             "status": r[6],
             "created_at": r[7].isoformat() if r[7] else None,
-            "lead_id": r[8],
-            "borrower": f"{r[9] or ''} {r[10] or ''}".strip() or "Unknown"
+            "borrower": r[8] or "Unknown"
         } for r in result]
 
         return {"tasks": tasks, "count": len(tasks)}
@@ -125,10 +123,9 @@ async def get_workflow_alerts(
         query = """
             SELECT wa.id, wa.loan_id, wa.alert_type, wa.alert_message,
                    wa.alert_level, wa.acknowledged, wa.created_at,
-                   l.lead_id, le.first_name, le.last_name
+                   l.borrower_name
             FROM workflow_alerts wa
             LEFT JOIN loans l ON wa.loan_id = l.id
-            LEFT JOIN leads le ON l.lead_id = le.id
             WHERE wa.acknowledged = :ack
         """
         params = {"ack": acknowledged, "limit": limit}
@@ -152,8 +149,7 @@ async def get_workflow_alerts(
             "severity": r[4],
             "acknowledged": r[5],
             "created_at": r[6].isoformat() if r[6] else None,
-            "lead_id": r[7],
-            "borrower": f"{r[8] or ''} {r[9] or ''}".strip() or "Unknown"
+            "borrower": r[7] or "Unknown"
         } for r in result]
 
         return {"alerts": alerts, "count": len(alerts)}
@@ -215,10 +211,9 @@ async def get_scheduled_messages(
         query = """
             SELECT tdm.id, tdm.loan_id, tdm.week_number, tdm.theme_name,
                    tdm.scheduled_send_date, tdm.ai_generated_content,
-                   tdm.status, l.lead_id, le.first_name, le.last_name
+                   tdm.status, l.borrower_name
             FROM theme_day_messages tdm
             LEFT JOIN loans l ON tdm.loan_id = l.id
-            LEFT JOIN leads le ON l.lead_id = le.id
             WHERE 1=1
         """
         params = {"limit": limit}
@@ -245,8 +240,7 @@ async def get_scheduled_messages(
             "scheduled_date": r[4].isoformat() if r[4] else None,
             "message": r[5],
             "status": r[6],
-            "lead_id": r[7],
-            "borrower": f"{r[8] or ''} {r[9] or ''}".strip() or "Unknown"
+            "borrower": r[7] or "Unknown"
         } for r in result]
 
         return {"messages": messages, "count": len(messages)}
@@ -356,11 +350,9 @@ async def get_post_closing_calls(
 
         result = db.execute(text(f"""
             SELECT pc.id, pc.loan_id, pc.scheduled_date, pc.completed_date,
-                   pc.experience_rating, l.lead_id, le.first_name, le.last_name,
-                   le.phone
+                   pc.experience_rating, l.borrower_name
             FROM post_closing_calls pc
             LEFT JOIN loans l ON pc.loan_id = l.id
-            LEFT JOIN leads le ON l.lead_id = le.id
             WHERE {where_clause}
             ORDER BY pc.scheduled_date ASC
             LIMIT :limit
@@ -372,9 +364,7 @@ async def get_post_closing_calls(
             "scheduled_date": r[2].isoformat() if r[2] else None,
             "completed_date": r[3].isoformat() if r[3] else None,
             "rating": r[4],
-            "lead_id": r[5],
-            "borrower": f"{r[6] or ''} {r[7] or ''}".strip() or "Unknown",
-            "phone": r[8]
+            "borrower": r[5] or "Unknown"
         } for r in result]
 
         return {"calls": calls, "count": len(calls)}
@@ -449,41 +439,29 @@ async def get_workflow_dashboard(
 ):
     """Get workflow dashboard summary"""
     try:
-        # Pending tasks count
+        # Pending tasks count (simplified - no org filter for now)
         pending_tasks = db.execute(text("""
-            SELECT COUNT(*) FROM workflow_tasks wt
-            LEFT JOIN loans l ON wt.loan_id = l.id
-            LEFT JOIN leads le ON l.lead_id = le.id
-            WHERE (le.organization_id = :org_id OR le.organization_id IS NULL)
-            AND wt.status = 'pending'
-        """), {"org_id": organization_id}).scalar() or 0
+            SELECT COUNT(*) FROM workflow_tasks
+            WHERE status = 'pending'
+        """)).scalar() or 0
 
         # Overdue tasks
         overdue_tasks = db.execute(text("""
-            SELECT COUNT(*) FROM workflow_tasks wt
-            LEFT JOIN loans l ON wt.loan_id = l.id
-            LEFT JOIN leads le ON l.lead_id = le.id
-            WHERE (le.organization_id = :org_id OR le.organization_id IS NULL)
-            AND wt.status = 'pending' AND wt.due_date < NOW()
-        """), {"org_id": organization_id}).scalar() or 0
+            SELECT COUNT(*) FROM workflow_tasks
+            WHERE status = 'pending' AND due_date < NOW()
+        """)).scalar() or 0
 
         # Unacknowledged alerts
         alerts = db.execute(text("""
-            SELECT COUNT(*) FROM workflow_alerts wa
-            LEFT JOIN loans l ON wa.loan_id = l.id
-            LEFT JOIN leads le ON l.lead_id = le.id
-            WHERE (le.organization_id = :org_id OR le.organization_id IS NULL)
-            AND wa.acknowledged = FALSE
-        """), {"org_id": organization_id}).scalar() or 0
+            SELECT COUNT(*) FROM workflow_alerts
+            WHERE acknowledged = FALSE
+        """)).scalar() or 0
 
         # Last Mile tasks today
         last_mile_today = db.execute(text("""
-            SELECT COUNT(*) FROM last_mile_tasks lmt
-            LEFT JOIN loans l ON lmt.loan_id = l.id
-            LEFT JOIN leads le ON l.lead_id = le.id
-            WHERE (le.organization_id = :org_id OR le.organization_id IS NULL)
-            AND lmt.due_date::date = CURRENT_DATE AND lmt.status = 'pending'
-        """), {"org_id": organization_id}).scalar() or 0
+            SELECT COUNT(*) FROM last_mile_tasks
+            WHERE due_date::date = CURRENT_DATE AND status = 'pending'
+        """)).scalar() or 0
 
         # High risk loans
         high_risk = db.execute(text("""
