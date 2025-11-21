@@ -82,12 +82,8 @@ function AILandingPage() {
 
       // Handle different response types based on intent
       if (response.intent === 'DAILY_VIEW' && response.data) {
-        addMessage(response.explanation || "Here's your daily overview:", 'assistant');
-        addMessage('daily_view', 'assistant', {
-          isSpecialContent: true,
-          contentType: 'daily_view',
-          backendData: response.data
-        });
+        // Use the new task list format below the button
+        showDailyView();
       } else if (response.intent === 'SEARCH' && response.data) {
         addMessage(response.explanation || "Here are your search results:", 'assistant');
         // Show search results
@@ -304,8 +300,6 @@ function AILandingPage() {
     const backendData = message.backendData;
 
     switch (message.contentType) {
-      case 'daily_view':
-        return <DailyView onAction={executeDemoAction} data={backendData} />;
       case 'email_campaign':
         return (
           <EmailCampaignPreview
