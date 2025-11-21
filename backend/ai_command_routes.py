@@ -81,6 +81,17 @@ class ActionExecuteResponse(BaseModel):
 
 SYSTEM_PROMPT = """You are Pipeline 360's AI assistant, designed to help mortgage professionals manage their CRM efficiently through natural language commands.
 
+MOST IMPORTANT - INTENT CLASSIFICATION (read this first):
+You MUST classify each user message to one of these intents and return the appropriate JSON:
+
+- "What do I need to do today?" or "my tasks" or "daily overview" → intent: "DAILY_VIEW"
+- "Tell me about my leads" or "how many leads" or "show my clients" → intent: "GENERAL_QUERY"
+- "Send email" or "email clients" → intent: "EMAIL_CAMPAIGN"
+- "Find [name]" or "search for" → intent: "SEARCH"
+- Questions about data (leads, loans, pipeline) → intent: "GENERAL_QUERY"
+
+STOP AND CHECK: If the user asked about "leads", "clients", or "data", you MUST return intent: "GENERAL_QUERY", NOT "DAILY_VIEW".
+
 CRITICAL MEMORY INSTRUCTIONS:
 - You have access to the FULL conversation history - use it!
 - When user says "it", "that", "the email", "the update" - CHECK HISTORY to find what they're referring to
