@@ -132,8 +132,8 @@ function AILandingPage() {
 
       // Handle different response types based on intent
       if (response.intent === 'DAILY_VIEW' && response.data) {
-        // Use the new task list format below the button
-        showDailyView();
+        // Use the real data from the response
+        showDailyViewWithData(response.data, response.explanation);
       } else if (response.intent === 'SEARCH' && response.data) {
         addMessage(response.explanation || "Here are your search results:", 'assistant');
         // Show search results
@@ -270,6 +270,68 @@ function AILandingPage() {
     setTimeout(() => {
       addMessage("These are proactive opportunities to grow your pipeline. Let me know which one you'd like to tackle first!", 'assistant');
     }, 500);
+  };
+
+  const showDailyViewWithData = (data, explanation) => {
+    // Add the AI's explanation
+    addMessage(explanation || "Here's your daily overview:", 'assistant');
+
+    // Convert API data to task list format
+    const tasks = [];
+    let taskId = 1;
+
+    // Add follow-up items as tasks
+    if (data.follow_ups) {
+      data.follow_ups.forEach(followUp => {
+        followUp.items?.forEach(item => {
+          tasks.push({
+            id: taskId++,
+            title: `${followUp.type}`,
+            client: item,
+            stage: followUp.type,
+            priority: followUp.priority === 'High' ? 'HIGH' : 'MEDIUM',
+            type: 'Follow-up',
+            source: 'CRM Data',
+            owner: 'Loan Officer',
+            dateCreated: new Date().toLocaleString(),
+            details: `${followUp.type} - ${item}`,
+            dueTime: 'Today'
+          });
+        });
+      });
+    }
+
+    // Add reconciliation items as tasks
+    if (data.reconciliations) {
+      data.reconciliations.forEach(recon => {
+        recon.items?.forEach(item => {
+          tasks.push({
+            id: taskId++,
+            title: recon.type,
+            client: item,
+            stage: 'Pipeline',
+            priority: 'HIGH',
+            type: 'Reconciliation',
+            source: 'System Alert',
+            owner: 'Loan Officer',
+            dateCreated: new Date().toLocaleString(),
+            details: `${recon.type} - ${item}`
+          });
+        });
+      });
+    }
+
+    // If no tasks found, show summary message
+    if (tasks.length === 0) {
+      addMessage(`Your pipeline: ${data.summary?.active_leads || 0} active leads, ${data.summary?.loans_in_pipeline || 0} loans in pipeline (${data.summary?.pipeline_volume || '$0'})`, 'assistant');
+    } else {
+      setTaskListData(tasks);
+      setSelectedTask(tasks[0]);
+
+      setTimeout(() => {
+        addMessage(`You have ${tasks.length} items to review. Complete these and let me know when you're done!`, 'assistant');
+      }, 500);
+    }
   };
 
   const showDailyView = () => {
