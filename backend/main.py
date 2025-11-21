@@ -10590,6 +10590,130 @@ async def calculate_mum_referral_scores(client_id: int, data: dict, db: Session 
 
     return scores
 
+# ============================================================================
+# WORKFLOW AUTOMATION TEST ENDPOINTS
+# ============================================================================
+
+@app.get("/api/v1/workflows/test")
+async def test_workflow_system(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Test the workflow automation system"""
+    try:
+        # Test workflow engine initialization
+        workflow_engine = LeadWorkflowEngine(db)
+        time_engine = TimeBasedWorkflowEngine(db)
+        action_executor = WorkflowActionExecutor(db)
+
+        return {
+            "status": "operational",
+            "components": {
+                "lead_workflow_engine": "✅ Ready",
+                "time_based_engine": "✅ Ready",
+                "action_executor": "✅ Ready",
+                "sms_service": "✅ Available" if action_executor.sms_client and action_executor.sms_client.enabled else "⚠️ Not configured",
+                "email_service": "✅ Available" if action_executor.email_service else "⚠️ Not configured"
+            },
+            "message": "Workflow automation system is operational"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e)
+        }
+
+@app.post("/api/v1/workflows/test-status-change")
+async def test_status_change_workflow(
+    lead_id: int,
+    new_status: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Test workflow by simulating a status change (dry run - does not update lead)"""
+    # Get the lead
+    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    # Create status change event
+    status_change = LeadStatusChange(
+        lead_id=lead.id,
+        lead_name=lead.name,
+        lead_email=lead.email,
+        lead_phone=lead.phone,
+        old_status=lead.stage.value if lead.stage else "None",
+        new_status=new_status,
+        loan_officer_id=current_user.id,
+        loan_officer_name=current_user.name,
+        loan_officer_email=current_user.email,
+        loan_type=getattr(lead, 'loan_type', None),
+        loan_amount=getattr(lead, 'loan_amount', None),
+        changed_at=datetime.now(timezone.utc)
+    )
+
+    # Process workflow (dry run)
+    workflow_engine = LeadWorkflowEngine(db)
+    workflow_result = await workflow_engine.process_status_change(status_change)
+
+    return {
+        "lead_id": lead.id,
+        "lead_name": lead.name,
+        "simulated_transition": f"{status_change.old_status} → {new_status}",
+        "actions_generated": workflow_result.get("action_count", 0),
+        "actions": workflow_result.get("actions", []),
+        "note": "This is a dry run - no actions were executed and lead status was not changed"
+    }
+
+@app.post("/api/v1/workflows/run-time-based")
+async def run_time_based_workflows_manual(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Manually trigger time-based workflow checks"""
+    time_engine = TimeBasedWorkflowEngine(db)
+    actions = await time_engine.check_stale_leads()
+
+    if actions:
+        executor = WorkflowActionExecutor(db)
+        result = await executor.execute_actions(actions)
+        return {
+            "status": "executed",
+            "total_actions": result["total"],
+            "successful": result["successful"],
+            "failed": result["failed"],
+            "skipped": result["skipped"],
+            "details": result["details"]
+        }
+    else:
+        return {
+            "status": "no_actions",
+            "message": "No stale leads found requiring action"
+        }
+
+@app.get("/api/v1/workflows/status")
+async def get_workflow_status(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Get workflow automation status and recent executions"""
+    try:
+        # Get recent workflow executions
+        result = db.execute(text("""
+            SELECT workflow_name, trigger_event, execution_status, created_at, lead_id
+            FROM workflow_executions
+            ORDER BY created_at DESC
+            LIMIT 10
+        """))
+        executions = [dict(row._mapping) for row in result.fetchall()]
+
+        return {
+            "scheduler_running": scheduler.running,
+            "recent_executions": executions,
+            "available_statuses": [s.value for s in LeadStage]
+        }
+    except Exception as e:
+        return {
+            "scheduler_running": scheduler.running if hasattr(scheduler, 'running') else False,
+            "recent_executions": [],
+            "error": str(e),
+            "available_statuses": [s.value for s in LeadStage]
+        }
+
 def calculate_referral_scores(data: dict) -> dict:
     """Calculate referral intelligence scores based on employment data"""
     # Default scores
