@@ -76,7 +76,7 @@ def get_company_id_for_user(user):
 async def create_ai_authorization(
     auth_data: AIAuthorizationCreate,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Create AI authorization for a task type (workflow)"""
     user_id = str(current_user.id)
@@ -124,10 +124,10 @@ async def create_ai_authorization(
 
 @router.get("/authorizations")
 async def get_ai_authorizations(
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Get all AI authorizations for current user"""
-    user_id = get_current_user_id()
+    user_id = str(current_user.id)
     
     result = db.execute(text("""
         SELECT 
@@ -188,10 +188,10 @@ async def get_ai_authorizations(
 async def revoke_ai_authorization(
     authorization_id: str,
     revoke_data: RevokeAuthorization,
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Revoke AI authorization for a task type"""
-    user_id = get_current_user_id()
+    user_id = str(current_user.id)
     
     # Verify authorization exists and belongs to user
     auth = db.execute(text("""
@@ -255,10 +255,10 @@ async def revoke_ai_authorization(
 @router.post("/authorizations/{authorization_id}/pause")
 async def pause_ai_authorization(
     authorization_id: str,
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Temporarily pause AI automation"""
-    user_id = get_current_user_id()
+    user_id = str(current_user.id)
     
     db.execute(text("""
         UPDATE ai_task_type_authorizations
@@ -274,10 +274,10 @@ async def pause_ai_authorization(
 @router.post("/authorizations/{authorization_id}/resume")
 async def resume_ai_authorization(
     authorization_id: str,
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Resume paused AI automation"""
-    user_id = get_current_user_id()
+    user_id = str(current_user.id)
     
     # Get current training progress
     auth = db.execute(text("""
@@ -309,11 +309,11 @@ async def resume_ai_authorization(
 async def review_training_task(
     task_id: str,
     review: TrainingReview,
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """User approves or rejects AI's training attempt"""
-    user_id = get_current_user_id()
-    company_id = get_current_company_id()
+    user_id = str(current_user.id)
+    company_id = get_company_id_for_user(current_user)
     
     # Get task and verify it's pending review
     task = db.execute(text("""
@@ -443,10 +443,10 @@ async def get_ai_audit_log(
     date_to: Optional[str] = None,
     limit: int = Query(default=50, le=200),
     offset: int = 0,
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Get AI audit log with filters"""
-    user_id = get_current_user_id()
+    user_id = str(current_user.id)
     
     # Build query
     conditions = ["al.user_id = :user_id"]
@@ -527,10 +527,10 @@ async def get_ai_costs(
     user_id_param: Optional[str] = None,
     month: Optional[int] = None,
     year: Optional[int] = None,
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Get AI usage and costs"""
-    user_id = user_id_param or get_current_user_id()
+    user_id = user_id_param or str(current_user.id)
     target_month = month or datetime.now().month
     target_year = year or datetime.now().year
     
@@ -616,10 +616,10 @@ async def get_ai_costs(
 @router.get("/performance")
 async def get_ai_performance(
     days: int = Query(default=30, le=365),
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Get AI performance metrics for dashboard"""
-    user_id = get_current_user_id()
+    user_id = str(current_user.id)
     date_from = datetime.now() - timedelta(days=days)
     
     # Overall metrics
@@ -712,10 +712,10 @@ async def get_ai_performance(
 @router.get("/authorizations/{authorization_id}/rollback-states")
 async def get_rollback_states(
     authorization_id: str,
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Get available rollback states for an authorization"""
-    user_id = get_current_user_id()
+    user_id = str(current_user.id)
     
     # Verify authorization belongs to user
     auth = db.execute(text("""
@@ -757,11 +757,11 @@ async def get_rollback_states(
 async def rollback_ai_state(
     authorization_id: str,
     rollback_data: RollbackRequest,
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Rollback AI to a previous state"""
-    user_id = get_current_user_id()
-    company_id = get_current_company_id()
+    user_id = str(current_user.id)
+    company_id = get_company_id_for_user(current_user)
     
     # Get the rollback state
     state = db.execute(text("""
@@ -848,10 +848,10 @@ async def rollback_ai_state(
 async def delegate_task_to_ai(
     task_id: str,
     delegate_data: Optional[DelegateToAI] = None,
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """User delegates a task to AI for completion"""
-    user_id = get_current_user_id()
+    user_id = str(current_user.id)
     
     # Get task
     task = db.execute(text("""
