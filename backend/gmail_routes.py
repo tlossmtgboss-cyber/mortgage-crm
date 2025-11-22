@@ -56,7 +56,15 @@ async def get_current_user(
                 self.email = row[1]
                 self.name = row[2]
                 # Settings stored in user_metadata
-                metadata = row[3] if row[3] else {}
+                raw_metadata = row[3] if row[3] else {}
+                # Handle both dict and JSON string
+                if isinstance(raw_metadata, str):
+                    try:
+                        metadata = json.loads(raw_metadata)
+                    except:
+                        metadata = {}
+                else:
+                    metadata = raw_metadata
                 self.settings = metadata.get('settings', {}) if isinstance(metadata, dict) else {}
                 self._db = session
                 self._user_id = row[0]
