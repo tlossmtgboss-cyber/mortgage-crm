@@ -6,25 +6,25 @@ import './WorkflowStagePage.css';
 // Status configurations for each stage
 const LEAD_STATUSES = {
   new: { name: 'New', color: '#6b7280' },
-  contacted: { name: 'Contacted', color: '#3b82f6' },
-  qualified: { name: 'Qualified', color: '#8b5cf6' },
+  attempted_contact: { name: 'Attempted Contact', color: '#f59e0b' },
+  prospect: { name: 'Prospect', color: '#3b82f6' },
+  application: { name: 'Application', color: '#8b5cf6' },
+  pre_qualified: { name: 'Pre-Qualified', color: '#06b6d4' },
   pre_approved: { name: 'Pre-Approved', color: '#10b981' },
-  nurturing: { name: 'Nurturing', color: '#f59e0b' }
+  withdrawn: { name: 'Withdrawn', color: '#ef4444' },
+  does_not_qualify: { name: 'Does Not Qualify', color: '#dc2626' }
 };
 
 const ACTIVE_LOAN_STATUSES = {
-  application: { name: 'Application', color: '#6b7280' },
-  processing: { name: 'Processing', color: '#3b82f6' },
-  underwriting: { name: 'Underwriting', color: '#8b5cf6' },
+  in_processing: { name: 'In Processing', color: '#3b82f6' },
+  in_underwriting: { name: 'In Underwriting', color: '#8b5cf6' },
   approved: { name: 'Approved', color: '#10b981' },
-  closing: { name: 'Closing', color: '#f59e0b' }
+  cleared_to_close: { name: 'Cleared to Close', color: '#f59e0b' },
+  suspended: { name: 'Suspended', color: '#ef4444' }
 };
 
 const PORTFOLIO_STATUSES = {
-  onboarding: { name: 'Onboarding', color: '#6b7280' },
-  active: { name: 'Active', color: '#10b981' },
-  review: { name: 'Review', color: '#f59e0b' },
-  refinance: { name: 'Refinance Opportunity', color: '#8b5cf6' }
+  closed_funded: { name: 'Closed and Funded', color: '#10b981' }
 };
 
 const STAGE_CONFIG = {
@@ -38,24 +38,38 @@ const STAGE_CONFIG = {
         { id: 1, title: 'Initial Contact', description: 'Make first contact with lead', order: 1, auto_trigger: 'on_lead_create', days_offset: 0 },
         { id: 2, title: 'Send Introduction Email', description: 'Send welcome email', order: 2, auto_trigger: 'after_previous', days_offset: 0 }
       ],
-      contacted: [
-        { id: 3, title: 'Schedule Discovery Call', description: 'Set up initial consultation', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
-        { id: 4, title: 'Send Follow-up', description: 'Follow up if no response', order: 2, auto_trigger: 'scheduled', days_offset: 2 }
+      attempted_contact: [
+        { id: 3, title: 'Follow-up Call', description: 'Attempt to reach lead again', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
+        { id: 4, title: 'Send Follow-up Email', description: 'Email if no phone response', order: 2, auto_trigger: 'scheduled', days_offset: 1 },
+        { id: 5, title: 'Final Attempt', description: 'Last contact attempt', order: 3, auto_trigger: 'scheduled', days_offset: 3 }
       ],
-      qualified: [
-        { id: 5, title: 'Pre-Qualification Check', description: 'Verify qualification criteria', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
-        { id: 6, title: 'Collect Documents', description: 'Request income and assets docs', order: 2, auto_trigger: 'after_previous', days_offset: 1 },
-        { id: 7, title: 'Credit Authorization', description: 'Get credit check authorization', order: 3, auto_trigger: 'after_previous', days_offset: 0 }
+      prospect: [
+        { id: 6, title: 'Schedule Discovery Call', description: 'Set up initial consultation', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
+        { id: 7, title: 'Send Loan Options', description: 'Email loan product info', order: 2, auto_trigger: 'after_previous', days_offset: 0 }
+      ],
+      application: [
+        { id: 8, title: 'Send Application Link', description: 'Email application portal', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
+        { id: 9, title: 'Collect Documents', description: 'Request income and assets', order: 2, auto_trigger: 'after_previous', days_offset: 1 },
+        { id: 10, title: 'Credit Authorization', description: 'Get credit check consent', order: 3, auto_trigger: 'after_previous', days_offset: 0 }
+      ],
+      pre_qualified: [
+        { id: 11, title: 'Run Credit Check', description: 'Pull credit report', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
+        { id: 12, title: 'Verify Income', description: 'Review income documents', order: 2, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 13, title: 'Send Pre-Qual Letter', description: 'Email pre-qualification', order: 3, auto_trigger: 'after_previous', days_offset: 0 }
       ],
       pre_approved: [
-        { id: 8, title: 'Generate Pre-Approval', description: 'Create pre-approval letter', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
-        { id: 9, title: 'Send Pre-Approval', description: 'Email pre-approval to client', order: 2, auto_trigger: 'after_previous', days_offset: 0 },
-        { id: 10, title: 'Convert to Active Loan', description: 'Move to loan processing', order: 3, auto_trigger: 'manual', days_offset: 0 }
+        { id: 14, title: 'Generate Pre-Approval', description: 'Create pre-approval letter', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
+        { id: 15, title: 'Send Pre-Approval', description: 'Email to client', order: 2, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 16, title: 'Convert to Active Loan', description: 'Move to processing', order: 3, auto_trigger: 'manual', days_offset: 0 }
       ],
-      nurturing: [
-        { id: 11, title: 'Add to Drip Campaign', description: 'Start nurture sequence', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
-        { id: 12, title: 'Monthly Check-in', description: 'Periodic follow-up call', order: 2, auto_trigger: 'scheduled', days_offset: 30 },
-        { id: 13, title: 'Rate Alert', description: 'Notify when rates favorable', order: 3, auto_trigger: 'rate_trigger', days_offset: 0 }
+      withdrawn: [
+        { id: 17, title: 'Send Exit Survey', description: 'Request feedback', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
+        { id: 18, title: 'Add to Nurture List', description: 'Future follow-up', order: 2, auto_trigger: 'after_previous', days_offset: 0 }
+      ],
+      does_not_qualify: [
+        { id: 19, title: 'Send DNQ Letter', description: 'Explain reasons', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
+        { id: 20, title: 'Refer to Resources', description: 'Credit repair/savings tips', order: 2, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 21, title: 'Schedule Follow-up', description: 'Check back in 6 months', order: 3, auto_trigger: 'scheduled', days_offset: 180 }
       ]
     }
   },
@@ -65,27 +79,31 @@ const STAGE_CONFIG = {
     color: '#10b981',
     statuses: ACTIVE_LOAN_STATUSES,
     defaultTasksByStatus: {
-      application: [
-        { id: 14, title: 'Application Received', description: 'Formal application submitted', order: 1, auto_trigger: 'on_conversion', days_offset: 0 },
-        { id: 15, title: 'Order Appraisal', description: 'Request property appraisal', order: 2, auto_trigger: 'after_previous', days_offset: 1 },
-        { id: 16, title: 'Title Search', description: 'Order title search', order: 3, auto_trigger: 'after_previous', days_offset: 0 }
+      in_processing: [
+        { id: 22, title: 'Order Appraisal', description: 'Request property appraisal', order: 1, auto_trigger: 'on_conversion', days_offset: 0 },
+        { id: 23, title: 'Order Title Search', description: 'Request title work', order: 2, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 24, title: 'Document Review', description: 'Review all submitted docs', order: 3, auto_trigger: 'after_previous', days_offset: 1 },
+        { id: 25, title: 'Request Missing Docs', description: 'Send conditions letter', order: 4, auto_trigger: 'after_previous', days_offset: 1 }
       ],
-      processing: [
-        { id: 17, title: 'Document Review', description: 'Review all submitted docs', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
-        { id: 18, title: 'Request Missing Docs', description: 'Send conditions letter', order: 2, auto_trigger: 'after_previous', days_offset: 1 }
-      ],
-      underwriting: [
-        { id: 19, title: 'Submit to UW', description: 'Package file for review', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
-        { id: 20, title: 'Address Conditions', description: 'Clear UW conditions', order: 2, auto_trigger: 'on_conditions', days_offset: 0 }
+      in_underwriting: [
+        { id: 26, title: 'Submit to UW', description: 'Package file for review', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
+        { id: 27, title: 'Address Conditions', description: 'Clear UW conditions', order: 2, auto_trigger: 'on_conditions', days_offset: 0 },
+        { id: 28, title: 'Resubmit to UW', description: 'Send cleared conditions', order: 3, auto_trigger: 'after_previous', days_offset: 0 }
       ],
       approved: [
-        { id: 21, title: 'Clear to Close', description: 'Final approval obtained', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
-        { id: 22, title: 'Final CD Review', description: 'Review closing disclosure', order: 2, auto_trigger: 'after_previous', days_offset: 0 }
+        { id: 29, title: 'Final Approval Notice', description: 'Notify client of approval', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
+        { id: 30, title: 'Order Final CD', description: 'Request closing disclosure', order: 2, auto_trigger: 'after_previous', days_offset: 0 }
       ],
-      closing: [
-        { id: 23, title: 'Schedule Closing', description: 'Coordinate date/location', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
-        { id: 24, title: 'Closing Day', description: 'Execute documents', order: 2, auto_trigger: 'on_closing_date', days_offset: 0 },
-        { id: 25, title: 'Fund & Record', description: 'Wire funds', order: 3, auto_trigger: 'after_previous', days_offset: 1 }
+      cleared_to_close: [
+        { id: 31, title: 'Schedule Closing', description: 'Coordinate date/location', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
+        { id: 32, title: 'Send Closing Package', description: 'Email final documents', order: 2, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 33, title: 'Closing Day', description: 'Execute documents', order: 3, auto_trigger: 'on_closing_date', days_offset: 0 },
+        { id: 34, title: 'Fund & Record', description: 'Wire funds and record', order: 4, auto_trigger: 'after_previous', days_offset: 1 }
+      ],
+      suspended: [
+        { id: 35, title: 'Notify Client', description: 'Explain suspension reason', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
+        { id: 36, title: 'Create Action Plan', description: 'Steps to resolve issues', order: 2, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 37, title: 'Weekly Check-in', description: 'Monitor progress', order: 3, auto_trigger: 'scheduled', days_offset: 7 }
       ]
     }
   },
@@ -95,22 +113,15 @@ const STAGE_CONFIG = {
     color: '#8b5cf6',
     statuses: PORTFOLIO_STATUSES,
     defaultTasksByStatus: {
-      onboarding: [
-        { id: 26, title: 'Welcome Package', description: 'Send welcome materials', order: 1, auto_trigger: 'on_portfolio_add', days_offset: 0 },
-        { id: 27, title: '30-Day Check-In', description: 'First payment follow-up', order: 2, auto_trigger: 'scheduled', days_offset: 30 }
-      ],
-      active: [
-        { id: 28, title: '90-Day Review', description: 'Servicing transition check', order: 1, auto_trigger: 'scheduled', days_offset: 90 },
-        { id: 29, title: 'Annual Review', description: 'Yearly checkup', order: 2, auto_trigger: 'annual', days_offset: 365 },
-        { id: 30, title: 'Birthday Outreach', description: 'Send greeting', order: 3, auto_trigger: 'birthday', days_offset: 0 }
-      ],
-      review: [
-        { id: 31, title: 'Loan Anniversary', description: 'Celebrate anniversary', order: 1, auto_trigger: 'anniversary', days_offset: 0 },
-        { id: 32, title: 'Referral Request', description: 'Ask for referrals', order: 2, auto_trigger: 'milestone', days_offset: 0 }
-      ],
-      refinance: [
-        { id: 33, title: 'Rate Check', description: 'Review rates', order: 1, auto_trigger: 'rate_trigger', days_offset: 0 },
-        { id: 34, title: 'Refinance Proposal', description: 'Send savings analysis', order: 2, auto_trigger: 'after_previous', days_offset: 1 }
+      closed_funded: [
+        { id: 38, title: 'Welcome Package', description: 'Send welcome materials', order: 1, auto_trigger: 'on_portfolio_add', days_offset: 0 },
+        { id: 39, title: '30-Day Check-In', description: 'First payment follow-up', order: 2, auto_trigger: 'scheduled', days_offset: 30 },
+        { id: 40, title: '90-Day Review', description: 'Servicing transition check', order: 3, auto_trigger: 'scheduled', days_offset: 90 },
+        { id: 41, title: 'Annual Review', description: 'Yearly financial checkup', order: 4, auto_trigger: 'annual', days_offset: 365 },
+        { id: 42, title: 'Birthday Outreach', description: 'Send birthday greeting', order: 5, auto_trigger: 'birthday', days_offset: 0 },
+        { id: 43, title: 'Loan Anniversary', description: 'Celebrate anniversary', order: 6, auto_trigger: 'anniversary', days_offset: 0 },
+        { id: 44, title: 'Refinance Check', description: 'Review for refi opportunity', order: 7, auto_trigger: 'rate_trigger', days_offset: 0 },
+        { id: 45, title: 'Referral Request', description: 'Ask for referrals', order: 8, auto_trigger: 'milestone', days_offset: 0 }
       ]
     }
   }

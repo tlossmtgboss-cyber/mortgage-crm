@@ -19,19 +19,52 @@ from ai_automation_models import (
     PerformanceOverall, PerformanceByTaskType, DailyTrend,
     RollbackState, TaskDelegationResponse
 )
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from models import User
 
 router = APIRouter(prefix="/api/v1/ai", tags=["ai-automation"])
 logger = logging.getLogger(__name__)
 
-
-# Helper function to get current user (placeholder - integrate with your auth)
-def get_current_user_id():
-    # TODO: Replace with actual auth
-    return "demo@example.com"
+security = HTTPBearer(auto_error=False)
 
 
-def get_current_company_id():
-    # TODO: Replace with actual company context
+# Auth dependency
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    """Get current user from JWT token."""
+    from jose import jwt
+
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    try:
+        token = credentials.credentials
+        secret = os.getenv("JWT_SECRET", "your-secret-key")
+        payload = jwt.decode(token, secret, algorithms=["HS256"])
+        email = payload.get("sub")
+
+        if not email:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        user = db.query(User).filter(User.email == email).first()
+
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        return user
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Auth error: {e}")
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+
+def get_company_id_for_user(user):
+    """Get company ID for user - placeholder for multi-tenant"""
+    # TODO: Get actual company from user or context
     return "00000000-0000-0000-0000-000000000001"
 
 
@@ -42,11 +75,12 @@ def get_current_company_id():
 @router.post("/authorizations")
 async def create_ai_authorization(
     auth_data: AIAuthorizationCreate,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Create AI authorization for a task type (workflow)"""
-    user_id = get_current_user_id()
-    company_id = get_current_company_id()
+    user_id = str(current_user.id)
+    company_id = get_company_id_for_user(current_user)
     
     # Check if authorization already exists
     existing = db.execute(text("""
