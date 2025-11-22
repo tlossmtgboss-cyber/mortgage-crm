@@ -3738,6 +3738,10 @@ app.include_router(gmail_router, tags=["Gmail Integration"])
 from morning_checkin_routes import router as morning_checkin_router
 app.include_router(morning_checkin_router, tags=["Morning Check-in"])
 
+# Include AI Task Automation routes
+from ai_automation_routes import router as ai_automation_router
+app.include_router(ai_automation_router, tags=["AI Task Automation"])
+
 # Morning Check-in Migration Endpoint
 @app.post("/api/v1/migrations/add-morning-checkin")
 async def add_morning_checkin_migration(db: Session = Depends(get_db)):
