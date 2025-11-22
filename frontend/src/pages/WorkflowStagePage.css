@@ -191,14 +191,15 @@
   cursor: not-allowed;
 }
 
-/* Horizontal workflow view */
+/* Horizontal workflow view - single row */
 .tasks-list {
   display: flex;
   flex-direction: row;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: flex-start;
   gap: 12px;
   padding: 20px 0;
+  overflow-x: auto;
 }
 
 .task-item {
@@ -210,9 +211,8 @@
   background: white;
   border-radius: 8px;
   border: 1px solid #e5e7eb;
-  width: calc(33.333% - 8px);
-  min-width: 200px;
-  max-width: 280px;
+  flex: 0 0 auto;
+  width: 140px;
   transition: all 0.3s ease;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }

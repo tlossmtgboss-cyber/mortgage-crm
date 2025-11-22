@@ -40,7 +40,7 @@ async def get_current_user(
 
         # Get user with settings
         result = db.execute(
-            text("SELECT id, email, name, settings FROM users WHERE email = :email"),
+            text("SELECT id, email, full_name, user_metadata FROM users WHERE email = :email"),
             {"email": email}
         )
         user_row = result.fetchone()
@@ -54,8 +54,11 @@ async def get_current_user(
                 self.id = row[0]
                 self.email = row[1]
                 self.name = row[2]
-                self.settings = row[3] if row[3] else {}
+                # Settings stored in user_metadata
+                metadata = row[3] if row[3] else {}
+                self.settings = metadata.get('settings', {}) if isinstance(metadata, dict) else {}
                 self._db = session
+                self._user_id = row[0]
 
             def save_settings(self):
                 """Save settings back to database"""
