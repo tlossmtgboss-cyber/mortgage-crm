@@ -191,12 +191,13 @@
   cursor: not-allowed;
 }
 
-/* Flowchart-based workflow view */
+/* Horizontal workflow view */
 .tasks-list {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px;
   padding: 20px 0;
 }
 
@@ -204,15 +205,16 @@
   position: relative;
   display: flex;
   align-items: flex-start;
-  gap: 6px;
-  padding: 6px 10px;
+  gap: 8px;
+  padding: 12px 14px;
   background: white;
-  border-radius: 6px;
+  border-radius: 8px;
   border: 1px solid #e5e7eb;
-  width: 100%;
-  max-width: 180px;
+  width: calc(33.333% - 8px);
+  min-width: 200px;
+  max-width: 280px;
   transition: all 0.3s ease;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .task-item:hover {
@@ -221,36 +223,15 @@
   transform: scale(1.02);
 }
 
-/* Flowchart arrow connector */
-.task-item:not(:last-child)::after {
-  content: '';
-  position: absolute;
-  bottom: -12px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 0;
-  height: 0;
-  border-left: 4px solid transparent;
-  border-right: 4px solid transparent;
-  border-top: 6px solid var(--stage-color, #3b82f6);
-  z-index: 2;
-}
-
-/* Connecting line between tasks */
+/* Remove vertical arrows for horizontal layout */
+.task-item:not(:last-child)::after,
 .task-item:not(:last-child)::before {
-  content: '';
-  position: absolute;
-  bottom: -6px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 2px;
-  height: 6px;
-  background: var(--stage-color, #3b82f6);
+  display: none;
 }
 
-/* Spacing for arrows */
+/* No extra margin needed for horizontal */
 .task-item {
-  margin-bottom: 14px;
+  margin-bottom: 0;
 }
 
 .task-item:last-child {
@@ -263,20 +244,20 @@
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  min-width: 20px;
+  min-width: 24px;
 }
 
 .task-order .order-number {
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   background: var(--stage-color, #3b82f6);
   color: white;
-  border-radius: 4px;
+  border-radius: 5px;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  font-size: 9px;
+  font-size: 11px;
   box-shadow: 0 1px 2px rgba(59, 130, 246, 0.3);
 }
 
@@ -311,21 +292,21 @@
 .task-title-row {
   display: flex;
   align-items: center;
-  gap: 4px;
-  margin-bottom: 2px;
+  gap: 6px;
+  margin-bottom: 4px;
   flex-wrap: wrap;
 }
 
 .task-title-row strong {
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 600;
   color: #111827;
 }
 
 .trigger-badge {
-  font-size: 7px;
-  padding: 1px 4px;
-  border-radius: 6px;
+  font-size: 9px;
+  padding: 2px 6px;
+  border-radius: 8px;
   text-transform: capitalize;
   font-weight: 500;
 }
@@ -361,21 +342,21 @@
 
 .task-desc {
   color: #6b7280;
-  font-size: 8px;
-  margin: 0 0 2px 0;
-  line-height: 1.3;
+  font-size: 10px;
+  margin: 0 0 4px 0;
+  line-height: 1.4;
 }
 
 .days-offset {
   display: inline-flex;
   align-items: center;
-  gap: 1px;
-  font-size: 7px;
+  gap: 2px;
+  font-size: 9px;
   color: #3b82f6;
   font-weight: 600;
   background: #eff6ff;
-  padding: 1px 4px;
-  border-radius: 3px;
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 
 .days-offset::before {
