@@ -3744,18 +3744,19 @@ async def add_morning_checkin_migration(db: Session = Depends(get_db)):
     """Run migration to add morning check-in tables"""
     try:
         import os
+        from sqlalchemy import text as sql_text
+
         migration_path = os.path.join(os.path.dirname(__file__), "migrations", "add_morning_checkin.sql")
 
         with open(migration_path, 'r') as f:
             sql = f.read()
 
-        # Execute the SQL
-        for statement in sql.split(';'):
-            statement = statement.strip()
-            if statement:
-                db.execute(text(statement))
+        # Use raw connection to execute multi-statement SQL
+        connection = db.connection().connection
+        cursor = connection.cursor()
+        cursor.execute(sql)
+        connection.commit()
 
-        db.commit()
         return {"status": "success", "message": "Morning check-in tables created successfully"}
     except Exception as e:
         db.rollback()
