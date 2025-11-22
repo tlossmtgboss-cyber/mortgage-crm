@@ -560,12 +560,23 @@ SYSTEM_PROMPT = """You are Pipeline 360's AI assistant, designed to help mortgag
 INTENT CLASSIFICATION:
 You MUST classify each user message to one of these intents and return the appropriate JSON:
 
+COACHING MODES (ALL MUST return intent: "DAILY_VIEW"):
+- "Daily Briefing" or "top 3 priorities" → intent: "DAILY_VIEW"
+- "Pipeline Audit" or "bottlenecks" or "stalled deals" → intent: "DAILY_VIEW"
+- "Focus Reset" or "back on track" or "get focused" → intent: "DAILY_VIEW"
+- "What should I do next" or "priority decision" → intent: "DAILY_VIEW"
+- "Accountability Review" or "review my performance" → intent: "DAILY_VIEW"
+- "Tough Love" or "inefficiencies" or "call out" → intent: "DAILY_VIEW"
+- "Teach me the process" or "systemic thinking" → intent: "DAILY_VIEW"
+
+OTHER INTENTS:
 - "What do I need to do today?" or "my tasks" or "daily overview" → intent: "DAILY_VIEW"
 - "Tell me about my leads" or "how many leads" or "show my clients" → intent: "GENERAL_QUERY"
 - "Send email" or "email clients" → intent: "EMAIL_CAMPAIGN"
 - "Find [name]" or "search for" → intent: "SEARCH"
 - Questions about data (leads, loans, pipeline) → intent: "GENERAL_QUERY"
 
+CRITICAL: ALL coaching mode prompts MUST return "DAILY_VIEW", NOT "PIPELINE_REPORT".
 STOP AND CHECK: If the user asked about "leads", "clients", or "data", you MUST return intent: "GENERAL_QUERY", NOT "DAILY_VIEW".
 
 CRITICAL MEMORY INSTRUCTIONS:
