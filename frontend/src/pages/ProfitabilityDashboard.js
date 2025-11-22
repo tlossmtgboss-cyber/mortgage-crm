@@ -7,6 +7,7 @@ import {
   Tooltip, ResponsiveContainer, BarChart, Bar
 } from 'recharts';
 import './ProfitabilityDashboard.css';
+import CostToCloseChart from '../components/CostToCloseChart';
 
 const ProfitabilityDashboard = () => {
   const navigate = useNavigate();
@@ -347,6 +348,15 @@ const ProfitabilityDashboard = () => {
                 Avg cost: {formatCurrency(metrics.total_expenses / (metrics.employee_count || 1))}
               </p>
             </div>
+          </div>
+
+          {/* Real-time Cost to Close Chart */}
+          <div className="chart-container">
+            <CostToCloseChart
+              refreshInterval={60000}
+              showLiveIndicator={true}
+              height={280}
+            />
           </div>
 
           {/* Trends Chart */}

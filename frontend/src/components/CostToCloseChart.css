@@ -1,0 +1,190 @@
+/* Cost to Close Chart Styles */
+.ctc-chart-container {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Header */
+.ctc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.ctc-title-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ctc-title-section h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+}
+
+/* Live Indicator */
+.ctc-live-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: #ecfdf5;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #059669;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ctc-live-dot {
+  width: 6px;
+  height: 6px;
+  background: #10b981;
+  border-radius: 50%;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.2);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Current Value */
+.ctc-current-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ctc-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.ctc-value.up {
+  color: #dc2626;
+}
+
+.ctc-value.down {
+  color: #10b981;
+}
+
+.ctc-trend-arrow {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.ctc-trend-arrow.up {
+  color: #dc2626;
+}
+
+.ctc-trend-arrow.down {
+  color: #10b981;
+}
+
+/* Chart Area */
+.ctc-chart {
+  width: 100%;
+}
+
+/* Tooltip */
+.ctc-tooltip {
+  background: rgba(17, 24, 39, 0.95);
+  border-radius: 8px;
+  padding: 10px 14px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border: none;
+}
+
+.ctc-tooltip-date {
+  margin: 0 0 4px 0;
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.ctc-tooltip-value {
+  margin: 0;
+  font-size: 13px;
+  color: white;
+}
+
+.ctc-tooltip-value strong {
+  color: #10b981;
+  font-weight: 600;
+}
+
+/* Footer */
+.ctc-footer {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f3f4f6;
+}
+
+.ctc-update-info {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+/* Loading State */
+.ctc-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 12px;
+}
+
+.ctc-loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #10b981;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ctc-loading p {
+  margin: 0;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .ctc-header {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .ctc-current-value {
+    order: -1;
+  }
+
+  .ctc-value {
+    font-size: 20px;
+  }
+}
