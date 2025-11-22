@@ -24,7 +24,6 @@ async def get_current_user(
 ):
     """Get current user from JWT token."""
     from jose import jwt
-    from main import User
 
     if not credentials:
         raise HTTPException(status_code=401, detail="Not authenticated")
