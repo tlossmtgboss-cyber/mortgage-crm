@@ -3730,9 +3730,9 @@ app.include_router(market_chat_router, tags=["Market Chat"])
 from market_data_routes import router as market_data_router
 app.include_router(market_data_router, tags=["Market Data"])
 
-# Include Gmail Integration routes (disabled - needs proper setup)
-# from gmail_routes import router as gmail_router
-# app.include_router(gmail_router, tags=["Gmail Integration"])
+# Include Gmail Integration routes
+from gmail_routes import router as gmail_router
+app.include_router(gmail_router, tags=["Gmail Integration"])
 
 # Include Morning Check-in routes
 from morning_checkin_routes import router as morning_checkin_router
