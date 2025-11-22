@@ -61,7 +61,7 @@ router = APIRouter(prefix="/api/v1/gmail", tags=["gmail"])
 
 @router.get("/auth-url")
 async def get_gmail_auth_url(
-    current_user: User = Depends(get_current_user),
+    current_user= Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -158,7 +158,7 @@ async def gmail_oauth_callback(
 
 @router.get("/status")
 async def get_gmail_status(
-    current_user: User = Depends(get_current_user),
+    current_user= Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get Gmail connection status for current user."""
@@ -173,7 +173,7 @@ async def get_gmail_status(
 
 @router.post("/disconnect")
 async def disconnect_gmail(
-    current_user: User = Depends(get_current_user),
+    current_user= Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Disconnect Gmail account."""
@@ -203,7 +203,7 @@ async def list_emails(
     query: str = Query(None, description="Gmail search query"),
     max_results: int = Query(50, le=100),
     page_token: str = Query(None),
-    current_user: User = Depends(get_current_user),
+    current_user= Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """List emails from connected Gmail account."""
@@ -249,7 +249,7 @@ async def list_emails(
 @router.get("/emails/{message_id}")
 async def get_email(
     message_id: str,
-    current_user: User = Depends(get_current_user),
+    current_user= Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Get full email details."""
@@ -283,7 +283,7 @@ async def send_email(
     bcc: str = None,
     reply_to: str = None,
     thread_id: str = None,
-    current_user: User = Depends(get_current_user),
+    current_user= Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Send an email through Gmail."""
@@ -321,7 +321,7 @@ async def send_email(
 async def list_contacts(
     max_results: int = Query(100, le=500),
     page_token: str = Query(None),
-    current_user: User = Depends(get_current_user),
+    current_user= Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """List contacts from connected Google account."""
@@ -353,7 +353,7 @@ async def list_contacts(
 async def sync_emails(
     days_back: int = Query(7, le=30, description="Number of days to sync"),
     max_results: int = Query(100, le=500),
-    current_user: User = Depends(get_current_user),
+    current_user= Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Sync recent emails from Gmail."""
