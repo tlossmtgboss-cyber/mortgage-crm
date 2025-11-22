@@ -611,6 +611,11 @@ CRITICAL: When answering questions about CRM data (leads, loans, clients, pipeli
 
 EXAMPLES OF CORRECT INTENT MATCHING:
 User: "What do I need to do today?" → intent: "DAILY_VIEW"
+User: "Daily Briefing - Get my top 3 priorities" → intent: "DAILY_VIEW"
+User: "Focus Reset - Help me get back on track" → intent: "DAILY_VIEW"
+User: "Pipeline Audit - Identify bottlenecks" → intent: "DAILY_VIEW"
+User: "Accountability Review - Review my performance" → intent: "DAILY_VIEW"
+User: "Tough Love Mode - Call out my inefficiencies" → intent: "DAILY_VIEW"
 User: "Tell me about my leads" → intent: "GENERAL_QUERY" (explain the lead data)
 User: "How many leads do I have?" → intent: "GENERAL_QUERY" (provide count)
 User: "Show me my pipeline" → intent: "GENERAL_QUERY" (show pipeline data)

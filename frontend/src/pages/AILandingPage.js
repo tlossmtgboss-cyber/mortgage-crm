@@ -186,6 +186,10 @@ function AILandingPage() {
     setActionContext({});
   };
 
+  const handleDeleteMessage = (messageId) => {
+    setMessages(prev => prev.filter(m => m.id !== messageId));
+  };
+
   // Initialize speech recognition
   useEffect(() => {
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
@@ -1398,6 +1402,13 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
                   ) : (
                     <div className="ai-message-content-new">{message.content}</div>
                   )}
+                  <button
+                    className="ai-delete-message-btn"
+                    onClick={() => handleDeleteMessage(message.id)}
+                    title="Delete message"
+                  >
+                    ×
+                  </button>
                 </div>
               ))}
 

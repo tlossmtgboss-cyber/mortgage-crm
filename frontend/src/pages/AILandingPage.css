@@ -1341,3 +1341,37 @@
   border-color: #667eea;
   box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
 }
+
+/* Delete Message Button */
+.ai-message-new {
+  position: relative;
+}
+
+.ai-delete-message-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  cursor: pointer;
+  color: #6c7a89;
+  font-size: 18px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: all 0.2s ease;
+}
+
+.ai-message-new:hover .ai-delete-message-btn {
+  opacity: 1;
+}
+
+.ai-delete-message-btn:hover {
+  background: rgba(220, 53, 69, 0.2);
+  color: #dc3545;
+}
