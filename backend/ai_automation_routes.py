@@ -328,7 +328,7 @@ async def review_training_task(
     task = db.execute(text("""
         SELECT t.*, a.authorization_id, a.training_progress_count, a.task_type_name
         FROM tasks t
-        JOIN ai_task_type_authorizations a ON t.workflow_id = a.workflow_id AND a.user_id = :user_id
+        JOIN ai_task_type_authorizations a ON t.workflow_id = a.workflow_id AND a.user_id::text = :user_id
         WHERE t.id = :task_id AND t.completion_method = 'ai_pending_review'
     """), {"task_id": task_id, "user_id": user_id}).fetchone()
     
@@ -590,7 +590,7 @@ async def get_ai_costs(
             COUNT(DISTINCT task_instance_id) as tasks,
             SUM(amount) as cost
         FROM ai_cost_tracking
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         GROUP BY period_year, period_month
         ORDER BY period_year DESC, period_month DESC
         LIMIT 6
@@ -685,7 +685,7 @@ async def get_ai_performance(
             COUNT(*) as tasks,
             AVG(confidence_score) as avg_confidence
         FROM ai_audit_log
-        WHERE user_id = :user_id
+        WHERE user_id::text = :user_id
         AND action_type = 'auto_complete'
         AND timestamp >= :date_from
         GROUP BY DATE(timestamp)
