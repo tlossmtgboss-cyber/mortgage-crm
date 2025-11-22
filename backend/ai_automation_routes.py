@@ -76,7 +76,7 @@ def get_company_id_for_user(user):
 async def create_ai_authorization(
     auth_data: AIAuthorizationCreate,
     current_user: User = Depends(get_current_user),
-    current_user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
     """Create AI authorization for a task type (workflow)"""
     user_id = str(current_user.id)
