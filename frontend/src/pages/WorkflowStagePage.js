@@ -160,6 +160,7 @@ function WorkflowStagePage() {
     auto_trigger: 'after_previous',
     days_offset: 0
   });
+  const [draggedTask, setDraggedTask] = useState(null);
 
   const stageConfig = STAGE_CONFIG[stage];
   const statuses = stageConfig?.statuses || {};
@@ -269,6 +270,45 @@ function WorkflowStagePage() {
     });
   };
 
+  // Drag and drop handlers
+  const handleDragStart = (e, task) => {
+    setDraggedTask(task);
+    e.dataTransfer.effectAllowed = 'move';
+    e.target.style.opacity = '0.5';
+  };
+
+  const handleDragEnd = (e) => {
+    e.target.style.opacity = '1';
+    setDraggedTask(null);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e, targetTask) => {
+    e.preventDefault();
+    if (!draggedTask || !selectedStatus || draggedTask.id === targetTask.id) return;
+
+    const currentTasks = [...tasks];
+    const draggedIndex = currentTasks.findIndex(t => t.id === draggedTask.id);
+    const targetIndex = currentTasks.findIndex(t => t.id === targetTask.id);
+
+    // Remove dragged task and insert at target position
+    currentTasks.splice(draggedIndex, 1);
+    currentTasks.splice(targetIndex, 0, draggedTask);
+
+    // Update order numbers
+    const reorderedTasks = currentTasks.map((t, idx) => ({ ...t, order: idx + 1 }));
+
+    setTasksByStatus({
+      ...tasksByStatus,
+      [selectedStatus]: reorderedTasks
+    });
+    setDraggedTask(null);
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -366,7 +406,12 @@ function WorkflowStagePage() {
           {tasks.map((task, idx) => (
             <div
               key={task.id}
-              className={`task-card ${editingTask === task.id ? 'editing' : ''}`}
+              className={`task-card ${editingTask === task.id ? 'editing' : ''} ${draggedTask?.id === task.id ? 'dragging' : ''}`}
+              draggable={editingTask !== task.id}
+              onDragStart={(e) => handleDragStart(e, task)}
+              onDragEnd={handleDragEnd}
+              onDragOver={handleDragOver}
+              onDrop={(e) => handleDrop(e, task)}
               onClick={() => editingTask !== task.id && setEditingTask(task.id)}
             >
               <div className="task-card-header">

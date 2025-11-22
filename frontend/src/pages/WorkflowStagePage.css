@@ -227,6 +227,22 @@
   z-index: 100;
 }
 
+.task-card.dragging {
+  opacity: 0.5;
+}
+
+.task-card[draggable="true"] {
+  cursor: grab;
+}
+
+.task-card[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.task-card:not(.editing):hover {
+  transform: translateY(-2px);
+}
+
 .task-card-header {
   display: flex;
   align-items: center;

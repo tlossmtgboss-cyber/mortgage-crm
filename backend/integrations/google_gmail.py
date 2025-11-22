@@ -87,23 +87,33 @@ class GmailService:
         Returns:
             Token data including access_token, refresh_token, etc.
         """
-        flow = Flow.from_client_config(
-            self.client_config,
-            scopes=SCOPES,
-            redirect_uri=self.redirect_uri
-        )
+        import requests
 
-        flow.fetch_token(code=code)
-        credentials = flow.credentials
+        # Use direct HTTP request to avoid scope mismatch errors
+        token_url = "https://oauth2.googleapis.com/token"
+
+        response = requests.post(token_url, data={
+            'code': code,
+            'client_id': self.client_id,
+            'client_secret': self.client_secret,
+            'redirect_uri': self.redirect_uri,
+            'grant_type': 'authorization_code'
+        })
+
+        if response.status_code != 200:
+            logger.error(f"Token exchange failed: {response.text}")
+            raise Exception(f"Token exchange failed: {response.text}")
+
+        token_data = response.json()
 
         return {
-            'access_token': credentials.token,
-            'refresh_token': credentials.refresh_token,
-            'token_uri': credentials.token_uri,
-            'client_id': credentials.client_id,
-            'client_secret': credentials.client_secret,
-            'scopes': list(credentials.scopes),
-            'expiry': credentials.expiry.isoformat() if credentials.expiry else None
+            'access_token': token_data.get('access_token'),
+            'refresh_token': token_data.get('refresh_token'),
+            'token_uri': token_url,
+            'client_id': self.client_id,
+            'client_secret': self.client_secret,
+            'scopes': token_data.get('scope', '').split(),
+            'expiry': None  # Will be set when credentials are refreshed
         }
 
     def get_credentials(self, token_data: Dict[str, Any]) -> Credentials:

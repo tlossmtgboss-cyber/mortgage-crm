@@ -83,7 +83,7 @@ def get_or_create_partner(db: Session, user_id: int, partner_name: str) -> int:
     """Get existing partner or create new one"""
     result = db.execute(text("""
         SELECT id FROM referral_partners
-        WHERE user_id = :user_id AND LOWER(name) = LOWER(:name)
+        WHERE user_id = :user_id AND LOWER(business_name) = LOWER(:name)
         LIMIT 1
     """), {"user_id": user_id, "name": partner_name})
     row = result.fetchone()
@@ -93,8 +93,8 @@ def get_or_create_partner(db: Session, user_id: int, partner_name: str) -> int:
 
     # Create new partner
     result = db.execute(text("""
-        INSERT INTO referral_partners (user_id, name, partner_type, created_at)
-        VALUES (:user_id, :name, 'realtor', CURRENT_TIMESTAMP)
+        INSERT INTO referral_partners (user_id, business_name, contact_name, category, created_at)
+        VALUES (:user_id, :name, :name, 'realtor', CURRENT_TIMESTAMP)
         RETURNING id
     """), {"user_id": user_id, "name": partner_name})
     db.commit()
