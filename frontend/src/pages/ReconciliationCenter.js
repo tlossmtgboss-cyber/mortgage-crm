@@ -213,8 +213,21 @@ function ReconciliationCenter() {
         }
       } else {
         if (!silent) {
-          setSyncStatus('⚠ Sync failed - please try again');
-          setTimeout(() => setSyncStatus(''), 3000);
+          // Try to get specific error message
+          let errorMessage = '⚠ Sync failed - please try again';
+          try {
+            const errorData = await response.json();
+            if (response.status === 404 && errorData.detail) {
+              // Not connected error
+              errorMessage = `⚠ ${errorData.detail}. Go to Settings to reconnect.`;
+            } else if (errorData.detail) {
+              errorMessage = `⚠ ${errorData.detail}`;
+            }
+          } catch (e) {
+            // Use default error message
+          }
+          setSyncStatus(errorMessage);
+          setTimeout(() => setSyncStatus(''), 5000);
         }
       }
     } catch (error) {
