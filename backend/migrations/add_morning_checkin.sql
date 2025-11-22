@@ -117,44 +117,44 @@ CREATE INDEX IF NOT EXISTS idx_partner_roi_snapshots_partner ON partner_roi_snap
 CREATE INDEX IF NOT EXISTS idx_partner_time_investments_partner ON partner_time_investments(partner_id, user_id);
 CREATE INDEX IF NOT EXISTS idx_leads_referral_partner ON leads(referral_partner_id);
 
--- Create view for current partner ROI metrics
-CREATE OR REPLACE VIEW partner_roi_current AS
-SELECT
-    rp.id as partner_id,
-    rp.name as partner_name,
-    rp.company,
-    rp.user_id,
+-- Create view for current partner ROI metrics (commented out - needs table structure check)
+-- CREATE OR REPLACE VIEW partner_roi_current AS
+-- SELECT
+--     rp.id as partner_id,
+--     rp.name as partner_name,
+--     rp.company,
+--     rp.user_id,
 
-    -- Lead counts
-    COUNT(DISTINCT l.id) as total_leads,
-    COUNT(DISTINCT CASE WHEN l.created_at > NOW() - INTERVAL '12 months' THEN l.id END) as leads_12m,
-    COUNT(DISTINCT CASE WHEN l.stage IN ('Closed Won', 'Funded') THEN l.id END) as converted_leads,
-
-    -- Conversion rate
-    CASE
-        WHEN COUNT(DISTINCT l.id) > 0
-        THEN ROUND(100.0 * COUNT(DISTINCT CASE WHEN l.stage IN ('Closed Won', 'Funded') THEN l.id END) / COUNT(DISTINCT l.id), 1)
-        ELSE 0
-    END as conversion_rate,
-
-    -- Active pipeline
-    COUNT(DISTINCT CASE WHEN l.stage NOT IN ('Closed Won', 'Closed Lost', 'Funded', 'Inactive') THEN l.id END) as active_leads,
-    COALESCE(SUM(CASE WHEN l.stage NOT IN ('Closed Won', 'Closed Lost', 'Funded', 'Inactive') THEN l.loan_amount END), 0) as active_pipeline_value,
-
-    -- Revenue (using loan amount * estimated commission rate)
-    COALESCE(SUM(CASE WHEN l.stage IN ('Closed Won', 'Funded') AND l.created_at > NOW() - INTERVAL '12 months'
-        THEN l.loan_amount * 0.01 END), 0) as estimated_revenue_12m,
-
-    -- Time investment (from interactions)
-    COALESCE(SUM(pi.duration_minutes) / 60.0, 0) as total_hours_invested,
-
-    -- Last contact
-    MAX(pi.interaction_date) as last_contact_date
-
-FROM referral_partners rp
-LEFT JOIN leads l ON l.referral_partner_id = rp.id
-LEFT JOIN partner_interactions pi ON pi.partner_id = rp.id
-GROUP BY rp.id, rp.name, rp.company, rp.user_id;
+--     -- Lead counts
+--     COUNT(DISTINCT l.id) as total_leads,
+--     COUNT(DISTINCT CASE WHEN l.created_at > NOW() - INTERVAL '12 months' THEN l.id END) as leads_12m,
+--     COUNT(DISTINCT CASE WHEN l.stage IN ('Closed Won', 'Funded') THEN l.id END) as converted_leads,
+--
+--     -- Conversion rate
+--     CASE
+--         WHEN COUNT(DISTINCT l.id) > 0
+--         THEN ROUND(100.0 * COUNT(DISTINCT CASE WHEN l.stage IN ('Closed Won', 'Funded') THEN l.id END) / COUNT(DISTINCT l.id), 1)
+--         ELSE 0
+--     END as conversion_rate,
+--
+--     -- Active pipeline
+--     COUNT(DISTINCT CASE WHEN l.stage NOT IN ('Closed Won', 'Closed Lost', 'Funded', 'Inactive') THEN l.id END) as active_leads,
+--     COALESCE(SUM(CASE WHEN l.stage NOT IN ('Closed Won', 'Closed Lost', 'Funded', 'Inactive') THEN l.loan_amount END), 0) as active_pipeline_value,
+--
+--     -- Revenue (using loan amount * estimated commission rate)
+--     COALESCE(SUM(CASE WHEN l.stage IN ('Closed Won', 'Funded') AND l.created_at > NOW() - INTERVAL '12 months'
+--         THEN l.loan_amount * 0.01 END), 0) as estimated_revenue_12m,
+--
+--     -- Time investment (from interactions)
+--     COALESCE(SUM(pi.duration_minutes) / 60.0, 0) as total_hours_invested,
+--
+--     -- Last contact
+--     MAX(pi.interaction_date) as last_contact_date
+--
+-- FROM referral_partners rp
+-- LEFT JOIN leads l ON l.referral_partner_id = rp.id
+-- LEFT JOIN partner_interactions pi ON pi.partner_id = rp.id
+-- GROUP BY rp.id, rp.name, rp.company, rp.user_id;
 
 -- Insert default settings for existing users
 INSERT INTO user_checkin_settings (user_id, hourly_rate, checkin_enabled)
