@@ -3734,6 +3734,10 @@ app.include_router(market_data_router, tags=["Market Data"])
 from gmail_routes import router as gmail_router
 app.include_router(gmail_router, tags=["Gmail Integration"])
 
+# Include Morning Check-in routes
+from morning_checkin_routes import router as morning_checkin_router
+app.include_router(morning_checkin_router, tags=["Morning Check-in"])
+
 # ============================================================================
 # API KEY HELPER FUNCTIONS
 # ============================================================================
