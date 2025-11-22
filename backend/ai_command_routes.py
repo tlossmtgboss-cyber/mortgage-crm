@@ -1117,9 +1117,22 @@ async def process_with_claude(
     # Build enhanced system prompt with memory context
     system = SYSTEM_PROMPT
 
-    # CHECK IF THIS IS A DAILY_VIEW REQUEST - add explicit summary numbers
+    # CHECK IF THIS IS A DAILY_VIEW OR COACHING REQUEST - add explicit summary numbers
     message_lower = message.lower()
-    if any(phrase in message_lower for phrase in ["today", "daily", "morning", "need to do", "what should i", "my tasks", "what's on"]):
+
+    # Coaching mode detection
+    is_daily_briefing = "daily briefing" in message_lower or "top 3 priorities" in message_lower
+    is_pipeline_audit = "pipeline audit" in message_lower or "bottlenecks" in message_lower
+    is_focus_reset = "focus reset" in message_lower or "back on track" in message_lower
+    is_next_action = "what should i do next" in message_lower or "priority decision" in message_lower
+    is_accountability = "accountability review" in message_lower or "review my performance" in message_lower
+    is_tough_love = "tough love" in message_lower or "inefficiencies" in message_lower
+    is_teach_process = "teach me the process" in message_lower or "systemic thinking" in message_lower
+
+    is_coaching_mode = any([is_daily_briefing, is_pipeline_audit, is_focus_reset, is_next_action,
+                           is_accountability, is_tough_love, is_teach_process])
+
+    if is_coaching_mode or any(phrase in message_lower for phrase in ["today", "daily", "morning", "need to do", "what should i", "my tasks", "what's on"]):
         # Fetch daily summary data to show exact numbers
         daily_data = get_daily_summary(db, user_id)
         summary = daily_data.get("summary", {})
@@ -1143,6 +1156,92 @@ LOAN STAGE BREAKDOWN:
 
 IMPORTANT: Use the EXACT numbers above in your response. Do NOT say "0 active leads" - use "{summary.get('active_leads', 0)} active leads".
 === END DAILY VIEW DATA ===
+"""
+
+        # Add coaching mode specific instructions
+        if is_daily_briefing:
+            system += """
+
+=== COACHING MODE: DAILY BRIEFING ===
+The user wants their TOP 3 PRIORITIES for today. Structure your response as:
+1. Identify the 3 most critical items from tasks and follow-ups
+2. For each priority, explain WHY it's urgent
+3. Provide specific action steps
+4. Keep it focused and actionable - no fluff
+=== END COACHING MODE ===
+"""
+        elif is_pipeline_audit:
+            system += """
+
+=== COACHING MODE: PIPELINE AUDIT ===
+The user wants to identify BOTTLENECKS and STALLED DEALS. Structure your response as:
+1. Identify deals that haven't moved stages in 7+ days
+2. Call out any missing documents or pending items
+3. Highlight conversion issues between stages
+4. Provide specific recommendations to unstick each bottleneck
+Be direct and specific - name names and amounts.
+=== END COACHING MODE ===
+"""
+        elif is_focus_reset:
+            system += """
+
+=== COACHING MODE: FOCUS RESET ===
+The user is scattered and needs to refocus. Structure your response as:
+1. List ONLY the most critical items that need immediate attention
+2. Cut through the noise - ignore low-priority items
+3. Provide a clear sequence: do THIS first, THEN this, THEN this
+4. Be calm but direct - help them see the path forward
+=== END COACHING MODE ===
+"""
+        elif is_next_action:
+            system += """
+
+=== COACHING MODE: WHAT SHOULD I DO NEXT ===
+The user needs priority decision guidance. Structure your response as:
+1. Look at their current workload and identify the single most impactful action
+2. Explain why this should be next (urgency, value, dependencies)
+3. Provide the specific next step to take
+4. If there are competing priorities, explain the trade-offs
+=== END COACHING MODE ===
+"""
+        elif is_accountability:
+            system += """
+
+=== COACHING MODE: ACCOUNTABILITY REVIEW ===
+The user wants honest performance feedback. Structure your response as:
+1. Review their metrics against goals
+2. Highlight what's working well
+3. Call out areas falling behind with specific numbers
+4. Compare to previous periods if data available
+5. End with specific improvement actions
+Be honest but constructive - they asked for accountability.
+=== END COACHING MODE ===
+"""
+        elif is_tough_love:
+            system += """
+
+=== COACHING MODE: TOUGH LOVE ===
+The user wants you to be DIRECT about inefficiencies. Structure your response as:
+1. No sugar-coating - call out exactly what's not working
+2. Point to specific leads, deals, or tasks that are being neglected
+3. Highlight patterns of behavior that are hurting results
+4. Be blunt about the cost of inaction (lost revenue, missed opportunities)
+5. End with "Here's what you need to do TODAY"
+They asked for tough love - deliver it respectfully but firmly.
+=== END COACHING MODE ===
+"""
+        elif is_teach_process:
+            system += """
+
+=== COACHING MODE: TEACH ME THE PROCESS ===
+The user wants to learn systemic thinking. Structure your response as:
+1. Explain the optimal workflow for their current situation
+2. Show how different pipeline stages connect
+3. Teach them to identify leading vs lagging indicators
+4. Provide frameworks they can apply repeatedly
+5. Use their actual data as examples
+This is educational - help them build better habits, not just solve today's problem.
+=== END COACHING MODE ===
 """
 
     # ADD COMPLETE CRM DATA CONTEXT
