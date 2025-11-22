@@ -17,7 +17,84 @@ function AILandingPage() {
   const [selectedSendMethod, setSelectedSendMethod] = useState('email'); // Track selected send method
   const [editingMessage, setEditingMessage] = useState(false);
   const [editedMessage, setEditedMessage] = useState('');
+  const [savedQuestions, setSavedQuestions] = useState(() => {
+    const stored = localStorage.getItem('ai_saved_questions');
+    return stored ? JSON.parse(stored) : [];
+  });
+  const [selectedSavedQuestion, setSelectedSavedQuestion] = useState(null);
+  const [draggedMessage, setDraggedMessage] = useState(null);
   const chatAreaRef = useRef(null);
+  const sidebarRef = useRef(null);
+
+  // Save questions to localStorage when they change
+  useEffect(() => {
+    localStorage.setItem('ai_saved_questions', JSON.stringify(savedQuestions));
+  }, [savedQuestions]);
+
+  // Drag handlers for saving questions
+  const handleDragStart = (e, message) => {
+    if (message.type !== 'user') return;
+    setDraggedMessage(message);
+    e.dataTransfer.effectAllowed = 'copy';
+    e.dataTransfer.setData('text/plain', message.content);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    if (sidebarRef.current) {
+      sidebarRef.current.classList.add('drag-over');
+    }
+  };
+
+  const handleDragLeave = (e) => {
+    if (sidebarRef.current) {
+      sidebarRef.current.classList.remove('drag-over');
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    if (sidebarRef.current) {
+      sidebarRef.current.classList.remove('drag-over');
+    }
+
+    if (draggedMessage && draggedMessage.type === 'user') {
+      // Find the answer that followed this question
+      const msgIndex = messages.findIndex(m => m.id === draggedMessage.id);
+      const answerMsg = messages.find((m, i) => i > msgIndex && m.type === 'assistant');
+
+      const newSavedQuestion = {
+        id: Date.now(),
+        question: draggedMessage.content,
+        answer: answerMsg?.content || 'No answer available',
+        savedAt: new Date().toISOString()
+      };
+
+      // Check if already saved
+      if (!savedQuestions.some(q => q.question === draggedMessage.content)) {
+        setSavedQuestions(prev => [...prev, newSavedQuestion]);
+      }
+    }
+    setDraggedMessage(null);
+  };
+
+  const handleSelectSavedQuestion = (saved) => {
+    setSelectedSavedQuestion(saved);
+  };
+
+  const handleDeleteSavedQuestion = (id, e) => {
+    e.stopPropagation();
+    setSavedQuestions(prev => prev.filter(q => q.id !== id));
+    if (selectedSavedQuestion?.id === id) {
+      setSelectedSavedQuestion(null);
+    }
+  };
+
+  const handleReaskQuestion = (question) => {
+    setInputValue(question);
+    setSelectedSavedQuestion(null);
+  };
 
   // Session ID for permanent memory - persists to localStorage
   const [sessionId, setSessionId] = useState(() => {
@@ -644,96 +721,171 @@ function AILandingPage() {
         <h1>Back at it, {userName}</h1>
       </div>
 
-      <div className="ai-container">
-        <div className="ai-chat-area" ref={chatAreaRef}>
-          {messages.length === 0 ? (
-            <div className="ai-empty-state">
-              <div className="ai-empty-icon">💬</div>
-              <h2>What would you like to do today?</h2>
-              <p>Ask me anything about your CRM data, clients, or tasks. I'll handle the rest.</p>
+      <div className="ai-main-layout">
+        {/* Main content area */}
+        <div className="ai-container">
+          {/* Input area at top */}
+          <div className="ai-input-container">
+            <button className="ai-icon-btn" title="Add attachment">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 5v14M5 12h14"/>
+              </svg>
+            </button>
 
-              <div className="ai-example-prompts">
-                <button className="ai-example-prompt" onClick={() => handleExamplePrompt('What do I need to do today?')}>
-                  What do I need to do today?
-                </button>
-                <button className="ai-example-prompt" onClick={() => handleExamplePrompt('Send an email to all mortgages under management clients about the All In One loan')}>
-                  Send an email to all mortgages under management clients about the All In One loan
-                </button>
-                <button className="ai-example-prompt" onClick={() => handleExamplePrompt('Update all deals in underwriting to include the new appraisal waiver guidelines')}>
-                  Update all deals in underwriting to include the new appraisal waiver guidelines
-                </button>
-                <button className="ai-example-prompt" onClick={() => handleExamplePrompt('Call my top 10 referral partners and leave a voicemail thanking them for Q4')}>
-                  Call my top 10 referral partners and leave a voicemail thanking them for Q4
-                </button>
-                <button className="ai-example-prompt" onClick={() => handleExamplePrompt('Generate a pipeline report for deals closing this month and send to my team')}>
-                  Generate a pipeline report for deals closing this month and send to my team
-                </button>
-              </div>
-            </div>
-          ) : (
-            messages.map(message => (
-              <div key={message.id} className={`ai-message ai-message-${message.type}`}>
-                {message.isSpecialContent ? (
-                  renderSpecialContent(message)
-                ) : (
-                  <div className="ai-message-content">{message.content}</div>
-                )}
-              </div>
-            ))
-          )}
+            <button className="ai-icon-btn" title="Voice input">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/>
+              </svg>
+            </button>
 
-          {loading && (
-            <div className="ai-message ai-message-assistant">
-              <div className="ai-typing-indicator">
-                <span></span>
-                <span></span>
-                <span></span>
-              </div>
+            <div className="ai-input-wrapper">
+              <input
+                type="text"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Ask me to do something..."
+                disabled={loading}
+              />
             </div>
-          )}
+
+            <div className="ai-model-selector">
+              <span>Sonnet 4.5</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M6 9l6 6 6-6"/>
+              </svg>
+            </div>
+
+            <button
+              className="ai-send-btn"
+              onClick={() => sendMessage()}
+              disabled={!inputValue.trim() || loading}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+              </svg>
+            </button>
+          </div>
+
+          {/* Answer area below input */}
+          <div className="ai-chat-area" ref={chatAreaRef}>
+            {selectedSavedQuestion ? (
+              // Show saved question's answer
+              <div className="ai-saved-answer-display">
+                <div className="ai-saved-answer-header">
+                  <span>Saved Question</span>
+                  <button onClick={() => setSelectedSavedQuestion(null)}>✕ Close</button>
+                </div>
+                <div className="ai-message ai-message-user">
+                  <div className="ai-message-content">{selectedSavedQuestion.question}</div>
+                </div>
+                <div className="ai-message ai-message-assistant">
+                  <div className="ai-message-content">{selectedSavedQuestion.answer}</div>
+                </div>
+                <button
+                  className="ai-reask-btn"
+                  onClick={() => handleReaskQuestion(selectedSavedQuestion.question)}
+                >
+                  🔄 Ask Again
+                </button>
+              </div>
+            ) : messages.length === 0 ? (
+              <div className="ai-empty-state">
+                <div className="ai-empty-icon">💬</div>
+                <h2>What would you like to do today?</h2>
+                <p>Ask me anything about your CRM data, clients, or tasks. I'll handle the rest.</p>
+                <p className="ai-drag-hint">💡 Tip: Drag questions to the sidebar to save them!</p>
+
+                <div className="ai-example-prompts">
+                  <button className="ai-example-prompt" onClick={() => handleExamplePrompt('What do I need to do today?')}>
+                    What do I need to do today?
+                  </button>
+                  <button className="ai-example-prompt" onClick={() => handleExamplePrompt('Send an email to all mortgages under management clients about the All In One loan')}>
+                    Send an email to all mortgages under management clients about the All In One loan
+                  </button>
+                  <button className="ai-example-prompt" onClick={() => handleExamplePrompt('Update all deals in underwriting to include the new appraisal waiver guidelines')}>
+                    Update all deals in underwriting to include the new appraisal waiver guidelines
+                  </button>
+                  <button className="ai-example-prompt" onClick={() => handleExamplePrompt('Call my top 10 referral partners and leave a voicemail thanking them for Q4')}>
+                    Call my top 10 referral partners and leave a voicemail thanking them for Q4
+                  </button>
+                  <button className="ai-example-prompt" onClick={() => handleExamplePrompt('Generate a pipeline report for deals closing this month and send to my team')}>
+                    Generate a pipeline report for deals closing this month and send to my team
+                  </button>
+                </div>
+              </div>
+            ) : (
+              messages.map(message => (
+                <div
+                  key={message.id}
+                  className={`ai-message ai-message-${message.type} ${message.type === 'user' ? 'draggable' : ''}`}
+                  draggable={message.type === 'user'}
+                  onDragStart={(e) => handleDragStart(e, message)}
+                >
+                  {message.isSpecialContent ? (
+                    renderSpecialContent(message)
+                  ) : (
+                    <div className="ai-message-content">
+                      {message.content}
+                      {message.type === 'user' && <span className="ai-drag-icon" title="Drag to save">⋮⋮</span>}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+
+            {loading && (
+              <div className="ai-message ai-message-assistant">
+                <div className="ai-typing-indicator">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="ai-input-container">
-          <button className="ai-icon-btn" title="Add attachment">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 5v14M5 12h14"/>
-            </svg>
-          </button>
-
-          <button className="ai-icon-btn" title="Voice input">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/>
-            </svg>
-          </button>
-
-          <div className="ai-input-wrapper">
-            <input
-              type="text"
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Ask me to do something..."
-              disabled={loading}
-            />
+        {/* Saved Questions Sidebar */}
+        <div
+          className="ai-saved-sidebar"
+          ref={sidebarRef}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          <div className="ai-saved-sidebar-header">
+            <h3>📌 Saved Questions</h3>
+            <span className="ai-saved-count">{savedQuestions.length}</span>
           </div>
 
-          <div className="ai-model-selector">
-            <span>Sonnet 4.5</span>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M6 9l6 6 6-6"/>
-            </svg>
-          </div>
-
-          <button
-            className="ai-send-btn"
-            onClick={() => sendMessage()}
-            disabled={!inputValue.trim() || loading}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
-            </svg>
-          </button>
+          {savedQuestions.length === 0 ? (
+            <div className="ai-saved-empty">
+              <p>Drag questions here to save them for quick access</p>
+            </div>
+          ) : (
+            <div className="ai-saved-list">
+              {savedQuestions.map(saved => (
+                <div
+                  key={saved.id}
+                  className={`ai-saved-item ${selectedSavedQuestion?.id === saved.id ? 'selected' : ''}`}
+                  onClick={() => handleSelectSavedQuestion(saved)}
+                >
+                  <div className="ai-saved-question-text">
+                    {saved.question.length > 60 ? saved.question.substring(0, 60) + '...' : saved.question}
+                  </div>
+                  <button
+                    className="ai-saved-delete"
+                    onClick={(e) => handleDeleteSavedQuestion(saved.id, e)}
+                    title="Delete"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
