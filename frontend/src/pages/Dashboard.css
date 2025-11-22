@@ -1884,3 +1884,48 @@
   color: #374151;
   flex: 1;
 }
+
+/* AI Assistant Button in Header */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.ai-landing-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+}
+
+.ai-landing-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.4);
+}
+
+.ai-landing-btn:active {
+  transform: translateY(0);
+}
+
+@media (max-width: 768px) {
+  .header-actions {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+  }
+  
+  .ai-landing-btn {
+    font-size: 12px;
+    padding: 6px 12px;
+  }
+}

@@ -40,6 +40,7 @@ function Dashboard() {
   const [containerOrder, setContainerOrder] = useState([
     'ai-alerts',
     'production-tracker',
+    'profitability',
     'efficiency',
     'ai-tasks',
     'pipeline',
@@ -58,6 +59,7 @@ function Dashboard() {
       const defaultOrder = [
         'ai-alerts',
         'production-tracker',
+        'profitability',
         'efficiency',
         'ai-tasks',
         'pipeline',
@@ -429,6 +431,67 @@ function Dashboard() {
       );
     }
 
+    if (containerId === 'profitability') {
+      return (
+        <div
+          key={containerId}
+          className={`dashboard-block profitability-block draggable-container ${isDragging ? 'dragging' : ''}`}
+          onDragOver={(e) => handleDragOver(e, index)}
+          onDragEnd={handleDragEnd}
+        >
+          <div
+            className="drag-handle"
+            title="Drag to reorder"
+            draggable="true"
+            onDragStart={() => handleDragStart(index)}
+          >⋮⋮</div>
+          <div className="block-header clickable-block" onClick={() => navigate('/profitability')}>
+            <h2>📊 Profitability Intelligence</h2>
+          </div>
+          <div className="profitability-preview">
+            <div className="profitability-metrics-grid">
+              <div className="profitability-metric">
+                <div className="metric-label">Gain on Sale</div>
+                <div className="metric-value">285 bps</div>
+                <div className="metric-change positive">↑ 12 bps</div>
+              </div>
+              <div className="profitability-metric">
+                <div className="metric-label">Cost per Loan</div>
+                <div className="metric-value">$8,450</div>
+                <div className="metric-change positive">↓ $320</div>
+              </div>
+              <div className="profitability-metric">
+                <div className="metric-label">Net Margin</div>
+                <div className="metric-value">$2,850</div>
+                <div className="metric-change positive">↑ $180</div>
+              </div>
+              <div className="profitability-metric">
+                <div className="metric-label">Cash Runway</div>
+                <div className="metric-value">8.2 mo</div>
+                <div className="metric-change neutral">→ stable</div>
+              </div>
+            </div>
+            <div className="profitability-insights">
+              <div className="insight-item">
+                <span className="insight-icon">💡</span>
+                <span>FHA loans showing 15% higher margins than conventional this month</span>
+              </div>
+              <div className="insight-item">
+                <span className="insight-icon">⚠️</span>
+                <span>Warehouse utilization at 78% - consider additional capacity</span>
+              </div>
+            </div>
+            <button
+              className="btn-view-profitability"
+              onClick={() => navigate('/profitability')}
+            >
+              View Full Analysis →
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     if (containerId === 'efficiency') {
       // PHASE 4: Only show for Operations and Management roles (NOT Sales)
       // Always show for demo user
@@ -789,8 +852,17 @@ function Dashboard() {
           Today's Command Center{' '}
           <span className="task-count-badge">({getAggregatedTasksCount()})</span>
         </h1>
-        <div className="header-date">
-          {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+        <div className="header-actions">
+          <div className="header-date">
+            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+          </div>
+          <button
+            className="ai-landing-btn"
+            onClick={() => navigate('/ai')}
+            title="Open AI Assistant"
+          >
+            AI Assistant
+          </button>
         </div>
       </div>
 

@@ -5,7 +5,7 @@ This module provides endpoints for processing natural language commands
 and executing CRM actions through Claude AI.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, File, UploadFile
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 from pydantic import BaseModel
@@ -17,6 +17,7 @@ import json
 import uuid
 import time
 import anthropic
+import base64
 
 from database import get_db
 from conversation_memory_service import ConversationMemory
@@ -1837,3 +1838,228 @@ async def execute_voicemail_drop(
         "recipients_count": len(recipients),
         "status": "queued"
     }
+
+
+# ============================================================================
+# Screenshot Parsing Models
+# ============================================================================
+
+class ScreenshotLeadData(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    referral_source: Optional[str] = None
+    property_address: Optional[str] = None
+    loan_type: Optional[str] = None
+    loan_amount: Optional[float] = None
+    notes: Optional[str] = None
+
+
+class CreateLeadFromScreenshotRequest(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    referral_source: Optional[str] = None
+    property_address: Optional[str] = None
+    loan_type: Optional[str] = None
+    loan_amount: Optional[float] = None
+    notes: Optional[str] = None
+
+
+# ============================================================================
+# Screenshot Parsing Endpoints
+# ============================================================================
+
+@router.post("/parse-screenshot")
+async def parse_screenshot(
+    image: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Parse a screenshot image to extract lead information using Claude's vision.
+    """
+    if not anthropic_client:
+        raise HTTPException(status_code=500, detail="AI service not configured")
+
+    # Validate file type
+    if not image.content_type or not image.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+
+    try:
+        # Read and encode the image
+        image_data = await image.read()
+        base64_image = base64.standard_b64encode(image_data).decode("utf-8")
+
+        # Determine media type
+        media_type = image.content_type or "image/jpeg"
+
+        # Create the prompt for Claude to extract lead information
+        extraction_prompt = """Analyze this screenshot which appears to be a text message or email introducing a lead from a realtor or referral partner.
+
+Extract the following information if present:
+- First Name
+- Last Name
+- Email
+- Phone Number
+- Referral Source (who sent the introduction - the realtor/partner name and company)
+- Property Address (if mentioned)
+- Loan Type (purchase, refinance, etc.)
+- Loan Amount (if mentioned)
+- Any additional notes or context
+
+Return the information as a JSON object with these fields:
+{
+    "first_name": "",
+    "last_name": "",
+    "email": "",
+    "phone": "",
+    "referral_source": "",
+    "property_address": "",
+    "loan_type": "",
+    "loan_amount": null,
+    "notes": ""
+}
+
+Only include fields where you can extract actual data from the image. Leave fields empty or null if the information is not present.
+Format phone numbers as (XXX) XXX-XXXX if possible.
+For loan_amount, extract just the numeric value (no $ or commas).
+
+Return ONLY the JSON object, no additional text."""
+
+        # Call Claude with vision
+        response = anthropic_client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1000,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": media_type,
+                                "data": base64_image
+                            }
+                        },
+                        {
+                            "type": "text",
+                            "text": extraction_prompt
+                        }
+                    ]
+                }
+            ]
+        )
+
+        # Parse the response
+        response_text = response.content[0].text
+
+        # Extract JSON from response
+        try:
+            # Find JSON in the response
+            json_start = response_text.find('{')
+            json_end = response_text.rfind('}') + 1
+            if json_start >= 0 and json_end > json_start:
+                json_str = response_text[json_start:json_end]
+                lead_data = json.loads(json_str)
+
+                # Check if we got any meaningful data
+                has_data = any([
+                    lead_data.get("first_name"),
+                    lead_data.get("last_name"),
+                    lead_data.get("email"),
+                    lead_data.get("phone")
+                ])
+
+                if has_data:
+                    return {
+                        "success": True,
+                        "lead_data": lead_data,
+                        "message": "Successfully extracted lead information from screenshot"
+                    }
+                else:
+                    return {
+                        "success": False,
+                        "lead_data": None,
+                        "message": "Could not find lead information in the screenshot. Please ensure the image contains contact details."
+                    }
+            else:
+                return {
+                    "success": False,
+                    "lead_data": None,
+                    "message": "Could not parse the image. Please try a clearer screenshot."
+                }
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse JSON from Claude response: {e}")
+            return {
+                "success": False,
+                "lead_data": None,
+                "message": "Failed to extract structured data from the screenshot."
+            }
+
+    except Exception as e:
+        logger.error(f"Error parsing screenshot: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to process screenshot: {str(e)}")
+
+
+@router.post("/create-lead-from-screenshot")
+async def create_lead_from_screenshot(
+    request: CreateLeadFromScreenshotRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Create a new lead from parsed screenshot data.
+    The lead will be created in the 'Attempted Contact' stage.
+    """
+    main = get_main_module()
+    Lead = main.Lead
+    LeadStage = main.LeadStage
+
+    # Get current user
+    try:
+        User = main.User
+        demo_user = db.query(User).filter(User.email == "demo@example.com").first()
+        current_user_id = demo_user.id if demo_user else 1
+    except Exception:
+        current_user_id = 1
+
+    try:
+        # Construct the full name
+        name = f"{request.first_name or ''} {request.last_name or ''}".strip()
+        if not name:
+            name = "Unknown"
+
+        # Create the new lead
+        new_lead = Lead(
+            owner_id=current_user_id,
+            name=name,
+            email=request.email,
+            phone=request.phone,
+            source=request.referral_source or "Realtor Referral",
+            stage=LeadStage.ATTEMPTED_CONTACT,  # Set to Attempted Contact stage
+            loan_type=request.loan_type,
+            preapproval_amount=request.loan_amount,
+            notes=request.notes,
+            property_address=request.property_address if hasattr(Lead, 'property_address') else None
+        )
+
+        db.add(new_lead)
+        db.commit()
+        db.refresh(new_lead)
+
+        logger.info(f"Created lead from screenshot: {new_lead.id} - {new_lead.name}")
+
+        return {
+            "success": True,
+            "message": f"Lead '{new_lead.name}' created successfully in Attempted Contact stage",
+            "lead_id": new_lead.id,
+            "lead_name": new_lead.name
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating lead from screenshot: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create lead: {str(e)}")

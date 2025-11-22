@@ -1257,3 +1257,27 @@
     border-top: 1px solid #e8ecf1;
   }
 }
+
+/* Lead Preview from Screenshot */
+.ai-lead-preview-data {
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 16px;
+  margin: 12px 0;
+}
+
+.ai-lead-field {
+  padding: 8px 0;
+  border-bottom: 1px solid #e8ecf1;
+  font-size: 13px;
+}
+
+.ai-lead-field:last-child {
+  border-bottom: none;
+}
+
+.ai-lead-field strong {
+  color: #4a5568;
+  display: inline-block;
+  min-width: 140px;
+}

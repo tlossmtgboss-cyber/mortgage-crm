@@ -323,6 +323,20 @@ export const aiAPI = {
     });
     return response.data;
   },
+  parseScreenshot: async (imageFile) => {
+    const formData = new FormData();
+    formData.append('image', imageFile);
+    const response = await api.post('/api/v1/ai/parse-screenshot', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+  createLeadFromScreenshot: async (leadData) => {
+    const response = await api.post('/api/v1/ai/create-lead-from-screenshot', leadData);
+    return response.data;
+  },
 };
 
 export const conversationsAPI = {

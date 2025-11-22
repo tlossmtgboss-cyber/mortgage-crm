@@ -17,6 +17,8 @@ function AILandingPage() {
   const [selectedSendMethod, setSelectedSendMethod] = useState('email');
   const [editingMessage, setEditingMessage] = useState(false);
   const [editedMessage, setEditedMessage] = useState('');
+  const [parsedLeadData, setParsedLeadData] = useState(null);
+  const [isParsingImage, setIsParsingImage] = useState(false);
 
   // New state for redesigned features
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -306,13 +308,82 @@ function AILandingPage() {
     setContextMenu({ visible: false, x: 0, y: 0, chatId: null });
   };
 
-  const handleFileUpload = (e) => {
+  const handleFileUpload = async (e) => {
     const files = e.target.files;
     if (files.length > 0) {
-      const fileNames = Array.from(files).map(f => f.name).join(', ');
-      addMessage(`Uploaded: ${fileNames}`, 'system');
-      // TODO: Actually upload and process files
+      const file = files[0];
+      const isImage = file.type.startsWith('image/');
+
+      if (isImage) {
+        // Process image for lead extraction
+        setIsParsingImage(true);
+        addMessage(`Analyzing screenshot: ${file.name}...`, 'user');
+
+        try {
+          const result = await aiAPI.parseScreenshot(file);
+
+          if (result.success && result.lead_data) {
+            setParsedLeadData(result.lead_data);
+            addMessage(
+              `I found the following lead information in the screenshot. Would you like me to create this lead?`,
+              'assistant',
+              {
+                isSpecialContent: true,
+                contentType: 'lead_preview',
+                leadData: result.lead_data
+              }
+            );
+          } else {
+            addMessage(
+              result.message || "I couldn't extract lead information from this image. Please try a clearer screenshot.",
+              'assistant'
+            );
+          }
+        } catch (error) {
+          console.error('Screenshot parsing error:', error);
+          addMessage(
+            "Failed to process the screenshot. Please try again or enter the lead information manually.",
+            'assistant'
+          );
+        } finally {
+          setIsParsingImage(false);
+        }
+      } else {
+        const fileNames = Array.from(files).map(f => f.name).join(', ');
+        addMessage(`Uploaded: ${fileNames}`, 'system');
+      }
     }
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleCreateLead = async () => {
+    if (!parsedLeadData) return;
+
+    try {
+      addMessage('Creating lead...', 'assistant');
+      const result = await aiAPI.createLeadFromScreenshot(parsedLeadData);
+
+      if (result.success) {
+        addMessage(
+          `Lead created successfully! ${parsedLeadData.first_name} ${parsedLeadData.last_name} has been added to your pipeline in the "Attempted Contact" stage.`,
+          'assistant'
+        );
+        setParsedLeadData(null);
+      } else {
+        addMessage(result.message || 'Failed to create lead. Please try again.', 'assistant');
+      }
+    } catch (error) {
+      console.error('Lead creation error:', error);
+      addMessage('Failed to create lead. Please try again.', 'assistant');
+    }
+  };
+
+  const handleCancelLead = () => {
+    setParsedLeadData(null);
+    addMessage('Lead creation cancelled.', 'assistant');
   };
 
   const handleExamplePrompt = (prompt) => {
@@ -817,6 +888,14 @@ function AILandingPage() {
     const preview = message.preview;
 
     switch (message.contentType) {
+      case 'lead_preview':
+        return (
+          <LeadPreviewComponent
+            leadData={message.leadData}
+            onConfirm={handleCreateLead}
+            onCancel={handleCancelLead}
+          />
+        );
       case 'email_campaign':
         return (
           <EmailCampaignPreview
@@ -1572,6 +1651,70 @@ function PipelineReportPreview({ preview, onExecute, onEdit }) {
         <div className="ai-action-buttons">
           <button className="ai-btn ai-btn-edit" onClick={onEdit}>Customize Report</button>
           <button className="ai-btn ai-btn-approve" onClick={onExecute}>Generate & Send</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Lead Preview Component for Screenshot Parsing
+function LeadPreviewComponent({ leadData, onConfirm, onCancel }) {
+  return (
+    <div className="ai-message-content-new ai-special-content">
+      I found the following lead information from the screenshot:
+
+      <div className="ai-action-preview">
+        <h3>Lead Information</h3>
+        <div className="ai-lead-preview-data">
+          {leadData.first_name && (
+            <div className="ai-lead-field">
+              <strong>First Name:</strong> {leadData.first_name}
+            </div>
+          )}
+          {leadData.last_name && (
+            <div className="ai-lead-field">
+              <strong>Last Name:</strong> {leadData.last_name}
+            </div>
+          )}
+          {leadData.email && (
+            <div className="ai-lead-field">
+              <strong>Email:</strong> {leadData.email}
+            </div>
+          )}
+          {leadData.phone && (
+            <div className="ai-lead-field">
+              <strong>Phone:</strong> {leadData.phone}
+            </div>
+          )}
+          {leadData.referral_source && (
+            <div className="ai-lead-field">
+              <strong>Referral Source:</strong> {leadData.referral_source}
+            </div>
+          )}
+          {leadData.property_address && (
+            <div className="ai-lead-field">
+              <strong>Property Address:</strong> {leadData.property_address}
+            </div>
+          )}
+          {leadData.loan_type && (
+            <div className="ai-lead-field">
+              <strong>Loan Type:</strong> {leadData.loan_type}
+            </div>
+          )}
+          {leadData.notes && (
+            <div className="ai-lead-field">
+              <strong>Notes:</strong> {leadData.notes}
+            </div>
+          )}
+        </div>
+
+        <div className="ai-note">
+          This lead will be created in the <strong>"Attempted Contact"</strong> stage
+        </div>
+
+        <div className="ai-action-buttons">
+          <button className="ai-btn ai-btn-edit" onClick={onCancel}>Cancel</button>
+          <button className="ai-btn ai-btn-approve" onClick={onConfirm}>Create Lead</button>
         </div>
       </div>
     </div>
