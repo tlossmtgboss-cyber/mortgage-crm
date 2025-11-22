@@ -46,7 +46,7 @@ async def get_current_user(
     # For testing without auth, return demo user
     if not credentials:
         result = db.execute(
-            text("SELECT id, email, name FROM users WHERE email = :email"),
+            text("SELECT id, email, full_name FROM users WHERE email = :email"),
             {"email": "demo@example.com"}
         )
         user_row = result.fetchone()
@@ -56,7 +56,7 @@ async def get_current_user(
 
     try:
         token = credentials.credentials
-        secret = os.getenv("JWT_SECRET", "your-secret-key")
+        secret = os.getenv("SECRET_KEY", "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7")
         payload = jwt.decode(token, secret, algorithms=["HS256"])
         email = payload.get("sub")
 
@@ -65,7 +65,7 @@ async def get_current_user(
 
         # Get user with raw SQL
         result = db.execute(
-            text("SELECT id, email, name FROM users WHERE email = :email"),
+            text("SELECT id, email, full_name FROM users WHERE email = :email"),
             {"email": email}
         )
         user_row = result.fetchone()
