@@ -37,10 +37,12 @@ function AILandingPage() {
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, chatId: null });
   const [selectedPermission, setSelectedPermission] = useState('all');
   const [userPermissions, setUserPermissions] = useState(['all', 'leads', 'loans', 'tasks', 'reports']);
+  const [isListening, setIsListening] = useState(false);
 
   const chatAreaRef = useRef(null);
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
+  const recognitionRef = useRef(null);
 
   // Session ID for permanent memory
   const [sessionId, setSessionId] = useState(() => {
@@ -124,6 +126,65 @@ function AILandingPage() {
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
   }, []);
+
+  // Initialize speech recognition
+  useEffect(() => {
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = true;
+      recognitionRef.current.interimResults = true;
+      recognitionRef.current.lang = 'en-US';
+
+      recognitionRef.current.onresult = (event) => {
+        let finalTranscript = '';
+        let interimTranscript = '';
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript;
+          } else {
+            interimTranscript += transcript;
+          }
+        }
+
+        if (finalTranscript) {
+          setInputValue(prev => prev + finalTranscript);
+        }
+      };
+
+      recognitionRef.current.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        setIsListening(false);
+      };
+
+      recognitionRef.current.onend = () => {
+        setIsListening(false);
+      };
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+    };
+  }, []);
+
+  const toggleSpeechRecognition = () => {
+    if (!recognitionRef.current) {
+      alert('Speech recognition is not supported in your browser. Please use Chrome or Edge.');
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      recognitionRef.current.start();
+      setIsListening(true);
+    }
+  };
 
   const addMessage = (content, type, extraData = {}) => {
     setMessages(prev => [...prev, {
@@ -827,6 +888,19 @@ function AILandingPage() {
                 multiple
                 style={{ display: 'none' }}
               />
+
+              <button
+                className={`ai-mic-btn ${isListening ? 'listening' : ''}`}
+                onClick={toggleSpeechRecognition}
+                title={isListening ? 'Stop listening' : 'Start voice input'}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
+                  <path d="M19 10v2a7 7 0 01-14 0v-2"/>
+                  <line x1="12" y1="19" x2="12" y2="23"/>
+                  <line x1="8" y1="23" x2="16" y2="23"/>
+                </svg>
+              </button>
 
               <textarea
                 ref={textareaRef}

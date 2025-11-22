@@ -227,6 +227,42 @@
   color: #2c3e50;
 }
 
+.ai-mic-btn {
+  background: none;
+  border: none;
+  color: #8c9db5;
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.ai-mic-btn:hover {
+  background: #e8ecf1;
+  color: #2c3e50;
+}
+
+.ai-mic-btn.listening {
+  background: #ffebee;
+  color: #e74c3c;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(231, 76, 60, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(231, 76, 60, 0);
+  }
+}
+
 .ai-input-container-new textarea {
   flex: 1;
   border: none;
