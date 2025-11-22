@@ -88,6 +88,11 @@ def get_company_id_for_user(user):
     return "00000000-0000-0000-0000-000000000001"
 
 
+def int_to_uuid(integer_id):
+    """Convert integer user ID to UUID format for AI tables"""
+    return f"00000000-0000-0000-0000-{str(integer_id).zfill(12)}"
+
+
 # ============================================
 # AUTHORIZATION ENDPOINTS
 # ============================================
@@ -99,7 +104,7 @@ async def create_ai_authorization(
     db: Session = Depends(get_db)
 ):
     """Create AI authorization for a task type (workflow)"""
-    user_id = str(current_user.id)
+    user_id = int_to_uuid(current_user.id)
     company_id = get_company_id_for_user(current_user)
     
     # Check if authorization already exists
@@ -149,7 +154,7 @@ async def get_ai_authorizations(
     """Get all AI authorizations for current user"""
     try:
         # Convert integer user ID to UUID format for AI tables
-        user_id = str(current_user.id)
+        user_id = int_to_uuid(current_user.id)
 
         # Simple query first - just get basic authorizations
         result = db.execute(text("""
@@ -200,7 +205,7 @@ async def revoke_ai_authorization(
     current_user= Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Revoke AI authorization for a task type"""
-    user_id = str(current_user.id)
+    user_id = int_to_uuid(current_user.id)
     
     # Verify authorization exists and belongs to user
     auth = db.execute(text("""
@@ -267,7 +272,7 @@ async def pause_ai_authorization(
     current_user= Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Temporarily pause AI automation"""
-    user_id = str(current_user.id)
+    user_id = int_to_uuid(current_user.id)
     
     db.execute(text("""
         UPDATE ai_task_type_authorizations
@@ -286,7 +291,7 @@ async def resume_ai_authorization(
     current_user= Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Resume paused AI automation"""
-    user_id = str(current_user.id)
+    user_id = int_to_uuid(current_user.id)
     
     # Get current training progress
     auth = db.execute(text("""
@@ -321,7 +326,7 @@ async def review_training_task(
     current_user= Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """User approves or rejects AI's training attempt"""
-    user_id = str(current_user.id)
+    user_id = int_to_uuid(current_user.id)
     company_id = get_company_id_for_user(current_user)
     
     # Get task and verify it's pending review
@@ -455,7 +460,7 @@ async def get_ai_audit_log(
     current_user= Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Get AI audit log with filters"""
-    user_id = str(current_user.id)
+    user_id = int_to_uuid(current_user.id)
     
     # Build query
     conditions = ["al.user_id::text = :user_id"]
@@ -628,7 +633,7 @@ async def get_ai_performance(
     current_user= Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Get AI performance metrics for dashboard"""
-    user_id = str(current_user.id)
+    user_id = int_to_uuid(current_user.id)
     date_from = datetime.now() - timedelta(days=days)
     
     # Overall metrics
@@ -724,7 +729,7 @@ async def get_rollback_states(
     current_user= Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Get available rollback states for an authorization"""
-    user_id = str(current_user.id)
+    user_id = int_to_uuid(current_user.id)
     
     # Verify authorization belongs to user
     auth = db.execute(text("""
@@ -769,7 +774,7 @@ async def rollback_ai_state(
     current_user= Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """Rollback AI to a previous state"""
-    user_id = str(current_user.id)
+    user_id = int_to_uuid(current_user.id)
     company_id = get_company_id_for_user(current_user)
     
     # Get the rollback state
@@ -860,7 +865,7 @@ async def delegate_task_to_ai(
     current_user= Depends(get_current_user), db: Session = Depends(get_db)
 ):
     """User delegates a task to AI for completion"""
-    user_id = str(current_user.id)
+    user_id = int_to_uuid(current_user.id)
     
     # Get task
     task = db.execute(text("""
