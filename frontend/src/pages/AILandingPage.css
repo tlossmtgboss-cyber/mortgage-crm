@@ -249,6 +249,7 @@
   min-height: 300px;
   max-height: 500px;
   overflow-y: auto;
+  flex: 1;
 }
 
 .ai-message {
