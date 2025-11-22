@@ -3750,6 +3750,10 @@ app.include_router(task_workflow_router, tags=["Task Workflow"])
 from integration_routes import router as integration_router
 app.include_router(integration_router, tags=["Integrations"])
 
+# Include Profitability Intelligence routes
+from profitability_routes import router as profitability_router
+app.include_router(profitability_router, tags=["Profitability"])
+
 # Morning Check-in Migration Endpoint
 @app.post("/api/v1/migrations/add-morning-checkin")
 async def add_morning_checkin_migration(db: Session = Depends(get_db)):
@@ -4769,7 +4773,7 @@ async def drop_voicemail(
             phone_number=clean_number,
             contact_name=recipient_name,
             message_text=message,
-            delivery_status='pending'
+            status='pending'
         )
         db.add(voicemail_drop)
         db.commit()
@@ -4807,7 +4811,7 @@ async def drop_voicemail(
                 if zapier_response.status_code not in [200, 201]:
                     error_msg = zapier_response.text
                     logger.error(f"Zapier webhook error: {error_msg}")
-                    voicemail_drop.delivery_status = 'failed'
+                    voicemail_drop.status = 'failed'
                     voicemail_drop.error_message = f"Zapier error: {error_msg}"
                     db.commit()
                     raise HTTPException(status_code=500, detail=f"Zapier webhook error: {error_msg}")
@@ -4815,7 +4819,7 @@ async def drop_voicemail(
                 # Zapier webhook triggered successfully
                 session_id = f"zapier_{voicemail_drop.id}"
                 voicemail_drop.vapi_call_id = session_id
-                voicemail_drop.delivery_status = 'sent_to_zapier'
+                voicemail_drop.status = 'sent_to_zapier'
                 db.commit()
                 logger.info(f"Zapier webhook triggered successfully")
 
@@ -4924,13 +4928,13 @@ async def drop_voicemail(
                 if sly_data.get("new_campaign") == "OK":
                     session_id = str(sly_data.get("session_id"))
                     voicemail_drop.vapi_call_id = session_id
-                    voicemail_drop.delivery_status = 'sent'
+                    voicemail_drop.status = 'sent'
                     db.commit()
                     logger.info(f"Voicemail sent successfully via Slybroadcast. Session ID: {session_id}")
                 elif "ERROR" in sly_data:
                     # Error response: {"ERROR": "error message"}
                     error_msg = sly_data.get("ERROR", "Unknown error")
-                    voicemail_drop.delivery_status = 'failed'
+                    voicemail_drop.status = 'failed'
                     voicemail_drop.error_message = error_msg
                     db.commit()
                     logger.error(f"Slybroadcast error: {error_msg}")
@@ -4938,7 +4942,7 @@ async def drop_voicemail(
                 else:
                     # Unexpected response
                     error_msg = str(sly_data)
-                    voicemail_drop.delivery_status = 'failed'
+                    voicemail_drop.status = 'failed'
                     voicemail_drop.error_message = error_msg
                     db.commit()
                     logger.error(f"Unexpected Slybroadcast response: {error_msg}")
@@ -5053,22 +5057,22 @@ async def vapi_voicemail_status_webhook(
 
             # Update voicemail drop status
             if end_reason in ["assistant-left-voicemail", "voicemail-detected"]:
-                voicemail_drop.delivery_status = "delivered"
+                voicemail_drop.status = "delivered"
                 voicemail_drop.delivered_at = datetime.now(timezone.utc)
             elif end_reason == "customer-did-not-answer":
-                voicemail_drop.delivery_status = "no-answer"
+                voicemail_drop.status = "no-answer"
             elif end_reason in ["customer-ended-call", "customer-busy"]:
-                voicemail_drop.delivery_status = "failed"
+                voicemail_drop.status = "failed"
                 voicemail_drop.error_message = end_reason
             else:
-                voicemail_drop.delivery_status = "completed"
+                voicemail_drop.status = "completed"
 
             voicemail_drop.call_duration = duration
             voicemail_drop.call_cost = cost
 
             db.commit()
 
-            logger.info(f"Updated voicemail drop {voicemail_id}: status={voicemail_drop.delivery_status}")
+            logger.info(f"Updated voicemail drop {voicemail_id}: status={voicemail_drop.status}")
 
         return {"status": "received"}
 
