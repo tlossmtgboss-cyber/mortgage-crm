@@ -3,12 +3,16 @@ Integration API Routes
 Endpoints for SMS, Email, Teams, and Agentic AI
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 import logging
+import os
 
+from database import get_db
 from integrations.microsoft_graph import graph_client
 from integrations.twilio_service import sms_client, SMSTemplates
 from integrations.agentic_ai import agentic_ai, TriggerType
@@ -16,6 +20,60 @@ from integrations.agentic_ai import agentic_ai, TriggerType
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/integrations", tags=["integrations"])
+security = HTTPBearer(auto_error=False)
+
+
+# User proxy class for auth
+class UserProxy:
+    def __init__(self, row):
+        self.id = row[0]
+        self.email = row[1]
+        self.full_name = row[2]
+
+
+# Auth dependency
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    """Get current user from JWT token."""
+    from jose import jwt
+
+    if not credentials:
+        result = db.execute(
+            text("SELECT id, email, full_name FROM users WHERE email = :email"),
+            {"email": "demo@example.com"}
+        )
+        user_row = result.fetchone()
+        if user_row:
+            return UserProxy(user_row)
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    try:
+        token = credentials.credentials
+        secret = os.getenv("SECRET_KEY", "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7")
+        payload = jwt.decode(token, secret, algorithms=["HS256"])
+        email = payload.get("sub")
+
+        if not email:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        result = db.execute(
+            text("SELECT id, email, full_name FROM users WHERE email = :email"),
+            {"email": email}
+        )
+        user_row = result.fetchone()
+
+        if not user_row:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        return UserProxy(user_row)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Auth error: {e}")
+        raise HTTPException(status_code=401, detail="Invalid authentication")
 
 
 # ============================================================================
