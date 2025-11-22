@@ -3754,6 +3754,10 @@ app.include_router(integration_router, tags=["Integrations"])
 from profitability_routes import router as profitability_router
 app.include_router(profitability_router, tags=["Profitability"])
 
+# Include AI Insights routes for profitability
+from ai_insights_routes import router as ai_insights_router
+app.include_router(ai_insights_router, tags=["AI Profitability Insights"])
+
 # Morning Check-in Migration Endpoint
 @app.post("/api/v1/migrations/add-morning-checkin")
 async def add_morning_checkin_migration(db: Session = Depends(get_db)):

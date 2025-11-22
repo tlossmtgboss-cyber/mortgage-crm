@@ -907,4 +907,204 @@ export const circleOfCashflowAPI = {
   },
 };
 
+// Profitability Intelligence
+export const profitabilityAPI = {
+  // Dashboard
+  getDashboard: async (month = null) => {
+    const params = month ? { month } : {};
+    const response = await api.get('/api/v1/profitability/dashboard', { params });
+    return response.data;
+  },
+  getMetrics: async (month = null) => {
+    const params = month ? { month } : {};
+    const response = await api.get('/api/v1/profitability/metrics', { params });
+    return response.data;
+  },
+  getTrends: async (months = 12) => {
+    const response = await api.get('/api/v1/profitability/trends', { params: { months } });
+    return response.data;
+  },
+
+  // Expenses
+  getExpenses: async (filters = {}) => {
+    const response = await api.get('/api/v1/profitability/expenses', { params: filters });
+    return response.data;
+  },
+  createExpense: async (data) => {
+    const response = await api.post('/api/v1/profitability/expenses', data);
+    return response.data;
+  },
+  updateExpense: async (id, data) => {
+    const response = await api.put(`/api/v1/profitability/expenses/${id}`, data);
+    return response.data;
+  },
+  deleteExpense: async (id) => {
+    const response = await api.delete(`/api/v1/profitability/expenses/${id}`);
+    return response.data;
+  },
+  getExpenseCategories: async () => {
+    const response = await api.get('/api/v1/profitability/expense-categories');
+    return response.data;
+  },
+
+  // Roles
+  getRoles: async () => {
+    const response = await api.get('/api/v1/profitability/roles');
+    return response.data;
+  },
+  createRole: async (data) => {
+    const response = await api.post('/api/v1/profitability/roles', data);
+    return response.data;
+  },
+  getRoleProfitability: async (roleId, month = null) => {
+    const params = month ? { month } : {};
+    const response = await api.get(`/api/v1/profitability/roles/${roleId}/profitability`, { params });
+    return response.data;
+  },
+
+  // Employees
+  getEmployees: async (filters = {}) => {
+    const response = await api.get('/api/v1/profitability/employees', { params: filters });
+    return response.data;
+  },
+  createEmployee: async (data) => {
+    const response = await api.post('/api/v1/profitability/employees', data);
+    return response.data;
+  },
+  updateEmployee: async (id, data) => {
+    const response = await api.put(`/api/v1/profitability/employees/${id}`, data);
+    return response.data;
+  },
+  getEmployeePerformance: async (id, month = null) => {
+    const params = month ? { month } : {};
+    const response = await api.get(`/api/v1/profitability/employees/${id}/performance`, { params });
+    return response.data;
+  },
+
+  // Loans
+  getLoans: async (filters = {}) => {
+    const response = await api.get('/api/v1/profitability/loans', { params: filters });
+    return response.data;
+  },
+  createLoan: async (data) => {
+    const response = await api.post('/api/v1/profitability/loans', data);
+    return response.data;
+  },
+  addLoanAttribution: async (loanId, data) => {
+    const response = await api.post(`/api/v1/profitability/loans/${loanId}/attributions`, data);
+    return response.data;
+  },
+
+  // Revenue
+  getRevenue: async (filters = {}) => {
+    const response = await api.get('/api/v1/profitability/revenue', { params: filters });
+    return response.data;
+  },
+  createRevenue: async (data) => {
+    const response = await api.post('/api/v1/profitability/revenue', data);
+    return response.data;
+  },
+
+  // Scenarios
+  getScenarios: async (savedOnly = false) => {
+    const response = await api.get('/api/v1/profitability/scenarios', { params: { saved_only: savedOnly } });
+    return response.data;
+  },
+  createScenario: async (data) => {
+    const response = await api.post('/api/v1/profitability/scenarios', data);
+    return response.data;
+  },
+  runScenario: async (baseMonth, parameters) => {
+    const response = await api.post('/api/v1/profitability/scenarios/run', parameters, {
+      params: { base_month: baseMonth }
+    });
+    return response.data;
+  },
+  saveScenario: async (id) => {
+    const response = await api.put(`/api/v1/profitability/scenarios/${id}/save`);
+    return response.data;
+  },
+
+  // Snapshots
+  getSnapshots: async (limit = 12) => {
+    const response = await api.get('/api/v1/profitability/snapshots', { params: { limit } });
+    return response.data;
+  },
+  createSnapshot: async (month) => {
+    const response = await api.post('/api/v1/profitability/snapshots', null, { params: { month } });
+    return response.data;
+  },
+
+  // Insights
+  getInsights: async (filters = {}) => {
+    const response = await api.get('/api/v1/profitability/insights', { params: filters });
+    return response.data;
+  },
+  generateInsights: async (month) => {
+    const response = await api.post('/api/v1/profitability/insights/generate', null, { params: { month } });
+    return response.data;
+  },
+  acknowledgeInsight: async (id) => {
+    const response = await api.put(`/api/v1/profitability/insights/${id}/acknowledge`);
+    return response.data;
+  },
+
+  // Analysis
+  getGapsAndGains: async (month = null) => {
+    const params = month ? { month } : {};
+    const response = await api.get('/api/v1/profitability/analysis/gaps-gains', { params });
+    return response.data;
+  },
+  getBreakEvenAnalysis: async (month = null) => {
+    const params = month ? { month } : {};
+    const response = await api.get('/api/v1/profitability/analysis/break-even', { params });
+    return response.data;
+  },
+
+  // AI Insights
+  queryAI: async (question, month = null) => {
+    const response = await api.post('/api/v1/profitability/ai/query', { question, month });
+    return response.data;
+  },
+  getAIRecommendations: async (month = null) => {
+    const params = month ? { month } : {};
+    const response = await api.get('/api/v1/profitability/ai/recommendations', { params });
+    return response.data;
+  },
+  analyzeHiring: async (roleName, salary, month = null) => {
+    const response = await api.post('/api/v1/profitability/ai/hiring-analysis', {
+      role_name: roleName,
+      salary: salary,
+      month: month
+    });
+    return response.data;
+  },
+  getExecutiveDigest: async (month = null) => {
+    const params = month ? { month } : {};
+    const response = await api.get('/api/v1/profitability/ai/executive-digest', { params });
+    return response.data;
+  },
+  getAnomalies: async (month = null) => {
+    const params = month ? { month } : {};
+    const response = await api.get('/api/v1/profitability/ai/anomalies', { params });
+    return response.data;
+  },
+  compareScenarios: async (scenarios, month = null) => {
+    const response = await api.post('/api/v1/profitability/ai/compare-scenarios', {
+      scenarios: scenarios,
+      month: month
+    });
+    return response.data;
+  },
+  getQuickInsights: async (month = null) => {
+    const params = month ? { month } : {};
+    const response = await api.get('/api/v1/profitability/ai/quick-insights', { params });
+    return response.data;
+  },
+  getSuggestedQuestions: async () => {
+    const response = await api.get('/api/v1/profitability/ai/suggested-questions');
+    return response.data;
+  },
+};
+
 export default api;
