@@ -3746,6 +3746,10 @@ app.include_router(ai_automation_router, tags=["AI Task Automation"])
 from task_workflow_routes import router as task_workflow_router
 app.include_router(task_workflow_router, tags=["Task Workflow"])
 
+# Include Integration routes (SMS, Email, Teams)
+from integration_routes import router as integration_router
+app.include_router(integration_router, tags=["Integrations"])
+
 # Morning Check-in Migration Endpoint
 @app.post("/api/v1/migrations/add-morning-checkin")
 async def add_morning_checkin_migration(db: Session = Depends(get_db)):
@@ -4763,7 +4767,7 @@ async def drop_voicemail(
             lead_id=lead_id,
             loan_id=loan_id,
             phone_number=clean_number,
-            recipient_name=recipient_name,
+            contact_name=recipient_name,
             message_text=message,
             delivery_status='pending'
         )
