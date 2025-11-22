@@ -9359,6 +9359,59 @@ async def sync_microsoft_emails_now(
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Sync error: {str(e)}")
 
+@app.get("/api/v1/reconciliation/debug")
+async def debug_reconciliation(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Debug endpoint to check email and extraction status"""
+    try:
+        from sqlalchemy import text
+
+        # Count IncomingDataEvents
+        events_count = db.execute(text("""
+            SELECT COUNT(*) FROM incoming_data_events WHERE user_id = :user_id
+        """), {"user_id": current_user.id}).scalar()
+
+        # Count ExtractedData for user's events
+        extracted_count = db.execute(text("""
+            SELECT COUNT(*) FROM extracted_data ed
+            JOIN incoming_data_events ide ON ed.event_id = ide.id
+            WHERE ide.user_id = :user_id
+        """), {"user_id": current_user.id}).scalar()
+
+        # Get status breakdown
+        status_breakdown = db.execute(text("""
+            SELECT ed.status, COUNT(*) as count FROM extracted_data ed
+            JOIN incoming_data_events ide ON ed.event_id = ide.id
+            WHERE ide.user_id = :user_id
+            GROUP BY ed.status
+        """), {"user_id": current_user.id}).fetchall()
+
+        # Get recent events
+        recent_events = db.execute(text("""
+            SELECT ide.id, ide.subject, ide.processed, ed.status, ed.category
+            FROM incoming_data_events ide
+            LEFT JOIN extracted_data ed ON ide.id = ed.event_id
+            WHERE ide.user_id = :user_id
+            ORDER BY ide.created_at DESC
+            LIMIT 5
+        """), {"user_id": current_user.id}).fetchall()
+
+        return {
+            "user_id": current_user.id,
+            "incoming_events_count": events_count,
+            "extracted_data_count": extracted_count,
+            "status_breakdown": {row[0]: row[1] for row in status_breakdown},
+            "recent_events": [
+                {"id": row[0], "subject": row[1][:50] if row[1] else None, "processed": row[2], "status": row[3], "category": row[4]}
+                for row in recent_events
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Debug error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/v1/microsoft/reprocess-emails")
 async def reprocess_unextracted_emails(
     current_user: User = Depends(get_current_user),
