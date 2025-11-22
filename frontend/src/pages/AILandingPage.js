@@ -19,6 +19,8 @@ function AILandingPage() {
   const [editedMessage, setEditedMessage] = useState('');
   const [parsedLeadData, setParsedLeadData] = useState(null);
   const [isParsingImage, setIsParsingImage] = useState(false);
+  const [generatingMessageType, setGeneratingMessageType] = useState(null);
+  const [generatedFullMessage, setGeneratedFullMessage] = useState('');
 
   // New state for redesigned features
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -897,6 +899,114 @@ function AILandingPage() {
     addMessage('Message updated successfully!', 'assistant');
   };
 
+  const generateFullMessage = async (messageType) => {
+    if (!selectedTask) return;
+
+    setGeneratingMessageType(messageType);
+
+    // Simulate AI generation with thoughtful, complete messages
+    setTimeout(() => {
+      let fullMessage = '';
+      const clientName = selectedTask.client?.split(' ')[0] || 'there';
+      const taskTitle = selectedTask.title || '';
+      const taskDetails = selectedTask.details || '';
+
+      switch (messageType) {
+        case 'email':
+          fullMessage = `Subject: Important Update Regarding Your ${taskTitle}
+
+Dear ${clientName},
+
+I hope this message finds you well. I wanted to personally reach out regarding ${taskTitle.toLowerCase()}.
+
+${taskDetails}
+
+As your dedicated loan officer, I understand how important this milestone is for you and your family. I want to ensure we're addressing every detail with the care and attention it deserves.
+
+Here's what I recommend as our next steps:
+1. Let's schedule a brief call to discuss your options
+2. I'll prepare a detailed breakdown of the best path forward
+3. We can finalize our action plan together
+
+I'm available this week at your convenience. Would Tuesday or Wednesday work better for you? I can accommodate morning or afternoon times.
+
+Please don't hesitate to reach out if you have any questions in the meantime. I'm here to make this process as smooth as possible for you.
+
+Looking forward to speaking with you soon.
+
+Warm regards,
+Tim
+Senior Loan Officer
+TL Development, LLC
+(555) 123-4567
+tim@tldevelopment.com`;
+          break;
+
+        case 'text':
+          fullMessage = `Hi ${clientName}! This is Tim from TL Development. I wanted to follow up on ${taskTitle.toLowerCase()}. ${taskDetails} I have some great options to discuss with you that could really benefit your situation. Do you have 10 minutes for a quick call today or tomorrow? I'm flexible with timing and want to make sure we keep things moving smoothly for you. Let me know what works best! - Tim`;
+          break;
+
+        case 'phone':
+          fullMessage = `PHONE SCRIPT FOR: ${clientName}
+
+OPENING:
+"Hi ${clientName}, this is Tim from TL Development. How are you doing today? I hope I'm catching you at a good time."
+
+[Wait for response]
+
+PURPOSE:
+"I'm calling to follow up on ${taskTitle.toLowerCase()}. ${taskDetails}"
+
+KEY TALKING POINTS:
+• Express understanding of their timeline and goals
+• Explain the current status and what needs to happen next
+• Present 2-3 specific options or recommendations
+• Address any potential concerns proactively
+
+VALUE PROPOSITION:
+"I want to make sure we're moving forward in a way that works best for your situation. Based on what I'm seeing, I think we have some really good options here."
+
+QUESTIONS TO ASK:
+• "What questions do you have about the process so far?"
+• "Is there anything specific you're concerned about?"
+• "What's your ideal timeline for completing this?"
+
+CLOSING:
+"I'll send you a quick recap of what we discussed via email. Does [specific date/time] work for our next check-in? Perfect. I appreciate your time today, ${clientName}. Talk to you soon!"
+
+OBJECTION HANDLERS:
+• If busy: "I completely understand. When would be a better time for a quick 5-minute call?"
+• If hesitant: "I hear you. Let me address that concern specifically..."
+• If needs to think: "Absolutely, take your time. I'll follow up on [day] - does that work?"`;
+          break;
+
+        case 'voicemail':
+          fullMessage = `Hi ${clientName}, this is Tim from TL Development calling.
+
+I wanted to reach out personally about ${taskTitle.toLowerCase()}.
+
+${taskDetails}
+
+I have some important information to share with you and a few options I think you'll be excited about.
+
+Please give me a call back at your earliest convenience at (555) 123-4567. I'm available today until 6 PM, or feel free to call me tomorrow morning.
+
+If I don't hear from you, I'll try you again tomorrow afternoon.
+
+Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. Have a great day!`;
+          break;
+
+        default:
+          fullMessage = selectedTask.aiDraftedMessage || '';
+      }
+
+      setGeneratedFullMessage(fullMessage);
+      setEditedMessage(fullMessage);
+      setEditingMessage(true);
+      setGeneratingMessageType(null);
+    }, 1500);
+  };
+
   const removeTaskFromList = (taskId) => {
     setTaskListData(prev => {
       const updated = prev.filter(t => t.id !== taskId);
@@ -1423,15 +1533,47 @@ function AILandingPage() {
                     {editingMessage ? (
                       <button className="ai-edit-message-btn" onClick={handleSaveMessage}>Save</button>
                     ) : (
-                      <button className="ai-edit-message-btn" onClick={handleEditMessage}>Edit Message</button>
+                      <button className="ai-edit-message-btn" onClick={handleEditMessage}>Edit</button>
                     )}
                   </div>
+
+                  <div className="generate-message-buttons">
+                    <button
+                      className={`generate-btn ${generatingMessageType === 'email' ? 'generating' : ''}`}
+                      onClick={() => generateFullMessage('email')}
+                      disabled={generatingMessageType !== null}
+                    >
+                      {generatingMessageType === 'email' ? 'Generating...' : 'Generate Full Email'}
+                    </button>
+                    <button
+                      className={`generate-btn ${generatingMessageType === 'text' ? 'generating' : ''}`}
+                      onClick={() => generateFullMessage('text')}
+                      disabled={generatingMessageType !== null}
+                    >
+                      {generatingMessageType === 'text' ? 'Generating...' : 'Generate Text'}
+                    </button>
+                    <button
+                      className={`generate-btn ${generatingMessageType === 'phone' ? 'generating' : ''}`}
+                      onClick={() => generateFullMessage('phone')}
+                      disabled={generatingMessageType !== null}
+                    >
+                      {generatingMessageType === 'phone' ? 'Generating...' : 'Generate Phone Script'}
+                    </button>
+                    <button
+                      className={`generate-btn ${generatingMessageType === 'voicemail' ? 'generating' : ''}`}
+                      onClick={() => generateFullMessage('voicemail')}
+                      disabled={generatingMessageType !== null}
+                    >
+                      {generatingMessageType === 'voicemail' ? 'Generating...' : 'Generate Voicemail'}
+                    </button>
+                  </div>
+
                   {editingMessage ? (
                     <textarea
                       className="ai-drafted-content-edit"
                       value={editedMessage}
                       onChange={(e) => setEditedMessage(e.target.value)}
-                      rows={6}
+                      rows={12}
                     />
                   ) : (
                     <div className="ai-drafted-content">

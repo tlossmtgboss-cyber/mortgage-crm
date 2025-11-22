@@ -399,6 +399,7 @@ async def list_contacts(
 async def sync_emails(
     days_back: int = Query(7, le=30, description="Number of days to sync"),
     max_results: int = Query(100, le=500),
+    force: bool = Query(False, description="Force reprocess existing emails"),
     current_user= Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -421,14 +422,31 @@ async def sync_emails(
         )
 
         # Process emails through extraction pipeline for reconciliation
-        from main import process_microsoft_email_to_dre
+        from main import process_microsoft_email_to_dre, IncomingDataEvent, ExtractedData
+        from sqlalchemy import text
 
         processed_count = 0
         for email in emails:
             try:
+                email_id = email.get("id", "")
+
+                # If force=True, delete existing records for this email
+                if force and email_id:
+                    existing = db.query(IncomingDataEvent).filter(
+                        IncomingDataEvent.external_message_id == email_id,
+                        IncomingDataEvent.user_id == current_user.id
+                    ).first()
+                    if existing:
+                        # Delete associated ExtractedData first
+                        db.query(ExtractedData).filter(
+                            ExtractedData.event_id == existing.id
+                        ).delete()
+                        db.delete(existing)
+                        db.commit()
+
                 # Convert Gmail format to Microsoft-like format for processing
                 email_data = {
-                    "id": email.get("id", ""),
+                    "id": email_id,
                     "subject": email.get("subject", ""),
                     "from": {
                         "emailAddress": {
