@@ -24,6 +24,7 @@ async def get_current_user(
 ):
     """Get current user from JWT token."""
     from jose import jwt
+    from models import User
 
     if not credentials:
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -37,19 +38,12 @@ async def get_current_user(
         if not email:
             raise HTTPException(status_code=401, detail="Invalid token")
 
-        from sqlalchemy import text
-        result = db.execute(text("SELECT id, email, name FROM users WHERE email = :email"), {"email": email})
-        user_row = result.fetchone()
+        user = db.query(User).filter(User.email == email).first()
 
-        if not user_row:
+        if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        # Return user dict
-        return {
-            "id": user_row[0],
-            "email": user_row[1] if user_row[1] else email,
-            "name": user_row[2] if user_row[2] else email.split("@")[0]
-        }
+        return user
 
     except HTTPException:
         raise
@@ -58,6 +52,7 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="Authentication failed")
 
 from integrations.google_gmail import gmail_service
+from models import User
 
 logger = logging.getLogger(__name__)
 
