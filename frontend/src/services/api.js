@@ -1107,4 +1107,87 @@ export const profitabilityAPI = {
   },
 };
 
+// Financial Intelligence API (Phase 3)
+export const financialIntelligenceAPI = {
+  getExecutiveDashboard: async (month = null) => {
+    const params = month ? { month } : {};
+    const response = await api.get('/api/v1/financial-intelligence/executive-dashboard', { params });
+    return response.data;
+  },
+  getGainOnSale: async (month = null) => {
+    const params = month ? { month } : {};
+    const response = await api.get('/api/v1/financial-intelligence/gain-on-sale', { params });
+    return response.data;
+  },
+  getHedgeAnalysis: async () => {
+    const response = await api.get('/api/v1/financial-intelligence/hedge-analysis');
+    return response.data;
+  },
+  getProductProfitability: async (month = null) => {
+    const params = month ? { month } : {};
+    const response = await api.get('/api/v1/financial-intelligence/product-profitability', { params });
+    return response.data;
+  },
+  getCostPerLoan: async (month = null) => {
+    const params = month ? { month } : {};
+    const response = await api.get('/api/v1/financial-intelligence/cost-per-loan', { params });
+    return response.data;
+  },
+  getCashRunway: async () => {
+    const response = await api.get('/api/v1/financial-intelligence/cash-runway');
+    return response.data;
+  },
+  getBreakEven: async (month = null) => {
+    const params = month ? { month } : {};
+    const response = await api.get('/api/v1/financial-intelligence/break-even', { params });
+    return response.data;
+  },
+  getWarehouseEfficiency: async () => {
+    const response = await api.get('/api/v1/financial-intelligence/warehouse-efficiency');
+    return response.data;
+  },
+  getRateExposure: async () => {
+    const response = await api.get('/api/v1/financial-intelligence/rate-exposure');
+    return response.data;
+  },
+  getMSRStatus: async () => {
+    const response = await api.get('/api/v1/financial-intelligence/msr-status');
+    return response.data;
+  },
+  getPricingAnalysis: async () => {
+    const response = await api.get('/api/v1/financial-intelligence/pricing-analysis');
+    return response.data;
+  },
+  getCashForecast: async () => {
+    const response = await api.get('/api/v1/financial-intelligence/cash-forecast');
+    return response.data;
+  },
+  getLiquidity: async () => {
+    const response = await api.get('/api/v1/financial-intelligence/liquidity');
+    return response.data;
+  },
+  getCapital: async () => {
+    const response = await api.get('/api/v1/financial-intelligence/capital');
+    return response.data;
+  },
+  getComplianceRisks: async () => {
+    const response = await api.get('/api/v1/financial-intelligence/compliance-risks');
+    return response.data;
+  },
+  getTechROI: async (month = null) => {
+    const params = month ? { month } : {};
+    const response = await api.get('/api/v1/financial-intelligence/tech-roi', { params });
+    return response.data;
+  },
+  getOperationalLosses: async () => {
+    const response = await api.get('/api/v1/financial-intelligence/operational-losses');
+    return response.data;
+  },
+  getInvestmentRecommendations: async (month = null) => {
+    const params = month ? { month } : {};
+    const response = await api.get('/api/v1/financial-intelligence/investment-recommendations', { params });
+    return response.data;
+  },
+};
+
 export default api;
