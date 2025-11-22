@@ -83,9 +83,9 @@ def get_or_create_partner(db: Session, user_id: int, partner_name: str) -> int:
     """Get existing partner or create new one"""
     result = db.execute(text("""
         SELECT id FROM referral_partners
-        WHERE user_id = :user_id AND LOWER(business_name) = LOWER(:name)
+        WHERE LOWER(business_name) = LOWER(:name)
         LIMIT 1
-    """), {"user_id": user_id, "name": partner_name})
+    """), {"name": partner_name})
     row = result.fetchone()
 
     if row:
@@ -93,7 +93,7 @@ def get_or_create_partner(db: Session, user_id: int, partner_name: str) -> int:
 
     # Create new partner
     result = db.execute(text("""
-        INSERT INTO referral_partners (user_id, business_name, contact_name, category, created_at)
+        INSERT INTO referral_partners (created_by, business_name, contact_name, category, created_at)
         VALUES (:user_id, :name, :name, 'realtor', CURRENT_TIMESTAMP)
         RETURNING id
     """), {"user_id": user_id, "name": partner_name})
@@ -321,9 +321,9 @@ async def get_all_partners_roi(db: Session = Depends(get_db)):
     result = db.execute(text("""
         SELECT
             rp.id,
-            rp.name,
-            rp.company,
-            rp.partner_type,
+            rp.business_name,
+            rp.contact_name,
+            rp.category,
 
             -- Lead metrics
             COUNT(DISTINCT l.id) as total_leads,
@@ -352,10 +352,9 @@ async def get_all_partners_roi(db: Session = Depends(get_db)):
 
         FROM referral_partners rp
         LEFT JOIN leads l ON l.referral_partner_id = rp.id
-        WHERE rp.user_id = :user_id
-        GROUP BY rp.id, rp.name, rp.company, rp.partner_type
+        GROUP BY rp.id, rp.business_name, rp.contact_name, rp.category
         ORDER BY revenue_12m DESC
-    """), {"user_id": user_id})
+    """))
 
     partners = []
     for row in result:
@@ -369,9 +368,9 @@ async def get_all_partners_roi(db: Session = Depends(get_db)):
 
         partners.append({
             "id": row[0],
-            "name": row[1],
-            "company": row[2],
-            "partner_type": row[3],
+            "name": row[1] or row[2],  # business_name or contact_name
+            "company": row[1],  # business_name as company
+            "partner_type": row[3],  # category
             "total_leads": row[4],
             "leads_12m": row[5],
             "converted": row[6],
@@ -412,10 +411,10 @@ async def get_partner_roi_detail(
 
     # Get partner info
     result = db.execute(text("""
-        SELECT id, name, company, partner_type, email, phone
+        SELECT id, business_name, contact_name, category, email, phone
         FROM referral_partners
-        WHERE id = :id AND user_id = :user_id
-    """), {"id": partner_id, "user_id": user_id})
+        WHERE id = :id
+    """), {"id": partner_id})
     partner = result.fetchone()
 
     if not partner:
@@ -458,9 +457,9 @@ async def get_partner_roi_detail(
     return {
         "partner": {
             "id": partner[0],
-            "name": partner[1],
-            "company": partner[2],
-            "type": partner[3],
+            "name": partner[1] or partner[2],  # business_name or contact_name
+            "company": partner[1],  # business_name
+            "type": partner[3],  # category
             "email": partner[4],
             "phone": partner[5]
         },
@@ -624,16 +623,15 @@ async def get_ai_insights(db: Session = Depends(get_db)):
 
     # Check for partners with declining conversion
     result = db.execute(text("""
-        SELECT rp.name, COUNT(*) as recent_leads,
+        SELECT COALESCE(rp.business_name, rp.contact_name) as partner_name, COUNT(*) as recent_leads,
             COUNT(CASE WHEN l.stage IN ('Closed Won', 'Funded') THEN 1 END) as recent_converted
         FROM referral_partners rp
         JOIN leads l ON l.referral_partner_id = rp.id
-        WHERE rp.user_id = :user_id
-        AND l.created_at > NOW() - INTERVAL '3 months'
-        GROUP BY rp.id, rp.name
+        WHERE l.created_at > NOW() - INTERVAL '3 months'
+        GROUP BY rp.id, rp.business_name, rp.contact_name
         HAVING COUNT(*) >= 3
         AND COUNT(CASE WHEN l.stage IN ('Closed Won', 'Funded') THEN 1 END)::float / COUNT(*) < 0.3
-    """), {"user_id": user_id})
+    """))
 
     for row in result:
         insights.append({
@@ -645,14 +643,13 @@ async def get_ai_insights(db: Session = Depends(get_db)):
 
     # Check for inactive partners
     result = db.execute(text("""
-        SELECT rp.name, MAX(l.created_at) as last_lead
+        SELECT COALESCE(rp.business_name, rp.contact_name) as partner_name, MAX(l.created_at) as last_lead
         FROM referral_partners rp
         LEFT JOIN leads l ON l.referral_partner_id = rp.id
-        WHERE rp.user_id = :user_id
-        GROUP BY rp.id, rp.name
+        GROUP BY rp.id, rp.business_name, rp.contact_name
         HAVING MAX(l.created_at) < NOW() - INTERVAL '45 days'
         OR MAX(l.created_at) IS NULL
-    """), {"user_id": user_id})
+    """))
 
     for row in result:
         insights.append({
@@ -664,16 +661,15 @@ async def get_ai_insights(db: Session = Depends(get_db)):
 
     # Check for high performers to celebrate
     result = db.execute(text("""
-        SELECT rp.name, COUNT(*) as leads_this_month
+        SELECT COALESCE(rp.business_name, rp.contact_name) as partner_name, COUNT(*) as leads_this_month
         FROM referral_partners rp
         JOIN leads l ON l.referral_partner_id = rp.id
-        WHERE rp.user_id = :user_id
-        AND l.created_at > DATE_TRUNC('month', CURRENT_DATE)
-        GROUP BY rp.id, rp.name
+        WHERE l.created_at > DATE_TRUNC('month', CURRENT_DATE)
+        GROUP BY rp.id, rp.business_name, rp.contact_name
         HAVING COUNT(*) >= 3
         ORDER BY COUNT(*) DESC
         LIMIT 3
-    """), {"user_id": user_id})
+    """))
 
     for row in result:
         insights.append({

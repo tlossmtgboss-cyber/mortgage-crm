@@ -16,10 +16,11 @@ const LEAD_STATUSES = {
 };
 
 const ACTIVE_LOAN_STATUSES = {
+  le_pending: { name: 'LE Pending', color: '#6366f1' },
   in_processing: { name: 'In Processing', color: '#3b82f6' },
-  in_underwriting: { name: 'In Underwriting', color: '#8b5cf6' },
+  underwriting_received: { name: 'Underwriting Received', color: '#8b5cf6' },
   approved: { name: 'Approved', color: '#10b981' },
-  cleared_to_close: { name: 'Cleared to Close', color: '#f59e0b' },
+  clear_to_close: { name: 'Clear to Close', color: '#f59e0b' },
   suspended: { name: 'Suspended', color: '#ef4444' }
 };
 
@@ -79,31 +80,74 @@ const STAGE_CONFIG = {
     color: '#10b981',
     statuses: ACTIVE_LOAN_STATUSES,
     defaultTasksByStatus: {
-      in_processing: [
-        { id: 22, title: 'Order Appraisal', description: 'Request property appraisal', order: 1, auto_trigger: 'on_conversion', days_offset: 0 },
-        { id: 23, title: 'Order Title Search', description: 'Request title work', order: 2, auto_trigger: 'after_previous', days_offset: 0 },
-        { id: 24, title: 'Document Review', description: 'Review all submitted docs', order: 3, auto_trigger: 'after_previous', days_offset: 1 },
-        { id: 25, title: 'Request Missing Docs', description: 'Send conditions letter', order: 4, auto_trigger: 'after_previous', days_offset: 1 }
+      le_pending: [
+        { id: 22, title: 'Generate Loan Estimate', description: 'Create LE with loan terms, rates, closing costs, and cash to close', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
+        { id: 23, title: 'Generate Initial Disclosures', description: 'Prepare TRID disclosures, state disclosures, and acknowledgment forms', order: 2, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 24, title: 'Send LE Package', description: 'Deliver via email with eSign link, SMS notification, and portal update', order: 3, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 25, title: 'Start TRID Clock', description: 'Track 3-business-day waiting period for compliance', order: 4, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 26, title: 'First Reminder (4 hrs)', description: 'Send reminder if LE not opened within 4 hours', order: 5, auto_trigger: 'scheduled', days_offset: 0 },
+        { id: 27, title: 'Second Reminder (24 hrs)', description: 'Create LO task and send follow-up if not acknowledged', order: 6, auto_trigger: 'scheduled', days_offset: 1 },
+        { id: 28, title: 'Urgent Follow-up (48 hrs)', description: 'Personal LO call required, manager notification', order: 7, auto_trigger: 'scheduled', days_offset: 2 },
+        { id: 29, title: 'Verify TRID Complete', description: 'Confirm 3-day waiting period complete before proceeding', order: 8, auto_trigger: 'scheduled', days_offset: 3 }
       ],
-      in_underwriting: [
-        { id: 26, title: 'Submit to UW', description: 'Package file for review', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
-        { id: 27, title: 'Address Conditions', description: 'Clear UW conditions', order: 2, auto_trigger: 'on_conditions', days_offset: 0 },
-        { id: 28, title: 'Resubmit to UW', description: 'Send cleared conditions', order: 3, auto_trigger: 'after_previous', days_offset: 0 }
+      in_processing: [
+        { id: 30, title: 'Assign Processor', description: 'Assign based on workload, expertise, and territory', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
+        { id: 31, title: 'Send Document Request', description: 'Generate comprehensive checklist: income, assets, property docs', order: 2, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 32, title: 'Order Credit Report', description: 'Pull tri-merge credit report if not already done', order: 3, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 33, title: 'Order Appraisal', description: 'Submit appraisal order to AMC with property details', order: 4, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 34, title: 'Order Title Search', description: 'Request title work and insurance', order: 5, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 35, title: 'Request VOE', description: 'Send employment verification to employer', order: 6, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 36, title: 'Document Reminder (48 hrs)', description: 'Send reminder for critical missing documents', order: 7, auto_trigger: 'scheduled', days_offset: 2 },
+        { id: 37, title: 'Processor Call (72 hrs)', description: 'Personal call if critical docs still missing', order: 8, auto_trigger: 'scheduled', days_offset: 3 },
+        { id: 38, title: 'Review Appraisal', description: 'Analyze appraisal value, comparables, and conditions', order: 9, auto_trigger: 'on_appraisal_received', days_offset: 0 },
+        { id: 39, title: 'Run AUS', description: 'Run Desktop Underwriter or Loan Product Advisor', order: 10, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 40, title: 'QC Review', description: 'Complete quality control checklist before UW submission', order: 11, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 41, title: 'Submit to Underwriting', description: 'Package file and submit to UW queue', order: 12, auto_trigger: 'after_previous', days_offset: 0 }
+      ],
+      underwriting_received: [
+        { id: 42, title: 'Assign Underwriter', description: 'Assign based on workload, expertise, and priority', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
+        { id: 43, title: 'AI Pre-Analysis', description: 'Run automated risk scoring and issue flagging', order: 2, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 44, title: 'Review Credit', description: 'Verify scores, payment history, liabilities, and DTI', order: 3, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 45, title: 'Review Income', description: 'Calculate qualifying income from all sources', order: 4, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 46, title: 'Review Assets', description: 'Verify balances, source large deposits, confirm reserves', order: 5, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 47, title: 'Review Appraisal', description: 'Verify value supports loan, check property eligibility', order: 6, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 48, title: 'Validate AUS Findings', description: 'Confirm recommendations match file structure', order: 7, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 49, title: 'Issue Decision', description: 'Approve with conditions, suspend, or decline', order: 8, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 50, title: 'Generate Conditions', description: 'Create PTD and PTC conditions with assignments', order: 9, auto_trigger: 'after_previous', days_offset: 0 }
       ],
       approved: [
-        { id: 29, title: 'Final Approval Notice', description: 'Notify client of approval', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
-        { id: 30, title: 'Order Final CD', description: 'Request closing disclosure', order: 2, auto_trigger: 'after_previous', days_offset: 0 }
+        { id: 51, title: 'Send Approval Notice', description: 'Congratulate borrower with conditional approval details', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
+        { id: 52, title: 'Send Conditions List', description: 'Deliver clear conditions to borrower with deadlines', order: 2, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 53, title: 'Track PTD Conditions', description: 'Monitor prior-to-docs condition clearance', order: 3, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 54, title: 'Condition Reminder (48 hrs)', description: 'Send reminder for conditions due soon', order: 4, auto_trigger: 'scheduled', days_offset: 2 },
+        { id: 55, title: 'Urgent Reminder (24 hrs)', description: 'Urgent outreach for critical conditions', order: 5, auto_trigger: 'scheduled', days_offset: 1 },
+        { id: 56, title: 'Clear Conditions', description: 'Review and clear each condition as received', order: 6, auto_trigger: 'on_document_received', days_offset: 0 },
+        { id: 57, title: 'Prepare Closing Disclosure', description: 'Generate CD once all PTD conditions cleared', order: 7, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 58, title: 'Send CD to Borrower', description: 'Deliver CD and start 3-day TRID waiting period', order: 8, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 59, title: 'Check Rate Lock', description: 'Verify rate lock status and expiration', order: 9, auto_trigger: 'scheduled', days_offset: 0 }
       ],
-      cleared_to_close: [
-        { id: 31, title: 'Schedule Closing', description: 'Coordinate date/location', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
-        { id: 32, title: 'Send Closing Package', description: 'Email final documents', order: 2, auto_trigger: 'after_previous', days_offset: 0 },
-        { id: 33, title: 'Closing Day', description: 'Execute documents', order: 3, auto_trigger: 'on_closing_date', days_offset: 0 },
-        { id: 34, title: 'Fund & Record', description: 'Wire funds and record', order: 4, auto_trigger: 'after_previous', days_offset: 1 }
+      clear_to_close: [
+        { id: 60, title: 'Send CTC Notice', description: 'Congratulate borrower - clear to close!', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
+        { id: 61, title: 'Confirm Closing Details', description: 'Verify date, time, location with all parties', order: 2, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 62, title: 'Send Wire Instructions', description: 'Deliver secure wire instructions with fraud warning', order: 3, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 63, title: 'Final VOE (5 days out)', description: 'Re-verify employment is still active', order: 4, auto_trigger: 'scheduled', days_offset: -5 },
+        { id: 64, title: 'Final Credit Check', description: 'Soft pull to ensure no new debt', order: 5, auto_trigger: 'scheduled', days_offset: -5 },
+        { id: 65, title: 'Verify Insurance', description: 'Confirm policy in place with lender as mortgagee', order: 6, auto_trigger: 'scheduled', days_offset: -3 },
+        { id: 66, title: 'Closing Week Reminder', description: 'Send 7-day countdown with final checklist', order: 7, auto_trigger: 'scheduled', days_offset: -7 },
+        { id: 67, title: 'Day Before Reminder', description: 'Final confirmation with what to bring', order: 8, auto_trigger: 'scheduled', days_offset: -1 },
+        { id: 68, title: 'Execute Closing', description: 'Complete signing, collect funds, deliver keys', order: 9, auto_trigger: 'on_closing_date', days_offset: 0 },
+        { id: 69, title: 'QC Closing Package', description: 'Review signed docs for completeness', order: 10, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 70, title: 'Approve Funding', description: 'Wire funds to title/escrow', order: 11, auto_trigger: 'after_previous', days_offset: 0 }
       ],
       suspended: [
-        { id: 35, title: 'Notify Client', description: 'Explain suspension reason', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
-        { id: 36, title: 'Create Action Plan', description: 'Steps to resolve issues', order: 2, auto_trigger: 'after_previous', days_offset: 0 },
-        { id: 37, title: 'Weekly Check-in', description: 'Monitor progress', order: 3, auto_trigger: 'scheduled', days_offset: 7 }
+        { id: 71, title: 'Document Suspension Reason', description: 'Select reason and enter detailed notes', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
+        { id: 72, title: 'Create Action Plan', description: 'Define what\'s needed, who\'s responsible, target date', order: 2, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 73, title: 'Notify Borrower', description: 'Send transparent explanation with specific requirements', order: 3, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 74, title: 'Assign Resolution Owner', description: 'Assign processor, LO, or UW to resolve', order: 4, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 75, title: 'Daily Status Check', description: 'Monitor for received documents and progress', order: 5, auto_trigger: 'scheduled', days_offset: 1 },
+        { id: 76, title: 'Day 3 Escalation', description: 'Manager notification if no progress', order: 6, auto_trigger: 'scheduled', days_offset: 3 },
+        { id: 77, title: 'Day 7 Review', description: 'Manager meeting to assess viability', order: 7, auto_trigger: 'scheduled', days_offset: 7 },
+        { id: 78, title: 'Day 14 Decision', description: 'Executive review - resolve, extend, or decline', order: 8, auto_trigger: 'scheduled', days_offset: 14 }
       ]
     }
   },
@@ -136,6 +180,8 @@ const triggerOptions = [
   { value: 'on_conditions', label: 'On Conditions' },
   { value: 'on_closing_date', label: 'On Closing Date' },
   { value: 'on_portfolio_add', label: 'On Portfolio Add' },
+  { value: 'on_appraisal_received', label: 'On Appraisal Received' },
+  { value: 'on_document_received', label: 'On Document Received' },
   { value: 'scheduled', label: 'Scheduled' },
   { value: 'annual', label: 'Annual' },
   { value: 'rate_trigger', label: 'Rate Trigger' },
