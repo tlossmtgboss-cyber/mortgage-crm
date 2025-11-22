@@ -11000,7 +11000,7 @@ async def update_lead(lead_id: int, lead_update: LeadUpdate, db: Session = Depen
                 old_status=old_status or "None",
                 new_status=new_status,
                 loan_officer_id=current_user.id,
-                loan_officer_name=current_user.name,
+                loan_officer_name=current_user.full_name or current_user.email,
                 loan_officer_email=current_user.email,
                 loan_type=lead.loan_type if hasattr(lead, 'loan_type') else None,
                 loan_amount=lead.loan_amount if hasattr(lead, 'loan_amount') else None,
@@ -22730,6 +22730,50 @@ async def add_post_closing_workflow_migration(
     except Exception as e:
         logger.error(f"Migration failed: {str(e)}")
         db.rollback()
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e)
+        }
+
+
+@app.post("/api/v1/migrations/add-profitability-tables", response_model=None)
+async def add_profitability_tables_migration(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Add Profitability Intelligence System tables
+    Creates 11 tables for expense tracking, employee costs, revenue, scenarios, and insights.
+    """
+    try:
+        logger.info(f"Running migration: add profitability tables (user: {current_user.id})")
+
+        from migrations.add_profitability_tables import run_migration
+        run_migration()
+
+        logger.info("Profitability tables migration completed successfully")
+
+        return {
+            "success": True,
+            "message": "Profitability tables migration completed",
+            "tables_created": [
+                "expense_categories",
+                "expenses",
+                "profitability_roles",
+                "employee_costs",
+                "profitability_loans",
+                "loan_attributions",
+                "revenue_records",
+                "profitability_snapshots",
+                "profitability_scenarios",
+                "profitability_insights",
+                "profitability_audit"
+            ]
+        }
+
+    except Exception as e:
+        logger.error(f"Profitability tables migration failed: {e}")
         return {
             "success": False,
             "message": f"Migration failed: {str(e)}",
