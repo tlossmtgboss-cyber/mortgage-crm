@@ -224,7 +224,7 @@ async def revoke_ai_authorization(
             revoked_by_user_id = :user_id,
             retain_training_data = :retain_data,
             updated_at = NOW()
-        WHERE authorization_id = :auth_id
+        WHERE authorization_id::text = :auth_id
     """), {
         "auth_id": authorization_id,
         "user_id": user_id,
