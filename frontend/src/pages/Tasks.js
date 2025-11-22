@@ -704,17 +704,13 @@ function Tasks() {
     setShowDeleteConfirm(false);
 
     try {
-      // Check if this is a real database task (UUID or numeric ID)
-      // Mock tasks have IDs like 'priority-0', 'message-1', etc.
-      const isRealTask = typeof taskId === 'number' ||
-        (typeof taskId === 'string' &&
-         !taskId.includes('-') &&
-         !isNaN(taskId)) ||
-        (typeof taskId === 'string' &&
-         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(taskId));
+      // Check if this is a mock/demo task
+      // Mock tasks have IDs like 'priority-0', 'message-1', 'ai-pending-0', etc.
+      const mockIdPatterns = ['priority-', 'issue-', 'ai-pending-', 'ai-waiting-', 'mum-', 'lead-', 'message-'];
+      const isMockTask = typeof taskId === 'string' && mockIdPatterns.some(pattern => taskId.startsWith(pattern));
 
-      if (isRealTask) {
-        // Call API to delete task from database
+      if (!isMockTask) {
+        // Call API to delete real task from database
         await tasksAPI.delete(taskId);
       }
 
