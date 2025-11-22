@@ -10,93 +10,39 @@ function AILandingPage() {
   const [loading, setLoading] = useState(false);
   const [userName, setUserName] = useState('');
   const [conversationHistory, setConversationHistory] = useState([]);
-  const [actionContext, setActionContext] = useState({}); // Store action previews for context
-  const [taskListData, setTaskListData] = useState(null); // Tasks to display below button
+  const [actionContext, setActionContext] = useState({});
+  const [taskListData, setTaskListData] = useState(null);
   const [selectedTask, setSelectedTask] = useState(null);
-  const [tasksCompleted, setTasksCompleted] = useState(false); // Track if user completed tasks
-  const [selectedSendMethod, setSelectedSendMethod] = useState('email'); // Track selected send method
+  const [tasksCompleted, setTasksCompleted] = useState(false);
+  const [selectedSendMethod, setSelectedSendMethod] = useState('email');
   const [editingMessage, setEditingMessage] = useState(false);
   const [editedMessage, setEditedMessage] = useState('');
-  const [savedQuestions, setSavedQuestions] = useState(() => {
-    const stored = localStorage.getItem('ai_saved_questions');
+
+  // New state for redesigned features
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarView, setSidebarView] = useState('chats'); // 'chats', 'reports', 'suggestions'
+  const [chatHistory, setChatHistory] = useState(() => {
+    const stored = localStorage.getItem('ai_chat_history');
     return stored ? JSON.parse(stored) : [];
   });
-  const [selectedSavedQuestion, setSelectedSavedQuestion] = useState(null);
-  const [draggedMessage, setDraggedMessage] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [reports, setReports] = useState(() => {
+    const stored = localStorage.getItem('ai_reports');
+    return stored ? JSON.parse(stored) : [];
+  });
+  const [projects, setProjects] = useState(() => {
+    const stored = localStorage.getItem('ai_projects');
+    return stored ? JSON.parse(stored) : [];
+  });
+  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, chatId: null });
+  const [selectedPermission, setSelectedPermission] = useState('all');
+  const [userPermissions, setUserPermissions] = useState(['all', 'leads', 'loans', 'tasks', 'reports']);
+
   const chatAreaRef = useRef(null);
-  const sidebarRef = useRef(null);
+  const textareaRef = useRef(null);
+  const fileInputRef = useRef(null);
 
-  // Save questions to localStorage when they change
-  useEffect(() => {
-    localStorage.setItem('ai_saved_questions', JSON.stringify(savedQuestions));
-  }, [savedQuestions]);
-
-  // Drag handlers for saving questions
-  const handleDragStart = (e, message) => {
-    if (message.type !== 'user') return;
-    setDraggedMessage(message);
-    e.dataTransfer.effectAllowed = 'copy';
-    e.dataTransfer.setData('text/plain', message.content);
-  };
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
-    if (sidebarRef.current) {
-      sidebarRef.current.classList.add('drag-over');
-    }
-  };
-
-  const handleDragLeave = (e) => {
-    if (sidebarRef.current) {
-      sidebarRef.current.classList.remove('drag-over');
-    }
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    if (sidebarRef.current) {
-      sidebarRef.current.classList.remove('drag-over');
-    }
-
-    if (draggedMessage && draggedMessage.type === 'user') {
-      // Find the answer that followed this question
-      const msgIndex = messages.findIndex(m => m.id === draggedMessage.id);
-      const answerMsg = messages.find((m, i) => i > msgIndex && m.type === 'assistant');
-
-      const newSavedQuestion = {
-        id: Date.now(),
-        question: draggedMessage.content,
-        answer: answerMsg?.content || 'No answer available',
-        savedAt: new Date().toISOString()
-      };
-
-      // Check if already saved
-      if (!savedQuestions.some(q => q.question === draggedMessage.content)) {
-        setSavedQuestions(prev => [...prev, newSavedQuestion]);
-      }
-    }
-    setDraggedMessage(null);
-  };
-
-  const handleSelectSavedQuestion = (saved) => {
-    setSelectedSavedQuestion(saved);
-  };
-
-  const handleDeleteSavedQuestion = (id, e) => {
-    e.stopPropagation();
-    setSavedQuestions(prev => prev.filter(q => q.id !== id));
-    if (selectedSavedQuestion?.id === id) {
-      setSelectedSavedQuestion(null);
-    }
-  };
-
-  const handleReaskQuestion = (question) => {
-    setInputValue(question);
-    setSelectedSavedQuestion(null);
-  };
-
-  // Session ID for permanent memory - persists to localStorage
+  // Session ID for permanent memory
   const [sessionId, setSessionId] = useState(() => {
     const stored = localStorage.getItem('ai_session_id');
     if (stored) return stored;
@@ -105,8 +51,43 @@ function AILandingPage() {
     return newId;
   });
 
+  // Save chat history when messages change
   useEffect(() => {
-    // Get user name from token or localStorage
+    if (messages.length > 0) {
+      const currentChat = {
+        id: sessionId,
+        title: messages[0]?.content?.substring(0, 50) + '...' || 'New Chat',
+        messages: messages,
+        timestamp: new Date().toISOString(),
+        isProject: false
+      };
+
+      setChatHistory(prev => {
+        const existing = prev.findIndex(c => c.id === sessionId);
+        if (existing >= 0) {
+          const updated = [...prev];
+          updated[existing] = currentChat;
+          return updated;
+        }
+        return [currentChat, ...prev];
+      });
+    }
+  }, [messages, sessionId]);
+
+  // Persist to localStorage
+  useEffect(() => {
+    localStorage.setItem('ai_chat_history', JSON.stringify(chatHistory));
+  }, [chatHistory]);
+
+  useEffect(() => {
+    localStorage.setItem('ai_reports', JSON.stringify(reports));
+  }, [reports]);
+
+  useEffect(() => {
+    localStorage.setItem('ai_projects', JSON.stringify(projects));
+  }, [projects]);
+
+  useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) {
       navigate('/login');
@@ -129,6 +110,21 @@ function AILandingPage() {
     }
   }, [messages]);
 
+  // Auto-resize textarea
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 200) + 'px';
+    }
+  }, [inputValue]);
+
+  // Close context menu on click outside
+  useEffect(() => {
+    const handleClick = () => setContextMenu({ visible: false, x: 0, y: 0, chatId: null });
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, []);
+
   const addMessage = (content, type, extraData = {}) => {
     setMessages(prev => [...prev, {
       id: Date.now(),
@@ -145,10 +141,73 @@ function AILandingPage() {
     }
   };
 
+  const handleNewChat = () => {
+    const newId = crypto.randomUUID();
+    setSessionId(newId);
+    localStorage.setItem('ai_session_id', newId);
+    setMessages([]);
+    setTaskListData(null);
+    setSelectedTask(null);
+    setConversationHistory([]);
+    setActionContext({});
+  };
+
+  const handleLoadChat = (chat) => {
+    setSessionId(chat.id);
+    localStorage.setItem('ai_session_id', chat.id);
+    setMessages(chat.messages || []);
+  };
+
+  const handleContextMenu = (e, chatId) => {
+    e.preventDefault();
+    setContextMenu({
+      visible: true,
+      x: e.clientX,
+      y: e.clientY,
+      chatId
+    });
+  };
+
+  const handleSaveAsProject = () => {
+    const chat = chatHistory.find(c => c.id === contextMenu.chatId);
+    if (chat) {
+      const projectName = prompt('Enter project name:', chat.title);
+      if (projectName) {
+        const project = {
+          ...chat,
+          title: projectName,
+          isProject: true,
+          savedAt: new Date().toISOString()
+        };
+        setProjects(prev => [project, ...prev]);
+      }
+    }
+    setContextMenu({ visible: false, x: 0, y: 0, chatId: null });
+  };
+
+  const handleDeleteChat = () => {
+    setChatHistory(prev => prev.filter(c => c.id !== contextMenu.chatId));
+    setContextMenu({ visible: false, x: 0, y: 0, chatId: null });
+  };
+
+  const handleFileUpload = (e) => {
+    const files = e.target.files;
+    if (files.length > 0) {
+      const fileNames = Array.from(files).map(f => f.name).join(', ');
+      addMessage(`Uploaded: ${fileNames}`, 'system');
+      // TODO: Actually upload and process files
+    }
+  };
+
   const handleExamplePrompt = (prompt) => {
     setInputValue(prompt);
     setTimeout(() => sendMessage(prompt), 100);
   };
+
+  const filteredChats = chatHistory.filter(chat =>
+    chat.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    chat.messages?.some(m => m.content?.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
 
   const sendMessage = async (overrideMessage = null) => {
     const message = overrideMessage || inputValue.trim();
@@ -159,31 +218,27 @@ function AILandingPage() {
     setLoading(true);
 
     try {
-      // Call the AI processing endpoint with FULL conversation history and session_id for permanent memory
       const response = await aiAPI.processCommand(message, {
-        session_id: sessionId, // For permanent memory tracking
-        conversation_context: conversationHistory.slice(-20), // Send last 20 messages
-        action_context: actionContext, // Include all action previews for context
+        session_id: sessionId,
+        conversation_context: conversationHistory.slice(-20),
+        action_context: actionContext,
+        permission_scope: selectedPermission,
         current_state: {
           last_action_id: Object.keys(actionContext).slice(-1)[0] || null,
           total_actions: Object.keys(actionContext).length
         }
       });
 
-      // Update session ID if server returns a new one
       if (response.session_id && response.session_id !== sessionId) {
         setSessionId(response.session_id);
         localStorage.setItem('ai_session_id', response.session_id);
       }
 
-      // Build detailed assistant response for history
       let historyContent = response.explanation || '';
 
-      // If there's an action, add detailed context to history
       if (response.action_id && response.preview) {
         historyContent += `\n[Action ${response.action_id}: ${response.intent} - Preview: ${JSON.stringify(response.preview)}]`;
 
-        // Store action context for future reference
         setActionContext(prev => ({
           ...prev,
           [response.action_id]: {
@@ -193,9 +248,19 @@ function AILandingPage() {
             status: 'previewed'
           }
         }));
+
+        // Save as report if it's a report type
+        if (response.intent?.includes('REPORT') || response.intent?.includes('PIPELINE')) {
+          const report = {
+            id: Date.now(),
+            title: message.substring(0, 50),
+            data: response.preview,
+            createdAt: new Date().toISOString()
+          };
+          setReports(prev => [report, ...prev.slice(0, 19)]);
+        }
       }
 
-      // Update conversation history with full context
       setConversationHistory(prev => [
         ...prev,
         { role: 'user', content: message },
@@ -207,13 +272,10 @@ function AILandingPage() {
         }
       ]);
 
-      // Handle different response types based on intent
       if (response.intent === 'DAILY_VIEW' && response.data) {
-        // Use the real data from the response
         showDailyViewWithData(response.data, response.explanation);
       } else if (response.intent === 'SEARCH' && response.data) {
         addMessage(response.explanation || "Here are your search results:", 'assistant');
-        // Show search results
         const results = response.data;
         if (results.leads?.length > 0 || results.deals?.length > 0) {
           const resultText = [
@@ -223,14 +285,12 @@ function AILandingPage() {
           addMessage(resultText, 'assistant');
         }
       } else if (response.preview && response.action_id) {
-        // Actionable command with preview
         addMessage(response.explanation || "Here's what I can do:", 'assistant', {
           preview: response.preview,
           actionId: response.action_id,
           actionType: response.intent
         });
       } else if (response.preview) {
-        // Preview without action (like reports)
         addMessage(response.explanation || "Here's what I found:", 'assistant', {
           preview: response.preview,
           actionType: response.intent
@@ -240,7 +300,6 @@ function AILandingPage() {
       }
     } catch (error) {
       console.error('AI processing error:', error);
-      // For demo purposes, route to simulated responses
       routeMessage(message);
     } finally {
       setLoading(false);
@@ -250,20 +309,16 @@ function AILandingPage() {
   const routeMessage = (message) => {
     const lower = message.toLowerCase();
 
-    // Handle task completion
     if ((lower.includes('done') || lower.includes('completed') || lower.includes('finished')) &&
         (lower.includes('task') || lower.includes('all'))) {
       handleTasksCompleted();
-    }
-    // Handle "what's next" after task completion
-    else if (lower.includes('next') || lower.includes("what's next") || lower.includes('whats next')) {
+    } else if (lower.includes('next') || lower.includes("what's next") || lower.includes('whats next')) {
       if (tasksCompleted) {
         showNextPriorities();
       } else {
         showDailyView();
       }
-    }
-    else if (lower.includes('today') || lower.includes('do today') || lower.includes('task') || lower.includes('to do') || lower.includes('todo')) {
+    } else if (lower.includes('today') || lower.includes('do today') || lower.includes('task') || lower.includes('to do') || lower.includes('todo')) {
       showDailyView();
     } else if (lower.includes('email') && (lower.includes('all in one') || lower.includes('mortgages under management'))) {
       showEmailCampaign();
@@ -276,7 +331,6 @@ function AILandingPage() {
     } else if (lower.includes('report') || lower.includes('pipeline')) {
       showPipelineReport();
     } else {
-      // Default to showing daily view with tasks for any unrecognized query
       addMessage("Let me show you your current tasks and priorities:", 'assistant');
       showDailyView();
     }
@@ -284,7 +338,7 @@ function AILandingPage() {
 
   const handleTasksCompleted = () => {
     setTasksCompleted(true);
-    setTaskListData(null); // Clear the task list
+    setTaskListData(null);
     setSelectedTask(null);
     addMessage("Great job! I've marked all of today's tasks as completed. You're making excellent progress!", 'assistant');
 
@@ -296,7 +350,6 @@ function AILandingPage() {
   const showNextPriorities = () => {
     addMessage("Now that you've completed today's tasks, here are your next priorities:", 'assistant');
 
-    // Set different tasks - upcoming priorities
     const nextTasks = [
       {
         id: 101,
@@ -342,7 +395,7 @@ function AILandingPage() {
 
     setTaskListData(nextTasks);
     setSelectedTask(nextTasks[0]);
-    setTasksCompleted(false); // Reset for next cycle
+    setTasksCompleted(false);
 
     setTimeout(() => {
       addMessage("These are proactive opportunities to grow your pipeline. Let me know which one you'd like to tackle first!", 'assistant');
@@ -350,14 +403,11 @@ function AILandingPage() {
   };
 
   const showDailyViewWithData = (data, explanation) => {
-    // Add the AI's explanation
     addMessage(explanation || "Here's your daily overview:", 'assistant');
 
-    // Convert API data to task list format
     const tasks = [];
     let taskId = 1;
 
-    // Add follow-up items as tasks
     if (data.follow_ups) {
       data.follow_ups.forEach(followUp => {
         followUp.items?.forEach(item => {
@@ -378,7 +428,6 @@ function AILandingPage() {
       });
     }
 
-    // Add reconciliation items as tasks
     if (data.reconciliations) {
       data.reconciliations.forEach(recon => {
         recon.items?.forEach(item => {
@@ -398,9 +447,7 @@ function AILandingPage() {
       });
     }
 
-    // If no tasks found, show summary message
     if (tasks.length === 0) {
-      // Handle all field naming conventions from Claude AI (varies between responses)
       const activeLeads = data.summary?.active_leads || data.summary?.leads_needing_attention || data.summary?.total_leads || 0;
       const loansInPipeline = data.summary?.loans_in_pipeline || data.summary?.deals_in_pipeline || data.summary?.active_deals || data.summary?.deals_in_progress || data.summary?.active_loans || 0;
       const pipelineVolume = data.summary?.pipeline_volume || data.summary?.pipeline_value || '$0';
@@ -416,10 +463,8 @@ function AILandingPage() {
   };
 
   const showDailyView = () => {
-    // Add summary message in chat
     addMessage("I'll show you your daily overview including all tasks, follow-ups, and reconciliation items scheduled for today.", 'assistant');
 
-    // Set task list data to display below the button
     const tasks = [
       {
         id: 1,
@@ -490,7 +535,6 @@ function AILandingPage() {
     setTaskListData(tasks);
     setSelectedTask(tasks[0]);
 
-    // Add instruction to return when completed
     setTimeout(() => {
       addMessage("Here are your tasks for today. Complete these items and come back to let me know when you're done - I'll help you with the next steps!", 'assistant');
     }, 500);
@@ -501,7 +545,6 @@ function AILandingPage() {
   };
 
   const showTextCampaign = (originalMessage) => {
-    // Extract context from the original message
     const lower = originalMessage.toLowerCase();
     let audience = 'pre-approved leads';
     let messageContext = 'weekend house hunting plans';
@@ -537,7 +580,6 @@ function AILandingPage() {
 
   const executeAction = async (actionId, modifications = {}) => {
     if (!actionId) {
-      // Fallback for demo mode without actionId
       addMessage('Action executed successfully!', 'assistant');
       return;
     }
@@ -547,9 +589,9 @@ function AILandingPage() {
       const result = await aiAPI.executeAction(actionId, modifications, sessionId);
 
       if (result.success) {
-        addMessage(`✅ ${result.message}`, 'assistant');
+        addMessage(`${result.message}`, 'assistant');
       } else {
-        addMessage(`❌ ${result.message || 'Action failed'}`, 'assistant');
+        addMessage(`${result.message || 'Action failed'}`, 'assistant');
       }
     } catch (error) {
       console.error('Action execution error:', error);
@@ -557,79 +599,70 @@ function AILandingPage() {
     }
   };
 
-  // Demo mode execute (for fallback without backend)
   const executeDemoAction = (actionType) => {
     const confirmMessages = {
-      email_campaign: '✅ Email sent successfully to 47 clients!',
-      text_campaign: '✅ Text messages sent successfully to 12 pre-approved leads!',
-      bulk_update: '✅ Successfully updated 14 deals. Processors have been notified.',
-      voicemail_campaign: '✅ Voicemail drops initiated! All 10 calls are being placed now.',
-      pipeline_report: '✅ Pipeline report generated and sent to your team!'
+      email_campaign: 'Email sent successfully to 47 clients!',
+      text_campaign: 'Text messages sent successfully to 12 pre-approved leads!',
+      bulk_update: 'Successfully updated 14 deals. Processors have been notified.',
+      voicemail_campaign: 'Voicemail drops initiated! All 10 calls are being placed now.',
+      pipeline_report: 'Pipeline report generated and sent to your team!'
     };
-    addMessage(confirmMessages[actionType] || '✅ Action completed successfully!', 'assistant');
+    addMessage(confirmMessages[actionType] || 'Action completed successfully!', 'assistant');
   };
 
   // Task action handlers
   const handleSendViaEmail = async () => {
     if (!selectedTask) return;
-    const message = editingMessage ? editedMessage : selectedTask.aiDraftedMessage;
-    addMessage(`📧 Sending email to ${selectedTask.client}...`, 'assistant');
+    addMessage(`Sending email to ${selectedTask.client}...`, 'assistant');
 
-    // Simulate API call
     setTimeout(() => {
-      addMessage(`✅ Email sent successfully to ${selectedTask.client}!`, 'assistant');
-      // Remove task from list
+      addMessage(`Email sent successfully to ${selectedTask.client}!`, 'assistant');
       removeTaskFromList(selectedTask.id);
     }, 1000);
   };
 
   const handleApproveAIAction = async () => {
     if (!selectedTask) return;
-    addMessage(`✅ Approving AI action for "${selectedTask.title}"...`, 'assistant');
+    addMessage(`Approving AI action for "${selectedTask.title}"...`, 'assistant');
 
-    // Execute the AI's recommended action based on send method
     setTimeout(() => {
       const methodMessages = {
-        email: `📧 Email sent to ${selectedTask.client}`,
-        text: `💬 Text message sent to ${selectedTask.client}`,
-        phone: `📞 Call initiated to ${selectedTask.client}`,
-        voicemail: `📱 Voicemail dropped for ${selectedTask.client}`
+        email: `Email sent to ${selectedTask.client}`,
+        text: `Text message sent to ${selectedTask.client}`,
+        phone: `Call initiated to ${selectedTask.client}`,
+        voicemail: `Voicemail dropped for ${selectedTask.client}`
       };
-      addMessage(`✅ Action completed! ${methodMessages[selectedSendMethod]}`, 'assistant');
+      addMessage(`Action completed! ${methodMessages[selectedSendMethod]}`, 'assistant');
       removeTaskFromList(selectedTask.id);
     }, 1000);
   };
 
   const handleSnooze = () => {
     if (!selectedTask) return;
-    // Show snooze options
-    addMessage(`⏰ Snoozing "${selectedTask.title}". When would you like to be reminded?\n\n• 1 hour\n• 3 hours\n• Tomorrow morning\n• Next week`, 'assistant');
+    addMessage(`Snoozing "${selectedTask.title}". When would you like to be reminded?\n\n• 1 hour\n• 3 hours\n• Tomorrow morning\n• Next week`, 'assistant');
 
-    // For demo, snooze for "later today"
     setTimeout(() => {
-      addMessage(`✅ Task snoozed! I'll remind you about "${selectedTask.title}" in 3 hours.`, 'assistant');
+      addMessage(`Task snoozed! I'll remind you about "${selectedTask.title}" in 3 hours.`, 'assistant');
       removeTaskFromList(selectedTask.id);
     }, 1500);
   };
 
   const handleDelegate = () => {
     if (!selectedTask) return;
-    addMessage(`👥 Delegating "${selectedTask.title}". Select a team member:\n\n• John (Processor)\n• Maria (Assistant)\n• David (Junior LO)`, 'assistant');
+    addMessage(`Delegating "${selectedTask.title}". Select a team member:\n\n• John (Processor)\n• Maria (Assistant)\n• David (Junior LO)`, 'assistant');
 
-    // For demo, delegate to a team member
     setTimeout(() => {
-      addMessage(`✅ Task delegated to Maria! She'll receive a notification with all the details.`, 'assistant');
+      addMessage(`Task delegated to Maria! She'll receive a notification with all the details.`, 'assistant');
       removeTaskFromList(selectedTask.id);
     }, 1500);
   };
 
   const handleDeleteTask = () => {
     if (!selectedTask) return;
-    addMessage(`🗑️ Are you sure you want to delete "${selectedTask.title}"? This action cannot be undone.`, 'assistant');
+    addMessage(`Are you sure you want to delete "${selectedTask.title}"? This action cannot be undone.`, 'assistant');
 
-    // For demo, confirm deletion
     setTimeout(() => {
-      addMessage(`✅ Task deleted successfully.`, 'assistant');
+      addMessage(`Task deleted successfully.`, 'assistant');
       removeTaskFromList(selectedTask.id);
     }, 1000);
   };
@@ -643,7 +676,7 @@ function AILandingPage() {
 
   const handleSaveMessage = () => {
     setEditingMessage(false);
-    addMessage('✅ Message updated successfully!', 'assistant');
+    addMessage('Message updated successfully!', 'assistant');
   };
 
   const removeTaskFromList = (taskId) => {
@@ -651,7 +684,7 @@ function AILandingPage() {
       const updated = prev.filter(t => t.id !== taskId);
       if (updated.length === 0) {
         setSelectedTask(null);
-        addMessage("🎉 Great job! You've completed all your tasks. Ask 'what's next?' for your upcoming priorities.", 'assistant');
+        addMessage("Great job! You've completed all your tasks. Ask 'what's next?' for your upcoming priorities.", 'assistant');
       } else {
         setSelectedTask(updated[0]);
       }
@@ -666,7 +699,6 @@ function AILandingPage() {
   const renderSpecialContent = (message) => {
     const actionId = message.actionId;
     const preview = message.preview;
-    const backendData = message.backendData;
 
     switch (message.contentType) {
       case 'email_campaign':
@@ -715,129 +747,59 @@ function AILandingPage() {
   };
 
   return (
-    <div className="ai-landing-page">
-      <div className="ai-header">
-        <div className="ai-logo">✱</div>
-        <h1>Back at it, {userName}</h1>
-      </div>
-
-      <div className="ai-main-layout">
-        {/* Main content area */}
-        <div className="ai-container">
-          {/* Input area at top */}
-          <div className="ai-input-container">
-            <button className="ai-icon-btn" title="Add attachment">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 5v14M5 12h14"/>
-              </svg>
-            </button>
-
-            <button className="ai-icon-btn" title="Voice input">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/>
-              </svg>
-            </button>
-
-            <div className="ai-input-wrapper">
-              <input
-                type="text"
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Ask me to do something..."
-                disabled={loading}
-              />
-            </div>
-
-            <div className="ai-model-selector">
-              <span>Sonnet 4.5</span>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M6 9l6 6 6-6"/>
-              </svg>
-            </div>
-
-            <button
-              className="ai-send-btn"
-              onClick={() => sendMessage()}
-              disabled={!inputValue.trim() || loading}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
-              </svg>
-            </button>
+    <div className="ai-landing-page-new">
+      {/* Main Content Area */}
+      <div className="ai-main-content">
+        {/* Header */}
+        <div className="ai-header-new">
+          <div className="ai-logo-new">
+            <span className="ai-logo-icon">*</span>
           </div>
+          <h1>Back at it, {userName}</h1>
+        </div>
 
-          {/* Answer area below input */}
-          <div className="ai-chat-area" ref={chatAreaRef}>
-            {selectedSavedQuestion ? (
-              // Show saved question's answer
-              <div className="ai-saved-answer-display">
-                <div className="ai-saved-answer-header">
-                  <span>Saved Question</span>
-                  <button onClick={() => setSelectedSavedQuestion(null)}>✕ Close</button>
-                </div>
-                <div className="ai-message ai-message-user">
-                  <div className="ai-message-content">{selectedSavedQuestion.question}</div>
-                </div>
-                <div className="ai-message ai-message-assistant">
-                  <div className="ai-message-content">{selectedSavedQuestion.answer}</div>
-                </div>
-                <button
-                  className="ai-reask-btn"
-                  onClick={() => handleReaskQuestion(selectedSavedQuestion.question)}
-                >
-                  🔄 Ask Again
-                </button>
-              </div>
-            ) : messages.length === 0 ? (
-              <div className="ai-empty-state">
-                <div className="ai-empty-icon">💬</div>
+        {/* Chat Container */}
+        <div className="ai-chat-container">
+          {/* Messages Area */}
+          <div className="ai-messages-area" ref={chatAreaRef}>
+            {messages.length === 0 ? (
+              <div className="ai-welcome-state">
                 <h2>What would you like to do today?</h2>
                 <p>Ask me anything about your CRM data, clients, or tasks. I'll handle the rest.</p>
-                <p className="ai-drag-hint">💡 Tip: Drag questions to the sidebar to save them!</p>
 
-                <div className="ai-example-prompts">
-                  <button className="ai-example-prompt" onClick={() => handleExamplePrompt('What do I need to do today?')}>
+                <div className="ai-example-prompts-new">
+                  <button onClick={() => handleExamplePrompt('What do I need to do today?')}>
                     What do I need to do today?
                   </button>
-                  <button className="ai-example-prompt" onClick={() => handleExamplePrompt('Send an email to all mortgages under management clients about the All In One loan')}>
+                  <button onClick={() => handleExamplePrompt('Send an email to all mortgages under management clients about the All In One loan')}>
                     Send an email to all mortgages under management clients about the All In One loan
                   </button>
-                  <button className="ai-example-prompt" onClick={() => handleExamplePrompt('Update all deals in underwriting to include the new appraisal waiver guidelines')}>
+                  <button onClick={() => handleExamplePrompt('Update all deals in underwriting to include the new appraisal waiver guidelines')}>
                     Update all deals in underwriting to include the new appraisal waiver guidelines
                   </button>
-                  <button className="ai-example-prompt" onClick={() => handleExamplePrompt('Call my top 10 referral partners and leave a voicemail thanking them for Q4')}>
+                  <button onClick={() => handleExamplePrompt('Call my top 10 referral partners and leave a voicemail thanking them for Q4')}>
                     Call my top 10 referral partners and leave a voicemail thanking them for Q4
                   </button>
-                  <button className="ai-example-prompt" onClick={() => handleExamplePrompt('Generate a pipeline report for deals closing this month and send to my team')}>
+                  <button onClick={() => handleExamplePrompt('Generate a pipeline report for deals closing this month and send to my team')}>
                     Generate a pipeline report for deals closing this month and send to my team
                   </button>
                 </div>
               </div>
             ) : (
               messages.map(message => (
-                <div
-                  key={message.id}
-                  className={`ai-message ai-message-${message.type} ${message.type === 'user' ? 'draggable' : ''}`}
-                  draggable={message.type === 'user'}
-                  onDragStart={(e) => handleDragStart(e, message)}
-                >
+                <div key={message.id} className={`ai-message-new ai-message-${message.type}`}>
                   {message.isSpecialContent ? (
                     renderSpecialContent(message)
                   ) : (
-                    <div className="ai-message-content">
-                      {message.content}
-                      {message.type === 'user' && <span className="ai-drag-icon" title="Drag to save">⋮⋮</span>}
-                    </div>
+                    <div className="ai-message-content-new">{message.content}</div>
                   )}
                 </div>
               ))
             )}
 
             {loading && (
-              <div className="ai-message ai-message-assistant">
-                <div className="ai-typing-indicator">
+              <div className="ai-message-new ai-message-assistant">
+                <div className="ai-typing-indicator-new">
                   <span></span>
                   <span></span>
                   <span></span>
@@ -845,55 +807,214 @@ function AILandingPage() {
               </div>
             )}
           </div>
-        </div>
 
-        {/* Saved Questions Sidebar */}
-        <div
-          className="ai-saved-sidebar"
-          ref={sidebarRef}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-        >
-          <div className="ai-saved-sidebar-header">
-            <h3>📌 Saved Questions</h3>
-            <span className="ai-saved-count">{savedQuestions.length}</span>
+          {/* Input Area */}
+          <div className="ai-input-area">
+            <div className="ai-input-container-new">
+              <button
+                className="ai-upload-btn"
+                onClick={() => fileInputRef.current?.click()}
+                title="Upload documents"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
+                </svg>
+              </button>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileUpload}
+                multiple
+                style={{ display: 'none' }}
+              />
+
+              <textarea
+                ref={textareaRef}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Ask me to do something..."
+                disabled={loading}
+                rows={1}
+              />
+
+              <select
+                className="ai-permission-select"
+                value={selectedPermission}
+                onChange={(e) => setSelectedPermission(e.target.value)}
+              >
+                {userPermissions.map(perm => (
+                  <option key={perm} value={perm}>
+                    {perm.charAt(0).toUpperCase() + perm.slice(1)}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                className="ai-send-btn-new"
+                onClick={() => sendMessage()}
+                disabled={!inputValue.trim() || loading}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                </svg>
+              </button>
+            </div>
           </div>
-
-          {savedQuestions.length === 0 ? (
-            <div className="ai-saved-empty">
-              <p>Drag questions here to save them for quick access</p>
-            </div>
-          ) : (
-            <div className="ai-saved-list">
-              {savedQuestions.map(saved => (
-                <div
-                  key={saved.id}
-                  className={`ai-saved-item ${selectedSavedQuestion?.id === saved.id ? 'selected' : ''}`}
-                  onClick={() => handleSelectSavedQuestion(saved)}
-                >
-                  <div className="ai-saved-question-text">
-                    {saved.question.length > 60 ? saved.question.substring(0, 60) + '...' : saved.question}
-                  </div>
-                  <button
-                    className="ai-saved-delete"
-                    onClick={(e) => handleDeleteSavedQuestion(saved.id, e)}
-                    title="Delete"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
+
+        <button className="ai-back-to-crm-new" onClick={() => navigate('/dashboard')}>
+          Back to CRM Dashboard
+        </button>
       </div>
 
-      <button className="ai-back-to-crm" onClick={() => navigate('/dashboard')}>
-        Back to CRM Dashboard
-      </button>
+      {/* Collapsible Right Sidebar */}
+      <div className={`ai-sidebar-new ${sidebarCollapsed ? 'collapsed' : ''}`}>
+        <button
+          className="ai-sidebar-toggle"
+          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+        >
+          {sidebarCollapsed ? '<' : '>'}
+        </button>
 
-      {/* Task List Display - Shows below button when tasks are available */}
+        {!sidebarCollapsed && (
+          <>
+            {/* New Chat Button */}
+            <button className="ai-new-chat-btn" onClick={handleNewChat}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 5v14M5 12h14"/>
+              </svg>
+              New Chat
+            </button>
+
+            {/* Navigation Buttons */}
+            <div className="ai-sidebar-nav">
+              <button
+                className={`ai-nav-btn ${sidebarView === 'chats' ? 'active' : ''}`}
+                onClick={() => setSidebarView('chats')}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+                </svg>
+                Chats
+              </button>
+              <button
+                className={`ai-nav-btn ${sidebarView === 'reports' ? 'active' : ''}`}
+                onClick={() => setSidebarView('reports')}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+                </svg>
+                Reports
+              </button>
+              <button
+                className={`ai-nav-btn ${sidebarView === 'suggestions' ? 'active' : ''}`}
+                onClick={() => setSidebarView('suggestions')}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                </svg>
+                Suggestions
+              </button>
+            </div>
+
+            {/* Content based on view */}
+            <div className="ai-sidebar-content">
+              {sidebarView === 'chats' && (
+                <>
+                  <div className="ai-search-box">
+                    <input
+                      type="text"
+                      placeholder="Search chats..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                  </div>
+                  <div className="ai-chat-list">
+                    {filteredChats.length === 0 ? (
+                      <div className="ai-empty-list">No chats yet</div>
+                    ) : (
+                      filteredChats.map(chat => (
+                        <div
+                          key={chat.id}
+                          className={`ai-chat-item ${chat.id === sessionId ? 'active' : ''}`}
+                          onClick={() => handleLoadChat(chat)}
+                          onContextMenu={(e) => handleContextMenu(e, chat.id)}
+                        >
+                          <div className="ai-chat-title">{chat.title}</div>
+                          <div className="ai-chat-time">
+                            {new Date(chat.timestamp).toLocaleDateString()}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </>
+              )}
+
+              {sidebarView === 'reports' && (
+                <div className="ai-reports-list">
+                  {reports.length === 0 ? (
+                    <div className="ai-empty-list">No reports yet. Generate reports from your chats!</div>
+                  ) : (
+                    reports.map(report => (
+                      <div key={report.id} className="ai-report-item">
+                        <div className="ai-report-title">{report.title}</div>
+                        <div className="ai-report-time">
+                          {new Date(report.createdAt).toLocaleDateString()}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {sidebarView === 'suggestions' && (
+                <div className="ai-suggestions-view">
+                  <h3>Share Your Ideas</h3>
+                  <p>Help us improve! Share your suggestions and feature requests.</p>
+                  <textarea
+                    className="ai-suggestion-input"
+                    placeholder="Type your suggestion here..."
+                    rows={4}
+                  />
+                  <button className="ai-submit-suggestion">Submit Suggestion</button>
+                </div>
+              )}
+            </div>
+
+            {/* Projects Section */}
+            {projects.length > 0 && sidebarView === 'chats' && (
+              <div className="ai-projects-section">
+                <h4>Saved Projects</h4>
+                {projects.map(project => (
+                  <div
+                    key={project.id}
+                    className="ai-project-item"
+                    onClick={() => handleLoadChat(project)}
+                  >
+                    <span className="ai-project-icon">📁</span>
+                    {project.title}
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Context Menu */}
+      {contextMenu.visible && (
+        <div
+          className="ai-context-menu"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+        >
+          <button onClick={handleSaveAsProject}>Save as Project</button>
+          <button onClick={handleDeleteChat}>Delete Chat</button>
+        </div>
+      )}
+
+      {/* Task List Display */}
       {taskListData && taskListData.length > 0 && (
         <div className="ai-task-list-container">
           <div className="ai-task-sidebar">
@@ -927,7 +1048,7 @@ function AILandingPage() {
             <div className="ai-task-detail-panel">
               <div className="ai-task-detail-header">
                 <span className={`ai-task-detail-badge ${selectedTask.source === 'Manual Priority' ? 'manual' : 'system'}`}>
-                  {selectedTask.source === 'Manual Priority' ? '⚙️ MANUAL PRIORITY' : '🔔 ' + selectedTask.source.toUpperCase()}
+                  {selectedTask.source === 'Manual Priority' ? 'MANUAL PRIORITY' : selectedTask.source.toUpperCase()}
                 </span>
                 <h2>{selectedTask.title}</h2>
               </div>
@@ -967,40 +1088,40 @@ function AILandingPage() {
                   <button
                     className={`ai-send-via-btn ${selectedSendMethod === 'email' ? 'active' : ''}`}
                     onClick={() => handleSendMethodChange('email')}
-                  >📧 Email</button>
+                  >Email</button>
                   <button
                     className={`ai-send-via-btn ${selectedSendMethod === 'text' ? 'active' : ''}`}
                     onClick={() => handleSendMethodChange('text')}
-                  >💬 Text</button>
+                  >Text</button>
                   <button
                     className={`ai-send-via-btn ${selectedSendMethod === 'phone' ? 'active' : ''}`}
                     onClick={() => handleSendMethodChange('phone')}
-                  >📞 Phone</button>
+                  >Phone</button>
                   <button
                     className={`ai-send-via-btn ${selectedSendMethod === 'voicemail' ? 'active' : ''}`}
                     onClick={() => handleSendMethodChange('voicemail')}
-                  >📱 Voicemail</button>
+                  >Voicemail</button>
                 </div>
               </div>
 
               <div className="ai-train-section">
                 <div className="ai-train-header">
-                  <span>🎯 Train AI (Optional)</span>
+                  <span>Train AI (Optional)</span>
                 </div>
                 <textarea
                   className="ai-train-input"
-                  placeholder="Type instructions to teach AI how to handle similar tasks in the future... (e.g., 'Always mention our competitive rates when following up on pre-approvals')"
+                  placeholder="Type instructions to teach AI how to handle similar tasks in the future..."
                 />
               </div>
 
               {selectedTask.aiDraftedMessage && (
                 <div className="ai-drafted-message">
                   <div className="ai-drafted-header">
-                    <span>🤖 AI-Drafted Message</span>
+                    <span>AI-Drafted Message</span>
                     {editingMessage ? (
-                      <button className="ai-edit-message-btn" onClick={handleSaveMessage}>💾 Save</button>
+                      <button className="ai-edit-message-btn" onClick={handleSaveMessage}>Save</button>
                     ) : (
-                      <button className="ai-edit-message-btn" onClick={handleEditMessage}>✏️ Edit Message</button>
+                      <button className="ai-edit-message-btn" onClick={handleEditMessage}>Edit Message</button>
                     )}
                   </div>
                   {editingMessage ? (
@@ -1019,11 +1140,11 @@ function AILandingPage() {
               )}
 
               <div className="ai-task-actions">
-                <button className="ai-action-btn send" onClick={handleSendViaEmail}>📧 Send via Email</button>
-                <button className="ai-action-btn approve" onClick={handleApproveAIAction}>✅ Approve AI Action</button>
-                <button className="ai-action-btn snooze" onClick={handleSnooze}>⏰ Snooze</button>
-                <button className="ai-action-btn delegate" onClick={handleDelegate}>👥 Delegate</button>
-                <button className="ai-action-btn delete" onClick={handleDeleteTask}>🗑️ Delete</button>
+                <button className="ai-action-btn send" onClick={handleSendViaEmail}>Send via Email</button>
+                <button className="ai-action-btn approve" onClick={handleApproveAIAction}>Approve AI Action</button>
+                <button className="ai-action-btn snooze" onClick={handleSnooze}>Snooze</button>
+                <button className="ai-action-btn delegate" onClick={handleDelegate}>Delegate</button>
+                <button className="ai-action-btn delete" onClick={handleDeleteTask}>Delete</button>
               </div>
             </div>
           )}
@@ -1033,97 +1154,8 @@ function AILandingPage() {
   );
 }
 
-// Daily View Component
-function DailyView({ onAction }) {
-  return (
-    <div className="ai-message-content ai-special-content">
-      <strong>Your Day - {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</strong>
-
-      <div className="ai-daily-summary">
-        <div className="ai-summary-item">
-          <div className="ai-summary-number">5</div>
-          <div className="ai-summary-label">Tasks</div>
-        </div>
-        <div className="ai-summary-item">
-          <div className="ai-summary-number">2</div>
-          <div className="ai-summary-label">High Priority</div>
-        </div>
-        <div className="ai-summary-item">
-          <div className="ai-summary-number">3</div>
-          <div className="ai-summary-label">Reconciliations</div>
-        </div>
-        <div className="ai-summary-item">
-          <div className="ai-summary-number">2</div>
-          <div className="ai-summary-label">Calls</div>
-        </div>
-      </div>
-
-      <div className="ai-section-header">📋 Tasks</div>
-
-      <div className="ai-task-card">
-        <div className="ai-task-header">
-          <span className="ai-task-priority high">high</span>
-          <span className="ai-task-type">Follow-up Call</span>
-        </div>
-        <div className="ai-task-client">Sarah Johnson</div>
-        <div className="ai-task-details">Rate lock expires in 3 days - discuss extension options</div>
-        <div className="ai-task-due urgent">🕐 Today 10:00 AM</div>
-      </div>
-
-      <div className="ai-task-card">
-        <div className="ai-task-header">
-          <span className="ai-task-priority high">high</span>
-          <span className="ai-task-type">Document Review</span>
-        </div>
-        <div className="ai-task-client">Michael Chen</div>
-        <div className="ai-task-details">VA loan docs ready for final review before submission</div>
-        <div className="ai-task-due urgent">🕐 Today 2:00 PM</div>
-      </div>
-
-      <div className="ai-task-card">
-        <div className="ai-task-header">
-          <span className="ai-task-priority medium">medium</span>
-          <span className="ai-task-type">Pre-qualification Call</span>
-        </div>
-        <div className="ai-task-client">Amanda Rodriguez</div>
-        <div className="ai-task-details">First-time buyer consultation - budget $450K</div>
-        <div className="ai-task-due">🕐 Today 4:00 PM</div>
-      </div>
-
-      <div className="ai-section-header">⚠️ Reconciliations Needed</div>
-
-      <div className="ai-reconciliation-card">
-        <div className="ai-reconciliation-header">
-          <span className="ai-reconciliation-type">Loan Processing</span>
-          <span className="ai-reconciliation-status needs_attention">needs attention</span>
-        </div>
-        <div className="ai-reconciliation-client">Robert Taylor</div>
-        <div className="ai-reconciliation-loan">Loan #LN-2024-8834</div>
-        <div className="ai-reconciliation-action">Review title report discrepancies</div>
-      </div>
-
-      <div className="ai-reconciliation-card">
-        <div className="ai-reconciliation-header">
-          <span className="ai-reconciliation-type">Underwriting</span>
-          <span className="ai-reconciliation-status needs_attention">needs attention</span>
-        </div>
-        <div className="ai-reconciliation-client">Lisa Anderson</div>
-        <div className="ai-reconciliation-loan">Loan #LN-2024-8901</div>
-        <div className="ai-reconciliation-action">Address income verification questions</div>
-      </div>
-
-      <div className="ai-quick-actions">
-        <button className="ai-quick-action-btn" onClick={() => onAction('mark_reviewed')}>Mark All Reviewed</button>
-        <button className="ai-quick-action-btn" onClick={() => onAction('export_calendar')}>Export to Calendar</button>
-        <button className="ai-quick-action-btn" onClick={() => onAction('reprioritize')}>Re-prioritize</button>
-      </div>
-    </div>
-  );
-}
-
 // Email Campaign Preview Component
 function EmailCampaignPreview({ preview, onExecute, onEdit }) {
-  // Use backend data if available, otherwise use demo data
   const recipients = preview?.recipients || ['47 mortgages under management clients'];
   const recipientCount = preview?.count || recipients.length || 47;
   const subject = preview?.subject || 'Unlock More Financial Flexibility with the All In One Loan';
@@ -1145,11 +1177,11 @@ Tim
 TL Development, LLC`;
 
   return (
-    <div className="ai-message-content ai-special-content">
+    <div className="ai-message-content-new ai-special-content">
       I've drafted an email for {recipientCount} clients:
 
       <div className="ai-action-preview">
-        <h3>📧 Email Preview</h3>
+        <h3>Email Preview</h3>
         <div style={{ marginBottom: '12px' }}>
           <strong>To:</strong> {recipientCount} clients<br/>
           <strong>Subject:</strong> {subject}
@@ -1173,11 +1205,11 @@ function TextCampaignPreview({ textData, onExecute, onEdit }) {
   const audience = textData?.audience || 'pre-approved leads';
 
   return (
-    <div className="ai-message-content ai-special-content">
+    <div className="ai-message-content-new ai-special-content">
       I've prepared a text message for your {audience}. Here's the preview:
 
       <div className="ai-action-preview">
-        <h3>💬 Text Message Preview</h3>
+        <h3>Text Message Preview</h3>
         <div style={{ marginBottom: '12px' }}>
           <strong>To:</strong> 12 {audience}<br/>
           <strong>Type:</strong> SMS
@@ -1185,10 +1217,10 @@ function TextCampaignPreview({ textData, onExecute, onEdit }) {
 
         <div className="ai-preview-content">
           <div style={{ background: '#e8f5e9', padding: '12px', borderRadius: '8px', marginBottom: '12px' }}>
-            <strong style={{ color: '#2e7d32' }}>📱 Message Preview:</strong>
+            <strong style={{ color: '#2e7d32' }}>Message Preview:</strong>
           </div>
           <div style={{ background: '#f5f5f5', padding: '16px', borderRadius: '12px', border: '1px solid #e0e0e0' }}>
-            Hi [First Name]! 👋<br/><br/>
+            Hi [First Name]!<br/><br/>
             Hope you're having a great week! Quick question - are you planning to check out any houses this weekend?<br/><br/>
             With your pre-approval in place, you're ready to make a strong offer when you find the right one. I'd love to help coordinate any showings.<br/><br/>
             Let me know if you'd like some neighborhood recommendations or want me to set up any tours!<br/><br/>
@@ -1211,7 +1243,7 @@ function TextCampaignPreview({ textData, onExecute, onEdit }) {
         </div>
 
         <div className="ai-note">
-          📋 Each message will be personalized with the lead's first name
+          Each message will be personalized with the lead's first name
         </div>
 
         <div className="ai-action-buttons">
@@ -1226,21 +1258,21 @@ function TextCampaignPreview({ textData, onExecute, onEdit }) {
 // Bulk Update Preview Component
 function BulkUpdatePreview({ preview, onExecute, onEdit }) {
   return (
-    <div className="ai-message-content ai-special-content">
+    <div className="ai-message-content-new ai-special-content">
       I found 14 deals in underwriting that need the new appraisal waiver guidelines added.
 
       <div className="ai-action-preview">
-        <h3>📊 Bulk Deal Update</h3>
+        <h3>Bulk Deal Update</h3>
         <div className="ai-preview-content">
           Found 14 deals currently in underwriting status:<br/><br/>
-          ✅ Will Update:<br/>
+          Will Update:<br/>
           • LN-2024-8901 - Lisa Anderson - Conventional<br/>
           • LN-2024-8834 - Robert Taylor - Refinance<br/>
           • LN-2024-8756 - James Wilson - FHA<br/>
           • LN-2024-9012 - Patricia White - Conventional<br/>
           • LN-2024-9088 - John Davis - VA<br/>
           ... and 9 more<br/><br/>
-          📝 Update Details:<br/>
+          Update Details:<br/>
           Field: Guidelines Notes<br/>
           Adding: "NEW: Appraisal waiver available for LTV ≤ 80% on conv. loans per Fannie Mae 11/2025 updates. Eligible borrowers can save $500-700 and 1-2 weeks processing time."<br/><br/>
           This will be added to each deal's notes section and trigger a notification to assigned processors.
@@ -1257,11 +1289,11 @@ function BulkUpdatePreview({ preview, onExecute, onEdit }) {
 // Voicemail Campaign Preview Component
 function VoicemailCampaignPreview({ preview, onExecute, onEdit }) {
   return (
-    <div className="ai-message-content ai-special-content">
+    <div className="ai-message-content-new ai-special-content">
       I've identified your top 10 referral partners for Q4 2024 based on deal volume and value.
 
       <div className="ai-action-preview">
-        <h3>📞 Voicemail Drop Campaign</h3>
+        <h3>Voicemail Drop Campaign</h3>
         <div className="ai-partner-list">
           <div className="ai-partner-item">
             <strong>1. Sarah Mitchell - Coldwell Banker</strong><br/>
@@ -1286,7 +1318,7 @@ function VoicemailCampaignPreview({ preview, onExecute, onEdit }) {
         </div>
 
         <div className="ai-note">
-          📋 Each voicemail will be personalized with partner name, deal count, and total volume
+          Each voicemail will be personalized with partner name, deal count, and total volume
         </div>
 
         <div className="ai-action-buttons">
@@ -1301,11 +1333,11 @@ function VoicemailCampaignPreview({ preview, onExecute, onEdit }) {
 // Pipeline Report Preview Component
 function PipelineReportPreview({ preview, onExecute, onEdit }) {
   return (
-    <div className="ai-message-content ai-special-content">
+    <div className="ai-message-content-new ai-special-content">
       I've generated your pipeline report for December 2024 closings.
 
       <div className="ai-action-preview">
-        <h3>📈 Pipeline Report - December 2024 Closings</h3>
+        <h3>Pipeline Report - December 2024 Closings</h3>
 
         <div className="ai-daily-summary">
           <div className="ai-summary-item">
