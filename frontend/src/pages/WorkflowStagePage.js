@@ -362,13 +362,17 @@ function WorkflowStagePage() {
           </div>
         </div>
 
-        <div className="tasks-list">
+        <div className="tasks-grid">
           {tasks.map((task, idx) => (
-            <div key={task.id} className="task-item">
-              <div className="task-order">
+            <div
+              key={task.id}
+              className={`task-card ${editingTask === task.id ? 'editing' : ''}`}
+              onClick={() => editingTask !== task.id && setEditingTask(task.id)}
+            >
+              <div className="task-card-header">
                 <button
                   className="move-btn"
-                  onClick={() => handleMoveTask(task.id, 'up')}
+                  onClick={(e) => { e.stopPropagation(); handleMoveTask(task.id, 'up'); }}
                   disabled={idx === 0}
                 >
                   ▲
@@ -376,125 +380,105 @@ function WorkflowStagePage() {
                 <span className="order-number">{task.order}</span>
                 <button
                   className="move-btn"
-                  onClick={() => handleMoveTask(task.id, 'down')}
+                  onClick={(e) => { e.stopPropagation(); handleMoveTask(task.id, 'down'); }}
                   disabled={idx === tasks.length - 1}
                 >
                   ▼
                 </button>
               </div>
 
-              <div className="task-content">
-                {editingTask === task.id ? (
-                  <div className="task-edit-form expanded">
+              {editingTask === task.id ? (
+                <div className="task-edit-form expanded" onClick={(e) => e.stopPropagation()}>
+                  <div className="edit-form-group">
+                    <label>Owner</label>
+                    <select
+                      value={task.owner || ''}
+                      onChange={(e) => handleEditTask(task.id, 'owner', e.target.value)}
+                    >
+                      <option value="">Select Owner</option>
+                      <option value="loan_officer">Loan Officer</option>
+                      <option value="processor">Processor</option>
+                      <option value="underwriter">Underwriter</option>
+                      <option value="closer">Closer</option>
+                      <option value="system">System (Auto)</option>
+                    </select>
+                  </div>
+                  <div className="edit-form-group">
+                    <label>Task Name</label>
+                    <input
+                      type="text"
+                      value={task.title}
+                      onChange={(e) => handleEditTask(task.id, 'title', e.target.value)}
+                      placeholder="Task title"
+                    />
+                  </div>
+                  <div className="edit-form-group">
+                    <label>Description</label>
+                    <textarea
+                      value={task.description}
+                      onChange={(e) => handleEditTask(task.id, 'description', e.target.value)}
+                      placeholder="Detailed description of the task..."
+                      rows={4}
+                    />
+                  </div>
+                  <div className="edit-form-group">
+                    <label>Activation Trigger</label>
+                    <select
+                      value={task.auto_trigger}
+                      onChange={(e) => handleEditTask(task.id, 'auto_trigger', e.target.value)}
+                    >
+                      {triggerOptions.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="edit-form-row">
                     <div className="edit-form-group">
-                      <label>Owner</label>
-                      <select
-                        value={task.owner || ''}
-                        onChange={(e) => handleEditTask(task.id, 'owner', e.target.value)}
-                      >
-                        <option value="">Select Owner</option>
-                        <option value="loan_officer">Loan Officer</option>
-                        <option value="processor">Processor</option>
-                        <option value="underwriter">Underwriter</option>
-                        <option value="closer">Closer</option>
-                        <option value="system">System (Auto)</option>
-                      </select>
-                    </div>
-                    <div className="edit-form-group">
-                      <label>Task Name</label>
+                      <label>Days Offset</label>
                       <input
-                        type="text"
-                        value={task.title}
-                        onChange={(e) => handleEditTask(task.id, 'title', e.target.value)}
-                        placeholder="Task title"
+                        type="number"
+                        value={task.days_offset}
+                        onChange={(e) => handleEditTask(task.id, 'days_offset', parseInt(e.target.value) || 0)}
+                        min="0"
+                        placeholder="0"
                       />
                     </div>
                     <div className="edit-form-group">
-                      <label>Description</label>
-                      <textarea
-                        value={task.description}
-                        onChange={(e) => handleEditTask(task.id, 'description', e.target.value)}
-                        placeholder="Detailed description of the task..."
-                        rows={4}
-                      />
-                    </div>
-                    <div className="edit-form-group">
-                      <label>Activation Trigger</label>
+                      <label>Time of Day</label>
                       <select
-                        value={task.auto_trigger}
-                        onChange={(e) => handleEditTask(task.id, 'auto_trigger', e.target.value)}
+                        value={task.activation_time || '09:00'}
+                        onChange={(e) => handleEditTask(task.id, 'activation_time', e.target.value)}
                       >
-                        {triggerOptions.map(opt => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
+                        <option value="08:00">8:00 AM</option>
+                        <option value="09:00">9:00 AM</option>
+                        <option value="10:00">10:00 AM</option>
+                        <option value="11:00">11:00 AM</option>
+                        <option value="12:00">12:00 PM</option>
+                        <option value="13:00">1:00 PM</option>
+                        <option value="14:00">2:00 PM</option>
+                        <option value="15:00">3:00 PM</option>
+                        <option value="16:00">4:00 PM</option>
+                        <option value="17:00">5:00 PM</option>
                       </select>
                     </div>
-                    <div className="edit-form-row">
-                      <div className="edit-form-group">
-                        <label>Days Offset</label>
-                        <input
-                          type="number"
-                          value={task.days_offset}
-                          onChange={(e) => handleEditTask(task.id, 'days_offset', parseInt(e.target.value) || 0)}
-                          min="0"
-                          placeholder="0"
-                        />
-                      </div>
-                      <div className="edit-form-group">
-                        <label>Time of Day</label>
-                        <select
-                          value={task.activation_time || '09:00'}
-                          onChange={(e) => handleEditTask(task.id, 'activation_time', e.target.value)}
-                        >
-                          <option value="08:00">8:00 AM</option>
-                          <option value="09:00">9:00 AM</option>
-                          <option value="10:00">10:00 AM</option>
-                          <option value="11:00">11:00 AM</option>
-                          <option value="12:00">12:00 PM</option>
-                          <option value="13:00">1:00 PM</option>
-                          <option value="14:00">2:00 PM</option>
-                          <option value="15:00">3:00 PM</option>
-                          <option value="16:00">4:00 PM</option>
-                          <option value="17:00">5:00 PM</option>
-                        </select>
-                      </div>
-                    </div>
+                  </div>
+                  <div className="edit-form-actions">
+                    <button
+                      className="delete-task-btn"
+                      onClick={() => handleDeleteTask(task.id)}
+                    >
+                      Delete
+                    </button>
                     <button className="done-edit-btn" onClick={() => setEditingTask(null)}>
-                      Done Editing
+                      Done
                     </button>
                   </div>
-                ) : (
-                  <>
-                    <div className="task-title-row">
-                      <strong>{task.title}</strong>
-                      <span className="trigger-badge" data-trigger={task.auto_trigger}>
-                        {task.auto_trigger.replace(/_/g, ' ')}
-                      </span>
-                    </div>
-                    <p className="task-desc">{task.description}</p>
-                    {task.days_offset > 0 && (
-                      <span className="days-offset">+{task.days_offset} days</span>
-                    )}
-                  </>
-                )}
-              </div>
-
-              <div className="task-actions">
-                <button
-                  className="edit-task-btn"
-                  onClick={() => setEditingTask(editingTask === task.id ? null : task.id)}
-                  title="Edit task"
-                >
-                  ✎
-                </button>
-                <button
-                  className="delete-task-btn"
-                  onClick={() => handleDeleteTask(task.id)}
-                  title="Delete task"
-                >
-                  ×
-                </button>
-              </div>
+                </div>
+              ) : (
+                <div className="task-card-title">
+                  {task.title}
+                </div>
+              )}
             </div>
           ))}
         </div>

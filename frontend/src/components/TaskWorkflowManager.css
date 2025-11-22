@@ -782,3 +782,103 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Expanded Popup Form Styles */
+.expanded-popup {
+  background: white;
+  border: 2px solid var(--stage-color, #0066cc);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  position: relative;
+}
+
+.expanded-popup .form-group {
+  margin-bottom: 16px;
+}
+
+.expanded-popup .form-group label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.expanded-popup input,
+.expanded-popup textarea,
+.expanded-popup select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.expanded-popup input:focus,
+.expanded-popup textarea:focus,
+.expanded-popup select:focus {
+  outline: none;
+  border-color: var(--stage-color, #0066cc);
+  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.1);
+}
+
+.expanded-popup textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.expanded-popup .form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.expanded-popup .form-row .form-group {
+  margin-bottom: 12px;
+}
+
+.expanded-popup h4 {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--stage-color, #0066cc);
+  margin: 0 0 16px 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #eee;
+}
+
+.expanded-popup .form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #eee;
+}
+
+.task-edit-form.expanded-popup {
+  margin: 8px 0;
+}
+
+.task-edit-form.expanded-popup .done-edit-btn {
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px;
+  background: var(--stage-color, #0066cc);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.task-edit-form.expanded-popup .done-edit-btn:hover {
+  opacity: 0.9;
+}

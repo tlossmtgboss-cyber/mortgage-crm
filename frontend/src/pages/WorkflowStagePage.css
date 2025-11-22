@@ -191,7 +191,65 @@
   cursor: not-allowed;
 }
 
-/* Horizontal workflow view - single row */
+/* Task Grid - uniform cards */
+.tasks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 16px;
+  padding: 20px 0;
+}
+
+.task-card {
+  position: relative;
+  background: white;
+  border-radius: 10px;
+  border: 2px solid #e5e7eb;
+  padding: 12px;
+  min-height: 120px;
+  max-height: 120px;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+.task-card:hover {
+  border-color: var(--stage-color, #3b82f6);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.task-card.editing {
+  min-height: auto;
+  max-height: none;
+  overflow: visible;
+  z-index: 100;
+}
+
+.task-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.task-card-title {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: #111827;
+  text-align: center;
+  line-height: 1.4;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  word-wrap: break-word;
+}
+
+/* Legacy task-list styles (keep for backwards compatibility) */
 .tasks-list {
   display: flex;
   flex-direction: row;
@@ -221,21 +279,6 @@
   border-color: var(--stage-color, #3b82f6);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
   transform: scale(1.02);
-}
-
-/* Remove vertical arrows for horizontal layout */
-.task-item:not(:last-child)::after,
-.task-item:not(:last-child)::before {
-  display: none;
-}
-
-/* No extra margin needed for horizontal */
-.task-item {
-  margin-bottom: 0;
-}
-
-.task-item:last-child {
-  margin-bottom: 0;
 }
 
 /* Step number badge */
@@ -529,6 +572,34 @@
 
 .done-edit-btn:hover {
   background: #059669;
+}
+
+/* Edit form actions row */
+.edit-form-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.edit-form-actions .delete-task-btn {
+  background: #fee2e2;
+  color: #dc2626;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.edit-form-actions .delete-task-btn:hover {
+  background: #fecaca;
+}
+
+.edit-form-actions .done-edit-btn {
+  margin-top: 0;
 }
 
 /* Modal */

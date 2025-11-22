@@ -16,11 +16,16 @@ function TaskWorkflowManager() {
     title: '',
     description: '',
     auto_trigger: 'after_previous',
-    days_offset: 0
+    days_offset: 0,
+    owner_id: '',
+    activation_time: ''
   });
 
   // Team members with their workflow progress (will be loaded from API)
   const [teamMembers, setTeamMembers] = useState([]);
+
+  // Users list for owner dropdown
+  const [users, setUsers] = useState([]);
 
   // Workflow stages with their tasks
   const [workflowStages, setWorkflowStages] = useState({
@@ -75,7 +80,24 @@ function TaskWorkflowManager() {
 
   useEffect(() => {
     loadWorkflowStages();
+    loadUsers();
   }, []);
+
+  const loadUsers = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/users`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setUsers(data.users || data || []);
+      }
+    } catch (error) {
+      console.error('Error loading users:', error);
+    }
+  };
 
   useEffect(() => {
     if (activeStage && viewMode === 'team') {
@@ -134,7 +156,9 @@ function TaskWorkflowManager() {
       description: newTask.description,
       order: stage.tasks.length + 1,
       auto_trigger: newTask.auto_trigger,
-      days_offset: parseInt(newTask.days_offset) || 0
+      days_offset: parseInt(newTask.days_offset) || 0,
+      owner_id: newTask.owner_id || null,
+      activation_time: newTask.activation_time || null
     };
 
     setWorkflowStages(prev => ({
@@ -145,7 +169,7 @@ function TaskWorkflowManager() {
       }
     }));
 
-    setNewTask({ title: '', description: '', auto_trigger: 'after_previous', days_offset: 0 });
+    setNewTask({ title: '', description: '', auto_trigger: 'after_previous', days_offset: 0, owner_id: '', activation_time: '' });
     setShowAddForm(false);
     setMessage({ type: 'success', text: 'Task added successfully' });
     setTimeout(() => setMessage({ type: '', text: '' }), 3000);
@@ -396,34 +420,69 @@ function TaskWorkflowManager() {
                           </div>
                           <div className="task-content">
                             {editingTask === task.id ? (
-                              <div className="task-edit-form">
-                                <input
-                                  type="text"
-                                  value={task.title}
-                                  onChange={(e) => handleEditTask(key, task.id, 'title', e.target.value)}
-                                  placeholder="Task title"
-                                />
-                                <textarea
-                                  value={task.description}
-                                  onChange={(e) => handleEditTask(key, task.id, 'description', e.target.value)}
-                                  placeholder="Description"
-                                  rows={2}
-                                />
-                                <div className="form-row">
+                              <div className="task-edit-form expanded-popup">
+                                <div className="form-group">
+                                  <label>Owner</label>
                                   <select
-                                    value={task.auto_trigger}
-                                    onChange={(e) => handleEditTask(key, task.id, 'auto_trigger', e.target.value)}
+                                    value={task.owner_id || ''}
+                                    onChange={(e) => handleEditTask(key, task.id, 'owner_id', e.target.value || null)}
                                   >
-                                    {triggerOptions.map(opt => (
-                                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                    <option value="">Select Owner</option>
+                                    {users.map(user => (
+                                      <option key={user.id} value={user.id}>
+                                        {user.name || user.email}
+                                      </option>
                                     ))}
                                   </select>
+                                </div>
+                                <div className="form-group">
+                                  <label>Task Name</label>
                                   <input
-                                    type="number"
-                                    value={task.days_offset}
-                                    onChange={(e) => handleEditTask(key, task.id, 'days_offset', parseInt(e.target.value) || 0)}
-                                    min="0"
-                                    placeholder="Days"
+                                    type="text"
+                                    value={task.title}
+                                    onChange={(e) => handleEditTask(key, task.id, 'title', e.target.value)}
+                                    placeholder="Task title"
+                                  />
+                                </div>
+                                <div className="form-group">
+                                  <label>Description</label>
+                                  <textarea
+                                    value={task.description}
+                                    onChange={(e) => handleEditTask(key, task.id, 'description', e.target.value)}
+                                    placeholder="Describe the task in detail..."
+                                    rows={3}
+                                  />
+                                </div>
+                                <div className="form-row">
+                                  <div className="form-group">
+                                    <label>Trigger</label>
+                                    <select
+                                      value={task.auto_trigger}
+                                      onChange={(e) => handleEditTask(key, task.id, 'auto_trigger', e.target.value)}
+                                    >
+                                      {triggerOptions.map(opt => (
+                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <div className="form-group">
+                                    <label>Days Offset</label>
+                                    <input
+                                      type="number"
+                                      value={task.days_offset}
+                                      onChange={(e) => handleEditTask(key, task.id, 'days_offset', parseInt(e.target.value) || 0)}
+                                      min="0"
+                                      placeholder="Days"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="form-group">
+                                  <label>Activation Time</label>
+                                  <input
+                                    type="time"
+                                    value={task.activation_time || ''}
+                                    onChange={(e) => handleEditTask(key, task.id, 'activation_time', e.target.value)}
+                                    placeholder="When task activates"
                                   />
                                 </div>
                                 <button className="done-edit-btn" onClick={() => setEditingTask(null)}>
@@ -465,10 +524,24 @@ function TaskWorkflowManager() {
 
                     {/* Add Task Form */}
                     {showAddForm ? (
-                      <div className="add-task-form">
+                      <div className="add-task-form expanded-popup">
                         <h4>Add New Task</h4>
                         <div className="form-group">
-                          <label>Title</label>
+                          <label>Owner</label>
+                          <select
+                            value={newTask.owner_id}
+                            onChange={(e) => setNewTask(prev => ({ ...prev, owner_id: e.target.value }))}
+                          >
+                            <option value="">Select Owner</option>
+                            {users.map(user => (
+                              <option key={user.id} value={user.id}>
+                                {user.name || user.email}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label>Task Name</label>
                           <input
                             type="text"
                             value={newTask.title}
@@ -481,8 +554,8 @@ function TaskWorkflowManager() {
                           <textarea
                             value={newTask.description}
                             onChange={(e) => setNewTask(prev => ({ ...prev, description: e.target.value }))}
-                            placeholder="Task description"
-                            rows={2}
+                            placeholder="Describe the task in detail..."
+                            rows={3}
                           />
                         </div>
                         <div className="form-row">
@@ -506,6 +579,15 @@ function TaskWorkflowManager() {
                               min="0"
                             />
                           </div>
+                        </div>
+                        <div className="form-group">
+                          <label>Activation Time</label>
+                          <input
+                            type="time"
+                            value={newTask.activation_time}
+                            onChange={(e) => setNewTask(prev => ({ ...prev, activation_time: e.target.value }))}
+                            placeholder="When task activates"
+                          />
                         </div>
                         <div className="form-actions">
                           <button className="cancel-btn" onClick={() => setShowAddForm(false)}>Cancel</button>

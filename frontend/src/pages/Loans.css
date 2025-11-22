@@ -117,7 +117,7 @@
   color: var(--color-primary);
 }
 
-.status-received, .status-processing, .status-approved {
+.status-received, .status-le_pending, .status-processing, .status-approved {
   background: rgba(33, 127, 141, 0.1);
   color: var(--color-success);
 }
