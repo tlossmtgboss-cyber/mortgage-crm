@@ -24,7 +24,7 @@ async def get_current_user(
 ):
     """Get current user from JWT token."""
     from jose import jwt
-    from models import User
+    from main import User
 
     if not credentials:
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -52,7 +52,6 @@ async def get_current_user(
         raise HTTPException(status_code=401, detail="Authentication failed")
 
 from integrations.google_gmail import gmail_service
-from models import User
 
 logger = logging.getLogger(__name__)
 
