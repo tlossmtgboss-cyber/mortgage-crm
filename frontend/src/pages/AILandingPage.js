@@ -482,6 +482,9 @@ function AILandingPage() {
           preview: response.preview,
           actionType: response.intent
         });
+      } else if (response.fallback || (!response.data && !response.preview && !response.action_id)) {
+        // API returned fallback or empty response - use local routing
+        routeMessage(message);
       } else {
         addMessage(response.explanation || "I understand your request.", 'assistant');
       }
