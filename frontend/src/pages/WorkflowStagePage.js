@@ -225,7 +225,7 @@ function WorkflowStagePage() {
         </div>
       )}
 
-      <div className="tasks-container">
+      <div className="tasks-container" style={{ '--stage-color': stageConfig.color }}>
         <div className="tasks-header">
           <h2>Workflow Tasks</h2>
           <div className="header-actions">
@@ -303,7 +303,9 @@ function WorkflowStagePage() {
                   <>
                     <div className="task-title-row">
                       <strong>{task.title}</strong>
-                      <span className="trigger-badge">{task.auto_trigger.replace(/_/g, ' ')}</span>
+                      <span className="trigger-badge" data-trigger={task.auto_trigger}>
+                        {task.auto_trigger.replace(/_/g, ' ')}
+                      </span>
                     </div>
                     <p className="task-desc">{task.description}</p>
                     {task.days_offset > 0 && (

@@ -54,6 +54,14 @@ function Settings() {
   const [reprocessing, setReprocessing] = useState(false);
   const [syncingCalendar, setSyncingCalendar] = useState(false);
 
+  // Gmail integration state
+  const [gmailStatus, setGmailStatus] = useState({
+    connected: false,
+    email: null,
+    connected_at: null
+  });
+  const [loadingGmail, setLoadingGmail] = useState(false);
+
   // Team members state
   const [teamMembers, setTeamMembers] = useState([]);
   const [availableRoles, setAvailableRoles] = useState([]);
@@ -1142,6 +1150,14 @@ const API_BASE_URL = isProduction
   };
 
   const availableIntegrations = [
+    {
+      id: 'gmail',
+      name: 'Gmail',
+      description: 'Sync Gmail emails and contacts with your CRM',
+      icon: '📧',
+      color: '#ea4335',
+      category: 'Email'
+    },
     {
       id: 'outlook',
       name: 'Outlook Email',
