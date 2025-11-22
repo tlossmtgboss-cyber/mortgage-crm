@@ -704,8 +704,19 @@ function Tasks() {
     setShowDeleteConfirm(false);
 
     try {
-      // Call API to delete task from database
-      await tasksAPI.delete(taskId);
+      // Check if this is a real database task (UUID or numeric ID)
+      // Mock tasks have IDs like 'priority-0', 'message-1', etc.
+      const isRealTask = typeof taskId === 'number' ||
+        (typeof taskId === 'string' &&
+         !taskId.includes('-') &&
+         !isNaN(taskId)) ||
+        (typeof taskId === 'string' &&
+         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(taskId));
+
+      if (isRealTask) {
+        // Call API to delete task from database
+        await tasksAPI.delete(taskId);
+      }
 
       // Remove from local state
       setCompletedTasks(prev => {
