@@ -328,19 +328,19 @@ async def get_all_partners_roi(db: Session = Depends(get_db)):
             -- Lead metrics
             COUNT(DISTINCT l.id) as total_leads,
             COUNT(DISTINCT CASE WHEN l.created_at > NOW() - INTERVAL '12 months' THEN l.id END) as leads_12m,
-            COUNT(DISTINCT CASE WHEN l.stage IN ('Closed Won', 'Funded') THEN l.id END) as converted,
+            COUNT(DISTINCT CASE WHEN l.stage = 'Pre-Approved' THEN l.id END) as converted,
 
             -- Conversion rate
             CASE WHEN COUNT(DISTINCT l.id) > 0
-                THEN ROUND(100.0 * COUNT(DISTINCT CASE WHEN l.stage IN ('Closed Won', 'Funded') THEN l.id END) / COUNT(DISTINCT l.id), 1)
+                THEN ROUND(100.0 * COUNT(DISTINCT CASE WHEN l.stage = 'Pre-Approved' THEN l.id END) / COUNT(DISTINCT l.id), 1)
                 ELSE 0 END as conversion_rate,
 
             -- Active pipeline
-            COUNT(DISTINCT CASE WHEN l.stage NOT IN ('Closed Won', 'Closed Lost', 'Funded', 'Inactive') THEN l.id END) as active_leads,
-            COALESCE(SUM(CASE WHEN l.stage NOT IN ('Closed Won', 'Closed Lost', 'Funded', 'Inactive') THEN l.loan_amount END), 0) as pipeline_value,
+            COUNT(DISTINCT CASE WHEN l.stage NOT IN ('Pre-Approved') THEN l.id END) as active_leads,
+            COALESCE(SUM(CASE WHEN l.stage NOT IN ('Pre-Approved') THEN l.loan_amount END), 0) as pipeline_value,
 
             -- Revenue (1% commission estimate)
-            COALESCE(SUM(CASE WHEN l.stage IN ('Closed Won', 'Funded') AND l.created_at > NOW() - INTERVAL '12 months'
+            COALESCE(SUM(CASE WHEN l.stage = 'Pre-Approved' AND l.created_at > NOW() - INTERVAL '12 months'
                 THEN l.loan_amount * 0.01 END), 0) as revenue_12m,
 
             -- Time investment
@@ -451,7 +451,7 @@ async def get_partner_roi_detail(
 
     # Calculate totals
     total_leads = sum(s["count"] for s in leads_by_stage.values())
-    converted = leads_by_stage.get("Closed Won", {}).get("count", 0) + leads_by_stage.get("Funded", {}).get("count", 0)
+    converted = leads_by_stage.get("Pre-Approved", {}).get("count", 0)
     total_hours = sum(i["duration_minutes"] for i in interactions) / 60
 
     return {
@@ -624,13 +624,13 @@ async def get_ai_insights(db: Session = Depends(get_db)):
     # Check for partners with declining conversion
     result = db.execute(text("""
         SELECT COALESCE(rp.business_name, rp.contact_name) as partner_name, COUNT(*) as recent_leads,
-            COUNT(CASE WHEN l.stage IN ('Closed Won', 'Funded') THEN 1 END) as recent_converted
+            COUNT(CASE WHEN l.stage = 'Pre-Approved' THEN 1 END) as recent_converted
         FROM referral_partners rp
         JOIN leads l ON l.referral_partner_id = rp.id
         WHERE l.created_at > NOW() - INTERVAL '3 months'
         GROUP BY rp.id, rp.business_name, rp.contact_name
         HAVING COUNT(*) >= 3
-        AND COUNT(CASE WHEN l.stage IN ('Closed Won', 'Funded') THEN 1 END)::float / COUNT(*) < 0.3
+        AND COUNT(CASE WHEN l.stage = 'Pre-Approved' THEN 1 END)::float / COUNT(*) < 0.3
     """))
 
     for row in result:
