@@ -376,3 +376,41 @@ async def run_circle_of_cashflow_migration(
     except Exception as e:
         logger.error(f"Migration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/add-ai-task-automation-tables")
+async def run_ai_task_automation_migration(
+    admin: Any = Depends(get_admin_user)
+):
+    """
+    Run the AI Task Automation tables migration
+    Creates ai_task_type_authorizations, ai_training_history, ai_audit_log,
+    ai_cost_tracking, ai_rollback_states tables and modifies tasks table
+    """
+    try:
+        from migrations.add_ai_task_automation_tables import run_migration
+
+        logger.info("Starting AI Task Automation tables migration...")
+        success = run_migration()
+
+        if success:
+            return {
+                "status": "success",
+                "message": "AI Task Automation tables created successfully",
+                "tables_created": [
+                    "ai_task_type_authorizations",
+                    "ai_training_history",
+                    "ai_audit_log",
+                    "ai_cost_tracking",
+                    "ai_rollback_states"
+                ]
+            }
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail="Migration failed - check logs for details"
+            )
+
+    except Exception as e:
+        logger.error(f"Migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
