@@ -3742,6 +3742,10 @@ app.include_router(morning_checkin_router, tags=["Morning Check-in"])
 from ai_automation_routes import router as ai_automation_router
 app.include_router(ai_automation_router, tags=["AI Task Automation"])
 
+# Include Task Workflow routes
+from task_workflow_routes import router as task_workflow_router
+app.include_router(task_workflow_router, tags=["Task Workflow"])
+
 # Morning Check-in Migration Endpoint
 @app.post("/api/v1/migrations/add-morning-checkin")
 async def add_morning_checkin_migration(db: Session = Depends(get_db)):

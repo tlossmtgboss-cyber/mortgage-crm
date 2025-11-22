@@ -4,14 +4,69 @@ Handles bulk task uploads, workflow assignments, and task templates
 """
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from typing import List, Optional
 import csv
 import io
+import os
 from datetime import datetime, timedelta
 from pydantic import BaseModel
 
+from database import get_db
+
 router = APIRouter()
+security = HTTPBearer(auto_error=False)
+
+
+# User proxy class for auth
+class UserProxy:
+    def __init__(self, row):
+        self.id = row[0]
+        self.email = row[1]
+        self.name = row[2]
+
+
+# Auth dependency
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+):
+    """Get current user from JWT token."""
+    from jose import jwt
+
+    # For testing without auth, return demo user
+    if not credentials:
+        result = db.execute(
+            text("SELECT id, email, full_name FROM users WHERE email = :email"),
+            {"email": "demo@example.com"}
+        )
+        user_row = result.fetchone()
+        if user_row:
+            return UserProxy(user_row)
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    try:
+        token = credentials.credentials
+        secret = os.getenv("SECRET_KEY", "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7")
+        payload = jwt.decode(token, secret, algorithms=["HS256"])
+        email = payload.get("sub")
+        if not email:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        result = db.execute(
+            text("SELECT id, email, full_name FROM users WHERE email = :email"),
+            {"email": email}
+        )
+        user_row = result.fetchone()
+        if not user_row:
+            raise HTTPException(status_code=401, detail="User not found")
+
+        return UserProxy(user_row)
+
+    except jwt.JWTError:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 # Pydantic Models
 class TaskCreate(BaseModel):
@@ -266,22 +321,24 @@ async def bulk_upload_tasks(
                 'description': row.get('description', ''),
                 'priority': row.get('priority', 'medium'),
                 'due_date': due_date,
-                'category': row.get('category', 'general'),
                 'status': row.get('status', 'pending'),
-                'assigned_to_id': assigned_to,
-                'created_by_id': current_user['id'],
-                'organization_id': current_user.get('organization_id')
+                'owner_id': assigned_to
             }
             tasks_to_create.append(task_data)
 
         # Bulk insert tasks
         if tasks_to_create:
-            # This is a placeholder - you'll need to replace with your actual DB model
             for task_data in tasks_to_create:
-                # db.add(Task(**task_data))
+                db.execute(
+                    text("""
+                        INSERT INTO tasks (title, description, priority, due_date, status, owner_id, created_at, updated_at)
+                        VALUES (:title, :description, :priority, :due_date, :status, :owner_id, NOW(), NOW())
+                    """),
+                    task_data
+                )
                 created_count += 1
 
-            # db.commit()
+            db.commit()
 
         return {
             "success": True,
@@ -397,19 +454,20 @@ async def assign_workflow(
                 'description': task_template.get('description', ''),
                 'priority': task_template.get('priority', 'medium'),
                 'due_date': due_date,
-                'category': task_template.get('category', 'general'),
                 'status': 'pending',
-                'assigned_to_id': assignment.user_id,
-                'created_by_id': current_user['id'],
-                'organization_id': current_user.get('organization_id'),
-                'workflow_id': workflow_id
+                'owner_id': assignment.user_id
             }
 
-            # This is a placeholder - replace with actual DB model
-            # db.add(Task(**task_data))
+            db.execute(
+                text("""
+                    INSERT INTO tasks (title, description, priority, due_date, status, owner_id, created_at, updated_at)
+                    VALUES (:title, :description, :priority, :due_date, :status, :owner_id, NOW(), NOW())
+                """),
+                task_data
+            )
             created_count += 1
 
-        # db.commit()
+        db.commit()
 
         return {
             "success": True,
@@ -419,15 +477,5 @@ async def assign_workflow(
         }
 
     except Exception as e:
-        # db.rollback()
+        db.rollback()
         raise HTTPException(status_code=500, detail=f"Error assigning workflow: {str(e)}")
-
-
-# Helper function placeholders (replace with your actual implementations)
-def get_db():
-    # Replace with your actual database session
-    pass
-
-def get_current_user():
-    # Replace with your actual auth function
-    pass
