@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { teamAPI } from '../services/api';
+import { teamAPI, tasksAPI } from '../services/api';
 import MergeCenter from './MergeCenter';
 import './Tasks.css';
 
@@ -700,20 +700,30 @@ function Tasks() {
     handleComplete(taskId);
   };
 
-  const handleDelete = (taskId) => {
+  const handleDelete = async (taskId) => {
     setShowDeleteConfirm(false);
-    setCompletedTasks(prev => {
-      const newCompleted = new Set(prev);
-      newCompleted.add(taskId);
-      return newCompleted;
-    });
 
-    // Select next task from current tab only
-    if (selectedTask && selectedTask.id === taskId) {
-      const tabTasks = getTasksForTab();
-      const currentIndex = tabTasks.findIndex(t => t.id === taskId);
-      const nextTask = tabTasks[currentIndex + 1] || tabTasks[currentIndex - 1] || null;
-      setSelectedTask(nextTask);
+    try {
+      // Call API to delete task from database
+      await tasksAPI.delete(taskId);
+
+      // Remove from local state
+      setCompletedTasks(prev => {
+        const newCompleted = new Set(prev);
+        newCompleted.add(taskId);
+        return newCompleted;
+      });
+
+      // Select next task from current tab only
+      if (selectedTask && selectedTask.id === taskId) {
+        const tabTasks = getTasksForTab();
+        const currentIndex = tabTasks.findIndex(t => t.id === taskId);
+        const nextTask = tabTasks[currentIndex + 1] || tabTasks[currentIndex - 1] || null;
+        setSelectedTask(nextTask);
+      }
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      alert('Failed to delete task. Please try again.');
     }
   };
 
