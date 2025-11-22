@@ -61,10 +61,18 @@ async def get_current_user(
                 self._user_id = row[0]
 
             def save_settings(self):
-                """Save settings back to database"""
+                """Save settings back to database in user_metadata"""
+                # Get current metadata
+                result = self._db.execute(
+                    text("SELECT user_metadata FROM users WHERE id = :id"),
+                    {"id": self._user_id}
+                )
+                row = result.fetchone()
+                metadata = row[0] if row and row[0] else {}
+                metadata['settings'] = self.settings
                 self._db.execute(
-                    text("UPDATE users SET settings = :settings WHERE id = :id"),
-                    {"settings": json.dumps(self.settings), "id": self.id}
+                    text("UPDATE users SET user_metadata = :metadata WHERE id = :id"),
+                    {"metadata": json.dumps(metadata), "id": self._user_id}
                 )
                 self._db.commit()
 
@@ -127,9 +135,9 @@ async def gmail_oauth_callback(
 
         user_id = int(state.replace("user_", ""))
 
-        # Get user settings
+        # Get user metadata
         result = db.execute(
-            text("SELECT settings FROM users WHERE id = :id"),
+            text("SELECT user_metadata FROM users WHERE id = :id"),
             {"id": user_id}
         )
         row = result.fetchone()
@@ -143,17 +151,19 @@ async def gmail_oauth_callback(
         credentials = gmail_service.get_credentials(token_data)
         gmail_info = gmail_service.get_user_info(credentials)
 
-        # Update settings
-        settings = row[0] if row[0] else {}
+        # Update settings in user_metadata
+        metadata = row[0] if row[0] else {}
+        settings = metadata.get('settings', {}) if isinstance(metadata, dict) else {}
         settings['gmail_tokens'] = token_data
         settings['gmail_email'] = gmail_info.get('email')
         settings['gmail_connected'] = True
         settings['gmail_connected_at'] = datetime.utcnow().isoformat()
+        metadata['settings'] = settings
 
-        # Save settings back to database
+        # Save metadata back to database
         db.execute(
-            text("UPDATE users SET settings = :settings WHERE id = :id"),
-            {"settings": json.dumps(settings), "id": user_id}
+            text("UPDATE users SET user_metadata = :metadata WHERE id = :id"),
+            {"metadata": json.dumps(metadata), "id": user_id}
         )
         db.commit()
 
