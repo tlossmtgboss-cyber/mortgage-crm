@@ -116,15 +116,21 @@ async def gmail_oauth_callback(
     Exchanges authorization code for tokens and stores them.
     """
     try:
+        from sqlalchemy import text
+
         # Extract user ID from state
         if not state or not state.startswith("user_"):
             raise HTTPException(status_code=400, detail="Invalid state parameter")
 
         user_id = int(state.replace("user_", ""))
 
-        # Get user
-        user = db.query(User).filter(User.id == user_id).first()
-        if not user:
+        # Get user settings
+        result = db.execute(
+            text("SELECT settings FROM users WHERE id = :id"),
+            {"id": user_id}
+        )
+        row = result.fetchone()
+        if not row:
             raise HTTPException(status_code=404, detail="User not found")
 
         # Exchange code for tokens
@@ -134,19 +140,18 @@ async def gmail_oauth_callback(
         credentials = gmail_service.get_credentials(token_data)
         gmail_info = gmail_service.get_user_info(credentials)
 
-        # Store tokens in user's settings
-        if not user.settings:
-            user.settings = {}
+        # Update settings
+        settings = row[0] if row[0] else {}
+        settings['gmail_tokens'] = token_data
+        settings['gmail_email'] = gmail_info.get('email')
+        settings['gmail_connected'] = True
+        settings['gmail_connected_at'] = datetime.utcnow().isoformat()
 
-        user.settings['gmail_tokens'] = token_data
-        user.settings['gmail_email'] = gmail_info.get('email')
-        user.settings['gmail_connected'] = True
-        user.settings['gmail_connected_at'] = datetime.utcnow().isoformat()
-
-        # Mark settings as modified for SQLAlchemy
-        from sqlalchemy.orm.attributes import flag_modified
-        flag_modified(user, 'settings')
-
+        # Save settings back to database
+        db.execute(
+            text("UPDATE users SET settings = :settings WHERE id = :id"),
+            {"settings": json.dumps(settings), "id": user_id}
+        )
         db.commit()
 
         logger.info(f"Gmail connected for user {user_id}: {gmail_info.get('email')}")
@@ -208,10 +213,8 @@ async def disconnect_gmail(
         current_user.settings['gmail_connected'] = False
         current_user.settings.pop('gmail_connected_at', None)
 
-        from sqlalchemy.orm.attributes import flag_modified
-        flag_modified(current_user, 'settings')
-
-        db.commit()
+        # Save settings
+        current_user.save_settings()
 
         return {"success": True, "message": "Gmail disconnected"}
     except Exception as e:
@@ -247,9 +250,8 @@ async def list_emails(
             if credentials.expiry:
                 current_user.settings['gmail_tokens']['expiry'] = credentials.expiry.isoformat()
 
-            from sqlalchemy.orm.attributes import flag_modified
-            flag_modified(current_user, 'settings')
-            db.commit()
+            # Save settings
+            current_user.save_settings()
 
         result = gmail_service.list_messages(
             credentials,
