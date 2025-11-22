@@ -496,7 +496,35 @@ function AILandingPage() {
   const routeMessage = (message) => {
     const lower = message.toLowerCase();
 
-    if ((lower.includes('done') || lower.includes('completed') || lower.includes('finished')) &&
+    // Coaching mode handlers
+    if (lower.includes('daily briefing') || lower.includes('top 3 priorities')) {
+      addMessage("Here's your daily briefing with your top 3 priorities:", 'assistant');
+      showDailyView();
+    } else if (lower.includes('pipeline audit') || lower.includes('bottlenecks')) {
+      addMessage("Let me audit your pipeline and identify any bottlenecks:", 'assistant');
+      showPipelineReport();
+    } else if (lower.includes('focus reset') || lower.includes('back on track')) {
+      addMessage("Let's reset your focus. Here are the most critical items that need your attention right now:", 'assistant');
+      showDailyView();
+    } else if (lower.includes('what should i do next') || lower.includes('priority decision')) {
+      if (tasksCompleted) {
+        showNextPriorities();
+      } else {
+        addMessage("Based on your current workload, here's what you should focus on next:", 'assistant');
+        showDailyView();
+      }
+    } else if (lower.includes('accountability review') || lower.includes('review my performance')) {
+      addMessage("Let's review your performance. Here's where you stand on your key metrics and tasks:", 'assistant');
+      showPipelineReport();
+    } else if (lower.includes('tough love') || lower.includes('inefficiencies')) {
+      addMessage("Alright, let's be direct. Here are the areas that need immediate attention:", 'assistant');
+      showDailyView();
+    } else if (lower.includes('teach me the process') || lower.includes('systemic thinking')) {
+      addMessage("Let me walk you through the systematic approach to managing your pipeline effectively:", 'assistant');
+      showDailyView();
+    } else if (lower.includes('have a question') || lower.includes('ask a question')) {
+      addMessage("I'm here to help! What specific question do you have about your pipeline, leads, or tasks?", 'assistant');
+    } else if ((lower.includes('done') || lower.includes('completed') || lower.includes('finished')) &&
         (lower.includes('task') || lower.includes('all'))) {
       handleTasksCompleted();
     } else if (lower.includes('next') || lower.includes("what's next") || lower.includes('whats next')) {
