@@ -38,11 +38,14 @@ function AILandingPage() {
   const [selectedPermission, setSelectedPermission] = useState('all');
   const [userPermissions, setUserPermissions] = useState(['all', 'leads', 'loans', 'tasks', 'reports']);
   const [isListening, setIsListening] = useState(false);
+  const [dividerPosition, setDividerPosition] = useState(50); // percentage
+  const [isDragging, setIsDragging] = useState(false);
 
   const chatAreaRef = useRef(null);
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
   const recognitionRef = useRef(null);
+  const containerRef = useRef(null);
 
   // Session ID for permanent memory
   const [sessionId, setSessionId] = useState(() => {
@@ -126,6 +129,50 @@ function AILandingPage() {
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
   }, []);
+
+  // Handle divider drag
+  useEffect(() => {
+    const handleMouseMove = (e) => {
+      if (!isDragging || !containerRef.current) return;
+      const container = containerRef.current;
+      const rect = container.getBoundingClientRect();
+      const newPosition = ((e.clientX - rect.left) / rect.width) * 100;
+      setDividerPosition(Math.min(Math.max(newPosition, 20), 80));
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+    };
+
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
+
+  const handleDividerMouseDown = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleCopyContent = async () => {
+    const content = messages.map(msg => {
+      const prefix = msg.type === 'user' ? 'You: ' : 'Assistant: ';
+      return prefix + msg.content;
+    }).join('\n\n');
+
+    try {
+      await navigator.clipboard.writeText(content);
+      alert('Content copied to clipboard!');
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  };
 
   // Initialize speech recognition
   useEffect(() => {
@@ -809,146 +856,13 @@ function AILandingPage() {
 
   return (
     <div className="ai-landing-page-new">
-      {/* Main Content Area */}
-      <div className="ai-main-content">
-        {/* Header */}
-        <div className="ai-header-new">
-          <div className="ai-logo-new">
-            <span className="ai-logo-icon">*</span>
-          </div>
-          <h1>Back at it, {userName}</h1>
-        </div>
-
-        {/* Chat Container */}
-        <div className="ai-chat-container">
-          {/* Messages Area */}
-          <div className="ai-messages-area" ref={chatAreaRef}>
-            {messages.length === 0 ? (
-              <div className="ai-welcome-state">
-                <h2>What would you like to do today?</h2>
-                <p>Ask me anything about your CRM data, clients, or tasks. I'll handle the rest.</p>
-
-                <div className="ai-example-prompts-new">
-                  <button onClick={() => handleExamplePrompt('What do I need to do today?')}>
-                    What do I need to do today?
-                  </button>
-                  <button onClick={() => handleExamplePrompt('Send an email to all mortgages under management clients about the All In One loan')}>
-                    Send an email to all mortgages under management clients about the All In One loan
-                  </button>
-                  <button onClick={() => handleExamplePrompt('Update all deals in underwriting to include the new appraisal waiver guidelines')}>
-                    Update all deals in underwriting to include the new appraisal waiver guidelines
-                  </button>
-                  <button onClick={() => handleExamplePrompt('Call my top 10 referral partners and leave a voicemail thanking them for Q4')}>
-                    Call my top 10 referral partners and leave a voicemail thanking them for Q4
-                  </button>
-                  <button onClick={() => handleExamplePrompt('Generate a pipeline report for deals closing this month and send to my team')}>
-                    Generate a pipeline report for deals closing this month and send to my team
-                  </button>
-                </div>
-              </div>
-            ) : (
-              messages.map(message => (
-                <div key={message.id} className={`ai-message-new ai-message-${message.type}`}>
-                  {message.isSpecialContent ? (
-                    renderSpecialContent(message)
-                  ) : (
-                    <div className="ai-message-content-new">{message.content}</div>
-                  )}
-                </div>
-              ))
-            )}
-
-            {loading && (
-              <div className="ai-message-new ai-message-assistant">
-                <div className="ai-typing-indicator-new">
-                  <span></span>
-                  <span></span>
-                  <span></span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Input Area */}
-          <div className="ai-input-area">
-            <div className="ai-input-container-new">
-              <button
-                className="ai-upload-btn"
-                onClick={() => fileInputRef.current?.click()}
-                title="Upload documents"
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
-                </svg>
-              </button>
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileUpload}
-                multiple
-                style={{ display: 'none' }}
-              />
-
-              <button
-                className={`ai-mic-btn ${isListening ? 'listening' : ''}`}
-                onClick={toggleSpeechRecognition}
-                title={isListening ? 'Stop listening' : 'Start voice input'}
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
-                  <path d="M19 10v2a7 7 0 01-14 0v-2"/>
-                  <line x1="12" y1="19" x2="12" y2="23"/>
-                  <line x1="8" y1="23" x2="16" y2="23"/>
-                </svg>
-              </button>
-
-              <textarea
-                ref={textareaRef}
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyPress={handleKeyPress}
-                placeholder="Ask me to do something..."
-                disabled={loading}
-                rows={1}
-              />
-
-              <select
-                className="ai-permission-select"
-                value={selectedPermission}
-                onChange={(e) => setSelectedPermission(e.target.value)}
-              >
-                {userPermissions.map(perm => (
-                  <option key={perm} value={perm}>
-                    {perm.charAt(0).toUpperCase() + perm.slice(1)}
-                  </option>
-                ))}
-              </select>
-
-              <button
-                className="ai-send-btn-new"
-                onClick={() => sendMessage()}
-                disabled={!inputValue.trim() || loading}
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
-                </svg>
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <button className="ai-back-to-crm-new" onClick={() => navigate('/dashboard')}>
-          Back to CRM Dashboard
-        </button>
-      </div>
-
-      {/* Collapsible Right Sidebar */}
+      {/* Collapsible Left Sidebar */}
       <div className={`ai-sidebar-new ${sidebarCollapsed ? 'collapsed' : ''}`}>
         <button
           className="ai-sidebar-toggle"
           onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
         >
-          {sidebarCollapsed ? '<' : '>'}
+          {sidebarCollapsed ? '>' : '<'}
         </button>
 
         {!sidebarCollapsed && (
@@ -1074,6 +988,174 @@ function AILandingPage() {
               </div>
             )}
           </>
+        )}
+      </div>
+
+      {/* Main Content Area - Split Pane */}
+      <div className="ai-main-content" ref={containerRef}>
+        {/* Top Right Buttons */}
+        <div className="ai-top-right-buttons">
+          {messages.length > 0 && (
+            <button
+              className="ai-copy-btn"
+              onClick={handleCopyContent}
+              title="Copy content"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+              </svg>
+            </button>
+          )}
+          {!sidebarCollapsed && (
+            <button
+              className="ai-close-sidebar-btn"
+              onClick={() => setSidebarCollapsed(true)}
+              title="Close sidebar"
+            >
+              ×
+            </button>
+          )}
+        </div>
+
+        {/* Left Pane - Input/Prompts */}
+        <div className="ai-left-pane" style={{ width: messages.length > 0 ? `${dividerPosition}%` : '100%' }}>
+          {/* Header */}
+          <div className="ai-header-new">
+            <div className="ai-logo-new">
+              <span className="ai-logo-icon">*</span>
+            </div>
+            <h1>Back at it, {userName}</h1>
+          </div>
+
+          <div className="ai-welcome-state">
+            <h2>What would you like to do today?</h2>
+            <p>Ask me anything about your CRM data, clients, or tasks. I'll handle the rest.</p>
+
+            <div className="ai-example-prompts-new">
+              <button onClick={() => handleExamplePrompt('What do I need to do today?')}>
+                What do I need to do today?
+              </button>
+              <button onClick={() => handleExamplePrompt('Send an email to all mortgages under management clients about the All In One loan')}>
+                Send an email to all mortgages under management clients about the All In One loan
+              </button>
+              <button onClick={() => handleExamplePrompt('Update all deals in underwriting to include the new appraisal waiver guidelines')}>
+                Update all deals in underwriting to include the new appraisal waiver guidelines
+              </button>
+              <button onClick={() => handleExamplePrompt('Call my top 10 referral partners and leave a voicemail thanking them for Q4')}>
+                Call my top 10 referral partners and leave a voicemail thanking them for Q4
+              </button>
+              <button onClick={() => handleExamplePrompt('Generate a pipeline report for deals closing this month and send to my team')}>
+                Generate a pipeline report for deals closing this month and send to my team
+              </button>
+            </div>
+          </div>
+
+          {/* Input Area */}
+          <div className="ai-input-area">
+            <div className="ai-input-container-new">
+              <button
+                className="ai-upload-btn"
+                onClick={() => fileInputRef.current?.click()}
+                title="Upload documents"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
+                </svg>
+              </button>
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileUpload}
+                multiple
+                style={{ display: 'none' }}
+              />
+
+              <button
+                className={`ai-mic-btn ${isListening ? 'listening' : ''}`}
+                onClick={toggleSpeechRecognition}
+                title={isListening ? 'Stop listening' : 'Start voice input'}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/>
+                  <path d="M19 10v2a7 7 0 01-14 0v-2"/>
+                  <line x1="12" y1="19" x2="12" y2="23"/>
+                  <line x1="8" y1="23" x2="16" y2="23"/>
+                </svg>
+              </button>
+
+              <textarea
+                ref={textareaRef}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyPress={handleKeyPress}
+                placeholder="Ask me to do something..."
+                disabled={loading}
+                rows={1}
+              />
+
+              <select
+                className="ai-permission-select"
+                value={selectedPermission}
+                onChange={(e) => setSelectedPermission(e.target.value)}
+              >
+                {userPermissions.map(perm => (
+                  <option key={perm} value={perm}>
+                    {perm.charAt(0).toUpperCase() + perm.slice(1)}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                className="ai-send-btn-new"
+                onClick={() => sendMessage()}
+                disabled={!inputValue.trim() || loading}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <button className="ai-back-to-crm-new" onClick={() => navigate('/dashboard')}>
+            Back to CRM Dashboard
+          </button>
+        </div>
+
+        {/* Draggable Divider */}
+        {messages.length > 0 && (
+          <div
+            className={`ai-pane-divider ${isDragging ? 'dragging' : ''}`}
+            onMouseDown={handleDividerMouseDown}
+          />
+        )}
+
+        {/* Right Pane - Answers/Chat */}
+        {messages.length > 0 && (
+          <div className="ai-right-pane" style={{ width: `${100 - dividerPosition}%` }}>
+            <div className="ai-messages-area" ref={chatAreaRef}>
+              {messages.map(message => (
+                <div key={message.id} className={`ai-message-new ai-message-${message.type}`}>
+                  {message.isSpecialContent ? (
+                    renderSpecialContent(message)
+                  ) : (
+                    <div className="ai-message-content-new">{message.content}</div>
+                  )}
+                </div>
+              ))}
+
+              {loading && (
+                <div className="ai-message-new ai-message-assistant">
+                  <div className="ai-typing-indicator-new">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </div>
 

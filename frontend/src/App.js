@@ -64,6 +64,8 @@ const WorkflowStagePage = lazy(() => import('./pages/WorkflowStagePage'));
 const MarketDashboard = lazy(() => import('./pages/MarketDashboard'));
 const MorningCheckin = lazy(() => import('./pages/MorningCheckin'));
 const PartnerROIDashboard = lazy(() => import('./pages/PartnerROIDashboard'));
+const ProfitabilityDashboard = lazy(() => import('./pages/ProfitabilityDashboard'));
+const ScenarioModeling = lazy(() => import('./pages/ScenarioModeling'));
 
 // Simple loading component
 const PageLoader = () => (
@@ -369,6 +371,50 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><PartnerROIDashboard /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+
+          {/* Profitability Intelligence Dashboard */}
+          <Route
+            path="/profitability"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><ProfitabilityDashboard /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+
+          {/* Scenario Modeling */}
+          <Route
+            path="/profitability/scenarios"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><ScenarioModeling /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>

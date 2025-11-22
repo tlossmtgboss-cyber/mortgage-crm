@@ -127,10 +127,17 @@ const MorningCheckin = () => {
   const handleComplete = async () => {
     try {
       setLoading(true);
-      await api.post('/api/v1/checkin/complete');
+      if (!api || typeof api.post !== 'function') {
+        console.error('API not properly initialized:', api);
+        setError('API service not available. Please refresh the page.');
+        return;
+      }
+      const response = await api.post('/api/v1/checkin/complete');
+      console.log('Check-in completed:', response);
       setPhase('complete');
     } catch (err) {
-      setError('Failed to complete check-in');
+      console.error('Error completing check-in:', err);
+      setError('Failed to complete check-in: ' + (err.response?.data?.detail || err.message));
     } finally {
       setLoading(false);
     }
