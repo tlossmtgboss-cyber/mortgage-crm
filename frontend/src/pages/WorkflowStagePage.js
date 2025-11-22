@@ -3,58 +3,122 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
 import './WorkflowStagePage.css';
 
+// Status configurations for each stage
+const LEAD_STATUSES = {
+  new: { name: 'New', color: '#6b7280' },
+  contacted: { name: 'Contacted', color: '#3b82f6' },
+  qualified: { name: 'Qualified', color: '#8b5cf6' },
+  pre_approved: { name: 'Pre-Approved', color: '#10b981' },
+  nurturing: { name: 'Nurturing', color: '#f59e0b' }
+};
+
+const ACTIVE_LOAN_STATUSES = {
+  application: { name: 'Application', color: '#6b7280' },
+  processing: { name: 'Processing', color: '#3b82f6' },
+  underwriting: { name: 'Underwriting', color: '#8b5cf6' },
+  approved: { name: 'Approved', color: '#10b981' },
+  closing: { name: 'Closing', color: '#f59e0b' }
+};
+
+const PORTFOLIO_STATUSES = {
+  onboarding: { name: 'Onboarding', color: '#6b7280' },
+  active: { name: 'Active', color: '#10b981' },
+  review: { name: 'Review', color: '#f59e0b' },
+  refinance: { name: 'Refinance Opportunity', color: '#8b5cf6' }
+};
+
 const STAGE_CONFIG = {
   lead: {
     name: 'Lead',
     description: 'Initial contact and qualification workflow',
     color: '#3b82f6',
-    defaultTasks: [
-      { id: 1, title: 'Initial Contact', description: 'Make first contact with lead', order: 1, auto_trigger: 'on_lead_create', days_offset: 0 },
-      { id: 2, title: 'Send Introduction Email', description: 'Send welcome email with information', order: 2, auto_trigger: 'after_previous', days_offset: 0 },
-      { id: 3, title: 'Schedule Discovery Call', description: 'Set up initial consultation', order: 3, auto_trigger: 'after_previous', days_offset: 1 },
-      { id: 4, title: 'Pre-Qualification Check', description: 'Verify basic qualification criteria', order: 4, auto_trigger: 'after_previous', days_offset: 0 },
-      { id: 5, title: 'Collect Documents', description: 'Request income, assets, and ID documents', order: 5, auto_trigger: 'after_previous', days_offset: 1 },
-      { id: 6, title: 'Credit Pull Authorization', description: 'Get authorization for credit check', order: 6, auto_trigger: 'after_previous', days_offset: 0 },
-      { id: 7, title: 'Generate Pre-Approval Letter', description: 'Create pre-approval documentation', order: 7, auto_trigger: 'after_previous', days_offset: 1 },
-      { id: 8, title: 'Convert to Active Loan', description: 'Move to active loan processing', order: 8, auto_trigger: 'manual', days_offset: 0 }
-    ]
+    statuses: LEAD_STATUSES,
+    defaultTasksByStatus: {
+      new: [
+        { id: 1, title: 'Initial Contact', description: 'Make first contact with lead', order: 1, auto_trigger: 'on_lead_create', days_offset: 0 },
+        { id: 2, title: 'Send Introduction Email', description: 'Send welcome email', order: 2, auto_trigger: 'after_previous', days_offset: 0 }
+      ],
+      contacted: [
+        { id: 3, title: 'Schedule Discovery Call', description: 'Set up initial consultation', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
+        { id: 4, title: 'Send Follow-up', description: 'Follow up if no response', order: 2, auto_trigger: 'scheduled', days_offset: 2 }
+      ],
+      qualified: [
+        { id: 5, title: 'Pre-Qualification Check', description: 'Verify qualification criteria', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
+        { id: 6, title: 'Collect Documents', description: 'Request income and assets docs', order: 2, auto_trigger: 'after_previous', days_offset: 1 },
+        { id: 7, title: 'Credit Authorization', description: 'Get credit check authorization', order: 3, auto_trigger: 'after_previous', days_offset: 0 }
+      ],
+      pre_approved: [
+        { id: 8, title: 'Generate Pre-Approval', description: 'Create pre-approval letter', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
+        { id: 9, title: 'Send Pre-Approval', description: 'Email pre-approval to client', order: 2, auto_trigger: 'after_previous', days_offset: 0 },
+        { id: 10, title: 'Convert to Active Loan', description: 'Move to loan processing', order: 3, auto_trigger: 'manual', days_offset: 0 }
+      ],
+      nurturing: [
+        { id: 11, title: 'Add to Drip Campaign', description: 'Start nurture sequence', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
+        { id: 12, title: 'Monthly Check-in', description: 'Periodic follow-up call', order: 2, auto_trigger: 'scheduled', days_offset: 30 },
+        { id: 13, title: 'Rate Alert', description: 'Notify when rates favorable', order: 3, auto_trigger: 'rate_trigger', days_offset: 0 }
+      ]
+    }
   },
   active_loan: {
     name: 'Active Loan',
     description: 'Loan processing and underwriting workflow',
     color: '#10b981',
-    defaultTasks: [
-      { id: 9, title: 'Application Submitted', description: 'Formal loan application received', order: 1, auto_trigger: 'on_conversion', days_offset: 0 },
-      { id: 10, title: 'Order Appraisal', description: 'Request property appraisal', order: 2, auto_trigger: 'after_previous', days_offset: 1 },
-      { id: 11, title: 'Title Search', description: 'Order title search and insurance', order: 3, auto_trigger: 'after_previous', days_offset: 0 },
-      { id: 12, title: 'Submit to Underwriting', description: 'Package file for underwriter review', order: 4, auto_trigger: 'after_previous', days_offset: 2 },
-      { id: 13, title: 'Address Conditions', description: 'Clear underwriting conditions', order: 5, auto_trigger: 'on_conditions', days_offset: 0 },
-      { id: 14, title: 'Final Approval', description: 'Obtain clear to close', order: 6, auto_trigger: 'after_previous', days_offset: 3 },
-      { id: 15, title: 'Schedule Closing', description: 'Coordinate closing date and location', order: 7, auto_trigger: 'after_previous', days_offset: 1 },
-      { id: 16, title: 'Closing Day', description: 'Execute closing documents', order: 8, auto_trigger: 'on_closing_date', days_offset: 0 },
-      { id: 17, title: 'Fund Loan', description: 'Wire funds and record documents', order: 9, auto_trigger: 'after_previous', days_offset: 1 },
-      { id: 18, title: 'Move to Portfolio', description: 'Transfer to servicing/portfolio', order: 10, auto_trigger: 'after_previous', days_offset: 3 }
-    ]
+    statuses: ACTIVE_LOAN_STATUSES,
+    defaultTasksByStatus: {
+      application: [
+        { id: 14, title: 'Application Received', description: 'Formal application submitted', order: 1, auto_trigger: 'on_conversion', days_offset: 0 },
+        { id: 15, title: 'Order Appraisal', description: 'Request property appraisal', order: 2, auto_trigger: 'after_previous', days_offset: 1 },
+        { id: 16, title: 'Title Search', description: 'Order title search', order: 3, auto_trigger: 'after_previous', days_offset: 0 }
+      ],
+      processing: [
+        { id: 17, title: 'Document Review', description: 'Review all submitted docs', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
+        { id: 18, title: 'Request Missing Docs', description: 'Send conditions letter', order: 2, auto_trigger: 'after_previous', days_offset: 1 }
+      ],
+      underwriting: [
+        { id: 19, title: 'Submit to UW', description: 'Package file for review', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
+        { id: 20, title: 'Address Conditions', description: 'Clear UW conditions', order: 2, auto_trigger: 'on_conditions', days_offset: 0 }
+      ],
+      approved: [
+        { id: 21, title: 'Clear to Close', description: 'Final approval obtained', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
+        { id: 22, title: 'Final CD Review', description: 'Review closing disclosure', order: 2, auto_trigger: 'after_previous', days_offset: 0 }
+      ],
+      closing: [
+        { id: 23, title: 'Schedule Closing', description: 'Coordinate date/location', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
+        { id: 24, title: 'Closing Day', description: 'Execute documents', order: 2, auto_trigger: 'on_closing_date', days_offset: 0 },
+        { id: 25, title: 'Fund & Record', description: 'Wire funds', order: 3, auto_trigger: 'after_previous', days_offset: 1 }
+      ]
+    }
   },
   portfolio: {
     name: 'Portfolio',
     description: 'Post-closing servicing and retention workflow',
     color: '#8b5cf6',
-    defaultTasks: [
-      { id: 19, title: 'Welcome to Portfolio', description: 'Send post-closing welcome package', order: 1, auto_trigger: 'on_portfolio_add', days_offset: 0 },
-      { id: 20, title: '30-Day Check-In', description: 'First payment follow-up call', order: 2, auto_trigger: 'scheduled', days_offset: 30 },
-      { id: 21, title: '90-Day Review', description: 'Ensure smooth servicing transition', order: 3, auto_trigger: 'scheduled', days_offset: 90 },
-      { id: 22, title: 'Annual Review', description: 'Yearly financial checkup', order: 4, auto_trigger: 'annual', days_offset: 365 },
-      { id: 23, title: 'Refinance Opportunity Check', description: 'Review for refinance potential', order: 5, auto_trigger: 'rate_trigger', days_offset: 0 },
-      { id: 24, title: 'Birthday Outreach', description: 'Send birthday greeting', order: 6, auto_trigger: 'birthday', days_offset: 0 },
-      { id: 25, title: 'Loan Anniversary', description: 'Celebrate loan anniversary', order: 7, auto_trigger: 'anniversary', days_offset: 0 },
-      { id: 26, title: 'Referral Request', description: 'Ask for referrals at key moments', order: 8, auto_trigger: 'milestone', days_offset: 0 }
-    ]
+    statuses: PORTFOLIO_STATUSES,
+    defaultTasksByStatus: {
+      onboarding: [
+        { id: 26, title: 'Welcome Package', description: 'Send welcome materials', order: 1, auto_trigger: 'on_portfolio_add', days_offset: 0 },
+        { id: 27, title: '30-Day Check-In', description: 'First payment follow-up', order: 2, auto_trigger: 'scheduled', days_offset: 30 }
+      ],
+      active: [
+        { id: 28, title: '90-Day Review', description: 'Servicing transition check', order: 1, auto_trigger: 'scheduled', days_offset: 90 },
+        { id: 29, title: 'Annual Review', description: 'Yearly checkup', order: 2, auto_trigger: 'annual', days_offset: 365 },
+        { id: 30, title: 'Birthday Outreach', description: 'Send greeting', order: 3, auto_trigger: 'birthday', days_offset: 0 }
+      ],
+      review: [
+        { id: 31, title: 'Loan Anniversary', description: 'Celebrate anniversary', order: 1, auto_trigger: 'anniversary', days_offset: 0 },
+        { id: 32, title: 'Referral Request', description: 'Ask for referrals', order: 2, auto_trigger: 'milestone', days_offset: 0 }
+      ],
+      refinance: [
+        { id: 33, title: 'Rate Check', description: 'Review rates', order: 1, auto_trigger: 'rate_trigger', days_offset: 0 },
+        { id: 34, title: 'Refinance Proposal', description: 'Send savings analysis', order: 2, auto_trigger: 'after_previous', days_offset: 1 }
+      ]
+    }
   }
 };
 
 const triggerOptions = [
   { value: 'on_lead_create', label: 'On Lead Create' },
+  { value: 'on_status_change', label: 'On Status Change' },
   { value: 'after_previous', label: 'After Previous Task' },
   { value: 'manual', label: 'Manual' },
   { value: 'on_conversion', label: 'On Conversion' },
@@ -72,7 +136,8 @@ const triggerOptions = [
 function WorkflowStagePage() {
   const { stage } = useParams();
   const navigate = useNavigate();
-  const [tasks, setTasks] = useState([]);
+  const [tasksByStatus, setTasksByStatus] = useState({});
+  const [selectedStatus, setSelectedStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
@@ -86,11 +151,18 @@ function WorkflowStagePage() {
   });
 
   const stageConfig = STAGE_CONFIG[stage];
+  const statuses = stageConfig?.statuses || {};
+  const statusKeys = Object.keys(statuses);
+  const tasks = selectedStatus ? (tasksByStatus[selectedStatus] || []) : [];
 
   useEffect(() => {
     if (!stageConfig) {
       navigate('/settings');
       return;
+    }
+    // Set default selected status to first one
+    if (statusKeys.length > 0 && !selectedStatus) {
+      setSelectedStatus(statusKeys[0]);
     }
     loadTasks();
   }, [stage, stageConfig, navigate]);
@@ -105,32 +177,37 @@ function WorkflowStagePage() {
       });
       if (response.ok) {
         const data = await response.json();
-        setTasks(data.tasks || stageConfig.defaultTasks);
+        setTasksByStatus(data.tasksByStatus || stageConfig.defaultTasksByStatus);
       } else {
-        setTasks(stageConfig.defaultTasks);
+        setTasksByStatus(stageConfig.defaultTasksByStatus);
       }
     } catch (error) {
       console.error('Error loading tasks:', error);
-      setTasks(stageConfig.defaultTasks);
+      setTasksByStatus(stageConfig.defaultTasksByStatus);
     } finally {
       setLoading(false);
     }
   };
 
   const handleAddTask = () => {
-    if (!newTask.title.trim()) return;
+    if (!newTask.title.trim() || !selectedStatus) return;
 
-    const maxId = Math.max(...tasks.map(t => t.id), 0);
+    const allTasks = Object.values(tasksByStatus).flat();
+    const maxId = Math.max(...allTasks.map(t => t.id), 0);
+    const currentTasks = tasksByStatus[selectedStatus] || [];
     const newTaskObj = {
       id: maxId + 1,
       title: newTask.title,
       description: newTask.description,
-      order: tasks.length + 1,
+      order: currentTasks.length + 1,
       auto_trigger: newTask.auto_trigger,
       days_offset: parseInt(newTask.days_offset) || 0
     };
 
-    setTasks([...tasks, newTaskObj]);
+    setTasksByStatus({
+      ...tasksByStatus,
+      [selectedStatus]: [...currentTasks, newTaskObj]
+    });
     setNewTask({ title: '', description: '', auto_trigger: 'after_previous', days_offset: 0 });
     setShowAddForm(false);
     setMessage({ type: 'success', text: 'Task added successfully' });
@@ -138,15 +215,21 @@ function WorkflowStagePage() {
   };
 
   const handleDeleteTask = (taskId) => {
-    setTasks(tasks
+    if (!selectedStatus) return;
+    const updatedTasks = tasks
       .filter(t => t.id !== taskId)
-      .map((t, idx) => ({ ...t, order: idx + 1 }))
-    );
+      .map((t, idx) => ({ ...t, order: idx + 1 }));
+
+    setTasksByStatus({
+      ...tasksByStatus,
+      [selectedStatus]: updatedTasks
+    });
     setMessage({ type: 'success', text: 'Task deleted' });
     setTimeout(() => setMessage({ type: '', text: '' }), 3000);
   };
 
   const handleMoveTask = (taskId, direction) => {
+    if (!selectedStatus) return;
     const taskIndex = tasks.findIndex(t => t.id === taskId);
     if (
       (direction === 'up' && taskIndex === 0) ||
@@ -158,13 +241,21 @@ function WorkflowStagePage() {
     [newTasks[taskIndex], newTasks[swapIndex]] = [newTasks[swapIndex], newTasks[taskIndex]];
 
     const reorderedTasks = newTasks.map((t, idx) => ({ ...t, order: idx + 1 }));
-    setTasks(reorderedTasks);
+    setTasksByStatus({
+      ...tasksByStatus,
+      [selectedStatus]: reorderedTasks
+    });
   };
 
   const handleEditTask = (taskId, field, value) => {
-    setTasks(tasks.map(t =>
+    if (!selectedStatus) return;
+    const updatedTasks = tasks.map(t =>
       t.id === taskId ? { ...t, [field]: value } : t
-    ));
+    );
+    setTasksByStatus({
+      ...tasksByStatus,
+      [selectedStatus]: updatedTasks
+    });
   };
 
   const handleSave = async () => {
@@ -176,7 +267,7 @@ function WorkflowStagePage() {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ tasks })
+        body: JSON.stringify({ tasksByStatus })
       });
 
       if (response.ok) {
@@ -192,6 +283,9 @@ function WorkflowStagePage() {
       setTimeout(() => setMessage({ type: '', text: '' }), 3000);
     }
   };
+
+  // Calculate total tasks across all statuses
+  const totalTasks = Object.values(tasksByStatus).flat().length;
 
   if (!stageConfig) {
     return null;
@@ -214,7 +308,7 @@ function WorkflowStagePage() {
         <div className="header-content">
           <h1>{stageConfig.name} Workflow</h1>
           <p>{stageConfig.description}</p>
-          <span className="task-count">{tasks.length} tasks</span>
+          <span className="task-count">{totalTasks} tasks total</span>
         </div>
       </div>
 
@@ -225,9 +319,24 @@ function WorkflowStagePage() {
         </div>
       )}
 
-      <div className="tasks-container" style={{ '--stage-color': stageConfig.color }}>
+      {/* Status Tabs */}
+      <div className="status-tabs">
+        {statusKeys.map(statusKey => (
+          <button
+            key={statusKey}
+            className={`status-tab ${selectedStatus === statusKey ? 'active' : ''}`}
+            onClick={() => setSelectedStatus(statusKey)}
+            style={{ '--status-color': statuses[statusKey].color }}
+          >
+            <span className="status-name">{statuses[statusKey].name}</span>
+            <span className="status-task-count">{(tasksByStatus[statusKey] || []).length}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="tasks-container" style={{ '--stage-color': selectedStatus ? statuses[selectedStatus]?.color : stageConfig.color }}>
         <div className="tasks-header">
-          <h2>Workflow Tasks</h2>
+          <h2>{selectedStatus ? statuses[selectedStatus]?.name : ''} Tasks</h2>
           <div className="header-actions">
             <button className="add-task-btn" onClick={() => setShowAddForm(true)}>
               + Add Task
@@ -237,7 +346,7 @@ function WorkflowStagePage() {
               onClick={handleSave}
               disabled={saving}
             >
-              {saving ? 'Saving...' : 'Save Workflow'}
+              {saving ? 'Saving...' : 'Save All'}
             </button>
           </div>
         </div>

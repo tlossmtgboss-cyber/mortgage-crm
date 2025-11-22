@@ -80,6 +80,54 @@
   opacity: 0.7;
 }
 
+/* Status Tabs */
+.status-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.status-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 13px;
+}
+
+.status-tab:hover {
+  border-color: var(--status-color, #3b82f6);
+  background: #f9fafb;
+}
+
+.status-tab.active {
+  border-color: var(--status-color, #3b82f6);
+  background: var(--status-color, #3b82f6);
+  color: white;
+}
+
+.status-tab .status-name {
+  font-weight: 500;
+}
+
+.status-tab .status-task-count {
+  background: rgba(0, 0, 0, 0.1);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.status-tab.active .status-task-count {
+  background: rgba(255, 255, 255, 0.3);
+}
+
 .tasks-container {
   background: white;
   border-radius: 12px;
