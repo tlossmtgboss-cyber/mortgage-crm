@@ -402,7 +402,7 @@ async def sync_emails(
     current_user= Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Sync recent emails from Gmail."""
+    """Sync recent emails from Gmail and process them for reconciliation."""
     try:
         settings = current_user.settings or {}
 
@@ -420,8 +420,42 @@ async def sync_emails(
             max_results=max_results
         )
 
+        # Process emails through extraction pipeline for reconciliation
+        from main import process_microsoft_email_to_dre
+
+        processed_count = 0
+        for email in emails:
+            try:
+                # Convert Gmail format to Microsoft-like format for processing
+                email_data = {
+                    "id": email.get("id", ""),
+                    "subject": email.get("subject", ""),
+                    "from": {
+                        "emailAddress": {
+                            "address": email.get("from", "")
+                        }
+                    },
+                    "toRecipients": [
+                        {"emailAddress": {"address": email.get("to", "")}}
+                    ] if email.get("to") else [],
+                    "receivedDateTime": email.get("date", ""),
+                    "body": {
+                        "contentType": "text" if email.get("body_text") else "html",
+                        "content": email.get("body_text") or email.get("body_html", "")
+                    }
+                }
+
+                result = await process_microsoft_email_to_dre(email_data, current_user.id, db)
+                if result.get("status") != "skipped":
+                    processed_count += 1
+
+            except Exception as e:
+                logger.warning(f"Error processing email {email.get('id', 'unknown')}: {e}")
+                continue
+
         return {
             "synced_count": len(emails),
+            "processed_count": processed_count,
             "emails": emails
         }
 

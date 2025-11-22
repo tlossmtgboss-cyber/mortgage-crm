@@ -22,7 +22,7 @@ function ReconciliationCenter() {
   useEffect(() => {
     fetchPendingItems();
     fetchCompletedItems();
-    loadSampleData(); // Load sample data
+    // Note: loadSampleData() removed - was overwriting real API data with samples
 
     // Auto-sync emails every 5 minutes
     const syncInterval = setInterval(() => {
@@ -127,7 +127,32 @@ function ReconciliationCenter() {
 
       if (response.ok) {
         const data = await response.json();
-        setPendingItems(data.items || []);
+        const allItems = data.items || [];
+
+        // Split items: high confidence goes to auto-processing, low confidence needs review
+        const autoProcess = [];
+        const needsReview = [];
+
+        allItems.forEach(item => {
+          // Items with low confidence or specific flags go to pending review
+          if (item.ai_confidence < 0.75 || item.match_confidence < 0.65 || item.status === 'needs_review') {
+            needsReview.push({
+              ...item,
+              needs_human_review: true,
+              review_reason: item.ai_confidence < 0.75 ? 'Low AI confidence' :
+                            item.match_confidence < 0.65 ? 'Low match confidence' :
+                            'Flagged for review',
+              email_subject: item.email?.subject,
+              email_from: item.email?.sender,
+              email_received_at: item.email?.received_at
+            });
+          } else {
+            autoProcess.push(item);
+          }
+        });
+
+        setPendingItems(autoProcess);
+        setPendingReviewItems(needsReview);
       }
     } catch (error) {
       console.error('Error fetching pending items:', error);
