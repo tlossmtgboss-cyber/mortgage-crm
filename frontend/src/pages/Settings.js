@@ -1312,7 +1312,141 @@ const API_BASE_URL = isProduction
     }
   ];
 
+  // Gmail connection functions
+  const checkGmailStatus = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/gmail/status`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setGmailStatus(data);
+
+        // Update connected integrations
+        const newConnected = new Set(connectedIntegrations);
+        if (data.connected) {
+          newConnected.add('gmail');
+        } else {
+          newConnected.delete('gmail');
+        }
+        setConnectedIntegrations(newConnected);
+      }
+    } catch (error) {
+      console.error('Error checking Gmail status:', error);
+    }
+  };
+
+  const connectGmail = async () => {
+    setLoadingGmail(true);
+    try {
+      // Get auth URL from backend
+      const response = await fetch(`${API_BASE_URL}/api/v1/gmail/auth-url`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to get Gmail auth URL');
+      }
+
+      const data = await response.json();
+
+      // Open OAuth popup
+      const width = 600;
+      const height = 700;
+      const left = (window.screen.width / 2) - (width / 2);
+      const top = (window.screen.height / 2) - (height / 2);
+
+      const popup = window.open(
+        data.auth_url,
+        'Gmail Login',
+        `width=${width},height=${height},top=${top},left=${left}`
+      );
+
+      if (!popup) {
+        alert('Popup was blocked! Please allow popups for this site and try again.');
+        setLoadingGmail(false);
+        return;
+      }
+
+      // Listen for message from popup
+      const handleMessage = (event) => {
+        if (event.data && event.data.type === 'gmail_connected') {
+          window.removeEventListener('message', handleMessage);
+          setGmailStatus({
+            connected: true,
+            email: event.data.email,
+            connected_at: new Date().toISOString()
+          });
+
+          const newConnected = new Set(connectedIntegrations);
+          newConnected.add('gmail');
+          setConnectedIntegrations(newConnected);
+          setLoadingGmail(false);
+        }
+      };
+
+      window.addEventListener('message', handleMessage);
+
+      // Fallback check for popup close
+      const checkPopup = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(checkPopup);
+          setLoadingGmail(false);
+          checkGmailStatus();
+        }
+      }, 500);
+
+    } catch (error) {
+      console.error('Error connecting Gmail:', error);
+      alert('Failed to connect Gmail: ' + error.message);
+      setLoadingGmail(false);
+    }
+  };
+
+  const disconnectGmail = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/gmail/disconnect`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        setGmailStatus({
+          connected: false,
+          email: null,
+          connected_at: null
+        });
+
+        const newConnected = new Set(connectedIntegrations);
+        newConnected.delete('gmail');
+        setConnectedIntegrations(newConnected);
+      } else {
+        throw new Error('Failed to disconnect Gmail');
+      }
+    } catch (error) {
+      console.error('Error disconnecting Gmail:', error);
+      alert('Failed to disconnect Gmail');
+    }
+  };
+
   const toggleIntegration = (integrationId) => {
+    // Handle Gmail specially - use OAuth flow
+    if (integrationId === 'gmail') {
+      if (gmailStatus.connected) {
+        disconnectGmail();
+      } else {
+        connectGmail();
+      }
+      return;
+    }
+
     // Handle Outlook specially - use OAuth flow
     if (integrationId === 'outlook') {
       if (microsoftStatus.connected) {
@@ -1340,12 +1474,13 @@ const API_BASE_URL = isProduction
   );
 
   const featuredIntegrations = filteredIntegrations.filter(i =>
-    ['outlook', 'outlook-calendar', 'teams', 'zoom', 'docusign', 'calendly'].includes(i.id)
+    ['gmail', 'outlook', 'outlook-calendar', 'teams', 'zoom', 'docusign', 'calendly'].includes(i.id)
   );
 
   useEffect(() => {
     if (activeSection === 'integration-marketplace' || activeSection === 'outlook-email' || activeSection === 'outlook-calendar') {
       checkMicrosoftStatus();
+      checkGmailStatus();
     }
     if (activeSection === 'calendly' || activeSection === 'calendar-settings') {
       fetchCalendlyEventTypes();
