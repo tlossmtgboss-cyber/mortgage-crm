@@ -385,20 +385,41 @@ function WorkflowStagePage() {
 
               <div className="task-content">
                 {editingTask === task.id ? (
-                  <div className="task-edit-form">
-                    <input
-                      type="text"
-                      value={task.title}
-                      onChange={(e) => handleEditTask(task.id, 'title', e.target.value)}
-                      placeholder="Task title"
-                    />
-                    <textarea
-                      value={task.description}
-                      onChange={(e) => handleEditTask(task.id, 'description', e.target.value)}
-                      placeholder="Description"
-                      rows={2}
-                    />
-                    <div className="form-row">
+                  <div className="task-edit-form expanded">
+                    <div className="edit-form-group">
+                      <label>Owner</label>
+                      <select
+                        value={task.owner || ''}
+                        onChange={(e) => handleEditTask(task.id, 'owner', e.target.value)}
+                      >
+                        <option value="">Select Owner</option>
+                        <option value="loan_officer">Loan Officer</option>
+                        <option value="processor">Processor</option>
+                        <option value="underwriter">Underwriter</option>
+                        <option value="closer">Closer</option>
+                        <option value="system">System (Auto)</option>
+                      </select>
+                    </div>
+                    <div className="edit-form-group">
+                      <label>Task Name</label>
+                      <input
+                        type="text"
+                        value={task.title}
+                        onChange={(e) => handleEditTask(task.id, 'title', e.target.value)}
+                        placeholder="Task title"
+                      />
+                    </div>
+                    <div className="edit-form-group">
+                      <label>Description</label>
+                      <textarea
+                        value={task.description}
+                        onChange={(e) => handleEditTask(task.id, 'description', e.target.value)}
+                        placeholder="Detailed description of the task..."
+                        rows={4}
+                      />
+                    </div>
+                    <div className="edit-form-group">
+                      <label>Activation Trigger</label>
                       <select
                         value={task.auto_trigger}
                         onChange={(e) => handleEditTask(task.id, 'auto_trigger', e.target.value)}
@@ -407,13 +428,36 @@ function WorkflowStagePage() {
                           <option key={opt.value} value={opt.value}>{opt.label}</option>
                         ))}
                       </select>
-                      <input
-                        type="number"
-                        value={task.days_offset}
-                        onChange={(e) => handleEditTask(task.id, 'days_offset', parseInt(e.target.value) || 0)}
-                        min="0"
-                        placeholder="Days"
-                      />
+                    </div>
+                    <div className="edit-form-row">
+                      <div className="edit-form-group">
+                        <label>Days Offset</label>
+                        <input
+                          type="number"
+                          value={task.days_offset}
+                          onChange={(e) => handleEditTask(task.id, 'days_offset', parseInt(e.target.value) || 0)}
+                          min="0"
+                          placeholder="0"
+                        />
+                      </div>
+                      <div className="edit-form-group">
+                        <label>Time of Day</label>
+                        <select
+                          value={task.activation_time || '09:00'}
+                          onChange={(e) => handleEditTask(task.id, 'activation_time', e.target.value)}
+                        >
+                          <option value="08:00">8:00 AM</option>
+                          <option value="09:00">9:00 AM</option>
+                          <option value="10:00">10:00 AM</option>
+                          <option value="11:00">11:00 AM</option>
+                          <option value="12:00">12:00 PM</option>
+                          <option value="13:00">1:00 PM</option>
+                          <option value="14:00">2:00 PM</option>
+                          <option value="15:00">3:00 PM</option>
+                          <option value="16:00">4:00 PM</option>
+                          <option value="17:00">5:00 PM</option>
+                        </select>
+                      </div>
                     </div>
                     <button className="done-edit-btn" onClick={() => setEditingTask(null)}>
                       Done Editing

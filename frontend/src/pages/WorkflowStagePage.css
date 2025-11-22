@@ -439,15 +439,56 @@
   gap: 12px;
 }
 
+.task-edit-form.expanded {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 400px;
+  min-height: 450px;
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  border: 2px solid var(--stage-color, #3b82f6);
+  z-index: 100;
+}
+
+.edit-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.edit-form-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.edit-form-row {
+  display: flex;
+  gap: 12px;
+}
+
+.edit-form-row .edit-form-group {
+  flex: 1;
+}
+
 .task-edit-form input[type="text"],
+.task-edit-form input[type="number"],
 .task-edit-form textarea,
 .task-edit-form select {
-  padding: 8px 12px;
+  padding: 10px 12px;
   border: 1px solid #d1d5db;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 14px;
   width: 100%;
   box-sizing: border-box;
+}
+
+.task-edit-form textarea {
+  resize: vertical;
+  min-height: 80px;
 }
 
 .task-edit-form input:focus,
@@ -473,15 +514,17 @@
 }
 
 .done-edit-btn {
-  align-self: flex-start;
+  align-self: flex-end;
   background: #10b981;
   color: white;
   border: none;
-  padding: 6px 12px;
-  border-radius: 6px;
+  padding: 10px 20px;
+  border-radius: 8px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 500;
   transition: all 0.2s;
+  margin-top: 8px;
 }
 
 .done-edit-btn:hover {
