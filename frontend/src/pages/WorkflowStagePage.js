@@ -399,8 +399,8 @@ function WorkflowStagePage() {
   return (
     <div className="workflow-stage-page">
       <div className="stage-page-header" style={{ '--stage-color': stageConfig.color }}>
-        <button className="back-button" onClick={() => navigate('/settings')}>
-          ← Back to Settings
+        <button className="back-button" onClick={() => navigate(-1)}>
+          ← Back to Workflow Management
         </button>
         <div className="header-content">
           <h1>{stageConfig.name} Workflow</h1>

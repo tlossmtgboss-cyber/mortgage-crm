@@ -5,6 +5,7 @@ API endpoints for Gmail OAuth authentication and email operations.
 """
 
 from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from typing import Optional
 from datetime import datetime, timedelta
@@ -170,7 +171,7 @@ async def gmail_oauth_callback(
         logger.info(f"Gmail connected for user {user_id}: {gmail_info.get('email')}")
 
         # Return HTML that closes the popup and notifies parent
-        return f"""
+        html_content = f"""
         <html>
             <body>
                 <script>
@@ -188,6 +189,7 @@ async def gmail_oauth_callback(
             </body>
         </html>
         """
+        return HTMLResponse(content=html_content)
     except HTTPException:
         raise
     except Exception as e:
