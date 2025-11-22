@@ -3738,6 +3738,30 @@ app.include_router(market_data_router, tags=["Market Data"])
 from morning_checkin_routes import router as morning_checkin_router
 app.include_router(morning_checkin_router, tags=["Morning Check-in"])
 
+# Morning Check-in Migration Endpoint
+@app.post("/api/v1/migrations/add-morning-checkin")
+async def add_morning_checkin_migration(db: Session = Depends(get_db)):
+    """Run migration to add morning check-in tables"""
+    try:
+        import os
+        migration_path = os.path.join(os.path.dirname(__file__), "migrations", "add_morning_checkin.sql")
+
+        with open(migration_path, 'r') as f:
+            sql = f.read()
+
+        # Execute the SQL
+        for statement in sql.split(';'):
+            statement = statement.strip()
+            if statement:
+                db.execute(text(statement))
+
+        db.commit()
+        return {"status": "success", "message": "Morning check-in tables created successfully"}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 # ============================================================================
 # API KEY HELPER FUNCTIONS
 # ============================================================================
