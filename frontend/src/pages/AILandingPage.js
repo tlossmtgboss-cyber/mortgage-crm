@@ -686,82 +686,91 @@ function AILandingPage() {
     }
   };
 
-  const showDailyView = () => {
+  const showDailyView = async () => {
     addMessage("I'll show you your daily overview including all tasks, follow-ups, and reconciliation items scheduled for today.", 'assistant');
 
-    const tasks = [
-      {
-        id: 1,
-        title: 'Follow up on pre-approval',
-        client: 'Sarah Johnson',
-        stage: 'Pre-Approved',
-        priority: 'HIGH',
-        type: 'Follow-up Call',
-        source: 'Manual Priority',
-        owner: 'Loan Officer',
-        dateCreated: '11/9/2025, 10:30:00 AM',
-        details: 'Rate lock expires in 3 days - discuss extension options',
-        dueTime: 'Today 10:00 AM',
-        aiDraftedMessage: 'Hi Sarah,\n\nI wanted to reach out regarding your pre-approval...'
-      },
-      {
-        id: 2,
-        title: 'Upload missing documents',
-        client: 'Mike Chen',
-        stage: 'Processing',
-        priority: 'MEDIUM',
-        type: 'Document Upload',
-        source: 'System Alert',
-        owner: 'Loan Officer',
-        dateCreated: '11/8/2025, 2:15:00 PM',
-        details: 'Need W-2s and bank statements for underwriting',
-        dueTime: 'Today 2:00 PM'
-      },
-      {
-        id: 3,
-        title: 'Schedule appraisal',
-        client: 'Emily Davis',
-        stage: 'Application Complete',
-        priority: 'MEDIUM',
-        type: 'Scheduling',
-        source: 'Workflow',
-        owner: 'Loan Officer',
-        dateCreated: '11/7/2025, 9:00:00 AM',
-        details: 'Property at 123 Oak Street ready for appraisal',
-        dueTime: 'Today 4:00 PM'
-      },
-      {
-        id: 4,
-        title: 'Appraisal delay',
-        client: 'John Smith',
-        stage: 'Underwriting',
-        priority: 'HIGH',
-        type: 'Milestone Alert',
-        source: 'System Alert',
-        owner: 'Loan Officer',
-        dateCreated: '11/10/2025, 8:00:00 AM',
-        details: 'Appraisal came in $15K below purchase price'
-      },
-      {
-        id: 5,
-        title: 'Insurance missing',
-        client: 'Jane Doe',
-        stage: 'Clear to Close',
-        priority: 'HIGH',
-        type: 'Milestone Alert',
-        source: 'System Alert',
-        owner: 'Loan Officer',
-        dateCreated: '11/10/2025, 10:00:00 AM',
-        details: 'Need homeowners insurance binder before closing'
+    try {
+      // Query real tasks from the API
+      const response = await aiAPI.processCommand("Show me my tasks for today", {
+        session_id: sessionId,
+        conversation_context: conversationHistory.slice(-5)
+      });
+
+      if (response.intent === 'DAILY_VIEW' && response.data) {
+        showDailyViewWithData(response.data, null);
+        return;
       }
-    ];
 
-    setTaskListData(tasks);
-    setSelectedTask(tasks[0]);
+      // Fallback: fetch tasks from dashboard API
+      const API_URL = process.env.REACT_APP_API_URL || '';
+      const dashboardResponse = await fetch(`${API_URL}/api/v1/dashboard`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
 
-    setTimeout(() => {
-      addMessage("Here are your tasks for today. Complete these items and come back to let me know when you're done - I'll help you with the next steps!", 'assistant');
-    }, 500);
+      if (dashboardResponse.ok) {
+        const dashboardData = await dashboardResponse.json();
+        const realTasks = [];
+        let taskId = 1;
+
+        // Convert prioritized tasks to task format
+        if (dashboardData.prioritized_tasks) {
+          dashboardData.prioritized_tasks.forEach(task => {
+            realTasks.push({
+              id: taskId++,
+              title: task.title,
+              client: task.borrower || 'Unknown',
+              stage: task.stage || 'In Progress',
+              priority: task.urgency === 'critical' ? 'HIGH' : task.urgency === 'high' ? 'HIGH' : 'MEDIUM',
+              type: 'Priority Task',
+              source: 'Dashboard',
+              owner: 'Loan Officer',
+              dateCreated: new Date().toLocaleString(),
+              details: task.ai_action || task.description || '',
+              dueTime: 'Today',
+              aiDraftedMessage: task.ai_action ? `Hi ${task.borrower?.split(' ')[0] || 'there'},\n\nI wanted to reach out regarding ${task.title.toLowerCase()}...` : null
+            });
+          });
+        }
+
+        // Add AI tasks
+        if (dashboardData.ai_tasks?.pending) {
+          dashboardData.ai_tasks.pending.forEach(task => {
+            realTasks.push({
+              id: taskId++,
+              title: task.title || task.description,
+              client: task.client_name || 'System Task',
+              stage: task.status || 'Pending',
+              priority: task.priority || 'MEDIUM',
+              type: 'AI Task',
+              source: 'AI System',
+              owner: 'Loan Officer',
+              dateCreated: task.created_at || new Date().toLocaleString(),
+              details: task.description || '',
+              dueTime: task.due_date || 'Today'
+            });
+          });
+        }
+
+        if (realTasks.length > 0) {
+          setTaskListData(realTasks);
+          setSelectedTask(realTasks[0]);
+          setTimeout(() => {
+            addMessage(`Found ${realTasks.length} tasks for today. Complete these items and come back to let me know when you're done - I'll help you with the next steps!`, 'assistant');
+          }, 500);
+          return;
+        }
+      }
+
+      // If no real tasks found, show message
+      addMessage("No tasks found for today. Great job staying on top of things! Ask me 'what's next?' to find new opportunities.", 'assistant');
+
+    } catch (error) {
+      console.error('Error fetching daily tasks:', error);
+      addMessage("I couldn't fetch your tasks right now. Please try again or check your connection.", 'assistant');
+    }
   };
 
   const showEmailCampaign = () => {

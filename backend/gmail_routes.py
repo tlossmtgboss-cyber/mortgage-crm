@@ -426,6 +426,7 @@ async def sync_emails(
         from sqlalchemy import text
 
         processed_count = 0
+        errors = []
         for email in emails:
             try:
                 email_id = email.get("id", "")
@@ -464,16 +465,21 @@ async def sync_emails(
                 }
 
                 result = await process_microsoft_email_to_dre(email_data, current_user.id, db)
-                if result.get("status") != "skipped":
+                if result.get("status") == "error":
+                    errors.append(f"{email_id}: {result.get('error', 'unknown')}")
+                elif result.get("status") != "skipped":
                     processed_count += 1
 
             except Exception as e:
-                logger.warning(f"Error processing email {email.get('id', 'unknown')}: {e}")
+                logger.error(f"Error processing email {email.get('id', 'unknown')}: {e}")
+                errors.append(f"{email.get('id', 'unknown')}: {str(e)}")
                 continue
 
         return {
             "synced_count": len(emails),
             "processed_count": processed_count,
+            "user_id": current_user.id,
+            "errors": errors if errors else None,
             "emails": emails
         }
 
