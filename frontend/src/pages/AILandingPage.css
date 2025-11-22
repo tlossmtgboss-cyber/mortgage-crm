@@ -51,6 +51,25 @@
   color: #2c3e50;
 }
 
+.ai-clear-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  cursor: pointer;
+  color: #6c7a89;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.ai-clear-btn:hover {
+  background: rgba(231, 76, 60, 0.2);
+  color: #e74c3c;
+}
+
 .ai-close-sidebar-btn {
   width: 32px;
   height: 32px;
