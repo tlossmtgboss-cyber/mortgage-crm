@@ -4441,55 +4441,54 @@ async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Ses
             fields = extract_loan_fields(content, classification["category"]) if classification["category"] != "unrelated" and classification["confidence"] >= 0.3 else {}
             avg_confidence = classification["confidence"]
 
-        # More lenient extraction - lower confidence threshold and allow emails with no fields
-        # This ensures all emails appear in Reconciliation for user review and AI learning
-        if classification["category"] != "unrelated" and classification.get("confidence", 0) >= 0.3:
-            if not fields:
-                # Extract fields if not already done (OpenAI path)
-                fields = extract_loan_fields(content, classification["category"])
+        # Create ExtractedData for ALL emails so they appear in Reconciliation
+        # Users can review, dismiss, or manually categorize any email
+        if not fields and classification["category"] != "unrelated":
+            # Extract fields if not already done (OpenAI path)
+            fields = extract_loan_fields(content, classification["category"])
 
-            # Create extracted_data even if no fields found - user can manually review
-            # Handle different confidence formats (Claude vs OpenAI)
-            if ai_provider == "claude":
-                # Claude already calculated avg_confidence
-                # Confidence is already set from parsed_result (0-1 scale)
-                pass
-            else:
-                # Legacy OpenAI format - fields contain {"confidence": ...} dicts
-                confidences = [field.get("confidence", 0.0) for field in fields.values()] if fields else []
-                avg_confidence = sum(confidences) / len(confidences) if confidences else classification["confidence"]
+        # Handle different confidence formats (Claude vs OpenAI)
+        if ai_provider == "claude":
+            # Claude already calculated avg_confidence
+            pass
+        else:
+            # Legacy OpenAI format - fields contain {"confidence": ...} dicts
+            confidences = [field.get("confidence", 0.0) for field in fields.values()] if fields else []
+            avg_confidence = sum(confidences) / len(confidences) if confidences else classification["confidence"]
 
-            entity_match = match_entity(fields, db, user_id) if fields else {"entity_type": None, "entity_id": None, "confidence": 0.0}
+        entity_match = match_entity(fields, db, user_id) if fields else {"entity_type": None, "entity_id": None, "confidence": 0.0}
 
-            # Determine status based on confidence
-            status = "needs_review"  # Default to needs_review for safety
-            if fields and avg_confidence > 0.85 and entity_match["confidence"] > 0.90:
-                status = "auto_approved"
-            elif fields and avg_confidence >= 0.60 and entity_match["confidence"] >= 0.50:
-                status = "pending_review"
-            # Everything else stays as needs_review
+        # Determine status based on confidence and category
+        status = "needs_review"  # Default to needs_review for safety
+        if classification["category"] == "unrelated":
+            status = "needs_review"  # All unrelated emails need review
+        elif fields and avg_confidence > 0.85 and entity_match["confidence"] > 0.90:
+            status = "auto_approved"
+        elif fields and avg_confidence >= 0.60 and entity_match["confidence"] >= 0.50:
+            status = "pending_review"
+        # Everything else stays as needs_review
 
-            extracted = ExtractedData(
-                event_id=db_event.id,
-                category=classification["category"],
-                subcategory=classification.get("subcategory"),
-                fields=fields or {},  # Use empty dict if no fields
-                match_entity_type=entity_match["entity_type"],
-                match_entity_id=entity_match["entity_id"],
-                match_confidence=entity_match["confidence"],
-                ai_confidence=avg_confidence,
-                status=status
-            )
-            db.add(extracted)
-            db_event.processed = True
-            db.commit()
+        extracted = ExtractedData(
+            event_id=db_event.id,
+            category=classification["category"],
+            subcategory=classification.get("subcategory"),
+            fields=fields or {},  # Use empty dict if no fields
+            match_entity_type=entity_match["entity_type"],
+            match_entity_id=entity_match["entity_id"],
+            match_confidence=entity_match["confidence"],
+            ai_confidence=avg_confidence,
+            status=status
+        )
+        db.add(extracted)
+        db_event.processed = True
+        db.commit()
 
-            # Auto-apply if high confidence
-            if status == "auto_approved":
-                if apply_extracted_data(extracted, db):
-                    extracted.status = "applied"
-                    db.commit()
-                    logger.info(f"Auto-applied extraction from email {db_event.id}")
+        # Auto-apply if high confidence
+        if status == "auto_approved":
+            if apply_extracted_data(extracted, db):
+                extracted.status = "applied"
+                db.commit()
+                logger.info(f"Auto-applied extraction from email {db_event.id}")
 
         return {"status": "success", "event_id": db_event.id}
 
