@@ -160,19 +160,50 @@ function ReconciliationCenter() {
         setSyncStatus('Syncing emails...');
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/sync-now`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+      const token = localStorage.getItem('token');
+
+      // Check which email service is connected
+      const gmailStatus = await fetch(`${API_BASE_URL}/api/v1/gmail/status`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      }).then(r => r.ok ? r.json() : null).catch(() => null);
+
+      const microsoftStatus = await fetch(`${API_BASE_URL}/api/v1/microsoft/status`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      }).then(r => r.ok ? r.json() : null).catch(() => null);
+
+      let response;
+      let syncEndpoint;
+
+      if (gmailStatus?.connected) {
+        // Use Gmail sync
+        syncEndpoint = `${API_BASE_URL}/api/v1/gmail/sync`;
+        response = await fetch(syncEndpoint, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+      } else if (microsoftStatus?.connected) {
+        // Use Microsoft sync
+        syncEndpoint = `${API_BASE_URL}/api/v1/microsoft/sync-now`;
+        response = await fetch(syncEndpoint, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+      } else {
+        // No email service connected
+        if (!silent) {
+          setSyncStatus('⚠ No email service connected. Go to Settings to connect Gmail or Microsoft 365.');
+          setTimeout(() => setSyncStatus(''), 5000);
         }
-      });
+        return;
+      }
 
       if (response.ok) {
         const data = await response.json();
         setLastSyncTime(new Date());
 
         if (!silent) {
-          setSyncStatus(`✓ Synced ${data.processed_count} emails successfully`);
+          const count = data.processed_count || data.synced_count || 0;
+          setSyncStatus(`✓ Synced ${count} emails successfully`);
           // Refresh both pending and completed items to show new data
           fetchPendingItems();
           fetchCompletedItems();
