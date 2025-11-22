@@ -1052,20 +1052,37 @@ function AILandingPage() {
             <p>Ask me anything about your CRM data, clients, or tasks. I'll handle the rest.</p>
 
             <div className="ai-example-prompts-new">
-              <button onClick={() => handleExamplePrompt('What do I need to do today?')}>
-                What do I need to do today?
+              <button onClick={() => handleExamplePrompt('Daily Briefing - Get my top 3 priorities for today')}>
+                <strong>Daily Briefing</strong>
+                <span>Get your top 3 priorities for today</span>
               </button>
-              <button onClick={() => handleExamplePrompt('Send an email to all mortgages under management clients about the All In One loan')}>
-                Send an email to all mortgages under management clients about the All In One loan
+              <button onClick={() => handleExamplePrompt('Pipeline Audit - Identify bottlenecks and stalled deals')}>
+                <strong>Pipeline Audit</strong>
+                <span>Identify bottlenecks and stalled deals</span>
               </button>
-              <button onClick={() => handleExamplePrompt('Update all deals in underwriting to include the new appraisal waiver guidelines')}>
-                Update all deals in underwriting to include the new appraisal waiver guidelines
+              <button onClick={() => handleExamplePrompt('Focus Reset - Help me get back on track')}>
+                <strong>Focus Reset</strong>
+                <span>Get back on track when scattered</span>
               </button>
-              <button onClick={() => handleExamplePrompt('Call my top 10 referral partners and leave a voicemail thanking them for Q4')}>
-                Call my top 10 referral partners and leave a voicemail thanking them for Q4
+              <button onClick={() => handleExamplePrompt('What should I do next?')}>
+                <strong>What Should I Do Next?</strong>
+                <span>Priority decision guidance</span>
               </button>
-              <button onClick={() => handleExamplePrompt('Generate a pipeline report for deals closing this month and send to my team')}>
-                Generate a pipeline report for deals closing this month and send to my team
+              <button onClick={() => handleExamplePrompt('Accountability Review - Review my performance')}>
+                <strong>Accountability Review</strong>
+                <span>Review your performance</span>
+              </button>
+              <button onClick={() => handleExamplePrompt('Tough Love Mode - Call out my inefficiencies directly')}>
+                <strong>Tough Love Mode</strong>
+                <span>Call out inefficiencies directly</span>
+              </button>
+              <button onClick={() => handleExamplePrompt('Teach Me The Process - Help me learn systemic thinking')}>
+                <strong>Teach Me The Process</strong>
+                <span>Learn systemic thinking and execution</span>
+              </button>
+              <button onClick={() => handleExamplePrompt('I have a question')}>
+                <strong>Ask a Question</strong>
+                <span>Get specific tactical advice</span>
               </button>
             </div>
           </div>
@@ -1150,11 +1167,11 @@ function AILandingPage() {
           />
         )}
 
-        {/* Right Pane - Answers/Chat */}
+        {/* Right Pane - Answers Only */}
         {messages.length > 0 && (
           <div className="ai-right-pane" style={{ width: `${100 - dividerPosition}%` }}>
             <div className="ai-messages-area" ref={chatAreaRef}>
-              {messages.map(message => (
+              {messages.filter(message => message.type === 'assistant').map(message => (
                 <div key={message.id} className={`ai-message-new ai-message-${message.type}`}>
                   {message.isSpecialContent ? (
                     renderSpecialContent(message)

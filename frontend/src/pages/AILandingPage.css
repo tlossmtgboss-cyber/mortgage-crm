@@ -201,10 +201,22 @@
   border: 1px solid #e8ecf1;
   border-radius: 10px;
   cursor: pointer;
-  font-size: 13px;
-  color: #2c3e50;
   text-align: left;
   transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ai-example-prompts-new button strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.ai-example-prompts-new button span {
+  font-size: 12px;
+  color: #6b7280;
 }
 
 .ai-example-prompts-new button:hover {
