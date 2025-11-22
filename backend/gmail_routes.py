@@ -12,8 +12,53 @@ import logging
 import json
 
 from database import get_db
-from auth import get_current_user
 from models import User
+import os
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+security = HTTPBearer(auto_error=False)
+
+# Auth dependency
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+) -> User:
+    """Get current user from JWT token."""
+    from jose import jwt
+
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    try:
+        token = credentials.credentials
+        secret = os.getenv("JWT_SECRET", "your-secret-key")
+        payload = jwt.decode(token, secret, algorithms=["HS256"])
+        email = payload.get("sub")
+
+        if not email:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        from sqlalchemy import text
+        result = db.execute(text("SELECT * FROM users WHERE email = :email"), {"email": email})
+        user_row = result.fetchone()
+
+        if not user_row:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Return user object
+        user = User(
+            id=user_row[0],
+            email=user_row[1] if len(user_row) > 1 else email,
+            name=user_row[2] if len(user_row) > 2 else email.split("@")[0]
+        )
+        return user
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.error(f"Auth error: {e}")
+        raise HTTPException(status_code=401, detail="Authentication failed")
+
 from integrations.google_gmail import gmail_service
 
 logger = logging.getLogger(__name__)
