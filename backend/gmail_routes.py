@@ -24,6 +24,7 @@ async def get_current_user(
 ):
     """Get current user from JWT token."""
     from jose import jwt
+    from sqlalchemy import text
 
     if not credentials:
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -37,12 +38,34 @@ async def get_current_user(
         if not email:
             raise HTTPException(status_code=401, detail="Invalid token")
 
-        user = db.query(User).filter(User.email == email).first()
+        # Get user with settings
+        result = db.execute(
+            text("SELECT id, email, name, settings FROM users WHERE email = :email"),
+            {"email": email}
+        )
+        user_row = result.fetchone()
 
-        if not user:
+        if not user_row:
             raise HTTPException(status_code=404, detail="User not found")
 
-        return user
+        # Create a proxy object to hold user data
+        class UserProxy:
+            def __init__(self, row, session):
+                self.id = row[0]
+                self.email = row[1]
+                self.name = row[2]
+                self.settings = row[3] if row[3] else {}
+                self._db = session
+
+            def save_settings(self):
+                """Save settings back to database"""
+                self._db.execute(
+                    text("UPDATE users SET settings = :settings WHERE id = :id"),
+                    {"settings": json.dumps(self.settings), "id": self.id}
+                )
+                self._db.commit()
+
+        return UserProxy(user_row, db)
 
     except HTTPException:
         raise
