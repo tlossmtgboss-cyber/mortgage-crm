@@ -105,7 +105,7 @@ async def create_ai_authorization(
     # Check if authorization already exists
     existing = db.execute(text("""
         SELECT authorization_id FROM ai_task_type_authorizations
-        WHERE user_id = :user_id AND workflow_id = :workflow_id
+        WHERE user_id::text = :user_id AND workflow_id::text = :workflow_id
     """), {"user_id": user_id, "workflow_id": auth_data.workflow_id}).fetchone()
     
     if existing:
@@ -205,7 +205,7 @@ async def revoke_ai_authorization(
     # Verify authorization exists and belongs to user
     auth = db.execute(text("""
         SELECT authorization_id FROM ai_task_type_authorizations
-        WHERE authorization_id = :auth_id AND user_id = :user_id
+        WHERE authorization_id::text = :auth_id AND user_id::text = :user_id
     """), {"auth_id": authorization_id, "user_id": user_id}).fetchone()
     
     if not auth:
@@ -272,7 +272,7 @@ async def pause_ai_authorization(
     db.execute(text("""
         UPDATE ai_task_type_authorizations
         SET authorization_status = 'paused', updated_at = NOW()
-        WHERE authorization_id = :auth_id AND user_id = :user_id
+        WHERE authorization_id::text = :auth_id AND user_id::text = :user_id
     """), {"auth_id": authorization_id, "user_id": user_id})
     
     db.commit()
@@ -291,7 +291,7 @@ async def resume_ai_authorization(
     # Get current training progress
     auth = db.execute(text("""
         SELECT training_progress_count FROM ai_task_type_authorizations
-        WHERE authorization_id = :auth_id AND user_id = :user_id
+        WHERE authorization_id::text = :auth_id AND user_id::text = :user_id
     """), {"auth_id": authorization_id, "user_id": user_id}).fetchone()
     
     if not auth:
@@ -458,7 +458,7 @@ async def get_ai_audit_log(
     user_id = str(current_user.id)
     
     # Build query
-    conditions = ["al.user_id = :user_id"]
+    conditions = ["al.user_id::text = :user_id"]
     params = {"user_id": user_id, "limit": limit, "offset": offset}
     
     if action_type:
@@ -551,7 +551,7 @@ async def get_ai_costs(
             COALESCE(AVG(amount), 0) as avg_cost_per_task,
             COALESCE(SUM(tokens_used), 0) as total_tokens
         FROM ai_cost_tracking
-        WHERE user_id = :user_id 
+        WHERE user_id::text = :user_id
         AND period_month = :month 
         AND period_year = :year
     """), {"user_id": user_id, "month": target_month, "year": target_year}).fetchone()
@@ -565,7 +565,7 @@ async def get_ai_costs(
             AVG(ct.amount) as avg_cost
         FROM ai_cost_tracking ct
         LEFT JOIN ai_task_type_authorizations ata ON ct.authorization_id = ata.authorization_id
-        WHERE ct.user_id = :user_id 
+        WHERE ct.user_id::text = :user_id
         AND ct.period_month = :month 
         AND ct.period_year = :year
         GROUP BY ata.task_type_name
@@ -639,7 +639,7 @@ async def get_ai_performance(
             AVG(confidence_score) as avg_confidence,
             SUM(execution_time_ms) / 1000.0 / 3600.0 as total_hours_saved
         FROM ai_audit_log
-        WHERE user_id = :user_id 
+        WHERE user_id::text = :user_id
         AND action_type = 'auto_complete'
         AND timestamp >= :date_from
     """), {"user_id": user_id, "date_from": date_from}).fetchone()
@@ -661,7 +661,7 @@ async def get_ai_performance(
             AVG(al.confidence_score) as avg_confidence
         FROM ai_audit_log al
         JOIN ai_task_type_authorizations ata ON al.authorization_id = ata.authorization_id
-        WHERE al.user_id = :user_id
+        WHERE al.user_id::text = :user_id
         AND al.action_type = 'auto_complete'
         AND al.timestamp >= :date_from
         GROUP BY ata.task_type_name
@@ -729,7 +729,7 @@ async def get_rollback_states(
     # Verify authorization belongs to user
     auth = db.execute(text("""
         SELECT authorization_id FROM ai_task_type_authorizations
-        WHERE authorization_id = :auth_id AND user_id = :user_id
+        WHERE authorization_id::text = :auth_id AND user_id::text = :user_id
     """), {"auth_id": authorization_id, "user_id": user_id}).fetchone()
     
     if not auth:
@@ -784,7 +784,7 @@ async def rollback_ai_state(
     # Get current authorization
     current_auth = db.execute(text("""
         SELECT * FROM ai_task_type_authorizations
-        WHERE authorization_id = :auth_id AND user_id = :user_id
+        WHERE authorization_id::text = :auth_id AND user_id::text = :user_id
     """), {"auth_id": authorization_id, "user_id": user_id}).fetchone()
     
     if not current_auth:
@@ -873,7 +873,7 @@ async def delegate_task_to_ai(
     # Check for existing authorization
     authorization = db.execute(text("""
         SELECT * FROM ai_task_type_authorizations
-        WHERE user_id = :user_id AND workflow_id = :workflow_id
+        WHERE user_id::text = :user_id AND workflow_id::text = :workflow_id
     """), {"user_id": user_id, "workflow_id": task.workflow_id}).fetchone()
     
     if not authorization:
