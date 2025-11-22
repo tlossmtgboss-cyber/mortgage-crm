@@ -121,6 +121,14 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
           >
             Market
           </Link>
+          {(userRole === 'management' || userRole === 'admin') && (
+            <Link
+              to="/profitability"
+              className={`nav-link ${isActive('/profitability') ? 'active' : ''}`}
+            >
+              Profitability
+            </Link>
+          )}
         </div>
 
         <div className="nav-actions">
