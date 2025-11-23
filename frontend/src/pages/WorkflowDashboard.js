@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import TaskWorkflowManager from '../components/TaskWorkflowManager';
 import './WorkflowDashboard.css';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://mortgage-crm-production-7a9a.up.railway.app';
@@ -138,6 +139,12 @@ function WorkflowDashboard() {
         >
           Last Mile
         </button>
+        <button
+          className={activeTab === 'configure' ? 'active' : ''}
+          onClick={() => setActiveTab('configure')}
+        >
+          Configure
+        </button>
       </div>
 
       {/* Tab Content */}
@@ -206,6 +213,10 @@ function WorkflowDashboard() {
 
         {activeTab === 'last-mile' && (
           <LastMileTracker />
+        )}
+
+        {activeTab === 'configure' && (
+          <TaskWorkflowManager />
         )}
       </div>
     </div>
