@@ -3190,7 +3190,7 @@ async def get_lead_context_for_ai(
     # Get activities/contact history
     activities = db.execute(
         text("""
-            SELECT activity_type, description, created_at
+            SELECT type, content, created_at
             FROM activities
             WHERE lead_id = :lead_id
             ORDER BY created_at DESC
@@ -3204,18 +3204,6 @@ async def get_lead_context_for_ai(
         text("""
             SELECT title, status, due_date, priority, created_at
             FROM tasks
-            WHERE lead_id = :lead_id
-            ORDER BY created_at DESC
-            LIMIT 10
-        """),
-        {"lead_id": lead_id}
-    ).fetchall()
-
-    # Get notes
-    notes = db.execute(
-        text("""
-            SELECT content, created_at
-            FROM notes
             WHERE lead_id = :lead_id
             ORDER BY created_at DESC
             LIMIT 10
@@ -3242,7 +3230,7 @@ async def get_lead_context_for_ai(
         "contact_history": [
             {
                 "type": a[0],
-                "description": a[1],
+                "content": a[1],
                 "date": a[2].isoformat() if a[2] else None
             }
             for a in activities
@@ -3255,13 +3243,6 @@ async def get_lead_context_for_ai(
                 "priority": t[3]
             }
             for t in tasks
-        ],
-        "notes": [
-            {
-                "content": n[0],
-                "date": n[1].isoformat() if n[1] else None
-            }
-            for n in notes
         ],
         "timeline_summary": f"Lead created {lead.created_at.strftime('%Y-%m-%d') if lead.created_at else 'N/A'}, currently in {lead.stage} stage with {len(activities)} recorded activities"
     }
