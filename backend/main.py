@@ -3257,7 +3257,7 @@ async def get_loan_context_for_ai(
     """Return complete loan context for AI queries"""
     loan = db.query(Loan).filter(
         Loan.id == loan_id,
-        Loan.user_id == current_user.id
+        Loan.loan_officer_id == current_user.id
     ).first()
     if not loan:
         raise HTTPException(status_code=404, detail="Loan not found")
