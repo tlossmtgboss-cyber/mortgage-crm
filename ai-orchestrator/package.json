@@ -1,0 +1,28 @@
+{
+  "name": "ai-orchestrator",
+  "version": "1.0.0",
+  "description": "AI Genius Smart Assistant Orchestrator for Mortgage CRM",
+  "main": "dist/ai/orchestrator/smartAssistant.js",
+  "types": "dist/ai/orchestrator/smartAssistant.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "ts-node src/ai/orchestrator/smartAssistant.ts",
+    "test": "ts-node src/ai/eval/harness.ts",
+    "lint": "eslint src --ext .ts"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "openai": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
