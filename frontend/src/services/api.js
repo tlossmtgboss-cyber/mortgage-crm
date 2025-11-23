@@ -306,12 +306,10 @@ export const aiAPI = {
     return ensureArray(response.data, 'suggestions');
   },
   processCommand: async (message, context = {}) => {
-    const response = await api.post('/api/v1/ai/process-command', {
+    const response = await api.post('/api/v1/ai/smart-chat', {
       message,
-      session_id: context.session_id || null,
-      conversation_context: context.conversation_context || [],
-      action_context: context.action_context || {},
-      current_state: context.current_state || {},
+      include_context: true,
+      context_type: 'general',
     });
     return response.data;
   },
