@@ -690,20 +690,6 @@ function ReconciliationCenter() {
               </div>
             )}
           </div>
-          <div className="header-stats">
-            <div className="stat-card">
-              <div className="stat-value">{pendingItems.length}</div>
-              <div className="stat-label">Pending Review</div>
-            </div>
-            <div className="stat-card">
-              <div className="stat-value">{selectedItems.size}/20</div>
-              <div className="stat-label">Selected</div>
-            </div>
-            <div className="stat-card progress-card">
-              <div className="stat-value">{approvalProgress.approved}/{approvalProgress.total}</div>
-              <div className="stat-label">Approved Today</div>
-            </div>
-          </div>
         </div>
 
         {/* Bulk Actions Bar - only show for pending tab */}
