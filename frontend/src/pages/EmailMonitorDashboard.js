@@ -90,17 +90,17 @@ const EmailMonitorDashboard = () => {
     setLoading(true);
     try {
       const [statsRes, emailsRes, logRes, whitelistRes, blacklistRes] = await Promise.all([
-        api.get('/email-monitor/stats'),
-        api.get('/email-monitor/captured', {
+        api.get('/api/v1/email-monitor/stats'),
+        api.get('/api/v1/email-monitor/captured', {
           params: {
             provider: providerFilter || undefined,
             status: statusFilter || undefined,
             limit: 50
           }
         }),
-        api.get('/email-monitor/analysis-log', { params: { limit: 100 } }),
-        api.get('/email-monitor/whitelist'),
-        api.get('/email-monitor/blacklist')
+        api.get('/api/v1/email-monitor/analysis-log', { params: { limit: 100 } }),
+        api.get('/api/v1/email-monitor/whitelist'),
+        api.get('/api/v1/email-monitor/blacklist')
       ]);
 
       setStats(statsRes.data);
@@ -120,7 +120,7 @@ const EmailMonitorDashboard = () => {
   const handleTestAnalysis = async () => {
     setTestLoading(true);
     try {
-      const response = await api.post('/email-monitor/test-analysis', testForm);
+      const response = await api.post('/api/v1/email-monitor/test-analysis', testForm);
       setTestResult(response.data);
     } catch (err) {
       setError('Test analysis failed');
@@ -131,7 +131,7 @@ const EmailMonitorDashboard = () => {
 
   const handleAddWhitelist = async () => {
     try {
-      await api.post('/email-monitor/whitelist', whitelistForm);
+      await api.post('/api/v1/email-monitor/whitelist', whitelistForm);
       setWhitelistDialogOpen(false);
       setWhitelistForm({ email_pattern: '', description: '', whitelist_type: 'email', auto_assign_category: '' });
       fetchData();
@@ -151,7 +151,7 @@ const EmailMonitorDashboard = () => {
 
   const handleAddBlacklist = async () => {
     try {
-      await api.post('/email-monitor/blacklist', blacklistForm);
+      await api.post('/api/v1/email-monitor/blacklist', blacklistForm);
       setBlacklistDialogOpen(false);
       setBlacklistForm({ email_pattern: '', description: '', blacklist_type: 'email', reason: '' });
       fetchData();
