@@ -4354,6 +4354,21 @@ async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Ses
         raw_html = body.get("content", "") if body.get("contentType") == "html" else None
         raw_text = body.get("content", "") if body.get("contentType") == "text" else None
 
+        # Parse received_at - handle both ISO format (Microsoft) and RFC 2822 (Gmail)
+        parsed_received_at = datetime.now(timezone.utc)
+        if received_at:
+            try:
+                # Try ISO format first (Microsoft Graph)
+                parsed_received_at = datetime.fromisoformat(received_at.replace('Z', '+00:00'))
+            except ValueError:
+                try:
+                    # Try RFC 2822 format (Gmail)
+                    from email.utils import parsedate_to_datetime
+                    parsed_received_at = parsedate_to_datetime(received_at)
+                except Exception:
+                    logger.warning(f"Could not parse date: {received_at}")
+                    parsed_received_at = datetime.now(timezone.utc)
+
         # Create incoming data event
         db_event = IncomingDataEvent(
             source="microsoft365",
@@ -4363,7 +4378,7 @@ async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Ses
             subject=subject,
             sender=sender,
             recipients=recipients,
-            received_at=datetime.fromisoformat(received_at.replace('Z', '+00:00')) if received_at else datetime.now(timezone.utc),
+            received_at=parsed_received_at,
             user_id=user_id,
             processed=False
         )
