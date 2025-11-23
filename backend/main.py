@@ -3274,9 +3274,9 @@ async def get_loan_context_for_ai(
     current_user: User = Depends(get_current_user_flexible)
 ):
     """Return complete loan context for AI queries"""
-    loan = db.query(ActiveLoanProfile).filter(
-        ActiveLoanProfile.id == loan_id,
-        ActiveLoanProfile.user_id == current_user.id
+    loan = db.query(Loan).filter(
+        Loan.id == loan_id,
+        Loan.user_id == current_user.id
     ).first()
     if not loan:
         raise HTTPException(status_code=404, detail="Loan not found")
@@ -3319,13 +3319,14 @@ async def get_loan_context_for_ai(
 
     return {
         "loan_id": loan.id,
+        "loan_number": loan.loan_number,
         "borrower_name": loan.borrower_name,
         "property_address": loan.property_address,
-        "current_stage": loan.stage,
+        "current_stage": loan.stage.value if loan.stage else None,
         "loan_type": loan.loan_type,
         "loan_amount": loan.amount,
-        "interest_rate": loan.interest_rate,
-        "lock_expiration": loan.lock_expiration.isoformat() if loan.lock_expiration else None,
+        "interest_rate": loan.rate,
+        "lock_date": loan.lock_date.isoformat() if loan.lock_date else None,
         "closing_date": loan.closing_date.isoformat() if loan.closing_date else None,
         "processor": loan.processor,
         "underwriter": loan.underwriter,
@@ -3356,8 +3357,8 @@ async def get_loan_context_for_ai(
             }
             for a in alerts
         ],
-        "days_in_stage": (datetime.now(timezone.utc) - loan.created_at).days if loan.created_at else 0,
-        "timeline_summary": f"Loan for {loan.borrower_name} at {loan.property_address}, currently in {loan.stage} stage"
+        "days_in_stage": loan.days_in_stage or 0,
+        "timeline_summary": f"Loan {loan.loan_number} for {loan.borrower_name} at {loan.property_address}, currently in {loan.stage.value if loan.stage else 'Unknown'} stage"
     }
 
 
@@ -3378,9 +3379,9 @@ async def get_client_context_for_ai(
     # Get client activities
     activities = db.execute(
         text("""
-            SELECT activity_type, description, created_at
+            SELECT type, content, created_at
             FROM activities
-            WHERE client_id = :client_id
+            WHERE mum_client_id = :client_id
             ORDER BY created_at DESC
             LIMIT 20
         """),
@@ -3391,39 +3392,38 @@ async def get_client_context_for_ai(
     tasks = db.execute(
         text("""
             SELECT title, status, due_date, priority
-            FROM tasks
-            WHERE client_id = :client_id
+            FROM ai_tasks
+            WHERE mum_client_id = :client_id
             ORDER BY created_at DESC
             LIMIT 10
         """),
         {"client_id": client_id}
     ).fetchall()
 
-    # Calculate equity and refinance potential
-    current_value = client.current_value or client.appraisal_value or 0
+    # Get loan balance
     loan_balance = client.loan_balance or 0
-    equity = current_value - loan_balance
-    equity_percent = (equity / current_value * 100) if current_value > 0 else 0
 
     return {
         "client_id": client.id,
-        "name": client.borrower_name,
+        "name": client.name,
         "email": client.email,
         "phone": client.phone,
-        "property_address": client.property_address,
-        "original_loan_date": client.original_loan_date.isoformat() if client.original_loan_date else None,
-        "loan_type": client.loan_type,
-        "current_rate": client.interest_rate,
+        "loan_number": client.loan_number,
+        "original_close_date": client.original_close_date.isoformat() if client.original_close_date else None,
+        "original_rate": client.original_rate,
+        "current_rate": client.current_rate,
         "loan_balance": loan_balance,
-        "original_amount": client.original_amount,
-        "current_value": current_value,
-        "equity": equity,
-        "equity_percent": round(equity_percent, 1),
-        "ltv": round((loan_balance / current_value * 100), 1) if current_value > 0 else None,
-        "monthly_payment": client.monthly_payment,
+        "days_since_funding": client.days_since_funding,
+        "refinance_opportunity": client.refinance_opportunity,
+        "estimated_savings": client.estimated_savings,
+        "engagement_score": client.engagement_score,
+        "status": client.status,
         "last_contact": client.last_contact.isoformat() if client.last_contact else None,
-        "next_review_date": client.next_review_date.isoformat() if client.next_review_date else None,
-        "referral_potential": client.referral_potential,
+        "next_touchpoint": client.next_touchpoint.isoformat() if client.next_touchpoint else None,
+        "referrals_sent": client.referrals_sent,
+        "notes": client.notes,
+        "loan_officer": client.loan_officer,
+        "processor": client.processor,
         "contact_history": [
             {
                 "type": a[0],
@@ -3442,11 +3442,12 @@ async def get_client_context_for_ai(
             for t in tasks
         ],
         "refinance_analysis": {
-            "has_equity": equity > 50000,
-            "rate_reduction_potential": client.interest_rate > 6.0 if client.interest_rate else False,
-            "years_since_closing": ((datetime.now().date() - client.original_loan_date).days // 365) if client.original_loan_date else None
+            "has_opportunity": client.refinance_opportunity,
+            "estimated_savings": client.estimated_savings,
+            "rate_reduction_potential": (client.original_rate - client.current_rate) if client.original_rate and client.current_rate else 0,
+            "years_since_closing": (client.days_since_funding // 365) if client.days_since_funding else None
         },
-        "timeline_summary": f"Client since {client.original_loan_date.strftime('%Y') if client.original_loan_date else 'N/A'}, ${equity:,.0f} equity ({equity_percent:.0f}%), rate {client.interest_rate}%"
+        "timeline_summary": f"Client since {client.original_close_date.strftime('%Y') if client.original_close_date else 'N/A'}, {client.days_since_funding or 0} days since funding, rate {client.current_rate}%"
     }
 
 
