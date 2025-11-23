@@ -3739,44 +3739,44 @@ async def get_email_context_for_ai(
                 "stage": str(lead.stage.value) if lead.stage else None
             }
 
-    # Get thread context (other emails in same thread)
-    thread_emails = []
-    if email.thread_id:
-        thread = db.execute(
-            text("""
-                SELECT id, subject, sender, recipient, received_at, direction
-                FROM emails
-                WHERE thread_id = :thread_id AND user_id = :user_id
-                ORDER BY received_at ASC
-            """),
-            {"thread_id": email.thread_id, "user_id": current_user.id}
-        ).fetchall()
-        thread_emails = [
+    # Get other emails from same sender for context
+    related_emails = db.execute(
+        text("""
+            SELECT id, subject, sender_email, received_date
+            FROM emails
+            WHERE sender_email = :sender_email AND user_id = :user_id AND id != :email_id
+            ORDER BY received_date DESC
+            LIMIT 5
+        """),
+        {"sender_email": email.sender_email, "user_id": current_user.id, "email_id": email_id}
+    ).fetchall()
+
+    return {
+        "email_id": email.id,
+        "message_id": email.message_id,
+        "subject": email.subject,
+        "sender_email": email.sender_email,
+        "sender_name": email.sender_name,
+        "recipients": email.recipient_emails,
+        "body": email.body_text,
+        "received_date": email.received_date.isoformat() if email.received_date else None,
+        "is_read": email.is_read,
+        "has_attachments": email.has_attachments,
+        "folder": email.folder_name,
+        "processed": email.processed,
+        "ai_extracted_data": email.ai_extracted_data,
+        "ai_confidence": email.ai_confidence,
+        "related_lead": lead_info,
+        "related_emails_from_sender": [
             {
                 "id": e[0],
                 "subject": e[1],
                 "sender": e[2],
-                "recipient": e[3],
-                "date": e[4].isoformat() if e[4] else None,
-                "direction": e[5]
+                "date": e[3].isoformat() if e[3] else None
             }
-            for e in thread
-        ]
-
-    return {
-        "email_id": email.id,
-        "subject": email.subject,
-        "sender": email.sender,
-        "recipient": email.recipient,
-        "body": email.body,
-        "received_at": email.received_at.isoformat() if email.received_at else None,
-        "direction": email.direction,
-        "is_read": email.is_read,
-        "ai_intent": email.ai_intent,
-        "ai_summary": email.ai_summary,
-        "related_lead": lead_info,
-        "thread_context": thread_emails,
-        "email_summary": f"Email from {email.sender} to {email.recipient}: '{email.subject}' - {email.ai_intent or 'No intent detected'}"
+            for e in related_emails
+        ],
+        "email_summary": f"Email from {email.sender_name or email.sender_email}: '{email.subject}' - {'Processed' if email.processed else 'Unprocessed'}"
     }
 
 
