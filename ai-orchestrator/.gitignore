@@ -2,3 +2,6 @@ node_modules/
 dist/
 .env
 *.log
+
+# Override root gitignore exclusion of lib/
+!src/lib/
