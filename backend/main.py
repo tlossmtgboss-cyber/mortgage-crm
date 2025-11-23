@@ -15034,6 +15034,16 @@ def init_db():
                         CREATE INDEX IF NOT EXISTS ix_api_keys_key ON api_keys(key);
                     """))
 
+                    # Add missing name column to referral_partners if it doesn't exist
+                    conn.execute(text("""
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='name') THEN
+                                ALTER TABLE referral_partners ADD COLUMN name VARCHAR NOT NULL DEFAULT 'Unknown';
+                            END IF;
+                        END $$;
+                    """))
+
                     conn.commit()
                     logger.info("✅ Schema migrations applied (PostgreSQL)")
         except Exception as e:
