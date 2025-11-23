@@ -1393,6 +1393,24 @@ PERMANENT MEMORY STATUS:
                 json_str = response_text[json_start:json_end]
                 result = json.loads(json_str)
 
+                # OVERRIDE INTENT FOR COACHING MODES
+                # Force DAILY_VIEW for coaching prompts regardless of Claude's classification
+                message_lower = message.lower()
+                coaching_keywords = [
+                    "daily briefing", "top 3 priorities",
+                    "pipeline audit", "bottlenecks", "stalled deals",
+                    "focus reset", "back on track", "get focused",
+                    "what should i do next", "priority decision",
+                    "accountability review", "review my performance",
+                    "tough love", "inefficiencies", "call out",
+                    "teach me the process", "systemic thinking"
+                ]
+                is_coaching = any(keyword in message_lower for keyword in coaching_keywords)
+
+                if is_coaching and result.get("intent") != "DAILY_VIEW":
+                    logger.info(f"Overriding intent from {result.get('intent')} to DAILY_VIEW for coaching prompt")
+                    result["intent"] = "DAILY_VIEW"
+
                 # INJECT REAL CRM DATA for DAILY_VIEW
                 if result.get("intent") == "DAILY_VIEW":
                     daily_data = get_daily_summary(db, user_id)
