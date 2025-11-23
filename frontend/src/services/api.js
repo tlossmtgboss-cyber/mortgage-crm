@@ -311,7 +311,16 @@ export const aiAPI = {
       include_context: true,
       context_type: 'general',
     });
-    return response.data;
+    // Map smart-chat response format to expected format
+    const data = response.data;
+    return {
+      explanation: data.response || data.explanation || '',
+      success: data.success,
+      context_used: data.context_used,
+      metadata: data.metadata,
+      // Preserve any other fields from original response
+      ...data
+    };
   },
   executeAction: async (actionId, modifications = {}, sessionId = null) => {
     const response = await api.post('/api/v1/ai/execute-action', {
