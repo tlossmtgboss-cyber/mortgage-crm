@@ -1066,6 +1066,24 @@ function ReconciliationCenter() {
           <div className="reconciliation-content">
             {/* Pending Review Items List */}
             <div className="items-list">
+              {/* Select All Header */}
+              <div className="select-all-header">
+                <input
+                  type="checkbox"
+                  className="item-checkbox"
+                  checked={selectedReviewItems.size === pendingReviewItems.length && pendingReviewItems.length > 0}
+                  onChange={() => {
+                    if (selectedReviewItems.size === pendingReviewItems.length) {
+                      deselectAllReviewItems();
+                    } else {
+                      selectAllReviewItems();
+                    }
+                  }}
+                />
+                <span className="select-all-label">
+                  {selectedReviewItems.size === pendingReviewItems.length ? 'Deselect All' : 'Select All'} ({pendingReviewItems.length} items)
+                </span>
+              </div>
               {pendingReviewItems.map((item) => (
                 <div
                   key={item.id}
