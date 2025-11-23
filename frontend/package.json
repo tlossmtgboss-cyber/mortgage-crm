@@ -4,6 +4,10 @@
   "description": "Agentic AI Mortgage CRM - React Frontend",
   "private": true,
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "@mui/icons-material": "^7.3.5",
+    "@mui/material": "^7.3.5",
     "axios": "^1.6.2",
     "html2canvas": "^1.4.1",
     "react": "^18.2.0",
