@@ -9,6 +9,8 @@ import express from "express";
 import cors from "cors";
 import { processMessage, UserMessage } from "./ai/orchestrator/smartAssistant";
 
+console.log("Modules loaded successfully");
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
