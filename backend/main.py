@@ -4761,9 +4761,9 @@ app.include_router(ai_insights_router, tags=["AI Profitability Insights"])
 from financial_intelligence_routes import router as financial_intelligence_router
 app.include_router(financial_intelligence_router, tags=["Financial Intelligence"])
 
-# Include Email Monitor routes
-from email_monitor_routes import router as email_monitor_router
-app.include_router(email_monitor_router, tags=["Email Monitor"])
+# Include Email Monitor routes - temporarily disabled for debugging
+# from email_monitor_routes import router as email_monitor_router
+# app.include_router(email_monitor_router, tags=["Email Monitor"])
 
 # Email Monitor Migration Endpoint
 @app.post("/api/v1/migrations/add-email-monitor")
