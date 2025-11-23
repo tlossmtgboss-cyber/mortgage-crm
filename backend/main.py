@@ -3836,79 +3836,37 @@ async def get_calendar_context_for_ai(
     }
 
 
-@app.get("/api/v1/ai/context/client-profile/{client_id}")
-async def get_client_profile_context_for_ai(
-    client_id: int,
+@app.get("/api/v1/ai/context/account-profile/{profile_id}")
+async def get_account_profile_context_for_ai(
+    profile_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_flexible)
 ):
-    """Return detailed client profile context for AI"""
-    client = db.query(ClientProfile).filter(
-        ClientProfile.id == client_id,
-        ClientProfile.user_id == current_user.id
+    """Return account/subscriber profile context for AI"""
+    profile = db.query(ClientProfile).filter(
+        ClientProfile.id == profile_id,
+        ClientProfile.primary_user_id == current_user.id
     ).first()
-    if not client:
-        raise HTTPException(status_code=404, detail="Client profile not found")
+    if not profile:
+        raise HTTPException(status_code=404, detail="Account profile not found")
 
-    # Get client's loans
-    loans = db.execute(
-        text("""
-            SELECT id, loan_number, amount, stage, closing_date, loan_type
-            FROM loans
-            WHERE borrower_name ILIKE :client_name AND loan_officer_id = :user_id
-            ORDER BY created_at DESC
-            LIMIT 10
-        """),
-        {"client_name": f"%{client.name}%", "user_id": current_user.id}
-    ).fetchall()
-
-    # Get client's activities
-    activities = db.execute(
-        text("""
-            SELECT type, content, created_at
-            FROM activities
-            WHERE user_id = :user_id
-            ORDER BY created_at DESC
-            LIMIT 10
-        """),
-        {"user_id": current_user.id}
-    ).fetchall()
+    # Extract user profile from JSON
+    user_profile = profile.user_profile or {}
 
     return {
-        "client_id": client.id,
-        "name": client.name,
-        "email": client.email,
-        "phone": client.phone,
-        "address": client.address,
-        "city": client.city,
-        "state": client.state,
-        "zip_code": client.zip_code,
-        "employer": client.employer,
-        "job_title": client.job_title,
-        "annual_income": client.annual_income,
-        "credit_score": client.credit_score,
-        "notes": client.notes,
-        "created_at": client.created_at.isoformat() if client.created_at else None,
-        "loan_history": [
-            {
-                "id": l[0],
-                "loan_number": l[1],
-                "amount": l[2],
-                "stage": str(l[3]) if l[3] else None,
-                "closing_date": l[4].isoformat() if l[4] else None,
-                "loan_type": l[5]
-            }
-            for l in loans
-        ],
-        "recent_activities": [
-            {
-                "type": str(a[0]) if a[0] else None,
-                "content": a[1],
-                "date": a[2].isoformat() if a[2] else None
-            }
-            for a in activities
-        ],
-        "client_summary": f"{client.name} - {client.employer or 'Unknown employer'}, Income: ${client.annual_income:,.0f}" if client.annual_income else f"{client.name}"
+        "profile_id": profile.id,
+        "account_id": profile.account_id,
+        "account_type": profile.account_type,
+        "company_name": profile.company_name,
+        "nmls_number": profile.nmls_number,
+        "team_size": profile.team_size,
+        "subscription_plan": profile.subscription_plan,
+        "billing_status": profile.billing_status,
+        "user_profile": user_profile,
+        "kpi_targets": profile.kpi_targets,
+        "automation_settings": profile.automation_settings,
+        "integration_settings": profile.integration_settings,
+        "profile_summary": f"{profile.company_name or 'Account'} ({profile.account_type or 'N/A'}) - {profile.team_size or 1} team members, {profile.subscription_plan or 'Unknown'} plan"
     }
 
 
@@ -4108,27 +4066,32 @@ async def get_mum_client_context_for_ai(
         {"client_id": client_id}
     ).fetchall()
 
-    # Calculate equity and LTV
-    equity = (client.home_value or 0) - (client.loan_balance or 0)
-    ltv = round((client.loan_balance / client.home_value * 100), 1) if client.home_value and client.loan_balance else 0
-
     return {
         "client_id": client.id,
         "name": client.name,
         "email": client.email,
         "phone": client.phone,
-        "property_address": client.property_address,
-        "home_value": client.home_value,
-        "loan_balance": client.loan_balance,
+        "loan_number": client.loan_number,
+        "original_close_date": client.original_close_date.isoformat() if client.original_close_date else None,
+        "days_since_funding": client.days_since_funding,
+        "original_rate": client.original_rate,
         "current_rate": client.current_rate,
-        "loan_type": client.loan_type,
-        "origination_date": client.origination_date.isoformat() if client.origination_date else None,
-        "maturity_date": client.maturity_date.isoformat() if client.maturity_date else None,
-        "calculated_equity": equity,
-        "ltv_ratio": ltv,
-        "monitoring_status": client.monitoring_status,
+        "loan_balance": client.loan_balance,
+        "refinance_opportunity": client.refinance_opportunity,
+        "estimated_savings": client.estimated_savings,
+        "engagement_score": client.engagement_score,
+        "status": client.status,
         "last_contact": client.last_contact.isoformat() if client.last_contact else None,
+        "next_touchpoint": client.next_touchpoint.isoformat() if client.next_touchpoint else None,
+        "referrals_sent": client.referrals_sent,
         "notes": client.notes,
+        "opportunity_notes": client.opportunity_notes,
+        "team": {
+            "loan_officer": client.loan_officer,
+            "processor": client.processor,
+            "underwriter": client.underwriter,
+            "closer": client.closer
+        },
         "recent_activities": [
             {
                 "type": str(a[0]) if a[0] else None,
@@ -4137,7 +4100,7 @@ async def get_mum_client_context_for_ai(
             }
             for a in activities
         ],
-        "client_summary": f"{client.name} - ${client.home_value:,.0f} home value, ${equity:,.0f} equity ({ltv}% LTV), {client.current_rate}% rate"
+        "client_summary": f"{client.name} - Loan #{client.loan_number}, ${client.loan_balance:,.0f} balance at {client.current_rate}%, {'Refi opportunity' if client.refinance_opportunity else 'No refi opportunity'}"
     }
 
 
@@ -4801,6 +4764,47 @@ app.include_router(financial_intelligence_router, tags=["Financial Intelligence"
 # Include Email Monitor routes
 from email_monitor_routes import router as email_monitor_router
 app.include_router(email_monitor_router, tags=["Email Monitor"])
+
+# Email Monitor Migration Endpoint
+@app.post("/api/v1/migrations/add-email-monitor")
+async def add_email_monitor_migration(db: Session = Depends(get_db)):
+    """Run migration to add email monitor tables"""
+    try:
+        import os
+        from sqlalchemy import text as sql_text
+
+        migration_path = os.path.join(os.path.dirname(__file__), "migrations", "add_email_monitor_tables.sql")
+
+        with open(migration_path, 'r') as f:
+            sql = f.read()
+
+        statements = [s.strip() for s in sql.split(';') if s.strip() and not s.strip().startswith('--')]
+
+        results = []
+        for statement in statements:
+            try:
+                db.execute(sql_text(statement))
+                db.commit()
+            except Exception as e:
+                if 'already exists' in str(e).lower() or 'duplicate' in str(e).lower():
+                    db.rollback()
+                    continue
+                results.append(f"Error: {str(e)[:100]}")
+                db.rollback()
+
+        return {
+            "success": True,
+            "message": "Email monitor migration completed",
+            "tables_created": [
+                "email_monitor_addresses", "email_monitor_keywords", "email_monitor_rules",
+                "email_monitor_captured", "email_crm_links", "email_relevance_analysis",
+                "email_filter_whitelist", "email_filter_blacklist", "email_provider_config",
+                "gmail_oauth_tokens", "outlook_oauth_tokens", "email_monitor_log"
+            ],
+            "errors": results if results else None
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 # Morning Check-in Migration Endpoint
 @app.post("/api/v1/migrations/add-morning-checkin")
