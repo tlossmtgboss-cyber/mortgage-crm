@@ -64,7 +64,8 @@ function ReconciliationCenter() {
                             'Flagged for review',
               email_subject: item.email?.subject,
               email_from: item.email?.sender,
-              email_received_at: item.email?.received_at
+              email_received_at: item.email?.received_at,
+              email_body: item.email?.body || item.email?.text_content || item.email?.html_content
             });
           } else {
             autoProcess.push(item);
@@ -456,6 +457,114 @@ function ReconciliationCenter() {
     setBulkProcessing(false);
 
     alert(`Successfully deleted ${successCount} out of ${selectedReviewItems.size} items`);
+  };
+
+  const bulkApproveReviewItems = async () => {
+    if (selectedReviewItems.size === 0) {
+      alert('Please select items to approve');
+      return;
+    }
+
+    if (!window.confirm(`Approve ${selectedReviewItems.size} item(s) and apply to matching records?`)) {
+      return;
+    }
+
+    setBulkProcessing(true);
+    let successCount = 0;
+
+    for (const itemId of selectedReviewItems) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/v1/reconciliation/approve`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            extracted_data_id: itemId,
+            corrections: null
+          })
+        });
+
+        if (response.ok) {
+          successCount++;
+        }
+      } catch (error) {
+        console.error(`Error approving item ${itemId}:`, error);
+      }
+    }
+
+    await fetchPendingItems();
+    setSelectedReviewItems(new Set());
+    setBulkProcessing(false);
+    alert(`Successfully approved ${successCount} out of ${selectedReviewItems.size} items`);
+  };
+
+  const bulkBlockSenders = async () => {
+    if (selectedReviewItems.size === 0) {
+      alert('Please select items to block senders');
+      return;
+    }
+
+    // Get unique senders from selected items
+    const sendersToBlock = new Set();
+    selectedReviewItems.forEach(itemId => {
+      const item = pendingReviewItems.find(i => i.id === itemId);
+      if (item?.email_from) {
+        sendersToBlock.add(item.email_from);
+      }
+    });
+
+    if (!window.confirm(`Block ${sendersToBlock.size} sender(s) and delete ${selectedReviewItems.size} item(s)?\n\nBlocked senders:\n${Array.from(sendersToBlock).join('\n')}\n\nFuture emails from these senders will be automatically ignored.`)) {
+      return;
+    }
+
+    setBulkProcessing(true);
+    let successCount = 0;
+
+    // Block each sender
+    for (const sender of sendersToBlock) {
+      try {
+        await fetch(`${API_BASE_URL}/api/v1/reconciliation/block-sender`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ sender_email: sender })
+        });
+      } catch (error) {
+        console.error(`Error blocking sender ${sender}:`, error);
+      }
+    }
+
+    // Delete the selected items
+    for (const itemId of selectedReviewItems) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/v1/reconciliation/reject`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            extracted_data_id: itemId,
+            reason: 'Sender blocked by user'
+          })
+        });
+
+        if (response.ok) {
+          successCount++;
+        }
+      } catch (error) {
+        console.error(`Error deleting item ${itemId}:`, error);
+      }
+    }
+
+    await fetchPendingItems();
+    setSelectedReviewItems(new Set());
+    setBulkProcessing(false);
+    alert(`Blocked ${sendersToBlock.size} sender(s) and deleted ${successCount} items`);
   };
 
   const getConfidenceColor = (confidence) => {
@@ -914,7 +1023,7 @@ function ReconciliationCenter() {
         ) : activeTab === 'pendingReview' && pendingReviewItems.length > 0 ? (
           <div className="reconciliation-content">
             {/* Bulk Actions Bar for Pending Review */}
-            <div className="bulk-actions-bar">
+            <div className="bulk-actions-bar review-bulk-bar">
               <div className="selection-controls">
                 <button
                   className="select-btn"
@@ -923,16 +1032,30 @@ function ReconciliationCenter() {
                   {selectedReviewItems.size === pendingReviewItems.length ? '☐ Deselect All' : '☑ Select All'}
                 </button>
                 <span className="selection-count">
-                  {selectedReviewItems.size} item{selectedReviewItems.size !== 1 ? 's' : ''} selected
+                  {selectedReviewItems.size} of {pendingReviewItems.length} selected
                 </span>
               </div>
               <div className="bulk-action-buttons">
+                <button
+                  className="btn-success"
+                  onClick={bulkApproveReviewItems}
+                  disabled={selectedReviewItems.size === 0 || bulkProcessing}
+                >
+                  ✓ Approve ({selectedReviewItems.size})
+                </button>
+                <button
+                  className="btn-warning"
+                  onClick={bulkBlockSenders}
+                  disabled={selectedReviewItems.size === 0 || bulkProcessing}
+                >
+                  🚫 Block Sender ({selectedReviewItems.size})
+                </button>
                 <button
                   className="btn-danger"
                   onClick={bulkDeleteReviewItems}
                   disabled={selectedReviewItems.size === 0 || bulkProcessing}
                 >
-                  {bulkProcessing ? 'Deleting...' : `🗑️ Delete Selected (${selectedReviewItems.size})`}
+                  🗑️ Delete ({selectedReviewItems.size})
                 </button>
               </div>
             </div>
@@ -968,17 +1091,16 @@ function ReconciliationCenter() {
                         {new Date(item.email_received_at).toLocaleDateString()}
                       </span>
                     </div>
-                    {item.review_reason && (
-                      <div className="review-reason">
-                        <strong>Review Reason:</strong> {item.review_reason}
+                    {item.email_body && (
+                      <div className="item-body-preview">
+                        {item.email_body.substring(0, 150)}{item.email_body.length > 150 ? '...' : ''}
                       </div>
                     )}
-                    <div className="item-confidence">
-                      <span className="confidence-label">Match Confidence:</span>
-                      <span className="confidence-value" style={{ color: getConfidenceColor(item.match_confidence) }}>
-                        {Math.round(item.match_confidence * 100)}%
-                      </span>
-                    </div>
+                    {item.review_reason && (
+                      <div className="review-reason">
+                        <strong>Reason:</strong> {item.review_reason}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
