@@ -15,6 +15,7 @@ function ReconciliationCenter() {
   const [lastSyncTime, setLastSyncTime] = useState(null);
   const [syncStatus, setSyncStatus] = useState('');
   const [selectedItems, setSelectedItems] = useState(new Set());
+  const [selectedReviewItems, setSelectedReviewItems] = useState(new Set());
   const [bulkProcessing, setBulkProcessing] = useState(false);
   const [approvalProgress, setApprovalProgress] = useState({ approved: 0, total: 20 });
   const [delegateToAI, setDelegateToAI] = useState(false);
@@ -388,6 +389,73 @@ function ReconciliationCenter() {
     setBulkProcessing(false);
 
     alert(`Successfully rejected ${successCount} out of ${selectedItems.size} items`);
+  };
+
+  // Pending Review bulk selection functions
+  const toggleReviewItemSelection = (itemId) => {
+    setSelectedReviewItems(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(itemId)) {
+        newSet.delete(itemId);
+      } else {
+        newSet.add(itemId);
+      }
+      return newSet;
+    });
+  };
+
+  const selectAllReviewItems = () => {
+    const itemsToSelect = pendingReviewItems.map(item => item.id);
+    setSelectedReviewItems(new Set(itemsToSelect));
+  };
+
+  const deselectAllReviewItems = () => {
+    setSelectedReviewItems(new Set());
+  };
+
+  const bulkDeleteReviewItems = async () => {
+    if (selectedReviewItems.size === 0) {
+      alert('Please select items to delete');
+      return;
+    }
+
+    if (!window.confirm(`Delete ${selectedReviewItems.size} pending review item(s)? This action cannot be undone.`)) {
+      return;
+    }
+
+    setBulkProcessing(true);
+    let successCount = 0;
+
+    for (const itemId of selectedReviewItems) {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/v1/reconciliation/reject`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            extracted_data_id: itemId,
+            reason: 'Bulk deleted by user'
+          })
+        });
+
+        if (response.ok) {
+          successCount++;
+        }
+      } catch (error) {
+        console.error(`Error deleting item ${itemId}:`, error);
+      }
+    }
+
+    // Refresh the list
+    await fetchPendingItems();
+
+    // Clear selections
+    setSelectedReviewItems(new Set());
+    setBulkProcessing(false);
+
+    alert(`Successfully deleted ${successCount} out of ${selectedReviewItems.size} items`);
   };
 
   const getConfidenceColor = (confidence) => {
@@ -845,14 +913,45 @@ function ReconciliationCenter() {
           </div>
         ) : activeTab === 'pendingReview' && pendingReviewItems.length > 0 ? (
           <div className="reconciliation-content">
+            {/* Bulk Actions Bar for Pending Review */}
+            <div className="bulk-actions-bar">
+              <div className="selection-controls">
+                <button
+                  className="select-btn"
+                  onClick={selectedReviewItems.size === pendingReviewItems.length ? deselectAllReviewItems : selectAllReviewItems}
+                >
+                  {selectedReviewItems.size === pendingReviewItems.length ? '☐ Deselect All' : '☑ Select All'}
+                </button>
+                <span className="selection-count">
+                  {selectedReviewItems.size} item{selectedReviewItems.size !== 1 ? 's' : ''} selected
+                </span>
+              </div>
+              <div className="bulk-action-buttons">
+                <button
+                  className="btn-danger"
+                  onClick={bulkDeleteReviewItems}
+                  disabled={selectedReviewItems.size === 0 || bulkProcessing}
+                >
+                  {bulkProcessing ? 'Deleting...' : `🗑️ Delete Selected (${selectedReviewItems.size})`}
+                </button>
+              </div>
+            </div>
+
             {/* Pending Review Items List */}
             <div className="items-list">
               {pendingReviewItems.map((item) => (
                 <div
                   key={item.id}
-                  className={`reconciliation-item ${selectedItem?.id === item.id ? 'selected' : ''}`}
+                  className={`reconciliation-item ${selectedItem?.id === item.id ? 'selected' : ''} ${selectedReviewItems.has(item.id) ? 'checked' : ''}`}
                   onClick={() => setSelectedItem(item)}
                 >
+                  <input
+                    type="checkbox"
+                    className="item-checkbox"
+                    checked={selectedReviewItems.has(item.id)}
+                    onChange={() => toggleReviewItemSelection(item.id)}
+                    onClick={(e) => e.stopPropagation()}
+                  />
                   <div className="item-content">
                     <div className="item-header">
                       <div className="item-category">
