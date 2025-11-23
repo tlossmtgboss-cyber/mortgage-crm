@@ -30,6 +30,12 @@ Available action types (use EXACTLY these strings):
 - SCHEDULE_APPOINTMENT: Schedule appointment with payload { title, datetime, duration, attendees }
 - SEND_EMAIL_DRAFT: Draft email with payload { to, subject, body }
 - SEND_SMS_DRAFT: Draft SMS with payload { to, message }
+
+Action guidelines:
+- When user requests scheduling with date/time, CREATE the SCHEDULE_APPOINTMENT action with best-effort datetime
+- When user requests task creation, CREATE the CREATE_TASK action immediately
+- Use requiresApproval: true only for high-risk actions
+- Prefer action execution over asking clarifying questions when intent is clear
 `;
 
   const bulletSummary = groundingSummaryBullets(grounding);
