@@ -210,17 +210,19 @@ function ReconciliationCenter() {
       if (response.ok) {
         // Remove from list and reset
         setPendingItems(prev => prev.filter(item => item.id !== itemId));
+        setPendingReviewItems(prev => prev.filter(item => item.id !== itemId));
         setSelectedItem(null);
         setEditedFields({});
         setDelegateToAI(false);
         // Refresh completed items to show the newly approved item
         fetchCompletedItems();
       } else {
-        alert('Failed to approve item');
+        const errorData = await response.json().catch(() => ({}));
+        alert(`Failed to approve item: ${errorData.detail || response.statusText}`);
       }
     } catch (error) {
       console.error('Error approving item:', error);
-      alert('Error approving item');
+      alert(`Error approving item: ${error.message}`);
     } finally {
       setProcessingAction(false);
     }
@@ -243,16 +245,18 @@ function ReconciliationCenter() {
 
       if (response.ok) {
         setPendingItems(prev => prev.filter(item => item.id !== itemId));
+        setPendingReviewItems(prev => prev.filter(item => item.id !== itemId));
         setSelectedItem(null);
         setEditedFields({});
         // Refresh completed items to show the rejected item
         fetchCompletedItems();
       } else {
-        alert('Failed to reject item');
+        const errorData = await response.json().catch(() => ({}));
+        alert(`Failed to reject item: ${errorData.detail || response.statusText}`);
       }
     } catch (error) {
       console.error('Error rejecting item:', error);
-      alert('Error rejecting item');
+      alert(`Error rejecting item: ${error.message}`);
     } finally {
       setProcessingAction(false);
     }
