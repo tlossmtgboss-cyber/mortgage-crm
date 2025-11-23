@@ -3473,8 +3473,8 @@ async def get_ai_context_summary(
     loan_counts = db.execute(
         text("""
             SELECT stage, COUNT(*) as count
-            FROM active_loans
-            WHERE user_id = :user_id
+            FROM loans
+            WHERE loan_officer_id = :user_id
             GROUP BY stage
         """),
         {"user_id": current_user.id}
@@ -3483,7 +3483,7 @@ async def get_ai_context_summary(
     # Get pending tasks count
     pending_tasks = db.execute(
         text("""
-            SELECT COUNT(*) FROM tasks
+            SELECT COUNT(*) FROM ai_tasks
             WHERE user_id = :user_id AND status != 'completed'
         """),
         {"user_id": current_user.id}
@@ -3494,7 +3494,7 @@ async def get_ai_context_summary(
         text("""
             SELECT
                 COUNT(*) as total_clients,
-                SUM(COALESCE(current_value, appraisal_value, 0) - COALESCE(loan_balance, 0)) as total_equity
+                SUM(COALESCE(loan_balance, 0)) as total_balance
             FROM mum_clients
             WHERE user_id = :user_id
         """),
@@ -3508,7 +3508,7 @@ async def get_ai_context_summary(
         "total_active_loans": sum(row[1] for row in loan_counts),
         "pending_tasks": pending_tasks or 0,
         "mum_clients": mum_stats[0] if mum_stats else 0,
-        "total_portfolio_equity": float(mum_stats[1]) if mum_stats and mum_stats[1] else 0,
+        "total_portfolio_balance": float(mum_stats[1]) if mum_stats and mum_stats[1] else 0,
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
