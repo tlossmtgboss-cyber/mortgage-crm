@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import ReactMarkdown from 'react-markdown';
 import { aiAPI } from '../services/api';
 import './AILandingPage.css';
 
@@ -1409,7 +1410,9 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
                   {message.isSpecialContent ? (
                     renderSpecialContent(message)
                   ) : (
-                    <div className="ai-message-content-new">{message.content}</div>
+                    <div className="ai-message-content-new ai-markdown-content">
+                      <ReactMarkdown>{message.content}</ReactMarkdown>
+                    </div>
                   )}
                   <button
                     className="ai-delete-message-btn"
