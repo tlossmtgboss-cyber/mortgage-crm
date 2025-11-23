@@ -3265,7 +3265,7 @@ async def get_loan_context_for_ai(
     # Get loan activities
     activities = db.execute(
         text("""
-            SELECT activity_type, description, created_at
+            SELECT type, content, created_at
             FROM activities
             WHERE loan_id = :loan_id
             ORDER BY created_at DESC
@@ -3286,17 +3286,20 @@ async def get_loan_context_for_ai(
         {"loan_id": loan_id}
     ).fetchall()
 
-    # Get workflow alerts
-    alerts = db.execute(
-        text("""
-            SELECT alert_type, alert_message, severity, created_at
-            FROM workflow_alerts
-            WHERE loan_id = :loan_id AND is_resolved = false
-            ORDER BY created_at DESC
-            LIMIT 5
-        """),
-        {"loan_id": loan_id}
-    ).fetchall()
+    # Get workflow alerts (table may not exist)
+    try:
+        alerts = db.execute(
+            text("""
+                SELECT alert_type, alert_message, severity, created_at
+                FROM workflow_alerts
+                WHERE loan_id = :loan_id AND is_resolved = false
+                ORDER BY created_at DESC
+                LIMIT 5
+            """),
+            {"loan_id": loan_id}
+        ).fetchall()
+    except Exception:
+        alerts = []
 
     return {
         "loan_id": loan.id,
@@ -3461,26 +3464,32 @@ async def get_ai_context_summary(
         {"user_id": current_user.id}
     ).fetchall()
 
-    # Get pending tasks count
-    pending_tasks = db.execute(
-        text("""
-            SELECT COUNT(*) FROM ai_tasks
-            WHERE user_id = :user_id AND status != 'completed'
-        """),
-        {"user_id": current_user.id}
-    ).scalar()
+    # Get pending tasks count (ai_tasks table may not exist)
+    try:
+        pending_tasks = db.execute(
+            text("""
+                SELECT COUNT(*) FROM ai_tasks
+                WHERE user_id = :user_id AND status != 'completed'
+            """),
+            {"user_id": current_user.id}
+        ).scalar()
+    except Exception:
+        pending_tasks = 0
 
     # Get MUM client count and total equity
-    mum_stats = db.execute(
-        text("""
-            SELECT
-                COUNT(*) as total_clients,
-                SUM(COALESCE(loan_balance, 0)) as total_balance
-            FROM mum_clients
-            WHERE user_id = :user_id
-        """),
-        {"user_id": current_user.id}
-    ).fetchone()
+    try:
+        mum_stats = db.execute(
+            text("""
+                SELECT
+                    COUNT(*) as total_clients,
+                    SUM(COALESCE(loan_balance, 0)) as total_balance
+                FROM mum_clients
+                WHERE user_id = :user_id
+            """),
+            {"user_id": current_user.id}
+        ).fetchone()
+    except Exception:
+        mum_stats = (0, 0)
 
     return {
         "leads_by_stage": {row[0]: row[1] for row in lead_counts},
