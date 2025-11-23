@@ -58,8 +58,8 @@ app.post("/api/v1/ai/smart-assistant", async (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
+app.listen(Number(PORT), "0.0.0.0", () => {
   console.log(`🤖 AI Orchestrator running on port ${PORT}`);
-  console.log(`   Health: http://localhost:${PORT}/health`);
-  console.log(`   API: POST http://localhost:${PORT}/api/v1/ai/smart-assistant`);
+  console.log(`   Health: http://0.0.0.0:${PORT}/health`);
+  console.log(`   API: POST http://0.0.0.0:${PORT}/api/v1/ai/smart-assistant`);
 });
