@@ -6,6 +6,7 @@ import AIReceptionist from '../components/AIReceptionist';
 import MyProfile from './MyProfile';
 import ExperimentsDashboard from './ExperimentsDashboard';
 import TaskWorkflowManager from '../components/TaskWorkflowManager';
+import EmailMonitorDashboard from './EmailMonitorDashboard';
 import './Settings.css';
 
 function Settings() {
@@ -1550,6 +1551,14 @@ const API_BASE_URL = isProduction
             <span>Task & Workflow Management</span>
           </button>
 
+          <button
+            className={`sidebar-btn ${activeSection === 'email-monitor' ? 'active' : ''}`}
+            onClick={() => setActiveSection('email-monitor')}
+          >
+            <span className="icon">📧</span>
+            <span>Email Monitor</span>
+          </button>
+
           {/* Landing Pages */}
           <button
             className={`sidebar-btn parent ${expandedSections.landingPages ? 'expanded' : ''}`}
@@ -1808,6 +1817,10 @@ const API_BASE_URL = isProduction
 
           {activeSection === 'ai-receptionist' && (
             <AIReceptionist />
+          )}
+
+          {activeSection === 'email-monitor' && (
+            <EmailMonitorDashboard />
           )}
 
           {activeSection === 'experiments' && (

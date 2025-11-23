@@ -66,7 +66,6 @@ const MorningCheckin = lazy(() => import('./pages/MorningCheckin'));
 const PartnerROIDashboard = lazy(() => import('./pages/PartnerROIDashboard'));
 const ProfitabilityDashboard = lazy(() => import('./pages/ProfitabilityDashboard'));
 const ScenarioModeling = lazy(() => import('./pages/ScenarioModeling'));
-const EmailMonitorDashboard = lazy(() => import('./pages/EmailMonitorDashboard'));
 
 // Simple loading component
 const PageLoader = () => (
@@ -416,28 +415,6 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><ScenarioModeling /></LazyPage>
-                  </main>
-                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
-                </div>
-              </PrivateRoute>
-            }
-          />
-
-          {/* Email Monitor Dashboard */}
-          <Route
-            path="/email-monitor"
-            element={
-              <PrivateRoute>
-                <div className="app-layout">
-                  <Navigation
-                    onToggleAssistant={toggleAssistant}
-                    onToggleCoach={toggleCoach}
-                    assistantOpen={assistantOpen}
-                    coachOpen={coachOpen}
-                    taskCounts={taskCounts}
-                  />
-                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <LazyPage><EmailMonitorDashboard /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
