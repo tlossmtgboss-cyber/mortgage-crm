@@ -11,6 +11,8 @@ function MarketChat() {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef(null);
+  const chatContainerRef = useRef(null);
+  const isInitialLoad = useRef(true);
 
   // Get current user from localStorage
   const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
@@ -23,9 +25,22 @@ function MarketChat() {
     return () => clearInterval(interval);
   }, []);
 
-  // Scroll to bottom when messages change
+  // Scroll to bottom when messages change (but not on initial page load)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messages.length > 0) {
+      if (isInitialLoad.current) {
+        // On initial load, scroll within container only without affecting page scroll
+        isInitialLoad.current = false;
+        if (chatContainerRef.current) {
+          chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+        }
+      } else {
+        // On subsequent updates, smooth scroll within container
+        if (chatContainerRef.current) {
+          chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+        }
+      }
+    }
   }, [messages]);
 
   const loadMessages = async () => {
@@ -89,7 +104,7 @@ function MarketChat() {
     <div className="market-chat-card">
       <h3>Team Chat</h3>
 
-      <div className="chat-messages">
+      <div className="chat-messages" ref={chatContainerRef}>
         {messages.length === 0 ? (
           <div className="no-messages">No messages yet. Start the conversation!</div>
         ) : (
