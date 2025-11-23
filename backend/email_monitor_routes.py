@@ -177,9 +177,8 @@ class EmailIntelligenceFilter:
         return False
 
     async def _match_crm_entities(self, email: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """Stage 2: CRM matching"""
-        # Import here to avoid circular imports
-        from main import Loan, Lead, Contact, ReferralPartner
+        """Stage 2: CRM matching using raw SQL to avoid circular imports"""
+        from sqlalchemy import text
 
         from_email = email.get('from', '')
         subject = email.get('subject', '')
@@ -188,63 +187,85 @@ class EmailIntelligenceFilter:
         # Extract loan numbers
         loan_numbers = self._extract_loan_numbers(subject + ' ' + body)
         if loan_numbers:
-            loans = self.db.query(Loan).filter(
-                Loan.loan_number.in_(loan_numbers),
-                Loan.current_stage.notin_(['Closed', 'Withdrawn'])
-            ).all()
+            # Query loans by loan number
+            placeholders = ', '.join([f':ln{i}' for i in range(len(loan_numbers))])
+            params = {f'ln{i}': ln for i, ln in enumerate(loan_numbers)}
 
-            if loans:
+            result = self.db.execute(
+                text(f"""
+                    SELECT id, loan_number FROM loans
+                    WHERE loan_number IN ({placeholders})
+                    AND current_stage NOT IN ('Closed', 'Withdrawn')
+                """),
+                params
+            ).fetchall()
+
+            if result:
                 return {
                     'category': 'LOAN_COMMUNICATION',
                     'confidence': 0.95,
                     'reason': f'Loan number(s) found',
-                    'entities': [{'type': 'loan', 'id': l.id} for l in loans],
-                    'auto_link': [{'type': 'loan', 'id': l.id} for l in loans]
+                    'entities': [{'type': 'loan', 'id': r[0]} for r in result],
+                    'auto_link': [{'type': 'loan', 'id': r[0]} for r in result]
                 }
 
-        # Match borrower
-        loan = self.db.query(Loan).filter(
-            or_(Loan.borrower_email == from_email, Loan.co_borrower_email == from_email),
-            Loan.current_stage.notin_(['Closed', 'Withdrawn'])
-        ).first()
+        # Match borrower email
+        result = self.db.execute(
+            text("""
+                SELECT id FROM loans
+                WHERE (borrower_email = :email OR co_borrower_email = :email)
+                AND current_stage NOT IN ('Closed', 'Withdrawn')
+                LIMIT 1
+            """),
+            {'email': from_email}
+        ).fetchone()
 
-        if loan:
+        if result:
             return {
                 'category': 'LOAN_COMMUNICATION',
                 'confidence': 0.95,
                 'reason': f'Email from borrower',
-                'entities': [{'type': 'borrower', 'id': loan.id}],
-                'auto_link': [{'type': 'loan', 'id': loan.id}]
+                'entities': [{'type': 'borrower', 'id': result[0]}],
+                'auto_link': [{'type': 'loan', 'id': result[0]}]
             }
 
-        # Match lead
-        lead = self.db.query(Lead).filter(
-            Lead.email == from_email,
-            Lead.lead_stage.notin_(['Withdrawn', 'Does Not Qualify'])
-        ).first()
+        # Match lead email
+        result = self.db.execute(
+            text("""
+                SELECT id FROM leads
+                WHERE email = :email
+                AND lead_stage NOT IN ('Withdrawn', 'Does Not Qualify')
+                LIMIT 1
+            """),
+            {'email': from_email}
+        ).fetchone()
 
-        if lead:
+        if result:
             return {
                 'category': 'LEAD_INQUIRY',
                 'confidence': 0.90,
                 'reason': f'Email from known lead',
-                'entities': [{'type': 'lead', 'id': lead.id}],
-                'auto_link': [{'type': 'lead', 'id': lead.id}]
+                'entities': [{'type': 'lead', 'id': result[0]}],
+                'auto_link': [{'type': 'lead', 'id': result[0]}]
             }
 
         # Match referral partner
-        partner = self.db.query(ReferralPartner).filter(
-            ReferralPartner.email == from_email,
-            ReferralPartner.is_active == True
-        ).first()
+        result = self.db.execute(
+            text("""
+                SELECT id, name FROM referral_partners
+                WHERE email = :email AND is_active = true
+                LIMIT 1
+            """),
+            {'email': from_email}
+        ).fetchone()
 
-        if partner:
+        if result:
             return {
                 'category': 'REFERRAL_PARTNER',
                 'confidence': 0.85,
-                'reason': f'Email from referral partner: {partner.name}',
-                'entities': [{'type': 'referral_partner', 'id': partner.id}],
-                'auto_link': [{'type': 'referral_partner', 'id': partner.id}]
+                'reason': f'Email from referral partner: {result[1]}',
+                'entities': [{'type': 'referral_partner', 'id': result[0]}],
+                'auto_link': [{'type': 'referral_partner', 'id': result[0]}]
             }
 
         return None
