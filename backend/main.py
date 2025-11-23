@@ -4100,7 +4100,7 @@ async def get_mum_client_context_for_ai(
             }
             for a in activities
         ],
-        "client_summary": f"{client.name} - Loan #{client.loan_number}, ${client.loan_balance:,.0f} balance at {client.current_rate}%, {'Refi opportunity' if client.refinance_opportunity else 'No refi opportunity'}"
+        "client_summary": f"{client.name} - Loan #{client.loan_number or 'N/A'}, ${client.loan_balance or 0:,.0f} balance at {client.current_rate or 0}%, {'Refi opportunity' if client.refinance_opportunity else 'No refi opportunity'}"
     }
 
 
