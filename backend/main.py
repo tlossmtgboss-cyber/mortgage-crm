@@ -15034,12 +15034,54 @@ def init_db():
                         CREATE INDEX IF NOT EXISTS ix_api_keys_key ON api_keys(key);
                     """))
 
-                    # Add missing name column to referral_partners if it doesn't exist
+                    # Add missing columns to referral_partners table
                     conn.execute(text("""
                         DO $$
                         BEGIN
                             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='name') THEN
                                 ALTER TABLE referral_partners ADD COLUMN name VARCHAR NOT NULL DEFAULT 'Unknown';
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='company') THEN
+                                ALTER TABLE referral_partners ADD COLUMN company VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='type') THEN
+                                ALTER TABLE referral_partners ADD COLUMN type VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='phone') THEN
+                                ALTER TABLE referral_partners ADD COLUMN phone VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='email') THEN
+                                ALTER TABLE referral_partners ADD COLUMN email VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='referrals_in') THEN
+                                ALTER TABLE referral_partners ADD COLUMN referrals_in INTEGER DEFAULT 0;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='referrals_out') THEN
+                                ALTER TABLE referral_partners ADD COLUMN referrals_out INTEGER DEFAULT 0;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='closed_loans') THEN
+                                ALTER TABLE referral_partners ADD COLUMN closed_loans INTEGER DEFAULT 0;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='volume') THEN
+                                ALTER TABLE referral_partners ADD COLUMN volume FLOAT DEFAULT 0.0;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='reciprocity_score') THEN
+                                ALTER TABLE referral_partners ADD COLUMN reciprocity_score FLOAT DEFAULT 0.0;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='status') THEN
+                                ALTER TABLE referral_partners ADD COLUMN status VARCHAR DEFAULT 'active';
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='loyalty_tier') THEN
+                                ALTER TABLE referral_partners ADD COLUMN loyalty_tier VARCHAR DEFAULT 'bronze';
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='last_interaction') THEN
+                                ALTER TABLE referral_partners ADD COLUMN last_interaction TIMESTAMP;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='notes') THEN
+                                ALTER TABLE referral_partners ADD COLUMN notes TEXT;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='referral_partners' AND column_name='created_at') THEN
+                                ALTER TABLE referral_partners ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
                             END IF;
                         END $$;
                     """))
