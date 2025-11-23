@@ -4781,26 +4781,31 @@ async def add_email_monitor_migration(db: Session = Depends(get_db)):
         statements = [s.strip() for s in sql.split(';') if s.strip() and not s.strip().startswith('--')]
 
         results = []
-        for statement in statements:
+        success_count = 0
+        for i, statement in enumerate(statements):
             try:
                 db.execute(sql_text(statement))
                 db.commit()
+                success_count += 1
             except Exception as e:
-                if 'already exists' in str(e).lower() or 'duplicate' in str(e).lower():
-                    db.rollback()
-                    continue
-                results.append(f"Error: {str(e)[:100]}")
                 db.rollback()
+                error_msg = str(e)
+                if 'already exists' in error_msg.lower() or 'duplicate' in error_msg.lower():
+                    success_count += 1
+                    continue
+                results.append(f"Statement {i+1}: {error_msg[:200]}")
 
         return {
-            "success": True,
-            "message": "Email monitor migration completed",
+            "success": len(results) == 0,
+            "message": f"Email monitor migration: {success_count} statements succeeded",
             "tables_created": [
                 "email_monitor_addresses", "email_monitor_keywords", "email_monitor_rules",
                 "email_monitor_captured", "email_crm_links", "email_relevance_analysis",
                 "email_filter_whitelist", "email_filter_blacklist", "email_provider_config",
                 "gmail_oauth_tokens", "outlook_oauth_tokens", "email_monitor_log"
             ],
+            "total_statements": len(statements),
+            "succeeded": success_count,
             "errors": results if results else None
         }
     except Exception as e:
