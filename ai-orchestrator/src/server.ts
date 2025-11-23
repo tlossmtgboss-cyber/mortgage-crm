@@ -1,5 +1,9 @@
 import * as dotenv from "dotenv";
-dotenv.config();
+dotenv.config({ path: '.env' });
+
+console.log("Starting AI Orchestrator...");
+console.log("PORT:", process.env.PORT);
+console.log("OPENAI_API_KEY:", process.env.OPENAI_API_KEY ? "set" : "NOT SET");
 
 import express from "express";
 import cors from "cors";
