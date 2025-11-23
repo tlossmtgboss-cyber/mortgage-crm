@@ -72,7 +72,7 @@ class EmailMonitorAddress(Base):
     description = Column(String(500))
     monitor_type = Column(Enum(MonitorTypeEnum), default=MonitorTypeEnum.FROM)
     is_active = Column(Boolean, default=True, index=True)
-    created_by = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    created_by = Column(Integer, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -87,7 +87,7 @@ class EmailMonitorKeyword(Base):
     match_type = Column(Enum("exact", "contains", "starts_with", "ends_with", name="match_type_enum"), default="contains")
     category = Column(String(100), index=True)
     is_active = Column(Boolean, default=True, index=True)
-    created_by = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    created_by = Column(Integer, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -109,7 +109,7 @@ class EmailMonitorRule(Base):
     allow_spam_check = Column(Boolean, default=True)
     require_crm_match = Column(Boolean, default=False)
     enabled_providers = Column(String(50), default="gmail,outlook")
-    created_by = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    created_by = Column(Integer, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -155,7 +155,7 @@ class EmailCRMLink(Base):
     link_confidence = Column(Numeric(3, 2), default=1.00)
     link_method = Column(Enum(LinkMethodEnum), default=LinkMethodEnum.EMAIL_MATCH)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    created_by = Column(Integer, ForeignKey("employees.id"))
+    created_by = Column(Integer)
 
     email = relationship("EmailMonitorCaptured", back_populates="crm_links")
 
@@ -200,7 +200,7 @@ class EmailFilterWhitelist(Base):
     whitelist_type = Column(String(20), default="email")
     auto_assign_category = Column(String(100))
     is_active = Column(Boolean, default=True, index=True)
-    created_by = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    created_by = Column(Integer, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -214,7 +214,7 @@ class EmailFilterBlacklist(Base):
     blacklist_type = Column(String(20), default="email")
     reason = Column(String(255))
     is_active = Column(Boolean, default=True, index=True)
-    created_by = Column(Integer, ForeignKey("employees.id"), nullable=False)
+    created_by = Column(Integer, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
