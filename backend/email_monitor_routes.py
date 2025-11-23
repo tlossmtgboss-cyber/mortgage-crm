@@ -5,7 +5,7 @@ Intelligent Email Monitor - FastAPI Routes
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, func, desc
+from sqlalchemy import and_, or_, func, desc, case
 from pydantic import BaseModel, EmailStr
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
@@ -344,10 +344,10 @@ async def get_provider_stats(db: Session = Depends(get_db)):
         EmailMonitorCaptured.email_provider,
         func.count(EmailMonitorCaptured.id).label('total_captured'),
         func.sum(
-            func.case((EmailMonitorCaptured.processing_status == 'assigned', 1), else_=0)
+            case((EmailMonitorCaptured.processing_status == 'assigned', 1), else_=0)
         ).label('auto_linked_count'),
         func.sum(
-            func.case((EmailMonitorCaptured.processing_status == 'manual_review', 1), else_=0)
+            case((EmailMonitorCaptured.processing_status == 'manual_review', 1), else_=0)
         ).label('pending_review')
     ).group_by(EmailMonitorCaptured.email_provider).all()
 

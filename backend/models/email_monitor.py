@@ -99,7 +99,7 @@ class EmailMonitorRule(Base):
     id = Column(Integer, primary_key=True, index=True)
     rule_name = Column(String(255), nullable=False)
     description = Column(Text)
-    match_logic = Column(Enum(MatchLogicEnum), default=MatchLogicEnum.ADDRESS_OR_KEYWORD)
+    match_logic = Column(String(30), default="address_or_keyword")
     auto_assign_to_loan = Column(Boolean, default=False)
     loan_match_strategy = Column(Enum("loan_number", "borrower_email", "property_address", "manual", name="loan_match_enum"), default="loan_number")
     priority = Column(Integer, default=0, index=True)
@@ -120,7 +120,7 @@ class EmailMonitorCaptured(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     rule_id = Column(Integer, ForeignKey("email_monitor_rules.id"), nullable=False)
-    email_provider = Column(Enum(EmailProviderEnum), default=EmailProviderEnum.GMAIL)
+    email_provider = Column(String(20), default="gmail")
     provider_message_id = Column(String(255), nullable=False)
     from_email = Column(String(255), index=True)
     to_email = Column(Text)
@@ -170,7 +170,7 @@ class EmailRelevanceAnalysis(Base):
     __tablename__ = "email_relevance_analysis"
 
     id = Column(Integer, primary_key=True, index=True)
-    email_provider = Column(Enum(EmailProviderEnum), default=EmailProviderEnum.GMAIL)
+    email_provider = Column(String(20), default="gmail")
     provider_message_id = Column(String(255), nullable=False)
     from_email = Column(String(255))
     subject = Column(Text)
@@ -223,7 +223,7 @@ class EmailProviderConfig(Base):
     __tablename__ = "email_provider_config"
 
     id = Column(Integer, primary_key=True, index=True)
-    provider_name = Column(Enum(EmailProviderEnum), unique=True, nullable=False)
+    provider_name = Column(String(20), unique=True, nullable=False)
     is_enabled = Column(Boolean, default=True, index=True)
     display_name = Column(String(100))
     config_json = Column(JSON)
