@@ -15086,6 +15086,55 @@ def init_db():
                         END $$;
                     """))
 
+                    # Add missing columns to leads table
+                    conn.execute(text("""
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='co_applicant_name') THEN
+                                ALTER TABLE leads ADD COLUMN co_applicant_name VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='co_applicant_email') THEN
+                                ALTER TABLE leads ADD COLUMN co_applicant_email VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='co_applicant_phone') THEN
+                                ALTER TABLE leads ADD COLUMN co_applicant_phone VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='loan_officer') THEN
+                                ALTER TABLE leads ADD COLUMN loan_officer VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='processor') THEN
+                                ALTER TABLE leads ADD COLUMN processor VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='underwriter') THEN
+                                ALTER TABLE leads ADD COLUMN underwriter VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='loan_number') THEN
+                                ALTER TABLE leads ADD COLUMN loan_number VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='lender') THEN
+                                ALTER TABLE leads ADD COLUMN lender VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='lock_date') THEN
+                                ALTER TABLE leads ADD COLUMN lock_date TIMESTAMP;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='lock_expiration') THEN
+                                ALTER TABLE leads ADD COLUMN lock_expiration TIMESTAMP;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='closing_date') THEN
+                                ALTER TABLE leads ADD COLUMN closing_date TIMESTAMP;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='apr') THEN
+                                ALTER TABLE leads ADD COLUMN apr FLOAT;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='points') THEN
+                                ALTER TABLE leads ADD COLUMN points FLOAT;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='user_metadata') THEN
+                                ALTER TABLE leads ADD COLUMN user_metadata JSON;
+                            END IF;
+                        END $$;
+                    """))
+
                     conn.commit()
                     logger.info("✅ Schema migrations applied (PostgreSQL)")
         except Exception as e:
