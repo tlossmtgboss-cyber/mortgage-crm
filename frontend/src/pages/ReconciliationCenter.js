@@ -1020,46 +1020,50 @@ function ReconciliationCenter() {
             <h2>All Reviewed!</h2>
             <p>No items pending review. Items flagged by AI for manual review will appear here.</p>
           </div>
-        ) : activeTab === 'pendingReview' && pendingReviewItems.length > 0 ? (
-          <div className="reconciliation-content">
-            {/* Bulk Actions Bar for Pending Review */}
-            <div className="bulk-actions-bar review-bulk-bar">
-              <div className="selection-controls">
-                <button
-                  className="select-btn"
-                  onClick={selectedReviewItems.size === pendingReviewItems.length ? deselectAllReviewItems : selectAllReviewItems}
-                >
-                  {selectedReviewItems.size === pendingReviewItems.length ? '☐ Deselect All' : '☑ Select All'}
-                </button>
-                <span className="selection-count">
-                  {selectedReviewItems.size} of {pendingReviewItems.length} selected
-                </span>
-              </div>
-              <div className="bulk-action-buttons">
-                <button
-                  className="btn-success"
-                  onClick={bulkApproveReviewItems}
-                  disabled={selectedReviewItems.size === 0 || bulkProcessing}
-                >
-                  ✓ Approve ({selectedReviewItems.size})
-                </button>
-                <button
-                  className="btn-warning"
-                  onClick={bulkBlockSenders}
-                  disabled={selectedReviewItems.size === 0 || bulkProcessing}
-                >
-                  🚫 Block Sender ({selectedReviewItems.size})
-                </button>
-                <button
-                  className="btn-danger"
-                  onClick={bulkDeleteReviewItems}
-                  disabled={selectedReviewItems.size === 0 || bulkProcessing}
-                >
-                  🗑️ Delete ({selectedReviewItems.size})
-                </button>
-              </div>
-            </div>
+        ) : null}
 
+        {/* Bulk Actions Bar for Pending Review - Outside reconciliation-content */}
+        {activeTab === 'pendingReview' && pendingReviewItems.length > 0 && (
+          <div className="bulk-actions-bar">
+            <div className="selection-controls">
+              <button
+                className="select-btn"
+                onClick={selectedReviewItems.size === pendingReviewItems.length ? deselectAllReviewItems : selectAllReviewItems}
+              >
+                {selectedReviewItems.size === pendingReviewItems.length ? '☐ Deselect All' : '☑ Select All'}
+              </button>
+              <span className="selection-count">
+                {selectedReviewItems.size} of {pendingReviewItems.length} selected
+              </span>
+            </div>
+            <div className="bulk-action-buttons">
+              <button
+                className="btn-success"
+                onClick={bulkApproveReviewItems}
+                disabled={selectedReviewItems.size === 0 || bulkProcessing}
+              >
+                ✓ Approve ({selectedReviewItems.size})
+              </button>
+              <button
+                className="btn-warning"
+                onClick={bulkBlockSenders}
+                disabled={selectedReviewItems.size === 0 || bulkProcessing}
+              >
+                🚫 Block Sender ({selectedReviewItems.size})
+              </button>
+              <button
+                className="btn-danger"
+                onClick={bulkDeleteReviewItems}
+                disabled={selectedReviewItems.size === 0 || bulkProcessing}
+              >
+                🗑️ Delete ({selectedReviewItems.size})
+              </button>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'pendingReview' && pendingReviewItems.length > 0 ? (
+          <div className="reconciliation-content">
             {/* Pending Review Items List */}
             <div className="items-list">
               {pendingReviewItems.map((item) => (
