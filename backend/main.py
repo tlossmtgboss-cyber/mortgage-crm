@@ -11612,6 +11612,7 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     """
     from datetime import date, timedelta, datetime, timezone
     from sqlalchemy import func, extract, case
+    import traceback
 
     # Get current date ranges
     today = date.today()
