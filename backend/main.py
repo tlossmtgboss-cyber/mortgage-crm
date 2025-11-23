@@ -15132,6 +15132,54 @@ def init_db():
                             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='user_metadata') THEN
                                 ALTER TABLE leads ADD COLUMN user_metadata JSON;
                             END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='address') THEN
+                                ALTER TABLE leads ADD COLUMN address VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='city') THEN
+                                ALTER TABLE leads ADD COLUMN city VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='state') THEN
+                                ALTER TABLE leads ADD COLUMN state VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='zip_code') THEN
+                                ALTER TABLE leads ADD COLUMN zip_code VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='property_type') THEN
+                                ALTER TABLE leads ADD COLUMN property_type VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='property_value') THEN
+                                ALTER TABLE leads ADD COLUMN property_value FLOAT;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='down_payment') THEN
+                                ALTER TABLE leads ADD COLUMN down_payment FLOAT;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='employment_status') THEN
+                                ALTER TABLE leads ADD COLUMN employment_status VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='annual_income') THEN
+                                ALTER TABLE leads ADD COLUMN annual_income FLOAT;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='monthly_debts') THEN
+                                ALTER TABLE leads ADD COLUMN monthly_debts FLOAT;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='first_time_buyer') THEN
+                                ALTER TABLE leads ADD COLUMN first_time_buyer BOOLEAN DEFAULT FALSE;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='loan_amount') THEN
+                                ALTER TABLE leads ADD COLUMN loan_amount FLOAT;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='interest_rate') THEN
+                                ALTER TABLE leads ADD COLUMN interest_rate FLOAT;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='loan_term') THEN
+                                ALTER TABLE leads ADD COLUMN loan_term INTEGER;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='referral_partner_id') THEN
+                                ALTER TABLE leads ADD COLUMN referral_partner_id INTEGER;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='updated_at') THEN
+                                ALTER TABLE leads ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+                            END IF;
                         END $$;
                     """))
 
