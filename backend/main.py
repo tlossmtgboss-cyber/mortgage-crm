@@ -4778,7 +4778,16 @@ async def add_email_monitor_migration(db: Session = Depends(get_db)):
         with open(migration_path, 'r') as f:
             sql = f.read()
 
-        statements = [s.strip() for s in sql.split(';') if s.strip() and not s.strip().startswith('--')]
+        # Split by semicolon and filter
+        raw_statements = sql.split(';')
+        statements = []
+        for s in raw_statements:
+            # Strip leading comment lines
+            lines = s.strip().split('\n')
+            clean_lines = [l for l in lines if not l.strip().startswith('--')]
+            clean_stmt = '\n'.join(clean_lines).strip()
+            if clean_stmt:
+                statements.append(clean_stmt)
 
         results = []
         success_count = 0
