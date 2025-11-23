@@ -3583,52 +3583,68 @@ async def get_user_profile_context_for_ai(
     """Return current user's profile and performance context for AI"""
 
     # Get task stats
-    task_stats = db.execute(
-        text("""
-            SELECT
-                COUNT(*) FILTER (WHERE status = 'pending') as pending,
-                COUNT(*) FILTER (WHERE status = 'completed') as completed,
-                COUNT(*) FILTER (WHERE status = 'in_progress') as in_progress,
-                COUNT(*) FILTER (WHERE due_date < CURRENT_DATE AND status != 'completed') as overdue
-            FROM tasks
-            WHERE owner_id = :user_id
-        """),
-        {"user_id": current_user.id}
-    ).fetchone()
+    try:
+        task_stats = db.execute(
+            text("""
+                SELECT
+                    COUNT(*) FILTER (WHERE status = 'pending') as pending,
+                    COUNT(*) FILTER (WHERE status = 'completed') as completed,
+                    COUNT(*) FILTER (WHERE status = 'in_progress') as in_progress,
+                    COUNT(*) FILTER (WHERE due_date < CURRENT_DATE AND status != 'completed') as overdue
+                FROM tasks
+                WHERE owner_id = :user_id
+            """),
+            {"user_id": current_user.id}
+        ).fetchone()
+    except Exception:
+        db.rollback()
+        task_stats = (0, 0, 0, 0)
 
     # Get lead stats
-    lead_stats = db.execute(
-        text("""
-            SELECT
-                COUNT(*) as total,
-                COUNT(*) FILTER (WHERE created_at > CURRENT_DATE - INTERVAL '30 days') as new_this_month
-            FROM leads
-            WHERE owner_id = :user_id
-        """),
-        {"user_id": current_user.id}
-    ).fetchone()
+    try:
+        lead_stats = db.execute(
+            text("""
+                SELECT
+                    COUNT(*) as total,
+                    COUNT(*) FILTER (WHERE created_at > CURRENT_DATE - INTERVAL '30 days') as new_this_month
+                FROM leads
+                WHERE owner_id = :user_id
+            """),
+            {"user_id": current_user.id}
+        ).fetchone()
+    except Exception:
+        db.rollback()
+        lead_stats = (0, 0)
 
     # Get loan stats
-    loan_stats = db.execute(
-        text("""
-            SELECT
-                COUNT(*) as total,
-                COALESCE(SUM(amount), 0) as total_volume,
-                COUNT(*) FILTER (WHERE stage = 'FUNDED' OR stage = 'Funded') as funded_count
-            FROM loans
-            WHERE loan_officer_id = :user_id
-        """),
-        {"user_id": current_user.id}
-    ).fetchone()
+    try:
+        loan_stats = db.execute(
+            text("""
+                SELECT
+                    COUNT(*) as total,
+                    COALESCE(SUM(amount), 0) as total_volume,
+                    COUNT(*) FILTER (WHERE stage::text LIKE '%FUNDED%' OR stage::text LIKE '%Funded%') as funded_count
+                FROM loans
+                WHERE loan_officer_id = :user_id
+            """),
+            {"user_id": current_user.id}
+        ).fetchone()
+    except Exception:
+        db.rollback()
+        loan_stats = (0, 0, 0)
 
     # Get recent activities count
-    recent_activities = db.execute(
-        text("""
-            SELECT COUNT(*) FROM activities
-            WHERE user_id = :user_id AND created_at > CURRENT_DATE - INTERVAL '7 days'
-        """),
-        {"user_id": current_user.id}
-    ).scalar()
+    try:
+        recent_activities = db.execute(
+            text("""
+                SELECT COUNT(*) FROM activities
+                WHERE user_id = :user_id AND created_at > CURRENT_DATE - INTERVAL '7 days'
+            """),
+            {"user_id": current_user.id}
+        ).scalar()
+    except Exception:
+        db.rollback()
+        recent_activities = 0
 
     return {
         "user_id": current_user.id,
