@@ -1179,6 +1179,18 @@ class AITrainingEvent(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
+class BlockedSender(Base):
+    __tablename__ = "blocked_senders"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    sender_email = Column(String, nullable=False)
+    reason = Column(String)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (
+        Index('ix_blocked_senders_user_email', 'user_id', 'sender_email', unique=True),
+    )
+
 class DuplicatePair(Base):
     __tablename__ = "duplicate_pairs"
     id = Column(Integer, primary_key=True, index=True)
@@ -2629,6 +2641,10 @@ class ReconciliationApproval(BaseModel):
 class ReconciliationRejection(BaseModel):
     extracted_data_id: int
     reason: Optional[str] = None
+
+class BlockSenderRequest(BaseModel):
+    sender_email: str
+    reason: Optional[str] = "Blocked by user"
 
 # ============================================================================
 # MICROSOFT OAUTH SCHEMAS
@@ -4782,6 +4798,10 @@ app.include_router(ai_insights_router, tags=["AI Profitability Insights"])
 from financial_intelligence_routes import router as financial_intelligence_router
 app.include_router(financial_intelligence_router, tags=["Financial Intelligence"])
 
+# Include Email Monitor routes
+from email_monitor_routes import router as email_monitor_router
+app.include_router(email_monitor_router, tags=["Email Monitor"])
+
 # Morning Check-in Migration Endpoint
 @app.post("/api/v1/migrations/add-morning-checkin")
 async def add_morning_checkin_migration(db: Session = Depends(get_db)):
@@ -6697,6 +6717,22 @@ async def ingest_email_data(
 ):
     """Ingest incoming email data for reconciliation"""
     try:
+        # Check if sender is blocked
+        if event.sender:
+            sender_email = event.sender.lower().strip()
+            blocked = db.query(BlockedSender).filter(
+                BlockedSender.user_id == current_user.id,
+                BlockedSender.sender_email == sender_email
+            ).first()
+
+            if blocked:
+                logger.info(f"Skipping email from blocked sender: {sender_email}")
+                return {
+                    "status": "skipped",
+                    "message": f"Sender {sender_email} is blocked",
+                    "event_id": None
+                }
+
         # Create incoming data event
         db_event = IncomingDataEvent(
             source=event.source,
@@ -7227,6 +7263,111 @@ async def reject_reconciliation(
         raise
     except Exception as e:
         logger.error(f"Rejection error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/reconciliation/block-sender")
+async def block_sender(
+    request: BlockSenderRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Block a sender from future email processing"""
+    try:
+        # Normalize email address
+        sender_email = request.sender_email.lower().strip()
+
+        # Check if already blocked
+        existing = db.query(BlockedSender).filter(
+            BlockedSender.user_id == current_user.id,
+            BlockedSender.sender_email == sender_email
+        ).first()
+
+        if existing:
+            return {
+                "status": "success",
+                "message": "Sender already blocked",
+                "sender_email": sender_email
+            }
+
+        # Create blocked sender record
+        blocked = BlockedSender(
+            user_id=current_user.id,
+            sender_email=sender_email,
+            reason=request.reason
+        )
+        db.add(blocked)
+        db.commit()
+
+        logger.info(f"User {current_user.id} blocked sender: {sender_email}")
+
+        return {
+            "status": "success",
+            "message": "Sender blocked",
+            "sender_email": sender_email
+        }
+    except Exception as e:
+        logger.error(f"Error blocking sender: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/reconciliation/blocked-senders")
+async def get_blocked_senders(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get list of blocked senders for current user"""
+    try:
+        blocked = db.query(BlockedSender).filter(
+            BlockedSender.user_id == current_user.id
+        ).order_by(BlockedSender.created_at.desc()).all()
+
+        return {
+            "blocked_senders": [
+                {
+                    "id": b.id,
+                    "sender_email": b.sender_email,
+                    "reason": b.reason,
+                    "created_at": b.created_at.isoformat() if b.created_at else None
+                }
+                for b in blocked
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Error fetching blocked senders: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/v1/reconciliation/blocked-senders/{sender_id}")
+async def unblock_sender(
+    sender_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Unblock a sender"""
+    try:
+        blocked = db.query(BlockedSender).filter(
+            BlockedSender.id == sender_id,
+            BlockedSender.user_id == current_user.id
+        ).first()
+
+        if not blocked:
+            raise HTTPException(status_code=404, detail="Blocked sender not found")
+
+        sender_email = blocked.sender_email
+        db.delete(blocked)
+        db.commit()
+
+        logger.info(f"User {current_user.id} unblocked sender: {sender_email}")
+
+        return {
+            "status": "success",
+            "message": "Sender unblocked",
+            "sender_email": sender_email
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error unblocking sender: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
