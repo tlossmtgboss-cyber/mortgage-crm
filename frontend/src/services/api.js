@@ -306,10 +306,40 @@ export const aiAPI = {
     return ensureArray(response.data, 'suggestions');
   },
   processCommand: async (message, context = {}) => {
+    // Detect coaching mode from message
+    const coachingKeywords = [
+      'daily briefing', 'pipeline audit', 'focus reset', 'what should i do',
+      'accountability review', 'tough love', 'teach me', 'priorities',
+      'what are my', 'help me focus', 'review my performance'
+    ];
+    const isCoachingMode = coachingKeywords.some(kw =>
+      message.toLowerCase().includes(kw)
+    );
+
+    // Fetch user context for better AI responses
+    let userContext = {};
+    try {
+      const [tasksRes, pipelineRes, profileRes] = await Promise.all([
+        api.get('/api/v1/ai/context/tasks').catch(() => ({ data: null })),
+        api.get('/api/v1/ai/context/pipeline').catch(() => ({ data: null })),
+        api.get('/api/v1/ai/context/user/profile').catch(() => ({ data: null }))
+      ]);
+
+      userContext = {
+        tasks: tasksRes.data,
+        pipeline: pipelineRes.data,
+        profile: profileRes.data
+      };
+    } catch (e) {
+      console.warn('Failed to fetch user context:', e);
+    }
+
     const response = await api.post('/api/v1/ai/smart-chat', {
       message,
       include_context: true,
-      context_type: 'general',
+      context_type: isCoachingMode ? 'coaching' : 'general',
+      coaching_mode: isCoachingMode,
+      user_context: userContext
     });
     // Map smart-chat response format to expected format
     const data = response.data;

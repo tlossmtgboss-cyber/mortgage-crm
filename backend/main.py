@@ -2646,6 +2646,14 @@ class BlockSenderRequest(BaseModel):
     sender_email: str
     reason: Optional[str] = "Blocked by user"
 
+class CreateLeadFromExtracted(BaseModel):
+    extracted_data_id: int
+    first_name: str
+    last_name: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    referral_partner_id: Optional[int] = None
+
 # ============================================================================
 # MICROSOFT OAUTH SCHEMAS
 # ============================================================================
@@ -4206,14 +4214,45 @@ async def smart_chat_with_memory(
         include_context = data.get("include_context", True)
         coaching_mode = data.get("coaching_mode")
         context_type = data.get("context_type")
+        user_context = data.get("user_context", {})
 
         if not message:
             raise HTTPException(status_code=400, detail="Message is required")
 
-        # Fetch CRM data for coaching requests
+        # Build coaching context from user_context or fetch it
         coaching_context = None
         if coaching_mode or context_type == "coaching":
-            coaching_context = await _get_coaching_context(db, current_user.id)
+            # Use passed user_context to build coaching context
+            if user_context:
+                context_parts = []
+
+                # Add profile summary
+                if user_context.get("profile"):
+                    p = user_context["profile"]
+                    context_parts.append(f"## Your Profile Summary")
+                    context_parts.append(f"Pipeline: {p.get('pipeline_summary', 'N/A')}")
+                    context_parts.append(f"Active Leads: {p.get('total_active_leads', 0)}")
+                    context_parts.append(f"Funded Loans: {p.get('funded_this_month', 0)} this month")
+                    if p.get('tasks'):
+                        context_parts.append(f"Tasks: {p['tasks'].get('pending', 0)} pending, {p['tasks'].get('overdue', 0)} overdue")
+
+                # Add tasks
+                if user_context.get("tasks") and user_context["tasks"].get("tasks"):
+                    context_parts.append(f"\n## Your Tasks ({len(user_context['tasks']['tasks'])} items)")
+                    for task in user_context["tasks"]["tasks"][:10]:
+                        status = "🔴 OVERDUE" if task.get("is_overdue") else "⏰ Due"
+                        context_parts.append(f"- {task.get('title', 'Untitled')}: {status} {task.get('due_date', 'No date')}")
+
+                # Add pipeline
+                if user_context.get("pipeline") and user_context["pipeline"].get("stages"):
+                    context_parts.append(f"\n## Your Pipeline")
+                    for stage in user_context["pipeline"]["stages"]:
+                        context_parts.append(f"- {stage.get('name', 'Unknown')}: {stage.get('count', 0)} leads (${stage.get('value', 0):,.0f})")
+
+                coaching_context = "\n".join(context_parts)
+            else:
+                # Fallback to database fetch
+                coaching_context = await _get_coaching_context(db, current_user.id)
 
         # ✅ FIX: Log to Mission Control FIRST (before trying AI response)
         action_id = await log_ai_action_to_mission_control(
@@ -7403,6 +7442,152 @@ async def unblock_sender(
     except Exception as e:
         logger.error(f"Error unblocking sender: {e}")
         db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/reconciliation/create-lead")
+async def create_lead_from_extracted(
+    request: CreateLeadFromExtracted,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new lead from extracted email data when no match is found"""
+    try:
+        # Get extracted data
+        extracted = db.query(ExtractedData).join(
+            IncomingDataEvent,
+            ExtractedData.event_id == IncomingDataEvent.id
+        ).filter(
+            ExtractedData.id == request.extracted_data_id,
+            IncomingDataEvent.user_id == current_user.id
+        ).first()
+
+        if not extracted:
+            raise HTTPException(status_code=404, detail="Extracted data not found")
+
+        # Build lead name
+        full_name = f"{request.first_name} {request.last_name}"
+
+        # Extract additional fields from the extracted data
+        fields = extracted.fields or {}
+
+        # Get email from request or extracted data
+        email = request.email
+        if not email and "email" in fields:
+            email = fields["email"].get("value")
+
+        # Get phone from request or extracted data
+        phone = request.phone
+        if not phone and "phone" in fields:
+            phone = fields["phone"].get("value")
+
+        # Create new lead
+        new_lead = Lead(
+            name=full_name,
+            email=email,
+            phone=phone,
+            stage=LeadStage.NEW,
+            source="Email Import",
+            referral_partner_id=request.referral_partner_id,
+            owner_id=current_user.id,
+            notes=f"Created from email extraction on {datetime.now().strftime('%Y-%m-%d')}"
+        )
+
+        # Apply extracted fields to lead
+        if "loan_amount" in fields:
+            try:
+                new_lead.preapproval_amount = float(fields["loan_amount"]["value"])
+            except:
+                pass
+
+        if "credit_score" in fields:
+            try:
+                new_lead.credit_score = int(fields["credit_score"]["value"])
+            except:
+                pass
+
+        if "loan_type" in fields:
+            new_lead.loan_type = fields["loan_type"]["value"]
+
+        if "address" in fields:
+            new_lead.address = fields["address"]["value"]
+
+        if "property_value" in fields:
+            try:
+                new_lead.property_value = float(fields["property_value"]["value"])
+            except:
+                pass
+
+        db.add(new_lead)
+        db.flush()  # Get the new lead ID
+
+        # Update extracted data to point to this new lead
+        extracted.match_entity_type = "lead"
+        extracted.match_entity_id = new_lead.id
+        extracted.match_confidence = 1.0  # User-confirmed match
+        extracted.status = "approved"
+        extracted.reviewed_by = current_user.id
+        extracted.reviewed_at = datetime.now(timezone.utc)
+
+        db.commit()
+
+        logger.info(f"Created new lead {new_lead.id} from extracted data {extracted.id} by user {current_user.id}")
+
+        return {
+            "status": "success",
+            "message": f"Created new lead: {full_name}",
+            "lead_id": new_lead.id,
+            "extracted_data_id": extracted.id
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating lead from extracted data: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/reconciliation/check-match/{extracted_id}")
+async def check_match_status(
+    extracted_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Check if extracted data has a match before approving"""
+    try:
+        extracted = db.query(ExtractedData).join(
+            IncomingDataEvent,
+            ExtractedData.event_id == IncomingDataEvent.id
+        ).filter(
+            ExtractedData.id == extracted_id,
+            IncomingDataEvent.user_id == current_user.id
+        ).first()
+
+        if not extracted:
+            raise HTTPException(status_code=404, detail="Extracted data not found")
+
+        has_match = bool(extracted.match_entity_type and extracted.match_entity_id)
+
+        # Get extracted name if available
+        fields = extracted.fields or {}
+        extracted_name = None
+        if "borrower_name" in fields:
+            extracted_name = fields["borrower_name"].get("value")
+        elif "name" in fields:
+            extracted_name = fields["name"].get("value")
+
+        return {
+            "has_match": has_match,
+            "match_entity_type": extracted.match_entity_type,
+            "match_entity_id": extracted.match_entity_id,
+            "match_confidence": extracted.match_confidence,
+            "extracted_name": extracted_name,
+            "fields": extracted.fields
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error checking match status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/v1/reconciliation/correct")

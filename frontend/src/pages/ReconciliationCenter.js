@@ -20,9 +20,21 @@ function ReconciliationCenter() {
   const [approvalProgress, setApprovalProgress] = useState({ approved: 0, total: 20 });
   const [delegateToAI, setDelegateToAI] = useState(false);
 
+  // No-match dialog state
+  const [showNoMatchDialog, setShowNoMatchDialog] = useState(false);
+  const [noMatchItemId, setNoMatchItemId] = useState(null);
+  const [noMatchData, setNoMatchData] = useState(null);
+  const [newBorrowerForm, setNewBorrowerForm] = useState({
+    first_name: '',
+    last_name: '',
+    referral_partner_id: ''
+  });
+  const [referralPartners, setReferralPartners] = useState([]);
+
   useEffect(() => {
     fetchPendingItems();
     fetchCompletedItems();
+    fetchReferralPartners();
     // Note: loadSampleData() removed - was overwriting real API data with samples
 
     // Auto-sync emails every 5 minutes
@@ -35,6 +47,22 @@ function ReconciliationCenter() {
 
     return () => clearInterval(syncInterval);
   }, []);
+
+  const fetchReferralPartners = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/referral-partners`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setReferralPartners(data.partners || data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching referral partners:', error);
+    }
+  };
 
   const fetchPendingItems = async () => {
     try {
@@ -192,6 +220,44 @@ function ReconciliationCenter() {
   const handleApprove = async (itemId) => {
     try {
       setProcessingAction(true);
+
+      // First check if there's a match
+      const checkResponse = await fetch(`${API_BASE_URL}/api/v1/reconciliation/check-match/${itemId}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (checkResponse.ok) {
+        const matchData = await checkResponse.json();
+
+        if (!matchData.has_match) {
+          // No match found - show dialog to create new borrower
+          setNoMatchItemId(itemId);
+          setNoMatchData(matchData);
+          setNewBorrowerForm({
+            first_name: matchData.extracted_name?.split(' ')[0] || '',
+            last_name: matchData.extracted_name?.split(' ').slice(1).join(' ') || '',
+            referral_partner_id: ''
+          });
+          setShowNoMatchDialog(true);
+          setProcessingAction(false);
+          return;
+        }
+      }
+
+      // Has match or check failed - proceed with normal approval
+      await proceedWithApproval(itemId);
+    } catch (error) {
+      console.error('Error approving item:', error);
+      alert(`Error approving item: ${error.message}`);
+      setProcessingAction(false);
+    }
+  };
+
+  const proceedWithApproval = async (itemId) => {
+    try {
+      setProcessingAction(true);
       const corrections = Object.keys(editedFields).length > 0 ? editedFields : null;
 
       const response = await fetch(`${API_BASE_URL}/api/v1/reconciliation/approve`, {
@@ -228,6 +294,57 @@ function ReconciliationCenter() {
     } finally {
       setProcessingAction(false);
     }
+  };
+
+  const handleCreateBorrower = async () => {
+    try {
+      setProcessingAction(true);
+
+      // Validate form
+      if (!newBorrowerForm.first_name || !newBorrowerForm.last_name) {
+        alert('Please enter first name and last name');
+        setProcessingAction(false);
+        return;
+      }
+
+      // Create new lead from extracted data
+      const response = await fetch(`${API_BASE_URL}/api/v1/reconciliation/create-lead`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          extracted_data_id: noMatchItemId,
+          first_name: newBorrowerForm.first_name,
+          last_name: newBorrowerForm.last_name,
+          referral_partner_id: newBorrowerForm.referral_partner_id || null
+        })
+      });
+
+      if (response.ok) {
+        // Close dialog and proceed with approval
+        setShowNoMatchDialog(false);
+        setNoMatchItemId(null);
+        setNoMatchData(null);
+        await proceedWithApproval(noMatchItemId);
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        alert(`Failed to create borrower: ${errorData.detail || response.statusText}`);
+      }
+    } catch (error) {
+      console.error('Error creating borrower:', error);
+      alert(`Error creating borrower: ${error.message}`);
+    } finally {
+      setProcessingAction(false);
+    }
+  };
+
+  const handleCancelNoMatch = () => {
+    setShowNoMatchDialog(false);
+    setNoMatchItemId(null);
+    setNoMatchData(null);
+    setProcessingAction(false);
   };
 
   const handleReject = async (itemId, reason) => {
@@ -1422,6 +1539,82 @@ function ReconciliationCenter() {
           </div>
         ) : null}
       </div>
+
+      {/* No Match Dialog */}
+      {showNoMatchDialog && (
+        <div className="dialog-overlay">
+          <div className="dialog-content no-match-dialog">
+            <div className="dialog-header">
+              <h3>No Matching Borrower Found</h3>
+              <button className="dialog-close" onClick={handleCancelNoMatch}>&times;</button>
+            </div>
+            <div className="dialog-body">
+              <p>No existing borrower profile matches this extracted data. Would you like to create a new borrower?</p>
+
+              {noMatchData?.fields && (
+                <div className="extracted-summary">
+                  <h4>Extracted Information:</h4>
+                  <ul>
+                    {Object.entries(noMatchData.fields).map(([key, value]) => (
+                      value && <li key={key}><strong>{key}:</strong> {value}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              <div className="new-borrower-form">
+                <h4>New Borrower Details:</h4>
+                <div className="form-group">
+                  <label>First Name *</label>
+                  <input
+                    type="text"
+                    value={newBorrowerForm.first_name}
+                    onChange={(e) => setNewBorrowerForm(prev => ({ ...prev, first_name: e.target.value }))}
+                    placeholder="Enter first name"
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Last Name *</label>
+                  <input
+                    type="text"
+                    value={newBorrowerForm.last_name}
+                    onChange={(e) => setNewBorrowerForm(prev => ({ ...prev, last_name: e.target.value }))}
+                    placeholder="Enter last name"
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Referral Partner</label>
+                  <select
+                    value={newBorrowerForm.referral_partner_id}
+                    onChange={(e) => setNewBorrowerForm(prev => ({ ...prev, referral_partner_id: e.target.value }))}
+                  >
+                    <option value="">Select referral partner (optional)</option>
+                    {referralPartners.map(partner => (
+                      <option key={partner.id} value={partner.id}>
+                        {partner.name || partner.company_name || `Partner #${partner.id}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="dialog-footer">
+              <button className="btn btn-secondary" onClick={handleCancelNoMatch}>
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={handleCreateBorrower}
+                disabled={processingAction || !newBorrowerForm.first_name || !newBorrowerForm.last_name}
+              >
+                {processingAction ? 'Creating...' : 'Create Borrower & Approve'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
