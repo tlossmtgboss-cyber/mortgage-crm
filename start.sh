@@ -19,6 +19,4 @@ echo "🔐 Demo Login: demo@example.com / demo123"
 echo ""
 
 # Start uvicorn server (Railway provides PORT environment variable)
-python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
-python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
->>>>>>> d774359 (✨ Add comprehensive profile fields, AI Assistant page, and Railway deployment updates)
+python3 -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}

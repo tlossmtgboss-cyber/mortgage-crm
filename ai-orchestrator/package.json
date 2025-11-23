@@ -6,7 +6,7 @@
   "types": "dist/ai/orchestrator/smartAssistant.d.ts",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/minimal-server.js",
+    "start": "node dist/server.js",
     "dev": "ts-node src/server.ts",
     "test": "ts-node src/ai/eval/harness.ts",
     "lint": "eslint src --ext .ts"
