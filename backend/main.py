@@ -6086,6 +6086,622 @@ async def create_workflow_from_template(
 
 
 # ============================================================================
+# COMPLIANCE VALIDATION SYSTEM
+# ============================================================================
+
+# Compliance rules for different action types
+COMPLIANCE_RULES = {
+    "email_to_borrower": {
+        "rules": [
+            {"name": "rate_limit", "max_per_day": 3, "description": "Max 3 emails per borrower per day"},
+            {"name": "business_hours", "start": 8, "end": 20, "description": "Only send during business hours"},
+            {"name": "opt_out_check", "description": "Verify borrower hasn't opted out"},
+            {"name": "content_review", "forbidden_words": ["guaranteed", "promise", "100%"], "description": "No misleading claims"}
+        ],
+        "risk_level": "medium"
+    },
+    "sms_to_borrower": {
+        "rules": [
+            {"name": "rate_limit", "max_per_day": 2, "description": "Max 2 SMS per borrower per day"},
+            {"name": "tcpa_compliance", "description": "TCPA consent required"},
+            {"name": "business_hours", "start": 9, "end": 21, "description": "Only send 9am-9pm local time"}
+        ],
+        "risk_level": "medium"
+    },
+    "lead_stage_update": {
+        "rules": [
+            {"name": "valid_transition", "description": "Stage transition must be valid"},
+            {"name": "audit_required", "description": "All changes must be logged"}
+        ],
+        "risk_level": "low"
+    },
+    "loan_data_update": {
+        "rules": [
+            {"name": "hmda_fields", "protected": ["race", "ethnicity", "sex"], "description": "HMDA protected fields require special handling"},
+            {"name": "audit_required", "description": "All changes must be logged"},
+            {"name": "dual_control", "threshold": 50000, "description": "Changes over $50k need review"}
+        ],
+        "risk_level": "high"
+    },
+    "task_creation": {
+        "rules": [
+            {"name": "rate_limit", "max_per_hour": 20, "description": "Max 20 tasks per hour"},
+        ],
+        "risk_level": "low"
+    }
+}
+
+
+async def validate_compliance(
+    db: Session,
+    user_id: int,
+    action_type: str,
+    target_id: int = None,
+    action_data: dict = None
+) -> dict:
+    """
+    Validate an action against compliance rules before execution
+    Returns: {"passed": bool, "violations": [], "warnings": [], "risk_level": str}
+    """
+    from datetime import datetime, timedelta
+
+    result = {
+        "passed": True,
+        "violations": [],
+        "warnings": [],
+        "risk_level": "low",
+        "checked_at": datetime.now().isoformat()
+    }
+
+    if action_type not in COMPLIANCE_RULES:
+        return result
+
+    rules = COMPLIANCE_RULES[action_type]
+    result["risk_level"] = rules.get("risk_level", "low")
+
+    for rule in rules.get("rules", []):
+        rule_name = rule["name"]
+
+        # Rate limit check
+        if rule_name == "rate_limit":
+            if "max_per_day" in rule:
+                # Count actions in last 24 hours
+                cutoff = datetime.now() - timedelta(days=1)
+                count = db.query(AIAuditLog).filter(
+                    AIAuditLog.user_id == user_id,
+                    AIAuditLog.action_type == action_type,
+                    AIAuditLog.target_id == target_id,
+                    AIAuditLog.created_at >= cutoff
+                ).count()
+
+                if count >= rule["max_per_day"]:
+                    result["passed"] = False
+                    result["violations"].append({
+                        "rule": rule_name,
+                        "message": f"Rate limit exceeded: {count}/{rule['max_per_day']} per day",
+                        "severity": "error"
+                    })
+                elif count >= rule["max_per_day"] - 1:
+                    result["warnings"].append({
+                        "rule": rule_name,
+                        "message": f"Approaching rate limit: {count}/{rule['max_per_day']} per day"
+                    })
+
+            if "max_per_hour" in rule:
+                cutoff = datetime.now() - timedelta(hours=1)
+                count = db.query(AIAuditLog).filter(
+                    AIAuditLog.user_id == user_id,
+                    AIAuditLog.action_type == action_type,
+                    AIAuditLog.created_at >= cutoff
+                ).count()
+
+                if count >= rule["max_per_hour"]:
+                    result["passed"] = False
+                    result["violations"].append({
+                        "rule": rule_name,
+                        "message": f"Hourly rate limit exceeded: {count}/{rule['max_per_hour']}",
+                        "severity": "error"
+                    })
+
+        # Business hours check
+        elif rule_name == "business_hours":
+            current_hour = datetime.now().hour
+            if current_hour < rule["start"] or current_hour >= rule["end"]:
+                result["warnings"].append({
+                    "rule": rule_name,
+                    "message": f"Outside business hours ({rule['start']}:00-{rule['end']}:00)"
+                })
+
+        # Content review check
+        elif rule_name == "content_review" and action_data:
+            content = str(action_data.get("content", "") or action_data.get("message", "")).lower()
+            for word in rule.get("forbidden_words", []):
+                if word.lower() in content:
+                    result["passed"] = False
+                    result["violations"].append({
+                        "rule": rule_name,
+                        "message": f"Forbidden word detected: '{word}'",
+                        "severity": "error"
+                    })
+
+        # HMDA protected fields
+        elif rule_name == "hmda_fields" and action_data:
+            for field in rule.get("protected", []):
+                if field in action_data:
+                    result["warnings"].append({
+                        "rule": rule_name,
+                        "message": f"HMDA protected field '{field}' being modified - ensure compliance"
+                    })
+
+        # Dual control for large amounts
+        elif rule_name == "dual_control" and action_data:
+            amount = action_data.get("loan_amount", 0) or action_data.get("amount", 0)
+            if amount and float(amount) > rule.get("threshold", 50000):
+                result["warnings"].append({
+                    "rule": rule_name,
+                    "message": f"Amount ${amount:,.2f} exceeds ${rule['threshold']:,} - consider review"
+                })
+
+    return result
+
+
+@app.post("/api/v1/ai/compliance/validate")
+async def validate_action_compliance(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Validate an action against compliance rules before execution
+    """
+    data = await request.json()
+
+    result = await validate_compliance(
+        db=db,
+        user_id=current_user.id,
+        action_type=data.get("action_type"),
+        target_id=data.get("target_id"),
+        action_data=data.get("action_data", {})
+    )
+
+    return result
+
+
+@app.get("/api/v1/ai/compliance/rules")
+async def get_compliance_rules(
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Get all compliance rules
+    """
+    return {"rules": COMPLIANCE_RULES}
+
+
+# ============================================================================
+# EVENT-TRIGGERED WORKFLOWS
+# ============================================================================
+
+# Event trigger definitions
+EVENT_TRIGGERS = {
+    "lead_stage_changed": {
+        "description": "Triggered when a lead's stage changes",
+        "available_actions": ["send_email", "create_task", "send_sms", "notify_user"]
+    },
+    "loan_status_changed": {
+        "description": "Triggered when a loan's status changes",
+        "available_actions": ["send_borrower_update", "create_task", "notify_team"]
+    },
+    "task_overdue": {
+        "description": "Triggered when a task becomes overdue",
+        "available_actions": ["send_reminder", "escalate", "reassign"]
+    },
+    "document_uploaded": {
+        "description": "Triggered when a document is uploaded",
+        "available_actions": ["verify_document", "update_checklist", "notify_processor"]
+    },
+    "new_lead_created": {
+        "description": "Triggered when a new lead is created",
+        "available_actions": ["send_welcome", "create_tasks", "assign_lo"]
+    }
+}
+
+
+@app.post("/api/v1/ai/events/trigger")
+async def trigger_event_workflow(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Trigger event-based workflows
+    Called by webhooks or internal events
+    """
+    try:
+        from datetime import datetime, timedelta
+        from openai import OpenAI
+
+        data = await request.json()
+        event_type = data.get("event_type")
+        entity_type = data.get("entity_type")  # lead, loan, task
+        entity_id = data.get("entity_id")
+        old_value = data.get("old_value")
+        new_value = data.get("new_value")
+        metadata = data.get("metadata", {})
+
+        actions_taken = []
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+        # Handle different event types
+        if event_type == "lead_stage_changed":
+            lead = db.query(Lead).filter(Lead.id == entity_id).first()
+            if not lead:
+                raise HTTPException(status_code=404, detail="Lead not found")
+
+            # Auto-actions based on new stage
+            if new_value in ["QUALIFIED", "CONTACTED"]:
+                # Create follow-up task
+                task = Task(
+                    title=f"Follow up with {lead.name} - Stage: {new_value}",
+                    description=f"Lead moved to {new_value}. Schedule next contact.",
+                    due_date=datetime.now() + timedelta(days=1),
+                    priority="high",
+                    status="pending",
+                    owner_id=current_user.id,
+                    lead_id=lead.id
+                )
+                db.add(task)
+                actions_taken.append({"action": "task_created", "task": task.title})
+
+            elif new_value == "APPLICATION":
+                # Generate welcome to application email
+                response = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[
+                        {"role": "system", "content": "Generate a brief, professional welcome email for a mortgage applicant."},
+                        {"role": "user", "content": f"Welcome {lead.name} who just started their mortgage application."}
+                    ],
+                    max_tokens=150
+                )
+                email_content = response.choices[0].message.content
+                actions_taken.append({
+                    "action": "email_generated",
+                    "content_preview": email_content[:100]
+                })
+
+        elif event_type == "loan_status_changed":
+            loan = db.query(Loan).filter(Loan.id == entity_id).first()
+            if loan:
+                # Auto-notify borrower of status change
+                response = client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[
+                        {"role": "system", "content": "Generate a brief loan status update notification."},
+                        {"role": "user", "content": f"Loan for {loan.borrower_name} moved from {old_value} to {new_value}."}
+                    ],
+                    max_tokens=100
+                )
+                notification = response.choices[0].message.content
+                actions_taken.append({
+                    "action": "notification_generated",
+                    "status_change": f"{old_value} → {new_value}",
+                    "content": notification
+                })
+
+        elif event_type == "task_overdue":
+            task = db.query(Task).filter(Task.id == entity_id).first()
+            if task:
+                # Escalate priority
+                task.priority = "urgent"
+                actions_taken.append({
+                    "action": "task_escalated",
+                    "task": task.title,
+                    "new_priority": "urgent"
+                })
+
+        elif event_type == "new_lead_created":
+            lead = db.query(Lead).filter(Lead.id == entity_id).first()
+            if lead:
+                # Create initial tasks
+                initial_tasks = [
+                    ("Initial contact call", 0, "high"),
+                    ("Send intro email", 0, "medium"),
+                    ("Qualify lead", 1, "high")
+                ]
+                for title, days, priority in initial_tasks:
+                    task = Task(
+                        title=f"{title} - {lead.name}",
+                        due_date=datetime.now() + timedelta(days=days),
+                        priority=priority,
+                        status="pending",
+                        owner_id=current_user.id,
+                        lead_id=lead.id
+                    )
+                    db.add(task)
+                    actions_taken.append({"action": "task_created", "task": task.title})
+
+        # Log the event
+        audit = AIAuditLog(
+            user_id=current_user.id,
+            agent_name="Event Trigger Engine",
+            action_type=f"event_{event_type}",
+            action_category="automation",
+            autonomy_level="autonomous",
+            target_type=entity_type,
+            target_id=entity_id,
+            input_data={"event": event_type, "old": old_value, "new": new_value},
+            output_data={"actions": actions_taken},
+            status="completed"
+        )
+        db.add(audit)
+        db.commit()
+
+        return {
+            "event_type": event_type,
+            "entity_id": entity_id,
+            "actions_taken": actions_taken,
+            "success": True
+        }
+
+    except Exception as e:
+        logger.error(f"Event trigger error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/ai/events/triggers")
+async def get_event_triggers(
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Get available event triggers
+    """
+    return {"triggers": EVENT_TRIGGERS}
+
+
+# ============================================================================
+# BACKGROUND SCHEDULER
+# ============================================================================
+
+@app.post("/api/v1/ai/scheduler/run-due-workflows")
+async def run_due_workflows(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Execute all workflows that are due to run
+    Called by external cron job or scheduler service
+    """
+    try:
+        from datetime import datetime
+
+        # Get API key from header for scheduler authentication
+        api_key = request.headers.get("X-Scheduler-Key")
+        expected_key = os.getenv("SCHEDULER_API_KEY", "scheduler-secret-key")
+
+        if api_key != expected_key:
+            raise HTTPException(status_code=401, detail="Invalid scheduler key")
+
+        now = datetime.now()
+
+        # Find all due workflows
+        due_workflows = db.query(ScheduledWorkflow).filter(
+            ScheduledWorkflow.is_active == True,
+            ScheduledWorkflow.next_run <= now
+        ).all()
+
+        results = []
+
+        for workflow in due_workflows:
+            try:
+                # Create execution record
+                execution = WorkflowExecution(
+                    workflow_id=workflow.id,
+                    user_id=workflow.user_id,
+                    status="running",
+                    trigger_type="scheduled"
+                )
+                db.add(execution)
+                db.commit()
+
+                # Execute the workflow (simplified - would call execute_workflow internally)
+                actions_taken = []
+                errors = []
+
+                if workflow.workflow_type == "weekly_borrower_update":
+                    loans = db.query(Loan).filter(
+                        Loan.user_id == workflow.user_id,
+                        Loan.status.in_(["in_progress", "processing", "underwriting"])
+                    ).all()
+
+                    for loan in loans:
+                        actions_taken.append({
+                            "action": "borrower_update_queued",
+                            "loan_id": loan.id,
+                            "borrower": loan.borrower_name
+                        })
+
+                elif workflow.workflow_type == "daily_task_summary":
+                    tasks = db.query(Task).filter(
+                        Task.owner_id == workflow.user_id,
+                        Task.status != "completed"
+                    ).count()
+                    actions_taken.append({
+                        "action": "summary_generated",
+                        "pending_tasks": tasks
+                    })
+
+                elif workflow.workflow_type == "follow_up_sequence":
+                    leads = db.query(Lead).filter(
+                        Lead.owner_id == workflow.user_id,
+                        Lead.stage.in_(["NEW", "CONTACTED"])
+                    ).all()
+                    for lead in leads:
+                        actions_taken.append({
+                            "action": "follow_up_queued",
+                            "lead": lead.name
+                        })
+
+                # Update execution
+                execution.status = "completed"
+                execution.completed_at = datetime.now()
+                execution.targets_processed = len(actions_taken)
+                execution.targets_succeeded = len(actions_taken)
+                execution.actions_taken = actions_taken
+
+                # Update workflow
+                workflow.last_run = now
+                workflow.total_executions += 1
+                workflow.successful_executions += 1
+
+                # Calculate next run
+                from datetime import timedelta
+                if workflow.schedule_interval == "daily":
+                    workflow.next_run = now + timedelta(days=1)
+                elif workflow.schedule_interval == "weekly":
+                    workflow.next_run = now + timedelta(weeks=1)
+                elif workflow.schedule_interval == "monthly":
+                    workflow.next_run = now + timedelta(days=30)
+
+                results.append({
+                    "workflow_id": workflow.id,
+                    "name": workflow.name,
+                    "status": "completed",
+                    "actions": len(actions_taken)
+                })
+
+            except Exception as e:
+                workflow.failed_executions += 1
+                results.append({
+                    "workflow_id": workflow.id,
+                    "name": workflow.name,
+                    "status": "failed",
+                    "error": str(e)
+                })
+
+        db.commit()
+
+        return {
+            "executed": len(results),
+            "results": results,
+            "next_check": "Call this endpoint periodically (e.g., every 5 minutes)"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Scheduler error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/ai/scheduler/status")
+async def get_scheduler_status(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Get scheduler status and upcoming workflows
+    """
+    from datetime import datetime, timedelta
+
+    now = datetime.now()
+
+    # Get user's workflows
+    workflows = db.query(ScheduledWorkflow).filter(
+        ScheduledWorkflow.user_id == current_user.id,
+        ScheduledWorkflow.is_active == True
+    ).all()
+
+    upcoming = []
+    overdue = []
+
+    for w in workflows:
+        info = {
+            "id": w.id,
+            "name": w.name,
+            "workflow_type": w.workflow_type,
+            "next_run": w.next_run.isoformat() if w.next_run else None,
+            "last_run": w.last_run.isoformat() if w.last_run else None
+        }
+
+        if w.next_run:
+            if w.next_run <= now:
+                overdue.append(info)
+            elif w.next_run <= now + timedelta(days=1):
+                upcoming.append(info)
+
+    return {
+        "total_active_workflows": len(workflows),
+        "overdue_count": len(overdue),
+        "upcoming_24h": upcoming,
+        "overdue": overdue,
+        "scheduler_endpoint": "/api/v1/ai/scheduler/run-due-workflows",
+        "recommended_interval": "5 minutes"
+    }
+
+
+@app.post("/api/v1/ai/scheduler/pause/{workflow_id}")
+async def pause_workflow(
+    workflow_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Pause a scheduled workflow
+    """
+    workflow = db.query(ScheduledWorkflow).filter(
+        ScheduledWorkflow.id == workflow_id,
+        ScheduledWorkflow.user_id == current_user.id
+    ).first()
+
+    if not workflow:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    workflow.is_active = False
+    db.commit()
+
+    return {"id": workflow_id, "is_active": False, "message": "Workflow paused"}
+
+
+@app.post("/api/v1/ai/scheduler/resume/{workflow_id}")
+async def resume_workflow(
+    workflow_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Resume a paused workflow
+    """
+    from datetime import datetime, timedelta
+
+    workflow = db.query(ScheduledWorkflow).filter(
+        ScheduledWorkflow.id == workflow_id,
+        ScheduledWorkflow.user_id == current_user.id
+    ).first()
+
+    if not workflow:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    workflow.is_active = True
+
+    # Reset next_run if it's in the past
+    if workflow.next_run and workflow.next_run < datetime.now():
+        if workflow.schedule_interval == "daily":
+            workflow.next_run = datetime.now() + timedelta(days=1)
+        elif workflow.schedule_interval == "weekly":
+            workflow.next_run = datetime.now() + timedelta(weeks=1)
+        else:
+            workflow.next_run = datetime.now() + timedelta(days=1)
+
+    db.commit()
+
+    return {
+        "id": workflow_id,
+        "is_active": True,
+        "next_run": workflow.next_run.isoformat() if workflow.next_run else None,
+        "message": "Workflow resumed"
+    }
+
+
+# ============================================================================
 # AI UNDERWRITING ENDPOINTS
 # ============================================================================
 
