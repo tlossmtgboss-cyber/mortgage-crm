@@ -4545,7 +4545,7 @@ Respond in JSON format:
         user_context = {
             "user_id": current_user.id,
             "user_email": current_user.email,
-            "user_name": current_user.name or current_user.email.split('@')[0],
+            "user_name": current_user.full_name or current_user.email.split('@')[0],
             "message": message,
             "intent": intent_data.get("intent"),
             "entities": intent_data.get("entities", {})
