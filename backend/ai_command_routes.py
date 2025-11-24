@@ -4044,9 +4044,12 @@ async def execute_voicemail_drop(
 # Email Daily Priorities Report
 # ============================================================================
 
+class SendEmailRequest(BaseModel):
+    email_address: Optional[str] = None
+
 @router.post("/send-daily-priorities-email")
 async def send_daily_priorities_email(
-    email_address: Optional[str] = None,
+    request: SendEmailRequest,
     db: Session = Depends(get_db)
 ):
     """
@@ -4069,7 +4072,7 @@ async def send_daily_priorities_email(
         user_email = ""
 
     # Use provided email or fallback to user's email
-    to_email = email_address or user_email
+    to_email = request.email_address or user_email
     if not to_email:
         raise HTTPException(status_code=400, detail="No email address provided")
 
