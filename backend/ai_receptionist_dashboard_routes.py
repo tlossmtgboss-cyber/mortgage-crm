@@ -129,6 +129,8 @@ class ROIMetrics(BaseModel):
     saved_labor_hours: float
     saved_missed_calls: int
     cost_per_interaction: Optional[float] = None
+    cost_per_close: Optional[float] = None
+    total_closes: Optional[int] = None
     roi_percentage: Optional[float] = None
 
 
@@ -468,10 +470,22 @@ async def get_roi_metrics(
         # Calculate saved missed calls (placeholder)
         saved_missed_calls = int(total_conversations * 0.35)  # Assume 35% would have been missed
 
+        # Calculate total closes from activities with 'closed' lead_stage
+        total_closes = db.query(AIReceptionistActivity).filter(
+            and_(
+                AIReceptionistActivity.timestamp >= datetime.combine(start_date, datetime.min.time()),
+                AIReceptionistActivity.timestamp <= datetime.combine(end_date, datetime.max.time()),
+                AIReceptionistActivity.lead_stage == 'closed'
+            )
+        ).count()
+
         # Calculate ROI (placeholder - needs real cost data)
         total_cost = total_conversations * cost_per_interaction
         total_value = total_estimated_revenue + (total_saved_hours * 50)  # $50/hour labor cost
         roi_percentage = ((total_value - total_cost) / total_cost * 100) if total_cost > 0 else None
+
+        # Calculate cost per close
+        cost_per_close = (total_cost / total_closes) if total_closes > 0 else None
 
         return ROIMetrics(
             total_appointments=total_appointments,
@@ -480,6 +494,8 @@ async def get_roi_metrics(
             saved_labor_hours=total_saved_hours,
             saved_missed_calls=saved_missed_calls,
             cost_per_interaction=cost_per_interaction,
+            cost_per_close=cost_per_close,
+            total_closes=total_closes,
             roi_percentage=roi_percentage
         )
 
