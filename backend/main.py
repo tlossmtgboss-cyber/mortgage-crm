@@ -149,9 +149,11 @@ class LeadStage(str, enum.Enum):
     NEW = "New"
     ATTEMPTED_CONTACT = "Attempted Contact"
     PROSPECT = "Prospect"
-    APPLICATION_STARTED = "Application Started"
-    APPLICATION_COMPLETE = "Application Complete"
+    APPLICATION = "Application"
+    PRE_QUALIFIED = "Pre-Qualified"
     PRE_APPROVED = "Pre-Approved"
+    WITHDRAWN = "Withdrawn"
+    DOES_NOT_QUALIFY = "Does Not Qualify"
 
 class LoanStage(str, enum.Enum):
     DISCLOSED = "Disclosed"
@@ -5031,18 +5033,46 @@ Key metrics to track:
 
         async def execute_get_pipeline(args):
             include_details = args.get("include_details", False)
+
+            # Get leads
             leads = db.query(Lead).filter(Lead.owner_id == current_user.id).all()
 
-            stages = {}
+            # Get loans
+            loans = db.query(Loan).filter(Loan.loan_officer_id == current_user.id).all()
+
+            # Lead stages
+            lead_stages = {}
             for lead in leads:
                 stage = str(lead.stage) if lead.stage else "New"
-                if stage not in stages:
-                    stages[stage] = {"count": 0, "leads": []}
-                stages[stage]["count"] += 1
+                if stage not in lead_stages:
+                    lead_stages[stage] = {"count": 0, "items": []}
+                lead_stages[stage]["count"] += 1
                 if include_details:
-                    stages[stage]["leads"].append({"id": lead.id, "name": f"{lead.name}"})
+                    lead_stages[stage]["items"].append({"id": lead.id, "name": f"{lead.name}", "type": "lead"})
 
-            return {"total_leads": len(leads), "stages": stages}
+            # Loan stages
+            loan_stages = {}
+            for loan in loans:
+                stage = str(loan.stage) if loan.stage else "Unknown"
+                if stage not in loan_stages:
+                    loan_stages[stage] = {"count": 0, "items": []}
+                loan_stages[stage]["count"] += 1
+                if include_details:
+                    borrower_name = loan.borrower.name if loan.borrower else f"Loan #{loan.id}"
+                    loan_stages[stage]["items"].append({
+                        "id": loan.id,
+                        "name": borrower_name,
+                        "amount": float(loan.loan_amount) if loan.loan_amount else 0,
+                        "type": "loan"
+                    })
+
+            return {
+                "total_leads": len(leads),
+                "total_loans": len(loans),
+                "lead_stages": lead_stages,
+                "loan_stages": loan_stages,
+                "summary": f"{len(leads)} leads, {len(loans)} active loans"
+            }
 
         async def execute_schedule_followup(args):
             lead_id = args.get("lead_id")
@@ -16621,8 +16651,8 @@ async def get_conversion_funnel(db: Session = Depends(get_db), current_user: Use
     stages_count = {
         "new": len([l for l in leads if l.stage == LeadStage.NEW]),
         "contacted": len([l for l in leads if l.stage != LeadStage.NEW]),
-        "prospect": len([l for l in leads if l.stage in [LeadStage.PROSPECT, LeadStage.APPLICATION_STARTED, LeadStage.APPLICATION_COMPLETE, LeadStage.PRE_APPROVED]]),
-        "application": len([l for l in leads if l.stage in [LeadStage.APPLICATION_STARTED, LeadStage.APPLICATION_COMPLETE, LeadStage.PRE_APPROVED]]),
+        "prospect": len([l for l in leads if l.stage in [LeadStage.PROSPECT, LeadStage.APPLICATION, LeadStage.PRE_QUALIFIED, LeadStage.PRE_APPROVED]]),
+        "application": len([l for l in leads if l.stage in [LeadStage.APPLICATION, LeadStage.PRE_QUALIFIED, LeadStage.PRE_APPROVED]]),
         "pre_approved": len([l for l in leads if l.stage == LeadStage.PRE_APPROVED])
     }
 
@@ -16675,7 +16705,7 @@ async def get_scorecard_metrics(db: Session = Depends(get_db), current_user: Use
     # Calculate stage-based metrics from real loan activity
     total_leads = len(ytd_leads)
     prospect_leads = len([l for l in ytd_leads if l.stage == LeadStage.PROSPECT])
-    app_started = len([l for l in ytd_leads if l.stage in [LeadStage.APPLICATION_STARTED, LeadStage.APPLICATION_COMPLETE, LeadStage.PRE_APPROVED]])
+    app_started = len([l for l in ytd_leads if l.stage in [LeadStage.APPLICATION, LeadStage.PRE_QUALIFIED, LeadStage.PRE_APPROVED]])
     pre_approved = len([l for l in ytd_leads if l.stage == LeadStage.PRE_APPROVED])
     funded_count = len(funded_loans)
     
@@ -17079,7 +17109,7 @@ async def execute_ai_function(
             # Get high-priority leads (high score, active stages)
             leads = db.query(Lead).filter(
                 Lead.owner_id == current_user.id,
-                Lead.stage.in_([LeadStage.NEW, LeadStage.ATTEMPTED_CONTACT, LeadStage.PROSPECT, LeadStage.PRE_QUALIFIED])
+                Lead.stage.in_([LeadStage.NEW, LeadStage.ATTEMPTED_CONTACT, LeadStage.PROSPECT, LeadStage.APPLICATION, LeadStage.PRE_QUALIFIED])
             ).order_by(Lead.ai_score.desc()).limit(limit).all()
 
             return {
