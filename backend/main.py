@@ -150,6 +150,7 @@ class LeadStage(str, enum.Enum):
     ATTEMPTED_CONTACT = "Attempted Contact"
     PROSPECT = "Prospect"
     APPLICATION = "Application"
+    APPLICATION_STARTED = "Application Started"
     PRE_QUALIFIED = "Pre-Qualified"
     PRE_APPROVED = "Pre-Approved"
     WITHDRAWN = "Withdrawn"
