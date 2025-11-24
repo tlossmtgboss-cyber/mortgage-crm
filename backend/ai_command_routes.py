@@ -4103,10 +4103,24 @@ async def send_daily_priorities_email(
             user_id=current_user_id
         )
 
+        logger.info(f"Query result for user {current_user_id}: success={priorities.get('success') if priorities else None}, data_count={len(priorities.get('data', [])) if priorities else 0}")
+
         if not priorities or not isinstance(priorities, dict) or not priorities.get("data"):
-            raise HTTPException(status_code=404, detail="No priorities data found")
+            logger.warning(f"No priorities data found. priorities={priorities}")
+            raise HTTPException(status_code=404, detail=f"No priorities data found for user {current_user_id}. Query returned: {len(priorities.get('data', [])) if priorities and isinstance(priorities, dict) else 0} items")
 
         priorities_data = priorities.get("data", [])
+
+        # If data is empty list, still send email with empty message
+        if not priorities_data or len(priorities_data) == 0:
+            logger.info(f"No priority items for user {current_user_id}, sending empty report")
+            # Create a placeholder message
+            priorities_data = [{
+                "type": "message",
+                "title": "No pending tasks or urgent loans at this time",
+                "priority_score": 0,
+                "urgency_label": "All Clear"
+            }]
 
         # Send the email
         success = email_service.send_daily_priorities_report(
