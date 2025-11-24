@@ -526,6 +526,59 @@ IMPORTANT: When asked about rate locks, use this real-time market data to provid
                 status = "⚠️" if emp["roi"] < 0 else "✅" if emp["roi"] > 100 else "📊"
                 context_parts.append(f"{status} {emp['name']} ({emp['role']}): ROI {emp['roi']:.1f}%, {emp['loans']} loans closed")
 
+            # Add loan-level detail for processors and underwriters
+            context_parts.append("\n### Loan-Level Performance Detail:\n")
+
+            # Get all loans with processor/underwriter assignments
+            all_loans = db.query(Loan).filter(
+                Loan.loan_officer_id != None
+            ).order_by(Loan.updated_at.desc()).limit(50).all()
+
+            # Group loans by processor
+            by_processor = {}
+            by_underwriter = {}
+
+            for loan in all_loans:
+                if loan.processor:
+                    if loan.processor not in by_processor:
+                        by_processor[loan.processor] = []
+                    by_processor[loan.processor].append(loan)
+                if loan.underwriter:
+                    if loan.underwriter not in by_underwriter:
+                        by_underwriter[loan.underwriter] = []
+                    by_underwriter[loan.underwriter].append(loan)
+
+            # Show processors with their loans
+            if by_processor:
+                context_parts.append("**Processors - Loan Details:**")
+                for proc_name, loans in sorted(by_processor.items()):
+                    on_track = sum(1 for l in loans if l.sla_status == "on-track")
+                    efficiency = (on_track / len(loans) * 100) if loans else 0
+                    context_parts.append(f"\n{proc_name} ({len(loans)} loans, {efficiency:.0f}% on-track):")
+                    for loan in loans[:5]:  # Show up to 5 loans per processor
+                        stage = str(loan.stage).replace("LoanStage.", "") if loan.stage else "Unknown"
+                        sla = "✅" if loan.sla_status == "on-track" else "⚠️"
+                        days = loan.days_in_stage or 0
+                        context_parts.append(f"  {sla} {loan.loan_number}: {stage}, {days} days in stage, ${loan.amount:,.0f}")
+                    if len(loans) > 5:
+                        context_parts.append(f"  ... and {len(loans) - 5} more loans")
+                context_parts.append("")
+
+            # Show underwriters with their loans
+            if by_underwriter:
+                context_parts.append("**Underwriters - Loan Details:**")
+                for uw_name, loans in sorted(by_underwriter.items()):
+                    on_track = sum(1 for l in loans if l.sla_status == "on-track")
+                    efficiency = (on_track / len(loans) * 100) if loans else 0
+                    context_parts.append(f"\n{uw_name} ({len(loans)} loans, {efficiency:.0f}% on-track):")
+                    for loan in loans[:5]:
+                        stage = str(loan.stage).replace("LoanStage.", "") if loan.stage else "Unknown"
+                        sla = "✅" if loan.sla_status == "on-track" else "⚠️"
+                        days = loan.days_in_stage or 0
+                        context_parts.append(f"  {sla} {loan.loan_number}: {stage}, {days} days in stage, ${loan.amount:,.0f}")
+                    if len(loans) > 5:
+                        context_parts.append(f"  ... and {len(loans) - 5} more loans")
+
             return "\n".join(context_parts)
         except Exception as e:
             logger.error(f"Error getting team performance context: {e}")
