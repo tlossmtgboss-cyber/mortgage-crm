@@ -17498,6 +17498,9 @@ def filter_leads_by_permissions(query, user: User, db: Session):
     - leads.view_team: See team's leads (not implemented yet - needs team_id)
     - leads.view_assigned: See only assigned leads
     """
+    # TEMPORARY: Return all leads to debug 500 error
+    return query
+
     try:
         if has_permission(user.id, 'leads.view_all', db):
             # Management: See all leads
