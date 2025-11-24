@@ -150,7 +150,6 @@ class LeadStage(str, enum.Enum):
     ATTEMPTED_CONTACT = "Attempted Contact"
     PROSPECT = "Prospect"
     APPLICATION = "Application"
-    APPLICATION_STARTED = "APPLICATION_STARTED"
     PRE_QUALIFIED = "Pre-Qualified"
     PRE_APPROVED = "Pre-Approved"
     WITHDRAWN = "Withdrawn"
@@ -18007,6 +18006,26 @@ def init_db():
 
                     conn.commit()
                     logger.info("✅ Schema migrations applied (PostgreSQL)")
+
+                    # Fix invalid APPLICATION_STARTED stage values
+                    result = conn.execute(text("""
+                        UPDATE leads
+                        SET stage = 'Application'
+                        WHERE stage = 'APPLICATION_STARTED'
+                    """))
+                    if result.rowcount > 0:
+                        logger.info(f"✅ Fixed {result.rowcount} leads with invalid APPLICATION_STARTED stage")
+
+                    # Fix null stages - set to New
+                    result2 = conn.execute(text("""
+                        UPDATE leads
+                        SET stage = 'New'
+                        WHERE stage IS NULL
+                    """))
+                    if result2.rowcount > 0:
+                        logger.info(f"✅ Fixed {result2.rowcount} leads with null stage")
+
+                    conn.commit()
         except Exception as e:
             logger.warning(f"⚠️ Schema migration note: {e}")
 
