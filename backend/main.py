@@ -4686,6 +4686,24 @@ Key metrics to track:
                 selected_agent = agent
                 break
 
+        # Autonomous Mode Configuration
+        autonomous_mode = data.get("autonomous_mode", True)  # Enable by default
+
+        # Risk levels for each tool
+        tool_risk_levels = {
+            # LOW RISK - Auto-execute without confirmation
+            "get_tasks": "low",
+            "search_leads": "low",
+            "get_pipeline": "low",
+            "get_metrics": "low",
+            "create_task": "low",           # Auto-create routine tasks
+            "schedule_followup": "low",     # Auto-schedule follow-ups
+
+            # MEDIUM RISK - Auto-execute for internal actions
+            "send_email": "medium",         # Auto-send status updates to self
+            "update_lead": "medium",        # Stage updates OK
+        }
+
         # Define tools the AI can execute
         tools = [
             {
@@ -5099,7 +5117,21 @@ Current date: {datetime.now().strftime('%Y-%m-%d %H:%M')}{agent_context}
 - Examples: "Email John and create a follow-up task" → call send_email AND create_task
 - "Send rate updates to all pre-approved leads" → search leads, then send multiple emails
 - Always complete ALL requested actions before responding
-- Confirm each action completed in your final response"""
+- Confirm each action completed in your final response
+
+## AUTONOMOUS MODE {"(ENABLED)" if autonomous_mode else "(DISABLED)"}:
+{"You are authorized to take action automatically for low-risk tasks:" if autonomous_mode else "Autonomous mode is disabled. Describe what you would do but ask for confirmation."}
+- ✅ Auto-create tasks for follow-ups and reminders
+- ✅ Auto-schedule follow-ups based on lead activity
+- ✅ Auto-send status update emails TO THE USER (not clients)
+- ✅ Auto-update lead stages based on conversation
+- ✅ Auto-fetch and analyze data
+
+When acting autonomously:
+- Execute the action immediately without asking
+- Report what you did in your response
+- Be proactive: if user mentions needing a reminder, create the task
+- If they discuss a lead, schedule appropriate follow-ups"""
 
         # Initialize conversation
         messages = [
@@ -5167,12 +5199,21 @@ Current date: {datetime.now().strftime('%Y-%m-%d %H:%M')}{agent_context}
             status="completed"
         )
 
+        # Categorize executed tools by risk level
+        autonomous_actions = []
+        for t in tool_results:
+            risk = tool_risk_levels.get(t["tool"], "medium")
+            if risk == "low":
+                autonomous_actions.append(t["tool"])
+
         return {
             "response": ai_response,
             "tools_executed": [t["tool"] for t in tool_results],
             "tool_results": tool_results,
             "agent_used": agent_name,
-            "specialized_agent": selected_agent["name"] if selected_agent else None
+            "specialized_agent": selected_agent["name"] if selected_agent else None,
+            "autonomous_mode": autonomous_mode,
+            "autonomous_actions": autonomous_actions
         }
 
     except Exception as e:
