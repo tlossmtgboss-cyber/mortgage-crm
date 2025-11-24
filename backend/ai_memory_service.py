@@ -87,13 +87,17 @@ class ContextAwareAI:
             # 2.5 Always get ROI context for business metrics questions
             roi_context = await self._get_roi_context(db)
 
+            # 2.6 Get rate lock context for rate-related questions
+            rate_lock_context = await self._get_rate_lock_context()
+
             # 3. Build enhanced system prompt with context
             system_prompt = self._build_system_prompt(
                 relevant_history,
                 lead_context,
                 loan_context,
                 coaching_context,
-                roi_context
+                roi_context,
+                rate_lock_context
             )
 
             # 4. Generate response with Claude
@@ -166,7 +170,8 @@ class ContextAwareAI:
         lead_context: str,
         loan_context: str,
         coaching_context: Optional[str] = None,
-        roi_context: Optional[str] = None
+        roi_context: Optional[str] = None,
+        rate_lock_context: Optional[str] = None
     ) -> str:
         """Build enhanced system prompt with all available context"""
 
@@ -212,6 +217,11 @@ You also have access to the mortgage CRM system and can help with lead managemen
         if roi_context:
             context_sections.append("\n## 📊 BUSINESS & ROI METRICS (Use this for cost, ROI, and performance questions!):")
             context_sections.append(roi_context)
+
+        # Add rate lock intelligence context if available
+        if rate_lock_context:
+            context_sections.append("\n## 🔒 RATE LOCK INTELLIGENCE (Use this for rate lock decisions!):")
+            context_sections.append(rate_lock_context)
 
         # Add guidelines - different based on whether we have current lead context
         if lead_context or loan_context:
@@ -339,6 +349,54 @@ Total AI Cost: ${total_cost:.2f}"""
             return context
         except Exception as e:
             logger.error(f"Error getting ROI context: {e}")
+            return ""
+
+    async def _get_rate_lock_context(self, days: int = 30) -> str:
+        """Get rate lock intelligence context from market data"""
+        try:
+            from scrapers import MarketDataOrchestrator
+
+            orchestrator = MarketDataOrchestrator()
+
+            # Get market snapshot
+            snapshot = orchestrator.get_market_snapshot()
+            if not snapshot:
+                return ""
+
+            # Get rate lock specific context
+            rate_context = orchestrator.get_rate_lock_context(days)
+
+            # Format context for AI
+            treasury = snapshot.get("treasury", {})
+            mortgage = snapshot.get("mortgage_rates", {})
+            volatility = snapshot.get("volatility", {})
+
+            context = f"""## Current Market Conditions
+10-Year Treasury: {treasury.get('10yr', 'N/A')}%
+30-Year Mortgage Rate: {mortgage.get('rate_30yr', 'N/A')}%
+15-Year Mortgage Rate: {mortgage.get('rate_15yr', 'N/A')}%
+Spread to 10yr: {mortgage.get('spread_to_10yr', 'N/A')} bps
+
+## Market Volatility
+VIX Index: {volatility.get('vix', 'N/A')}
+Volatility Assessment: {volatility.get('assessment', 'N/A')}
+Volatility Score: {volatility.get('score', 'N/A')}/10
+
+## Rate Lock Recommendation
+Market Score: {snapshot.get('market_score', 'N/A')}/100
+Recommendation: {snapshot.get('recommendation', 'N/A')}
+
+## {days}-Day Lock Analysis
+{rate_context.get('analysis', 'No specific analysis available.')}
+
+## AI Rate Lock Commentary
+Based on current market conditions, {rate_context.get('commentary', 'markets are showing mixed signals. Consider your specific situation and risk tolerance.')}
+
+IMPORTANT: When asked about rate locks, use this real-time market data to provide specific, actionable advice based on the recommendation above."""
+
+            return context
+        except Exception as e:
+            logger.error(f"Error getting rate lock context: {e}")
             return ""
 
     async def _extract_conversation_metadata(
