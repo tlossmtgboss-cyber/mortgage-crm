@@ -15183,6 +15183,24 @@ def init_db():
                         END $$;
                     """))
 
+                    # Create user_permissions table if it doesn't exist
+                    conn.execute(text("""
+                        CREATE TABLE IF NOT EXISTS user_permissions (
+                            id SERIAL PRIMARY KEY,
+                            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                            permission_key VARCHAR(255) NOT NULL,
+                            granted BOOLEAN DEFAULT TRUE,
+                            granted_by INTEGER REFERENCES users(id),
+                            granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            expires_at TIMESTAMP,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            CONSTRAINT unique_user_permission UNIQUE (user_id, permission_key)
+                        );
+                        CREATE INDEX IF NOT EXISTS idx_user_permissions_user ON user_permissions(user_id);
+                        CREATE INDEX IF NOT EXISTS idx_user_permissions_composite ON user_permissions(user_id, permission_key, granted);
+                    """))
+
                     conn.commit()
                     logger.info("✅ Schema migrations applied (PostgreSQL)")
         except Exception as e:
