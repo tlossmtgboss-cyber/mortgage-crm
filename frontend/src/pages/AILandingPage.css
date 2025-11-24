@@ -1453,3 +1453,119 @@
   border-top: 1px solid #e8ecf1;
   margin: 16px 0;
 }
+
+/* Accountability Review Styles */
+.accountability-review {
+  background: linear-gradient(135deg, #f8f9fa 0%, #fff 100%);
+}
+
+.accountability-review h3 {
+  color: #2d3748;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #e2856e;
+}
+
+.ai-review-content {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.ai-review-section {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid #e8ecf1;
+}
+
+.ai-review-section h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #4a5568;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ai-review-section p {
+  color: #2d3748;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.ai-review-section ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.ai-review-section li {
+  color: #2d3748;
+  margin: 6px 0;
+  line-height: 1.5;
+}
+
+.ai-review-actions {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e8ecf1;
+}
+
+.ai-review-actions .ai-note {
+  background: #fff3cd;
+  border: 1px solid #ffeeba;
+  color: #856404;
+}
+
+/* Chat Response Styles */
+.chat-response {
+  background: #fff;
+  border: 1px solid #e8ecf1;
+}
+
+.ai-chat-response-content {
+  padding: 16px;
+  line-height: 1.6;
+  color: #2d3748;
+}
+
+.ai-chat-response-content h1,
+.ai-chat-response-content h2,
+.ai-chat-response-content h3,
+.ai-chat-response-content h4 {
+  margin: 16px 0 8px 0;
+  font-weight: 600;
+  color: #1a202c;
+}
+
+.ai-chat-response-content h1 { font-size: 20px; }
+.ai-chat-response-content h2 { font-size: 18px; }
+.ai-chat-response-content h3 { font-size: 16px; }
+.ai-chat-response-content h4 { font-size: 14px; }
+
+.ai-chat-response-content p {
+  margin: 8px 0;
+}
+
+.ai-chat-response-content ul,
+.ai-chat-response-content ol {
+  margin: 8px 0;
+  padding-left: 24px;
+}
+
+.ai-chat-response-content li {
+  margin: 4px 0;
+}
+
+.ai-chat-response-content strong {
+  font-weight: 600;
+  color: #1a202c;
+}
+
+.ai-chat-response-content code {
+  background: #f1f5f9;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+}

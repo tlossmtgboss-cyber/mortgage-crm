@@ -1273,16 +1273,82 @@ The user needs priority decision guidance. Structure your response as:
 === END COACHING MODE ===
 """
         elif is_accountability:
-            system += """
+            # Fetch additional accountability metrics
+            from datetime import timedelta
+
+            # Get completed tasks this month
+            month_start = today.replace(day=1)
+            completed_this_month = db.query(Task).filter(
+                Task.owner_id == user_id,
+                Task.status == 'completed',
+                Task.updated_at >= month_start
+            ).count()
+
+            # Get total tasks assigned this month
+            total_tasks_this_month = db.query(Task).filter(
+                Task.owner_id == user_id,
+                Task.created_at >= month_start
+            ).count()
+
+            # Calculate task completion rate
+            completion_rate = (completed_this_month / total_tasks_this_month * 100) if total_tasks_this_month > 0 else 0
+
+            # Get leads that have progressed stages this month
+            leads_progressed = 0
+            leads_stalled = 0
+            stalled_lead_names = []
+            seven_days_ago = today - timedelta(days=7)
+
+            for lead in all_leads:
+                if lead.updated_at and lead.updated_at.date() < seven_days_ago:
+                    leads_stalled += 1
+                    if len(stalled_lead_names) < 5:
+                        stalled_lead_names.append(lead.name or "Unknown")
+                elif lead.updated_at and lead.updated_at.date() >= month_start:
+                    leads_progressed += 1
+
+            # Get overdue task count
+            overdue_count = len([t for t in all_tasks if t.due_date and t.due_date.date() < today])
+
+            system += f"""
 
 === COACHING MODE: ACCOUNTABILITY REVIEW ===
-The user wants honest performance feedback. Structure your response as:
-1. Review their metrics against goals
-2. Highlight what's working well
-3. Call out areas falling behind with specific numbers
-4. Compare to previous periods if data available
-5. End with specific improvement actions
-Be honest but constructive - they asked for accountability.
+The user wants honest performance feedback. You MUST include these specific metrics:
+
+TASK PERFORMANCE:
+- Tasks Completed This Month: {completed_this_month}
+- Total Tasks This Month: {total_tasks_this_month}
+- Completion Rate: {completion_rate:.0f}%
+- Overdue Tasks: {overdue_count}
+
+LEAD MANAGEMENT:
+- Total Leads: {total_leads}
+- Leads Progressed This Month: {leads_progressed}
+- Leads Stalled (no activity 7+ days): {leads_stalled}
+{f'- Stalled Leads: {", ".join(stalled_lead_names)}' if stalled_lead_names else ''}
+
+PIPELINE STATUS:
+- Active Loans: {total_loans}
+- Pipeline Value: ${total_pipeline_value:,.0f}
+
+Structure your response as:
+
+**Performance Summary**
+- Start with overall assessment (Good/Needs Improvement/Critical)
+- Use the exact metrics above
+
+**What's Working**
+- Highlight positive metrics (completion rate > 70%, leads progressing, etc.)
+
+**Areas Needing Attention**
+- Call out low completion rates, overdue tasks, stalled leads BY NAME
+- Be specific with numbers - don't soften the truth
+
+**Action Items**
+- List 3-5 specific actions they should take THIS WEEK
+- Prioritize by impact
+
+Be honest and direct - they asked for accountability. If the metrics are poor, say so clearly.
 === END COACHING MODE ===
 """
         elif is_tough_love:

@@ -476,34 +476,50 @@ function AILandingPage() {
       } else if (response.intent === 'DAILY_VIEW' && response.data) {
         showDailyViewWithData(response.data, response.explanation);
       } else if (response.intent === 'SEARCH' && response.data) {
-        addMessage(response.explanation || "Here are your search results:", 'assistant');
         const results = response.data;
+        let searchContent = response.explanation || "Here are your search results:";
         if (results.leads?.length > 0 || results.deals?.length > 0) {
           const resultText = [
             results.leads?.length > 0 ? `Found ${results.leads.length} leads` : '',
             results.deals?.length > 0 ? `Found ${results.deals.length} deals` : ''
           ].filter(Boolean).join(', ');
-          addMessage(resultText, 'assistant');
+          searchContent += '\n\n' + resultText;
         }
+        addMessage(searchContent, 'assistant', {
+          isSpecialContent: true,
+          contentType: 'chat_response',
+          responseData: results
+        });
       } else if (response.preview && response.action_id) {
         addMessage(response.explanation || "Here's what I can do:", 'assistant', {
+          isSpecialContent: true,
+          contentType: 'chat_response',
           preview: response.preview,
           actionId: response.action_id,
           actionType: response.intent
         });
       } else if (response.preview) {
         addMessage(response.explanation || "Here's what I found:", 'assistant', {
+          isSpecialContent: true,
+          contentType: 'chat_response',
           preview: response.preview,
           actionType: response.intent
         });
       } else if (response.explanation) {
-        // Orchestrator returned a valid response - show it
-        addMessage(response.explanation, 'assistant');
+        // Show all AI responses in the right sidebar
+        addMessage(response.explanation, 'assistant', {
+          isSpecialContent: true,
+          contentType: 'chat_response',
+          responseData: response.data || null
+        });
       } else if (!response.explanation && !response.data && !response.preview && !response.action_id) {
         // No useful response - use local routing as fallback
         routeMessage(message);
       } else {
-        addMessage("I understand your request.", 'assistant');
+        addMessage("I understand your request.", 'assistant', {
+          isSpecialContent: true,
+          contentType: 'chat_response'
+        });
       }
     } catch (error) {
       console.error('AI processing error:', error);
@@ -1171,6 +1187,20 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
             preview={preview}
             onExecute={() => actionId ? executeAction(actionId) : executeDemoAction('pipeline_report')}
             onEdit={() => addMessage('How would you like to customize this report?', 'assistant')}
+          />
+        );
+      case 'accountability_review':
+        return (
+          <AccountabilityReviewComponent
+            content={message.content}
+            reviewData={message.reviewData}
+          />
+        );
+      case 'chat_response':
+        return (
+          <ChatResponseComponent
+            content={message.content}
+            responseData={message.responseData}
           />
         );
       default:
@@ -1925,6 +1955,79 @@ function PipelineReportPreview({ preview, onExecute, onEdit }) {
         <div className="ai-action-buttons">
           <button className="ai-btn ai-btn-edit" onClick={onEdit}>Customize Report</button>
           <button className="ai-btn ai-btn-approve" onClick={onExecute}>Generate & Send</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Chat Response Component - displays all AI responses in sidebar
+function ChatResponseComponent({ content, responseData }) {
+  return (
+    <div className="ai-message-content-new ai-special-content">
+      <div className="ai-action-preview chat-response">
+        <div className="ai-chat-response-content">
+          <ReactMarkdown>{content}</ReactMarkdown>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Accountability Review Component
+function AccountabilityReviewComponent({ content, reviewData }) {
+  // Parse the content to extract sections
+  const sections = content.split('\n\n').filter(s => s.trim());
+
+  return (
+    <div className="ai-message-content-new ai-special-content">
+      <div className="ai-action-preview accountability-review">
+        <h3>📊 Accountability Review</h3>
+
+        <div className="ai-review-content">
+          {sections.map((section, index) => {
+            // Check if this is a header section
+            if (section.includes(':') && !section.includes('•')) {
+              const [header, ...rest] = section.split(':');
+              return (
+                <div key={index} className="ai-review-section">
+                  <h4>{header.trim()}</h4>
+                  <p>{rest.join(':').trim()}</p>
+                </div>
+              );
+            }
+
+            // Check if this is a bullet list
+            if (section.includes('•') || section.includes('-')) {
+              const lines = section.split('\n');
+              return (
+                <div key={index} className="ai-review-section">
+                  <ul>
+                    {lines.map((line, i) => {
+                      const cleanLine = line.replace(/^[•\-]\s*/, '').trim();
+                      if (cleanLine) {
+                        return <li key={i}>{cleanLine}</li>;
+                      }
+                      return null;
+                    })}
+                  </ul>
+                </div>
+              );
+            }
+
+            // Regular paragraph
+            return (
+              <div key={index} className="ai-review-section">
+                <p>{section}</p>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="ai-review-actions">
+          <div className="ai-note">
+            💡 <strong>Tip:</strong> Focus on moving leads from NEW stage to later stages, and completing pending tasks to improve your metrics.
+          </div>
         </div>
       </div>
     </div>
