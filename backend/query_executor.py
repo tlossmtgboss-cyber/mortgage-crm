@@ -146,8 +146,8 @@ class QueryExecutor:
             WITH stage_counts AS (
                 SELECT
                     COUNT(*) as total_leads,
-                    COUNT(*) FILTER (WHERE stage IN ('PROSPECT', 'APPLICATION_STARTED', 'PRE_APPROVED')) as reached_prospect,
-                    COUNT(*) FILTER (WHERE stage IN ('APPLICATION_STARTED', 'PRE_APPROVED')) as reached_application,
+                    COUNT(*) FILTER (WHERE stage IN ('PROSPECT', 'Application', 'PRE_APPROVED')) as reached_prospect,
+                    COUNT(*) FILTER (WHERE stage IN ('Application', 'PRE_APPROVED')) as reached_application,
                     COUNT(*) FILTER (WHERE stage = 'PRE_APPROVED') as reached_preapproved,
                     0 as closed_won
                 FROM leads

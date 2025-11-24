@@ -150,7 +150,6 @@ class LeadStage(str, enum.Enum):
     ATTEMPTED_CONTACT = "Attempted Contact"
     PROSPECT = "Prospect"
     APPLICATION = "Application"
-    APPLICATION_STARTED = "Application Started"
     PRE_QUALIFIED = "Pre-Qualified"
     PRE_APPROVED = "Pre-Approved"
     WITHDRAWN = "Withdrawn"
@@ -3858,7 +3857,7 @@ async def get_referral_partner_context_for_ai(
         text("""
             SELECT
                 COUNT(*) as total_leads,
-                COUNT(*) FILTER (WHERE stage IN ('APPLICATION_STARTED', 'PRE_APPROVED', 'CLOSED')) as converted
+                COUNT(*) FILTER (WHERE stage IN ('Application', 'PRE_APPROVED', 'CLOSED')) as converted
             FROM leads
             WHERE referral_partner_id = :partner_id AND owner_id = :user_id
         """),
@@ -18008,14 +18007,14 @@ def init_db():
                     conn.commit()
                     logger.info("✅ Schema migrations applied (PostgreSQL)")
 
-                    # Fix invalid APPLICATION_STARTED stage values
+                    # Fix invalid Application stage values
                     result = conn.execute(text("""
                         UPDATE leads
                         SET stage = 'Application'
-                        WHERE stage = 'APPLICATION_STARTED'
+                        WHERE stage = 'Application'
                     """))
                     if result.rowcount > 0:
-                        logger.info(f"✅ Fixed {result.rowcount} leads with invalid APPLICATION_STARTED stage")
+                        logger.info(f"✅ Fixed {result.rowcount} leads with invalid Application stage")
 
                     # Fix null stages - set to New
                     result2 = conn.execute(text("""
@@ -18100,7 +18099,7 @@ def create_sample_data(db: Session):
                 name="Mike Williams",
                 email="mike.w@email.com",
                 phone="555-0103",
-                stage=LeadStage.APPLICATION_STARTED,
+                stage=LeadStage.Application,
                 source="Zillow",
                 loan_type="Purchase",
                 preapproval_amount=525000,
