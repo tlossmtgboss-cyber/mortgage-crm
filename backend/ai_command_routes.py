@@ -3480,7 +3480,28 @@ PERMANENT MEMORY STATUS:
                     # VALIDATION: Check for placeholder values in AI response
                     actual_leads = daily_data["summary"].get("active_leads", 0)
                     actual_loans = daily_data["summary"].get("loans_in_pipeline", 0)
+                    actual_tasks = daily_data["summary"].get("total_tasks", 0)
+                    actual_overdue = daily_data["summary"].get("overdue_tasks", 0)
                     explanation = result.get("explanation", "").lower()
+
+                    # Check for incorrect "no tasks" messaging
+                    no_tasks_phrases = ["no tasks", "currently have no tasks", "have no tasks", "0 tasks", "no outstanding tasks"]
+                    has_incorrect_no_tasks = any(phrase in explanation for phrase in no_tasks_phrases)
+
+                    if has_incorrect_no_tasks and actual_tasks > 0:
+                        logger.warning(f"AI said 'no tasks' but actual count is {actual_tasks} (overdue: {actual_overdue})")
+                        # Build correct task summary
+                        task_summary = f"You have {actual_tasks} outstanding tasks"
+                        if actual_overdue > 0:
+                            task_summary = f"You have {actual_overdue} overdue tasks that need immediate attention"
+
+                        # Get first few tasks to show
+                        task_items = daily_data.get("tasks", [])[:3]
+                        task_list_text = "\n\n**Top Priority Tasks:**\n"
+                        for task in task_items:
+                            task_list_text += f"- [{task.get('priority', 'N/A')}] {task.get('title', 'Untitled')}\n"
+
+                        result["explanation"] = f"{task_summary}.{task_list_text}\n\nWould you like me to help you prioritize or create a schedule for these tasks?"
 
                     if "0 active leads" in explanation and actual_leads > 0:
                         logger.warning(f"AI returned placeholder '0 leads' but actual count is {actual_leads}")
@@ -3490,7 +3511,7 @@ PERMANENT MEMORY STATUS:
                     if "0 loans in pipeline" in explanation and actual_loans > 0:
                         logger.warning(f"AI returned placeholder '0 loans' but actual count is {actual_loans}")
 
-                    logger.info(f"DAILY_VIEW response validated - Leads: {actual_leads}, Loans: {actual_loans}")
+                    logger.info(f"DAILY_VIEW response validated - Leads: {actual_leads}, Loans: {actual_loans}, Tasks: {actual_tasks}")
 
                 # INJECT QUERY RESULTS for ANALYTICAL_QUERY
                 if result.get("intent") == "ANALYTICAL_QUERY":
