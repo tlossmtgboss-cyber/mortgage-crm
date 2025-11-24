@@ -5195,15 +5195,98 @@ Key metrics to track:
 {chr(10).join([f"- {l.name} ({str(l.stage).replace('LeadStage.', '') if l.stage else 'NEW'})" for l in recent_leads]) if recent_leads else "- No leads yet"}
 """
 
+        # Detect coaching mode from message
+        message_lower = message.lower()
+        coaching_mode = None
+        coaching_instructions = ""
+
+        if "daily briefing" in message_lower or "top 3 priorities" in message_lower:
+            coaching_mode = "Daily Briefing"
+            total_outstanding = len([t for t in all_tasks if t.status != "completed"])
+            coaching_instructions = f"""
+
+## COACHING MODE: DAILY BRIEFING
+Your job: Give the user their TOP 3 PRIORITIES for today based on their actual task and pipeline data.
+
+CRITICAL RULES:
+- The user has {len(tasks_overdue)} OVERDUE tasks and {total_outstanding} total outstanding tasks
+- If OVERDUE tasks > 0: START with "You have {len(tasks_overdue)} overdue tasks that need immediate attention"
+- If total outstanding tasks > 0: Say "You have {total_outstanding} outstanding tasks" NOT "no tasks"
+- NEVER say "no tasks" if overdue or outstanding tasks exist
+- ALWAYS prioritize overdue tasks first
+- Use ACTUAL task names and due dates from the data above
+- Be specific and actionable - no generic advice
+- Format as numbered list (1, 2, 3)
+"""
+        elif "pipeline audit" in message_lower or "bottlenecks" in message_lower:
+            coaching_mode = "Pipeline Audit"
+            coaching_instructions = """
+
+## COACHING MODE: PIPELINE AUDIT
+Your job: Identify bottlenecks and stalled deals in the pipeline.
+
+CRITICAL RULES:
+- Use ACTUAL lead/loan names and stages from the data above
+- Call out specific deals that are stuck or delayed
+- Identify missing actions or pending items
+- Be direct and specific - name names and amounts
+- Prioritize by deal size and urgency
+"""
+        elif "focus reset" in message_lower or "back on track" in message_lower:
+            coaching_mode = "Focus Reset"
+            coaching_instructions = """
+
+## COACHING MODE: FOCUS RESET
+Your job: Help the user refocus when scattered or overwhelmed.
+
+CRITICAL RULES:
+- List ONLY the most critical items needing immediate attention
+- Cut through the noise - ignore low-priority items
+- Provide clear sequence: do THIS first, THEN this, THEN this
+- Be calm but direct
+- Use actual tasks and pipeline items from the data above
+"""
+        elif "what should i do next" in message_lower or "priority decision" in message_lower:
+            coaching_mode = "Priority Decision"
+            coaching_instructions = """
+
+## COACHING MODE: PRIORITY DECISION GUIDANCE
+Your job: Help the user decide what to do next.
+
+CRITICAL RULES:
+- Identify the SINGLE most impactful action right now
+- Explain WHY this should be next (urgency, value, dependencies)
+- Provide the specific next step to take
+- If competing priorities exist, explain the trade-offs
+- Use actual data from above to justify recommendation
+"""
+        elif "accountability review" in message_lower or "review my performance" in message_lower:
+            coaching_mode = "Accountability Review"
+            coaching_instructions = """
+
+## COACHING MODE: ACCOUNTABILITY REVIEW
+Your job: Provide honest performance feedback.
+
+CRITICAL RULES:
+- Use ACTUAL metrics from the data above
+- Calculate completion rates, overdue percentages
+- Identify patterns (good and bad)
+- Be honest - if performance is poor, say so clearly
+- Provide specific, actionable improvement steps
+"""
+
         # Step 1: Call GPT with tools and real data context
         agent_context = ""
         agent_name = "General Assistant"
         if selected_agent:
             agent_context = f"\n\n## SPECIALIZED AGENT MODE:\n{selected_agent['prompt']}"
             agent_name = selected_agent['name']
+        elif coaching_mode:
+            agent_context = coaching_instructions
+            agent_name = f"{coaching_mode} Coach"
 
         system_prompt = f"""You are an AI assistant for a mortgage CRM system with access to tools.
-{"" if not selected_agent else f"**Active Agent: {selected_agent['name']}**"}
+{"" if not selected_agent and not coaching_mode else f"**Active Agent: {agent_name}**"}
 User: {current_user.full_name or current_user.email}
 Current date: {datetime.now().strftime('%Y-%m-%d %H:%M')}{agent_context}
 
