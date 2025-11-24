@@ -5059,11 +5059,11 @@ Key metrics to track:
                     loan_stages[stage] = {"count": 0, "items": []}
                 loan_stages[stage]["count"] += 1
                 if include_details:
-                    borrower_name = loan.borrower.name if loan.borrower else f"Loan #{loan.id}"
+                    borrower_name = loan.borrower_name if loan.borrower_name else f"Loan #{loan.id}"
                     loan_stages[stage]["items"].append({
                         "id": loan.id,
                         "name": borrower_name,
-                        "amount": float(loan.loan_amount) if loan.loan_amount else 0,
+                        "amount": float(loan.amount) if loan.amount else 0,
                         "processor": loan.processor,
                         "underwriter": loan.underwriter,
                         "days_in_stage": loan.days_in_stage if hasattr(loan, 'days_in_stage') else None,
