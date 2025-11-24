@@ -414,3 +414,42 @@ async def run_ai_task_automation_migration(
     except Exception as e:
         logger.error(f"Migration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/create-mortgage-glossary")
+async def run_mortgage_glossary_migration(
+    admin: Any = Depends(get_admin_user)
+):
+    """
+    Run the mortgage glossary migration
+    Creates mortgage_glossary table with ~442 mortgage terminology terms
+    for AI Orchestrator knowledge base
+    """
+    try:
+        from migrations.create_mortgage_glossary import run_migration
+        from database import SessionLocal
+
+        logger.info("Starting mortgage glossary migration...")
+        db = SessionLocal()
+        success = run_migration(db)
+        db.close()
+
+        if success:
+            return {
+                "status": "success",
+                "message": "Mortgage glossary table created with ~442 terms",
+                "categories": [
+                    "Origination", "Underwriting", "Credit", "Collateral",
+                    "Compliance", "Processing", "Closing", "Servicing",
+                    "Secondary Market", "Operations", "Marketing"
+                ]
+            }
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail="Migration failed - check logs for details"
+            )
+
+    except Exception as e:
+        logger.error(f"Migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
