@@ -17498,16 +17498,21 @@ def filter_leads_by_permissions(query, user: User, db: Session):
     - leads.view_team: See team's leads (not implemented yet - needs team_id)
     - leads.view_assigned: See only assigned leads
     """
-    if has_permission(user.id, 'leads.view_all', db):
-        # Management: See all leads
-        return query
+    try:
+        if has_permission(user.id, 'leads.view_all', db):
+            # Management: See all leads
+            return query
 
-    if has_permission(user.id, 'leads.view_assigned', db):
-        # Sales: See only their assigned leads
+        if has_permission(user.id, 'leads.view_assigned', db):
+            # Sales: See only their assigned leads
+            return query.filter(Lead.owner_id == user.id)
+
+        # Default: Show leads owned by the user (backwards compatibility)
         return query.filter(Lead.owner_id == user.id)
-
-    # Default: Show leads owned by the user (backwards compatibility)
-    return query.filter(Lead.owner_id == user.id)
+    except Exception as e:
+        logger.error(f"Permission filter error: {e}")
+        # Fallback: return leads owned by user
+        return query.filter(Lead.owner_id == user.id)
 
 
 def filter_clients_by_permissions(query, user: User, db: Session):
