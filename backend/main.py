@@ -17461,6 +17461,7 @@ def has_permission(user_id: int, permission_key: str, db: Session) -> bool:
 
     except Exception as e:
         logger.error(f"Permission check error for user {user_id}, key {permission_key}: {e}")
+        db.rollback()  # Rollback to recover from SQL errors
         return False
 
 
