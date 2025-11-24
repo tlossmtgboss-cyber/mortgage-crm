@@ -4996,52 +4996,69 @@ Current date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
 - When the user asks about their tasks/leads/pipeline, you can answer directly using the data above
 - Use tools for actions (send_email, create_task) or when you need to search/filter specific data
 - Be specific - say "You have 3 tasks due today" not "You have some tasks"
-- Mention actual client names when relevant"""
+- Mention actual client names when relevant
 
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": message}
-            ],
-            tools=tools,
-            tool_choice="auto",
-            temperature=0.7
-        )
+## MULTI-STEP WORKFLOWS:
+- You can chain multiple actions in a single request
+- Examples: "Email John and create a follow-up task" → call send_email AND create_task
+- "Send rate updates to all pre-approved leads" → search leads, then send multiple emails
+- Always complete ALL requested actions before responding
+- Confirm each action completed in your final response"""
 
-        response_message = response.choices[0].message
-        tool_calls = response_message.tool_calls
+        # Initialize conversation
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": message}
+        ]
 
-        # Step 2: Execute any tool calls
-        tool_results = []
-        if tool_calls:
+        # Multi-step workflow loop (up to 3 iterations for complex chains)
+        all_tool_results = []
+        max_iterations = 3
+
+        for iteration in range(max_iterations):
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages,
+                tools=tools,
+                tool_choice="auto",
+                temperature=0.7
+            )
+
+            response_message = response.choices[0].message
+            tool_calls = response_message.tool_calls
+
+            # If no tool calls, we have our final response
+            if not tool_calls:
+                ai_response = response_message.content
+                break
+
+            # Execute all tool calls in this iteration
+            messages.append(response_message)
+
             for tool_call in tool_calls:
                 function_name = tool_call.function.name
                 function_args = json.loads(tool_call.function.arguments)
-                logger.info(f"Executing tool: {function_name} with args: {function_args}")
+                logger.info(f"Executing tool (iteration {iteration + 1}): {function_name} with args: {function_args}")
 
                 if function_name in tool_functions:
                     result = await tool_functions[function_name](function_args)
-                    tool_results.append({"tool": function_name, "result": result})
+                    all_tool_results.append({"tool": function_name, "result": result})
 
-            # Step 3: Get final response with tool results
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": message},
-                response_message,
-            ]
-
-            for i, tool_call in enumerate(tool_calls):
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "content": json.dumps(tool_results[i]["result"])
-                })
-
-            final_response = client.chat.completions.create(model="gpt-4o", messages=messages, temperature=0.7)
-            ai_response = final_response.choices[0].message.content
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call.id,
+                        "content": json.dumps(result)
+                    })
         else:
-            ai_response = response_message.content
+            # If we exhausted iterations, get final response
+            final_response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages,
+                temperature=0.7
+            )
+            ai_response = final_response.choices[0].message.content
+
+        tool_results = all_tool_results
 
         # Log to Mission Control
         await log_ai_action_to_mission_control(
