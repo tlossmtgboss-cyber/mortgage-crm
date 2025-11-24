@@ -1074,6 +1074,96 @@ def run_migration(db):
         ('QM Points and Fees Cap', 'Maximum points and fees allowed for Qualified Mortgage status, generally 3% of loan amount.', 'Compliance', 'QM', '{"3% Cap","QM Fee Limit"}', '{"Qualified Mortgage (QM)","Section 32 Loan"}', 'AI calculates cumulative points and fees against QM thresholds.', 'Higher percentage caps for smaller loan amounts.', '{"QM/ATR"}'),
 
         ('Prepayment Penalty Restrictions', 'Limitations on prepayment penalties for QM and high-cost loans.', 'Compliance', 'Regulation', '{"Prepay Penalty","Early Payoff Penalty"}', '{"QM","HOEPA"}', 'AI validates prepayment penalty terms comply with applicable rules.', 'QM loans limited to 3-year max, declining penalty structure.', '{"QM/ATR","HOEPA"}'),
+
+        # AUS FINDINGS
+        ('Approve/Eligible', 'Best AUS finding indicating loan meets all agency requirements with minimal compensating factors needed.', 'Underwriting', 'AUS Finding', '{"Approved","Eligible","Accept"}', '{"DU","LP","Refer"}', 'AI routes Approve/Eligible findings to streamlined approval workflow.', 'Requires validation of AUS inputs and compliance with feedback.', '{"GSE"}'),
+
+        ('Refer with Caution', 'AUS finding indicating additional risk factors requiring manual underwriting review and compensating factors.', 'Underwriting', 'AUS Finding', '{"Refer","Caution","Manual Review"}', '{"Approve/Eligible","Compensating Factors"}', 'AI triggers manual underwriting workflow and compensating factor analysis.', 'Requires experienced underwriter review and strong offsetting factors.', '{"GSE"}'),
+
+        ('Ineligible', 'AUS finding indicating loan does not meet minimum agency requirements.', 'Underwriting', 'AUS Finding', '{"Decline","Reject","Not Eligible"}', '{"Approve/Eligible","Refer"}', 'AI identifies reasons for ineligibility and suggests alternative solutions.', 'May require restructuring or alternative product to qualify.', '{"GSE"}'),
+
+        ('Out of Scope', 'AUS finding indicating loan characteristics fall outside automated underwriting parameters.', 'Underwriting', 'AUS Finding', '{"OOS","Not Scored"}', '{"Manual Underwriting","Non-Traditional"}', 'AI routes to manual underwriting with appropriate guidelines.', 'Common for complex income, non-warrantable condos, or unique situations.', '{"GSE"}'),
+
+        ('Scorecard', 'Specific risk assessment methodology applied by AUS based on loan characteristics.', 'Underwriting', 'AUS Finding', '{"Classic FICO","Classic Non-FICO"}', '{"DU","Credit Score"}', 'AI identifies which scorecard was used for appropriate documentation requirements.', 'Different scorecards have different doc requirements and compensating factors.', '{"GSE"}'),
+
+        # CONDITION TYPES
+        ('PTD', 'Prior to Docs - Conditions that must be cleared before loan documents can be drawn.', 'Underwriting', 'Condition Type', '{"Prior to Docs","Pre-Docs"}', '{"PTC","PTF","Conditions"}', 'AI tracks PTD conditions and prevents doc draw until cleared.', 'Must be satisfied before creating closing disclosure and loan documents.', '{"Internal"}'),
+
+        ('PTC', 'Prior to Closing - Conditions that must be cleared before loan can close but after docs are drawn.', 'Underwriting', 'Condition Type', '{"Prior to Closing","Pre-Close"}', '{"PTD","PTF","Conditions"}', 'AI ensures PTC conditions are cleared before scheduling closing.', 'Can draw docs but cannot close until satisfied.', '{"Internal"}'),
+
+        ('PTF', 'Prior to Funding - Conditions that must be cleared before lender funds the loan.', 'Underwriting', 'Condition Type', '{"Prior to Funding","Pre-Fund"}', '{"PTC","Post-Closing"}', 'AI holds funding until PTF conditions are cleared and verified.', 'Critical conditions affecting lender risk or investor salability.', '{"Internal"}'),
+
+        ('Post-Closing Condition', 'Condition that can be satisfied after closing and funding, typically for final documentation.', 'Underwriting', 'Condition Type', '{"Post-Close","Trailing Doc"}', '{"PTF","Condition"}', 'AI tracks post-closing conditions for investor delivery requirements.', 'Must be obtained within specified timeframe for investor sale.', '{"Investor Guideline"}'),
+
+        # CLOSING DOCUMENTS
+        ('Promissory Note', 'Legal document where borrower promises to repay the loan according to specified terms.', 'Closing', 'Loan Documents', '{"Note","Mortgage Note"}', '{"Deed of Trust","Mortgage"}', 'AI verifies note terms match approved loan parameters.', 'Negotiable instrument creating the debt obligation.', '{"State Law"}'),
+
+        ('Security Instrument', 'Mortgage or Deed of Trust pledging property as collateral for the loan.', 'Closing', 'Loan Documents', '{"Mortgage","Deed of Trust","DOT"}', '{"Promissory Note","Lien"}', 'AI ensures correct security instrument for the state (mortgage vs deed of trust).', 'Creates lien on property securing the note.', '{"State Law"}'),
+
+        ('ARM Rider', 'Addendum to security instrument detailing adjustable-rate mortgage terms and adjustment procedures.', 'Closing', 'Loan Documents', '{"Adjustable Rate Rider","ARM Addendum"}', '{"ARM","Security Instrument"}', 'AI attaches ARM rider for all adjustable-rate products.', 'Required disclosure of index, margin, adjustment caps, and schedules.', '{"State Law"}'),
+
+        ('Condo Rider', 'Addendum addressing condominium-specific provisions including HOA obligations and assessments.', 'Closing', 'Loan Documents', '{"Condominium Rider"}', '{"Security Instrument","Condo"}', 'AI attaches condo rider for all condominium transactions.', 'Addresses special assessments, HOA rules, and shared ownership.', '{"State Law"}'),
+
+        ('PUD Rider', 'Addendum addressing Planned Unit Development provisions and HOA membership requirements.', 'Closing', 'Loan Documents', '{"PUD Addendum"}', '{"Security Instrument","PUD"}', 'AI attaches PUD rider for properties in planned unit developments.', 'Covers HOA membership and common area obligations.', '{"State Law"}'),
+
+        ('Compliance Agreement', 'Borrower agreement to satisfy post-closing conditions within specified timeframe.', 'Closing', 'Loan Documents', '{"CA","Post-Closing Agreement"}', '{"Post-Closing Condition"}', 'AI generates compliance agreement listing all trailing documents.', 'Binds borrower to provide outstanding documentation after closing.', '{"Internal"}'),
+
+        ('Initial Escrow Disclosure', 'Disclosure showing initial escrow account setup including prepaids and monthly escrow payment.', 'Closing', 'Loan Documents', '{"Escrow Analysis","Initial Escrow Statement"}', '{"Closing Disclosure","Escrow Account"}', 'AI calculates initial escrow requirements based on tax and insurance timing.', 'Shows escrow cushion, monthly payment, and projected disbursements.', '{"RESPA"}'),
+
+        # INSURANCE
+        ('Hazard Insurance', 'Property insurance covering dwelling against fire, storms, and other perils.', 'Collateral', 'Insurance', '{"Homeowners Insurance","HO-3","Property Insurance"}', '{"Flood Insurance","Force-Placed Insurance"}', 'AI verifies hazard insurance meets lender requirements for coverage amount.', 'Must equal lesser of replacement cost or loan amount with mortgagee clause.', '{"Investor Guideline"}'),
+
+        ('Flood Insurance', 'Insurance required for properties in FEMA-designated Special Flood Hazard Areas.', 'Collateral', 'Insurance', '{"NFIP","National Flood Insurance"}', '{"Hazard Insurance","Flood Zone","SFHA"}', 'AI checks flood determination and requires insurance if in SFHA.', 'Required under Flood Disaster Protection Act for SFHA properties.', '{"Federal Law","FEMA"}'),
+
+        ('Wind/Hail Insurance', 'Separate insurance for wind and hail damage, often required in coastal or high-risk areas.', 'Collateral', 'Insurance', '{"Windstorm Insurance","Hurricane Coverage"}', '{"Hazard Insurance","Coastal Property"}', 'AI identifies properties requiring separate wind coverage.', 'Common in coastal states where wind excluded from standard policy.', '{"State Law"}'),
+
+        ('Force-Placed Insurance', 'Lender-purchased insurance when borrower fails to maintain required coverage.', 'Servicing', 'Insurance', '{"Lender-Placed Insurance","LPI"}', '{"Hazard Insurance","Default"}', 'AI triggers force-placement process after borrower insurance lapses.', 'More expensive than borrower-purchased, added to loan balance.', '{"Investor Guideline"}'),
+
+        ('Mortgagee Clause', 'Provision in insurance policy naming lender as loss payee.', 'Collateral', 'Insurance', '{"Loss Payee","Lender Endorsement"}', '{"Hazard Insurance","Evidence of Insurance"}', 'AI verifies mortgagee clause lists lender correctly on insurance policies.', 'Ensures lender receives claim proceeds for property damage.', '{"Investor Guideline"}'),
+
+        # SERVICING SPECIFICS
+        ('MSR', 'Mortgage Servicing Rights - Right to service a mortgage and collect servicing fee.', 'Servicing', 'Rights', '{"Servicing Rights","Servicing Portfolio"}', '{"Subservicer","Servicing Transfer"}', 'AI values MSR based on loan characteristics and prepayment expectations.', 'Can be sold separately from loan ownership in secondary market.', '{"SEC","Investor Guideline"}'),
+
+        ('Subservicer', 'Third-party servicer hired by MSR owner to handle day-to-day servicing activities.', 'Servicing', 'Operations', '{"Third-Party Servicer","Master Servicer"}', '{"MSR","Servicing Transfer"}', 'AI coordinates subservicer onboarding and performance monitoring.', 'Performs servicing under agreement with MSR owner.', '{"Internal"}'),
+
+        ('Interim Servicing', 'Short-term servicing from closing until loan is sold and servicing is transferred.', 'Servicing', 'Operations', '{"Temporary Servicing"}', '{"MSR","Servicing Transfer"}', 'AI manages interim servicing period and coordinates transfer.', 'Typically 30-90 days until investor assumes servicing.', '{"Internal"}'),
+
+        ('Servicing Transfer', 'Process of moving loan servicing from one servicer to another.', 'Servicing', 'Process', '{"Transfer of Servicing","Goodbye Letter"}', '{"MSR","Subservicer"}', 'AI coordinates servicing transfer notifications and data migration.', 'Requires notices to borrower 15 days before effective date.', '{"RESPA"}'),
+
+        ('Servicer Advance', 'Funds advanced by servicer to investor when borrower payment is missed.', 'Servicing', 'Operations', '{"Servicing Advance","P&I Advance"}', '{"Default","Delinquency"}', 'AI tracks advances and recovery upon resolution of delinquency.', 'Servicer advances scheduled payments until borrower cures or foreclosure.', '{"Investor Guideline"}'),
+
+        # QUALITY CONTROL
+        ('Pre-Funding QC', 'Quality control review performed before loan funding to verify accuracy and compliance.', 'Operations', 'Quality Control', '{"Pre-Fund Review","Pre-Close QC"}', '{"Post-Closing QC","Conditions"}', 'AI selects loans for pre-funding QC based on risk factors.', 'Catches errors before funding to prevent repurchase risk.', '{"Internal"}'),
+
+        ('Post-Closing QC', 'Quality control review after closing examining underwriting, documentation, and compliance.', 'Operations', 'Quality Control', '{"Post-Close Audit","QC Review"}', '{"Pre-Funding QC","Audit"}', 'AI samples loans for post-closing QC and tracks findings.', 'Identifies trends, training needs, and potential repurchase exposure.', '{"Investor Guideline"}'),
+
+        ('EPD', 'Early Payment Default - Loan that becomes delinquent within first few months after closing.', 'Operations', 'Quality Control', '{"Early Pay Default","First Payment Default"}', '{"Default","QC Review"}', 'AI flags EPD loans for root cause analysis and potential fraud investigation.', 'Triggers enhanced review as indicator of fraud or underwriting defect.', '{"Investor Guideline"}'),
+
+        ('Defect', 'Underwriting or documentation issue discovered in QC review.', 'Operations', 'Quality Control', '{"Finding","Exception","QC Defect"}', '{"Post-Closing QC","Repurchase"}', 'AI categorizes defects by severity and tracks remediation.', 'Material defects may trigger repurchase demands from investor.', '{"Investor Guideline"}'),
+
+        ('Remediation', 'Process of correcting defects found in QC review.', 'Operations', 'Quality Control', '{"Cure","Defect Correction"}', '{"Defect","Post-Closing QC"}', 'AI tracks remediation status and timelines for defect resolution.', 'May involve obtaining missing docs or re-underwriting.', '{"Internal"}'),
+
+        # REPURCHASE
+        ('Repurchase Request', 'Investor demand that lender buy back loan due to material defects in underwriting or documentation.', 'Operations', 'Risk', '{"Buyback Request","Put-Back"}', '{"Defect","Indemnification"}', 'AI evaluates repurchase requests and determines defense strategy.', 'Material breach of reps and warranties triggers repurchase obligation.', '{"Investor Guideline"}'),
+
+        ('Indemnification', 'Agreement where lender assumes liability for specific defect without repurchasing the loan.', 'Operations', 'Risk', '{"Indem","Keep-Whole"}', '{"Repurchase Request","MI Rescission"}', 'AI negotiates indemnification as alternative to full repurchase.', 'Lender remains liable for losses but loan stays with investor.', '{"Investor Guideline"}'),
+
+        ('Make-Whole', 'Financial settlement where lender compensates investor for loss without loan repurchase.', 'Operations', 'Risk', '{"Cash Settlement","Make Whole Payment"}', '{"Repurchase Request","Indemnification"}', 'AI calculates make-whole payments based on loan performance and loss severity.', 'Negotiated settlement to resolve repurchase dispute.', '{"Investor Guideline"}'),
+
+        ('Reps and Warranties', 'Lender representations about loan quality and compliance made in sale agreement.', 'Operations', 'Risk', '{"R&W","Loan Sale Reps"}', '{"Repurchase Request","Sale Agreement"}', 'AI validates all reps and warranties before loan sale to investor.', 'Breach of reps triggers repurchase or indemnification obligation.', '{"Investor Guideline"}'),
+
+        # PIPELINE METRICS
+        ('Pull-Through Rate', 'Percentage of locked loans that successfully close and fund.', 'Operations', 'Metrics', '{"Pullthrough","Close Rate"}', '{"Fallout","Lock Desk"}', 'AI calculates pull-through rate to forecast closings and hedge effectiveness.', 'Key metric for pipeline management and hedging strategy.', '{"Internal"}'),
+
+        ('Fallout', 'Loans that do not close after rate lock, typically due to denial, cancellation, or withdrawal.', 'Operations', 'Metrics', '{"Pipeline Fallout","Lost Locks"}', '{"Pull-Through Rate","Lock Desk"}', 'AI tracks fallout reasons and rates to improve lock strategies.', 'High fallout increases hedging costs and reduces profitability.', '{"Internal"}'),
+
+        ('Lock Desk', 'Department or team responsible for locking interest rates and managing rate lock pipeline.', 'Operations', 'Department', '{"Secondary Marketing","Lock Team"}', '{"Rate Lock","Pull-Through Rate"}', 'AI provides lock desk with real-time pricing and lock status updates.', 'Manages locks, extensions, and hedge strategies.', '{"Internal"}'),
+
+        ('Lock Extension', 'Agreement to extend rate lock expiration date, typically for a fee.', 'Origination', 'Rate Lock', '{"Lock Extend","Extension"}', '{"Rate Lock","Lock Period"}', 'AI calculates extension fees based on market conditions and investor cost.', 'Required when loan won''t close before original lock expiration.', '{"Internal"}'),
+
+        ('Float Down', 'Option allowing borrower to reduce locked rate if market rates decrease before closing.', 'Origination', 'Rate Lock', '{"Rate Improvement","Float-Down Option"}', '{"Rate Lock","Lock Period"}', 'AI monitors market for float-down triggers based on program rules.', 'Typically requires minimum rate improvement and may have fee.', '{"Internal"}'),
+
+        ('Pipeline Report', 'Report showing all active loans by stage with key metrics and risk indicators.', 'Operations', 'Reporting', '{"Pipeline Analysis","Active Loans"}', '{"Pull-Through Rate","Fallout"}', 'AI generates real-time pipeline reports with stage distribution and bottlenecks.', 'Critical for forecasting, capacity planning, and risk management.', '{"Internal"}'),
     ]
 
     # Insert all terms
