@@ -4397,6 +4397,96 @@ async def get_memory_stats(
         }
 
 
+@app.post("/api/v1/ai/send-task-summary-email")
+async def send_task_summary_email(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Send an email to the user with their task summary for today or tomorrow
+    """
+    try:
+        data = await request.json()
+        timeframe = data.get("timeframe", "today")
+        tasks = data.get("tasks", [])
+
+        # Get user's email
+        user_email = current_user.email
+        user_name = current_user.name or user_email.split('@')[0]
+
+        # Build email content
+        if not tasks:
+            task_list = "No tasks scheduled - great job staying ahead!"
+        else:
+            task_list = "\n".join([
+                f"• {task.get('title', task.get('description', 'Untitled task'))}"
+                + (f" - Due: {task.get('due_date', 'No date')}" if task.get('due_date') else "")
+                for task in tasks[:20]
+            ])
+            if len(tasks) > 20:
+                task_list += f"\n\n...and {len(tasks) - 20} more tasks"
+
+        subject = f"Your Task Summary for {timeframe.title()}"
+        html_content = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #2c3e50;">Hi {user_name},</h2>
+            <p>Here's your task summary for <strong>{timeframe}</strong>:</p>
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="color: #495057; margin-top: 0;">Tasks ({len(tasks)} items)</h3>
+                <pre style="white-space: pre-wrap; font-family: Arial, sans-serif; margin: 0;">{task_list}</pre>
+            </div>
+            <p style="color: #6c757d; font-size: 12px;">
+                Sent from your Mortgage CRM AI Assistant
+            </p>
+        </body>
+        </html>
+        """
+
+        # Try to send via Microsoft Graph if available
+        try:
+            from integrations.microsoft_graph import graph_client
+            if graph_client and hasattr(graph_client, 'send_email'):
+                await graph_client.send_email(
+                    to_email=user_email,
+                    subject=subject,
+                    body=html_content,
+                    is_html=True
+                )
+                logger.info(f"Task summary email sent to {user_email}")
+                return {"success": True, "message": f"Email sent to {user_email}"}
+        except Exception as e:
+            logger.warning(f"Microsoft Graph email failed: {e}")
+
+        # Fallback: Try SendGrid or other email service
+        try:
+            import sendgrid
+            from sendgrid.helpers.mail import Mail, Email, To, Content
+
+            sg_api_key = os.getenv("SENDGRID_API_KEY")
+            if sg_api_key:
+                sg = sendgrid.SendGridAPIClient(api_key=sg_api_key)
+                message = Mail(
+                    from_email=Email(os.getenv("SENDGRID_FROM_EMAIL", "noreply@mortgagecrm.com")),
+                    to_emails=To(user_email),
+                    subject=subject,
+                    html_content=Content("text/html", html_content)
+                )
+                sg.send(message)
+                logger.info(f"Task summary email sent via SendGrid to {user_email}")
+                return {"success": True, "message": f"Email sent to {user_email}"}
+        except Exception as e:
+            logger.warning(f"SendGrid email failed: {e}")
+
+        # If no email service available, return error
+        return {"success": False, "message": "Email service not configured"}
+
+    except Exception as e:
+        logger.error(f"Error sending task summary email: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/v1/ai/autonomous-task")
 async def execute_autonomous_task(
     request: Request,

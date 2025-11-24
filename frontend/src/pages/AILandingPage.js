@@ -543,6 +543,10 @@ function AILandingPage() {
       } else {
         showDailyView();
       }
+    } else if (lower.includes('email') && (lower.includes('task') || lower.includes('to do') || lower.includes('todo') || lower.includes('tomorrow') || lower.includes('need to do'))) {
+      // Handle "email me my tasks for tomorrow" type requests
+      const isTomorrow = lower.includes('tomorrow');
+      sendTaskSummaryEmail(isTomorrow);
     } else if (lower.includes('today') || lower.includes('do today') || lower.includes('task') || lower.includes('to do') || lower.includes('todo')) {
       showDailyView();
     } else if (lower.includes('email') && (lower.includes('all in one') || lower.includes('mortgages under management'))) {
@@ -853,6 +857,73 @@ function AILandingPage() {
       addMessage(`Email sent successfully to ${selectedTask.client}!`, 'assistant');
       removeTaskFromList(selectedTask.id);
     }, 1000);
+  };
+
+  // Send task summary email to user
+  const sendTaskSummaryEmail = async (isTomorrow = false) => {
+    const timeframe = isTomorrow ? 'tomorrow' : 'today';
+    addMessage(`I'll send you an email with your tasks for ${timeframe}. Let me gather that information...`, 'assistant');
+
+    try {
+      const API_URL = process.env.REACT_APP_API_URL || '';
+
+      // Fetch tasks
+      const tasksResponse = await fetch(`${API_URL}/api/v1/tasks/?limit=50`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!tasksResponse.ok) {
+        throw new Error('Failed to fetch tasks');
+      }
+
+      const tasks = await tasksResponse.json();
+
+      // Filter tasks based on timeframe
+      const today = new Date();
+      const targetDate = new Date(today);
+      if (isTomorrow) {
+        targetDate.setDate(targetDate.getDate() + 1);
+      }
+      const targetDateStr = targetDate.toISOString().split('T')[0];
+
+      const filteredTasks = tasks.filter(task => {
+        if (!task.due_date) return !isTomorrow; // Tasks without due dates show for today
+        const taskDate = new Date(task.due_date).toISOString().split('T')[0];
+        return taskDate === targetDateStr;
+      });
+
+      // Send email via backend
+      const emailResponse = await fetch(`${API_URL}/api/v1/ai/send-task-summary-email`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          timeframe: timeframe,
+          tasks: filteredTasks
+        })
+      });
+
+      if (emailResponse.ok) {
+        addMessage(`✅ Email sent! Check your inbox for your ${timeframe}'s task summary with ${filteredTasks.length} items.`, 'assistant');
+      } else {
+        // Fallback: show tasks in chat
+        if (filteredTasks.length === 0) {
+          addMessage(`You don't have any tasks scheduled for ${timeframe}. Great job staying ahead!`, 'assistant');
+        } else {
+          const taskList = filteredTasks.slice(0, 10).map(t => `• ${t.title || t.description}`).join('\n');
+          addMessage(`Here are your tasks for ${timeframe} (${filteredTasks.length} items):\n\n${taskList}${filteredTasks.length > 10 ? '\n\n...and more' : ''}`, 'assistant');
+        }
+      }
+    } catch (error) {
+      console.error('Error sending task summary email:', error);
+      addMessage(`I couldn't send the email right now, but let me show you your tasks for ${timeframe} instead.`, 'assistant');
+      showDailyView();
+    }
   };
 
   const handleApproveAIAction = async () => {
