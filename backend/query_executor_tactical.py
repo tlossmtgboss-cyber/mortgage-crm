@@ -42,7 +42,7 @@ def _query_daily_focus_priorities(db: Session, params: Dict, user_id: int) -> Li
 
             UNION ALL
 
-            -- Urgent loans
+            -- All active loans (show ALL loans, prioritize by urgency)
             SELECT
                 'loan' as type,
                 l.id,
@@ -66,11 +66,6 @@ def _query_daily_focus_priorities(db: Session, params: Dict, user_id: int) -> Li
             FROM loans l
             WHERE l.loan_officer_id = :user_id
             AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
-            AND (
-                l.closing_date < NOW() + INTERVAL '7 days'
-                OR l.risk_score > 60
-                OR l.days_in_stage > 14
-            )
         )
         SELECT type, id, title, value, due_date, priority_score, urgency_label
         FROM priority_items
