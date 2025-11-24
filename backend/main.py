@@ -4931,14 +4931,72 @@ async def orchestrator_chat(
             "get_metrics": execute_get_metrics
         }
 
-        # Step 1: Call GPT with tools
+        # Pre-fetch real data context for personalized responses
+        today = datetime.now().date()
+        tomorrow = today + timedelta(days=1)
+        week_end = today + timedelta(days=7)
+
+        # Get user's actual data
+        all_leads = db.query(Lead).filter(Lead.owner_id == current_user.id).all()
+        all_tasks = db.query(Task).filter(Task.owner_id == current_user.id).all()
+
+        # Tasks breakdown
+        tasks_today = [t for t in all_tasks if t.due_date and t.due_date.date() == today and t.status != "completed"]
+        tasks_tomorrow = [t for t in all_tasks if t.due_date and t.due_date.date() == tomorrow and t.status != "completed"]
+        tasks_overdue = [t for t in all_tasks if t.due_date and t.due_date.date() < today and t.status != "completed"]
+        tasks_this_week = [t for t in all_tasks if t.due_date and today <= t.due_date.date() <= week_end and t.status != "completed"]
+
+        # Pipeline breakdown
+        pipeline_stages = {}
+        for lead in all_leads:
+            stage = str(lead.stage).replace("LeadStage.", "") if lead.stage else "NEW"
+            if stage not in pipeline_stages:
+                pipeline_stages[stage] = []
+            pipeline_stages[stage].append(lead.name)
+
+        # Recent leads (last 5)
+        recent_leads = sorted(all_leads, key=lambda x: x.created_at or datetime.min, reverse=True)[:5]
+
+        # Build context string
+        data_context = f"""
+## YOUR CURRENT DATA (Real-time):
+
+### Tasks Overview:
+- Tasks due TODAY: {len(tasks_today)}
+- Tasks due TOMORROW: {len(tasks_tomorrow)}
+- Tasks this week: {len(tasks_this_week)}
+- OVERDUE tasks: {len(tasks_overdue)}
+
+### Today's Tasks:
+{chr(10).join([f"- {t.title} ({t.priority} priority)" for t in tasks_today[:5]]) if tasks_today else "- No tasks due today"}
+
+### Tomorrow's Tasks:
+{chr(10).join([f"- {t.title} ({t.priority} priority)" for t in tasks_tomorrow[:5]]) if tasks_tomorrow else "- No tasks due tomorrow"}
+
+### Overdue Tasks:
+{chr(10).join([f"- {t.title} (due {t.due_date.strftime('%m/%d')})" for t in tasks_overdue[:5]]) if tasks_overdue else "- No overdue tasks"}
+
+### Pipeline Summary ({len(all_leads)} total leads):
+{chr(10).join([f"- {stage}: {len(names)} leads ({', '.join(names[:3])}{'...' if len(names) > 3 else ''})" for stage, names in pipeline_stages.items()])}
+
+### Recent Leads:
+{chr(10).join([f"- {l.name} ({str(l.stage).replace('LeadStage.', '') if l.stage else 'NEW'})" for l in recent_leads]) if recent_leads else "- No leads yet"}
+"""
+
+        # Step 1: Call GPT with tools and real data context
         system_prompt = f"""You are an AI assistant for a mortgage CRM system with access to tools.
 User: {current_user.full_name or current_user.email}
 Current date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
 
-Use the available tools to help the user. When they ask for information, use the appropriate tool to get real data.
-When they ask to perform actions (send email, create task), execute the tool.
-Always use tools when available rather than just describing what you would do."""
+{data_context}
+
+## INSTRUCTIONS:
+- Reference the real data above when answering questions about tasks, leads, or pipeline
+- Use actual client names and numbers in your responses
+- When the user asks about their tasks/leads/pipeline, you can answer directly using the data above
+- Use tools for actions (send_email, create_task) or when you need to search/filter specific data
+- Be specific - say "You have 3 tasks due today" not "You have some tasks"
+- Mention actual client names when relevant"""
 
         response = client.chat.completions.create(
             model="gpt-4o",
