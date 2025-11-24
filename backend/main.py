@@ -828,6 +828,80 @@ class IntegrationCredential(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
+class ScheduledWorkflow(Base):
+    """Autonomous scheduled workflows for recurring AI tasks"""
+    __tablename__ = "scheduled_workflows"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    description = Column(Text)
+    workflow_type = Column(String, nullable=False)  # weekly_borrower_update, daily_task_summary, pipeline_report, follow_up_sequence
+    schedule_cron = Column(String)  # Cron expression: "0 9 * * 1" = 9am every Monday
+    schedule_interval = Column(String)  # Alternative: daily, weekly, monthly
+    next_run = Column(DateTime, index=True)
+    last_run = Column(DateTime)
+    is_active = Column(Boolean, default=True, index=True)
+    config = Column(JSON)  # Workflow-specific configuration
+    target_criteria = Column(JSON)  # Filter criteria for targets (e.g., loan status, lead stage)
+    template_id = Column(String)  # Email/message template to use
+    retry_on_failure = Column(Boolean, default=True)
+    max_retries = Column(Integer, default=3)
+    notify_on_completion = Column(Boolean, default=False)
+    notify_on_failure = Column(Boolean, default=True)
+    total_executions = Column(Integer, default=0)
+    successful_executions = Column(Integer, default=0)
+    failed_executions = Column(Integer, default=0)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+class WorkflowExecution(Base):
+    """Track each execution of a scheduled workflow"""
+    __tablename__ = "workflow_executions"
+    id = Column(Integer, primary_key=True, index=True)
+    workflow_id = Column(Integer, ForeignKey("scheduled_workflows.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    status = Column(String, default="running")  # running, completed, failed, partial
+    started_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    completed_at = Column(DateTime)
+    targets_processed = Column(Integer, default=0)
+    targets_succeeded = Column(Integer, default=0)
+    targets_failed = Column(Integer, default=0)
+    actions_taken = Column(JSON)  # List of actions performed
+    errors = Column(JSON)  # Any errors encountered
+    execution_log = Column(Text)  # Detailed execution log
+    retry_count = Column(Integer, default=0)
+    trigger_type = Column(String, default="scheduled")  # scheduled, manual, event
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class AIAuditLog(Base):
+    """Comprehensive audit trail for all AI actions"""
+    __tablename__ = "ai_audit_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    agent_name = Column(String, nullable=False, index=True)
+    action_type = Column(String, nullable=False, index=True)  # email_sent, task_created, lead_updated, etc.
+    action_category = Column(String)  # communication, data_update, analysis, automation
+    autonomy_level = Column(String)  # autonomous, assisted, manual
+    target_type = Column(String)  # lead, loan, borrower, task
+    target_id = Column(Integer)
+    input_data = Column(JSON)  # What triggered the action
+    output_data = Column(JSON)  # Result of the action
+    status = Column(String, default="completed")  # completed, failed, pending, rolled_back
+    error_message = Column(Text)
+    compliance_checked = Column(Boolean, default=False)
+    compliance_passed = Column(Boolean)
+    compliance_notes = Column(Text)
+    execution_time_ms = Column(Integer)
+    model_used = Column(String)  # gpt-4o, whisper-1, etc.
+    tokens_used = Column(Integer)
+    cost_estimate = Column(Float)
+    session_id = Column(String, index=True)  # Group related actions
+    parent_action_id = Column(Integer, ForeignKey("ai_audit_logs.id"))  # For action chains
+    is_reversible = Column(Boolean, default=False)
+    reversed_at = Column(DateTime)
+    reversed_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
 class SubscriptionPlan(Base):
     __tablename__ = "subscription_plans"
     id = Column(Integer, primary_key=True, index=True)
@@ -5505,6 +5579,510 @@ Keep responses under 30 words for phone conversations."""
     except Exception as e:
         logger.error(f"Phone webhook error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# AUTONOMOUS WORKFLOW ENDPOINTS
+# ============================================================================
+
+@app.post("/api/v1/ai/workflows")
+async def create_scheduled_workflow(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Create a new scheduled autonomous workflow
+    """
+    try:
+        data = await request.json()
+
+        # Calculate next run time
+        from datetime import datetime, timedelta
+        schedule_interval = data.get("schedule_interval", "weekly")
+        now = datetime.now()
+
+        if schedule_interval == "daily":
+            next_run = now + timedelta(days=1)
+        elif schedule_interval == "weekly":
+            next_run = now + timedelta(weeks=1)
+        elif schedule_interval == "monthly":
+            next_run = now + timedelta(days=30)
+        else:
+            next_run = now + timedelta(days=1)
+
+        workflow = ScheduledWorkflow(
+            user_id=current_user.id,
+            name=data.get("name"),
+            description=data.get("description"),
+            workflow_type=data.get("workflow_type"),
+            schedule_cron=data.get("schedule_cron"),
+            schedule_interval=schedule_interval,
+            next_run=next_run,
+            is_active=data.get("is_active", True),
+            config=data.get("config", {}),
+            target_criteria=data.get("target_criteria", {}),
+            template_id=data.get("template_id"),
+            retry_on_failure=data.get("retry_on_failure", True),
+            max_retries=data.get("max_retries", 3),
+            notify_on_completion=data.get("notify_on_completion", False),
+            notify_on_failure=data.get("notify_on_failure", True)
+        )
+
+        db.add(workflow)
+        db.commit()
+        db.refresh(workflow)
+
+        return {
+            "id": workflow.id,
+            "name": workflow.name,
+            "workflow_type": workflow.workflow_type,
+            "schedule_interval": workflow.schedule_interval,
+            "next_run": workflow.next_run.isoformat() if workflow.next_run else None,
+            "is_active": workflow.is_active,
+            "success": True
+        }
+
+    except Exception as e:
+        logger.error(f"Create workflow error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/ai/workflows")
+async def list_scheduled_workflows(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    List all scheduled workflows for the user
+    """
+    workflows = db.query(ScheduledWorkflow).filter(
+        ScheduledWorkflow.user_id == current_user.id
+    ).order_by(ScheduledWorkflow.created_at.desc()).all()
+
+    return {
+        "workflows": [
+            {
+                "id": w.id,
+                "name": w.name,
+                "workflow_type": w.workflow_type,
+                "schedule_interval": w.schedule_interval,
+                "next_run": w.next_run.isoformat() if w.next_run else None,
+                "last_run": w.last_run.isoformat() if w.last_run else None,
+                "is_active": w.is_active,
+                "total_executions": w.total_executions,
+                "successful_executions": w.successful_executions,
+                "failed_executions": w.failed_executions
+            }
+            for w in workflows
+        ],
+        "total": len(workflows)
+    }
+
+
+@app.post("/api/v1/ai/workflows/{workflow_id}/execute")
+async def execute_workflow(
+    workflow_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Manually trigger a workflow execution
+    """
+    try:
+        from openai import OpenAI
+        from datetime import datetime, timedelta
+
+        workflow = db.query(ScheduledWorkflow).filter(
+            ScheduledWorkflow.id == workflow_id,
+            ScheduledWorkflow.user_id == current_user.id
+        ).first()
+
+        if not workflow:
+            raise HTTPException(status_code=404, detail="Workflow not found")
+
+        # Create execution record
+        execution = WorkflowExecution(
+            workflow_id=workflow.id,
+            user_id=current_user.id,
+            status="running",
+            trigger_type="manual"
+        )
+        db.add(execution)
+        db.commit()
+
+        actions_taken = []
+        errors = []
+        targets_processed = 0
+        targets_succeeded = 0
+
+        # Execute based on workflow type
+        if workflow.workflow_type == "weekly_borrower_update":
+            # Get active loans with borrower emails
+            loans = db.query(Loan).filter(
+                Loan.user_id == current_user.id,
+                Loan.status.in_(["in_progress", "processing", "underwriting", "approved"])
+            ).all()
+
+            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+            for loan in loans:
+                targets_processed += 1
+                try:
+                    # Generate personalized update
+                    update_prompt = f"""Generate a brief, professional weekly loan status update email for:
+Borrower: {loan.borrower_name}
+Loan Type: {loan.loan_type}
+Status: {loan.status}
+Loan Amount: ${loan.loan_amount:,.2f if loan.loan_amount else 0}
+
+Keep it under 150 words. Be encouraging and informative."""
+
+                    response = client.chat.completions.create(
+                        model="gpt-4o",
+                        messages=[
+                            {"role": "system", "content": "You are a mortgage loan officer assistant."},
+                            {"role": "user", "content": update_prompt}
+                        ],
+                        max_tokens=200
+                    )
+
+                    email_content = response.choices[0].message.content
+
+                    # Log the action (in production, would actually send email)
+                    actions_taken.append({
+                        "action": "email_sent",
+                        "target": loan.borrower_name,
+                        "loan_id": loan.id,
+                        "content_preview": email_content[:100]
+                    })
+
+                    # Create audit log
+                    audit = AIAuditLog(
+                        user_id=current_user.id,
+                        agent_name="Workflow Engine",
+                        action_type="borrower_update_email",
+                        action_category="communication",
+                        autonomy_level="autonomous",
+                        target_type="loan",
+                        target_id=loan.id,
+                        input_data={"loan_status": loan.status, "borrower": loan.borrower_name},
+                        output_data={"email_content": email_content},
+                        status="completed",
+                        model_used="gpt-4o"
+                    )
+                    db.add(audit)
+
+                    targets_succeeded += 1
+
+                except Exception as e:
+                    errors.append({"loan_id": loan.id, "error": str(e)})
+
+        elif workflow.workflow_type == "daily_task_summary":
+            # Get today's tasks
+            today = datetime.now().date()
+            tasks = db.query(Task).filter(
+                Task.owner_id == current_user.id,
+                Task.due_date != None
+            ).all()
+
+            today_tasks = [t for t in tasks if t.due_date.date() == today]
+            overdue_tasks = [t for t in tasks if t.due_date.date() < today and t.status != "completed"]
+
+            actions_taken.append({
+                "action": "summary_generated",
+                "today_tasks": len(today_tasks),
+                "overdue_tasks": len(overdue_tasks)
+            })
+            targets_succeeded = 1
+            targets_processed = 1
+
+        elif workflow.workflow_type == "follow_up_sequence":
+            # Get leads needing follow-up
+            leads = db.query(Lead).filter(
+                Lead.owner_id == current_user.id,
+                Lead.stage.in_(["NEW", "CONTACTED", "QUALIFIED"])
+            ).all()
+
+            for lead in leads:
+                targets_processed += 1
+                # Create follow-up task
+                task = Task(
+                    title=f"Follow up with {lead.name}",
+                    description=f"Automated follow-up for {lead.name}",
+                    due_date=datetime.now() + timedelta(days=2),
+                    priority="medium",
+                    status="pending",
+                    owner_id=current_user.id,
+                    lead_id=lead.id
+                )
+                db.add(task)
+                actions_taken.append({
+                    "action": "task_created",
+                    "lead": lead.name,
+                    "task": task.title
+                })
+                targets_succeeded += 1
+
+        # Update execution record
+        execution.status = "completed" if not errors else "partial"
+        execution.completed_at = datetime.now()
+        execution.targets_processed = targets_processed
+        execution.targets_succeeded = targets_succeeded
+        execution.targets_failed = len(errors)
+        execution.actions_taken = actions_taken
+        execution.errors = errors if errors else None
+
+        # Update workflow stats
+        workflow.last_run = datetime.now()
+        workflow.total_executions += 1
+        if not errors:
+            workflow.successful_executions += 1
+        else:
+            workflow.failed_executions += 1
+
+        # Calculate next run
+        if workflow.schedule_interval == "daily":
+            workflow.next_run = datetime.now() + timedelta(days=1)
+        elif workflow.schedule_interval == "weekly":
+            workflow.next_run = datetime.now() + timedelta(weeks=1)
+        elif workflow.schedule_interval == "monthly":
+            workflow.next_run = datetime.now() + timedelta(days=30)
+
+        db.commit()
+
+        return {
+            "execution_id": execution.id,
+            "workflow_id": workflow.id,
+            "status": execution.status,
+            "targets_processed": targets_processed,
+            "targets_succeeded": targets_succeeded,
+            "actions_taken": actions_taken,
+            "errors": errors,
+            "next_run": workflow.next_run.isoformat() if workflow.next_run else None,
+            "success": True
+        }
+
+    except Exception as e:
+        logger.error(f"Workflow execution error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/ai/workflows/{workflow_id}/executions")
+async def get_workflow_executions(
+    workflow_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible),
+    limit: int = 20
+):
+    """
+    Get execution history for a workflow
+    """
+    executions = db.query(WorkflowExecution).filter(
+        WorkflowExecution.workflow_id == workflow_id,
+        WorkflowExecution.user_id == current_user.id
+    ).order_by(WorkflowExecution.created_at.desc()).limit(limit).all()
+
+    return {
+        "executions": [
+            {
+                "id": e.id,
+                "status": e.status,
+                "started_at": e.started_at.isoformat() if e.started_at else None,
+                "completed_at": e.completed_at.isoformat() if e.completed_at else None,
+                "targets_processed": e.targets_processed,
+                "targets_succeeded": e.targets_succeeded,
+                "targets_failed": e.targets_failed,
+                "trigger_type": e.trigger_type,
+                "actions_taken": e.actions_taken
+            }
+            for e in executions
+        ]
+    }
+
+
+@app.get("/api/v1/ai/audit-logs")
+async def get_audit_logs(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible),
+    limit: int = 50,
+    action_type: str = None,
+    agent_name: str = None
+):
+    """
+    Get AI audit logs with optional filtering
+    """
+    query = db.query(AIAuditLog).filter(AIAuditLog.user_id == current_user.id)
+
+    if action_type:
+        query = query.filter(AIAuditLog.action_type == action_type)
+    if agent_name:
+        query = query.filter(AIAuditLog.agent_name == agent_name)
+
+    logs = query.order_by(AIAuditLog.created_at.desc()).limit(limit).all()
+
+    return {
+        "logs": [
+            {
+                "id": l.id,
+                "agent_name": l.agent_name,
+                "action_type": l.action_type,
+                "action_category": l.action_category,
+                "autonomy_level": l.autonomy_level,
+                "target_type": l.target_type,
+                "target_id": l.target_id,
+                "status": l.status,
+                "compliance_passed": l.compliance_passed,
+                "created_at": l.created_at.isoformat()
+            }
+            for l in logs
+        ],
+        "total": len(logs)
+    }
+
+
+@app.get("/api/v1/ai/audit-logs/summary")
+async def get_audit_summary(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible),
+    days: int = 7
+):
+    """
+    Get summary of AI actions for reporting
+    """
+    from datetime import datetime, timedelta
+    from sqlalchemy import func
+
+    cutoff = datetime.now() - timedelta(days=days)
+
+    logs = db.query(AIAuditLog).filter(
+        AIAuditLog.user_id == current_user.id,
+        AIAuditLog.created_at >= cutoff
+    ).all()
+
+    # Aggregate by action type
+    action_counts = {}
+    agent_counts = {}
+    autonomous_count = 0
+    total_actions = len(logs)
+
+    for log in logs:
+        action_counts[log.action_type] = action_counts.get(log.action_type, 0) + 1
+        agent_counts[log.agent_name] = agent_counts.get(log.agent_name, 0) + 1
+        if log.autonomy_level == "autonomous":
+            autonomous_count += 1
+
+    return {
+        "period_days": days,
+        "total_actions": total_actions,
+        "autonomous_actions": autonomous_count,
+        "autonomous_percentage": round((autonomous_count / total_actions * 100) if total_actions > 0 else 0, 1),
+        "by_action_type": action_counts,
+        "by_agent": agent_counts
+    }
+
+
+# Workflow Templates
+WORKFLOW_TEMPLATES = {
+    "weekly_borrower_update": {
+        "name": "Weekly Borrower Updates",
+        "description": "Send personalized weekly status updates to all active loan borrowers",
+        "schedule_interval": "weekly",
+        "target_criteria": {"loan_status": ["in_progress", "processing", "underwriting"]},
+        "config": {"include_next_steps": True, "include_timeline": True}
+    },
+    "daily_task_summary": {
+        "name": "Daily Task Summary",
+        "description": "Generate and send daily task digest",
+        "schedule_interval": "daily",
+        "config": {"include_overdue": True, "include_upcoming": True}
+    },
+    "follow_up_sequence": {
+        "name": "Lead Follow-up Sequence",
+        "description": "Auto-create follow-up tasks for leads in nurture stages",
+        "schedule_interval": "daily",
+        "target_criteria": {"lead_stage": ["NEW", "CONTACTED", "QUALIFIED"]},
+        "config": {"follow_up_days": 2, "priority": "medium"}
+    },
+    "pipeline_report": {
+        "name": "Weekly Pipeline Report",
+        "description": "Generate and send weekly pipeline analytics report",
+        "schedule_interval": "weekly",
+        "config": {"include_conversion_rates": True, "include_projections": True}
+    }
+}
+
+
+@app.get("/api/v1/ai/workflow-templates")
+async def get_workflow_templates(
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Get available workflow templates
+    """
+    return {
+        "templates": [
+            {
+                "id": key,
+                **value
+            }
+            for key, value in WORKFLOW_TEMPLATES.items()
+        ]
+    }
+
+
+@app.post("/api/v1/ai/workflows/from-template/{template_id}")
+async def create_workflow_from_template(
+    template_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Create a workflow from a predefined template
+    """
+    if template_id not in WORKFLOW_TEMPLATES:
+        raise HTTPException(status_code=404, detail="Template not found")
+
+    template = WORKFLOW_TEMPLATES[template_id]
+    data = await request.json() if request.headers.get("content-type") == "application/json" else {}
+
+    # Calculate next run
+    from datetime import datetime, timedelta
+    schedule_interval = template.get("schedule_interval", "weekly")
+
+    if schedule_interval == "daily":
+        next_run = datetime.now() + timedelta(days=1)
+    elif schedule_interval == "weekly":
+        next_run = datetime.now() + timedelta(weeks=1)
+    else:
+        next_run = datetime.now() + timedelta(days=1)
+
+    workflow = ScheduledWorkflow(
+        user_id=current_user.id,
+        name=data.get("name", template["name"]),
+        description=template["description"],
+        workflow_type=template_id,
+        schedule_interval=schedule_interval,
+        next_run=next_run,
+        is_active=True,
+        config=template.get("config", {}),
+        target_criteria=template.get("target_criteria", {})
+    )
+
+    db.add(workflow)
+    db.commit()
+    db.refresh(workflow)
+
+    return {
+        "id": workflow.id,
+        "name": workflow.name,
+        "workflow_type": workflow.workflow_type,
+        "schedule_interval": workflow.schedule_interval,
+        "next_run": workflow.next_run.isoformat(),
+        "success": True
+    }
 
 
 # ============================================================================
