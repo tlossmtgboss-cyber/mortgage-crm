@@ -4852,11 +4852,11 @@ Key metrics to track:
                 "type": "function",
                 "function": {
                     "name": "get_pipeline",
-                    "description": "Get pipeline summary with leads by stage",
+                    "description": "Get pipeline summary with leads and loans by stage. When include_details=true, returns detailed info including borrower names, loan amounts, processor, underwriter, days_in_stage, and closing dates. USE THIS to answer performance questions about team members.",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "include_details": {"type": "boolean", "description": "Include lead details in each stage"}
+                            "include_details": {"type": "boolean", "description": "Set to true to include detailed loan/lead info with team member assignments (processor, underwriter) - required for performance analysis"}
                         }
                     }
                 }
@@ -5064,6 +5064,10 @@ Key metrics to track:
                         "id": loan.id,
                         "name": borrower_name,
                         "amount": float(loan.loan_amount) if loan.loan_amount else 0,
+                        "processor": loan.processor,
+                        "underwriter": loan.underwriter,
+                        "days_in_stage": loan.days_in_stage if hasattr(loan, 'days_in_stage') else None,
+                        "closing_date": loan.closing_date.isoformat() if loan.closing_date else None,
                         "type": "loan"
                     })
 
@@ -5299,6 +5303,28 @@ Current date: {datetime.now().strftime('%Y-%m-%d %H:%M')}{agent_context}
 - Use tools for actions (send_email, create_task) or when you need to search/filter specific data
 - Be specific - say "You have 3 tasks due today" not "You have some tasks"
 - Mention actual client names when relevant
+
+## ANALYTICAL QUESTIONS YOU CAN ANSWER:
+**NEVER say "I don't have access" - YOU HAVE FULL ACCESS to all CRM data**
+
+You CAN answer questions like:
+- "Who are my underperforming underwriters/processors/team members?"
+  → Use get_pipeline tool with include_details=True to see loans by team member
+  → Calculate avg days in stage, approval rates, time to close per person
+  → Compare metrics and identify bottom performers
+
+- "Which deals are stuck?" → Check loans in same stage >7 days
+- "What's my conversion rate?" → Calculate from lead stages above
+- "Who are my top producers?" → Group loans by loan officer, sum amounts
+- "Which loans are at risk?" → Check for overdue tasks, approaching lock expirations
+- "How is my team performing?" → Analyze metrics by processor/underwriter/closer
+
+**HOW TO ANSWER PERFORMANCE QUESTIONS:**
+1. Use get_pipeline(include_details=True) to get loan details with team members
+2. Group loans by team member (processor, underwriter, etc.)
+3. Calculate metrics (avg days in stage, completion rate, volume)
+4. Identify top/bottom performers with specific names and numbers
+5. NEVER say you don't have access - the data is RIGHT THERE
 
 ## MULTI-STEP WORKFLOWS:
 - You can chain multiple actions in a single request
