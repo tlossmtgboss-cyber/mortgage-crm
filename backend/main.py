@@ -24635,27 +24635,36 @@ async def initialize_ai_system(db: Session = Depends(get_db)):
         logger.info("Registering AI tools...")
         from ai_agent_definitions import TOOL_DEFINITIONS
         from ai_services import ToolRegistry
+        from ai_tool_handlers import TOOL_HANDLERS
 
         tool_registry = ToolRegistry(db)
         registered_tools = []
+        tools_with_handlers = 0
 
         for tool in TOOL_DEFINITIONS:
             try:
-                # Create a placeholder handler
-                async def placeholder_handler(input_data: dict, context):
-                    return {
-                        "success": True,
-                        "message": f"Tool {tool.name} executed",
-                        "data": input_data
-                    }
+                # Use real handler if available, otherwise use placeholder
+                if tool.name in TOOL_HANDLERS:
+                    handler = TOOL_HANDLERS[tool.name]
+                    tools_with_handlers += 1
+                else:
+                    # Fallback placeholder for tools without handlers yet
+                    async def placeholder_handler(input_data: dict, context, tool_name=tool.name):
+                        return {
+                            "success": True,
+                            "message": f"Tool {tool_name} executed (placeholder)",
+                            "data": input_data
+                        }
+                    handler = placeholder_handler
+                    logger.warning(f"⚠️ No handler for tool: {tool.name}, using placeholder")
 
-                await tool_registry.register_tool(tool, placeholder_handler)
+                await tool_registry.register_tool(tool, handler)
                 registered_tools.append(tool.name)
                 logger.info(f"✅ Registered tool: {tool.name}")
             except Exception as e:
                 logger.error(f"Failed to register tool {tool.name}: {e}")
 
-        logger.info(f"✅ Registered {len(registered_tools)}/{len(TOOL_DEFINITIONS)} tools")
+        logger.info(f"✅ Registered {len(registered_tools)}/{len(TOOL_DEFINITIONS)} tools ({tools_with_handlers} with real handlers)")
 
         return {
             "status": "success",
