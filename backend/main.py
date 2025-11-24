@@ -4597,6 +4597,95 @@ async def orchestrator_chat(
 
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
+        # Specialized Agent Registry
+        specialized_agents = {
+            "lead_nurturing": {
+                "name": "Lead Nurturing Agent",
+                "keywords": ["nurture", "follow-up", "sequence", "drip", "campaign", "outreach", "touch", "engagement"],
+                "prompt": """You are the Lead Nurturing Agent specializing in automated follow-up sequences.
+
+Your expertise:
+- Design multi-touch follow-up campaigns
+- Determine optimal contact timing and frequency
+- Personalize outreach based on lead behavior and stage
+- Suggest engagement strategies for cold, warm, and hot leads
+- Create nurture sequences (day 1: intro email, day 3: value add, day 7: check-in)
+
+When creating follow-ups, always consider:
+- Lead's current stage and last contact date
+- Communication preferences
+- Previous interaction history
+- Industry-appropriate timing"""
+            },
+            "document": {
+                "name": "Document Agent",
+                "keywords": ["document", "docs", "paperwork", "missing", "upload", "verification", "checklist", "stips"],
+                "prompt": """You are the Document Agent specializing in loan documentation management.
+
+Your expertise:
+- Track required documents for each loan type (Conventional, FHA, VA, USDA)
+- Identify missing documents and send reminders
+- Prioritize document requests by closing date
+- Suggest document alternatives when originals unavailable
+- Monitor document expiration dates (paystubs, bank statements)
+
+Standard document checklist by loan type:
+- All: ID, paystubs (30 days), W-2s (2 years), bank statements (2 months), tax returns
+- Self-employed: P&L, business returns, 1099s
+- FHA: Gift letters, explanation letters
+- VA: DD-214, Certificate of Eligibility"""
+            },
+            "compliance": {
+                "name": "Compliance Agent",
+                "keywords": ["compliance", "audit", "regulation", "trid", "respa", "hmda", "disclosure", "violation", "risk"],
+                "prompt": """You are the Compliance Agent specializing in mortgage regulatory compliance.
+
+Your expertise:
+- TRID timing (LE within 3 days, CD 3 days before closing)
+- RESPA requirements and fee tolerances
+- HMDA data accuracy
+- Fair lending practices
+- State-specific regulations
+- QM/ATR requirements
+
+When reviewing files, check:
+- Disclosure timing compliance
+- Fee tolerance violations (0%, 10%, unlimited)
+- APR accuracy
+- Loan estimate vs closing disclosure variances
+- Red flags for fair lending"""
+            },
+            "analytics": {
+                "name": "Analytics Agent",
+                "keywords": ["analytics", "metrics", "report", "forecast", "projection", "trend", "performance", "roi", "conversion"],
+                "prompt": """You are the Analytics Agent specializing in mortgage business intelligence.
+
+Your expertise:
+- Pipeline conversion analysis
+- Lead source ROI calculations
+- Loan officer performance metrics
+- Closing time projections
+- Revenue forecasting
+- Trend identification
+
+Key metrics to track:
+- Lead-to-application conversion rate
+- Application-to-closing rate
+- Average days in each pipeline stage
+- Pull-through rate by loan type
+- Cost per funded loan
+- Revenue per lead source"""
+            }
+        }
+
+        # Route to specialized agent based on message content
+        selected_agent = None
+        message_lower = message.lower()
+        for agent_id, agent in specialized_agents.items():
+            if any(keyword in message_lower for keyword in agent["keywords"]):
+                selected_agent = agent
+                break
+
         # Define tools the AI can execute
         tools = [
             {
@@ -4984,9 +5073,16 @@ async def orchestrator_chat(
 """
 
         # Step 1: Call GPT with tools and real data context
+        agent_context = ""
+        agent_name = "General Assistant"
+        if selected_agent:
+            agent_context = f"\n\n## SPECIALIZED AGENT MODE:\n{selected_agent['prompt']}"
+            agent_name = selected_agent['name']
+
         system_prompt = f"""You are an AI assistant for a mortgage CRM system with access to tools.
+{"" if not selected_agent else f"**Active Agent: {selected_agent['name']}**"}
 User: {current_user.full_name or current_user.email}
-Current date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+Current date: {datetime.now().strftime('%Y-%m-%d %H:%M')}{agent_context}
 
 {data_context}
 
@@ -5075,7 +5171,8 @@ Current date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
             "response": ai_response,
             "tools_executed": [t["tool"] for t in tool_results],
             "tool_results": tool_results,
-            "agent_used": "orchestrator_with_tools"
+            "agent_used": agent_name,
+            "specialized_agent": selected_agent["name"] if selected_agent else None
         }
 
     except Exception as e:
