@@ -494,7 +494,34 @@ IMPORTANT: When asked about rate locks, use this real-time market data to provid
             for emp in top_performers:
                 context_parts.append(f"- **{emp['name']}** ({emp['role']}): ROI {emp['roi']:.1f}%, {emp['loans']} loans, ${emp['revenue']:,.0f} revenue")
 
-            context_parts.append("\n### All Team Members by ROI:")
+            # Group employees by role for drill-down capability
+            by_role = {}
+            for emp in results:
+                role = emp["role"]
+                if role not in by_role:
+                    by_role[role] = []
+                by_role[role].append(emp)
+
+            context_parts.append("\n### Team Members by Role (Sorted by Efficiency):\n")
+
+            for role_name in sorted(by_role.keys()):
+                employees = by_role[role_name]
+                # Sort by ROI (efficiency proxy) descending
+                employees.sort(key=lambda x: x["roi"], reverse=True)
+
+                # Calculate role average
+                avg_roi = sum(e["roi"] for e in employees) / len(employees) if employees else 0
+                total_loans = sum(e["loans"] for e in employees)
+
+                context_parts.append(f"**{role_name}s** (Avg Efficiency: {avg_roi:.1f}%, Total Loans: {total_loans}):")
+
+                for i, emp in enumerate(employees, 1):
+                    status = "⚠️" if emp["roi"] < 0 else "✅" if emp["roi"] > avg_roi else "📊"
+                    context_parts.append(f"  {i}. {status} {emp['name']}: {emp['roi']:.1f}% efficiency, {emp['loans']} loans, ${emp['revenue']:,.0f} revenue")
+
+                context_parts.append("")
+
+            context_parts.append("### All Team Members by ROI:")
             for emp in results:
                 status = "⚠️" if emp["roi"] < 0 else "✅" if emp["roi"] > 100 else "📊"
                 context_parts.append(f"{status} {emp['name']} ({emp['role']}): ROI {emp['roi']:.1f}%, {emp['loans']} loans closed")
