@@ -4,13 +4,15 @@ Provides context-aware AI responses using conversation history
 """
 import logging
 from typing import Optional, Dict, List
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date, timedelta
 from sqlalchemy.orm import Session
+from sqlalchemy import and_
 import anthropic
 import json
 
 from integrations.pinecone_service import vector_memory
 from main import ConversationMemory, Lead, Loan, User
+from ai_receptionist_dashboard_models import AIReceptionistMetricsDaily, AIReceptionistActivity
 
 logger = logging.getLogger(__name__)
 
@@ -82,12 +84,16 @@ class ContextAwareAI:
             if loan_id:
                 loan_context = await self._get_loan_context(db, loan_id)
 
+            # 2.5 Always get ROI context for business metrics questions
+            roi_context = await self._get_roi_context(db)
+
             # 3. Build enhanced system prompt with context
             system_prompt = self._build_system_prompt(
                 relevant_history,
                 lead_context,
                 loan_context,
-                coaching_context
+                coaching_context,
+                roi_context
             )
 
             # 4. Generate response with Claude
@@ -159,7 +165,8 @@ class ContextAwareAI:
         relevant_history: List[Dict],
         lead_context: str,
         loan_context: str,
-        coaching_context: Optional[str] = None
+        coaching_context: Optional[str] = None,
+        roi_context: Optional[str] = None
     ) -> str:
         """Build enhanced system prompt with all available context"""
 
@@ -200,6 +207,11 @@ You also have access to the mortgage CRM system and can help with lead managemen
         if coaching_context:
             context_sections.append("\n## ⭐ YOUR CRM DATA (Use this for coaching and prioritization!):")
             context_sections.append(coaching_context)
+
+        # Add ROI/business metrics context if available
+        if roi_context:
+            context_sections.append("\n## 📊 BUSINESS & ROI METRICS (Use this for cost, ROI, and performance questions!):")
+            context_sections.append(roi_context)
 
         # Add guidelines - different based on whether we have current lead context
         if lead_context or loan_context:
@@ -268,6 +280,65 @@ Status: {loan.status or 'In Progress'}"""
             return context
         except Exception as e:
             logger.error(f"Error getting loan context: {e}")
+            return ""
+
+    async def _get_roi_context(self, db: Session) -> str:
+        """Get ROI and business metrics context"""
+        try:
+            # Get last 30 days of metrics
+            end_date = date.today()
+            start_date = end_date - timedelta(days=30)
+
+            metrics = db.query(AIReceptionistMetricsDaily).filter(
+                and_(
+                    AIReceptionistMetricsDaily.date >= start_date,
+                    AIReceptionistMetricsDaily.date <= end_date
+                )
+            ).all()
+
+            if not metrics:
+                return ""
+
+            # Aggregate metrics
+            total_appointments = sum(m.appointments_scheduled for m in metrics)
+            total_apps_initiated = sum(m.loan_apps_initiated for m in metrics)
+            total_saved_hours = sum(m.saved_labor_hours or 0 for m in metrics)
+            total_estimated_revenue = sum(m.estimated_revenue_created or 0 for m in metrics)
+            total_conversations = sum(m.total_conversations for m in metrics)
+
+            # Calculate rates
+            appointment_to_app_rate = (total_apps_initiated / total_appointments * 100) if total_appointments > 0 else 0
+            cost_per_interaction = 0.50
+
+            # Get closes
+            total_closes = db.query(AIReceptionistActivity).filter(
+                and_(
+                    AIReceptionistActivity.timestamp >= datetime.combine(start_date, datetime.min.time()),
+                    AIReceptionistActivity.timestamp <= datetime.combine(end_date, datetime.max.time()),
+                    AIReceptionistActivity.lead_stage == 'closed'
+                )
+            ).count()
+
+            # Calculate costs
+            total_cost = total_conversations * cost_per_interaction
+            cost_per_close = (total_cost / total_closes) if total_closes > 0 else None
+
+            # Format context
+            context = f"""## Business & ROI Metrics (Last 30 Days)
+Total Appointments Scheduled: {total_appointments}
+Loan Applications Initiated: {total_apps_initiated}
+Appointment to App Rate: {appointment_to_app_rate:.1f}%
+Total Conversations: {total_conversations}
+Total Closes: {total_closes}
+Estimated Revenue: ${total_estimated_revenue:,.2f}
+Saved Labor Hours: {total_saved_hours:.1f}
+Cost Per Interaction: ${cost_per_interaction:.2f}
+Cost Per Close: ${cost_per_close:.2f if cost_per_close else 'N/A'}
+Total AI Cost: ${total_cost:.2f}"""
+
+            return context
+        except Exception as e:
+            logger.error(f"Error getting ROI context: {e}")
             return ""
 
     async def _extract_conversation_metadata(
