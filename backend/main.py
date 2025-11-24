@@ -83,6 +83,34 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 # Initialize OpenAI client
 openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
+# ============================================================================
+# IN-MEMORY CACHE FOR BLAZING FAST RETRIEVAL
+# ============================================================================
+# Simple TTL cache for expensive endpoints
+_cache: Dict[str, Dict[str, Any]] = {}
+CACHE_TTL_SECONDS = 30  # 30-second cache for dashboard data
+
+def get_cached(key: str) -> Optional[Any]:
+    """Get cached value if not expired"""
+    if key in _cache:
+        entry = _cache[key]
+        if time.time() - entry['timestamp'] < CACHE_TTL_SECONDS:
+            return entry['data']
+        del _cache[key]
+    return None
+
+def set_cached(key: str, data: Any) -> None:
+    """Set cache entry with timestamp"""
+    _cache[key] = {'data': data, 'timestamp': time.time()}
+
+def clear_cache(prefix: str = None) -> None:
+    """Clear cache entries, optionally by prefix"""
+    global _cache
+    if prefix:
+        _cache = {k: v for k, v in _cache.items() if not k.startswith(prefix)}
+    else:
+        _cache = {}
+
 # Database - Create Base first
 Base = declarative_base()
 
@@ -3184,49 +3212,72 @@ async def update_ai_action_outcome(
 # ============================================================================
 
 async def _get_coaching_context(db: Session, user_id: int) -> str:
-    """Fetch CRM data for coaching context"""
-    from datetime import datetime, timedelta
-    from sqlalchemy import func
+    """Fetch CRM data for coaching context - optimized with database filtering"""
+    now = datetime.now(timezone.utc)
+    yesterday = now - timedelta(days=1)
+    ten_days_ago = now - timedelta(days=10)
+    today = now.date()
 
     context_parts = []
 
-    # Get leads stats (Lead uses owner_id, not user_id)
-    leads = db.query(Lead).filter(Lead.owner_id == user_id).all()
-    new_leads = [l for l in leads if l.created_at and l.created_at >= datetime.now() - timedelta(days=1)]
-    # Lead model uses 'stage' not 'status' - match actual enum values
-    pending_leads = [l for l in leads if l.stage and l.stage.value in ['New', 'Attempted Contact', 'Prospect']]
+    # Get leads stats with database COUNT queries (much faster than fetching all rows)
+    total_leads = db.query(func.count(Lead.id)).filter(Lead.owner_id == user_id).scalar() or 0
+    new_leads_count = db.query(func.count(Lead.id)).filter(
+        Lead.owner_id == user_id,
+        Lead.created_at >= yesterday
+    ).scalar() or 0
+    pending_leads_count = db.query(func.count(Lead.id)).filter(
+        Lead.owner_id == user_id,
+        Lead.stage.in_([LeadStage.NEW, LeadStage.ATTEMPTED_CONTACT, LeadStage.PROSPECT])
+    ).scalar() or 0
 
     context_parts.append(f"## LEADS DATA:")
-    context_parts.append(f"- Total leads: {len(leads)}")
-    context_parts.append(f"- New leads (last 24h): {len(new_leads)}")
-    context_parts.append(f"- Pending follow-up: {len(pending_leads)}")
+    context_parts.append(f"- Total leads: {total_leads}")
+    context_parts.append(f"- New leads (last 24h): {new_leads_count}")
+    context_parts.append(f"- Pending follow-up: {pending_leads_count}")
 
-    # Get loans/pipeline stats (Loan uses loan_officer_id)
-    loans = db.query(Loan).filter(Loan.loan_officer_id == user_id).all()
-    # Loan model uses 'stage' not 'status' - match actual enum values
-    active_loans = [l for l in loans if l.stage and l.stage.value not in ['Funded']]
-    stuck_loans = [l for l in active_loans if l.updated_at and l.updated_at <= datetime.now() - timedelta(days=10)]
+    # Get loans stats with database COUNT queries
+    total_loans = db.query(func.count(Loan.id)).filter(Loan.loan_officer_id == user_id).scalar() or 0
+    active_loans_count = db.query(func.count(Loan.id)).filter(
+        Loan.loan_officer_id == user_id,
+        Loan.stage != LoanStage.FUNDED
+    ).scalar() or 0
+
+    # Get stalled loans directly from database (only fetch the 5 we need)
+    stuck_loans = db.query(Loan).filter(
+        Loan.loan_officer_id == user_id,
+        Loan.stage != LoanStage.FUNDED,
+        Loan.updated_at <= ten_days_ago
+    ).limit(5).all()
 
     context_parts.append(f"\n## PIPELINE DATA:")
-    context_parts.append(f"- Total loans: {len(loans)}")
-    context_parts.append(f"- Active in pipeline: {len(active_loans)}")
+    context_parts.append(f"- Total loans: {total_loans}")
+    context_parts.append(f"- Active in pipeline: {active_loans_count}")
     context_parts.append(f"- Stalled (10+ days): {len(stuck_loans)}")
 
     if stuck_loans:
         context_parts.append(f"\nStalled deals:")
-        for loan in stuck_loans[:5]:
-            days_stuck = (datetime.now() - loan.updated_at).days
+        for loan in stuck_loans:
+            days_stuck = (now - loan.updated_at).days if loan.updated_at else 0
             context_parts.append(f"  - {loan.borrower_name}: {loan.stage.value} ({days_stuck} days)")
 
-    # Get tasks stats (Task uses owner_id)
-    tasks = db.query(Task).filter(Task.owner_id == user_id).all()
-    overdue_tasks = [t for t in tasks if t.due_date and t.due_date < datetime.now().date() and t.status != 'completed']
-    today_tasks = [t for t in tasks if t.due_date == datetime.now().date() and t.status != 'completed']
+    # Get tasks stats with database COUNT queries
+    total_tasks = db.query(func.count(Task.id)).filter(Task.owner_id == user_id).scalar() or 0
+    overdue_count = db.query(func.count(Task.id)).filter(
+        Task.owner_id == user_id,
+        Task.due_date < today,
+        Task.status != 'completed'
+    ).scalar() or 0
+    today_count = db.query(func.count(Task.id)).filter(
+        Task.owner_id == user_id,
+        func.date(Task.due_date) == today,
+        Task.status != 'completed'
+    ).scalar() or 0
 
     context_parts.append(f"\n## TASKS DATA:")
-    context_parts.append(f"- Total tasks: {len(tasks)}")
-    context_parts.append(f"- Overdue: {len(overdue_tasks)}")
-    context_parts.append(f"- Due today: {len(today_tasks)}")
+    context_parts.append(f"- Total tasks: {total_tasks}")
+    context_parts.append(f"- Overdue: {overdue_count}")
+    context_parts.append(f"- Due today: {today_count}")
 
     return "\n".join(context_parts)
 
@@ -4702,10 +4753,10 @@ async def orchestrator_chat(
                 content = f"Here are your tasks for {timeframe}:\n\n{task_list if task_list else 'No tasks scheduled.'}"
 
             elif content_type == "pipeline_update":
-                leads = db.query(Lead).filter(Lead.assigned_to == current_user.id).all()
+                leads = db.query(Lead).filter(Lead.owner_id == current_user.id).all()
                 stages = {}
                 for lead in leads:
-                    stage = lead.status or "New"
+                    stage = str(lead.stage) if lead.stage else "New"
                     if stage not in stages:
                         stages[stage] = 0
                     stages[stage] += 1
@@ -4787,28 +4838,28 @@ async def orchestrator_chat(
             status = args.get("status")
             limit = args.get("limit", 5)
 
-            query = db.query(Lead).filter(Lead.assigned_to == current_user.id)
+            query = db.query(Lead).filter(Lead.owner_id == current_user.id)
             if query_str:
                 search = f"%{query_str}%"
-                query = query.filter((Lead.first_name.ilike(search)) | (Lead.last_name.ilike(search)) | (Lead.email.ilike(search)) | (Lead.phone.ilike(search)))
+                query = query.filter((Lead.name.ilike(search)) | (Lead.email.ilike(search)) | (Lead.phone.ilike(search)))
             if status:
-                query = query.filter(Lead.status == status)
+                query = query.filter(Lead.stage == status)
 
             leads = query.limit(limit).all()
-            return {"count": len(leads), "leads": [{"id": l.id, "name": f"{l.first_name} {l.last_name}", "email": l.email, "phone": l.phone, "status": l.status} for l in leads]}
+            return {"count": len(leads), "leads": [{"id": l.id, "name": f"{l.name}", "email": l.email, "phone": l.phone, "status": str(l.stage) if l.stage else None} for l in leads]}
 
         async def execute_get_pipeline(args):
             include_details = args.get("include_details", False)
-            leads = db.query(Lead).filter(Lead.assigned_to == current_user.id).all()
+            leads = db.query(Lead).filter(Lead.owner_id == current_user.id).all()
 
             stages = {}
             for lead in leads:
-                stage = lead.status or "New"
+                stage = str(lead.stage) if lead.stage else "New"
                 if stage not in stages:
                     stages[stage] = {"count": 0, "leads": []}
                 stages[stage]["count"] += 1
                 if include_details:
-                    stages[stage]["leads"].append({"id": lead.id, "name": f"{lead.first_name} {lead.last_name}"})
+                    stages[stage]["leads"].append({"id": lead.id, "name": f"{lead.name}"})
 
             return {"total_leads": len(leads), "stages": stages}
 
@@ -4821,7 +4872,7 @@ async def orchestrator_chat(
 
             if not lead_id and lead_name:
                 search = f"%{lead_name}%"
-                lead = db.query(Lead).filter(Lead.assigned_to == current_user.id, (Lead.first_name.ilike(search)) | (Lead.last_name.ilike(search))).first()
+                lead = db.query(Lead).filter(Lead.owner_id == current_user.id, (Lead.name.ilike(search))).first()
                 if lead:
                     lead_id = lead.id
 
@@ -4841,7 +4892,7 @@ async def orchestrator_chat(
 
             if not lead_id and lead_name:
                 search = f"%{lead_name}%"
-                lead = db.query(Lead).filter(Lead.assigned_to == current_user.id, (Lead.first_name.ilike(search)) | (Lead.last_name.ilike(search))).first()
+                lead = db.query(Lead).filter(Lead.owner_id == current_user.id, (Lead.name.ilike(search))).first()
             else:
                 lead = db.query(Lead).filter(Lead.id == lead_id).first()
 
@@ -4849,20 +4900,20 @@ async def orchestrator_chat(
                 return {"success": False, "message": "Lead not found"}
 
             if args.get("status"):
-                lead.status = args["status"]
+                lead.stage = args["status"]
             if args.get("loan_stage"):
                 lead.loan_stage = args["loan_stage"]
             db.commit()
 
-            return {"success": True, "message": f"Lead {lead.first_name} {lead.last_name} updated", "lead_id": lead.id}
+            return {"success": True, "message": f"Lead {lead.name} updated", "lead_id": lead.id}
 
         async def execute_get_metrics(args):
-            leads = db.query(Lead).filter(Lead.assigned_to == current_user.id).all()
+            leads = db.query(Lead).filter(Lead.owner_id == current_user.id).all()
             tasks = db.query(Task).filter(Task.owner_id == current_user.id).all()
 
             metrics = {"total_leads": len(leads), "total_tasks": len(tasks), "completed_tasks": len([t for t in tasks if t.status == "completed"]), "pipeline_stages": {}}
             for lead in leads:
-                stage = lead.status or "New"
+                stage = str(lead.stage) if lead.stage else "New"
                 if stage not in metrics["pipeline_stages"]:
                     metrics["pipeline_stages"][stage] = 0
                 metrics["pipeline_stages"][stage] += 1
@@ -8814,10 +8865,21 @@ async def get_duplicate_leads(
             DuplicatePair.status == 'pending'
         ).all()
 
+        # OPTIMIZED: Batch load all leads at once instead of N+1 queries
+        lead_ids = set()
+        for pair in pending_pairs:
+            lead_ids.add(pair.lead_id_1)
+            lead_ids.add(pair.lead_id_2)
+
+        leads_map = {}
+        if lead_ids:
+            leads = db.query(Lead).filter(Lead.id.in_(lead_ids)).all()
+            leads_map = {lead.id: lead for lead in leads}
+
         result = []
         for pair in pending_pairs:
-            lead1 = db.query(Lead).filter(Lead.id == pair.lead_id_1).first()
-            lead2 = db.query(Lead).filter(Lead.id == pair.lead_id_2).first()
+            lead1 = leads_map.get(pair.lead_id_1)
+            lead2 = leads_map.get(pair.lead_id_2)
 
             if lead1 and lead2:
                 result.append({
@@ -9063,12 +9125,25 @@ async def get_completed_merges(
             DuplicatePair.status.in_(['merged', 'auto_merged'])
         ).order_by(DuplicatePair.merged_at.desc()).limit(50).all()
 
+        # OPTIMIZED: Batch load all leads at once instead of N+1 queries
+        lead_ids = set()
+        for pair in completed_pairs:
+            lead_ids.add(pair.lead_id_1)
+            lead_ids.add(pair.lead_id_2)
+            if pair.principal_record_id:
+                lead_ids.add(pair.principal_record_id)
+
+        leads_map = {}
+        if lead_ids:
+            leads = db.query(Lead).filter(Lead.id.in_(lead_ids)).all()
+            leads_map = {lead.id: lead for lead in leads}
+
         completed_tasks = []
         for pair in completed_pairs:
-            # Get the lead details
-            lead1 = db.query(Lead).filter(Lead.id == pair.lead_id_1).first()
-            lead2 = db.query(Lead).filter(Lead.id == pair.lead_id_2).first()
-            principal = db.query(Lead).filter(Lead.id == pair.principal_record_id).first()
+            # Get the lead details from batch-loaded map
+            lead1 = leads_map.get(pair.lead_id_1)
+            lead2 = leads_map.get(pair.lead_id_2)
+            principal = leads_map.get(pair.principal_record_id)
 
             # Calculate AI accuracy for this merge
             training_events = db.query(MergeTrainingEvent).filter(
@@ -12575,11 +12650,17 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
     """
     Get dashboard data with real metrics from database.
     All values are server-computed from CRM database.
-    OPTIMIZED: Uses fewer queries by batching and aggregating in memory.
+    OPTIMIZED: Uses caching + fewer queries by batching and aggregating in memory.
     """
     from datetime import date, timedelta, datetime, timezone
     from sqlalchemy import func, extract, case
     import traceback
+
+    # Check cache first for blazing fast retrieval
+    cache_key = f"dashboard:{current_user.id}"
+    cached_data = get_cached(cache_key)
+    if cached_data:
+        return cached_data
 
     # Get current date ranges
     today = date.today()
@@ -12992,7 +13073,7 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
         ]
     }
 
-    return {
+    result = {
         "prioritized_tasks": prioritized_tasks,
         "pipeline_stats": pipeline_stats,
         "production": production,
@@ -13004,6 +13085,10 @@ async def get_dashboard(db: Session = Depends(get_db), current_user: User = Depe
         "messages": messages,
         "efficiency": efficiency
     }
+
+    # Cache for blazing fast retrieval on subsequent requests
+    set_cached(cache_key, result)
+    return result
 
 # ============================================================================
 # LOAN SCORECARD REPORT
