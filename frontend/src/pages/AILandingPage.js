@@ -24,7 +24,7 @@ function AILandingPage() {
   const [generatedFullMessage, setGeneratedFullMessage] = useState('');
 
   // New state for redesigned features
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [sidebarView, setSidebarView] = useState('chats'); // 'chats', 'reports', 'suggestions'
   const [chatHistory, setChatHistory] = useState(() => {
     const stored = localStorage.getItem('ai_chat_history');
@@ -496,11 +496,14 @@ function AILandingPage() {
           preview: response.preview,
           actionType: response.intent
         });
-      } else if (response.fallback || (!response.data && !response.preview && !response.action_id)) {
-        // API returned fallback or empty response - use local routing
+      } else if (response.explanation) {
+        // Orchestrator returned a valid response - show it
+        addMessage(response.explanation, 'assistant');
+      } else if (!response.explanation && !response.data && !response.preview && !response.action_id) {
+        // No useful response - use local routing as fallback
         routeMessage(message);
       } else {
-        addMessage(response.explanation || "I understand your request.", 'assistant');
+        addMessage("I understand your request.", 'assistant');
       }
     } catch (error) {
       console.error('AI processing error:', error);
@@ -1351,7 +1354,7 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
         </div>
 
         {/* Left Pane - Input/Prompts */}
-        <div className="ai-left-pane" style={{ width: messages.length > 0 ? `${dividerPosition}%` : '100%' }}>
+        <div className="ai-left-pane" style={{ width: messages.some(m => m.isSpecialContent) ? `${dividerPosition}%` : '100%' }}>
           {/* Header */}
           <div className="ai-header-new">
             <div className="ai-logo-new">
@@ -1385,20 +1388,32 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
                 <strong>Accountability Review</strong>
                 <span>Review your performance</span>
               </button>
-              <button onClick={() => handleExamplePrompt('Tough Love Mode - Call out my inefficiencies directly')}>
-                <strong>Tough Love Mode</strong>
-                <span>Call out inefficiencies directly</span>
-              </button>
-              <button onClick={() => handleExamplePrompt('Teach Me The Process - Help me learn systemic thinking')}>
-                <strong>Teach Me The Process</strong>
-                <span>Learn systemic thinking and execution</span>
-              </button>
-              <button onClick={() => handleExamplePrompt('I have a question')}>
-                <strong>Ask a Question</strong>
-                <span>Get specific tactical advice</span>
-              </button>
             </div>
           </div>
+
+          {/* Conversation History - Above Input */}
+          {messages.length > 0 && (
+            <div className="ai-conversation-history" ref={chatAreaRef}>
+              {messages.map(message => (
+                <div key={message.id} className={`ai-message-new ai-message-${message.type}`}>
+                  {!message.isSpecialContent && (
+                    <div className="ai-message-content-new ai-markdown-content">
+                      <ReactMarkdown>{message.content}</ReactMarkdown>
+                    </div>
+                  )}
+                </div>
+              ))}
+              {loading && (
+                <div className="ai-message-new ai-message-assistant">
+                  <div className="ai-typing-indicator-new">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Input Area */}
           <div className="ai-input-area">
@@ -1473,26 +1488,20 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
         </div>
 
         {/* Draggable Divider */}
-        {messages.length > 0 && (
+        {messages.some(m => m.isSpecialContent) && (
           <div
             className={`ai-pane-divider ${isDragging ? 'dragging' : ''}`}
             onMouseDown={handleDividerMouseDown}
           />
         )}
 
-        {/* Right Pane - Answers Only */}
-        {messages.length > 0 && (
+        {/* Right Pane - Results Only (Special Content) */}
+        {messages.some(m => m.isSpecialContent) && (
           <div className="ai-right-pane" style={{ width: `${100 - dividerPosition}%` }}>
-            <div className="ai-messages-area" ref={chatAreaRef}>
-              {messages.filter(message => message.type === 'assistant').map(message => (
+            <div className="ai-messages-area">
+              {messages.filter(message => message.isSpecialContent).map(message => (
                 <div key={message.id} className={`ai-message-new ai-message-${message.type}`}>
-                  {message.isSpecialContent ? (
-                    renderSpecialContent(message)
-                  ) : (
-                    <div className="ai-message-content-new ai-markdown-content">
-                      <ReactMarkdown>{message.content}</ReactMarkdown>
-                    </div>
-                  )}
+                  {renderSpecialContent(message)}
                   <button
                     className="ai-delete-message-btn"
                     onClick={() => handleDeleteMessage(message.id)}
@@ -1502,16 +1511,6 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
                   </button>
                 </div>
               ))}
-
-              {loading && (
-                <div className="ai-message-new ai-message-assistant">
-                  <div className="ai-typing-indicator-new">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         )}
