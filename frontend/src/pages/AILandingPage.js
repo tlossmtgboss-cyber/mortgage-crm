@@ -543,11 +543,12 @@ function AILandingPage() {
       } else {
         showDailyView();
       }
-    } else if (lower.includes('email') && (lower.includes('task') || lower.includes('to do') || lower.includes('todo') || lower.includes('tomorrow') || lower.includes('need to do'))) {
+    } else if (lower.includes('email') && (lower.includes('task') || lower.includes('to do') || lower.includes('todo') || lower.includes('tomorrow') || lower.includes('need to do') || lower.includes('things'))) {
       // Handle "email me my tasks for tomorrow" type requests
       const isTomorrow = lower.includes('tomorrow');
       sendTaskSummaryEmail(isTomorrow);
-    } else if (lower.includes('today') || lower.includes('do today') || lower.includes('task') || lower.includes('to do') || lower.includes('todo')) {
+      return; // Prevent further processing
+    } else if ((lower.includes('today') || lower.includes('do today') || lower.includes('task') || lower.includes('to do') || lower.includes('todo')) && !lower.includes('email')) {
       showDailyView();
     } else if (lower.includes('email') && (lower.includes('all in one') || lower.includes('mortgages under management'))) {
       showEmailCampaign();
