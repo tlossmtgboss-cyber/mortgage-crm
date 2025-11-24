@@ -12375,19 +12375,25 @@ async def get_leads(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user_flexible)
 ):
-    # Phase 3: Apply permission-based filtering
-    query = db.query(Lead)
-    query = filter_leads_by_permissions(query, current_user, db)
+    try:
+        # Phase 3: Apply permission-based filtering
+        query = db.query(Lead)
+        query = filter_leads_by_permissions(query, current_user, db)
 
-    if stage:
-        try:
-            stage_enum = LeadStage(stage)
-            query = query.filter(Lead.stage == stage_enum)
-        except ValueError:
-            pass
+        if stage:
+            try:
+                stage_enum = LeadStage(stage)
+                query = query.filter(Lead.stage == stage_enum)
+            except ValueError:
+                pass
 
-    leads = query.order_by(Lead.created_at.desc()).offset(skip).limit(limit).all()
-    return leads
+        leads = query.order_by(Lead.created_at.desc()).offset(skip).limit(limit).all()
+        return leads
+    except Exception as e:
+        import traceback
+        logger.error(f"get_leads error: {e}")
+        logger.error(f"get_leads traceback: {traceback.format_exc()}")
+        raise
 
 @app.get("/api/v1/leads/search", response_model=List[LeadResponse])
 async def search_leads(
