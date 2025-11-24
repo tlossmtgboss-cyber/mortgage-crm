@@ -4052,8 +4052,8 @@ async def send_daily_priorities_email(
     """
     Send daily priorities report to specified email address
     """
-    from backend.email_service import email_service
-    from backend.query_executor import QueryExecutor
+    from email_service import email_service
+    from query_executor import QueryExecutor
 
     # Get current user
     main = get_main_module()
