@@ -382,6 +382,1407 @@ AI_TOOLS = [
             },
             "required": []
         }
+    },
+    # Customer Lifecycle & Value
+    {
+        "name": "query_client_lifetime_value",
+        "description": "Calculate client lifetime value including total loan volume, referrals, and estimated revenue per client",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_refi_candidates",
+        "description": "Identify clients likely to refinance based on rate environment, loan age, and current interest rates",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "months_since_closing": {"type": "integer", "default": 12, "description": "Minimum months since closing"}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "query_client_retention_rate",
+        "description": "Calculate percentage of clients who return for additional loans",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_ghost_clients",
+        "description": "Find past clients with no recent contact who need re-engagement",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "days_since_contact": {"type": "integer", "default": 180, "description": "Days since last contact"}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "query_communication_effectiveness",
+        "description": "Analyze response rates by time of day and communication channel",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_referral_likelihood",
+        "description": "Identify clients most likely to provide referrals based on satisfaction scores",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # Operational Efficiency
+    {
+        "name": "query_process_bottlenecks",
+        "description": "Identify where loans get stuck in the pipeline and average time in each stage",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_sla_compliance",
+        "description": "Calculate on-time performance metrics by stage",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_document_turnaround",
+        "description": "Calculate time from document request to receipt",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_pull_through_rate",
+        "description": "Calculate percentage of leads that actually close by source",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_capacity_utilization",
+        "description": "Calculate active loans vs optimal capacity for loan officers",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_cycle_time_by_loan_type",
+        "description": "Calculate average time to close by loan product type",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # Risk & Early Warning
+    {
+        "name": "query_at_risk_loans",
+        "description": "Predict loans at risk of falling out based on patterns like stall time and risk scores",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_expiring_rate_locks",
+        "description": "Find rate locks expiring soon with urgency levels",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "days_threshold": {"type": "integer", "default": 15, "description": "Days until expiration"}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "query_credit_quality_trend",
+        "description": "Track average FICO scores and DTI trends over time",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_compliance_risk_score",
+        "description": "Calculate compliance risk based on violations and missing disclosures",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_poor_quality_sources",
+        "description": "Identify referral partners with low conversion and high fallout rates",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # Marketing & Growth
+    {
+        "name": "query_cost_per_acquisition",
+        "description": "Calculate cost per acquisition by marketing channel",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_marketing_roi",
+        "description": "Track marketing campaign ROI from ad to closed loan",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_seasonal_trends",
+        "description": "Identify month-over-month patterns for forecasting",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_competitive_analysis",
+        "description": "Analyze lost deals to understand competitive positioning",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_market_share_by_zip",
+        "description": "Calculate local market dominance by ZIP code",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # Financial Forecasting
+    {
+        "name": "query_revenue_forecast_90d",
+        "description": "Forecast 90-day revenue based on current pipeline and conversion rates",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_pipeline_value_at_risk",
+        "description": "Calculate loans likely to cancel or fall through",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_margin_trend",
+        "description": "Analyze interest rate spread trends over time",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_breakeven_analysis",
+        "description": "Calculate loans needed to cover compensation and overhead",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "monthly_overhead": {"type": "number", "default": 15000},
+                "avg_commission": {"type": "number", "default": 3000}
+            },
+            "required": []
+        }
+    },
+    # Quality & Performance
+    {
+        "name": "query_processor_quality_metrics",
+        "description": "Analyze error rates and quality metrics by processor",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_loan_delay_root_causes",
+        "description": "Identify what causes most loan delays",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_documentation_completeness",
+        "description": "Calculate missing documents by loan stage",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_customer_satisfaction_by_lo",
+        "description": "Get NPS and satisfaction scores by loan officer",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # Partnership Intelligence
+    {
+        "name": "query_top_realtor_partners",
+        "description": "Identify top producing realtor partners by volume and close rate",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_referral_partner_response_time",
+        "description": "Measure how fast referral partners engage leads",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_vendor_performance",
+        "description": "Compare appraisal, title, and credit vendor performance",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # Strategic Planning
+    {
+        "name": "query_hiring_recommendation",
+        "description": "Analyze if hiring another team member makes financial sense based on capacity",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_product_profitability",
+        "description": "Calculate margin and time analysis by loan type to identify most profitable products",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_optimal_product_mix",
+        "description": "Recommend optimal product mix for revenue maximization",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_cost_cutting_opportunities",
+        "description": "Identify expense efficiency opportunities",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_employee_productivity_benchmark",
+        "description": "Compare performance to industry standards and benchmarks",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # ========== TACTICAL QUERIES - Day-to-Day Operations (99 queries) ==========
+    # Daily Operations & Priorities
+    {
+        "name": "query_daily_focus_priorities",
+        "description": "Get AI-prioritized action items based on urgency and revenue impact",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_hot_list",
+        "description": "Get loans needing immediate attention (closing soon, stalled, high risk)",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_callback_list",
+        "description": "Get missed calls, unreturned voicemails, and pending responses",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_overdue_tasks",
+        "description": "Get past due items sorted by priority",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_weekly_calendar",
+        "description": "Get upcoming closings, appointments, and deadlines this week",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_critical_issues",
+        "description": "Get critical issues flagged by AI (angry clients, compliance, high risk)",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # Client Communication
+    {
+        "name": "query_untouched_clients",
+        "description": "Get clients not contacted in X days",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "days": {"type": "integer", "default": 7, "description": "Days since last contact"}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "query_waiting_on_me",
+        "description": "Get loans where ball is in your court - action needed from you",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_followups_due",
+        "description": "Get scheduled follow-ups that are due or overdue",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_email_openers_no_response",
+        "description": "Get leads who opened emails but haven't responded",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_my_response_time",
+        "description": "Get your average response time to leads and clients",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_potentially_upset_clients",
+        "description": "Get clients who may be frustrated (low sentiment, long delays)",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_video_update_candidates",
+        "description": "Get loans that would benefit from a video update message",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # Loan Status & Milestones
+    {
+        "name": "query_closing_this_period",
+        "description": "Get loans closing this week or month",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "period": {"type": "string", "enum": ["week", "month"], "default": "week", "description": "Time period"}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "query_outstanding_conditions",
+        "description": "Get all outstanding underwriting conditions that need clearing",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_needs_appraisal",
+        "description": "Get loans that need appraisal ordered or are waiting for results",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_waiting_underwriting",
+        "description": "Get loans submitted to underwriting waiting for decision",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_needs_insurance_title",
+        "description": "Get loans waiting on insurance or title work",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_clear_to_close_pipeline",
+        "description": "Get loans that are clear to close - ready for final review",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_loans_in_final_review",
+        "description": "Get loans in final QC review before closing",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_milestones_this_week",
+        "description": "Get key milestones coming up this week (locks, closings, apps)",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # Income & Commission
+    {
+        "name": "query_my_commission_this_month",
+        "description": "Get commission from funded loans this month",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_projected_income",
+        "description": "Get projected income from current pipeline",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_funded_this_week",
+        "description": "Get loans that funded this week with commission details",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_goal_progress",
+        "description": "Get progress toward monthly/quarterly goals",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_ytd_income",
+        "description": "Get year-to-date income, volume, and unit counts",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_pipeline_commission_value",
+        "description": "Get total potential commission from active pipeline",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_highest_commission_loans",
+        "description": "Get your highest commission loans in pipeline",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # Personal Performance
+    {
+        "name": "query_am_i_hitting_numbers",
+        "description": "Check if you're on track for monthly goals",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_my_conversion_rate",
+        "description": "Get your lead-to-close conversion rate",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_compare_to_last_period",
+        "description": "Compare current month to last month performance",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_my_avg_time_to_close",
+        "description": "Get your average time from application to funding",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_personal_best_month",
+        "description": "Get your best month ever for volume and units",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_am_i_improving",
+        "description": "Analyze if your key metrics are trending up or down",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_closing_ratio_by_type",
+        "description": "Get your closing ratio broken down by loan type",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # Referral Partner Management
+    {
+        "name": "query_partners_for_lunch",
+        "description": "Get referral partners you haven't taken to lunch recently",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_top_referral_source_quarter",
+        "description": "Get top producing referral partners this quarter",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_dormant_partners",
+        "description": "Get partners who used to send business but haven't lately",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_partners_need_followup",
+        "description": "Get partners you need to follow up with",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_relationships_need_nurture",
+        "description": "Get key relationships that need attention",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_partners_shopping_competitors",
+        "description": "Get partners who may be working with competitors",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_partners_sent_bad_leads",
+        "description": "Get partners sending low-quality leads",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # Borrower Qualification
+    {
+        "name": "query_can_borrower_qualify",
+        "description": "Check if a specific borrower can qualify for a loan",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "lead_id": {"type": "integer", "description": "Lead ID to check"}
+            },
+            "required": ["lead_id"]
+        }
+    },
+    {
+        "name": "query_max_purchase_price",
+        "description": "Calculate max purchase price a borrower can afford",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "lead_id": {"type": "integer", "description": "Lead ID"}
+            },
+            "required": ["lead_id"]
+        }
+    },
+    {
+        "name": "query_eligible_loan_programs",
+        "description": "Get eligible loan programs for a borrower",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "lead_id": {"type": "integer", "description": "Lead ID"}
+            },
+            "required": ["lead_id"]
+        }
+    },
+    {
+        "name": "query_qualification_gaps",
+        "description": "Identify what's preventing qualification",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "lead_id": {"type": "integer", "description": "Lead ID"}
+            },
+            "required": ["lead_id"]
+        }
+    },
+    {
+        "name": "query_buy_now_or_wait",
+        "description": "Advise if borrower should buy now or wait",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "lead_id": {"type": "integer", "description": "Lead ID"}
+            },
+            "required": ["lead_id"]
+        }
+    },
+    {
+        "name": "query_afford_more_house",
+        "description": "Show options for borrower to afford more house",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "lead_id": {"type": "integer", "description": "Lead ID"}
+            },
+            "required": ["lead_id"]
+        }
+    },
+    {
+        "name": "query_required_documentation",
+        "description": "Get list of required documents for a loan",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "loan_id": {"type": "integer", "description": "Loan ID"}
+            },
+            "required": ["loan_id"]
+        }
+    },
+    {
+        "name": "query_dti_analysis",
+        "description": "Analyze debt-to-income ratio and payoff strategies",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "lead_id": {"type": "integer", "description": "Lead ID"}
+            },
+            "required": ["lead_id"]
+        }
+    },
+    # Time Management
+    {
+        "name": "query_time_spent_analysis",
+        "description": "Analyze where you're spending your time",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_revenue_per_activity",
+        "description": "Calculate revenue generated per activity type",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_should_delegate",
+        "description": "Identify low-value tasks you should delegate",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_task_balance_analysis",
+        "description": "Analyze balance between sales vs admin tasks",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_productive_windows",
+        "description": "Identify your most productive times of day",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_time_per_loan",
+        "description": "Calculate average time spent per loan file",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # Pipeline Health
+    {
+        "name": "query_pipeline_health_check",
+        "description": "Check if your pipeline is healthy (funnel shape analysis)",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_lead_flow_adequate",
+        "description": "Check if you have enough new leads coming in",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_pipeline_velocity",
+        "description": "Calculate how fast loans move through your pipeline",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_stage_concentration",
+        "description": "Identify if too many loans are stuck in one stage",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_pipeline_coverage_ratio",
+        "description": "Calculate pipeline value vs monthly goal coverage",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_leads_needed_for_goal",
+        "description": "Calculate how many more leads needed to hit goal",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # Action Items
+    {
+        "name": "query_most_urgent_now",
+        "description": "Get the single most urgent thing to do right now",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_highest_impact_actions",
+        "description": "Get actions that will have biggest impact on revenue",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_falling_through_cracks",
+        "description": "Get tasks or loans that are being neglected",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_productive_downtime",
+        "description": "Get suggestions for productive tasks during slow periods",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_quick_wins",
+        "description": "Get easy tasks that can be completed quickly",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # Scenario Analysis
+    {
+        "name": "query_rate_drop_impact",
+        "description": "Model impact of a rate drop on refi pipeline",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "rate_drop": {"type": "number", "description": "Rate drop in percentage points"}
+            },
+            "required": ["rate_drop"]
+        }
+    },
+    {
+        "name": "query_portfolio_refi_potential",
+        "description": "Calculate refinance potential in your closed loan portfolio",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_referral_source_risk",
+        "description": "Model impact if top referral source goes away",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "source": {"type": "string", "description": "Referral source name"}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "query_processor_hire_roi",
+        "description": "Calculate ROI of hiring another processor",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_product_focus_impact",
+        "description": "Model impact of focusing on specific loan products",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "product": {"type": "string", "description": "Product to focus on"}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "query_vacation_feasibility",
+        "description": "Check if you can take vacation without impacting closings",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "start_date": {"type": "string", "description": "Vacation start date"},
+                "end_date": {"type": "string", "description": "Vacation end date"}
+            },
+            "required": []
+        }
+    },
+    # Client Deep Dives
+    {
+        "name": "query_client_360_view",
+        "description": "Get complete 360-degree view of a client relationship",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "lead_id": {"type": "integer", "description": "Lead ID"}
+            },
+            "required": ["lead_id"]
+        }
+    },
+    {
+        "name": "query_loan_story",
+        "description": "Get complete timeline and story of a loan file",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "loan_id": {"type": "integer", "description": "Loan ID"}
+            },
+            "required": ["loan_id"]
+        }
+    },
+    {
+        "name": "query_loan_delay_reason",
+        "description": "Analyze why a specific loan is delayed",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "loan_id": {"type": "integer", "description": "Loan ID"}
+            },
+            "required": ["loan_id"]
+        }
+    },
+    {
+        "name": "query_file_risk_level",
+        "description": "Assess risk level and fallout probability for a loan",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "loan_id": {"type": "integer", "description": "Loan ID"}
+            },
+            "required": ["loan_id"]
+        }
+    },
+    {
+        "name": "query_client_needs_from_me",
+        "description": "Identify what a specific client needs from you right now",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "lead_id": {"type": "integer", "description": "Lead ID"}
+            },
+            "required": ["lead_id"]
+        }
+    },
+    {
+        "name": "query_client_history",
+        "description": "Get full interaction history with a client",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "lead_id": {"type": "integer", "description": "Lead ID"}
+            },
+            "required": ["lead_id"]
+        }
+    },
+    # Market Intelligence
+    {
+        "name": "query_competitor_rates",
+        "description": "Get current competitor rate comparison",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_losing_on_rate",
+        "description": "Check if you're losing deals due to rate",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_why_losing_to_competitors",
+        "description": "Analyze why you're losing to competitors",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_my_value_prop",
+        "description": "Get your unique value proposition vs competitors",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # Compliance & Risk
+    {
+        "name": "query_compliance_red_flags",
+        "description": "Get loans with potential compliance issues",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_overdue_disclosures",
+        "description": "Get loans with overdue TRID disclosures",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_loans_might_not_close",
+        "description": "Get loans at high risk of not closing",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_audit_risk_assessment",
+        "description": "Get overall audit risk assessment for your files",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_fair_lending_concerns",
+        "description": "Check for fair lending concerns in your pipeline",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # Relationship Maintenance
+    {
+        "name": "query_weekly_outreach_list",
+        "description": "Get prioritized list of people to reach out to this week",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_loan_anniversaries",
+        "description": "Get clients with upcoming loan anniversaries for check-ins",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_past_client_checkins",
+        "description": "Get past clients due for periodic check-ins",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_upcoming_celebrations",
+        "description": "Get upcoming birthdays, home purchase anniversaries to celebrate",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_gratitude_followups",
+        "description": "Get clients you should send thank you notes to",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_referral_ask_opportunities",
+        "description": "Get satisfied clients you haven't asked for referrals yet",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # Learning & Improvement
+    {
+        "name": "query_my_weaknesses",
+        "description": "Identify areas where you're underperforming",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_success_patterns",
+        "description": "Analyze what leads to your fastest closings and best outcomes",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_repeated_mistakes",
+        "description": "Identify recurring errors or issues in your process",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_close_faster_tips",
+        "description": "Get personalized tips on how to close loans faster",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_skill_gaps",
+        "description": "Identify skills you should develop or training needed",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # ========== PROCESSOR QUERIES - Day-to-Day Processor Operations (105 queries) ==========
+    # Daily Operations & Workload Management
+    {
+        "name": "query_processor_workload_today",
+        "description": "Get processor's workload today - files assigned with priority order",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_deadlines_today",
+        "description": "Get deadlines due today for processor's files",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_priority_queue",
+        "description": "Get processor's files prioritized by closing date and urgency",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_current_capacity",
+        "description": "Get processor's current workload capacity metrics",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_files_by_loan_officer",
+        "description": "Get files grouped by loan officer for a processor",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_weekly_calendar",
+        "description": "Get processor's weekly calendar with key deadlines",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_overdue_tasks",
+        "description": "Get processor's overdue tasks and action items",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_file_list",
+        "description": "Get complete list of processor's active files",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # Document Management
+    {
+        "name": "query_processor_missing_documents",
+        "description": "Get documents missing across processor's files",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_unresponsive_borrowers_docs",
+        "description": "Get borrowers not responding to document requests",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_documents_uploaded_today",
+        "description": "Get documents uploaded today requiring review",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_complete_documentation",
+        "description": "Get files with complete documentation ready to submit",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_overdue_doc_requests",
+        "description": "Get overdue document requests from borrowers",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_loan_stips",
+        "description": "Get stipulations needed for a specific loan",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "loan_id": {"type": "integer", "description": "Loan ID"}
+            },
+            "required": ["loan_id"]
+        }
+    },
+    {
+        "name": "query_processor_initial_disclosures_needed",
+        "description": "Get files needing initial disclosures",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_pending_verifications",
+        "description": "Get pending VOE/VOI/VOR verifications",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_credit_supplement_needed",
+        "description": "Get files needing credit supplements or explanations",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_tax_return_requests",
+        "description": "Get outstanding tax return requests",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_incomplete_income_docs",
+        "description": "Get files with incomplete income documentation",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_expired_documents",
+        "description": "Get documents that have expired and need renewal",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # Third-Party Services & Vendors
+    {
+        "name": "query_processor_appraisals_to_order",
+        "description": "Get files needing appraisals ordered",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_appraisals_in_progress",
+        "description": "Get appraisals currently in progress",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_overdue_appraisals",
+        "description": "Get overdue appraisals past expected completion date",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_appraisal_issues",
+        "description": "Get files with appraisal problems or low values",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_title_work_pending",
+        "description": "Get files waiting on title work",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_title_commitments_review",
+        "description": "Get title commitments received needing review",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_hoa_docs_pending",
+        "description": "Get files waiting on HOA documents",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_vendor_turnaround_times",
+        "description": "Get vendor performance and turnaround times",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_inspections_scheduled",
+        "description": "Get scheduled home inspections",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_insurance_needed",
+        "description": "Get files needing homeowners insurance binders",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # Underwriting Coordination
+    {
+        "name": "query_processor_ready_for_underwriting",
+        "description": "Get files ready to submit to underwriting",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_files_with_underwriter",
+        "description": "Get files currently with underwriter",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_conditions_received_today",
+        "description": "Get underwriting conditions received today",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_all_outstanding_conditions",
+        "description": "Get all outstanding underwriting conditions across files",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_cleared_conditions",
+        "description": "Get conditions cleared and ready to resubmit",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_suspended_files",
+        "description": "Get files suspended by underwriting",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_initial_approvals",
+        "description": "Get files that received initial approval",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_clear_to_close_files",
+        "description": "Get files that are clear to close",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_high_risk_underwriting",
+        "description": "Get files with high underwriting risk",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_next_uw_call",
+        "description": "Get topics for next underwriter call",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # Timeline & Rate Lock Management
+    {
+        "name": "query_processor_closing_schedule",
+        "description": "Get upcoming closing schedule",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_at_risk_closings",
+        "description": "Get closings at risk of missing target date",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_expiring_rate_locks",
+        "description": "Get rate locks expiring soon",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_tight_timeline_files",
+        "description": "Get files with tight timelines",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_disclosures_due",
+        "description": "Get disclosures due soon per TRID timing",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_delayed_files",
+        "description": "Get files running behind schedule",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_closing_success_rate",
+        "description": "Get processor's on-time closing success rate",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_avg_days_to_close",
+        "description": "Get processor's average days from app to closing",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # Quality Control & Compliance
+    {
+        "name": "query_processor_files_needing_qc",
+        "description": "Get files needing quality control review",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_compliance_red_flags",
+        "description": "Get files with compliance red flags",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_trid_violations",
+        "description": "Get potential TRID timing violations",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_missing_disclosures",
+        "description": "Get files with missing required disclosures",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_data_errors",
+        "description": "Get files with data entry errors or mismatches",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_aus_rerun_needed",
+        "description": "Get files needing AUS rerun after data changes",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_appraisal_issues_qc",
+        "description": "Get appraisal quality control issues",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_credit_issues_qc",
+        "description": "Get credit report quality control issues",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_audit_ready",
+        "description": "Check if files are audit-ready",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # Borrower Communication
+    {
+        "name": "query_processor_unresponsive_borrowers",
+        "description": "Get unresponsive borrowers needing follow-up",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_borrowers_to_call_today",
+        "description": "Get borrowers processor needs to call today",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_frustrated_borrowers",
+        "description": "Get potentially frustrated borrowers",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_borrower_response_times",
+        "description": "Get borrower responsiveness metrics",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_borrowers_need_updates",
+        "description": "Get borrowers needing status updates",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_borrower_meetings_needed",
+        "description": "Get files needing borrower meetings or calls",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_borrower_satisfaction",
+        "description": "Get borrower satisfaction scores for processor's files",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # Loan Officer Coordination
+    {
+        "name": "query_processor_lo_action_items",
+        "description": "Get action items waiting on loan officers",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_los_blocking_files",
+        "description": "Get loan officers blocking file progress",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_lo_response_times",
+        "description": "Get loan officer response time metrics",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_my_loan_officers",
+        "description": "Get loan officers processor works with and file counts",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_files_need_lo_approval",
+        "description": "Get files needing loan officer approval or review",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_problem_files_by_lo",
+        "description": "Get problem files grouped by loan officer",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_los_with_most_conditions",
+        "description": "Get loan officers with most underwriting conditions",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # File Status & Progress Tracking
+    {
+        "name": "query_processor_files_by_stage",
+        "description": "Get files grouped by loan stage",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_files_moved_today",
+        "description": "Get files that advanced stages today",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_stalled_files",
+        "description": "Get files stuck in same stage too long",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_file_aging_report",
+        "description": "Get file aging report by days in process",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_file_velocity",
+        "description": "Get average file velocity through stages",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_files_at_risk_fallout",
+        "description": "Get files at risk of falling out",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_funnel_health",
+        "description": "Get processor's funnel health metrics",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_files_closed_this_week",
+        "description": "Get files closed this week",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # Problem Resolution
+    {
+        "name": "query_processor_all_file_issues",
+        "description": "Get all open issues across processor's files",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_income_calc_problems",
+        "description": "Get files with income calculation issues",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_credit_disputes",
+        "description": "Get files with credit disputes in progress",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_appraisal_gaps",
+        "description": "Get files with appraisal shortfalls",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_title_issues",
+        "description": "Get files with title problems",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_manual_underwriting_files",
+        "description": "Get files requiring manual underwriting",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_eligibility_issues",
+        "description": "Get files with eligibility or guideline issues",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_whats_blocking_files",
+        "description": "Get summary of what's blocking each file",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # Performance & Analytics
+    {
+        "name": "query_processor_closing_ratio",
+        "description": "Get processor's closing ratio (files closed vs started)",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_avg_processing_time",
+        "description": "Get average processing time by loan type",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_peer_comparison",
+        "description": "Compare processor's metrics to peer averages",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_condition_clear_rate",
+        "description": "Get condition clearance rate and turnaround time",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_error_rate",
+        "description": "Get processor's error and resubmission rate",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_fastest_loan_types",
+        "description": "Get processor's fastest loan types to close",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_slowest_files",
+        "description": "Get processor's slowest files currently in pipeline",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # Capacity & Workload Planning
+    {
+        "name": "query_processor_at_capacity_check",
+        "description": "Check if processor is at capacity",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_incoming_files",
+        "description": "Get new files coming to processor soon",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_can_take_another",
+        "description": "Check if processor can take another file",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_workload_trend",
+        "description": "Get processor's workload trend over time",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_file_distribution",
+        "description": "Get file distribution across all processors",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    # Reporting & Insights
+    {
+        "name": "query_processor_weekly_summary",
+        "description": "Get processor's weekly performance summary",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_weekly_wins",
+        "description": "Get files successfully closed this week",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_time_allocation",
+        "description": "Get time allocation analysis for processor",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_biggest_bottleneck",
+        "description": "Identify processor's biggest bottleneck",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_common_conditions",
+        "description": "Get most common underwriting conditions",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
+    },
+    {
+        "name": "query_processor_lo_quality_ranking",
+        "description": "Rank loan officers by file quality",
+        "input_schema": {"type": "object", "properties": {}, "required": []}
     }
 ]
 
@@ -409,12 +1810,177 @@ class ActionValidator:
         valid_actions = [
             "get_daily_summary", "search_crm", "update_lead_status",
             "create_task", "send_email_campaign", "get_pipeline_report",
-            # Analytical query tools
+            # Original analytical query tools
             "query_pipeline_analysis", "query_lead_source_performance",
             "query_conversion_funnel", "query_loan_type_performance",
             "query_monthly_trends", "query_stale_leads",
             "query_high_value_opportunities", "query_activity_summary",
-            "get_market_intelligence", "get_rate_lock_recommendation"
+            "get_market_intelligence", "get_rate_lock_recommendation",
+            # Customer Lifecycle & Value
+            "query_client_lifetime_value", "query_refi_candidates",
+            "query_client_retention_rate", "query_ghost_clients",
+            "query_communication_effectiveness", "query_referral_likelihood",
+            # Operational Efficiency
+            "query_process_bottlenecks", "query_sla_compliance",
+            "query_document_turnaround", "query_pull_through_rate",
+            "query_capacity_utilization", "query_cycle_time_by_loan_type",
+            # Risk & Early Warning
+            "query_at_risk_loans", "query_expiring_rate_locks",
+            "query_credit_quality_trend", "query_compliance_risk_score",
+            "query_poor_quality_sources",
+            # Marketing & Growth
+            "query_cost_per_acquisition", "query_marketing_roi",
+            "query_seasonal_trends", "query_competitive_analysis",
+            "query_market_share_by_zip",
+            # Financial Forecasting
+            "query_revenue_forecast_90d", "query_pipeline_value_at_risk",
+            "query_margin_trend", "query_breakeven_analysis",
+            # Quality & Performance
+            "query_processor_quality_metrics", "query_loan_delay_root_causes",
+            "query_documentation_completeness", "query_customer_satisfaction_by_lo",
+            # Partnership Intelligence
+            "query_top_realtor_partners", "query_referral_partner_response_time",
+            "query_vendor_performance",
+            # Strategic Planning
+            "query_hiring_recommendation", "query_product_profitability",
+            "query_optimal_product_mix", "query_cost_cutting_opportunities",
+            "query_employee_productivity_benchmark",
+            # ========== TACTICAL QUERIES - Day-to-Day Operations (99 queries) ==========
+            # Daily Operations & Priorities
+            "query_daily_focus_priorities", "query_hot_list", "query_callback_list",
+            "query_overdue_tasks", "query_weekly_calendar", "query_critical_issues",
+            # Client Communication
+            "query_untouched_clients", "query_waiting_on_me", "query_followups_due",
+            "query_email_openers_no_response", "query_my_response_time",
+            "query_potentially_upset_clients", "query_video_update_candidates",
+            # Loan Status & Milestones
+            "query_closing_this_period", "query_outstanding_conditions",
+            "query_needs_appraisal", "query_waiting_underwriting",
+            "query_needs_insurance_title", "query_clear_to_close_pipeline",
+            "query_loans_in_final_review", "query_milestones_this_week",
+            # Income & Commission
+            "query_my_commission_this_month", "query_projected_income",
+            "query_funded_this_week", "query_goal_progress", "query_ytd_income",
+            "query_pipeline_commission_value", "query_highest_commission_loans",
+            # Personal Performance
+            "query_am_i_hitting_numbers", "query_my_conversion_rate",
+            "query_compare_to_last_period", "query_my_avg_time_to_close",
+            "query_personal_best_month", "query_am_i_improving",
+            "query_closing_ratio_by_type",
+            # Referral Partner Management
+            "query_partners_for_lunch", "query_top_referral_source_quarter",
+            "query_dormant_partners", "query_partners_need_followup",
+            "query_relationships_need_nurture", "query_partners_shopping_competitors",
+            "query_partners_sent_bad_leads",
+            # Borrower Qualification
+            "query_can_borrower_qualify", "query_max_purchase_price",
+            "query_eligible_loan_programs", "query_qualification_gaps",
+            "query_buy_now_or_wait", "query_afford_more_house",
+            "query_required_documentation", "query_dti_analysis",
+            # Time Management
+            "query_time_spent_analysis", "query_revenue_per_activity",
+            "query_should_delegate", "query_task_balance_analysis",
+            "query_productive_windows", "query_time_per_loan",
+            # Pipeline Health
+            "query_pipeline_health_check", "query_lead_flow_adequate",
+            "query_pipeline_velocity", "query_stage_concentration",
+            "query_pipeline_coverage_ratio", "query_leads_needed_for_goal",
+            # Action Items
+            "query_most_urgent_now", "query_highest_impact_actions",
+            "query_falling_through_cracks", "query_productive_downtime",
+            "query_quick_wins",
+            # Scenario Analysis
+            "query_rate_drop_impact", "query_portfolio_refi_potential",
+            "query_referral_source_risk", "query_processor_hire_roi",
+            "query_product_focus_impact", "query_vacation_feasibility",
+            # Client Deep Dives
+            "query_client_360_view", "query_loan_story", "query_loan_delay_reason",
+            "query_file_risk_level", "query_client_needs_from_me",
+            "query_client_history",
+            # Market Intelligence
+            "query_competitor_rates", "query_losing_on_rate",
+            "query_why_losing_to_competitors", "query_my_value_prop",
+            # Compliance & Risk
+            "query_compliance_red_flags", "query_overdue_disclosures",
+            "query_loans_might_not_close", "query_audit_risk_assessment",
+            "query_fair_lending_concerns",
+            # Relationship Maintenance
+            "query_weekly_outreach_list", "query_loan_anniversaries",
+            "query_past_client_checkins", "query_upcoming_celebrations",
+            "query_gratitude_followups", "query_referral_ask_opportunities",
+            # Learning & Improvement
+            "query_my_weaknesses", "query_success_patterns",
+            "query_repeated_mistakes", "query_close_faster_tips",
+            "query_skill_gaps",
+            # ========== PROCESSOR QUERIES - Day-to-Day Processor Operations (105 queries) ==========
+            # Daily Operations & Workload Management
+            "query_processor_workload_today", "query_processor_deadlines_today",
+            "query_processor_priority_queue", "query_processor_current_capacity",
+            "query_processor_files_by_loan_officer", "query_processor_weekly_calendar",
+            "query_processor_overdue_tasks", "query_processor_file_list",
+            # Document Management
+            "query_processor_missing_documents", "query_processor_unresponsive_borrowers_docs",
+            "query_processor_documents_uploaded_today", "query_processor_complete_documentation",
+            "query_processor_overdue_doc_requests", "query_processor_loan_stips",
+            "query_processor_initial_disclosures_needed", "query_processor_pending_verifications",
+            "query_processor_credit_supplement_needed", "query_processor_tax_return_requests",
+            "query_processor_incomplete_income_docs", "query_processor_expired_documents",
+            # Third-Party Services & Vendors
+            "query_processor_appraisals_to_order", "query_processor_appraisals_in_progress",
+            "query_processor_overdue_appraisals", "query_processor_appraisal_issues",
+            "query_processor_title_work_pending", "query_processor_title_commitments_review",
+            "query_processor_hoa_docs_pending", "query_processor_vendor_turnaround_times",
+            "query_processor_inspections_scheduled", "query_processor_insurance_needed",
+            # Underwriting Coordination
+            "query_processor_ready_for_underwriting", "query_processor_files_with_underwriter",
+            "query_processor_conditions_received_today", "query_processor_all_outstanding_conditions",
+            "query_processor_cleared_conditions", "query_processor_suspended_files",
+            "query_processor_initial_approvals", "query_processor_clear_to_close_files",
+            "query_processor_high_risk_underwriting", "query_processor_next_uw_call",
+            # Timeline & Rate Lock Management
+            "query_processor_closing_schedule", "query_processor_at_risk_closings",
+            "query_processor_expiring_rate_locks", "query_processor_tight_timeline_files",
+            "query_processor_disclosures_due", "query_processor_delayed_files",
+            "query_processor_closing_success_rate", "query_processor_avg_days_to_close",
+            # Quality Control & Compliance
+            "query_processor_files_needing_qc", "query_processor_compliance_red_flags",
+            "query_processor_trid_violations", "query_processor_missing_disclosures",
+            "query_processor_data_errors", "query_processor_aus_rerun_needed",
+            "query_processor_appraisal_issues_qc", "query_processor_credit_issues_qc",
+            "query_processor_audit_ready",
+            # Borrower Communication
+            "query_processor_unresponsive_borrowers", "query_processor_borrowers_to_call_today",
+            "query_processor_frustrated_borrowers", "query_processor_borrower_response_times",
+            "query_processor_borrowers_need_updates", "query_processor_borrower_meetings_needed",
+            "query_processor_borrower_satisfaction",
+            # Loan Officer Coordination
+            "query_processor_lo_action_items", "query_processor_los_blocking_files",
+            "query_processor_lo_response_times", "query_processor_my_loan_officers",
+            "query_processor_files_need_lo_approval", "query_processor_problem_files_by_lo",
+            "query_processor_los_with_most_conditions",
+            # File Status & Progress Tracking
+            "query_processor_files_by_stage", "query_processor_files_moved_today",
+            "query_processor_stalled_files", "query_processor_file_aging_report",
+            "query_processor_file_velocity", "query_processor_files_at_risk_fallout",
+            "query_processor_funnel_health", "query_processor_files_closed_this_week",
+            # Problem Resolution
+            "query_processor_all_file_issues", "query_processor_income_calc_problems",
+            "query_processor_credit_disputes", "query_processor_appraisal_gaps",
+            "query_processor_title_issues", "query_processor_manual_underwriting_files",
+            "query_processor_eligibility_issues", "query_processor_whats_blocking_files",
+            # Performance & Analytics
+            "query_processor_closing_ratio", "query_processor_avg_processing_time",
+            "query_processor_peer_comparison", "query_processor_condition_clear_rate",
+            "query_processor_error_rate", "query_processor_fastest_loan_types",
+            "query_processor_slowest_files",
+            # Capacity & Workload Planning
+            "query_processor_at_capacity_check", "query_processor_incoming_files",
+            "query_processor_can_take_another", "query_processor_workload_trend",
+            "query_processor_file_distribution",
+            # Reporting & Insights
+            "query_processor_weekly_summary", "query_processor_weekly_wins",
+            "query_processor_time_allocation", "query_processor_biggest_bottleneck",
+            "query_processor_common_conditions", "query_processor_lo_quality_ranking"
         ]
         if action_name not in valid_actions:
             return ValidationResult(False, f"Unknown action: {action_name}")
@@ -608,6 +2174,339 @@ SYSTEM_PROMPT = """You are Pipeline 360's AI assistant, designed to help mortgag
    - Follow up on UW conditions for Elizabeth Moore
 
 === END CRITICAL RULES ===
+
+## Mortgage Industry Terminology
+
+You are fluent in mortgage industry terminology and acronyms. When users reference these terms, you understand them implicitly and use them naturally in responses when appropriate. Always expand acronyms on first use when communicating with borrowers or external parties, but you may use them freely in internal/LO-facing contexts.
+
+### Loan Types & Programs
+- FHA: Federal Housing Administration loan
+- VA: Veterans Affairs loan
+- USDA: United States Department of Agriculture rural loan
+- ARM: Adjustable Rate Mortgage
+- FRM: Fixed Rate Mortgage
+- HELOC: Home Equity Line of Credit
+- HEL: Home Equity Loan
+- HECM: Home Equity Conversion Mortgage (reverse mortgage)
+- IRRRL: Interest Rate Reduction Refinance Loan (VA streamline refi)
+- Conv: Conventional loan
+
+### Financial Ratios & Metrics
+- LTV: Loan-to-Value ratio (loan amount / property value)
+- CLTV: Combined Loan-to-Value ratio (all liens / property value)
+- DTI: Debt-to-Income ratio (monthly debts / gross monthly income)
+- PITI: Principal, Interest, Taxes, Insurance (total monthly housing payment)
+- APR: Annual Percentage Rate
+- PTI: Payment-to-Income ratio
+
+### Loan Milestones & Status
+- CTC: Clear to Close (loan approved, ready for closing docs)
+- PTD: Prior to Docs (conditions needed before closing docs draw)
+- PTF: Prior to Funding (conditions needed before wire release)
+- CD: Closing Disclosure (final terms disclosure, required 3 days before closing)
+- LE: Loan Estimate (initial terms disclosure, required within 3 business days of application)
+- IC: Initial Compliance (initial disclosures sent)
+- UW: Underwriting / Underwriter
+- Resubmit: File resubmitted to underwriting after conditions addressed
+- Suspended: File on hold pending additional information
+- Denied: Loan application declined
+- Withdrawn: Borrower cancelled application
+- Funded: Loan proceeds disbursed
+- Docs Out: Closing documents sent to title/escrow
+
+### Documentation & Verification
+- AUS: Automated Underwriting System
+- DU: Desktop Underwriter (Fannie Mae AUS)
+- LP/LPA: Loan Product Advisor (Freddie Mac AUS)
+- VOE: Verification of Employment
+- VOD: Verification of Deposit
+- VOR: Verification of Rent
+- VOM: Verification of Mortgage
+- POF: Proof of Funds
+- POI: Proof of Income
+- LOE/LOX: Letter of Explanation
+- AVM: Automated Valuation Model
+- BPO: Broker Price Opinion
+- 1003: Uniform Residential Loan Application
+- 4506-T/4506-C: IRS Tax Transcript Request Form
+- W2: Wage and Tax Statement
+- YTD: Year-to-Date
+- P&L: Profit and Loss Statement
+- K-1: Partner/Shareholder Income Schedule
+- COE: Certificate of Eligibility (VA)
+
+### Entities & Investors
+- FNMA/Fannie: Federal National Mortgage Association
+- FHLMC/Freddie: Federal Home Loan Mortgage Corporation
+- GNMA/Ginnie: Government National Mortgage Association
+- GSE: Government-Sponsored Enterprise
+- HUD: Department of Housing and Urban Development
+- CFPB: Consumer Financial Protection Bureau
+- NMLS: Nationwide Multistate Licensing System
+
+### Insurance
+- PMI: Private Mortgage Insurance (conventional loans)
+- MIP: Mortgage Insurance Premium (FHA loans)
+- UFMIP: Upfront Mortgage Insurance Premium (FHA)
+- LPMI: Lender-Paid Mortgage Insurance
+- BPMI: Borrower-Paid Mortgage Insurance
+- HOI: Homeowners Insurance
+- HOA: Homeowners Association (dues)
+
+### Property Types
+- SFR: Single Family Residence
+- MFR: Multi-Family Residence (2-4 units)
+- PUD: Planned Unit Development
+- Condo: Condominium
+- TH: Townhouse
+- Mfg/MH: Manufactured Home
+- Modular: Modular Home
+- O/O: Owner Occupied
+- NOO: Non-Owner Occupied
+- 2nd: Second Home
+- Inv: Investment Property
+
+### Closing & Settlement
+- EMD: Earnest Money Deposit
+- POC: Paid Outside Closing
+- P&S/PSA: Purchase and Sale Agreement
+- LLPA: Loan-Level Price Adjustment
+- YSP: Yield Spread Premium
+- SRP: Service Release Premium
+- COF: Cost of Funds
+- Escrow: Impound account for taxes/insurance
+
+### Credit
+- FICO: Fair Isaac Corporation credit score
+- TU: TransUnion
+- EQ: Equifax
+- EX: Experian
+- RCR: Rapid Credit Rescore
+- TL: Tradeline (credit account)
+- AU: Authorized User
+- BK: Bankruptcy (Ch 7, Ch 13)
+- FC: Foreclosure
+- SS: Short Sale
+- DIL: Deed in Lieu of Foreclosure
+- NOD: Notice of Default
+
+### Compliance & Regulations
+- RESPA: Real Estate Settlement Procedures Act
+- TILA: Truth in Lending Act
+- TRID: TILA-RESPA Integrated Disclosure rules
+- QM: Qualified Mortgage
+- ATR: Ability to Repay
+- HMDA: Home Mortgage Disclosure Act
+- ECOA: Equal Credit Opportunity Act
+
+### People & Roles
+- LO: Loan Officer
+- MLO: Mortgage Loan Originator
+- LP: Loan Processor
+- UW: Underwriter
+- TC: Transaction Coordinator
+- RE/REA: Real Estate Agent
+- AE: Account Executive
+
+### Common Shorthand
+- Refi: Refinance
+- Cash-out: Cash-out refinance
+- R/T: Rate and Term refinance
+- Purch: Purchase
+- Pre-qual: Pre-qualification
+- Pre-approval: Pre-approval letter
+- DPA: Down Payment Assistance
+- GUS: GUS (USDA's automated underwriting)
+
+=== END TERMINOLOGY ===
+
+## Communication Context Rules
+
+Your communication style adapts based on the audience and context. Follow these rules for acronym and terminology usage:
+
+### Audience Detection
+
+Determine the audience from context clues:
+- **Internal/LO-facing**: Messages to loan officers, processors, underwriters, or internal team members. Indicators include: internal notes, task assignments, Slack-style communications, CRM activity logs, pipeline discussions.
+- **Borrower-facing**: Messages to borrowers, co-borrowers, or their representatives. Indicators include: email to borrower, SMS to client, welcome messages, status updates to applicants.
+- **Partner-facing**: Messages to real estate agents, title companies, insurance agents, builders, or other third parties. Indicators include: referral partner communications, closing coordination, agent updates.
+
+### Acronym Usage by Audience
+
+**Internal/LO-facing communications:**
+- Use acronyms freely without expansion
+- Assume full industry knowledge
+- Be concise and direct
+- Example: "LTV is 78%, DTI at 42%. Waiting on VOE and 4506-C to get CTC."
+
+**Borrower-facing communications:**
+- Expand all acronyms on first use, then may abbreviate in parentheses for future reference
+- Use plain language explanations alongside technical terms
+- Avoid jargon when a simpler term exists
+- Example: "Your Loan-to-Value ratio (LTV) is 78%, which means you won't need private mortgage insurance. We're waiting on verification of your employment before we can issue your Clear to Close."
+
+**Partner-facing communications:**
+- Expand acronyms on first use within a conversation thread
+- Assume moderate industry knowledge but not lender-specific terminology
+- Be professional but not overly simplified
+- Example: "The loan is Clear to Close (CTC). We're targeting closing on the 15th pending the updated Closing Disclosure (CD) acknowledgment."
+
+### Tone Calibration
+
+| Audience | Tone | Detail Level | Acronym Style |
+|----------|------|--------------|---------------|
+| Internal | Direct, efficient | High technical detail | Free use |
+| Borrower | Warm, reassuring | Simplified, milestone-focused | Always expand |
+| Partner | Professional, collaborative | Moderate detail | Expand first use |
+
+
+## Pipeline 360 Workflow Terminology
+
+These terms are specific to Pipeline 360's workflow automation and should be understood in all contexts:
+
+### Theme Days Communication System
+
+Theme Days is Pipeline 360's structured borrower communication cadence during active loan processing. Each day of the week has a designated communication focus:
+
+- **Monday - Milestone Monday**: Weekly status update summarizing loan progress, current stage, and what's ahead. Sets expectations for the week.
+- **Tuesday - Task Tuesday**: Request day for outstanding items, documents, or borrower actions needed. Clear task lists with deadlines.
+- **Wednesday - Wisdom Wednesday**: Educational content about the mortgage process, what to expect at closing, homeownership tips. Builds trust and reduces borrower anxiety.
+- **Thursday - Thankful Thursday**: Gratitude and relationship-building. Thank borrowers for documents submitted, responsiveness, or patience. Humanizes the process.
+- **Friday - Forward Friday**: Look-ahead communication. Preview next week's milestones, remind of upcoming deadlines, weekend availability info.
+
+**Usage in AI communications:**
+- When referencing Theme Days, the AI should understand which day's theme applies and match the tone/content appropriately
+- Theme Day emails should follow the designated focus while still addressing urgent loan-specific matters
+- If a critical update conflicts with the day's theme, prioritize the critical update but maintain the theme's tone where possible
+
+### Last Mile Pre-Closing Process
+
+Last Mile refers to Pipeline 360's structured workflow for the final phase of loan processing, from Clear to Close through funding. It ensures nothing falls through the cracks in the critical final days.
+
+**Last Mile Stages:**
+
+1. **CTC Received**: Loan approved, conditions satisfied. Triggers Last Mile workflow initiation.
+
+2. **CD Preparation**: Closing Disclosure drafted, fees balanced, figures confirmed with title.
+
+3. **CD Sent**: Closing Disclosure delivered to borrower. 3-day waiting period begins. Track acknowledgment.
+
+4. **Closing Scheduled**: Date/time/location confirmed with all parties. Wire instructions prepared.
+
+5. **Pre-Closing QC**: Final quality control review. Verify all docs current, no changes to borrower status.
+
+6. **Docs to Title**: Closing package sent to title company/attorney. Confirm receipt.
+
+7. **Closing Day**: Signing appointment. Monitor for completion, handle last-minute issues.
+
+8. **Docs Back**: Signed documents returned from title. Review for completeness and errors.
+
+9. **Funding**: Wire released. Loan funded. Confirm with title.
+
+10. **Recording**: Deed recorded with county. Transaction complete.
+
+**Last Mile Alerts:**
+- CD acknowledgment not received within 24 hours
+- Closing scheduled within 3 days but CD not yet sent
+- Docs to title not confirmed within 24 hours of sending
+- Funding conditions outstanding on closing day
+- Recording not confirmed within 48 hours of funding
+
+### Post-Closing Referral Workflow
+
+Automated relationship nurturing after loan closes to generate referrals and repeat business:
+
+- **Closing Day**: Congratulations message, move-in tips, set expectations for post-closing contact
+- **Week 1**: First payment reminder, mortgage servicer introduction, homeowner checklist
+- **Day 30**: Check-in on move, address any post-closing questions
+- **Day 60**: Request review/testimonial if experience was positive
+- **Day 90**: Referral ask, introduce referral program/incentives
+- **Quarterly**: Market updates, home value check-ins, refinance opportunities when rates favorable
+- **Annual**: Loan anniversary acknowledgment, annual review offer, property tax reminder
+
+### Rate Lock Intelligence
+
+Pipeline 360's system for managing rate lock decisions and expirations:
+
+- **Lock Status**: Locked, Floating, Expired, Extended
+- **Lock Expiration**: Date the current lock expires
+- **Days to Expiration**: Countdown to lock expiration
+- **Extension Cost**: Pricing impact of extending the lock
+- **Renegotiation Eligibility**: Whether current market allows for rate improvement
+- **Lock Alert Thresholds**: Configurable warnings at 7, 5, 3, 1 days before expiration
+
+**Rate Lock Terminology:**
+- Float: Loan rate not yet locked, subject to market movement
+- Lock: Rate secured at specific price for specific period
+- Relock: New lock after expiration (usually at worse pricing)
+- Extend: Pay fee to extend existing lock period
+- Renegotiate: Request better pricing if market improved significantly
+
+### Loan Pipeline Stages
+
+Pipeline 360's standard loan lifecycle stages:
+
+1. **Lead**: Initial inquiry, not yet application
+2. **Pre-Qual**: Quick assessment completed, no full application
+3. **Application**: 1003 received, file opened
+4. **Processing**: Gathering documentation, ordering services
+5. **Submitted**: File sent to underwriting
+6. **Underwriting**: Active UW review
+7. **Conditional Approval**: Approved with conditions (most common approval type)
+8. **Final Approval**: All conditions cleared
+9. **Clear to Close**: Approved for closing docs
+10. **Closing Scheduled**: Appointment set
+11. **Closed/Funded**: Transaction complete
+12. **On Hold**: Paused, waiting on borrower or external factor
+13. **Cancelled**: Withdrawn or denied
+
+### AI Task Automation Terminology
+
+Terms related to Pipeline 360's AI learning and task automation system:
+
+- **Task Template**: Predefined task structure the AI can learn to complete
+- **Training Example**: Human-completed instance used to teach AI the task
+- **Confidence Score**: AI's self-assessed likelihood of correct task completion (0-100%)
+- **Human Review Queue**: Tasks AI completed but flagged for human verification
+- **Graduation Threshold**: Confidence level at which AI can complete task autonomously
+- **Feedback Loop**: Human corrections that refine AI task performance
+- **Task Escalation**: AI recognition that a task requires human intervention
+
+### Circle of Cashflow / Referral Ecosystem
+
+Pipeline 360's referral network model:
+
+- **Referral Source**: Person or entity that sends business (agent, past client, partner)
+- **Referral Score**: Weighted rating of referral source quality and volume
+- **Reciprocal Referral**: Business sent back to referral partners
+- **Attribution**: Tracking which source generated a lead/loan
+- **Circle Member**: Active participant in referral ecosystem
+- **Referral Velocity**: Rate of referrals over time from a source
+
+
+## Combining Context and Terminology
+
+When generating communications, the AI should:
+
+1. Detect the audience (internal/borrower/partner)
+2. Apply appropriate acronym expansion rules
+3. Reference Pipeline 360 workflows by name when relevant to internal users
+4. Translate Pipeline 360 concepts to plain language for borrowers
+5. Match Theme Day tone when generating scheduled communications
+6. Flag Last Mile alerts proactively when loan data indicates risk
+
+### Example Transformations
+
+**Internal note about a loan:**
+"File is CTC as of today. Last Mile initiated. CD going out tomorrow, targeting closing 12/1. Lock expires 12/3, no extension needed if we stay on track. Theme Day comms paused for Last Mile sequence."
+
+**Same information for borrower:**
+"Great news! Your loan is fully approved and we're cleared to close. You'll receive your final Closing Disclosure tomorrow, and we're targeting your closing for December 1st. You'll hear from us with next steps as we finalize everything."
+
+**Same information for real estate agent:**
+"Loan is Clear to Close. CD goes out tomorrow, closing scheduled for 12/1. We're in good shape on the rate lock. Let me know if you need anything from our side for closing coordination."
+
+=== END COMMUNICATION CONTEXT ===
 
 INTENT CLASSIFICATION:
 You MUST classify each user message to one of these intents and return the appropriate JSON:
@@ -1205,6 +3104,27 @@ async def process_with_claude(
         daily_data = get_daily_summary(db, user_id)
         summary = daily_data.get("summary", {})
 
+        # Build task list for display
+        task_list = ""
+        if daily_data.get("tasks"):
+            today = datetime.now().date()
+            for task in daily_data["tasks"][:10]:
+                due_date = task.get("due_date")
+                if due_date:
+                    try:
+                        due_date_obj = datetime.fromisoformat(due_date).date() if isinstance(due_date, str) else due_date
+                        if due_date_obj < today:
+                            status_label = f"OVERDUE ({due_date_obj.strftime('%m/%d')})"
+                        elif due_date_obj == today:
+                            status_label = "Due TODAY"
+                        else:
+                            status_label = f"Due {due_date_obj.strftime('%m/%d')}"
+                    except:
+                        status_label = "Due date unknown"
+                else:
+                    status_label = "No due date"
+                task_list += f"- [{task.get('priority', 'N/A')}] {task.get('title', 'Untitled')} | {status_label}\n"
+
         system += f"""
 
 === DAILY VIEW DATA (YOU MUST USE THESE EXACT NUMBERS) ===
@@ -1222,7 +3142,15 @@ LEAD STATUS BREAKDOWN:
 LOAN STAGE BREAKDOWN:
 {chr(10).join([f"- {stage}: {count}" for stage, count in summary.get('loan_stage_breakdown', {}).items()])}
 
-IMPORTANT: Use the EXACT numbers above in your response. Do NOT say "0 active leads" - use "{summary.get('active_leads', 0)} active leads".
+OUTSTANDING TASKS:
+{task_list if task_list else "No tasks found"}
+
+TASK PRESENTATION RULES:
+- If there are {summary.get('overdue_tasks', 0)} overdue tasks: START with "You have {summary.get('overdue_tasks', 0)} overdue tasks that need immediate attention"
+- If total_tasks > 0: Say "You have {summary.get('total_tasks', 0)} outstanding tasks" NOT "no tasks due today"
+- ALWAYS prioritize overdue tasks first in your response
+- DO NOT say "no tasks" if total_tasks > 0 or overdue_tasks > 0
+- SHOW the actual tasks from the OUTSTANDING TASKS list above
 === END DAILY VIEW DATA ===
 """
 
@@ -2089,6 +4017,80 @@ async def execute_voicemail_drop(
         "recipients_count": len(recipients),
         "status": "queued"
     }
+
+
+# ============================================================================
+# Email Daily Priorities Report
+# ============================================================================
+
+@router.post("/send-daily-priorities-email")
+async def send_daily_priorities_email(
+    email_address: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Send daily priorities report to specified email address
+    """
+    from backend.email_service import email_service
+    from backend.query_executor import QueryExecutor
+
+    # Get current user
+    main = get_main_module()
+    try:
+        User = main.User
+        demo_user = db.query(User).filter(User.email == "demo@example.com").first()
+        current_user_id = demo_user.id if demo_user else 1
+        user_name = f"{demo_user.first_name} {demo_user.last_name}" if demo_user else "User"
+        user_email = demo_user.email if demo_user else ""
+    except Exception:
+        current_user_id = 1
+        user_name = "User"
+        user_email = ""
+
+    # Use provided email or fallback to user's email
+    to_email = email_address or user_email
+    if not to_email:
+        raise HTTPException(status_code=400, detail="No email address provided")
+
+    try:
+        # Execute the daily_focus_priorities query
+        priorities = QueryExecutor.execute_query(
+            db=db,
+            query_type="daily_focus_priorities",
+            params={},
+            user_id=current_user_id
+        )
+
+        if not priorities or not isinstance(priorities, dict) or not priorities.get("data"):
+            raise HTTPException(status_code=404, detail="No priorities data found")
+
+        priorities_data = priorities.get("data", [])
+
+        # Send the email
+        success = email_service.send_daily_priorities_report(
+            to_email=to_email,
+            user_name=user_name,
+            priorities=priorities_data
+        )
+
+        if success:
+            return {
+                "success": True,
+                "message": f"Daily priorities report sent to {to_email}",
+                "email": to_email,
+                "items_count": len(priorities_data)
+            }
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to send email. Please check SMTP configuration."
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error sending daily priorities email: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
 
 
 # ============================================================================
