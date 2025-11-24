@@ -13,6 +13,9 @@ import json
 from integrations.pinecone_service import vector_memory
 from main import ConversationMemory, Lead, Loan, User
 from ai_receptionist_dashboard_models import AIReceptionistMetricsDaily, AIReceptionistActivity
+from models.profitability import EmployeeCost, ProfitabilityLoan, LoanAttribution, ProfitabilityRole
+from sqlalchemy import func
+from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +93,9 @@ class ContextAwareAI:
             # 2.6 Get rate lock context for rate-related questions
             rate_lock_context = await self._get_rate_lock_context()
 
+            # 2.7 Get team performance context for performance questions
+            team_performance_context = await self._get_team_performance_context(db)
+
             # 3. Build enhanced system prompt with context
             system_prompt = self._build_system_prompt(
                 relevant_history,
@@ -97,7 +103,8 @@ class ContextAwareAI:
                 loan_context,
                 coaching_context,
                 roi_context,
-                rate_lock_context
+                rate_lock_context,
+                team_performance_context
             )
 
             # 4. Generate response with Claude
@@ -171,7 +178,8 @@ class ContextAwareAI:
         loan_context: str,
         coaching_context: Optional[str] = None,
         roi_context: Optional[str] = None,
-        rate_lock_context: Optional[str] = None
+        rate_lock_context: Optional[str] = None,
+        team_performance_context: Optional[str] = None
     ) -> str:
         """Build enhanced system prompt with all available context"""
 
@@ -222,6 +230,11 @@ You also have access to the mortgage CRM system and can help with lead managemen
         if rate_lock_context:
             context_sections.append("\n## 🔒 RATE LOCK INTELLIGENCE (Use this for rate lock decisions!):")
             context_sections.append(rate_lock_context)
+
+        # Add team performance context if available
+        if team_performance_context:
+            context_sections.append("\n## 👥 TEAM PERFORMANCE (Use this for performance and underwriter questions!):")
+            context_sections.append(team_performance_context)
 
         # Add guidelines - different based on whether we have current lead context
         if lead_context or loan_context:
@@ -397,6 +410,88 @@ IMPORTANT: When asked about rate locks, use this real-time market data to provid
             return context
         except Exception as e:
             logger.error(f"Error getting rate lock context: {e}")
+            return ""
+
+    async def _get_team_performance_context(self, db: Session) -> str:
+        """Get team/employee performance context"""
+        try:
+            # Get current month date range
+            today = date.today()
+            start_date = today.replace(day=1)
+            if today.month == 12:
+                end_date = date(today.year + 1, 1, 1)
+            else:
+                end_date = date(today.year, today.month + 1, 1)
+
+            # Get all active employees with their roles
+            employees = db.query(EmployeeCost).filter(
+                EmployeeCost.is_active == True
+            ).all()
+
+            if not employees:
+                return ""
+
+            results = []
+            for emp in employees:
+                # Get attributed revenue and loans for this month
+                attributed_data = db.query(
+                    func.sum(
+                        ProfitabilityLoan.total_revenue * LoanAttribution.attribution_percentage / 100
+                    ).label("revenue"),
+                    func.count(LoanAttribution.loan_id).label("loan_count")
+                ).join(ProfitabilityLoan).filter(
+                    LoanAttribution.employee_cost_id == emp.id,
+                    ProfitabilityLoan.close_date >= start_date,
+                    ProfitabilityLoan.close_date < end_date
+                ).first()
+
+                total_revenue = Decimal(attributed_data.revenue or 0)
+                loans_closed = attributed_data.loan_count or 0
+
+                monthly_cost = Decimal(emp.monthly_cost or 0)
+                net_contribution = total_revenue - monthly_cost
+                roi_percentage = (net_contribution / monthly_cost * 100) if monthly_cost > 0 else Decimal(0)
+
+                role_name = emp.role.name if emp.role else "Unknown"
+
+                results.append({
+                    "name": emp.employee_name,
+                    "role": role_name,
+                    "loans": loans_closed,
+                    "revenue": float(total_revenue),
+                    "cost": float(monthly_cost),
+                    "net": float(net_contribution),
+                    "roi": float(roi_percentage)
+                })
+
+            # Sort by ROI (lowest first to identify underperformers)
+            results.sort(key=lambda x: x["roi"])
+
+            # Format context
+            context_parts = [f"## Team Performance Summary (Current Month)\n"]
+
+            # Identify underperformers (negative ROI or below average)
+            underperformers = [r for r in results if r["roi"] < 0]
+            top_performers = sorted(results, key=lambda x: x["roi"], reverse=True)[:3]
+
+            if underperformers:
+                context_parts.append("### ⚠️ Underperforming Team Members (Negative ROI):")
+                for emp in underperformers:
+                    context_parts.append(f"- **{emp['name']}** ({emp['role']}): ROI {emp['roi']:.1f}%, {emp['loans']} loans, ${emp['revenue']:,.0f} revenue, ${emp['net']:,.0f} net contribution")
+                context_parts.append("")
+
+            context_parts.append("### 🌟 Top Performers:")
+            for emp in top_performers:
+                context_parts.append(f"- **{emp['name']}** ({emp['role']}): ROI {emp['roi']:.1f}%, {emp['loans']} loans, ${emp['revenue']:,.0f} revenue")
+
+            context_parts.append("\n### All Team Members by ROI:")
+            for emp in results:
+                status = "⚠️" if emp["roi"] < 0 else "✅" if emp["roi"] > 100 else "📊"
+                context_parts.append(f"{status} {emp['name']} ({emp['role']}): ROI {emp['roi']:.1f}%, {emp['loans']} loans closed")
+
+            return "\n".join(context_parts)
+        except Exception as e:
+            logger.error(f"Error getting team performance context: {e}")
             return ""
 
     async def _extract_conversation_metadata(
