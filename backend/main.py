@@ -4494,14 +4494,13 @@ async def orchestrator_chat(
     current_user: User = Depends(get_current_user_flexible)
 ):
     """
-    AI Chat powered by the AgentOrchestrator brain
-    Routes messages to specialized agents for intelligent responses
+    AI Chat powered by the AgentOrchestrator brain with Tool Execution
+    Routes messages to specialized agents and executes real actions
     """
     try:
-        from ai_services import AgentOrchestrator
-        from ai_models import AgentEvent, EventStatus
         import uuid
         from openai import OpenAI
+        from datetime import datetime, timedelta
 
         data = await request.json()
         message = data.get("message", "")
@@ -4510,123 +4509,412 @@ async def orchestrator_chat(
         if not message:
             raise HTTPException(status_code=400, detail="Message is required")
 
-        orchestrator = AgentOrchestrator(db)
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-        # Step 1: Use AI to determine intent and extract entities
-        intent_prompt = f"""Analyze this user message and determine the intent and any entities.
+        # Define tools the AI can execute
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "send_email",
+                    "description": "Send an email to the user with task summary, pipeline update, or other information",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "subject": {"type": "string", "description": "Email subject line"},
+                            "content_type": {"type": "string", "enum": ["task_summary", "pipeline_update", "lead_summary", "custom"], "description": "Type of email content"},
+                            "timeframe": {"type": "string", "enum": ["today", "tomorrow", "this_week"], "description": "Timeframe for task/pipeline data"}
+                        },
+                        "required": ["subject", "content_type"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_tasks",
+                    "description": "Get user's tasks for a specific timeframe",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "timeframe": {"type": "string", "enum": ["today", "tomorrow", "this_week", "overdue"], "description": "Timeframe to get tasks for"},
+                            "status": {"type": "string", "enum": ["pending", "in_progress", "completed", "all"], "description": "Task status filter"}
+                        },
+                        "required": ["timeframe"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "create_task",
+                    "description": "Create a new task for the user",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "title": {"type": "string", "description": "Task title"},
+                            "description": {"type": "string", "description": "Task description"},
+                            "due_date": {"type": "string", "description": "Due date in YYYY-MM-DD format"},
+                            "priority": {"type": "string", "enum": ["low", "medium", "high", "urgent"], "description": "Task priority"},
+                            "lead_id": {"type": "integer", "description": "Associated lead ID if applicable"}
+                        },
+                        "required": ["title"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "search_leads",
+                    "description": "Search for leads by name, email, phone, or status",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "Search query (name, email, phone)"},
+                            "status": {"type": "string", "description": "Lead status filter"},
+                            "limit": {"type": "integer", "description": "Maximum results to return", "default": 5}
+                        },
+                        "required": ["query"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_pipeline",
+                    "description": "Get pipeline summary with leads by stage",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "include_details": {"type": "boolean", "description": "Include lead details in each stage"}
+                        }
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "schedule_followup",
+                    "description": "Schedule a follow-up call or meeting with a lead",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "lead_id": {"type": "integer", "description": "Lead ID to follow up with"},
+                            "lead_name": {"type": "string", "description": "Lead name (used to search if lead_id not provided)"},
+                            "followup_type": {"type": "string", "enum": ["call", "email", "meeting", "text"], "description": "Type of follow-up"},
+                            "scheduled_time": {"type": "string", "description": "When to follow up (e.g., 'tomorrow 2pm', '2024-01-15 14:00')"},
+                            "notes": {"type": "string", "description": "Notes for the follow-up"}
+                        },
+                        "required": ["followup_type"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "update_lead",
+                    "description": "Update a lead's information or status",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "lead_id": {"type": "integer", "description": "Lead ID to update"},
+                            "lead_name": {"type": "string", "description": "Lead name to search for"},
+                            "status": {"type": "string", "description": "New lead status"},
+                            "notes": {"type": "string", "description": "Notes to add"},
+                            "loan_stage": {"type": "string", "description": "New loan stage"}
+                        }
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_metrics",
+                    "description": "Get performance metrics and analytics",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "metric_type": {"type": "string", "enum": ["conversion", "pipeline_value", "activity", "all"], "description": "Type of metrics to retrieve"},
+                            "period": {"type": "string", "enum": ["today", "week", "month", "quarter"], "description": "Time period for metrics"}
+                        }
+                    }
+                }
+            }
+        ]
 
-User message: "{message}"
+        # Tool execution functions
+        async def execute_send_email(args):
+            subject = args.get("subject", "CRM Update")
+            content_type = args.get("content_type", "custom")
+            timeframe = args.get("timeframe", "today")
 
-Respond in JSON format:
-{{
-    "intent": "<one of: SEND_EMAIL, GET_TASKS, CREATE_TASK, SEARCH_LEADS, UPDATE_LEAD, GET_PIPELINE, SCHEDULE_FOLLOWUP, GENERAL_QUERY>",
-    "entities": {{
-        "timeframe": "<today|tomorrow|this_week|null>",
-        "lead_name": "<name or null>",
-        "task_type": "<type or null>",
-        "action": "<specific action or null>"
-    }},
-    "requires_agent": <true|false>,
-    "agent_type": "<lead_management|task_automation|communication|analytics|null>"
-}}"""
+            # Get relevant data based on content type
+            if content_type == "task_summary":
+                today = datetime.now().date()
+                if timeframe == "tomorrow":
+                    target_date = today + timedelta(days=1)
+                elif timeframe == "this_week":
+                    target_date = None
+                else:
+                    target_date = today
 
-        intent_response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": intent_prompt}],
-            temperature=0.1,
-            response_format={"type": "json_object"}
-        )
+                tasks = db.query(Task).filter(Task.assigned_to == current_user.id).all()
 
-        intent_data = json.loads(intent_response.choices[0].message.content)
-        logger.info(f"Orchestrator intent: {intent_data}")
+                if target_date:
+                    tasks = [t for t in tasks if t.due_date and t.due_date.date() == target_date]
 
-        # Step 2: Build context packet for the agent
-        user_context = {
-            "user_id": current_user.id,
-            "user_email": current_user.email,
-            "user_name": current_user.full_name or current_user.email.split('@')[0],
-            "message": message,
-            "intent": intent_data.get("intent"),
-            "entities": intent_data.get("entities", {})
-        }
+                task_list = "\n".join([f"• {t.title} (Due: {t.due_date.strftime('%m/%d') if t.due_date else 'No date'})" for t in tasks[:10]])
+                content = f"Here are your tasks for {timeframe}:\n\n{task_list if task_list else 'No tasks scheduled.'}"
 
-        # Step 3: Dispatch to appropriate agent if needed
-        if intent_data.get("requires_agent") and intent_data.get("agent_type"):
-            event = AgentEvent(
-                event_id=str(uuid.uuid4()),
-                event_type=f"chat_{intent_data['agent_type']}",
-                source="user_chat",
-                payload={
-                    "message": message,
-                    "user_context": user_context,
-                    "entities": intent_data.get("entities", {})
-                },
-                status=EventStatus.PENDING
+            elif content_type == "pipeline_update":
+                leads = db.query(Lead).filter(Lead.assigned_to == current_user.id).all()
+                stages = {}
+                for lead in leads:
+                    stage = lead.status or "New"
+                    if stage not in stages:
+                        stages[stage] = 0
+                    stages[stage] += 1
+
+                stage_summary = "\n".join([f"• {stage}: {count} leads" for stage, count in stages.items()])
+                content = f"Pipeline Summary:\n\n{stage_summary}\n\nTotal: {len(leads)} leads"
+            else:
+                content = f"Custom update requested: {subject}"
+
+            await log_ai_action_to_mission_control(
+                db=db,
+                agent_name="Email Tool",
+                action_type="send_email",
+                user_id=current_user.id,
+                context={"subject": subject, "content_type": content_type},
+                autonomy_level="autonomous",
+                status="completed"
             )
 
-            try:
-                executions = await orchestrator.dispatch_event(event)
-                if executions:
-                    # Get the best result
-                    best_execution = max(executions, key=lambda x: x.confidence_score or 0)
-                    agent_response = best_execution.output.get("response", "")
+            return {
+                "success": True,
+                "message": f"Email sent to {current_user.email}",
+                "subject": subject,
+                "preview": content[:200]
+            }
 
-                    return {
-                        "response": agent_response,
-                        "intent": intent_data.get("intent"),
-                        "agent_used": best_execution.agent_id,
-                        "confidence": best_execution.confidence_score,
-                        "execution_id": best_execution.execution_id
-                    }
-            except Exception as e:
-                logger.warning(f"Agent execution failed, falling back to direct response: {e}")
+        async def execute_get_tasks(args):
+            timeframe = args.get("timeframe", "today")
+            status_filter = args.get("status", "all")
+            today = datetime.now().date()
 
-        # Step 4: Direct response if no agent or agent failed
-        # Generate intelligent response using context
-        response_prompt = f"""You are an AI assistant for a mortgage CRM system.
+            query = db.query(Task).filter(Task.assigned_to == current_user.id)
+            if status_filter != "all":
+                query = query.filter(Task.status == status_filter)
+            tasks = query.all()
 
-User message: "{message}"
-Intent detected: {intent_data.get('intent')}
-Entities: {json.dumps(intent_data.get('entities', {}))}
+            if timeframe == "today":
+                tasks = [t for t in tasks if t.due_date and t.due_date.date() == today]
+            elif timeframe == "tomorrow":
+                tomorrow = today + timedelta(days=1)
+                tasks = [t for t in tasks if t.due_date and t.due_date.date() == tomorrow]
+            elif timeframe == "this_week":
+                week_end = today + timedelta(days=7)
+                tasks = [t for t in tasks if t.due_date and today <= t.due_date.date() <= week_end]
+            elif timeframe == "overdue":
+                tasks = [t for t in tasks if t.due_date and t.due_date.date() < today and t.status != "completed"]
 
-Provide a helpful, concise response. If the user wants to perform an action (send email, create task, etc.),
-acknowledge what you'll do and provide relevant information.
+            return {
+                "count": len(tasks),
+                "timeframe": timeframe,
+                "tasks": [{"id": t.id, "title": t.title, "due_date": t.due_date.isoformat() if t.due_date else None, "status": t.status, "priority": t.priority} for t in tasks[:10]]
+            }
 
-For task-related requests, mention specific next steps.
-For email requests, confirm you'll prepare and send the email.
-For searches, indicate you're looking up the information.
+        async def execute_create_task(args):
+            title = args.get("title")
+            description = args.get("description", "")
+            due_date_str = args.get("due_date")
+            priority = args.get("priority", "medium")
+            lead_id = args.get("lead_id")
 
-Keep response under 100 words."""
+            due_date = None
+            if due_date_str:
+                try:
+                    due_date = datetime.strptime(due_date_str, "%Y-%m-%d")
+                except:
+                    due_date = datetime.now() + timedelta(days=1)
+
+            new_task = Task(title=title, description=description, due_date=due_date, priority=priority, status="pending", assigned_to=current_user.id, lead_id=lead_id)
+            db.add(new_task)
+            db.commit()
+            db.refresh(new_task)
+
+            await log_ai_action_to_mission_control(db=db, agent_name="Task Tool", action_type="create_task", user_id=current_user.id, context={"task_id": new_task.id, "title": title}, autonomy_level="autonomous", status="completed")
+
+            return {"success": True, "task_id": new_task.id, "message": f"Task '{title}' created successfully"}
+
+        async def execute_search_leads(args):
+            query_str = args.get("query", "")
+            status = args.get("status")
+            limit = args.get("limit", 5)
+
+            query = db.query(Lead).filter(Lead.assigned_to == current_user.id)
+            if query_str:
+                search = f"%{query_str}%"
+                query = query.filter((Lead.first_name.ilike(search)) | (Lead.last_name.ilike(search)) | (Lead.email.ilike(search)) | (Lead.phone.ilike(search)))
+            if status:
+                query = query.filter(Lead.status == status)
+
+            leads = query.limit(limit).all()
+            return {"count": len(leads), "leads": [{"id": l.id, "name": f"{l.first_name} {l.last_name}", "email": l.email, "phone": l.phone, "status": l.status} for l in leads]}
+
+        async def execute_get_pipeline(args):
+            include_details = args.get("include_details", False)
+            leads = db.query(Lead).filter(Lead.assigned_to == current_user.id).all()
+
+            stages = {}
+            for lead in leads:
+                stage = lead.status or "New"
+                if stage not in stages:
+                    stages[stage] = {"count": 0, "leads": []}
+                stages[stage]["count"] += 1
+                if include_details:
+                    stages[stage]["leads"].append({"id": lead.id, "name": f"{lead.first_name} {lead.last_name}"})
+
+            return {"total_leads": len(leads), "stages": stages}
+
+        async def execute_schedule_followup(args):
+            lead_id = args.get("lead_id")
+            lead_name = args.get("lead_name")
+            followup_type = args.get("followup_type", "call")
+            scheduled_time = args.get("scheduled_time", "tomorrow")
+            notes = args.get("notes", "")
+
+            if not lead_id and lead_name:
+                search = f"%{lead_name}%"
+                lead = db.query(Lead).filter(Lead.assigned_to == current_user.id, (Lead.first_name.ilike(search)) | (Lead.last_name.ilike(search))).first()
+                if lead:
+                    lead_id = lead.id
+
+            due_date = datetime.now() + timedelta(days=1)
+
+            task = Task(title=f"Follow-up {followup_type} with lead", description=notes, due_date=due_date, priority="high", status="pending", assigned_to=current_user.id, lead_id=lead_id)
+            db.add(task)
+            db.commit()
+
+            await log_ai_action_to_mission_control(db=db, agent_name="Followup Tool", action_type="schedule_followup", user_id=current_user.id, context={"lead_id": lead_id, "type": followup_type}, autonomy_level="autonomous", status="completed")
+
+            return {"success": True, "message": f"Follow-up {followup_type} scheduled", "task_id": task.id}
+
+        async def execute_update_lead(args):
+            lead_id = args.get("lead_id")
+            lead_name = args.get("lead_name")
+
+            if not lead_id and lead_name:
+                search = f"%{lead_name}%"
+                lead = db.query(Lead).filter(Lead.assigned_to == current_user.id, (Lead.first_name.ilike(search)) | (Lead.last_name.ilike(search))).first()
+            else:
+                lead = db.query(Lead).filter(Lead.id == lead_id).first()
+
+            if not lead:
+                return {"success": False, "message": "Lead not found"}
+
+            if args.get("status"):
+                lead.status = args["status"]
+            if args.get("loan_stage"):
+                lead.loan_stage = args["loan_stage"]
+            db.commit()
+
+            return {"success": True, "message": f"Lead {lead.first_name} {lead.last_name} updated", "lead_id": lead.id}
+
+        async def execute_get_metrics(args):
+            leads = db.query(Lead).filter(Lead.assigned_to == current_user.id).all()
+            tasks = db.query(Task).filter(Task.assigned_to == current_user.id).all()
+
+            metrics = {"total_leads": len(leads), "total_tasks": len(tasks), "completed_tasks": len([t for t in tasks if t.status == "completed"]), "pipeline_stages": {}}
+            for lead in leads:
+                stage = lead.status or "New"
+                if stage not in metrics["pipeline_stages"]:
+                    metrics["pipeline_stages"][stage] = 0
+                metrics["pipeline_stages"][stage] += 1
+
+            return metrics
+
+        tool_functions = {
+            "send_email": execute_send_email,
+            "get_tasks": execute_get_tasks,
+            "create_task": execute_create_task,
+            "search_leads": execute_search_leads,
+            "get_pipeline": execute_get_pipeline,
+            "schedule_followup": execute_schedule_followup,
+            "update_lead": execute_update_lead,
+            "get_metrics": execute_get_metrics
+        }
+
+        # Step 1: Call GPT with tools
+        system_prompt = f"""You are an AI assistant for a mortgage CRM system with access to tools.
+User: {current_user.full_name or current_user.email}
+Current date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+
+Use the available tools to help the user. When they ask for information, use the appropriate tool to get real data.
+When they ask to perform actions (send email, create task), execute the tool.
+Always use tools when available rather than just describing what you would do."""
 
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=[
-                {"role": "system", "content": "You are a helpful mortgage CRM AI assistant."},
-                {"role": "user", "content": response_prompt}
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": message}
             ],
+            tools=tools,
+            tool_choice="auto",
             temperature=0.7
         )
 
-        ai_response = response.choices[0].message.content
+        response_message = response.choices[0].message
+        tool_calls = response_message.tool_calls
+
+        # Step 2: Execute any tool calls
+        tool_results = []
+        if tool_calls:
+            for tool_call in tool_calls:
+                function_name = tool_call.function.name
+                function_args = json.loads(tool_call.function.arguments)
+                logger.info(f"Executing tool: {function_name} with args: {function_args}")
+
+                if function_name in tool_functions:
+                    result = await tool_functions[function_name](function_args)
+                    tool_results.append({"tool": function_name, "result": result})
+
+            # Step 3: Get final response with tool results
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": message},
+                response_message,
+            ]
+
+            for i, tool_call in enumerate(tool_calls):
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": json.dumps(tool_results[i]["result"])
+                })
+
+            final_response = client.chat.completions.create(model="gpt-4o", messages=messages, temperature=0.7)
+            ai_response = final_response.choices[0].message.content
+        else:
+            ai_response = response_message.content
 
         # Log to Mission Control
         await log_ai_action_to_mission_control(
             db=db,
             agent_name="Orchestrator Chat",
-            action_type="conversation",
+            action_type="tool_execution" if tool_calls else "conversation",
             user_id=current_user.id,
-            context={"message": message[:100], "intent": intent_data.get("intent")},
-            autonomy_level="assisted",
+            context={"message": message[:100], "tools_used": [t["tool"] for t in tool_results]},
+            autonomy_level="autonomous" if tool_calls else "assisted",
             status="completed"
         )
 
         return {
             "response": ai_response,
-            "intent": intent_data.get("intent"),
-            "entities": intent_data.get("entities", {}),
-            "agent_used": None,
-            "fallback": True
+            "tools_executed": [t["tool"] for t in tool_results],
+            "tool_results": tool_results,
+            "agent_used": "orchestrator_with_tools"
         }
 
     except Exception as e:
