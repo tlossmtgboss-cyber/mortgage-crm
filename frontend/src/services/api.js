@@ -334,21 +334,27 @@ export const aiAPI = {
       console.warn('Failed to fetch user context:', e);
     }
 
-    const response = await api.post('/api/v1/ai/smart-chat', {
+    // Use the AgentOrchestrator-powered endpoint for smarter responses
+    const response = await api.post('/api/v1/ai/orchestrator-chat', {
       message,
-      include_context: true,
-      context_type: isCoachingMode ? 'coaching' : 'general',
-      coaching_mode: isCoachingMode,
-      user_context: userContext
+      context: {
+        coaching_mode: isCoachingMode,
+        user_context: userContext
+      }
     });
-    // Map smart-chat response format to expected format
+
+    // Map orchestrator response to expected format
     const data = response.data;
     return {
-      explanation: data.response || data.explanation || '',
-      success: data.success,
-      context_used: data.context_used,
-      metadata: data.metadata,
-      // Preserve any other fields from original response
+      explanation: data.response || '',
+      intent: data.intent,
+      entities: data.entities,
+      agent_used: data.agent_used,
+      confidence: data.confidence,
+      execution_id: data.execution_id,
+      fallback: data.fallback,
+      // For backwards compatibility
+      success: true,
       ...data
     };
   },

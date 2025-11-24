@@ -4487,6 +4487,153 @@ async def send_task_summary_email(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/v1/ai/orchestrator-chat")
+async def orchestrator_chat(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    AI Chat powered by the AgentOrchestrator brain
+    Routes messages to specialized agents for intelligent responses
+    """
+    try:
+        from ai_services import AgentOrchestrator
+        from ai_models import AgentEvent, EventStatus
+        import uuid
+        from openai import OpenAI
+
+        data = await request.json()
+        message = data.get("message", "")
+        context = data.get("context", {})
+
+        if not message:
+            raise HTTPException(status_code=400, detail="Message is required")
+
+        orchestrator = AgentOrchestrator(db)
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+        # Step 1: Use AI to determine intent and extract entities
+        intent_prompt = f"""Analyze this user message and determine the intent and any entities.
+
+User message: "{message}"
+
+Respond in JSON format:
+{{
+    "intent": "<one of: SEND_EMAIL, GET_TASKS, CREATE_TASK, SEARCH_LEADS, UPDATE_LEAD, GET_PIPELINE, SCHEDULE_FOLLOWUP, GENERAL_QUERY>",
+    "entities": {{
+        "timeframe": "<today|tomorrow|this_week|null>",
+        "lead_name": "<name or null>",
+        "task_type": "<type or null>",
+        "action": "<specific action or null>"
+    }},
+    "requires_agent": <true|false>,
+    "agent_type": "<lead_management|task_automation|communication|analytics|null>"
+}}"""
+
+        intent_response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": intent_prompt}],
+            temperature=0.1,
+            response_format={"type": "json_object"}
+        )
+
+        intent_data = json.loads(intent_response.choices[0].message.content)
+        logger.info(f"Orchestrator intent: {intent_data}")
+
+        # Step 2: Build context packet for the agent
+        user_context = {
+            "user_id": current_user.id,
+            "user_email": current_user.email,
+            "user_name": current_user.name or current_user.email.split('@')[0],
+            "message": message,
+            "intent": intent_data.get("intent"),
+            "entities": intent_data.get("entities", {})
+        }
+
+        # Step 3: Dispatch to appropriate agent if needed
+        if intent_data.get("requires_agent") and intent_data.get("agent_type"):
+            event = AgentEvent(
+                event_id=str(uuid.uuid4()),
+                event_type=f"chat_{intent_data['agent_type']}",
+                source="user_chat",
+                payload={
+                    "message": message,
+                    "user_context": user_context,
+                    "entities": intent_data.get("entities", {})
+                },
+                status=EventStatus.PENDING
+            )
+
+            try:
+                executions = await orchestrator.dispatch_event(event)
+                if executions:
+                    # Get the best result
+                    best_execution = max(executions, key=lambda x: x.confidence_score or 0)
+                    agent_response = best_execution.output.get("response", "")
+
+                    return {
+                        "response": agent_response,
+                        "intent": intent_data.get("intent"),
+                        "agent_used": best_execution.agent_id,
+                        "confidence": best_execution.confidence_score,
+                        "execution_id": best_execution.execution_id
+                    }
+            except Exception as e:
+                logger.warning(f"Agent execution failed, falling back to direct response: {e}")
+
+        # Step 4: Direct response if no agent or agent failed
+        # Generate intelligent response using context
+        response_prompt = f"""You are an AI assistant for a mortgage CRM system.
+
+User message: "{message}"
+Intent detected: {intent_data.get('intent')}
+Entities: {json.dumps(intent_data.get('entities', {}))}
+
+Provide a helpful, concise response. If the user wants to perform an action (send email, create task, etc.),
+acknowledge what you'll do and provide relevant information.
+
+For task-related requests, mention specific next steps.
+For email requests, confirm you'll prepare and send the email.
+For searches, indicate you're looking up the information.
+
+Keep response under 100 words."""
+
+        response = client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "You are a helpful mortgage CRM AI assistant."},
+                {"role": "user", "content": response_prompt}
+            ],
+            temperature=0.7
+        )
+
+        ai_response = response.choices[0].message.content
+
+        # Log to Mission Control
+        await log_ai_action_to_mission_control(
+            db=db,
+            agent_name="Orchestrator Chat",
+            action_type="conversation",
+            user_id=current_user.id,
+            context={"message": message[:100], "intent": intent_data.get("intent")},
+            autonomy_level="assisted",
+            status="completed"
+        )
+
+        return {
+            "response": ai_response,
+            "intent": intent_data.get("intent"),
+            "entities": intent_data.get("entities", {}),
+            "agent_used": None,
+            "fallback": True
+        }
+
+    except Exception as e:
+        logger.error(f"Orchestrator chat error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/v1/ai/autonomous-task")
 async def execute_autonomous_task(
     request: Request,
