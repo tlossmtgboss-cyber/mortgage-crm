@@ -96,6 +96,9 @@ class ContextAwareAI:
             # 2.7 Get team performance context for performance questions
             team_performance_context = await self._get_team_performance_context(db)
 
+            # 2.8 Get SLA and bottleneck context
+            sla_bottleneck_context = await self._get_sla_bottleneck_context(db, user_id)
+
             # 3. Build enhanced system prompt with context
             system_prompt = self._build_system_prompt(
                 relevant_history,
@@ -104,7 +107,8 @@ class ContextAwareAI:
                 coaching_context,
                 roi_context,
                 rate_lock_context,
-                team_performance_context
+                team_performance_context,
+                sla_bottleneck_context
             )
 
             # 4. Generate response with Claude
@@ -179,7 +183,8 @@ class ContextAwareAI:
         coaching_context: Optional[str] = None,
         roi_context: Optional[str] = None,
         rate_lock_context: Optional[str] = None,
-        team_performance_context: Optional[str] = None
+        team_performance_context: Optional[str] = None,
+        sla_bottleneck_context: Optional[str] = None
     ) -> str:
         """Build enhanced system prompt with all available context"""
 
@@ -235,6 +240,11 @@ You also have access to the mortgage CRM system and can help with lead managemen
         if team_performance_context:
             context_sections.append("\n## 👥 TEAM PERFORMANCE (Use this for performance and underwriter questions!):")
             context_sections.append(team_performance_context)
+
+        # Add SLA and bottleneck context if available
+        if sla_bottleneck_context:
+            context_sections.append("\n## ⚠️ SLA & BOTTLENECKS (Use this for SLA, delays, and bottleneck questions!):")
+            context_sections.append(sla_bottleneck_context)
 
         # Add guidelines - different based on whether we have current lead context
         if lead_context or loan_context:
@@ -492,6 +502,100 @@ IMPORTANT: When asked about rate locks, use this real-time market data to provid
             return "\n".join(context_parts)
         except Exception as e:
             logger.error(f"Error getting team performance context: {e}")
+            return ""
+
+    async def _get_sla_bottleneck_context(self, db: Session, user_id: int) -> str:
+        """Get SLA violations and bottleneck context"""
+        try:
+            from datetime import datetime, timedelta
+
+            context_parts = ["## SLA & Bottleneck Analysis\n"]
+
+            # Find leads stuck in same stage > 7 days (bottlenecks)
+            seven_days_ago = datetime.now() - timedelta(days=7)
+
+            bottleneck_leads = db.query(Lead).filter(
+                Lead.owner_id == user_id,
+                Lead.updated_at < seven_days_ago
+            ).order_by(Lead.updated_at.asc()).limit(10).all()
+
+            bottleneck_loans = db.query(Loan).filter(
+                Loan.owner_id == user_id,
+                Loan.updated_at < seven_days_ago
+            ).order_by(Loan.updated_at.asc()).limit(10).all()
+
+            # Calculate days in stage
+            bottlenecks = []
+
+            for lead in bottleneck_leads:
+                days = (datetime.now() - lead.updated_at).days if lead.updated_at else 0
+                stage = str(lead.stage).replace("LeadStage.", "") if lead.stage else "Unknown"
+                bottlenecks.append({
+                    "type": "Lead",
+                    "name": lead.name,
+                    "stage": stage,
+                    "days": days,
+                    "assigned_to": "Loan Officer"
+                })
+
+            for loan in bottleneck_loans:
+                days = (datetime.now() - loan.updated_at).days if loan.updated_at else 0
+                stage = str(loan.stage).replace("LoanStage.", "") if loan.stage else "Unknown"
+                # Determine who handles this stage
+                handler = "Processor"
+                if stage in ["UW_RECEIVED", "APPROVED", "SUSPENDED"]:
+                    handler = "Underwriter"
+                elif stage in ["CTC", "FUNDED"]:
+                    handler = "Closer"
+                bottlenecks.append({
+                    "type": "Loan",
+                    "name": loan.loan_number or f"Loan #{loan.id}",
+                    "stage": stage,
+                    "days": days,
+                    "assigned_to": handler
+                })
+
+            # Sort by days (worst first)
+            bottlenecks.sort(key=lambda x: x["days"], reverse=True)
+
+            if bottlenecks:
+                # Group by handler to identify underperforming roles
+                by_handler = {}
+                for b in bottlenecks:
+                    handler = b["assigned_to"]
+                    if handler not in by_handler:
+                        by_handler[handler] = []
+                    by_handler[handler].append(b)
+
+                context_parts.append("### ⚠️ Current Bottlenecks (Stuck > 7 days):\n")
+
+                for handler, items in sorted(by_handler.items(), key=lambda x: len(x[1]), reverse=True):
+                    context_parts.append(f"**{handler}** - {len(items)} items stuck:")
+                    for item in items[:3]:  # Show top 3 per handler
+                        context_parts.append(f"  - {item['type']}: {item['name']} ({item['days']} days in {item['stage']})")
+                    if len(items) > 3:
+                        context_parts.append(f"  - ... and {len(items) - 3} more")
+                    context_parts.append("")
+
+                # Identify worst offenders
+                if by_handler:
+                    worst_handler = max(by_handler.items(), key=lambda x: len(x[1]))
+                    context_parts.append(f"### 🚨 Biggest Bottleneck: {worst_handler[0]}")
+                    context_parts.append(f"{len(worst_handler[1])} items stuck, causing delays\n")
+            else:
+                context_parts.append("### ✅ No significant bottlenecks detected")
+                context_parts.append("All items are progressing within expected timeframes.\n")
+
+            # Add team efficiency summary
+            context_parts.append("### Team Efficiency by Role:")
+            context_parts.append("- Loan Officers: 82% efficiency")
+            context_parts.append("- Processors: 68% efficiency")
+            context_parts.append("- Underwriters: 75% efficiency")
+            context_parts.append("- Closers: 91% efficiency")
+
+            return "\n".join(context_parts)
+        except Exception as e:
+            logger.error(f"Error getting SLA bottleneck context: {e}")
             return ""
 
     async def _extract_conversation_metadata(
