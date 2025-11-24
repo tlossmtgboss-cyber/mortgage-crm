@@ -12367,7 +12367,7 @@ async def create_lead(lead: LeadCreate, db: Session = Depends(get_db), current_u
     logger.info(f"Lead created: {db_lead.name} (Score: {db_lead.ai_score})")
     return db_lead
 
-@app.get("/api/v1/leads/", response_model=List[LeadResponse])
+@app.get("/api/v1/leads/")
 async def get_leads(
     skip: int = 0,
     limit: int = 100,
@@ -12388,7 +12388,29 @@ async def get_leads(
                 pass
 
         leads = query.order_by(Lead.created_at.desc()).offset(skip).limit(limit).all()
-        return leads
+
+        # Convert to dict manually to avoid Pydantic validation issues
+        result = []
+        for lead in leads:
+            lead_dict = {
+                "id": lead.id,
+                "name": lead.name,
+                "email": lead.email,
+                "phone": lead.phone,
+                "stage": lead.stage.value if lead.stage else None,
+                "source": lead.source,
+                "ai_score": lead.ai_score,
+                "sentiment": lead.sentiment,
+                "next_action": lead.next_action,
+                "preapproval_amount": lead.preapproval_amount,
+                "credit_score": lead.credit_score,
+                "loan_type": lead.loan_type,
+                "notes": lead.notes,
+                "created_at": lead.created_at.isoformat() if lead.created_at else None,
+                "updated_at": lead.updated_at.isoformat() if lead.updated_at else None,
+            }
+            result.append(lead_dict)
+        return result
     except Exception as e:
         import traceback
         logger.error(f"get_leads error: {e}")
@@ -23451,7 +23473,7 @@ async def bootstrap_admin_user(
 
 
 @app.post("/api/v1/migrations/run-phase2-permissions", response_model=None)
-async def run_phase2_permission_migration(
+async def run_phase2_permission_migration_endpoint(
     migration_key: str = "",
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
