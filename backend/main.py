@@ -20,7 +20,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, DateTime, Date, Text, ForeignKey, JSON, Enum as SQLEnum, func, text, or_, UniqueConstraint, Numeric, Index
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session, relationship
+from sqlalchemy.orm import sessionmaker, Session, relationship, selectinload, joinedload
 from pydantic import BaseModel, EmailStr
 from passlib.context import CryptContext
 from jose import JWTError, jwt
@@ -274,6 +274,13 @@ class VerificationToken(Base):
 
 class Lead(Base):
     __tablename__ = "leads"
+    __table_args__ = (
+        Index('ix_leads_owner_id', 'owner_id'),
+        Index('ix_leads_stage', 'stage'),
+        Index('ix_leads_created_at', 'created_at'),
+        Index('ix_leads_referral_partner_id', 'referral_partner_id'),
+        Index('ix_leads_owner_stage', 'owner_id', 'stage'),
+    )
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False, index=True)
     email = Column(String, index=True)
@@ -339,6 +346,13 @@ class Lead(Base):
 
 class Loan(Base):
     __tablename__ = "loans"
+    __table_args__ = (
+        Index('ix_loans_loan_officer_id', 'loan_officer_id'),
+        Index('ix_loans_stage', 'stage'),
+        Index('ix_loans_funded_date', 'funded_date'),
+        Index('ix_loans_created_at', 'created_at'),
+        Index('ix_loans_officer_stage', 'loan_officer_id', 'stage'),
+    )
     id = Column(Integer, primary_key=True, index=True)
     loan_number = Column(String, unique=True, index=True, nullable=False)
     borrower_name = Column(String, nullable=False)
@@ -377,6 +391,12 @@ class Loan(Base):
 
 class AITask(Base):
     __tablename__ = "ai_tasks"
+    __table_args__ = (
+        Index('ix_ai_tasks_assigned_to_id', 'assigned_to_id'),
+        Index('ix_ai_tasks_lead_id', 'lead_id'),
+        Index('ix_ai_tasks_loan_id', 'loan_id'),
+        Index('ix_ai_tasks_due_date', 'due_date'),
+    )
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
     description = Column(Text)
@@ -402,6 +422,14 @@ class AITask(Base):
 
 class Task(Base):
     __tablename__ = "tasks"
+    __table_args__ = (
+        Index('ix_tasks_owner_id', 'owner_id'),
+        Index('ix_tasks_status', 'status'),
+        Index('ix_tasks_due_date', 'due_date'),
+        Index('ix_tasks_lead_id', 'lead_id'),
+        Index('ix_tasks_loan_id', 'loan_id'),
+        Index('ix_tasks_owner_status', 'owner_id', 'status'),
+    )
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
     description = Column(Text)
@@ -476,6 +504,13 @@ class MUMClient(Base):
 
 class Activity(Base):
     __tablename__ = "activities"
+    __table_args__ = (
+        Index('ix_activities_lead_id', 'lead_id'),
+        Index('ix_activities_loan_id', 'loan_id'),
+        Index('ix_activities_user_id', 'user_id'),
+        Index('ix_activities_created_at', 'created_at'),
+        Index('ix_activities_lead_created', 'lead_id', 'created_at'),
+    )
     id = Column(Integer, primary_key=True, index=True)
     type = Column(SQLEnum(ActivityType), nullable=False)
     content = Column(Text)
@@ -4658,7 +4693,7 @@ async def orchestrator_chat(
                 else:
                     target_date = today
 
-                tasks = db.query(Task).filter(Task.assigned_to == current_user.id).all()
+                tasks = db.query(Task).filter(Task.owner_id == current_user.id).all()
 
                 if target_date:
                     tasks = [t for t in tasks if t.due_date and t.due_date.date() == target_date]
@@ -4702,7 +4737,7 @@ async def orchestrator_chat(
             status_filter = args.get("status", "all")
             today = datetime.now().date()
 
-            query = db.query(Task).filter(Task.assigned_to == current_user.id)
+            query = db.query(Task).filter(Task.owner_id == current_user.id)
             if status_filter != "all":
                 query = query.filter(Task.status == status_filter)
             tasks = query.all()
@@ -4738,7 +4773,7 @@ async def orchestrator_chat(
                 except:
                     due_date = datetime.now() + timedelta(days=1)
 
-            new_task = Task(title=title, description=description, due_date=due_date, priority=priority, status="pending", assigned_to=current_user.id, lead_id=lead_id)
+            new_task = Task(title=title, description=description, due_date=due_date, priority=priority, status="pending", owner_id=current_user.id, lead_id=lead_id)
             db.add(new_task)
             db.commit()
             db.refresh(new_task)
@@ -4792,7 +4827,7 @@ async def orchestrator_chat(
 
             due_date = datetime.now() + timedelta(days=1)
 
-            task = Task(title=f"Follow-up {followup_type} with lead", description=notes, due_date=due_date, priority="high", status="pending", assigned_to=current_user.id, lead_id=lead_id)
+            task = Task(title=f"Follow-up {followup_type} with lead", description=notes, due_date=due_date, priority="high", status="pending", owner_id=current_user.id, lead_id=lead_id)
             db.add(task)
             db.commit()
 
@@ -4823,7 +4858,7 @@ async def orchestrator_chat(
 
         async def execute_get_metrics(args):
             leads = db.query(Lead).filter(Lead.assigned_to == current_user.id).all()
-            tasks = db.query(Task).filter(Task.assigned_to == current_user.id).all()
+            tasks = db.query(Task).filter(Task.owner_id == current_user.id).all()
 
             metrics = {"total_leads": len(leads), "total_tasks": len(tasks), "completed_tasks": len([t for t in tasks if t.status == "completed"]), "pipeline_stages": {}}
             for lead in leads:
