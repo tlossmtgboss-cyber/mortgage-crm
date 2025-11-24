@@ -466,7 +466,14 @@ function AILandingPage() {
         }
       ]);
 
-      if (response.intent === 'DAILY_VIEW' && response.data) {
+      // Check if user wanted email - don't show daily view, route to email handler
+      const lowerMessage = message.toLowerCase();
+      const wantsEmail = lowerMessage.includes('email') && (lowerMessage.includes('task') || lowerMessage.includes('things') || lowerMessage.includes('to do') || lowerMessage.includes('tomorrow'));
+
+      if (wantsEmail) {
+        // User wants tasks emailed, not shown - use local routing
+        routeMessage(message);
+      } else if (response.intent === 'DAILY_VIEW' && response.data) {
         showDailyViewWithData(response.data, response.explanation);
       } else if (response.intent === 'SEARCH' && response.data) {
         addMessage(response.explanation || "Here are your search results:", 'assistant');
