@@ -974,7 +974,7 @@ def run_migration(db):
         db.execute(text("""
             INSERT INTO mortgage_glossary
             (term, definition, category, subcategory, synonyms, related_terms, ai_usage, workflow_usage, compliance_tags)
-            VALUES (:term, :definition, :category, :subcategory, :synonyms::text[], :related_terms::text[], :ai_usage, :workflow_usage, :compliance_tags::text[])
+            VALUES (:term, :definition, :category, :subcategory, CAST(:synonyms AS text[]), CAST(:related_terms AS text[]), :ai_usage, :workflow_usage, CAST(:compliance_tags AS text[]))
         """), {
             "term": term_data[0],
             "definition": term_data[1],
