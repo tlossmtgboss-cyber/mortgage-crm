@@ -589,6 +589,63 @@ TOOL_DEFINITIONS = [
         allowed_agents=["portfolio_analyst"],
         risk_level=RiskLevel.LOW
     ),
+    ToolDefinition(
+        name="getPortfolioLoans",
+        description="Get portfolio of closed/funded loans with filtering options",
+        category=ToolCategory.DATA_READ,
+        input_schema={
+            "type": "object",
+            "properties": {
+                "min_loan_amount": {"type": "number"},
+                "max_loan_amount": {"type": "number"},
+                "min_rate": {"type": "number"},
+                "max_rate": {"type": "number"},
+                "loan_type": {"type": "string"},
+                "months_since_closing": {"type": "integer"},
+                "limit": {"type": "integer"}
+            }
+        },
+        output_schema={"type": "object"},
+        handler_endpoint="/api/ai/tools/portfolio-loans",
+        allowed_agents=["portfolio_analyst", "forecasting_planner"],
+        risk_level=RiskLevel.LOW
+    ),
+    ToolDefinition(
+        name="checkMIDropEligibility",
+        description="Check loans for MI (mortgage insurance) drop eligibility based on LTV",
+        category=ToolCategory.ANALYSIS,
+        input_schema={
+            "type": "object",
+            "properties": {
+                "target_ltv": {"type": "number"},
+                "min_months_seasoning": {"type": "integer"},
+                "assumed_appreciation_rate": {"type": "number"}
+            }
+        },
+        output_schema={"type": "object"},
+        handler_endpoint="/api/ai/tools/check-mi-drop",
+        allowed_agents=["portfolio_analyst"],
+        risk_level=RiskLevel.LOW
+    ),
+    # Knowledge Tools
+    ToolDefinition(
+        name="lookupGlossaryTerm",
+        description="Look up mortgage terminology, definitions, and compliance requirements from the glossary",
+        category=ToolCategory.DATA_READ,
+        input_schema={
+            "type": "object",
+            "properties": {
+                "term": {"type": "string", "description": "Term to search for"},
+                "category": {"type": "string", "description": "Category to browse (e.g., Underwriting, Compliance, Servicing)"},
+                "include_related": {"type": "boolean", "default": True},
+                "limit": {"type": "integer", "default": 10}
+            }
+        },
+        output_schema={"type": "object"},
+        handler_endpoint="/api/ai/tools/lookup-glossary",
+        allowed_agents=["lead_manager", "pipeline_manager", "underwriting_assistant", "customer_engagement", "portfolio_analyst", "operations_agent", "forecasting_planner"],
+        risk_level=RiskLevel.LOW
+    ),
     # Operations Tools
     ToolDefinition(
         name="getSystemHealth",

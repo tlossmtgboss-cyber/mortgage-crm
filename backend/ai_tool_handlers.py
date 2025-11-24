@@ -661,6 +661,314 @@ async def handle_scan_refi_opportunities(input_data: Dict[str, Any], context: To
         db.close()
 
 
+async def handle_get_portfolio_loans(input_data: Dict[str, Any], context: ToolContext) -> Dict[str, Any]:
+    """Get portfolio of closed/funded loans with filtering options"""
+    from database import SessionLocal
+
+    db = SessionLocal()
+
+    try:
+        # Filter parameters
+        min_loan_amount = input_data.get("min_loan_amount", 0)
+        max_loan_amount = input_data.get("max_loan_amount", 10000000)
+        min_rate = input_data.get("min_rate", 0)
+        max_rate = input_data.get("max_rate", 20)
+        loan_type = input_data.get("loan_type")  # conventional, fha, va, etc.
+        months_since_closing = input_data.get("months_since_closing", 0)
+        limit = input_data.get("limit", 100)
+
+        query = text("""
+            SELECT
+                l.id,
+                l.borrower_name,
+                l.loan_amount,
+                l.original_rate,
+                l.loan_type,
+                l.property_value,
+                l.ltv,
+                l.closed_date,
+                l.status,
+                l.property_address,
+                l.has_pmi,
+                l.pmi_monthly_amount,
+                EXTRACT(MONTH FROM AGE(CURRENT_TIMESTAMP, l.closed_date)) as months_since_close
+            FROM loans l
+            WHERE l.status IN ('closed', 'funded')
+            AND l.loan_amount >= :min_loan_amount
+            AND l.loan_amount <= :max_loan_amount
+            AND COALESCE(l.original_rate, 0) >= :min_rate
+            AND COALESCE(l.original_rate, 0) <= :max_rate
+            AND (l.closed_date IS NULL OR l.closed_date <= CURRENT_TIMESTAMP - INTERVAL '1 month' * :months_since_closing)
+            AND (:loan_type IS NULL OR l.loan_type = :loan_type)
+            ORDER BY l.closed_date DESC
+            LIMIT :limit
+        """)
+
+        results = db.execute(query, {
+            "min_loan_amount": min_loan_amount,
+            "max_loan_amount": max_loan_amount,
+            "min_rate": min_rate,
+            "max_rate": max_rate,
+            "loan_type": loan_type,
+            "months_since_closing": months_since_closing,
+            "limit": limit
+        }).fetchall()
+
+        loans = []
+        total_portfolio_value = 0
+        for row in results:
+            loan_amount = float(row.loan_amount) if row.loan_amount else 0
+            total_portfolio_value += loan_amount
+            loans.append({
+                "loan_id": row.id,
+                "borrower_name": row.borrower_name,
+                "loan_amount": loan_amount,
+                "original_rate": float(row.original_rate) if row.original_rate else None,
+                "loan_type": row.loan_type,
+                "property_value": float(row.property_value) if row.property_value else None,
+                "ltv": float(row.ltv) if row.ltv else None,
+                "closed_date": row.closed_date.isoformat() if row.closed_date else None,
+                "property_address": row.property_address,
+                "has_pmi": row.has_pmi,
+                "pmi_monthly_amount": float(row.pmi_monthly_amount) if row.pmi_monthly_amount else None,
+                "months_since_close": int(row.months_since_close) if row.months_since_close else 0
+            })
+
+        # Get summary stats
+        summary_query = text("""
+            SELECT
+                COUNT(*) as total_loans,
+                SUM(loan_amount) as total_value,
+                AVG(original_rate) as avg_rate,
+                AVG(ltv) as avg_ltv
+            FROM loans
+            WHERE status IN ('closed', 'funded')
+        """)
+        summary = db.execute(summary_query).fetchone()
+
+        return {
+            "success": True,
+            "loans": loans,
+            "count": len(loans),
+            "portfolio_summary": {
+                "total_loans_in_portfolio": summary.total_loans or 0,
+                "total_portfolio_value": float(summary.total_value) if summary.total_value else 0,
+                "average_rate": round(float(summary.avg_rate), 3) if summary.avg_rate else None,
+                "average_ltv": round(float(summary.avg_ltv), 1) if summary.avg_ltv else None,
+                "returned_subset_value": total_portfolio_value
+            }
+        }
+    finally:
+        db.close()
+
+
+async def handle_check_mi_drop_eligibility(input_data: Dict[str, Any], context: ToolContext) -> Dict[str, Any]:
+    """Check loans for MI (mortgage insurance) drop eligibility based on LTV"""
+    from database import SessionLocal
+
+    db = SessionLocal()
+
+    try:
+        # Parameters
+        target_ltv = input_data.get("target_ltv", 80)  # Standard MI drop threshold
+        min_months_seasoning = input_data.get("min_months_seasoning", 24)  # Typical requirement
+        appreciation_rate = input_data.get("assumed_appreciation_rate", 0.03)  # 3% annual default
+
+        query = text("""
+            SELECT
+                l.id,
+                l.borrower_name,
+                l.loan_amount,
+                l.original_rate,
+                l.property_value,
+                l.ltv,
+                l.closed_date,
+                l.has_pmi,
+                l.pmi_monthly_amount,
+                l.loan_type,
+                EXTRACT(MONTH FROM AGE(CURRENT_TIMESTAMP, l.closed_date)) as months_since_close
+            FROM loans l
+            WHERE l.status IN ('closed', 'funded')
+            AND l.has_pmi = true
+            AND l.closed_date <= CURRENT_TIMESTAMP - INTERVAL '1 month' * :min_months
+            ORDER BY l.pmi_monthly_amount DESC NULLS LAST
+            LIMIT 100
+        """)
+
+        results = db.execute(query, {
+            "min_months": min_months_seasoning
+        }).fetchall()
+
+        eligible_loans = []
+        potential_monthly_savings = 0
+
+        for row in results:
+            if not row.property_value or not row.loan_amount:
+                continue
+
+            months = int(row.months_since_close) if row.months_since_close else 0
+            years = months / 12
+
+            # Estimate current property value with appreciation
+            original_value = float(row.property_value)
+            estimated_current_value = original_value * ((1 + appreciation_rate) ** years)
+
+            # Estimate current loan balance (simplified - assumes 30yr amortization)
+            original_loan = float(row.loan_amount)
+            rate = float(row.original_rate) / 100 if row.original_rate else 0.065
+            monthly_rate = rate / 12
+            n_payments = 360
+            if monthly_rate > 0:
+                monthly_payment = original_loan * (monthly_rate * (1 + monthly_rate)**n_payments) / ((1 + monthly_rate)**n_payments - 1)
+                # Remaining balance after 'months' payments
+                remaining_balance = original_loan * ((1 + monthly_rate)**n_payments - (1 + monthly_rate)**months) / ((1 + monthly_rate)**n_payments - 1)
+            else:
+                remaining_balance = original_loan - (original_loan / 360 * months)
+
+            # Calculate current LTV
+            current_ltv = (remaining_balance / estimated_current_value) * 100
+
+            if current_ltv <= target_ltv:
+                pmi_amount = float(row.pmi_monthly_amount) if row.pmi_monthly_amount else 100
+                potential_monthly_savings += pmi_amount
+
+                eligible_loans.append({
+                    "loan_id": row.id,
+                    "borrower_name": row.borrower_name,
+                    "original_ltv": round(float(row.ltv), 1) if row.ltv else None,
+                    "estimated_current_ltv": round(current_ltv, 1),
+                    "original_property_value": original_value,
+                    "estimated_current_value": round(estimated_current_value, 0),
+                    "current_balance_estimate": round(remaining_balance, 0),
+                    "months_seasoning": months,
+                    "pmi_monthly_amount": pmi_amount,
+                    "loan_type": row.loan_type,
+                    "eligibility_reason": f"LTV now {current_ltv:.1f}% (below {target_ltv}%)"
+                })
+
+        return {
+            "success": True,
+            "eligible_loans": eligible_loans,
+            "count": len(eligible_loans),
+            "total_monthly_savings_potential": round(potential_monthly_savings, 2),
+            "total_annual_savings_potential": round(potential_monthly_savings * 12, 2),
+            "analysis_parameters": {
+                "target_ltv_threshold": target_ltv,
+                "min_months_seasoning": min_months_seasoning,
+                "assumed_appreciation_rate": appreciation_rate
+            }
+        }
+    finally:
+        db.close()
+
+
+async def handle_lookup_glossary_term(input_data: Dict[str, Any], context: ToolContext) -> Dict[str, Any]:
+    """Look up mortgage terminology from the glossary"""
+    from database import SessionLocal
+
+    db = SessionLocal()
+
+    try:
+        search_term = input_data.get("term", "")
+        category = input_data.get("category")
+        include_related = input_data.get("include_related", True)
+        limit = input_data.get("limit", 10)
+
+        if search_term:
+            # Search by term name, synonyms, or full-text search
+            query = text("""
+                SELECT
+                    id, term, definition, category, subcategory,
+                    synonyms, related_terms, ai_usage, workflow_usage, compliance_tags
+                FROM mortgage_glossary
+                WHERE
+                    term ILIKE :search_pattern
+                    OR :search_term = ANY(synonyms)
+                    OR to_tsvector('english', term || ' ' || definition) @@ plainto_tsquery('english', :search_term)
+                ORDER BY
+                    CASE WHEN term ILIKE :search_pattern THEN 0 ELSE 1 END,
+                    term
+                LIMIT :limit
+            """)
+
+            results = db.execute(query, {
+                "search_term": search_term,
+                "search_pattern": f"%{search_term}%",
+                "limit": limit
+            }).fetchall()
+        elif category:
+            # Search by category
+            query = text("""
+                SELECT
+                    id, term, definition, category, subcategory,
+                    synonyms, related_terms, ai_usage, workflow_usage, compliance_tags
+                FROM mortgage_glossary
+                WHERE category ILIKE :category
+                ORDER BY term
+                LIMIT :limit
+            """)
+
+            results = db.execute(query, {
+                "category": f"%{category}%",
+                "limit": limit
+            }).fetchall()
+        else:
+            return {
+                "success": False,
+                "error": "Either 'term' or 'category' must be provided"
+            }
+
+        terms = []
+        for row in results:
+            term_data = {
+                "id": row.id,
+                "term": row.term,
+                "definition": row.definition,
+                "category": row.category,
+                "subcategory": row.subcategory,
+                "synonyms": list(row.synonyms) if row.synonyms else [],
+                "related_terms": list(row.related_terms) if row.related_terms else [],
+                "ai_usage": row.ai_usage,
+                "workflow_usage": row.workflow_usage,
+                "compliance_tags": list(row.compliance_tags) if row.compliance_tags else []
+            }
+            terms.append(term_data)
+
+        # Optionally fetch related terms
+        related_definitions = []
+        if include_related and terms:
+            all_related = set()
+            for t in terms:
+                all_related.update(t.get("related_terms", []))
+
+            if all_related:
+                related_query = text("""
+                    SELECT term, definition, category
+                    FROM mortgage_glossary
+                    WHERE term = ANY(:related_terms)
+                    LIMIT 20
+                """)
+                related_results = db.execute(related_query, {
+                    "related_terms": list(all_related)
+                }).fetchall()
+
+                for row in related_results:
+                    related_definitions.append({
+                        "term": row.term,
+                        "definition": row.definition,
+                        "category": row.category
+                    })
+
+        return {
+            "success": True,
+            "terms": terms,
+            "count": len(terms),
+            "related_definitions": related_definitions if include_related else []
+        }
+    finally:
+        db.close()
+
+
 # ============================================================================
 # OPERATIONS TOOLS
 # ============================================================================
@@ -826,6 +1134,11 @@ TOOL_HANDLERS = {
 
     # Portfolio
     "scanForRefiOpportunities": handle_scan_refi_opportunities,
+    "getPortfolioLoans": handle_get_portfolio_loans,
+    "checkMIDropEligibility": handle_check_mi_drop_eligibility,
+
+    # Knowledge
+    "lookupGlossaryTerm": handle_lookup_glossary_term,
 
     # Operations
     "getSystemHealth": handle_get_system_health,

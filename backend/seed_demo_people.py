@@ -55,7 +55,7 @@ TEAM_MEMBERS = {
     ]
 }
 
-# Leads - Prospects at various stages
+# Leads - Prospects at various stages with referral scores
 DEMO_LEADS = [
     {
         "name": "James Wilson",
@@ -69,7 +69,11 @@ DEMO_LEADS = [
         "property_value": 450000,
         "down_payment": 90000,
         "city": "Austin",
-        "state": "TX"
+        "state": "TX",
+        "employer_name": "Dell Technologies",
+        "job_title": "Regional Sales Director",
+        "referral_source_score": 92,
+        "referral_source_rating": "Strong Referral Source"
     },
     {
         "name": "Maria Hernandez",
@@ -84,7 +88,11 @@ DEMO_LEADS = [
         "property_value": 325000,
         "down_payment": 11375,
         "city": "San Antonio",
-        "state": "TX"
+        "state": "TX",
+        "employer_name": "USAA",
+        "job_title": "HR Manager",
+        "referral_source_score": 78,
+        "referral_source_rating": "Good Referral Source"
     },
     {
         "name": "Robert Taylor",
@@ -97,7 +105,11 @@ DEMO_LEADS = [
         "annual_income": 150000,
         "property_value": 550000,
         "city": "Dallas",
-        "state": "TX"
+        "state": "TX",
+        "employer_name": "Texas Instruments",
+        "job_title": "Engineering Manager",
+        "referral_source_score": 85,
+        "referral_source_rating": "Strong Referral Source"
     },
     {
         "name": "Ashley Thompson",
@@ -112,7 +124,11 @@ DEMO_LEADS = [
         "property_value": 380000,
         "down_payment": 0,
         "city": "Houston",
-        "state": "TX"
+        "state": "TX",
+        "employer_name": "Memorial Hermann",
+        "job_title": "Nursing Supervisor",
+        "referral_source_score": 71,
+        "referral_source_rating": "Good Referral Source"
     },
     {
         "name": "Christopher Davis",
@@ -127,7 +143,11 @@ DEMO_LEADS = [
         "down_payment": 170000,
         "preapproval_amount": 680000,
         "city": "Plano",
-        "state": "TX"
+        "state": "TX",
+        "employer_name": "Deloitte",
+        "job_title": "Partner",
+        "referral_source_score": 95,
+        "referral_source_rating": "Strong Referral Source"
     },
     {
         "name": "Jessica Martinez",
@@ -141,7 +161,11 @@ DEMO_LEADS = [
         "property_value": 395000,
         "down_payment": 79000,
         "city": "Fort Worth",
-        "state": "TX"
+        "state": "TX",
+        "employer_name": "Lockheed Martin",
+        "job_title": "Project Manager",
+        "referral_source_score": 82,
+        "referral_source_rating": "Strong Referral Source"
     },
     {
         "name": "Daniel Brown",
@@ -156,7 +180,11 @@ DEMO_LEADS = [
         "down_payment": 9975,
         "first_time_buyer": True,
         "city": "Arlington",
-        "state": "TX"
+        "state": "TX",
+        "employer_name": "GM Financial",
+        "job_title": "Financial Analyst",
+        "referral_source_score": 58,
+        "referral_source_rating": "Moderate Referral Source"
     },
     {
         "name": "Nicole Anderson",
@@ -170,7 +198,227 @@ DEMO_LEADS = [
         "annual_income": 165000,
         "property_value": 625000,
         "city": "Frisco",
-        "state": "TX"
+        "state": "TX",
+        "employer_name": "Toyota North America",
+        "job_title": "VP of Marketing",
+        "referral_source_score": 88,
+        "referral_source_rating": "Strong Referral Source"
+    },
+    # Additional leads for top 20 variety
+    {
+        "name": "Michael Chen",
+        "email": "michael.chen@email.com",
+        "phone": "(555) 111-2233",
+        "stage": "Pre-Approved",
+        "source": "LinkedIn",
+        "loan_type": "Purchase - Conventional",
+        "credit_score": 760,
+        "annual_income": 185000,
+        "property_value": 520000,
+        "down_payment": 104000,
+        "city": "Austin",
+        "state": "TX",
+        "employer_name": "Oracle",
+        "job_title": "Senior Director",
+        "referral_source_score": 90,
+        "referral_source_rating": "Strong Referral Source"
+    },
+    {
+        "name": "Sarah Williams",
+        "email": "sarah.williams@email.com",
+        "phone": "(555) 222-3344",
+        "stage": "Application Started",
+        "source": "Realtor Referral",
+        "loan_type": "Purchase - Jumbo",
+        "credit_score": 795,
+        "annual_income": 320000,
+        "property_value": 1200000,
+        "down_payment": 240000,
+        "city": "Highland Park",
+        "state": "TX",
+        "employer_name": "Goldman Sachs",
+        "job_title": "Managing Director",
+        "referral_source_score": 98,
+        "referral_source_rating": "Strong Referral Source"
+    },
+    {
+        "name": "David Rodriguez",
+        "email": "david.rodriguez@email.com",
+        "phone": "(555) 333-4455",
+        "stage": "Prospect",
+        "source": "Website",
+        "loan_type": "Purchase - Conventional",
+        "credit_score": 725,
+        "annual_income": 135000,
+        "property_value": 480000,
+        "down_payment": 96000,
+        "city": "Round Rock",
+        "state": "TX",
+        "employer_name": "Apple",
+        "job_title": "Product Manager",
+        "referral_source_score": 86,
+        "referral_source_rating": "Strong Referral Source"
+    },
+    {
+        "name": "Jennifer Lee",
+        "email": "jennifer.lee@email.com",
+        "phone": "(555) 444-5566",
+        "stage": "New",
+        "source": "Google",
+        "loan_type": "Purchase - Conventional",
+        "credit_score": 740,
+        "annual_income": 145000,
+        "property_value": 425000,
+        "down_payment": 85000,
+        "city": "Irving",
+        "state": "TX",
+        "employer_name": "ExxonMobil",
+        "job_title": "Operations Manager",
+        "referral_source_score": 79,
+        "referral_source_rating": "Good Referral Source"
+    },
+    {
+        "name": "Kevin Patel",
+        "email": "kevin.patel@email.com",
+        "phone": "(555) 555-6677",
+        "stage": "Application Complete",
+        "source": "Past Client Referral",
+        "loan_type": "Refinance - Conventional",
+        "credit_score": 770,
+        "annual_income": 210000,
+        "property_value": 750000,
+        "city": "Southlake",
+        "state": "TX",
+        "employer_name": "McKinsey & Company",
+        "job_title": "Senior Consultant",
+        "referral_source_score": 91,
+        "referral_source_rating": "Strong Referral Source"
+    },
+    {
+        "name": "Amanda Foster",
+        "email": "amanda.foster.client@email.com",
+        "phone": "(555) 666-7788",
+        "stage": "Pre-Approved",
+        "source": "Zillow",
+        "loan_type": "Purchase - VA",
+        "credit_score": 705,
+        "annual_income": 98000,
+        "property_value": 365000,
+        "down_payment": 0,
+        "city": "Keller",
+        "state": "TX",
+        "employer_name": "Lockheed Martin",
+        "job_title": "Systems Engineer",
+        "referral_source_score": 74,
+        "referral_source_rating": "Good Referral Source"
+    },
+    {
+        "name": "Brian Jackson",
+        "email": "brian.jackson@email.com",
+        "phone": "(555) 777-8899",
+        "stage": "Prospect",
+        "source": "Website",
+        "loan_type": "Purchase - Conventional",
+        "credit_score": 715,
+        "annual_income": 115000,
+        "property_value": 410000,
+        "down_payment": 82000,
+        "city": "McKinney",
+        "state": "TX",
+        "employer_name": "Raytheon",
+        "job_title": "Program Manager",
+        "referral_source_score": 83,
+        "referral_source_rating": "Strong Referral Source"
+    },
+    {
+        "name": "Lisa Nguyen",
+        "email": "lisa.nguyen@email.com",
+        "phone": "(555) 888-9900",
+        "stage": "New",
+        "source": "Facebook Ad",
+        "loan_type": "Purchase - FHA",
+        "credit_score": 675,
+        "annual_income": 78000,
+        "property_value": 295000,
+        "down_payment": 10325,
+        "first_time_buyer": True,
+        "city": "Garland",
+        "state": "TX",
+        "employer_name": "AT&T",
+        "job_title": "Account Manager",
+        "referral_source_score": 67,
+        "referral_source_rating": "Good Referral Source"
+    },
+    {
+        "name": "Thomas Mitchell",
+        "email": "thomas.mitchell@email.com",
+        "phone": "(555) 999-0011",
+        "stage": "Application Started",
+        "source": "Realtor Referral",
+        "loan_type": "Purchase - Conventional",
+        "credit_score": 755,
+        "annual_income": 175000,
+        "property_value": 595000,
+        "down_payment": 119000,
+        "city": "Coppell",
+        "state": "TX",
+        "employer_name": "Salesforce",
+        "job_title": "Regional VP",
+        "referral_source_score": 94,
+        "referral_source_rating": "Strong Referral Source"
+    },
+    {
+        "name": "Rachel Kim",
+        "email": "rachel.kim@email.com",
+        "phone": "(555) 000-1122",
+        "stage": "Pre-Approved",
+        "source": "LinkedIn",
+        "loan_type": "Purchase - Jumbo",
+        "credit_score": 785,
+        "annual_income": 275000,
+        "property_value": 925000,
+        "down_payment": 185000,
+        "city": "University Park",
+        "state": "TX",
+        "employer_name": "JPMorgan Chase",
+        "job_title": "Vice President",
+        "referral_source_score": 96,
+        "referral_source_rating": "Strong Referral Source"
+    },
+    {
+        "name": "Steven Garcia",
+        "email": "steven.garcia@email.com",
+        "phone": "(555) 112-2334",
+        "stage": "Prospect",
+        "source": "Website",
+        "loan_type": "Purchase - Conventional",
+        "credit_score": 700,
+        "annual_income": 92000,
+        "property_value": 345000,
+        "down_payment": 69000,
+        "city": "Lewisville",
+        "state": "TX",
+        "employer_name": "State Farm",
+        "job_title": "Claims Manager",
+        "referral_source_score": 72,
+        "referral_source_rating": "Good Referral Source"
+    },
+    {
+        "name": "Emily Thompson",
+        "email": "emily.thompson@email.com",
+        "phone": "(555) 223-3445",
+        "stage": "New",
+        "source": "Google",
+        "loan_type": "Refinance - Cash Out",
+        "credit_score": 745,
+        "annual_income": 155000,
+        "property_value": 565000,
+        "city": "Flower Mound",
+        "state": "TX",
+        "employer_name": "Accenture",
+        "job_title": "Managing Director",
+        "referral_source_score": 89,
+        "referral_source_rating": "Strong Referral Source"
     }
 ]
 
@@ -335,7 +583,7 @@ DEMO_LOANS = [
     }
 ]
 
-# MUM Clients - Client for Life Engine
+# MUM Clients - Client for Life Engine with amortization data
 DEMO_MUM_CLIENTS = [
     {
         "name": "Charles Bennett",
@@ -343,7 +591,10 @@ DEMO_MUM_CLIENTS = [
         "phone": "(555) 111-2222",
         "original_loan_date": 730,  # days ago
         "original_loan_amount": 385000,
-        "current_property_value": 485000,
+        "original_property_value": 450000,
+        "interest_rate": 6.25,
+        "loan_term": 30,
+        "loan_type": "Conventional 30-Year Fixed",
         "engagement_level": "High",
         "last_contact_days": 45,
         "next_milestone": "Home Anniversary",
@@ -356,7 +607,10 @@ DEMO_MUM_CLIENTS = [
         "phone": "(555) 222-3333",
         "original_loan_date": 1095,  # 3 years
         "original_loan_amount": 425000,
-        "current_property_value": 525000,
+        "original_property_value": 475000,
+        "interest_rate": 5.875,
+        "loan_term": 30,
+        "loan_type": "Conventional 30-Year Fixed",
         "engagement_level": "Medium",
         "last_contact_days": 90,
         "next_milestone": "Equity Check-in",
@@ -369,7 +623,10 @@ DEMO_MUM_CLIENTS = [
         "phone": "(555) 333-4444",
         "original_loan_date": 365,  # 1 year
         "original_loan_amount": 295000,
-        "current_property_value": 315000,
+        "original_property_value": 310000,
+        "interest_rate": 6.75,
+        "loan_term": 30,
+        "loan_type": "FHA 30-Year Fixed",
         "engagement_level": "High",
         "last_contact_days": 30,
         "next_milestone": "1-Year Anniversary",
@@ -382,7 +639,10 @@ DEMO_MUM_CLIENTS = [
         "phone": "(555) 444-5555",
         "original_loan_date": 1825,  # 5 years
         "original_loan_amount": 365000,
-        "current_property_value": 495000,
+        "original_property_value": 420000,
+        "interest_rate": 4.125,
+        "loan_term": 30,
+        "loan_type": "VA 30-Year Fixed",
         "engagement_level": "Medium",
         "last_contact_days": 120,
         "next_milestone": "Refinance Opportunity",
@@ -395,7 +655,10 @@ DEMO_MUM_CLIENTS = [
         "phone": "(555) 555-6666",
         "original_loan_date": 545,  # 18 months
         "original_loan_amount": 475000,
-        "current_property_value": 525000,
+        "original_property_value": 500000,
+        "interest_rate": 6.5,
+        "loan_term": 30,
+        "loan_type": "Jumbo 30-Year Fixed",
         "engagement_level": "Low",
         "last_contact_days": 180,
         "next_milestone": "Market Update",
@@ -408,18 +671,223 @@ DEMO_MUM_CLIENTS = [
         "phone": "(555) 666-7777",
         "original_loan_date": 275,  # 9 months
         "original_loan_amount": 335000,
-        "current_property_value": 355000,
+        "original_property_value": 350000,
+        "interest_rate": 7.0,
+        "loan_term": 30,
+        "loan_type": "Conventional 30-Year Fixed",
         "engagement_level": "High",
         "last_contact_days": 20,
         "next_milestone": "6-Month Check-in",
         "city": "Frisco",
         "state": "TX"
+    },
+    {
+        "name": "Andrew Martinez",
+        "email": "andrew.martinez@email.com",
+        "phone": "(555) 777-8888",
+        "original_loan_date": 1460,  # 4 years
+        "original_loan_amount": 285000,
+        "original_property_value": 320000,
+        "interest_rate": 3.75,
+        "loan_term": 15,
+        "loan_type": "Conventional 15-Year Fixed",
+        "engagement_level": "High",
+        "last_contact_days": 60,
+        "next_milestone": "Refinance Review",
+        "city": "Katy",
+        "state": "TX"
+    },
+    {
+        "name": "Catherine Brooks",
+        "email": "catherine.brooks@email.com",
+        "phone": "(555) 888-9999",
+        "original_loan_date": 910,  # 2.5 years
+        "original_loan_amount": 520000,
+        "original_property_value": 580000,
+        "interest_rate": 5.5,
+        "loan_term": 30,
+        "loan_type": "Jumbo 30-Year Fixed",
+        "engagement_level": "Medium",
+        "last_contact_days": 75,
+        "next_milestone": "Market Update",
+        "city": "Southlake",
+        "state": "TX"
+    }
+]
+
+# Team Member Profiles with KPIs (for performance tracking)
+TEAM_MEMBER_PROFILES = [
+    # Processors
+    {
+        "name": "Robert Garcia",
+        "email": "robert.garcia@company.com",
+        "role": "processor",
+        "department": "Processing",
+        "loans_processed": 145,
+        "avg_close_time": 28.5,
+        "satisfaction_score": 4.7,
+        "volume": 42500000
+    },
+    {
+        "name": "Amanda Foster",
+        "email": "amanda.foster@company.com",
+        "role": "processor",
+        "department": "Processing",
+        "loans_processed": 132,
+        "avg_close_time": 31.2,
+        "satisfaction_score": 4.5,
+        "volume": 38200000
+    },
+    {
+        "name": "Kevin Park",
+        "email": "kevin.park@company.com",
+        "role": "processor",
+        "department": "Processing",
+        "loans_processed": 78,
+        "avg_close_time": 35.8,
+        "satisfaction_score": 4.1,
+        "volume": 21500000
+    },
+    {
+        "name": "Diana Cruz",
+        "email": "diana.cruz@company.com",
+        "role": "processor",
+        "department": "Processing",
+        "loans_processed": 95,
+        "avg_close_time": 29.8,
+        "satisfaction_score": 4.6,
+        "volume": 28900000
+    },
+    # Underwriters
+    {
+        "name": "James Mitchell",
+        "email": "james.mitchell@company.com",
+        "role": "underwriter",
+        "department": "Underwriting",
+        "loans_processed": 168,
+        "avg_close_time": 3.2,  # Days in UW
+        "satisfaction_score": 4.8,
+        "volume": 52000000
+    },
+    {
+        "name": "Patricia Wong",
+        "email": "patricia.wong@company.com",
+        "role": "underwriter",
+        "department": "Underwriting",
+        "loans_processed": 142,
+        "avg_close_time": 4.1,
+        "satisfaction_score": 4.4,
+        "volume": 43500000
+    },
+    {
+        "name": "Brian Nelson",
+        "email": "brian.nelson@company.com",
+        "role": "underwriter",
+        "department": "Underwriting",
+        "loans_processed": 89,
+        "avg_close_time": 5.8,  # Slow - underperformer
+        "satisfaction_score": 3.9,  # Low satisfaction - underperformer
+        "volume": 26800000
+    },
+    {
+        "name": "Sandra Kim",
+        "email": "sandra.kim@company.com",
+        "role": "underwriter",
+        "department": "Underwriting",
+        "loans_processed": 156,
+        "avg_close_time": 3.5,
+        "satisfaction_score": 4.6,
+        "volume": 48200000
+    },
+    # Closers
+    {
+        "name": "Mark Thompson",
+        "email": "mark.thompson@company.com",
+        "role": "closer",
+        "department": "Closing",
+        "loans_processed": 178,
+        "avg_close_time": 2.1,
+        "satisfaction_score": 4.9,
+        "volume": 55000000
+    },
+    {
+        "name": "Jennifer Adams",
+        "email": "jennifer.adams@company.com",
+        "role": "closer",
+        "department": "Closing",
+        "loans_processed": 165,
+        "avg_close_time": 2.4,
+        "satisfaction_score": 4.7,
+        "volume": 51200000
+    },
+    {
+        "name": "Carlos Rivera",
+        "email": "carlos.rivera@company.com",
+        "role": "closer",
+        "department": "Closing",
+        "loans_processed": 98,
+        "avg_close_time": 3.8,  # Slow - underperformer
+        "satisfaction_score": 4.2,
+        "volume": 29500000
     }
 ]
 
 # ============================================================================
 # SEED FUNCTIONS
 # ============================================================================
+
+def create_team_member_profiles(db):
+    """Create team member profiles with KPIs for performance tracking"""
+    logger.info("📊 Creating team member profiles with KPIs...")
+
+    created_count = 0
+
+    for member in TEAM_MEMBER_PROFILES:
+        # Check if profile exists
+        existing = db.execute(text("""
+            SELECT id FROM team_member_profiles WHERE email = :email
+        """), {"email": member["email"]}).fetchone()
+
+        if existing:
+            logger.info(f"   ⏭️  Skipped {member['name']} (profile already exists)")
+            continue
+
+        # Calculate start date (random within last 1-5 years)
+        start_days_ago = random.randint(365, 1825)
+        start_date = datetime.now(timezone.utc).date() - timedelta(days=start_days_ago)
+
+        db.execute(text("""
+            INSERT INTO team_member_profiles (
+                name, email, role, department,
+                loans_processed, avg_close_time, satisfaction_score, volume,
+                start_date, status, is_active, is_deleted,
+                created_at, updated_at
+            )
+            VALUES (
+                :name, :email, :role, :department,
+                :loans_processed, :avg_close_time, :satisfaction_score, :volume,
+                :start_date, 'active', true, false,
+                CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+            )
+        """), {
+            "name": member["name"],
+            "email": member["email"],
+            "role": member["role"],
+            "department": member["department"],
+            "loans_processed": member["loans_processed"],
+            "avg_close_time": member["avg_close_time"],
+            "satisfaction_score": member["satisfaction_score"],
+            "volume": member["volume"],
+            "start_date": start_date
+        })
+
+        created_count += 1
+        logger.info(f"   ✅ Created profile: {member['name']} ({member['role']}) - {member['loans_processed']} loans")
+
+    db.commit()
+    logger.info(f"✅ Created {created_count} team member profiles")
+    return created_count
+
 
 def create_team_members(db):
     """Create team hierarchy: leadership → management → operations/sales"""
@@ -513,6 +981,8 @@ def create_leads(db):
                 annual_income, property_value, down_payment,
                 loan_amount, ltv, dti, city, state,
                 first_time_buyer, owner_id, ai_score, sentiment,
+                employer_name, job_title,
+                referral_source_score, referral_source_rating,
                 created_at, updated_at
             )
             VALUES (
@@ -521,6 +991,8 @@ def create_leads(db):
                 :income, :property_value, :down_payment,
                 :loan_amount, :ltv, :dti, :city, :state,
                 :first_time, :owner_id, :ai_score, 'positive',
+                :employer_name, :job_title,
+                :referral_source_score, :referral_source_rating,
                 CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
             )
         """), {
@@ -542,7 +1014,11 @@ def create_leads(db):
             "state": lead.get("state"),
             "first_time": lead.get("first_time_buyer", False),
             "owner_id": owner_id,
-            "ai_score": 50 + random.randint(-20, 30)
+            "ai_score": 50 + random.randint(-20, 30),
+            "employer_name": lead.get("employer_name"),
+            "job_title": lead.get("job_title"),
+            "referral_source_score": lead.get("referral_source_score", 0),
+            "referral_source_rating": lead.get("referral_source_rating")
         })
 
         created_count += 1
@@ -680,17 +1156,19 @@ def create_mum_clients(db):
 
         # Calculate dates
         original_loan_date = datetime.now(timezone.utc) - timedelta(days=client["original_loan_date"])
+        first_payment_date = original_loan_date + timedelta(days=45)  # ~45 days after closing
         last_contact = datetime.now(timezone.utc) - timedelta(days=client["last_contact_days"])
 
-        # Calculate equity
-        equity = client["current_property_value"] - (client["original_loan_amount"] * 0.95)  # Assume 5% paid down
-        equity_percent = (equity / client["current_property_value"]) * 100
+        # Get original property value
+        original_property = client.get("original_property_value", client["original_loan_amount"] * 1.25)
 
         db.execute(text("""
             INSERT INTO mum_clients (
                 name, email, phone, status,
                 original_loan_date, original_loan_amount,
-                current_property_value, estimated_equity,
+                original_property_value, current_property_value,
+                interest_rate, loan_term, loan_type,
+                first_payment_date,
                 last_contact_date, next_touchpoint_type,
                 engagement_score, lifecycle_stage,
                 loan_officer_name, created_at
@@ -698,7 +1176,9 @@ def create_mum_clients(db):
             VALUES (
                 :name, :email, :phone, 'active',
                 :loan_date, :loan_amount,
-                :property_value, :equity,
+                :original_property, :original_property,
+                :interest_rate, :loan_term, :loan_type,
+                :first_payment,
                 :last_contact, :next_milestone,
                 :engagement, 'active',
                 :lo_name, CURRENT_TIMESTAMP
@@ -709,8 +1189,11 @@ def create_mum_clients(db):
             "phone": client["phone"],
             "loan_date": original_loan_date,
             "loan_amount": client["original_loan_amount"],
-            "property_value": client["current_property_value"],
-            "equity": equity,
+            "original_property": original_property,
+            "interest_rate": client.get("interest_rate", 6.5),
+            "loan_term": client.get("loan_term", 30),
+            "loan_type": client.get("loan_type", "Conventional 30-Year Fixed"),
+            "first_payment": first_payment_date,
             "last_contact": last_contact,
             "next_milestone": client["next_milestone"],
             "engagement": 75 if client["engagement_level"] == "High" else 50 if client["engagement_level"] == "Medium" else 25,
@@ -743,6 +1226,9 @@ def seed_all_demo_data():
         team_count = create_team_members(db)
         logger.info("")
 
+        profile_count = create_team_member_profiles(db)
+        logger.info("")
+
         leads_count = create_leads(db)
         logger.info("")
 
@@ -757,10 +1243,11 @@ def seed_all_demo_data():
         logger.info("✅ DEMO DATA SEEDING COMPLETE")
         logger.info("=" * 80)
         logger.info(f"Team Members:   {team_count}")
+        logger.info(f"Team Profiles:  {profile_count}")
         logger.info(f"Leads:          {leads_count}")
         logger.info(f"Active Loans:   {loans_count}")
         logger.info(f"MUM Clients:    {mum_count}")
-        logger.info(f"TOTAL:          {team_count + leads_count + loans_count + mum_count}")
+        logger.info(f"TOTAL:          {team_count + profile_count + leads_count + loans_count + mum_count}")
         logger.info("")
         logger.info("📝 Demo Credentials:")
         logger.info("   All demo users: password = 'demo123'")
@@ -769,10 +1256,11 @@ def seed_all_demo_data():
         return {
             "success": True,
             "team_members": team_count,
+            "team_profiles": profile_count,
             "leads": leads_count,
             "loans": loans_count,
             "mum_clients": mum_count,
-            "total": team_count + leads_count + loans_count + mum_count
+            "total": team_count + profile_count + leads_count + loans_count + mum_count
         }
 
     except Exception as e:

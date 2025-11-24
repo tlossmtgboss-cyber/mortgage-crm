@@ -1164,6 +1164,333 @@ def run_migration(db):
         ('Float Down', 'Option allowing borrower to reduce locked rate if market rates decrease before closing.', 'Origination', 'Rate Lock', '{"Rate Improvement","Float-Down Option"}', '{"Rate Lock","Lock Period"}', 'AI monitors market for float-down triggers based on program rules.', 'Typically requires minimum rate improvement and may have fee.', '{"Internal"}'),
 
         ('Pipeline Report', 'Report showing all active loans by stage with key metrics and risk indicators.', 'Operations', 'Reporting', '{"Pipeline Analysis","Active Loans"}', '{"Pull-Through Rate","Fallout"}', 'AI generates real-time pipeline reports with stage distribution and bottlenecks.', 'Critical for forecasting, capacity planning, and risk management.', '{"Internal"}'),
+
+        # TECHNOLOGY & INTEGRATION
+        ('API Integration', 'Application Programming Interface connection enabling data exchange between systems.', 'Technology', 'Integration', '{"API","Web Services","REST API"}', '{"Webhook","MISMO","LOS"}', 'AI uses APIs to pull data from LOS, credit bureaus, and third-party services.', 'Enables real-time data synchronization across platforms.', '{"Internal"}'),
+
+        ('Webhook', 'Automated HTTP callback triggered by specific events to notify external systems in real-time.', 'Technology', 'Integration', '{"Event Notification","Callback"}', '{"API Integration","Event-Driven"}', 'AI sends webhooks to trigger external workflows when loan status changes.', 'Enables event-driven architecture for instant notifications.', '{"Internal"}'),
+
+        ('LOS', 'Loan Origination System - Core software platform for processing mortgage applications end-to-end.', 'Technology', 'Platform', '{"Loan Origination System","Origination Platform"}', '{"API Integration","Point of Sale"}', 'AI integrates with LOS to access loan data and automate workflows.', 'Central system of record for loan processing operations.', '{"Internal"}'),
+
+        ('MISMO', 'Mortgage Industry Standards Maintenance Organization - Standards consortium defining data formats for mortgage industry.', 'Technology', 'Standards', '{"MISMO XML","MISMO Standards"}', '{"API Integration","Data Format"}', 'AI parses and generates MISMO-compliant data for investor delivery and integrations.', 'Industry-standard format for loan data exchange between systems.', '{"Regulatory"}'),
+
+        ('eNote', 'Electronic promissory note that is the legal equivalent of a paper note.', 'Technology', 'Document', '{"Electronic Note","Digital Note"}', '{"eVault","MERS","Closing"}', 'AI generates eNotes and manages eVault registration process.', 'Legally enforceable electronic version of promissory note.', '{"ESIGN","UETA"}'),
+
+        ('eVault', 'Secure electronic storage system for eNotes and critical loan documents.', 'Technology', 'Document', '{"Electronic Vault","MERS eRegistry"}', '{"eNote","MERS","Document Management"}', 'AI registers eNotes in eVault and manages custody chain.', 'Ensures legal enforceability and transferability of electronic notes.', '{"ESIGN","UETA"}'),
+
+        ('MERS', 'Mortgage Electronic Registration Systems - National electronic registry tracking mortgage ownership and servicing rights.', 'Technology', 'Registry', '{"Mortgage Electronic Registration"}', '{"eNote","eVault","MIN"}', 'AI registers loans with MERS and updates on transfer of ownership or servicing.', 'Eliminates need to record assignments with county for each transfer.', '{"CFPB","Security"}'),
+
+        ('Digital Mortgage', 'End-to-end electronic mortgage process from application through closing with minimal paper.', 'Technology', 'Process', '{"eMortgage","Paperless Mortgage"}', '{"eNote","RON","Digital Closing"}', 'AI orchestrates fully digital workflows including eSign and remote notarization.', 'Reduces processing time and improves borrower experience.', '{"ESIGN","UETA"}'),
+
+        ('RON', 'Remote Online Notarization - Technology enabling notarization via live video conference.', 'Technology', 'Process', '{"Remote Notarization","eNotary"}', '{"Digital Mortgage","eNote","Closing"}', 'AI schedules RON sessions and validates identity verification requirements.', 'Enables fully remote closings without in-person notary.', '{"State Law"}'),
+
+        # MARKETING & LEAD GENERATION
+        ('Lead Source', 'Origin or channel through which a lead entered the system.', 'Marketing', 'Lead Management', '{"Source","Channel","Lead Origin"}', '{"Lead","Attribution","Cost Per Lead"}', 'AI tracks lead source for attribution, performance analysis, and routing rules.', 'Critical for ROI analysis and marketing budget allocation.', '{"Internal"}'),
+
+        ('Cost Per Lead', 'Marketing metric calculating average cost to acquire each lead.', 'Marketing', 'Metrics', '{"CPL","Lead Acquisition Cost"}', '{"Lead Source","ROI","Conversion Rate"}', 'AI calculates CPL by source to optimize marketing spend.', 'Used to evaluate marketing channel effectiveness and budget allocation.', '{"Internal"}'),
+
+        ('Conversion Rate', 'Percentage of leads that convert to applications or funded loans.', 'Marketing', 'Metrics', '{"Lead Conversion","Close Rate"}', '{"Lead Source","Pull-Through Rate","Fallout"}', 'AI tracks conversion rates by source, LO, and loan type for optimization.', 'Key metric for lead quality assessment and sales effectiveness.', '{"Internal"}'),
+
+        ('Attribution', 'Process of crediting lead sources and marketing channels for originated loans.', 'Marketing', 'Analytics', '{"Marketing Attribution","Source Credit"}', '{"Lead Source","Conversion Rate","ROI"}', 'AI attributes closed loans to marketing sources for accurate ROI calculation.', 'Supports data-driven marketing decisions and budget optimization.', '{"Internal"}'),
+
+        ('Nurture Campaign', 'Automated marketing sequence designed to engage inactive leads over time.', 'Marketing', 'Automation', '{"Drip Campaign","Lead Nurturing","Email Campaign"}', '{"Lead Source","Marketing Automation"}', 'AI triggers nurture campaigns based on lead stage, behavior, and engagement.', 'Keeps leads engaged until ready to proceed with application.', '{"Internal"}'),
+
+        ('Landing Page', 'Dedicated web page designed for specific marketing campaign to capture lead information.', 'Marketing', 'Digital', '{"Lead Capture Page","Campaign Page"}', '{"Lead Source","Conversion Rate"}', 'AI tracks landing page performance and optimizes for conversion.', 'Focused page with clear call-to-action for lead generation.', '{"Internal"}'),
+
+        ('Retargeting', 'Digital advertising strategy showing ads to users who previously visited website.', 'Marketing', 'Digital', '{"Remarketing","Behavioral Targeting"}', '{"Lead Source","Digital Marketing"}', 'AI identifies retargeting opportunities based on site behavior and loan status.', 'Re-engages visitors who left without converting to leads.', '{"Internal"}'),
+
+        # PIPELINE & OPERATIONS METRICS (additional ones not already in glossary)
+        ('Cycle Time', 'Average number of days from application to closing for funded loans.', 'Operations', 'Metrics', '{"Days to Close","Processing Time"}', '{"Pull-Through Rate","Pipeline Report","Aging"}', 'AI tracks cycle time by stage to identify bottlenecks and process improvements.', 'Key efficiency metric for operational performance and borrower experience.', '{"Internal Metric"}'),
+
+        ('Pipeline Coverage', 'Ratio of current pipeline value to monthly volume target.', 'Operations', 'Metrics', '{"Coverage Ratio","Pipeline Depth"}', '{"Pipeline Report","Pull-Through Rate","Forecasting"}', 'AI calculates pipeline coverage to ensure sufficient volume to meet targets.', 'Indicates whether pipeline is adequate given expected fallout and pull-through.', '{"Internal"}'),
+
+        ('Suspense Item', 'Outstanding task, document, or condition blocking loan progression.', 'Operations', 'Workflow', '{"Pending Item","Blocker","Outstanding Condition"}', '{"Condition","Task","PTD"}', 'AI flags suspense items and escalates aged items to prevent stalls.', 'Must be cleared before loan can advance to next stage.', '{"Internal"}'),
+
+        ('Aging Report', 'Report showing how long loans have been in current stage or pipeline.', 'Operations', 'Reporting', '{"Days in Stage","Stale Loan Report"}', '{"Cycle Time","Pipeline Report","Escalation"}', 'AI generates aging reports and identifies loans exceeding stage thresholds.', 'Highlights loans at risk of fallout due to extended processing time.', '{"Internal"}'),
+
+        # TITLE & SETTLEMENT
+        ('Title Insurance', 'Insurance policy protecting lender and/or owner against defects in property title.', 'Closing', 'Title', '{"Owner Title","Lender Title","Title Policy"}', '{"Title Search","Title Commitment","Settlement"}', 'AI verifies title insurance coverage amounts and endorsements meet requirements.', 'Protects against claims arising from title defects, liens, or encumbrances.', '{"State Law"}'),
+
+        ('Title Search', 'Examination of public records to verify property ownership history and identify liens.', 'Closing', 'Title', '{"Title Exam","Title Report"}', '{"Title Insurance","Chain of Title","Lien Search"}', 'AI reviews title search results for exceptions requiring resolution before closing.', 'Identifies ownership history, liens, judgments, and encumbrances.', '{"State Law"}'),
+
+        ('Title Commitment', 'Preliminary agreement from title company to issue title insurance policy subject to clearing exceptions.', 'Closing', 'Title', '{"Commitment for Title Insurance","Title Binder"}', '{"Title Insurance","Title Search","Closing"}', 'AI reviews title commitment exceptions and creates tasks to clear title issues.', 'Lists requirements and exceptions that must be satisfied for final policy.', '{"State Law"}'),
+
+        ('Settlement Agent', 'Attorney, title company, or escrow company conducting the loan closing.', 'Closing', 'Process', '{"Closing Agent","Escrow Agent","Settlement Attorney"}', '{"Closing","Title Insurance","CD"}', 'AI coordinates with settlement agent for closing scheduling and document delivery.', 'Facilitates closing, disburses funds, and ensures recording of documents.', '{"RESPA","State Law"}'),
+
+        ('Recording', 'Official filing of mortgage documents with county or state to establish public record of lien.', 'Closing', 'Process', '{"Document Recording","County Recording"}', '{"Security Instrument","Deed","Settlement"}', 'AI tracks recording status and obtains recorded documents for file completion.', 'Establishes lender lien priority and provides public notice of mortgage.', '{"State/Local"}'),
+
+        ('Chain of Title', 'Sequential history of property ownership transfers from original owner to current owner.', 'Closing', 'Title', '{"Title Chain","Ownership History"}', '{"Title Search","Deed","Title Insurance"}', 'AI reviews chain of title for gaps or irregularities that could affect ownership.', 'Continuous ownership transfer history validates current owner rights.', '{"State Law"}'),
+
+        ('Title Exception', 'Item listed on title commitment that is excluded from title insurance coverage.', 'Closing', 'Title', '{"Exception","Title Defect"}', '{"Title Commitment","Title Insurance","Survey"}', 'AI identifies material title exceptions requiring resolution before closing.', 'May include easements, restrictions, or unresolved liens.', '{"State Law"}'),
+
+        ('Mechanic\'s Lien', 'Legal claim by contractor or supplier for unpaid work or materials on property.', 'Closing', 'Title', '{"Construction Lien","Materialman Lien"}', '{"Title Search","Lien","Title Exception"}', 'AI flags mechanic liens requiring payoff or subordination before closing.', 'Takes priority based on work commencement date, potentially ahead of mortgage.', '{"State Law"}'),
+
+        # SERVICING OPERATIONS (additional ones not already in glossary)
+        ('Payment Application', 'Process and hierarchy for allocating borrower payment to principal, interest, escrow, fees, and charges.', 'Servicing', 'Operations', '{"Payment Allocation","Payment Waterfall"}', '{"Servicing","Delinquency","Escrow Account"}', 'AI applies payments per investor guidelines and regulatory requirements.', 'Must follow specified order: fees, interest, principal, then escrow.', '{"RESPA"}'),
+
+        ('Delinquency', 'Status when borrower is late on mortgage payment, typically measured at 30, 60, 90+ days past due.', 'Servicing', 'Collections', '{"Past Due","Late Payment","Default"}', '{"Payment Application","Loss Mitigation","Foreclosure"}', 'AI tracks delinquency status and triggers collection workflows and investor notices.', 'Progressive severity with increased collection efforts and eventual foreclosure.', '{"Investor Guideline"}'),
+
+        ('Loss Mitigation', 'Strategies to help borrower avoid foreclosure including modification, forbearance, and short sale.', 'Servicing', 'Default', '{"Workout Options","Foreclosure Alternatives"}', '{"Delinquency","Modification","Forbearance","Foreclosure"}', 'AI evaluates borrower for loss mitigation options based on hardship and loan characteristics.', 'Required evaluation under CFPB servicing rules before foreclosure referral.', '{"CFPB","CARES Act"}'),
+
+        ('Escrow Analysis', 'Annual review of escrow account to ensure sufficient funds for property taxes and insurance.', 'Servicing', 'Escrow', '{"Escrow Review","Escrow Adjustment"}', '{"Escrow Account","Payment Application","Shortage"}', 'AI performs escrow analysis and calculates payment adjustments for shortages or surpluses.', 'Required annually to adjust monthly payment for tax and insurance changes.', '{"RESPA"}'),
+
+        # HEDGING & SECONDARY MARKET
+        ('Best Efforts Delivery', 'Commitment type where lender has option to deliver loan or pay pair-off fee if loan doesn\'t close.', 'Secondary Market', 'Commitment', '{"Best Efforts","BE Delivery"}', '{"Mandatory Delivery","Pair-Off","Lock Desk"}', 'AI selects best efforts pricing when loan has higher fallout risk.', 'Provides flexibility but typically lower pricing than mandatory.', '{"Internal"}'),
+
+        ('Mandatory Delivery', 'Commitment requiring lender to deliver loan to investor or pay penalty if loan doesn\'t close.', 'Secondary Market', 'Commitment', '{"Mandatory","Mando Delivery"}', '{"Best Efforts Delivery","Pair-Off Fee","Hedge Strategy"}', 'AI uses mandatory commitments for high-confidence locks to maximize pricing.', 'Better pricing than best efforts but exposes lender to pair-off risk.', '{"Internal"}'),
+
+        ('Pair-Off Fee', 'Financial penalty paid when lender fails to deliver loan under mandatory commitment.', 'Secondary Market', 'Risk', '{"Pair-Off","Fallout Penalty"}', '{"Mandatory Delivery","Fallout","Lock Desk"}', 'AI calculates pair-off exposure and incorporates into hedging strategy.', 'Can be significant cost if loan falls out after mandatory commitment.', '{"Internal"}'),
+
+        ('Hedge Strategy', 'Risk management approach to protect against interest rate movements on locked pipeline.', 'Secondary Market', 'Risk Management', '{"Pipeline Hedging","Interest Rate Risk"}', '{"Lock Desk","Forward Commitment","TBA","Mandatory Delivery"}', 'AI recommends hedge positions based on pipeline composition and market volatility.', 'Uses forward commitments and MBS securities to offset rate risk.', '{"Internal"}'),
+
+        ('Forward Commitment', 'Agreement to sell loans to investor at future date at specified price.', 'Secondary Market', 'Commitment', '{"Forward Sale","Takeout Commitment"}', '{"Mandatory Delivery","Best Efforts Delivery","Hedge Strategy"}', 'AI matches loan characteristics to forward commitment terms for investor delivery.', 'Locks in execution price and hedges interest rate risk.', '{"Internal"}'),
+
+        ('TBA', 'To Be Announced - Forward contract for mortgage-backed securities with generic pool characteristics.', 'Secondary Market', 'Hedging', '{"To Be Announced","TBA Market","MBS Forward"}', '{"Hedge Strategy","Forward Commitment","MBS"}', 'AI uses TBA contracts to hedge interest rate risk on locked pipeline.', 'Liquid hedging instrument for managing rate risk before loan closing.', '{"Federal Reserve"}'),
+
+        ('Pipeline Hedging', 'Strategy to protect value of rate-locked pipeline from interest rate movements.', 'Secondary Market', 'Risk Management', '{"Rate Risk Hedge","Lock Hedge"}', '{"Hedge Strategy","Lock Desk","Pull-Through Rate","TBA"}', 'AI adjusts hedge positions based on pull-through assumptions and rate movements.', 'Critical to protect profitability of locked loans until closing.', '{"Internal"}'),
+
+        # ALTERNATIVE PRODUCTS
+        ('Non-QM', 'Non-Qualified Mortgage - Loan not meeting Consumer Financial Protection Bureau QM standards.', 'Origination', 'Product Type', '{"Non-QM","Non-Qualified Mortgage"}', '{"QM","Bank Statement Loan","DSCR Loan"}', 'AI routes non-QM scenarios to appropriate lenders with flexible guidelines.', 'Alternative for borrowers not meeting traditional QM criteria.', '{"Non-QM"}'),
+
+        ('DSCR Loan', 'Debt Service Coverage Ratio loan - Investment property loan qualified based on rental income not personal income.', 'Origination', 'Product Type', '{"DSCR","Investor Loan","Rental Income Loan"}', '{"Non-QM","Investment Property","Rental Income"}', 'AI calculates DSCR ratio (rental income divided by PITI) for qualification.', 'Common for real estate investors with complex tax returns.', '{"Non-QM"}'),
+
+        ('Bank Statement Loan', 'Alternative documentation loan using bank deposits instead of tax returns to verify income.', 'Origination', 'Product Type', '{"Bank Statement Program","Alternative Doc"}', '{"Non-QM","Self-Employment Income"}', 'AI analyzes bank statement deposits to calculate qualifying income for self-employed.', 'Useful for self-employed borrowers with write-offs reducing taxable income.', '{"Non-QM"}'),
+
+        ('Asset Depletion', 'Underwriting method using liquid assets divided by loan term to calculate qualifying income.', 'Underwriting', 'Income Calculation', '{"Asset Dissipation","Asset Qualifier"}', '{"Liquid Assets","Reserves","Non-QM"}', 'AI divides total liquid assets by loan term in months to determine monthly income.', 'Allows borrowers with significant assets but low reported income to qualify.', '{"Non-QM"}'),
+
+        ('Bridge Loan', 'Short-term financing enabling borrower to purchase new home before selling current home.', 'Origination', 'Product Type', '{"Bridge Financing","Swing Loan"}', '{"Purchase Loan","Contingent Sale"}', 'AI structures bridge loans with payoff contingency on sale of existing property.', 'Typically 6-12 month term with higher rates than permanent financing.', '{"Internal"}'),
+
+        ('HELOC', 'Home Equity Line of Credit - Revolving credit line secured by home equity.', 'Origination', 'Product Type', '{"Home Equity Line","Second Lien","Equity Line"}', '{"HCLTV","Second Lien","Revolving Debt"}', 'AI underwrites HELOC based on CLTV/HCLTV and treats full line as debt for qualifying.', 'Revolving credit with draw period followed by repayment period.', '{"GSE","State Law"}'),
+
+        ('Reverse Mortgage', 'Loan for seniors 62+ that pays borrower with no monthly payment required; repaid when home is sold.', 'Origination', 'Product Type', '{"HECM","Home Equity Conversion Mortgage"}', '{"FHA","Non-Recourse","Servicing"}', 'AI validates age, counseling, and equity requirements for reverse mortgages.', 'Complex product requiring HUD counseling and specific disclosures.', '{"HUD","FHA"}'),
+
+        ('Purchase Money Second', 'Second mortgage originated simultaneously with first mortgage to reduce down payment or eliminate PMI.', 'Origination', 'Product Type', '{"Piggyback Loan","80-10-10"}', '{"CLTV","Second Lien","Subordination"}', 'AI coordinates simultaneous closing of first and second liens with proper subordination.', 'Common structures: 80-10-10 or 80-15-5 (first-second-down payment).', '{"Internal"}'),
+
+        # WORKFLOW & PROCESS
+        ('Workflow State Machine', 'System architecture managing loan stage transitions based on defined rules and conditions.', 'Technology', 'Architecture', '{"State Machine","Workflow Engine"}', '{"Loan Stage","Workflow","Automation"}', 'AI orchestrates state transitions ensuring all prerequisites are met before stage advancement.', 'Enforces business rules and prevents premature stage progression.', '{"Internal"}'),
+
+        ('SLA', 'Service Level Agreement - Defined timeframe for completing specific task or process step.', 'Operations', 'Process', '{"Service Level Agreement","Time Commitment"}', '{"Cycle Time","Escalation","Task"}', 'AI monitors SLA compliance and escalates tasks approaching deadline.', 'Ensures timely processing and maintains borrower experience standards.', '{"Internal"}'),
+
+        ('Escalation Path', 'Defined process for routing stuck loans or overdue tasks to higher authority for resolution.', 'Operations', 'Process', '{"Escalation Workflow","Exception Handling"}', '{"SLA","Task","Pipeline Manager"}', 'AI triggers escalations when loans exceed aging thresholds or tasks remain incomplete.', 'Ensures problem loans receive attention to prevent fallout.', '{"Internal"}'),
+
+        ('Parallel Processing', 'Workflow design allowing multiple tasks to be worked simultaneously rather than sequentially.', 'Operations', 'Process', '{"Concurrent Tasks","Simultaneous Processing"}', '{"Workflow","Cycle Time","Efficiency"}', 'AI identifies tasks that can run in parallel to reduce overall cycle time.', 'Accelerates processing by eliminating unnecessary sequential dependencies.', '{"Internal"}'),
+
+        ('Waterfall Logic', 'Sequential decision-making process where each step depends on previous step outcomes.', 'Technology', 'Logic', '{"Decision Tree","If-Then Logic"}', '{"Workflow","Automation","Business Rules"}', 'AI applies waterfall logic to pricing, eligibility, and workflow routing decisions.', 'Ensures decisions follow proper hierarchy and business rule sequence.', '{"Internal"}'),
+
+        ('Trigger Event', 'Specific action or condition change that automatically initiates workflow or notification.', 'Technology', 'Automation', '{"Event Trigger","Workflow Trigger"}', '{"Webhook","Workflow State Machine","Automation"}', 'AI responds to trigger events by launching appropriate workflows or agent actions.', 'Enables event-driven architecture and real-time automation.', '{"Internal"}'),
+
+        ('Condition Clearing', 'Process of satisfying underwriting requirements through document submission or explanation.', 'Operations', 'Process', '{"Clearing Conditions","Satisfying Conditions"}', '{"PTD","PTC","PTF","Underwriting"}', 'AI tracks condition clearing status and routes documents to appropriate reviewer.', 'Critical path activity that must be completed before loan can progress.', '{"Internal"}'),
+
+        # COMMUNICATION & COMPLIANCE
+        ('TCPA', 'Telephone Consumer Protection Act - Federal law regulating telemarketing calls, auto-dialers, and texts.', 'Compliance', 'Communication', '{"Telephone Consumer Protection Act"}', '{"Opt-Out","Consent","Marketing"}', 'AI enforces TCPA consent requirements before placing calls or sending marketing texts.', 'Requires express written consent for marketing communications.', '{"TCPA"}'),
+
+        ('Opt-Out', 'Consumer request to stop receiving marketing communications via specific channel.', 'Compliance', 'Communication', '{"Unsubscribe","Do Not Call","Stop"}', '{"TCPA","Marketing","Communication Cadence"}', 'AI honors opt-out requests and prevents future communications on opted-out channels.', 'Must be honored immediately and maintained in suppression list.', '{"TCPA"}'),
+
+        ('Communication Cadence', 'Frequency and timing of borrower touchpoints throughout loan process.', 'Operations', 'Communication', '{"Contact Frequency","Touch Cadence"}', '{"Customer Engagement","SLA","Marketing"}', 'AI optimizes communication cadence based on loan stage and borrower preferences.', 'Balances keeping borrower informed without over-communicating.', '{"Internal"}'),
+
+        ('NPS', 'Net Promoter Score - Customer satisfaction metric measuring likelihood to recommend.', 'Operations', 'Metrics', '{"Net Promoter Score","Promoter Score"}', '{"CSAT","Customer Satisfaction","Survey"}', 'AI tracks NPS by LO, product, and stage to identify experience improvement opportunities.', 'Key indicator of customer loyalty and potential for referrals.', '{"Internal Metric"}'),
+
+        ('CSAT', 'Customer Satisfaction - Metric measuring borrower satisfaction with loan experience.', 'Operations', 'Metrics', '{"Customer Satisfaction Score","Satisfaction Rating"}', '{"NPS","Survey","Customer Experience"}', 'AI monitors CSAT scores and identifies drivers of satisfaction or dissatisfaction.', 'Typically measured via post-closing survey on 1-5 or 1-10 scale.', '{"Internal Metric"}'),
+
+        ('Touch Point', 'Any interaction or communication between lender and borrower during loan process.', 'Operations', 'Communication', '{"Customer Touch","Interaction Point"}', '{"Communication Cadence","Customer Engagement","SLA"}', 'AI tracks all touch points to ensure consistent borrower communication.', 'Includes calls, emails, texts, portal messages, and in-person meetings.', '{"Internal"}'),
+
+        # PRICING & RATE SHEET TERMS
+        ('Basis Points', 'One hundredth of one percent (0.01%) used to express pricing increments and rate differences.', 'Secondary Market', 'Pricing', '{"BPS","bps"}', '{"LLPA","Rate","Discount Points"}', 'AI calculates pricing adjustments in basis points for precision.', 'Standard unit for expressing rate and pricing changes in mortgage industry.', '{"Internal"}'),
+
+        ('LLPA', 'Loan-Level Price Adjustment - Risk-based pricing add-ons based on credit score, LTV, property type, and other factors.', 'Secondary Market', 'Pricing', '{"Loan-Level Price Adjustment","Price Adjustment"}', '{"Rate Sheet","Credit Score","LTV"}', 'AI calculates total LLPAs to determine final pricing for borrower.', 'Can add or subtract from base price depending on risk factors.', '{"GSE"}'),
+
+        ('Discount Points', 'Upfront fee paid to permanently reduce the interest rate, where one point equals 1% of loan amount.', 'Secondary Market', 'Pricing', '{"Points","Buy Down","Permanent Buydown"}', '{"Origination Points","Par Rate","APR"}', 'AI calculates break-even analysis to determine if discount points benefit borrower.', 'Increases closing costs but reduces monthly payment and total interest paid.', '{"TRID"}'),
+
+        ('Origination Fee', 'Fee charged by lender for processing and originating the loan, typically expressed as percentage or flat fee.', 'Secondary Market', 'Pricing', '{"Origination Points","Origination Charge"}', '{"Discount Points","Lender Fees","Section A"}', 'AI includes origination fee in APR and points/fees test calculations.', 'Disclosed in Section A of Loan Estimate and Closing Disclosure.', '{"TRID","QM/ATR"}'),
+
+        ('Par Rate', 'Interest rate at which loan can be originated with zero discount points and zero lender credits.', 'Secondary Market', 'Pricing', '{"Par Pricing","Zero Points"}', '{"Discount Points","Lender Credit","Rate Sheet"}', 'AI identifies par rate as baseline for buy-up/buy-down analysis.', 'Starting point for rate vs cost tradeoff discussions with borrower.', '{"Internal"}'),
+
+        ('Price Adjustment', 'Pricing add-on or improvement based on specific loan characteristics or risk factors.', 'Secondary Market', 'Pricing', '{"Pricing Hit","Pricing Improvement","Add-On"}', '{"LLPA","Rate Sheet","Risk Factor"}', 'AI aggregates all price adjustments to calculate final execution price.', 'Can be positive (cost) or negative (credit) depending on feature.', '{"Internal"}'),
+
+        ('Rate Sheet', 'Daily pricing matrix showing available interest rates and corresponding costs or credits for different loan scenarios.', 'Secondary Market', 'Pricing', '{"Pricing Matrix","Rate Card"}', '{"Par Rate","LLPA","Lock Desk"}', 'AI parses rate sheet to provide real-time pricing to borrowers and LOs.', 'Updated multiple times daily based on secondary market conditions.', '{"Internal"}'),
+
+        ('Buy-Up/Buy-Down', 'Adjusting interest rate higher to receive lender credit (buy-up) or lower by paying discount points (buy-down).', 'Secondary Market', 'Pricing', '{"Rate vs Cost","Points vs Credit"}', '{"Discount Points","Lender Credit","Par Rate"}', 'AI presents buy-up/buy-down options with break-even analysis.', 'Allows borrower to choose rate vs closing cost tradeoff.', '{"Internal"}'),
+
+        ('Rate Lock Fee', 'Upfront non-refundable fee charged to lock in an interest rate for specified period.', 'Secondary Market', 'Pricing', '{"Lock Fee","Lock-In Fee"}', '{"Rate Lock","Lock Period","Commitment Fee"}', 'AI discloses lock fee on Loan Estimate if charged by lender.', 'More common for longer lock periods or volatile rate environments.', '{"Internal"}'),
+
+        ('Commitment Fee', 'Fee paid to investor to secure loan pricing or delivery commitment.', 'Secondary Market', 'Pricing', '{"Takeout Fee"}', '{"Forward Commitment","Rate Lock","Mandatory Delivery"}', 'AI factors commitment fee into total loan costs and APR calculation.', 'Typically paid on best efforts or mandatory delivery commitments.', '{"Internal"}'),
+
+        # CRM & SALES OPERATIONS
+        ('Hot Lead', 'High-intent lead requiring immediate contact, typically within minutes of inquiry.', 'Marketing', 'Lead Management', '{"Urgent Lead","Immediate Contact"}', '{"Lead Temperature","Lead Score","SLA"}', 'AI prioritizes hot leads for instant routing and follow-up tracking.', 'Highest conversion potential, requires rapid response for best results.', '{"Internal"}'),
+
+        ('Warm Lead', 'Mid-stage lead showing interest but not requiring immediate action, typically contacted within hours.', 'Marketing', 'Lead Management', '{"Mid-Stage Lead"}', '{"Hot Lead","Cold Lead","Lead Temperature"}', 'AI schedules follow-up cadence appropriate for warm lead engagement.', 'Moderate conversion potential, benefits from nurturing and education.', '{"Internal"}'),
+
+        ('Cold Lead', 'Low-engagement lead requiring long-term nurture campaign before likely conversion.', 'Marketing', 'Lead Management', '{"Inactive Lead","Low-Intent Lead"}', '{"Nurture Campaign","Lead Temperature","Lead Score"}', 'AI enrolls cold leads in automated nurture campaigns for long-term engagement.', 'Low immediate conversion potential but may convert over time with proper nurturing.', '{"Internal"}'),
+
+        ('Lead Score', 'Quantified rating of lead quality based on demographic, behavioral, and engagement factors.', 'Marketing', 'Lead Management', '{"Lead Scoring","Lead Quality Score"}', '{"Lead Temperature","Conversion Rate","Hot Lead"}', 'AI calculates lead score to prioritize routing and resource allocation.', 'Combines firmographic, behavioral, and engagement data for predictive ranking.', '{"Internal"}'),
+
+        ('Pre-Qualified', 'Initial assessment based on borrower-stated information without credit pull or documentation.', 'Origination', 'Lead Stage', '{"Pre-Qual","PQ"}', '{"Pre-Approved","Soft Pull","Lead Stage"}', 'AI generates pre-qualification estimates for lead nurturing and conversion.', 'Informal estimate used for initial affordability assessment.', '{"Internal"}'),
+
+        ('Pre-Approved', 'Formal approval based on verified credit, income, and assets with conditional commitment.', 'Origination', 'Lead Stage', '{"Pre-Approval","Conditional Approval"}', '{"Pre-Qualified","Hard Credit Pull","Application"}', 'AI tracks pre-approval status and expiration for pipeline management.', 'Stronger than pre-qual, gives borrower confidence for house hunting.', '{"Internal"}'),
+
+        ('Purchase Intent', 'Lead classification indicating borrower plans to buy property rather than refinance.', 'Marketing', 'Lead Classification', '{"Home Purchase","Buyer Intent"}', '{"Refi Intent","Lead Type","Product Selection"}', 'AI routes purchase-intent leads differently than refi for appropriate product and timeline.', 'Typically longer sales cycle but higher loan amounts than refis.', '{"Internal"}'),
+
+        ('Refi Intent', 'Lead classification indicating borrower seeks to refinance existing mortgage.', 'Marketing', 'Lead Classification', '{"Refinance Intent"}', '{"Purchase Intent","Rate-and-Term Refinance","Cash-Out Refinance"}', 'AI qualifies refi intent leads for rate improvement or cash-out opportunities.', 'Shorter sales cycle than purchase, sensitive to rate movements.', '{"Internal"}'),
+
+        ('Lead Temperature', 'Classification system indicating lead urgency and engagement level (hot/warm/cold).', 'Marketing', 'Lead Management', '{"Lead Heat","Urgency Level"}', '{"Hot Lead","Warm Lead","Cold Lead","Lead Score"}', 'AI assigns lead temperature based on recency, frequency, and behavior signals.', 'Determines appropriate follow-up cadence and resource allocation.', '{"Internal"}'),
+
+        ('CRM Status', 'Detailed substage within loan pipeline indicating specific workflow position.', 'Operations', 'Pipeline', '{"Loan Status","Pipeline Stage","Substage"}', '{"Loan Stage","Workflow State Machine","Pipeline Report"}', 'AI updates CRM status based on completed milestones and next-step triggers.', 'More granular than loan stage, provides operational visibility.', '{"Internal"}'),
+
+        # SPECIFIC FORMS
+        ('1003 (URLA)', 'Uniform Residential Loan Application - Standardized mortgage application form required by GSEs.', 'Origination', 'Forms', '{"URLA","Form 1003","Fannie Mae 1003"}', '{"Application","Final 1003","Borrower Information"}', 'AI extracts data from 1003 to populate loan file and trigger workflows.', 'Primary source document for borrower demographics, income, assets, and liabilities.', '{"GSE"}'),
+
+        ('1004 Form', 'Uniform Residential Appraisal Report - Standard form for single-family property appraisals.', 'Collateral', 'Forms', '{"URAR","Fannie Mae 1004"}', '{"Appraisal","1025","Comparable Sales"}', 'AI parses 1004 to extract property value, condition, and comparable sales data.', 'Most common appraisal form for 1-unit properties.', '{"GSE","AIR"}'),
+
+        ('1008 Form', 'Uniform Underwriting and Transmittal Summary - Summary of loan data and underwriting decision.', 'Underwriting', 'Forms', '{"Transmittal Summary","Fannie Mae 1008"}', '{"Final 1003","Underwriting Decision","Loan Delivery"}', 'AI generates 1008 summarizing key loan characteristics for investor delivery.', 'Required for manual underwriting or as summary for investor purchase.', '{"GSE"}'),
+
+        ('1025 Form', 'Small Residential Income Property Appraisal Report - Appraisal form for 2-4 unit properties.', 'Collateral', 'Forms', '{"Income Property Appraisal","Fannie Mae 1025"}', '{"1004 Form","2-4 Unit Property","Rental Income"}', 'AI extracts property value and rental income data from 1025 for income properties.', 'Used for multi-family properties up to 4 units.', '{"GSE"}'),
+
+        ('4506-C', 'IRS Request for Transcript of Tax Return - Form used to order tax transcripts directly from IRS.', 'Underwriting', 'Forms', '{"Tax Transcript Request","IRS Form 4506-C"}', '{"Tax Return","Income Verification","1040"}', 'AI validates 4506-C is signed and submitted for income documentation.', 'Required for most conforming loans to verify tax return accuracy.', '{"GSE","IRS"}'),
+
+        ('1040', 'U.S. Individual Income Tax Return - Primary tax form filed by individuals annually.', 'Underwriting', 'Forms', '{"Tax Return","Federal Return"}', '{"4506-C","Schedule C","W-2 Income","Self-Employment Income"}', 'AI analyzes 1040 to calculate qualifying income for self-employed borrowers.', 'Primary document for income verification from tax returns.', '{"IRS"}'),
+
+        ('1099 Form', 'Miscellaneous income reporting form for non-employee compensation, interest, dividends, etc.', 'Underwriting', 'Forms', '{"1099-MISC","1099-INT","1099-DIV","Non-W-2 Income"}', '{"1040","Self-Employment Income","Interest Income"}', 'AI reviews 1099s to verify non-wage income reported on tax returns.', 'Various types report different income sources (interest, dividends, contractor pay).', '{"IRS"}'),
+
+        ('Schedule C', 'Profit or Loss from Business - Tax form reporting self-employment business income and expenses.', 'Underwriting', 'Forms', '{"Schedule C","Sole Proprietor"}', '{"Self-Employment Income","1040","Tax Return"}', 'AI calculates qualifying income from Schedule C with add-backs and trending.', 'Primary form for sole proprietor self-employment income analysis.', '{"IRS"}'),
+
+        ('8821', 'Tax Information Authorization - Form authorizing IRS to release tax information to third party.', 'Underwriting', 'Forms', '{"IRS Form 8821"}', '{"4506-C","Tax Return"}', 'AI tracks 8821 execution for lenders who use it for tax transcript access.', 'Alternative to 4506-C used by some lenders for tax verification.', '{"IRS"}'),
+
+        ('Final 1003', 'Executed and signed URLA reflecting final loan terms at closing.', 'Closing', 'Forms', '{"Signed Application","Closing 1003"}', '{"1003 (URLA)","Closing Disclosure","Loan Documents"}', 'AI ensures final 1003 matches approved terms and is properly executed.', 'Required closing document confirming borrower application accuracy.', '{"GSE"}'),
+
+        # BUSINESS CHANNELS
+        ('Retail Channel', 'Direct-to-consumer lending model where lender employs loan officers to originate loans directly with borrowers.', 'Operations', 'Business Model', '{"Direct Lending","Retail"}', '{"Wholesale Channel","Correspondent Lending","Branch Network"}', 'AI routes retail-sourced loans through appropriate pricing and operations workflows.', 'Highest margin but requires significant overhead for branches and staff.', '{"Internal"}'),
+
+        ('Wholesale Channel', 'Business model where mortgage broker originates loans that lender underwrites and funds.', 'Operations', 'Business Model', '{"Broker Channel","Wholesale"}', '{"Retail Channel","TPO","Correspondent Lending","Broker"}', 'AI applies wholesale pricing and broker compensation rules to broker-originated loans.', 'Lower cost structure than retail but lower margins due to broker compensation.', '{"Internal"}'),
+
+        ('Correspondent Lending', 'Business model where lender purchases closed loans from other lenders who originated, underwrote, and funded.', 'Operations', 'Business Model', '{"Correspondent Channel","Corr Lending"}', '{"Wholesale Channel","TPO","Delegated Authority","Mini-Correspondent"}', 'AI validates correspondent loans meet purchasing lender guidelines before acquisition.', 'Allows smaller lenders to sell loans while maintaining borrower relationship.', '{"Internal"}'),
+
+        ('Broker Channel', 'Mortgage origination through independent mortgage brokers who submit to multiple lenders.', 'Operations', 'Business Model', '{"Third-Party Broker"}', '{"Wholesale Channel","TPO","Table Funding","Net Funding"}', 'AI applies broker-specific pricing overlays and compensation limits.', 'Broker does not fund loan, acts as intermediary for fee.', '{"RESPA","LO Comp"}'),
+
+        ('TPO', 'Third-Party Origination - Umbrella term for wholesale and correspondent channels combined.', 'Operations', 'Business Model', '{"Third-Party Origination","Non-Retail"}', '{"Wholesale Channel","Correspondent Lending","Broker Channel"}', 'AI segments TPO volume separately from retail for reporting and operations.', 'All non-direct lending channels requiring partner management.', '{"Internal"}'),
+
+        ('Direct Lender', 'Lender that uses own funds or warehouse line to originate and fund loans directly.', 'Operations', 'Business Model', '{"Portfolio Lender","Balance Sheet Lender"}', '{"Broker","Correspondent Lending","Warehouse Line"}', 'AI identifies direct lender loans for different risk and servicing treatment.', 'Maintains control of entire loan process from origination through funding.', '{"Internal"}'),
+
+        ('Mini-Correspondent', 'Hybrid model where correspondent has delegated underwriting authority similar to wholesale broker.', 'Operations', 'Business Model', '{"Mini-Corr"}', '{"Correspondent Lending","Delegated Authority","Wholesale Channel"}', 'AI applies mini-corr guidelines balancing correspondent purchase with delegated risk.', 'Correspondent closes in own name but with significant lender oversight.', '{"Internal"}'),
+
+        ('Table Funding', 'Broker-originated loan where lender provides funds at closing table, then loan is immediately assigned to lender.', 'Operations', 'Business Model', '{"Table-Funded"}', '{"Broker Channel","Wholesale Channel","Net Funding"}', 'AI ensures table-funded loans meet TILA disclosure and timing requirements.', 'Broker appears as lender on closing docs but immediately transfers to actual lender.', '{"RESPA","TILA"}'),
+
+        ('Net Funding', 'Funding method where lender wires net proceeds after deducting broker compensation.', 'Operations', 'Business Model', '{"Net Wire","Broker Net Funding"}', '{"Broker Channel","Table Funding","Wholesale Channel"}', 'AI calculates net funding amount by subtracting broker comp from gross proceeds.', 'Broker receives compensation through net funding calculation at closing.', '{"Internal"}'),
+
+        ('Delegated Authority', 'Underwriting discretion granted to correspondent or broker to approve loans without investor pre-review.', 'Operations', 'Business Model', '{"Delegated Underwriting","Delegated"}', '{"Correspondent Lending","Non-Delegated","Mini-Correspondent"}', 'AI tracks delegated authority levels and applies appropriate quality control sampling.', 'Higher risk to purchasing lender but faster turn times and better pricing for seller.', '{"Investor Guideline"}'),
+
+        # DOWN PAYMENT ASSISTANCE (DPA)
+        ('DPA Program', 'Down payment assistance program providing grants or loans to help borrowers with upfront costs.', 'Origination', 'Assistance', '{"Down Payment Assistance","DPA"}', '{"Soft Second","Forgivable Loan","DPA Grant"}', 'AI validates DPA program eligibility and structures loan to meet investor guidelines.', 'Can be grant, loan, or forgivable loan depending on program structure.', '{"GSE","FHA","State/Local"}'),
+
+        ('Soft Second', 'Second mortgage with no payment (0% interest) used as down payment assistance, often forgivable.', 'Origination', 'Assistance', '{"Silent Second","DPA Second"}', '{"DPA Program","Forgivable Loan","CLTV"}', 'AI includes soft second in CLTV calculation and validates repayment terms.', 'Typically forgiven over time if borrower maintains occupancy.', '{"GSE"}'),
+
+        ('Forgivable Loan', 'DPA structured as loan that is forgiven over time if borrower meets occupancy requirements.', 'Origination', 'Assistance', '{"Forgivable DPA"}', '{"DPA Program","Soft Second","Recapture Tax"}', 'AI tracks forgiveness schedule and occupancy requirements for compliance.', 'Becomes grant if borrower remains in home for specified period (typically 5 years).', '{"GSE","HUD"}'),
+
+        ('Recapture Tax', 'Federal tax recapturing portion of first-time homebuyer credit or subsidy if home sold within 9 years.', 'Origination', 'Assistance', '{"Federal Recapture","DPA Recapture"}', '{"Forgivable Loan","DPA Program","IRS"}', 'AI discloses potential recapture tax obligation to borrowers using certain DPA.', 'Applies to federally-subsidized programs with below-market rates.', '{"IRS"}'),
+
+        ('DPA Grant', 'Non-repayable down payment assistance provided as outright grant to borrower.', 'Origination', 'Assistance', '{"Grant Funds","Gift Assistance"}', '{"DPA Program","Forgivable Loan","Income Limits"}', 'AI documents DPA grant source and ensures compliance with investor requirements.', 'True grant with no repayment required, subject to income/price limits.', '{"State/Local"}'),
+
+        ('Community Seconds', 'Local government or non-profit second lien programs providing affordable down payment assistance.', 'Origination', 'Assistance', '{"Community DPA","Affordable Housing Programs"}', '{"Soft Second","DPA Program","Income Limits"}', 'AI validates community seconds meet GSE subordinate financing requirements.', 'Typically offered by cities, counties, or housing authorities.', '{"State/Local","GSE"}'),
+
+        ('Income Limits', 'Maximum household income thresholds for DPA program eligibility, typically based on area median income (AMI).', 'Origination', 'Assistance', '{"AMI Limits","DPA Income Limits"}', '{"DPA Program","Area Median Income"}', 'AI verifies borrower income against DPA program limits for qualification.', 'Limits vary by county and household size, often 80-120% AMI.', '{"HUD","State/Local"}'),
+
+        ('Employer Assistance', 'Down payment or closing cost assistance provided by borrower employer as recruitment/retention benefit.', 'Origination', 'Assistance', '{"Employer DPA","Company Housing Benefit"}', '{"DPA Program","Gift Funds"}', 'AI documents employer assistance and ensures arm-length relationship with seller.', 'Must document no seller interest in providing employer for GSE acceptance.', '{"GSE"}'),
+
+        # LIFE OF LOAN EVENTS
+        ('Loan Assumption', 'Transfer of mortgage to new borrower who assumes responsibility for existing loan terms.', 'Servicing', 'Life Event', '{"Assumption","Transfer of Obligation"}', '{"Loan Transfer","Due-on-Sale Clause","Qualifying Assumption"}', 'AI validates new borrower qualification and processes assumption documentation.', 'Requires lender approval and creditworthiness review of assuming party.', '{"GSE","FHA","VA"}'),
+
+        ('Loan Modification', 'Permanent change to loan terms (rate, payment, balance) to make mortgage affordable for borrower.', 'Servicing', 'Life Event', '{"Modification","Perm Mod"}', '{"Forbearance Agreement","Loss Mitigation","Trial Payment Plan"}', 'AI evaluates modification options based on investor guidelines and hardship documentation.', 'Permanent solution to delinquency, typically follows trial period.', '{"CFPB","Investor Guideline"}'),
+
+        ('Forbearance Agreement', 'Temporary suspension or reduction of mortgage payments due to borrower hardship.', 'Servicing', 'Life Event', '{"Forbearance Plan","Payment Suspension"}', '{"Loan Modification","Repayment Plan","Loss Mitigation"}', 'AI tracks forbearance period and coordinates repayment or modification after expiration.', 'Temporary relief, not permanent solution, requires repayment plan afterward.', '{"CFPB","CARES Act"}'),
+
+        ('Repayment Plan', 'Structured agreement to catch up missed payments by adding to regular monthly payment.', 'Servicing', 'Life Event', '{"Payment Plan","Catch-Up Plan"}', '{"Forbearance Agreement","Delinquency","Loss Mitigation"}', 'AI calculates affordable repayment amounts based on borrower capacity.', 'Spreads delinquent payments over 3-12 months added to regular payment.', '{"CFPB"}'),
+
+        ('Short Sale', 'Pre-foreclosure sale of property where lender agrees to accept less than outstanding loan balance.', 'Servicing', 'Life Event', '{"Pre-Foreclosure Sale"}', '{"Foreclosure","Deed in Lieu","Loss Mitigation"}', 'AI evaluates short sale proposals and calculates net recovery vs foreclosure.', 'Alternative to foreclosure, typically less damaging to borrower credit than foreclosure.', '{"Investor Guideline"}'),
+
+        ('Deed in Lieu', 'Borrower voluntarily transfers property deed to lender to avoid foreclosure process.', 'Servicing', 'Life Event', '{"DIL","Deed in Lieu of Foreclosure"}', '{"Foreclosure","Short Sale","Loss Mitigation"}', 'AI assesses deed in lieu as foreclosure alternative and coordinates title transfer.', 'Faster and less costly than foreclosure, requires clear title.', '{"Investor Guideline"}'),
+
+        ('Principal Reduction', 'Permanent write-down of loan balance as loss mitigation strategy.', 'Servicing', 'Life Event', '{"Balance Reduction","Principal Forgiveness"}', '{"Loan Modification","Loss Mitigation","Underwater"}', 'AI evaluates principal reduction against investor guidelines and net present value.', 'Rare option, typically only for deeply underwater loans in modification programs.', '{"Investor Guideline"}'),
+
+        ('Rate Modification', 'Permanent change to loan interest rate as part of modification or loss mitigation.', 'Servicing', 'Life Event', '{"Rate Change","Permanent Rate Reduction"}', '{"Loan Modification","Trial Payment Plan"}', 'AI calculates new payment based on modified rate to achieve target affordability.', 'More common than principal reduction, reduces monthly payment burden.', '{"Investor Guideline"}'),
+
+        ('Term Extension', 'Lengthening loan term (e.g., 30 to 40 years) to reduce monthly payment.', 'Servicing', 'Life Event', '{"Extended Term","Maturity Date Extension"}', '{"Loan Modification","Payment Reduction"}', 'AI extends loan term to calculate lower monthly payment within investor parameters.', 'Reduces payment but increases total interest paid over loan life.', '{"Investor Guideline"}'),
+
+        ('Trial Payment Plan', 'Temporary period (typically 3 months) testing borrower ability before permanent modification.', 'Servicing', 'Life Event', '{"TPP","Trial Period","Trial Mod"}', '{"Loan Modification","Permanent Modification"}', 'AI tracks trial payments and initiates permanent modification upon successful completion.', 'Successful completion of trial required for permanent modification approval.', '{"CFPB","Investor Guideline"}'),
+
+        # LO COMPENSATION & LICENSING
+        ('SAFE Act', 'Secure and Fair Enforcement for Mortgage Licensing Act - Federal law requiring mortgage loan originator licensing.', 'Compliance', 'Licensing', '{"S.A.F.E. Act"}', '{"NMLS","MLO","State Licensing"}', 'AI validates all loan originators have active NMLS registration before accepting applications.', 'Establishes minimum licensing standards for residential mortgage originators.', '{"Federal","NMLS"}'),
+
+        ('NMLS', 'Nationwide Multistate Licensing System - Registry and licensing system for mortgage professionals.', 'Compliance', 'Licensing', '{"National Registry"}', '{"SAFE Act","MLO","State Licensing","CE Requirements"}', 'AI verifies NMLS ID is active and state-licensed for loan originator on all files.', 'Tracks licensing, education, and disciplinary history for MLOs nationwide.', '{"NMLS"}'),
+
+        ('MLO', 'Mortgage Loan Originator - Individual licensed to originate residential mortgage loans.', 'Compliance', 'Licensing', '{"Loan Originator","Loan Officer","LO"}', '{"NMLS","SAFE Act","Originator Compensation"}', 'AI validates MLO credentials and tracks compensation for compliance.', 'Must be licensed through NMLS and meet education/testing requirements.', '{"SAFE Act","NMLS"}'),
+
+        ('Originator Compensation', 'Total compensation paid to mortgage loan originator including commission, bonuses, and incentives.', 'Compliance', 'LO Comp', '{"LO Comp","MLO Compensation"}', '{"MLO","Loan Originator Compensation Rule","Dual Compensation"}', 'AI tracks and discloses LO compensation per federal compensation rules.', 'Subject to restrictions prohibiting dual compensation and steering.', '{"LO Comp","TILA"}'),
+
+        ('Loan Originator Compensation Rule', 'Federal Reserve regulation prohibiting dual compensation and steering in LO compensation.', 'Compliance', 'LO Comp', '{"LO Comp Rule","Reg Z Comp Rule"}', '{"Originator Compensation","Dual Compensation","Steering"}', 'AI enforces LO comp rule by preventing compensation tied to loan terms.', 'Prohibits paying LO based on loan terms other than amount.', '{"LO Comp","TILA"}'),
+
+        ('Net Tangible Benefit', 'Required showing that refinance provides measurable benefit to borrower, mandated in some states and VA loans.', 'Compliance', 'Consumer Protection', '{"NTB","Tangible Benefit"}', '{"Rate-and-Term Refinance","VA","State Law"}', 'AI calculates net tangible benefit to ensure refinance meets state/program requirements.', 'Prevents refinances that only benefit lender without borrower gain.', '{"VA","Net Tangible Benefit","State Law"}'),
+
+        ('Steering', 'Prohibited practice of directing borrower to loan with worse terms for higher LO compensation.', 'Compliance', 'LO Comp', '{"Prohibited Steering"}', '{"Loan Originator Compensation Rule","Dual Compensation"}', 'AI monitors for steering by tracking presented options and chosen loan terms.', 'Requires presenting options in borrower best interest, not highest comp.', '{"LO Comp","TILA"}'),
+
+        ('Dual Compensation', 'Prohibited practice where LO receives compensation from both borrower and lender on same transaction.', 'Compliance', 'LO Comp', '{"Double Comp"}', '{"Loan Originator Compensation Rule","Originator Compensation"}', 'AI prevents dual compensation by blocking borrower charges when LO paid by lender.', 'One of core prohibitions under LO compensation rule.', '{"LO Comp","TILA"}'),
+
+        ('CE Requirements', 'Continuing Education hours required annually to maintain mortgage license.', 'Compliance', 'Licensing', '{"Continuing Education","Annual CE"}', '{"NMLS","MLO","SAFE Act"}', 'AI tracks CE compliance and alerts when MLO nearing renewal deadline.', 'Typically 8 hours annually including federal law, ethics, and state topics.', '{"NMLS"}'),
+
+        ('State Licensing', 'State-specific mortgage originator licensing requirements beyond federal NMLS registration.', 'Compliance', 'Licensing', '{"State License","State Registration"}', '{"NMLS","SAFE Act","MLO"}', 'AI validates state-specific licensing for MLO in state where property located.', 'Each state has unique licensing, education, and testing requirements.', '{"State Law","NMLS"}'),
+
+        # RENOVATION LOANS
+        ('203(k) Loan', 'FHA renovation loan financing both purchase/refinance and renovation costs in single mortgage.', 'Origination', 'Product Type', '{"FHA 203k","203k Rehab Loan"}', '{"HomeStyle Renovation","CHOICERenovation","As-Is Value","After-Improved Value"}', 'AI coordinates 203(k) requirements including consultant, draw schedule, and appraisal.', 'Allows buyers to finance fixer-uppers with single loan including repairs.', '{"FHA","HUD"}'),
+
+        ('HomeStyle Renovation', 'Fannie Mae renovation loan product financing property purchase/refi plus improvement costs.', 'Origination', 'Product Type', '{"HomeStyle","Fannie Mae Renovation"}', '{"203(k) Loan","CHOICERenovation","Renovation Holdback"}', 'AI processes HomeStyle loans with renovation budget and contractor requirements.', 'Conventional alternative to FHA 203(k) with higher loan limits.', '{"GSE"}'),
+
+        ('CHOICERenovation', 'Freddie Mac renovation loan product similar to Fannie Mae HomeStyle.', 'Origination', 'Product Type', '{"Choice Renovation","Freddie Mac Renovation"}', '{"HomeStyle Renovation","203(k) Loan","Draw Schedule"}', 'AI coordinates CHOICERenovation workflows including contractor qualification and draws.', 'Freddie Mac version of renovation financing with similar structure to HomeStyle.', '{"GSE"}'),
+
+        ('As-Is Value', 'Current property value in present condition before any renovations or improvements.', 'Collateral', 'Renovation', '{"Current Value","Pre-Renovation Value"}', '{"After-Improved Value","Renovation Holdback","203(k) Loan"}', 'AI uses as-is value for LTV calculation and minimum required investment.', 'Appraisal reflects current condition, not potential after repairs.', '{"GSE","FHA"}'),
+
+        ('After-Improved Value', 'Projected property value after completion of planned renovations and improvements.', 'Collateral', 'Renovation', '{"After-Repair Value","ARV","Post-Renovation Value"}', '{"As-Is Value","Renovation Holdback","Appraisal"}', 'AI uses after-improved value to determine maximum loan amount on renovation loans.', 'Appraisal includes hypothetical value assuming successful completion of work.', '{"GSE","FHA"}'),
+
+        ('Renovation Holdback', 'Portion of loan proceeds held in escrow for payment to contractors as work completed.', 'Origination', 'Renovation', '{"Rehab Holdback","Escrow Holdback"}', '{"Draw Schedule","Renovation Consultant","203(k) Loan"}', 'AI manages holdback releases based on inspection approvals and draw requests.', 'Protects lender by ensuring funds disbursed only for completed work.', '{"GSE","FHA"}'),
+
+        ('Draw Schedule', 'Timeline and milestones for releasing renovation holdback funds as work progresses.', 'Origination', 'Renovation', '{"Payment Schedule","Disbursement Schedule"}', '{"Renovation Holdback","Renovation Consultant","203(k) Loan"}', 'AI tracks draw requests against approved schedule and inspection results.', 'Typically multiple draws aligned with construction milestones.', '{"GSE","FHA"}'),
+
+        ('Renovation Consultant', 'Required third-party professional who inspects work and approves draw requests on renovation loans.', 'Origination', 'Renovation', '{"203k Consultant","HUD Consultant"}', '{"203(k) Loan","Draw Schedule","Renovation Holdback"}', 'AI coordinates consultant inspections and draw approval process.', 'FHA requires HUD-approved consultant for 203(k) loans.', '{"FHA","HUD"}'),
+
+        # COMPENSATING FACTORS
+        ('Compensating Factors', 'Positive attributes offsetting risk factors to support loan approval despite guideline concerns.', 'Underwriting', 'Risk Assessment', '{"Risk Offsets","Mitigating Factors"}', '{"Refer with Caution","Manual Underwriting","Significant Reserves"}', 'AI identifies and documents compensating factors for marginal approvals.', 'Strengthen loan file for AUS refers or manual underwriting approvals.', '{"GSE"}'),
+
+        ('Significant Reserves', 'Liquid assets exceeding standard requirements, typically 6+ months PITI, used as compensating factor.', 'Underwriting', 'Compensating Factor', '{"Substantial Reserves","Excess Reserves"}', '{"Reserves","Compensating Factors","Liquid Assets"}', 'AI calculates months of reserves and flags as compensating factor for approval.', 'Strong offset for high DTI or marginal credit, shows financial stability.', '{"GSE"}'),
+
+        ('Minimal Consumer Debt', 'Low debt-to-income ratio outside housing payment, showing conservative debt management.', 'Underwriting', 'Compensating Factor', '{"Low Non-Housing Debt"}', '{"Compensating Factors","DTI","Front-End DTI"}', 'AI highlights minimal consumer debt as positive factor in underwriting decision.', 'Demonstrates disciplined credit use and payment capacity.', '{"GSE"}'),
+
+        ('Substantial Down Payment', 'Down payment significantly exceeding minimum requirement, typically 20% or more.', 'Underwriting', 'Compensating Factor', '{"Large Down Payment","High Equity"}', '{"Compensating Factors","LTV","Skin in the Game"}', 'AI emphasizes substantial down payment as strong compensating factor.', 'Shows commitment and financial strength, reduces default risk.', '{"GSE"}'),
+
+        ('Stable Employment', 'Long job tenure with same employer or industry, indicating income reliability.', 'Underwriting', 'Compensating Factor', '{"Job Stability","Long Tenure"}', '{"Compensating Factors","Employment History","VOE"}', 'AI tracks employment history and highlights stability as positive factor.', 'Typically 2+ years same employer or consistent industry progression.', '{"GSE"}'),
+
+        ('Residual Income', 'Funds remaining after all obligations, used especially in VA loans and as compensating factor.', 'Underwriting', 'Compensating Factor', '{"Disposable Income","Cash Flow"}', '{"Compensating Factors","DTI","VA"}', 'AI calculates residual income to show payment capacity beyond DTI ratio.', 'Particularly important for VA loans with residual income tables.', '{"VA","GSE"}'),
+
+        ('Credit History Explanation', 'Valid documented reason for past credit issues that no longer reflect current creditworthiness.', 'Underwriting', 'Compensating Factor', '{"Letter of Explanation","LOE","Extenuating Circumstances"}', '{"Compensating Factors","Credit Report","Derogatory Credit"}', 'AI prompts for credit explanation when past issues present but recent history strong.', 'One-time event (medical, divorce, layoff) with recovery evidence strengthens file.', '{"GSE"}'),
+
+        ('Co-Borrower Income', 'Strong secondary income source from co-borrower adding payment capacity and stability.', 'Underwriting', 'Compensating Factor', '{"Secondary Income","Joint Application"}', '{"Compensating Factors","DTI","Employment History"}', 'AI evaluates co-borrower income strength as factor supporting marginal primary borrower.', 'Diversifies income sources and improves overall debt-to-income.', '{"GSE"}'),
+
+        # CLOSING COST BREAKDOWN
+        ('Section A - Origination Charges', 'Loan Estimate and Closing Disclosure section listing lender fees for originating the loan.', 'Closing', 'LE/CD Sections', '{"Origination Charges","LE Section A"}', '{"Origination Fee","Discount Points","Loan Estimate"}', 'AI populates Section A with origination fee, points, and lender charges.', 'Subject to zero tolerance - cannot increase from LE to CD.', '{"TRID"}'),
+
+        ('Section B - Services You Cannot Shop For', 'LE/CD section for required services where borrower cannot choose provider.', 'Closing', 'LE/CD Sections', '{"Cannot Shop","LE Section B"}', '{"Appraisal","Credit Report","Flood Certification","Tax Service"}', 'AI lists services in Section B subject to 10% cumulative tolerance.', 'Includes appraisal, credit report, flood cert, tax service, and similar required services.', '{"TRID"}'),
+
+        ('Section C - Services You Can Shop For', 'LE/CD section for services where borrower can choose their own provider.', 'Closing', 'LE/CD Sections', '{"Can Shop","LE Section C"}', '{"Title Insurance","Settlement Agent","Survey","Pest Inspection"}', 'AI identifies Section C services subject to 10% tolerance if borrower uses lender provider.', 'Unlimited tolerance if borrower selects own provider not on lender list.', '{"TRID"}'),
+
+        ('Section E - Taxes and Government Fees', 'LE/CD section listing recording fees, transfer taxes, and other government charges.', 'Closing', 'LE/CD Sections', '{"Government Fees","LE Section E"}', '{"Recording","Transfer Tax","Closing Disclosure"}', 'AI calculates Section E charges based on jurisdiction and loan amount.', 'Zero tolerance if paid to government, 10% if paid to other party.', '{"TRID"}'),
+
+        ('Section F - Prepaids', 'LE/CD section for prepaid items collected at closing (interest, insurance, taxes).', 'Closing', 'LE/CD Sections', '{"Prepaids","LE Section F"}', '{"Prepaid Interest","Homeowners Insurance","Property Tax"}', 'AI calculates Section F prepaids based on closing date and payment cycles.', 'No tolerance limit - can vary from LE to CD based on actual closing date.', '{"TRID"}'),
+
+        ('Section G - Initial Escrow Payment', 'LE/CD section showing escrow account setup with cushion for taxes and insurance.', 'Closing', 'LE/CD Sections', '{"Escrow Setup","LE Section G"}', '{"Initial Escrow Disclosure","Escrow Account","Escrow Cushion"}', 'AI calculates Section G escrow setup based on tax/insurance due dates.', 'No tolerance limit - actual amount based on disbursement schedule.', '{"TRID"}'),
+
+        ('Section H - Other', 'LE/CD section for miscellaneous charges like HOA fees, warranties, owner title insurance.', 'Closing', 'LE/CD Sections', '{"Other Charges","LE Section H"}', '{"HOA Fees","Home Warranty","Owner Title Insurance"}', 'AI includes Section H items based on transaction specifics and borrower elections.', 'Various tolerance categories depending on item type.', '{"TRID"}'),
+
+        ('APR', 'Annual Percentage Rate - True cost of credit including interest rate plus certain fees expressed as yearly rate.', 'Compliance', 'Disclosure', '{"Annual Percentage Rate"}', '{"Interest Rate","Finance Charge","Rate","Points and Fees"}', 'AI calculates APR including interest and finance charges for TRID disclosures.', 'Higher than interest rate when points/fees charged, key comparison metric.', '{"TILA","TRID"}'),
+
+        ('Finance Charge', 'Total dollar amount loan will cost over life including interest and certain fees.', 'Compliance', 'Disclosure', '{"Total Finance Charge"}', '{"APR","Total of Payments","Interest Rate"}', 'AI sums all financed costs to calculate finance charge for disclosure.', 'Includes interest plus fees defined as finance charges under TILA.', '{"TILA","TRID"}'),
+
+        ('Total of Payments', 'Sum of all payments borrower will make over full loan term including principal and interest.', 'Compliance', 'Disclosure', '{"Payment Total"}', '{"Finance Charge","Monthly Payment","Loan Term"}', 'AI calculates total of payments for loan estimate and closing disclosure.', 'Helps borrower understand total cost over life of loan.', '{"TRID"}'),
     ]
 
     # Insert all terms

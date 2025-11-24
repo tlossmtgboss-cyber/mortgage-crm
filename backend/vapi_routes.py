@@ -271,9 +271,11 @@ async def update_lead_status_function(
                     "new": LeadStage.NEW,
                     "attempted contact": LeadStage.ATTEMPTED_CONTACT,
                     "prospect": LeadStage.PROSPECT,
-                    "application started": LeadStage.APPLICATION_STARTED,
-                    "application complete": LeadStage.APPLICATION_COMPLETE,
+                    "application": LeadStage.APPLICATION,
+                    "pre-qualified": LeadStage.PRE_QUALIFIED,
                     "pre-approved": LeadStage.PRE_APPROVED,
+                    "withdrawn": LeadStage.WITHDRAWN,
+                    "does not qualify": LeadStage.DOES_NOT_QUALIFY,
                 }
 
                 stage_key = new_stage.lower()
