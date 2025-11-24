@@ -967,6 +967,113 @@ def run_migration(db):
         ('ALTA Policy', 'American Land Title Association title insurance policy with standardized coverage.', 'Title', 'Insurance', '{"ALTA","Title Policy"}', '{"Owner''s Policy","Lender''s Policy"}', 'AI verifies appropriate ALTA endorsements for loan type.', 'Standard lender''s policy required for all mortgages.', '{"State Law"}'),
 
         ('Mechanic''s Lien', 'Lien placed by contractors or suppliers for unpaid work on property.', 'Title', 'Encumbrances', '{"Construction Lien","Materialman''s Lien"}', '{"Title Search","Lien","Clear Title"}', 'AI flags mechanic''s lien risk for recent construction or renovation.', 'Requires lien waivers or payoff documentation.', '{"State Law"}'),
+
+        # STATE-SPECIFIC RULES
+        ('Texas 50(a)(6)', 'Texas constitutional provision governing home equity lending with strict requirements including 80% LTV cap and 12-day waiting period.', 'Compliance', 'State Law', '{"Texas Cash-Out","Texas Home Equity","50a6"}', '{"Cash-Out Refinance","State Law"}', 'AI applies Texas-specific cash-out rules including LTV limits and timing requirements.', 'Requires special disclosures, attorney involvement, and cooling-off periods.', '{"State Law","Texas"}'),
+
+        ('Texas 50(f)(2)', 'Texas constitutional provision for rate-and-term refinance of existing home equity loans with specific requirements.', 'Compliance', 'State Law', '{"Texas Refi","50f2"}', '{"Texas 50(a)(6)","Rate-and-Term Refinance"}', 'AI distinguishes Texas equity refi rules from standard rate-term refinances.', 'Different requirements than 50(a)(6) for refinancing existing equity debt.', '{"State Law","Texas"}'),
+
+        ('NY CEMA', 'New York Consolidation Extension and Modification Agreement allowing borrowers to avoid paying mortgage tax on existing loan balance.', 'Closing', 'State Law', '{"Consolidation Extension Modification Agreement","New York CEMA"}', '{"Mortgage Tax","Refinance"}', 'AI identifies NY refinances eligible for CEMA to reduce borrower costs.', 'Requires coordination with existing lender and title company.', '{"State Law","New York"}'),
+
+        ('California Finance Lender License', 'State license required for certain mortgage lending activities in California.', 'Compliance', 'State Law', '{"CFL","California Lender License"}', '{"State License","Compliance"}', 'AI verifies lender licensing for California transactions.', 'Different requirements than NMLS for certain loan types.', '{"State Law","California"}'),
+
+        ('Georgia 24-Hour Waiting Period', 'Georgia requirement for 24-hour waiting period on high-cost home loans after receiving certain disclosures.', 'Compliance', 'State Law', '{"Georgia HCHL"}', '{"High-Cost Loan","State Law"}', 'AI schedules closings to comply with Georgia waiting periods.', 'Applies to loans meeting Georgia high-cost thresholds.', '{"State Law","Georgia"}'),
+
+        ('Illinois Anti-Predatory Lending', 'Illinois regulations providing additional consumer protections for high-risk home loans.', 'Compliance', 'State Law', '{"Illinois HRMLA"}', '{"High-Cost Loan","State Law"}', 'AI checks Illinois high-risk thresholds and required counseling.', 'May require pre-closing counseling from HUD-approved agency.', '{"State Law","Illinois"}'),
+
+        # CONDO/CO-OP
+        ('Warrantable Condo', 'A condominium project that meets agency guidelines for conventional financing without additional review.', 'Collateral', 'Property Type', '{"Eligible Condo","Approved Condo"}', '{"Non-Warrantable Condo","Project Approval","HOA"}', 'AI validates condo warrantability based on ownership concentration, commercial space, and HOA financials.', 'Streamlined approval process without full project review.', '{"GSE"}'),
+
+        ('Non-Warrantable Condo', 'A condominium that fails to meet agency guidelines due to ownership concentration, litigation, or other issues.', 'Collateral', 'Property Type', '{"Ineligible Condo"}', '{"Warrantable Condo","Portfolio Loan"}', 'AI identifies non-warrantable conditions and routes to appropriate products.', 'Requires portfolio or Non-QM lending solutions.', '{"Investor Guideline"}'),
+
+        ('Condo Project Approval', 'Agency or lender review and approval of condominium project for mortgage eligibility.', 'Collateral', 'Process', '{"Project Review","PERS","CPM"}', '{"Warrantable Condo","HOA Questionnaire"}', 'AI determines if project needs full review, limited review, or is pre-approved.', 'Full Review (PERS) vs Limited Review based on LTV and project characteristics.', '{"GSE"}'),
+
+        ('HOA Questionnaire', 'Standardized questionnaire completed by HOA or management company providing project details for underwriting.', 'Collateral', 'Documentation', '{"Condo Questionnaire","1076 Form"}', '{"Condo Project Approval","Warrantable Condo"}', 'AI analyzes HOA questionnaire for warrantability red flags.', 'Required for all condo and PUD transactions.', '{"GSE"}'),
+
+        ('Co-op', 'Cooperative housing where buyer purchases shares in corporation that owns building rather than real property.', 'Collateral', 'Property Type', '{"Cooperative","Co-operative"}', '{"Condo","Stock Certificate","Proprietary Lease"}', 'AI applies co-op specific underwriting including corporation financials.', 'Requires recognition agreement and review of co-op financials.', '{"GSE","State Law"}'),
+
+        ('Recognition Agreement', 'Agreement between co-op corporation and lender recognizing lender''s security interest in shares.', 'Collateral', 'Documentation', '{"Aztech Recognition","UCC-1"}', '{"Co-op","Stock Certificate"}', 'AI ensures recognition agreement is in place for co-op financing.', 'Required for lender to perfect security interest in co-op shares.', '{"GSE"}'),
+
+        ('Owner Occupancy Ratio', 'Percentage of units in condo project that are owner-occupied vs investor-owned or second homes.', 'Collateral', 'Risk Metrics', '{"Occupancy Concentration"}', '{"Warrantable Condo","Investment Property"}', 'AI checks occupancy ratios against investor limits for warrantability.', 'Too many investor units can make project non-warrantable.', '{"GSE"}'),
+
+        ('Commercial Space Ratio', 'Percentage of condo project square footage dedicated to commercial use.', 'Collateral', 'Risk Metrics', '{"Commercial Concentration"}', '{"Warrantable Condo","Mixed-Use"}', 'AI validates commercial space stays within agency limits.', 'Typically limited to 35% for Fannie Mae warrantability.', '{"GSE"}'),
+
+        # PROPERTY TYPES
+        ('Manufactured Home', 'Factory-built housing constructed to HUD code and transported to site on permanent chassis.', 'Collateral', 'Property Type', '{"Mobile Home","HUD Code Home"}', '{"Modular Home","Site-Built"}', 'AI applies manufactured home overlays for age, foundation, and title requirements.', 'Must be titled as real property, on permanent foundation, meet minimum size.', '{"GSE","FHA"}'),
+
+        ('Modular Home', 'Factory-built housing constructed to local building codes and assembled on-site on permanent foundation.', 'Collateral', 'Property Type', '{"Prefab Home","Factory-Built"}', '{"Manufactured Home","Site-Built"}', 'AI treats modular homes similar to site-built for most underwriting purposes.', 'Appraisal should not apply manufactured home adjustments.', '{"GSE"}'),
+
+        ('2-4 Unit Property', 'Residential property with 2, 3, or 4 separate dwelling units.', 'Collateral', 'Property Type', '{"Multi-Family","Duplex","Triplex","Fourplex"}', '{"Single Family","5+ Units","Rental Income"}', 'AI applies higher reserve requirements and rental income calculations for 2-4 units.', 'Owner must occupy one unit for conventional owner-occupied financing.', '{"GSE","FHA"}'),
+
+        ('Mixed-Use Property', 'Property combining residential and commercial uses, such as apartment above retail.', 'Collateral', 'Property Type', '{"Live-Work","Residential-Commercial"}', '{"Commercial Space Ratio","Zoning"}', 'AI evaluates commercial percentage and income for eligibility.', 'Commercial portion typically limited to 25-35% of total area.', '{"GSE"}'),
+
+        ('PUD', 'Planned Unit Development - residential development with common areas owned by HOA.', 'Collateral', 'Property Type', '{"Planned Unit Development"}', '{"Condo","HOA","Common Elements"}', 'AI identifies PUD for HOA questionnaire and insurance requirements.', 'Individual lot ownership with shared amenities and HOA.', '{"GSE"}'),
+
+        ('Leasehold Property', 'Property where borrower owns improvements but leases the land from a third party.', 'Collateral', 'Property Type', '{"Ground Lease","Land Lease"}', '{"Fee Simple","Lease Term"}', 'AI verifies lease term extends beyond loan maturity and meets investor requirements.', 'Typically requires lease term of at least 5 years beyond loan term.', '{"GSE","State Law"}'),
+
+        # INCOME EDGE CASES
+        ('Foreign Income', 'Income earned from sources outside the United States.', 'Underwriting', 'Income Type', '{"International Income","Overseas Income"}', '{"Currency Conversion","Tax Return"}', 'AI validates foreign income documentation and currency conversion requirements.', 'May require additional documentation of continuance and conversion to USD.', '{"GSE"}'),
+
+        ('Declining Income', 'Pattern of decreasing income over recent years requiring additional analysis.', 'Underwriting', 'Income Analysis', '{"Negative Trend","Income Decline"}', '{"Self-Employment Income","Variable Income"}', 'AI flags declining income trends and calculates appropriate qualifying income.', 'May require LOE or use of lower recent year income.', '{"GSE"}'),
+
+        ('Employment Gap', 'Period of unemployment in borrower''s work history requiring explanation.', 'Underwriting', 'Income Analysis', '{"Gap in Employment","Unemployment Period"}', '{"VOE","Employment History"}', 'AI identifies employment gaps and triggers LOE requirement.', 'Gaps over 30 days typically require written explanation.', '{"GSE"}'),
+
+        ('Trailing Spouse Income', 'Income from spouse who will begin employment after relocation.', 'Underwriting', 'Income Type', '{"Relocating Spouse","Future Employment"}', '{"Employment Offer Letter","Relocation"}', 'AI validates offer letter and start date for trailing spouse income.', 'May use income if employment begins within reasonable time of closing.', '{"GSE"}'),
+
+        ('Non-Taxable Income', 'Income not subject to federal income tax that may be grossed up for qualifying.', 'Underwriting', 'Income Type', '{"Tax-Exempt Income","Gross-Up"}', '{"Social Security Income","Disability Income","Child Support"}', 'AI applies gross-up factor to non-taxable income for DTI calculation.', 'Typically grossed up by 25% if tax-exempt status can be documented.', '{"GSE"}'),
+
+        ('Employer Housing Allowance', 'Employer-provided housing benefit that may be used as qualifying income.', 'Underwriting', 'Income Type', '{"Housing Allowance","Parsonage"}', '{"Clergy Income","Military BAH"}', 'AI includes housing allowances in qualifying income with proper documentation.', 'Must document continuance and amount from employer.', '{"GSE"}'),
+
+        ('Seasonal Income', 'Income earned only during certain times of year, such as agricultural or tourism work.', 'Underwriting', 'Income Type', '{"Seasonal Employment"}', '{"Variable Income","Employment History"}', 'AI averages seasonal income over appropriate period and verifies return to work.', 'Requires 2-year history and evidence job will continue.', '{"GSE"}'),
+
+        ('Temporary Leave Income', 'Reduced or absent income during maternity, disability, or other temporary leave.', 'Underwriting', 'Income Analysis', '{"Maternity Leave","Disability Leave","FMLA"}', '{"Employment Gap","Return to Work"}', 'AI determines if pre-leave income or current income should be used.', 'May use pre-leave income with documentation of return date and same position.', '{"GSE"}'),
+
+        # ASSET SPECIFICS
+        ('Gift Funds', 'Funds provided by family member or other acceptable donor for down payment or closing costs.', 'Underwriting', 'Assets', '{"Gift","Gift Letter"}', '{"Down Payment","Donor","Gift Fund Seasoning"}', 'AI validates gift letter, donor relationship, and transfer documentation.', 'Requires gift letter, evidence of transfer, and donor bank statement.', '{"GSE","FHA"}'),
+
+        ('Gift of Equity', 'Seller credit representing difference between sale price and market value in related-party transaction.', 'Underwriting', 'Assets', '{"Equity Gift","Family Sale"}', '{"Gift Funds","Non-Arms-Length","Related Party"}', 'AI calculates gift of equity and applies to LTV and down payment requirements.', 'Common in family sales where property sold below market value.', '{"GSE"}'),
+
+        ('Earnest Money Deposit', 'Good faith deposit made with purchase offer, applied to down payment at closing.', 'Underwriting', 'Assets', '{"EMD","Good Faith Deposit","Escrow Deposit"}', '{"Down Payment","Source of Funds"}', 'AI traces EMD source and verifies deposit in escrow.', 'Must document source if over certain threshold.', '{"GSE"}'),
+
+        ('Reserves', 'Liquid assets remaining after closing to cover future mortgage payments.', 'Underwriting', 'Assets', '{"Post-Closing Reserves","PITI Reserves"}', '{"Months Reserves","Liquid Assets"}', 'AI calculates required reserves based on property type and risk factors.', '2-6 months PITI typically required depending on loan characteristics.', '{"GSE"}'),
+
+        ('Business Assets for Down Payment', 'Using business funds for down payment with documentation of borrower access.', 'Underwriting', 'Assets', '{"Corporate Funds","Business Account"}', '{"Self-Employment","CPA Letter"}', 'AI validates business ownership percentage and impact on business operations.', 'Requires documentation that withdrawal won''t adversely affect business.', '{"GSE"}'),
+
+        ('Stock Options', 'Employee stock options that may be used as assets with vesting and exercise considerations.', 'Underwriting', 'Assets', '{"ESOP","Vested Options","RSU"}', '{"Liquid Assets","Reserves"}', 'AI evaluates vested vs unvested options and exercise requirements.', 'Only vested options with exercise ability typically eligible as assets.', '{"GSE"}'),
+
+        ('Retirement Account Withdrawal', 'Using retirement funds for down payment with consideration of penalties and taxes.', 'Underwriting', 'Assets', '{"401k Withdrawal","IRA Distribution"}', '{"Reserves","Liquid Assets"}', 'AI nets retirement withdrawals for penalties and taxes if under 59.5.', 'May require documentation of withdrawal terms and net proceeds.', '{"GSE"}'),
+
+        ('Foreign Assets', 'Assets held in accounts outside the United States.', 'Underwriting', 'Assets', '{"International Assets","Overseas Accounts"}', '{"Currency Conversion","Asset Documentation"}', 'AI validates foreign asset documentation and currency conversion.', 'May require additional documentation and currency conversion at transfer.', '{"GSE"}'),
+
+        # FRAUD INDICATORS
+        ('Straw Buyer', 'Person who purchases property on behalf of another to circumvent eligibility requirements.', 'Compliance', 'Fraud', '{"Nominee Buyer","Identity Fraud"}', '{"Occupancy Fraud","Non-Arms-Length"}', 'AI flags indicators of straw buyer schemes in transaction patterns.', 'Red flags include different mailing address, POA usage, quick resale.', '{"Fraud Prevention"}'),
+
+        ('Occupancy Fraud', 'Misrepresenting intended occupancy to obtain better loan terms.', 'Compliance', 'Fraud', '{"Occupancy Misrepresentation"}', '{"Primary Residence","Investment Property","Straw Buyer"}', 'AI analyzes occupancy indicators including commute distance and property history.', 'Compare subject distance to employment, existing property ownership.', '{"Fraud Prevention"}'),
+
+        ('Income Fraud', 'Falsifying or inflating income documentation to qualify for larger loan.', 'Compliance', 'Fraud', '{"Income Misrepresentation","Paystub Fraud"}', '{"4506-C","VOE"}', 'AI compares income sources and flags inconsistencies between documents.', '4506-C tax transcript comparison validates reported income.', '{"Fraud Prevention"}'),
+
+        ('Asset Fraud', 'Misrepresenting assets through falsified statements or temporary deposits.', 'Compliance', 'Fraud', '{"Asset Misrepresentation","Bank Statement Fraud"}', '{"Large Deposits","Source of Funds"}', 'AI identifies unusual deposit patterns and asset inconsistencies.', 'Verify large deposits and consistent average balances.', '{"Fraud Prevention"}'),
+
+        ('Property Flipping Fraud', 'Artificially inflating property value through series of quick sales with fraudulent appraisals.', 'Compliance', 'Fraud', '{"Illegal Flipping","Value Inflation"}', '{"Property Flip","Appraisal Fraud"}', 'AI compares current value to recent sales and flags suspicious appreciation.', 'Rapid price increases without documented improvements are red flags.', '{"Fraud Prevention"}'),
+
+        ('Identity Theft', 'Using another person''s identity to obtain mortgage fraudulently.', 'Compliance', 'Fraud', '{"Identity Fraud","Synthetic Identity"}', '{"SSA-89","Credit Report"}', 'AI validates identity through multiple data points and flags discrepancies.', 'SSA-89, credit report variations, and ID verification help detect.', '{"Fraud Prevention","FCRA"}'),
+
+        ('Undisclosed Debt', 'Failure to disclose existing debts that would affect DTI qualification.', 'Compliance', 'Fraud', '{"Hidden Liabilities","Debt Concealment"}', '{"Credit Supplement","DTI"}', 'AI monitors for new debts between application and closing.', 'Pre-closing credit refresh catches new undisclosed accounts.', '{"Fraud Prevention"}'),
+
+        ('Silent Second', 'Undisclosed secondary financing used for down payment.', 'Compliance', 'Fraud', '{"Undisclosed Second Lien"}', '{"CLTV","Source of Funds"}', 'AI analyzes source of funds and title for undisclosed liens.', 'Title search and source of funds documentation prevent silent seconds.', '{"Fraud Prevention"}'),
+
+        # HPML/SECTION 32
+        ('HPML', 'Higher-Priced Mortgage Loan - loan with APR exceeding APOR by specified threshold.', 'Compliance', 'Regulation', '{"Higher-Priced Mortgage Loan"}', '{"APOR","Section 32","Escrow Requirements"}', 'AI calculates HPML status based on APR vs APOR spread.', 'Triggers escrow requirements and special appraisal rules.', '{"Regulation Z","TILA"}'),
+
+        ('APOR', 'Average Prime Offer Rate - benchmark rate published weekly for HPML determination.', 'Compliance', 'Regulation', '{"Average Prime Offer Rate"}', '{"HPML","APR"}', 'AI compares loan APR to current APOR for HPML testing.', 'Different thresholds for first lien vs subordinate and jumbo vs conforming.', '{"Regulation Z"}'),
+
+        ('Section 32 Loan', 'High-cost mortgage under HOEPA with APR or points/fees exceeding federal thresholds.', 'Compliance', 'Regulation', '{"HOEPA Loan","High-Cost Mortgage"}', '{"HPML","Points and Fees Test"}', 'AI tests Section 32 thresholds and triggers required disclosures.', 'Prohibited features and required disclosures for high-cost loans.', '{"HOEPA","TILA"}'),
+
+        ('HOEPA', 'Home Ownership and Equity Protection Act - federal law protecting consumers from predatory lending.', 'Compliance', 'Regulation', '{"Home Ownership and Equity Protection Act"}', '{"Section 32 Loan","High-Cost Mortgage"}', 'AI applies HOEPA tests to identify high-cost loan restrictions.', 'Prohibits balloon payments, prepayment penalties, and other features.', '{"HOEPA","Dodd-Frank"}'),
+
+        ('QM Points and Fees Cap', 'Maximum points and fees allowed for Qualified Mortgage status, generally 3% of loan amount.', 'Compliance', 'QM', '{"3% Cap","QM Fee Limit"}', '{"Qualified Mortgage (QM)","Section 32 Loan"}', 'AI calculates cumulative points and fees against QM thresholds.', 'Higher percentage caps for smaller loan amounts.', '{"QM/ATR"}'),
+
+        ('Prepayment Penalty Restrictions', 'Limitations on prepayment penalties for QM and high-cost loans.', 'Compliance', 'Regulation', '{"Prepay Penalty","Early Payoff Penalty"}', '{"QM","HOEPA"}', 'AI validates prepayment penalty terms comply with applicable rules.', 'QM loans limited to 3-year max, declining penalty structure.', '{"QM/ATR","HOEPA"}'),
     ]
 
     # Insert all terms
