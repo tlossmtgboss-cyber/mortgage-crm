@@ -9131,7 +9131,7 @@ def create_milestone_tasks(loan, updated_fields: list, db: Session) -> list:
             existing_task = db.query(Task).filter(
                 Task.loan_id == loan.id,
                 Task.title == task_title,
-                Task.status != TaskStatus.COMPLETED
+                Task.status != "completed"
             ).first()
 
             if existing_task:
@@ -9142,12 +9142,11 @@ def create_milestone_tasks(loan, updated_fields: list, db: Session) -> list:
             new_task = Task(
                 title=task_title,
                 description=f"{task_desc}\n\nLoan: {loan.loan_number}\nBorrower: {loan.borrower_name or 'N/A'}",
-                status=TaskStatus.PENDING,
+                status="pending",
                 priority=priority,
                 due_date=due_date,
                 loan_id=loan.id,
                 owner_id=loan.owner_id,
-                source="ai_reconciliation",
                 created_at=datetime.now(timezone.utc)
             )
 
@@ -9208,7 +9207,7 @@ def create_lead_milestone_tasks(lead, updated_fields: list, db: Session) -> list
             existing_task = db.query(Task).filter(
                 Task.lead_id == lead.id,
                 Task.title == task_title,
-                Task.status != TaskStatus.COMPLETED
+                Task.status != "completed"
             ).first()
 
             if existing_task:
@@ -9219,12 +9218,11 @@ def create_lead_milestone_tasks(lead, updated_fields: list, db: Session) -> list
             new_task = Task(
                 title=task_title,
                 description=f"{task_desc}\n\nLead: {lead.name}\nEmail: {lead.email or 'N/A'}",
-                status=TaskStatus.PENDING,
+                status="pending",
                 priority=priority,
                 due_date=due_date,
                 lead_id=lead.id,
                 owner_id=lead.owner_id,
-                source="ai_reconciliation",
                 created_at=datetime.now(timezone.utc)
             )
 
