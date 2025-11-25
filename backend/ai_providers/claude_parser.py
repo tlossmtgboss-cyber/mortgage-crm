@@ -510,14 +510,38 @@ SPECIAL INSTRUCTIONS FOR {profile_type.upper()}:
         """
         Determine which profile type this email relates to
 
-        Returns: 'lead', 'active_loan', 'mum_client', or 'team_member'
+        Returns: 'lead', 'active_loan', 'mum_client', 'team_member', or 'unrelated'
         """
 
         subject = email_data.get('subject', '').lower()
         body = email_data.get('body_text', email_data.get('raw_text', '')).lower()
+        from_email = email_data.get('from_email', '').lower()
         combined = subject + ' ' + body
 
-        # Priority-based classification - check most specific indicators first
+        # FIRST: Check for clearly unrelated emails (newsletters, marketing, tech updates)
+        unrelated_senders = [
+            'newsletter', 'noreply', 'no-reply', 'marketing', 'promo',
+            'news@', 'updates@', 'notifications@', 'mailer-daemon',
+            'postmaster', 'donotreply', 'info@claude', 'anthropic',
+            'github', 'linkedin', 'twitter', 'facebook', 'google alerts'
+        ]
+        if any(sender in from_email for sender in unrelated_senders):
+            # Exception: mortgage-related senders
+            if not any(kw in from_email for kw in ['mortgage', 'loan', 'title', 'escrow', 'appraisal']):
+                return 'unrelated'
+
+        unrelated_keywords = [
+            'unsubscribe from this', 'click here to unsubscribe',
+            'update your preferences', 'view in browser',
+            'product announcement', 'new feature', 'we\'re excited to announce',
+            'software update', 'version release', 'changelog',
+            'your weekly digest', 'newsletter', 'promotional'
+        ]
+        if any(kw in combined for kw in unrelated_keywords):
+            # Exception: if it also has mortgage keywords, it's not unrelated
+            mortgage_indicators = ['loan', 'mortgage', 'borrower', 'closing', 'rate', 'appraisal']
+            if not any(mi in combined for mi in mortgage_indicators):
+                return 'unrelated'
 
         # Active loan indicators (CHECK FIRST - loan data is most distinctive)
         # These are strong indicators of loan-related emails
@@ -529,7 +553,7 @@ SPECIAL INSTRUCTIONS FOR {profile_type.upper()}:
             'conventional', 'usda', 'application date', 'funded', 'closing scheduled',
             'processor submission', 'conditions', 'conditional approval',
             'property address', 'borrower:', 'co-borrower', 'loan amount',
-            'branch:', 'payroll date'
+            'branch:', 'payroll date', 'rca', 'cmg-', 'status updated'
         ]
         if any(kw in combined for kw in active_loan_keywords):
             return 'active_loan'
@@ -552,7 +576,7 @@ SPECIAL INSTRUCTIONS FOR {profile_type.upper()}:
         if any(kw in combined for kw in team_member_keywords):
             return 'team_member'
 
-        # Default to lead for new inquiries
+        # Default to lead for new inquiries (mortgage-related but not specific)
         return 'lead'
 
 
