@@ -8579,7 +8579,8 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
 
     # Try to match by loan number first (highest confidence)
     if "loan_number" in fields and fields["loan_number"].get("value"):
-        loan_num = str(fields["loan_number"]["value"])
+        loan_num = str(fields["loan_number"]["value"]).strip()
+        logger.info(f"Attempting to match loan number: '{loan_num}'")
 
         # First try exact match with user's loans (highest confidence)
         loan = db.query(Loan).filter(
@@ -8588,6 +8589,7 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
         ).first()
 
         if loan:
+            logger.info(f"Found exact match with user's loan: {loan.id}")
             match_results["entity_type"] = "loan"
             match_results["entity_id"] = loan.id
             match_results["confidence"] = 0.98  # Very high - exact match + user owns it
@@ -8596,15 +8598,18 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
         # Try exact loan number match without user filter (still high confidence)
         loan = db.query(Loan).filter(Loan.loan_number == loan_num).first()
         if loan:
+            logger.info(f"Found exact match (any user): {loan.id}")
             match_results["entity_type"] = "loan"
             match_results["entity_id"] = loan.id
             match_results["confidence"] = 0.95  # High - exact loan number match
             return match_results
 
         # Try partial loan number match (loan numbers may have prefixes/suffixes)
+        logger.info(f"Trying partial match for: {loan_num}")
         loans = db.query(Loan).filter(
             Loan.loan_number.ilike(f"%{loan_num}%")
         ).all()
+        logger.info(f"Found {len(loans)} partial matches")
         if loans:
             # Prefer user's loan if multiple matches
             user_loan = next((l for l in loans if l.loan_officer_id == user_id), None)
@@ -9019,10 +9024,29 @@ async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Ses
                 logger.debug(f"Email {message_id} already processed (event {existing_event.id}), skipping")
                 return {"status": "skipped", "reason": "already_processed", "event_id": existing_event.id}
 
-        # Get body content
+        # Get body content - always try to get both HTML and text
         body = email_data.get("body", {})
-        raw_html = body.get("content", "") if body.get("contentType") == "html" else None
-        raw_text = body.get("content", "") if body.get("contentType") == "text" else None
+        body_content = body.get("content", "")
+        content_type = body.get("contentType", "text")
+
+        if content_type == "html":
+            raw_html = body_content
+            # Convert HTML to plain text for display
+            try:
+                from bs4 import BeautifulSoup
+                soup = BeautifulSoup(body_content, 'html.parser')
+                # Remove script and style elements
+                for script in soup(["script", "style"]):
+                    script.decompose()
+                raw_text = soup.get_text(separator='\n', strip=True)
+            except Exception:
+                # Fallback: simple HTML tag removal
+                import re
+                raw_text = re.sub(r'<[^>]+>', '', body_content)
+                raw_text = raw_text.replace('&nbsp;', ' ').replace('&amp;', '&')
+        else:
+            raw_text = body_content
+            raw_html = None
 
         # Parse received_at - handle both ISO format (Microsoft) and RFC 2822 (Gmail)
         parsed_received_at = datetime.now(timezone.utc)
@@ -10550,6 +10574,32 @@ async def extract_email_data(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
+def get_email_body_text(event) -> str:
+    """Get email body as plain text, converting HTML if needed"""
+    if not event:
+        return None
+
+    # Try raw_text first
+    if event.raw_text:
+        return event.raw_text
+
+    # Convert HTML to text if needed
+    if event.raw_html:
+        try:
+            from bs4 import BeautifulSoup
+            soup = BeautifulSoup(event.raw_html, 'html.parser')
+            # Remove script and style elements
+            for script in soup(["script", "style"]):
+                script.decompose()
+            return soup.get_text(separator='\n', strip=True)
+        except Exception:
+            # Fallback: simple HTML tag removal
+            import re
+            text = re.sub(r'<[^>]+>', '', event.raw_html)
+            return text.replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
+
+    return None
+
 @app.get("/api/v1/reconciliation/pending")
 async def get_pending_reconciliation(
     current_user: User = Depends(get_current_user),
@@ -10615,12 +10665,12 @@ async def get_pending_reconciliation(
                 "email_from": event.sender if event else None,
                 "email_subject": event.subject if event else None,
                 "email_received_at": event.received_at if event else None,
-                "email_body": event.raw_text if event else None,  # Full email body
+                "email_body": get_email_body_text(event) if event else None,  # Full email body
                 "email": {
                     "subject": event.subject if event else None,
                     "sender": event.sender if event else None,
                     "received_at": event.received_at if event else None,
-                    "body": event.raw_text if event else None  # Full email body
+                    "body": get_email_body_text(event) if event else None  # Full email body
                 },
                 "email_intent": email_intent.get("intent"),
                 "email_intent_description": email_intent.get("description"),
