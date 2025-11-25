@@ -8511,16 +8511,17 @@ def extract_loan_fields(content: str, category: str) -> Dict[str, Dict[str, Any]
                     "role": "system",
                     "content": f"""Extract mortgage loan fields from this {category} email.
 
-IMPORTANT: Look carefully in the email body for borrower names. They often appear as:
-- "Borrower: John Smith" or "Borrower(s): John Smith"
-- "Client: Jane Doe"
-- After greetings like "Dear Mr. Johnson"
-- In property/loan references like "the Smith property" or "Smith - 123 Main St"
-- In subject line patterns like "[LastName-LoanNumber]"
+**CRITICAL - BORROWER NAME EXTRACTION:**
+You MUST extract the borrower name. Look for these patterns:
+1. "Borrower:  LastName" or "Borrower: FirstName LastName"
+2. "Borrower(s): Name1 and Name2"
+3. Subject line patterns like "Loan # XXX - LastName -" or "[LastName-LoanNumber]"
+4. Email signatures or references to "the borrower"
+If you see text like "Borrower:  Spink" - extract "Spink" as borrower_name!
 
 Extract any present fields:
 - loan_number: string (look for patterns like RCA#, Loan #, file #)
-- borrower_name: string (CRITICAL - extract from body, subject, or any reference to the borrower/client)
+- borrower_name: string (**REQUIRED** - extract from Borrower: field, subject line, or any reference)
 - coborrower_name: string (if present)
 - property_address: string
 - property_city: string
@@ -8566,6 +8567,29 @@ Return JSON object. Only include fields you found. Use null for missing."""
     except Exception as e:
         logger.error(f"Field extraction error: {e}")
         return {}
+
+def extract_borrower_from_subject(subject: str) -> Optional[str]:
+    """Extract borrower name from email subject line as fallback"""
+    import re
+    if not subject:
+        return None
+
+    # Pattern 1: "Loan # XXX - LastName -" or "Loan # XXX - LastName - Status"
+    match = re.search(r'Loan\s*#?\s*\w+\s*-\s*([A-Za-z]+)\s*-', subject, re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+
+    # Pattern 2: "[LastName-LoanNumber]" like "[Spink-RCA0000006026]"
+    match = re.search(r'\[([A-Za-z]+)-\w+\]', subject)
+    if match:
+        return match.group(1).strip()
+
+    # Pattern 3: "LastName-LoanNumber:" or "Name - LoanNumber"
+    match = re.search(r'([A-Za-z]+)\s*-\s*[A-Z]{2,3}\d+', subject)
+    if match:
+        return match.group(1).strip()
+
+    return None
 
 def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str, Any]:
     """Match extracted fields to existing CRM entities"""
@@ -10509,6 +10533,13 @@ async def extract_email_data(
                 "reason": "Email classified as unrelated or low confidence",
                 "classification": classification
             }
+
+        # Fallback: Extract borrower name from subject if not found by AI
+        if fields and "borrower_name" not in fields:
+            fallback_borrower = extract_borrower_from_subject(subject)
+            if fallback_borrower:
+                logger.info(f"Extracted borrower name from subject: {fallback_borrower}")
+                fields["borrower_name"] = {"value": fallback_borrower, "confidence": 0.85}
 
         if not fields:
             event.processed = True
