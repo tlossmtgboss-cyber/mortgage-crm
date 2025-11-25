@@ -252,8 +252,8 @@
 .reconciliation-item {
   background: var(--color-bg-surface);
   border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-md);
-  padding: var(--space-md);
+  border-radius: 8px;
+  padding: 12px;
   cursor: pointer;
   transition: all 0.2s ease;
   box-shadow: var(--shadow-sm);
@@ -275,7 +275,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: var(--space-sm);
+  margin-bottom: 6px;
 }
 
 .item-category {
@@ -296,19 +296,30 @@
 }
 
 .item-subject {
-  font-size: var(--font-sm);
-  font-weight: var(--weight-semibold);
+  font-size: 13px;
+  font-weight: 600;
   color: var(--color-text-primary);
-  margin-bottom: var(--space-sm);
-  line-height: 1.4;
+  margin-bottom: 6px;
+  line-height: 1.3;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  /* Allow text to wrap to multiple lines */
+  white-space: normal;
+  /* Limit to 2 lines with ellipsis */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .item-meta {
   display: flex;
   justify-content: space-between;
-  font-size: 12px;
+  font-size: 11px;
   color: rgba(255, 255, 255, 0.5);
-  margin-bottom: 8px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 
 .item-match {
@@ -1029,19 +1040,24 @@
 
 /* Email Body Preview */
 .item-body-preview {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.7);
-  margin-top: 8px;
-  padding: 10px 12px;
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 6px;
-  line-height: 1.5;
-  border-left: 3px solid rgba(79, 70, 229, 0.5);
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+  line-height: 1.4;
+  border-left: 2px solid rgba(79, 70, 229, 0.4);
   font-style: italic;
+  /* Allow text to wrap */
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  white-space: normal;
+  /* Limit to 2 lines */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100%;
 }
 
 /* Select All Header */
