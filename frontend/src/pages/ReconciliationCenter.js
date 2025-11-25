@@ -1555,9 +1555,11 @@ function ReconciliationCenter() {
                 <div className="extracted-summary">
                   <h4>Extracted Information:</h4>
                   <ul>
-                    {Object.entries(noMatchData.fields).map(([key, value]) => (
-                      value && <li key={key}><strong>{key}:</strong> {value}</li>
-                    ))}
+                    {Object.entries(noMatchData.fields).map(([key, fieldData]) => {
+                      // fieldData is an object like {value: "...", confidence: 0.95}
+                      const displayValue = typeof fieldData === 'object' ? fieldData.value : fieldData;
+                      return displayValue && <li key={key}><strong>{formatFieldName(key)}:</strong> {displayValue}</li>;
+                    })}
                   </ul>
                 </div>
               )}
