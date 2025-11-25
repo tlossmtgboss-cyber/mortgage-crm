@@ -1,0 +1,55 @@
+#!/usr/bin/env python3
+"""Test sending daily priorities email"""
+
+import requests
+import json
+import sys
+
+# API endpoint
+API_URL = "https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai/send-daily-priorities-email"
+TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJkZW1vQGV4YW1wbGUuY29tIiwiZXhwIjoxNzY0MDE2OTcxfQ.DvKjpG2FOrpR_g8XHZ1ETk7bEFKRaABHW0D25csrdxA"
+
+# Target email
+TARGET_EMAIL = "tloss@cmgfi.com"
+
+print("="* 80)
+print("Testing Daily Priorities Email Functionality")
+print("="* 80)
+print(f"\nTarget Email: {TARGET_EMAIL}")
+print(f"API Endpoint: {API_URL}\n")
+
+# Test the endpoint
+headers = {
+    "Authorization": f"Bearer {TOKEN}",
+    "Content-Type": "application/json"
+}
+
+payload = {
+    "email_address": TARGET_EMAIL
+}
+
+print("Sending request...")
+try:
+    response = requests.post(API_URL, json=payload, headers=headers, timeout=30)
+
+    print(f"Status Code: {response.status_code}")
+    print(f"\nResponse:")
+    print(json.dumps(response.json(), indent=2))
+
+    if response.status_code == 200:
+        print("\n✓ SUCCESS: Email sent successfully!")
+        print(f"Check your inbox at {TARGET_EMAIL}")
+    else:
+        print(f"\n✗ FAILED: {response.json().get('detail', 'Unknown error')}")
+        sys.exit(1)
+
+except requests.exceptions.ConnectionError:
+    print("\n✗ ERROR: Could not connect to API")
+    print("Make sure the backend server is running")
+    sys.exit(1)
+except requests.exceptions.Timeout:
+    print("\n✗ ERROR: Request timed out")
+    sys.exit(1)
+except Exception as e:
+    print(f"\n✗ ERROR: {str(e)}")
+    sys.exit(1)

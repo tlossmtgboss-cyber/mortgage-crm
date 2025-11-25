@@ -1349,25 +1349,39 @@ function ReconciliationCenter() {
                     </div>
                   </div>
 
-                  {/* Email Details Section */}
+                  {/* Email Details Section - Full Email Display */}
                   <div className="email-details-section">
-                    <button
-                      className="history-accordion-button"
-                      onClick={() => {}}
-                    >
-                      <span className="history-icon">📧</span>
-                      <span className="history-title">Email Details</span>
-                      <span className="history-toggle">▼</span>
-                    </button>
-                    <div className="email-details-content">
-                      <div className="email-meta-row">
+                    <h4>📧 Email Details</h4>
+                    <div className="email-details-content" style={{ background: '#f9fafb', padding: '15px', borderRadius: '8px', marginTop: '10px' }}>
+                      <div className="email-meta-row" style={{ marginBottom: '8px' }}>
                         <strong>From:</strong> {selectedItem.email_from}
                       </div>
-                      <div className="email-meta-row">
+                      <div className="email-meta-row" style={{ marginBottom: '8px' }}>
                         <strong>Subject:</strong> {selectedItem.email_subject}
                       </div>
-                      <div className="email-meta-row">
+                      <div className="email-meta-row" style={{ marginBottom: '8px' }}>
                         <strong>Received:</strong> {new Date(selectedItem.email_received_at).toLocaleString()}
+                      </div>
+                      <div className="email-body-section" style={{ marginTop: '15px', borderTop: '1px solid #e5e7eb', paddingTop: '15px' }}>
+                        <strong>Email Body:</strong>
+                        <div
+                          className="email-body-content"
+                          style={{
+                            marginTop: '10px',
+                            padding: '15px',
+                            background: 'white',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: '6px',
+                            maxHeight: '400px',
+                            overflowY: 'auto',
+                            whiteSpace: 'pre-wrap',
+                            fontFamily: 'monospace',
+                            fontSize: '13px',
+                            lineHeight: '1.5'
+                          }}
+                        >
+                          {selectedItem.email_body || selectedItem.email?.body || selectedItem.email?.text_content || selectedItem.email?.html_content || 'No email body available'}
+                        </div>
                       </div>
                     </div>
                   </div>

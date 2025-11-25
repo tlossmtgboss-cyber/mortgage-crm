@@ -8511,20 +8511,38 @@ def extract_loan_fields(content: str, category: str) -> Dict[str, Dict[str, Any]
                     "role": "system",
                     "content": f"""Extract mortgage loan fields from this {category} email.
 
+IMPORTANT: Look carefully in the email body for borrower names. They often appear as:
+- "Borrower: John Smith" or "Borrower(s): John Smith"
+- "Client: Jane Doe"
+- After greetings like "Dear Mr. Johnson"
+- In property/loan references like "the Smith property" or "Smith - 123 Main St"
+- In subject line patterns like "[LastName-LoanNumber]"
+
 Extract any present fields:
-- loan_number: string
-- borrower_name: string
+- loan_number: string (look for patterns like RCA#, Loan #, file #)
+- borrower_name: string (CRITICAL - extract from body, subject, or any reference to the borrower/client)
+- coborrower_name: string (if present)
 - property_address: string
+- property_city: string
+- property_state: string
+- property_zip: string
 - loan_amount: float
+- program: string (e.g., "FHA 30 Yr Fixed", "VA 30 Yr Fixed", "Conv 30 Yr Fixed")
+- term: integer (loan term in years, e.g., 30)
 - rate: float (as decimal, e.g., 6.125)
 - rate_lock_date: ISO date
 - lock_expiration: ISO date
-- appraisal_date: ISO date
+- appraisal_ordered_date: ISO date
+- appraisal_scheduled_date: ISO date
+- appraisal_completed_date: ISO date
 - appraisal_value: float
+- closing_scheduled_date: ISO date
 - closing_date: ISO datetime
-- milestone: string (e.g., "RateLocked", "AppraisalOrdered", "ClearToClose")
+- milestone: string (e.g., "RateLocked", "AppraisalOrdered", "ClearToClose", "InspectionCompleted")
 - documents_received: list of strings
 - lender: string
+- loan_officer_name: string
+- loan_officer_email: string
 - realtor_name: string
 - title_company: string
 
@@ -8535,7 +8553,7 @@ Return JSON object. Only include fields you found. Use null for missing."""
                 },
                 {
                     "role": "user",
-                    "content": content[:2000]
+                    "content": content[:3000]  # Increased to capture more content
                 }
             ],
             response_format={"type": "json_object"},
@@ -8543,6 +8561,7 @@ Return JSON object. Only include fields you found. Use null for missing."""
         )
 
         fields = json.loads(response.choices[0].message.content)
+        logger.info(f"Extracted fields: {list(fields.keys())}")
         return fields
     except Exception as e:
         logger.error(f"Field extraction error: {e}")
@@ -10593,10 +10612,15 @@ async def get_pending_reconciliation(
                 "ai_confidence": item.ai_confidence,
                 "status": item.status,
                 "created_at": item.created_at,
+                "email_from": event.sender if event else None,
+                "email_subject": event.subject if event else None,
+                "email_received_at": event.received_at if event else None,
+                "email_body": event.raw_text if event else None,  # Full email body
                 "email": {
-                    "subject": event.subject,
-                    "sender": event.sender,
-                    "received_at": event.received_at
+                    "subject": event.subject if event else None,
+                    "sender": event.sender if event else None,
+                    "received_at": event.received_at if event else None,
+                    "body": event.raw_text if event else None  # Full email body
                 },
                 "email_intent": email_intent.get("intent"),
                 "email_intent_description": email_intent.get("description"),
