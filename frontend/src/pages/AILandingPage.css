@@ -10,17 +10,17 @@
 .ai-main-content {
   flex: 1;
   display: flex;
-  flex-direction: column;
-  margin-left: 0;
+  flex-direction: row;
+  margin-left: 260px;
   transition: margin-left 0.3s ease;
   height: 100vh;
   position: relative;
   background: #fff;
 }
 
-.ai-sidebar-new:not(.collapsed) ~ .ai-main-content,
-.ai-landing-page-new:has(.ai-sidebar-new:not(.collapsed)) .ai-main-content {
-  margin-left: 260px;
+.ai-sidebar-new.collapsed ~ .ai-main-content,
+.ai-landing-page-new:has(.ai-sidebar-new.collapsed) .ai-main-content {
+  margin-left: 0;
 }
 
 /* Left Sidebar - Claude.ai style */
@@ -40,10 +40,27 @@
 }
 
 .ai-sidebar-new.collapsed {
-  transform: translateX(-260px);
-  width: 0;
-  padding: 0;
+  width: 50px;
+  padding: 10px;
   overflow: hidden;
+}
+
+.ai-sidebar-new.collapsed .ai-new-chat-btn span,
+.ai-sidebar-new.collapsed .ai-nav-btn span,
+.ai-sidebar-new.collapsed .ai-sidebar-content,
+.ai-sidebar-new.collapsed .ai-search-box,
+.ai-sidebar-new.collapsed .ai-projects-section h4 {
+  display: none;
+}
+
+.ai-sidebar-new.collapsed .ai-new-chat-btn,
+.ai-sidebar-new.collapsed .ai-nav-btn {
+  padding: 10px;
+  justify-content: center;
+}
+
+.ai-sidebar-new.collapsed .ai-sidebar-toggle {
+  right: -30px;
 }
 
 .ai-sidebar-toggle {
@@ -169,20 +186,42 @@
   display: flex;
   flex-direction: column;
   flex: 1;
-  max-width: 900px;
-  margin: 0 auto;
   width: 100%;
   height: 100vh;
   padding: 0;
+  min-width: 0;
 }
 
-/* Hide right pane in Claude style */
+/* Right Pane - CRM Data Panel */
 .ai-right-pane {
-  display: none;
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-left: 1px solid #e5e5e5;
+  overflow: hidden;
+  min-width: 300px;
+  max-width: 450px;
 }
 
+.ai-right-pane .ai-messages-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  max-height: 100vh;
+}
+
+/* Draggable Divider */
 .ai-pane-divider {
-  display: none;
+  width: 4px;
+  background: #e5e5e5;
+  cursor: col-resize;
+  flex-shrink: 0;
+  transition: background 0.2s ease;
+}
+
+.ai-pane-divider:hover,
+.ai-pane-divider.dragging {
+  background: #d97757;
 }
 
 /* Header - minimal Claude style */
