@@ -515,21 +515,42 @@ SPECIAL INSTRUCTIONS FOR {profile_type.upper()}:
 
         subject = email_data.get('subject', '').lower()
         body = email_data.get('body_text', email_data.get('raw_text', '')).lower()
+        combined = subject + ' ' + body
 
-        # Simple keyword-based classification
-        # In production, this could use a separate Claude call for better accuracy
+        # Priority-based classification - check most specific indicators first
 
-        # Team member indicators
-        if any(kw in subject or kw in body for kw in ['performance review', 'goals', 'disc', 'employee', 'team member']):
-            return 'team_member'
-
-        # Active loan indicators (loan number, milestones)
-        if any(kw in subject or kw in body for kw in ['loan #', 'loan number', 'appraisal', 'clear to close', 'closing date', 'title company', 'underwriting']):
+        # Active loan indicators (CHECK FIRST - loan data is most distinctive)
+        # These are strong indicators of loan-related emails
+        active_loan_keywords = [
+            'loan #', 'loan number', 'loan number:', 'loan product',
+            'appraisal', 'clear to close', 'closing date', 'title company',
+            'underwriting', 'rate lock', 'lock date', 'lock expiration',
+            'completed a new loan', 'new loan', 'loan purpose', 'fha', 'va loan',
+            'conventional', 'usda', 'application date', 'funded', 'closing scheduled',
+            'processor submission', 'conditions', 'conditional approval',
+            'property address', 'borrower:', 'co-borrower', 'loan amount',
+            'branch:', 'payroll date'
+        ]
+        if any(kw in combined for kw in active_loan_keywords):
             return 'active_loan'
 
-        # MUM client indicators
-        if any(kw in subject or kw in body for kw in ['refinance', 'rate drop', 'portfolio', 'servicing', 'escrow']):
+        # MUM client indicators (past clients for refinancing)
+        mum_keywords = [
+            'refinance opportunity', 'rate drop alert', 'portfolio review',
+            'servicing', 'escrow analysis', 'rate watch', 'market update for client'
+        ]
+        if any(kw in combined for kw in mum_keywords):
             return 'mum_client'
+
+        # Team member indicators (HR/internal - only if NOT loan-related)
+        # Must be specific HR terms, not just "employee" which may appear in loan emails
+        team_member_keywords = [
+            'performance review', 'employee goals', 'disc assessment',
+            'team member profile', 'hr update', 'onboarding', 'anniversary',
+            'quarterly review', 'development plan'
+        ]
+        if any(kw in combined for kw in team_member_keywords):
+            return 'team_member'
 
         # Default to lead for new inquiries
         return 'lead'

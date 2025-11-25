@@ -63,6 +63,41 @@ function ReconciliationCenter() {
     { value: 'FUNDED', label: 'Funded' }
   ];
 
+  // Helper function to clean email preview text
+  const cleanEmailPreview = (text) => {
+    if (!text) return '';
+
+    let cleaned = text
+      // Remove URLs (http, https, www)
+      .replace(/https?:\/\/[^\s<>"{}|\\^`[\]]+/gi, '')
+      .replace(/www\.[^\s<>"{}|\\^`[\]]+/gi, '')
+      // Remove image references and file paths
+      .replace(/[^\s]+\.(png|jpg|jpeg|gif|svg|webp|ico|pdf)[^\s]*/gi, '')
+      // Remove HTML-like encoded characters
+      .replace(/&[a-z]+;/gi, ' ')
+      .replace(/&#\d+;/gi, ' ')
+      // Remove email addresses
+      .replace(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g, '')
+      // Remove markdown image syntax
+      .replace(/!\[.*?\]\(.*?\)/g, '')
+      // Remove excessive whitespace, newlines, and special chars
+      .replace(/[\r\n\t]+/g, ' ')
+      .replace(/\s{2,}/g, ' ')
+      // Remove common email cruft
+      .replace(/cid:[^\s]+/gi, '')
+      .replace(/\[image:.*?\]/gi, '')
+      .replace(/\[cid:.*?\]/gi, '')
+      // Trim
+      .trim();
+
+    // If we cleaned everything away, return a generic message
+    if (!cleaned || cleaned.length < 10) {
+      return 'Email content (contains images/attachments)';
+    }
+
+    return cleaned;
+  };
+
   useEffect(() => {
     fetchPendingItems();
     fetchCompletedItems();
@@ -1368,7 +1403,10 @@ function ReconciliationCenter() {
                     </div>
                     {item.email_body && (
                       <div className="item-body-preview">
-                        {item.email_body.substring(0, 150)}{item.email_body.length > 150 ? '...' : ''}
+                        {(() => {
+                          const cleaned = cleanEmailPreview(item.email_body);
+                          return cleaned.length > 120 ? cleaned.substring(0, 120) + '...' : cleaned;
+                        })()}
                       </div>
                     )}
                     {item.review_reason && (
