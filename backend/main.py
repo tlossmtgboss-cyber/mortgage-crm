@@ -10811,10 +10811,9 @@ async def reject_reconciliation(
                 extracted_data_id=extracted.id,
                 field_name=field_name,
                 original_value=str(field_data.get("value", "")),
-                corrected_value="",  # Empty means rejected
+                corrected_value=rejection.reason or "",  # Store rejection reason here
                 label="rejected",
-                user_id=current_user.id,
-                notes=rejection.reason
+                user_id=current_user.id
             )
             db.add(training)
 
