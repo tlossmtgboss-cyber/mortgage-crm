@@ -5407,6 +5407,7 @@ When asked about rate lock guidance:
         # Get user's actual data
         all_leads = db.query(Lead).filter(Lead.owner_id == current_user.id).all()
         all_tasks = db.query(Task).filter(Task.owner_id == current_user.id).all()
+        all_loans = db.query(Loan).filter(Loan.loan_officer_id == current_user.id).all()
 
         # Tasks breakdown
         tasks_today = [t for t in all_tasks if t.due_date and t.due_date.date() == today and t.status != "completed"]
@@ -5485,6 +5486,9 @@ When asked about rate lock guidance:
 
 ### Recent Leads:
 {chr(10).join([f"- {l.name} ({str(l.stage).replace('LeadStage.', '') if l.stage else 'NEW'})" for l in recent_leads]) if recent_leads else "- No leads yet"}
+
+### Active Loans (for task correlation - ALWAYS reference these when discussing tasks):
+{chr(10).join([f"- **{loan.borrower_name}** - Loan #{loan.loan_number or 'N/A'} | ${loan.amount:,.0f} | Stage: {str(loan.stage).replace('LoanStage.', '') if loan.stage else 'Unknown'}" for loan in all_loans[:15]]) if all_loans else "- No active loans"}
 """
 
         # Detect coaching mode from message
@@ -5817,28 +5821,43 @@ You create, manage, and assign tasks automatically based on:
 
 You run workflows like an operations manager with zero hesitation.
 
-# TASK QUERIES - ALWAYS PROVIDE FULL DETAILS WITH BORROWER CONTEXT
+# TASK QUERIES - MANDATORY BORROWER CONTEXT (NON-NEGOTIABLE)
 When the user asks about tasks, outstanding items, or what needs to be done:
-- ALWAYS provide FULL DETAILS for each task including:
-  - Task title/name
-  - Priority level (high, medium, low)
-  - Due date and time
-  - Description (if available)
-  - Current status
-  - **BORROWER/LOAN CONTEXT** - CRITICAL: Always show WHO the task is for
-- If a task has borrower_name, loan_amount, or loan_stage in the data - ALWAYS display it
-- If task mentions documents/VOE/W2/appraisal, correlate it with loans in similar stages from the pipeline data
-- Example format: "Review loan documents **for Jennifer Kim ($285,000 - UW Received)**"
-- Format tasks in a clear, structured list
-- Group by priority or due date when appropriate
-- NEVER give just a count - always list the actual tasks with details
-- If asking "what are my outstanding tasks" - list ALL outstanding tasks with full details
-- When tasks don't have explicit borrower links, INTELLIGENTLY CORRELATE them with loans:
-  - "VOE" or "employment verification" tasks → Processing stage loans
-  - "Review documents" or "underwriting" tasks → UW Received loans
-  - "Clear to close" or "CD" tasks → CTC stage loans
-  - "Pre-approval letter" tasks → Pre-Approved leads
-  - ALWAYS mention the likely borrower based on loan stage match
+
+## ABSOLUTE REQUIREMENT - READ THIS FIRST:
+**EVERY TASK MUST INCLUDE A BORROWER NAME.** This is not optional. The user NEEDS to know WHO each task is for.
+- Look at the "Active Loans" section in YOUR CURRENT DATA above
+- MATCH each task to the most likely borrower based on task content and loan stage
+- If uncertain, pick the most relevant loan and state it
+
+## Required Format for EVERY Task:
+"[Task Title] **for [Borrower Name]** ($[amount] - [Stage])"
+
+Examples:
+- "Review loan documents **for Jennifer Kim** ($285,000 - UW Received)"
+- "Obtain VOE **for Michael Johnson** ($425,000 - Processing)"
+- "Collect W2 **for Sarah Williams** ($320,000 - Processing)"
+- "Discuss revised numbers **for David Chen** ($550,000 - Approved)"
+
+## Correlation Rules (use when task has no direct loan link):
+- "VOE", "employment verification", "W2", "paystubs" → Match to PROCESSING stage loans
+- "Review documents", "underwriting", "conditions" → Match to UW_RECEIVED or SUBMITTED loans
+- "Clear to close", "CD", "closing disclosure" → Match to CTC or APPROVED loans
+- "Pre-approval", "pre-qual" → Match to DISCLOSED loans or leads
+- "Appraisal" → Match to PROCESSING or SUBMITTED loans
+- Generic tasks → Match to the loan with nearest due date or highest amount
+
+## NEVER DO THIS:
+- NEVER list a task without a borrower name
+- NEVER say "Review loan documents - Priority: HIGH" without specifying FOR WHOM
+- NEVER provide generic task lists - they are USELESS to the user
+
+## Full Details Required:
+- Task title with borrower context
+- Priority (HIGH/MEDIUM/LOW)
+- Due date/time
+- Description (if available)
+- Status
 
 # AI CONCIERGE + PRODUCTION ASSISTANT
 You assist loan officers by:
