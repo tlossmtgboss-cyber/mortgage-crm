@@ -15781,6 +15781,62 @@ async def root():
         "health": "/health"
     }
 
+@app.post("/api/v1/debug/test-task-creation")
+async def debug_test_task_creation(
+    loan_id: int,
+    trigger: str = "stage->CTC",
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Debug endpoint to test task creation in isolation.
+    Pass a loan_id and trigger (like "stage->CTC") to test if tasks are created.
+    """
+    import traceback
+    debug_info = {
+        "loan_id": loan_id,
+        "trigger": trigger,
+        "steps": [],
+        "error": None,
+        "tasks_created": [],
+        "tasks_in_db": []
+    }
+
+    try:
+        # Step 1: Get the loan
+        loan = db.query(Loan).filter(Loan.id == loan_id).first()
+        if not loan:
+            debug_info["error"] = f"Loan {loan_id} not found"
+            return debug_info
+
+        debug_info["steps"].append(f"Found loan: {loan.loan_number}, stage={loan.stage}, owner_id={loan.owner_id}")
+
+        # Step 2: Check Task model
+        debug_info["steps"].append(f"Task model columns: {[c.name for c in Task.__table__.columns]}")
+
+        # Step 3: Call create_milestone_tasks with the trigger
+        updated_fields = [trigger]
+        debug_info["steps"].append(f"Calling create_milestone_tasks with updated_fields={updated_fields}")
+
+        tasks_created = create_milestone_tasks(loan, updated_fields, db)
+        debug_info["tasks_created"] = tasks_created
+        debug_info["steps"].append(f"create_milestone_tasks returned: {tasks_created}")
+
+        # Step 4: Query tasks for this loan to verify
+        tasks = db.query(Task).filter(Task.loan_id == loan_id).all()
+        debug_info["tasks_in_db"] = [
+            {"id": t.id, "title": t.title, "status": t.status, "priority": t.priority}
+            for t in tasks
+        ]
+        debug_info["steps"].append(f"Found {len(tasks)} tasks in DB for loan {loan_id}")
+
+    except Exception as e:
+        debug_info["error"] = str(e)
+        debug_info["steps"].append(f"Exception: {traceback.format_exc()}")
+
+    return debug_info
+
+
 @app.get("/health")
 async def health_check(db: Session = Depends(get_db)):
     try:
