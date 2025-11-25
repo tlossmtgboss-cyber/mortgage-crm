@@ -5298,6 +5298,27 @@ When asked about rate lock guidance:
         # Recent leads (last 5)
         recent_leads = sorted(all_leads, key=lambda x: x.created_at or datetime.min, reverse=True)[:5]
 
+        # Helper function to format task details
+        def format_task_detail(task):
+            details = [f"**{task.title}**"]
+            if task.priority:
+                details.append(f"Priority: {task.priority.upper()}")
+            if task.due_date:
+                details.append(f"Due: {task.due_date.strftime('%m/%d/%Y %I:%M %p')}")
+            if task.description:
+                details.append(f"Description: {task.description[:100]}{'...' if len(task.description or '') > 100 else ''}")
+            if task.status:
+                details.append(f"Status: {task.status}")
+            # Get related lead/loan name
+            if task.lead_id:
+                related_lead = next((l for l in all_leads if l.id == task.lead_id), None)
+                if related_lead:
+                    details.append(f"Related to: {related_lead.name}")
+            return " | ".join(details)
+
+        # Get all outstanding tasks (not completed)
+        outstanding_tasks = [t for t in all_tasks if t.status != "completed"]
+
         # Build context string
         data_context = f"""
 ## YOUR CURRENT DATA (Real-time):
@@ -5307,15 +5328,19 @@ When asked about rate lock guidance:
 - Tasks due TOMORROW: {len(tasks_tomorrow)}
 - Tasks this week: {len(tasks_this_week)}
 - OVERDUE tasks: {len(tasks_overdue)}
+- TOTAL OUTSTANDING: {len(outstanding_tasks)}
+
+### All Outstanding Tasks (Detailed):
+{chr(10).join([f"- {format_task_detail(t)}" for t in outstanding_tasks[:10]]) if outstanding_tasks else "- No outstanding tasks"}
 
 ### Today's Tasks:
-{chr(10).join([f"- {t.title} ({t.priority} priority)" for t in tasks_today[:5]]) if tasks_today else "- No tasks due today"}
+{chr(10).join([f"- {format_task_detail(t)}" for t in tasks_today[:5]]) if tasks_today else "- No tasks due today"}
 
 ### Tomorrow's Tasks:
-{chr(10).join([f"- {t.title} ({t.priority} priority)" for t in tasks_tomorrow[:5]]) if tasks_tomorrow else "- No tasks due tomorrow"}
+{chr(10).join([f"- {format_task_detail(t)}" for t in tasks_tomorrow[:5]]) if tasks_tomorrow else "- No tasks due tomorrow"}
 
 ### Overdue Tasks:
-{chr(10).join([f"- {t.title} (due {t.due_date.strftime('%m/%d')})" for t in tasks_overdue[:5]]) if tasks_overdue else "- No overdue tasks"}
+{chr(10).join([f"- {format_task_detail(t)}" for t in tasks_overdue[:5]]) if tasks_overdue else "- No overdue tasks"}
 
 ### Pipeline Summary ({len(all_leads)} total leads):
 {chr(10).join([f"- {stage}: {len(names)} leads ({', '.join(names[:3])}{'...' if len(names) > 3 else ''})" for stage, names in pipeline_stages.items()])}
@@ -5653,6 +5678,20 @@ You create, manage, and assign tasks automatically based on:
 - Market events
 
 You run workflows like an operations manager with zero hesitation.
+
+# TASK QUERIES - ALWAYS PROVIDE FULL DETAILS
+When the user asks about tasks, outstanding items, or what needs to be done:
+- ALWAYS provide FULL DETAILS for each task including:
+  - Task title/name
+  - Priority level (high, medium, low)
+  - Due date and time
+  - Description (if available)
+  - Current status
+  - Related client/lead name (if linked)
+- Format tasks in a clear, structured list
+- Group by priority or due date when appropriate
+- NEVER give just a count - always list the actual tasks with details
+- If asking "what are my outstanding tasks" - list ALL outstanding tasks with full details
 
 # AI CONCIERGE + PRODUCTION ASSISTANT
 You assist loan officers by:
