@@ -92,7 +92,7 @@ class ErrorBoundary extends React.Component {
 
     try {
       const token = localStorage.getItem('token');
-      const API_BASE_URL = window.location.hostname.includes('vercel.app')
+      const API_BASE_URL = (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
         ? 'https://mortgage-crm-production-7a9a.up.railway.app'
         : 'http://localhost:8000';
 

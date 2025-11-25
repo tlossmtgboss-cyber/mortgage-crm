@@ -4,7 +4,7 @@ import axios from 'axios';
 import './Registration.css';
 
 // Use HTTPS Railway URL in production, localhost for development
-const isProduction = window.location.hostname.includes('vercel.app');
+const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
 const API_BASE_URL = isProduction
   ? 'https://mortgage-crm-production-7a9a.up.railway.app'
   : (process.env.REACT_APP_API_URL || 'http://localhost:8000');

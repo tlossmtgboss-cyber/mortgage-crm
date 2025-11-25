@@ -3,7 +3,7 @@ import { ensureArray } from '../utils/arrayHelpers';
 
 // Use direct Railway URL for production, localhost for development
 // Bypassing Vercel proxy due to POST request issues
-const isProduction = window.location.hostname.includes('vercel.app');
+const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
 export const API_BASE_URL = isProduction
   ? 'https://mortgage-crm-production-7a9a.up.railway.app' // Direct Railway URL
   : (process.env.REACT_APP_API_URL || 'http://localhost:8000');

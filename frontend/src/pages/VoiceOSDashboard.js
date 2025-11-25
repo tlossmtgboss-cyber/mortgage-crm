@@ -85,7 +85,7 @@ const VoiceOSDashboard = () => {
   const loadVoiceOSConfig = async () => {
     setLoading(true);
     try {
-      const API_BASE_URL = window.location.hostname.includes('vercel.app')
+      const API_BASE_URL = (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
         ? 'https://mortgage-crm-production-7a9a.up.railway.app'
         : 'http://localhost:8000';
 
@@ -161,7 +161,7 @@ const VoiceOSDashboard = () => {
     setPlayingVoice(voiceId);
 
     try {
-      const API_BASE_URL = window.location.hostname.includes('vercel.app')
+      const API_BASE_URL = (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
         ? 'https://mortgage-crm-production-7a9a.up.railway.app'
         : 'http://localhost:8000';
 
@@ -208,7 +208,7 @@ const VoiceOSDashboard = () => {
   const handleSaveConfig = async () => {
     setSaving(true);
     try {
-      const API_BASE_URL = window.location.hostname.includes('vercel.app')
+      const API_BASE_URL = (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
         ? 'https://mortgage-crm-production-7a9a.up.railway.app'
         : 'http://localhost:8000';
 
