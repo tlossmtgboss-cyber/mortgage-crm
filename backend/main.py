@@ -9424,7 +9424,7 @@ def apply_extracted_data(extracted_data: ExtractedData, db: Session) -> bool:
                     loan.final_closing_package_sent_date = parsed
                     updated_fields.append("final_closing_package_sent_date")
                     # Auto-update stage to CTC when closing docs are sent
-                    if loan.stage not in [LoanStage.FUNDED, LoanStage.DOCS]:
+                    if loan.stage != LoanStage.FUNDED:
                         loan.stage = LoanStage.CTC
                         updated_fields.append("stage->CTC")
 
