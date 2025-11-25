@@ -8559,7 +8559,23 @@ def classify_email_content(content: str, subject: str) -> Dict[str, Any]:
                     "role": "system",
                     "content": """You are an email classification expert for mortgage loan processing.
 
-Classify emails into categories:
+FIRST: Determine if this email is related to the mortgage/lending business.
+If the email is about ANY of these, classify as "unrelated":
+- Software updates, tech newsletters, product announcements
+- Marketing/promotional emails not about mortgage services
+- Personal emails, social media notifications
+- General news, politics, entertainment
+- Subscriptions, newsletters unrelated to mortgage industry
+- Internal company announcements not about loans
+
+ONLY classify as mortgage-related if the email contains:
+- Loan numbers, borrower names, property addresses
+- Loan status updates, milestone changes
+- Rate locks, appraisals, title, insurance
+- Closing documents, CDs, funding
+- Lead inquiries about getting a mortgage
+
+Categories (ONLY use if mortgage-related):
 - lead_update: New lead information or lead status changes
 - loan_update: Active loan milestone updates
 - rate_lock: Rate lock confirmations or expirations
@@ -8569,7 +8585,7 @@ Classify emails into categories:
 - closing: Closing date/time, CD delivery
 - document: Document receipt confirmations
 - portfolio: Servicing, escrow, tax updates
-- unrelated: Not mortgage-related
+- unrelated: NOT mortgage-related (use this liberally for anything that's not clearly about a mortgage transaction)
 
 Return JSON: {"category": "...", "subcategory": "...", "confidence": 0.0-1.0}"""
                 },
@@ -9459,10 +9475,15 @@ async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Ses
             fields = extract_loan_fields(content, classification["category"]) if classification["category"] != "unrelated" and classification["confidence"] >= 0.3 else {}
             avg_confidence = classification["confidence"]
 
-        # Create ExtractedData for ALL emails so they appear in Reconciliation
-        # Users can review, dismiss, or manually categorize any email
-        if not fields and classification["category"] != "unrelated":
-            # Extract fields if not already done (OpenAI path)
+        # Skip unrelated emails - don't clutter the reconciliation queue
+        if classification["category"] == "unrelated":
+            db_event.processed = True
+            db.commit()
+            logger.info(f"Skipped unrelated email: {subject[:50]}")
+            return {"status": "skipped", "reason": "Email classified as unrelated to mortgage business"}
+
+        # Extract fields if not already done (OpenAI path)
+        if not fields:
             fields = extract_loan_fields(content, classification["category"])
 
         # Handle different confidence formats (Claude vs OpenAI)
@@ -9478,9 +9499,7 @@ async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Ses
 
         # Determine status based on confidence and category
         status = "needs_review"  # Default to needs_review for safety
-        if classification["category"] == "unrelated":
-            status = "needs_review"  # All unrelated emails need review
-        elif fields and avg_confidence > 0.85 and entity_match["confidence"] > 0.90:
+        if fields and avg_confidence > 0.85 and entity_match["confidence"] > 0.90:
             status = "auto_approved"
         elif fields and avg_confidence >= 0.60 and entity_match["confidence"] >= 0.50:
             status = "pending_review"
