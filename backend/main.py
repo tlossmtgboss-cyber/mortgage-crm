@@ -9105,10 +9105,14 @@ def create_milestone_tasks(loan, updated_fields: list, db: Session) -> list:
     ]
 
     try:
+        logger.info(f"🔍 create_milestone_tasks called for loan {loan.loan_number} with updated_fields: {updated_fields}")
+
         for trigger_field, task_title, task_desc, days_offset, priority in milestone_task_triggers:
             # Check if this field was just updated
             if trigger_field not in updated_fields:
                 continue
+
+            logger.info(f"🎯 Trigger matched: {trigger_field} -> Creating task: {task_title}")
 
             # Determine the due date
             due_date = None
@@ -9155,10 +9159,16 @@ def create_milestone_tasks(loan, updated_fields: list, db: Session) -> list:
             logger.info(f"📋 Created task: '{task_title}' for loan {loan.loan_number}, due: {due_date}")
 
         if tasks_created:
+            logger.info(f"💾 Committing {len(tasks_created)} tasks to database...")
             db.commit()
+            logger.info(f"✅ Tasks committed successfully: {tasks_created}")
+        else:
+            logger.info(f"ℹ️ No matching triggers found for updated_fields: {updated_fields}")
 
     except Exception as e:
+        import traceback
         logger.error(f"Error creating milestone tasks: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         db.rollback()
 
     return tasks_created
