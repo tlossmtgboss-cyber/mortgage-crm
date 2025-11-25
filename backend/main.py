@@ -15494,6 +15494,46 @@ async def add_dre_columns(db: Session = Depends(get_db)):
             content={"status": "error", "message": str(e)}
         )
 
+@app.post("/admin/add-appraisal-columns")
+async def add_appraisal_columns(db: Session = Depends(get_db)):
+    """Admin endpoint to add appraisal and loan columns"""
+    try:
+        columns_to_add = [
+            ("loans", "appraisal_ordered_date", "TIMESTAMP"),
+            ("loans", "appraisal_scheduled_date", "TIMESTAMP"),
+            ("loans", "appraisal_completed_date", "TIMESTAMP"),
+            ("loans", "appraisal_value", "DECIMAL(15, 2)"),
+            ("loans", "lock_expiration_date", "TIMESTAMP"),
+            ("loans", "property_city", "VARCHAR(100)"),
+            ("loans", "property_state", "VARCHAR(50)"),
+            ("loans", "property_zip", "VARCHAR(20)"),
+            ("loans", "lender", "VARCHAR(255)"),
+        ]
+
+        for table, column, col_type in columns_to_add:
+            db.execute(text(f"""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_name='{table}' AND column_name='{column}'
+                    ) THEN
+                        ALTER TABLE {table} ADD COLUMN {column} {col_type};
+                    END IF;
+                END $$;
+            """))
+
+        db.commit()
+        logger.info("✅ Appraisal columns added successfully")
+        return {"status": "success", "message": "Appraisal columns added successfully"}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Failed to add appraisal columns: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
+
 @app.post("/admin/create-dre-tables")
 async def create_dre_tables(db: Session = Depends(get_db)):
     """Admin endpoint to create Data Reconciliation Engine tables"""
