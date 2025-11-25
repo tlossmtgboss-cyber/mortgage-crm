@@ -2633,11 +2633,16 @@ You can perform the following actions:
 9. MARKET_INTELLIGENCE - Get rate lock recommendations and market conditions
 
 MARKET INTELLIGENCE QUERIES:
-When user asks about rate locks, market conditions, or whether to lock:
+When user asks about rate locks, market conditions, rates, or whether to lock:
 - "should I lock?" or "rate lock recommendation" → intent: "MARKET_INTELLIGENCE"
 - "what are current rates?" or "market conditions" → intent: "MARKET_INTELLIGENCE"
 - "when should I lock?" or "lock or float?" → intent: "MARKET_INTELLIGENCE"
 - "MBS prices" or "treasury yields" → intent: "MARKET_INTELLIGENCE"
+- "rate lock guidance" or "rate guidance for tomorrow" → intent: "MARKET_INTELLIGENCE"
+- "what's the market looking like?" or "rate outlook" → intent: "MARKET_INTELLIGENCE"
+- "should my clients lock?" or "lock timing" → intent: "MARKET_INTELLIGENCE"
+
+IMPORTANT: For rate/market questions, NEVER ask the user for market data. The system has real-time market data available via get_market_intelligence(). Always use MARKET_INTELLIGENCE intent to fetch this data automatically.
 
 For MARKET_INTELLIGENCE, data should include:
 - lock_days: Optional number of days for lock (15, 30, 45, 60). Default 30.
@@ -2822,15 +2827,6 @@ def get_daily_summary(db: Session, user_id: int) -> Dict[str, Any]:
         follow_ups.append({
             "type": "New Leads Follow-up",
             "items": [f"{l.name} ({l.loan_type or 'N/A'})" for l in new_stage_leads[:5]],
-            "priority": "High"
-        })
-
-    # Application started leads need follow-up
-    app_leads = [l for l in all_leads if l.stage and l.stage.value == 'Application Started']
-    if app_leads:
-        follow_ups.append({
-            "type": "Application Started Follow-up",
-            "items": [f"{l.name} (${l.preapproval_amount or 0:,.0f})" for l in app_leads[:5]],
             "priority": "High"
         })
 

@@ -4752,6 +4752,26 @@ Key metrics to track:
 - Pull-through rate by loan type
 - Cost per funded loan
 - Revenue per lead source"""
+            },
+            "market_intelligence": {
+                "name": "Market Intelligence Agent",
+                "keywords": ["rate", "rates", "lock", "float", "market", "mbs", "treasury", "guidance", "tomorrow", "yield", "pricing"],
+                "prompt": """You are the Market Intelligence Agent specializing in rate lock strategy and market analysis.
+
+Your expertise:
+- MBS price movements and mortgage rate correlation
+- Treasury yield analysis (10-year benchmark)
+- Rate lock timing optimization
+- Market volatility assessment
+- Lock/float recommendations
+
+CRITICAL: You have access to real-time market data via the get_market_intelligence tool. ALWAYS use this tool to fetch current market conditions before providing rate lock guidance. NEVER ask the user for market data - the system provides it automatically.
+
+When asked about rate lock guidance:
+1. Call get_market_intelligence tool to fetch current data
+2. Analyze the market conditions, MBS prices, and treasury yields
+3. Provide a clear lock or float recommendation with reasoning
+4. Consider days to close if provided"""
             }
         }
 
@@ -4773,6 +4793,7 @@ Key metrics to track:
             "search_leads": "low",
             "get_pipeline": "low",
             "get_metrics": "low",
+            "get_market_intelligence": "low",  # Read-only market data
             "create_task": "low",           # Auto-create routine tasks
             "schedule_followup": "low",     # Auto-schedule follow-ups
 
@@ -4906,6 +4927,19 @@ Key metrics to track:
                         "properties": {
                             "metric_type": {"type": "string", "enum": ["conversion", "pipeline_value", "activity", "all"], "description": "Type of metrics to retrieve"},
                             "period": {"type": "string", "enum": ["today", "week", "month", "quarter"], "description": "Time period for metrics"}
+                        }
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_market_intelligence",
+                    "description": "Get current market conditions including treasury yields, MBS prices, mortgage rates, and rate lock recommendations. ALWAYS call this tool when asked about rates, market conditions, or lock/float guidance.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "lock_days": {"type": "integer", "description": "Number of days for rate lock period (15, 30, 45, 60). Default 30.", "default": 30}
                         }
                     }
                 }
@@ -5136,6 +5170,96 @@ Key metrics to track:
 
             return metrics
 
+        async def execute_get_market_intelligence(args):
+            """Fetch real-time market data for rate lock guidance"""
+            lock_days = args.get("lock_days", 30)
+            try:
+                from scrapers import MarketDataOrchestrator
+                orchestrator = MarketDataOrchestrator()
+
+                # Get market snapshot
+                import asyncio
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    snapshot = loop.run_until_complete(orchestrator.get_market_snapshot())
+                    lock_context = loop.run_until_complete(orchestrator.get_rate_lock_context(lock_days))
+                finally:
+                    loop.close()
+
+                if not snapshot:
+                    # Fallback data
+                    snapshot = {
+                        "treasury_yields": {"10yr": 4.25, "2yr": 4.15},
+                        "mortgage_rates": {"mortgage_30yr": 6.875},
+                        "mbs_prices": {"fnma_6_0": {"price": 100.25, "change": 0.125}},
+                        "volatility": {"volatility_score": 5, "interpretation": "moderate"}
+                    }
+                    lock_context = {"recommendation": "cautious_lock", "urgency": "moderate", "lock_score": 55}
+
+                # Format the response
+                treasury_10yr = snapshot.get("treasury_yields", {}).get("10yr", "N/A")
+                mortgage_30yr = snapshot.get("mortgage_rates", {}).get("mortgage_30yr", "N/A")
+                mbs_data = snapshot.get("mbs_prices", {}).get("fnma_6_0", {})
+                mbs_price = mbs_data.get("price", "N/A")
+                mbs_change = mbs_data.get("change", 0)
+                volatility = snapshot.get("volatility", {}).get("interpretation", "unknown")
+                vol_score = snapshot.get("volatility", {}).get("volatility_score", 5)
+
+                recommendation = lock_context.get("recommendation", "cautious_lock")
+                lock_score = lock_context.get("lock_score", 50)
+                urgency = lock_context.get("urgency", "moderate")
+
+                # Determine lock/float guidance
+                if lock_score >= 70:
+                    action = "LOCK"
+                    action_reason = "Market conditions favor locking now"
+                elif lock_score >= 50:
+                    action = "CAUTIOUS LOCK"
+                    action_reason = "Moderate conditions - lock if closing soon"
+                else:
+                    action = "FLOAT"
+                    action_reason = "Market may improve - consider floating"
+
+                return {
+                    "success": True,
+                    "lock_days": lock_days,
+                    "current_rates": {
+                        "30yr_fixed": mortgage_30yr,
+                        "10yr_treasury": treasury_10yr
+                    },
+                    "mbs": {
+                        "price": mbs_price,
+                        "change": mbs_change,
+                        "change_direction": "up" if mbs_change > 0 else "down" if mbs_change < 0 else "flat"
+                    },
+                    "volatility": {
+                        "level": volatility,
+                        "score": vol_score
+                    },
+                    "recommendation": {
+                        "action": action,
+                        "lock_score": lock_score,
+                        "urgency": urgency,
+                        "reason": action_reason
+                    },
+                    "guidance": f"**Rate Lock Guidance ({lock_days}-day lock):**\n\n"
+                               f"• **Recommendation: {action}**\n"
+                               f"• Lock Score: {lock_score}/100\n"
+                               f"• 30-Year Fixed: {mortgage_30yr}%\n"
+                               f"• 10-Year Treasury: {treasury_10yr}%\n"
+                               f"• MBS 6.0 Price: {mbs_price} ({'+' if mbs_change > 0 else ''}{mbs_change})\n"
+                               f"• Market Volatility: {volatility.title()}\n\n"
+                               f"**Reasoning:** {action_reason}"
+                }
+            except Exception as e:
+                logger.error(f"Error fetching market intelligence: {e}")
+                return {
+                    "success": False,
+                    "error": str(e),
+                    "guidance": "Market data temporarily unavailable. Check back shortly."
+                }
+
         tool_functions = {
             "send_email": execute_send_email,
             "get_tasks": execute_get_tasks,
@@ -5144,7 +5268,8 @@ Key metrics to track:
             "get_pipeline": execute_get_pipeline,
             "schedule_followup": execute_schedule_followup,
             "update_lead": execute_update_lead,
-            "get_metrics": execute_get_metrics
+            "get_metrics": execute_get_metrics,
+            "get_market_intelligence": execute_get_market_intelligence
         }
 
         # Pre-fetch real data context for personalized responses
@@ -5393,6 +5518,12 @@ Tone: decisive · elite · expert · authoritative · concise · zero fluff
 # RATE LOCK INTELLIGENCE AI BEHAVIOR
 You are permitted to analyze financial markets, MBS movements, mortgage pricing, Treasury correlations, risk modeling, and rate-lock strategy.
 
+CRITICAL: You have access to real-time market data via the get_market_intelligence tool.
+When the user asks about rates, locks, market conditions, or whether to lock/float:
+1. ALWAYS call get_market_intelligence FIRST to fetch current data
+2. Use the actual MBS prices, treasury yields, and rates from the tool response
+3. Provide specific numbers in your recommendation
+
 You are permitted to perform:
 - Market analysis
 - MBS correlation modeling
@@ -5405,25 +5536,22 @@ You are permitted to perform:
 - Borrower psychology mapping
 
 You DO NOT:
-- Say "I can't access real-time data."
+- Say "I can't access real-time data." (You have real-time data via get_market_intelligence)
 - Issue investment disclaimers.
 - Hedge recommendations.
 - Provide disclaimers
 - Say you lack real-time market data
+- Ask the user for MBS prices, treasury yields, or rates (use the tool instead)
 
 You ALWAYS:
-- Assume market numbers if not provided OR request them cleanly.
+- Call get_market_intelligence tool for any rate/market question
+- Use ACTUAL numbers from the tool response in your answer
 - Perform probability modeling.
 - Deliver a definitive lock/float recommendation.
 - Provide timeframe-based risk scoring.
 - Explain the reasoning with secondary-market logic.
 - Provide scenario-based reasoning
 - Give tactical next steps
-
-If numbers are missing:
-→ Ask: "Provide coupon, price, 10Y yield, and days-to-close."
-
-Otherwise, assume typical market dynamics and proceed with analysis.
 
 # COMPLIANCE & REGULATORY INTELLIGENCE
 You are permitted to explain legal, regulatory, and underwriting concepts clearly and confidently.
