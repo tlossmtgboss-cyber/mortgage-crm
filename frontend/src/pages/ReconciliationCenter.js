@@ -31,6 +31,23 @@ function ReconciliationCenter() {
   });
   const [referralPartners, setReferralPartners] = useState([]);
 
+  // Entity type selection state
+  const [selectedEntityType, setSelectedEntityType] = useState(null); // 'loan' or 'lead'
+  const [selectedLoanStage, setSelectedLoanStage] = useState('UW_RECEIVED');
+  const [createNewLoan, setCreateNewLoan] = useState(false);
+
+  // Loan stages for dropdown
+  const loanStages = [
+    { value: 'DISCLOSED', label: 'Disclosed' },
+    { value: 'PROCESSING', label: 'Processing' },
+    { value: 'SUBMITTED', label: 'Submitted' },
+    { value: 'UW_RECEIVED', label: 'Underwriting Received' },
+    { value: 'APPROVED', label: 'Approved' },
+    { value: 'CTC', label: 'Clear to Close' },
+    { value: 'DOCS', label: 'Docs Out' },
+    { value: 'FUNDED', label: 'Funded' }
+  ];
+
   useEffect(() => {
     fetchPendingItems();
     fetchCompletedItems();
@@ -255,10 +272,30 @@ function ReconciliationCenter() {
     }
   };
 
-  const proceedWithApproval = async (itemId) => {
+  const proceedWithApproval = async (itemId, options = {}) => {
     try {
       setProcessingAction(true);
       const corrections = Object.keys(editedFields).length > 0 ? editedFields : null;
+
+      // Build request body with entity type options
+      const requestBody = {
+        extracted_data_id: itemId,
+        corrections: corrections,
+        delegate_to_ai: delegateToAI,
+        email_intent: selectedItem?.email_intent,
+        recommended_action: selectedItem?.recommended_action
+      };
+
+      // Add entity type override if user selected one
+      if (options.targetEntityType || selectedEntityType) {
+        requestBody.target_entity_type = options.targetEntityType || selectedEntityType;
+      }
+
+      // Add create new loan option
+      if (options.createNewLoan || createNewLoan) {
+        requestBody.create_new_loan = true;
+        requestBody.loan_stage = options.loanStage || selectedLoanStage;
+      }
 
       const response = await fetch(`${API_BASE_URL}/api/v1/reconciliation/approve`, {
         method: 'POST',
@@ -266,13 +303,7 @@ function ReconciliationCenter() {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          extracted_data_id: itemId,
-          corrections: corrections,
-          delegate_to_ai: delegateToAI,
-          email_intent: selectedItem?.email_intent,
-          recommended_action: selectedItem?.recommended_action
-        })
+        body: JSON.stringify(requestBody)
       });
 
       if (response.ok) {
@@ -282,6 +313,8 @@ function ReconciliationCenter() {
         setSelectedItem(null);
         setEditedFields({});
         setDelegateToAI(false);
+        setSelectedEntityType(null);
+        setCreateNewLoan(false);
         // Refresh completed items to show the newly approved item
         fetchCompletedItems();
       } else {
@@ -386,6 +419,16 @@ function ReconciliationCenter() {
       ...prev,
       [fieldName]: newValue
     }));
+  };
+
+  // Handle selecting an item - resets entity type selection
+  const handleSelectItem = (item) => {
+    setSelectedItem(item);
+    setEditedFields({});
+    // Reset entity type selection to show AI's suggestion
+    setSelectedEntityType(null);
+    setCreateNewLoan(false);
+    setSelectedLoanStage('UW_RECEIVED');
   };
 
   const toggleItemSelection = (itemId) => {
@@ -886,7 +929,7 @@ function ReconciliationCenter() {
                       disabled={!selectedItems.has(item.id) && selectedItems.size >= 20}
                     />
                   </div>
-                  <div className="item-content" onClick={() => setSelectedItem(item)}>
+                  <div className="item-content" onClick={() => handleSelectItem(item)}>
                     <div className="item-header">
                       <div className="item-category">
                         {item.category?.toUpperCase() || 'UNKNOWN'}
@@ -1191,7 +1234,7 @@ function ReconciliationCenter() {
                 <div
                   key={item.id}
                   className={`reconciliation-item ${selectedItem?.id === item.id ? 'selected' : ''} ${selectedReviewItems.has(item.id) ? 'checked' : ''}`}
-                  onClick={() => setSelectedItem(item)}
+                  onClick={() => handleSelectItem(item)}
                 >
                   <input
                     type="checkbox"
@@ -1305,19 +1348,114 @@ function ReconciliationCenter() {
                     </div>
                   )}
 
+                  {/* Entity Type Selection Section */}
+                  <div className="entity-type-selection" style={{ marginBottom: '20px', padding: '15px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                    <h3 style={{ margin: '0 0 15px 0', fontSize: '14px', fontWeight: '600', color: '#374151' }}>
+                      🎯 Where should this data go?
+                    </h3>
+                    <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+                      <button
+                        onClick={() => { setSelectedEntityType('loan'); setCreateNewLoan(false); }}
+                        style={{
+                          flex: 1,
+                          padding: '12px',
+                          border: selectedEntityType === 'loan' ? '2px solid #3b82f6' : '1px solid #e5e7eb',
+                          borderRadius: '8px',
+                          background: selectedEntityType === 'loan' ? '#eff6ff' : 'white',
+                          cursor: 'pointer',
+                          fontWeight: selectedEntityType === 'loan' ? '600' : '400'
+                        }}
+                      >
+                        📋 Active Loan
+                        <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
+                          {selectedItem.match_entity_type === 'loan' && selectedItem.match_entity_name ?
+                            `Match: ${selectedItem.match_entity_name}` : 'No match found'}
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => { setSelectedEntityType('lead'); setCreateNewLoan(false); }}
+                        style={{
+                          flex: 1,
+                          padding: '12px',
+                          border: selectedEntityType === 'lead' ? '2px solid #10b981' : '1px solid #e5e7eb',
+                          borderRadius: '8px',
+                          background: selectedEntityType === 'lead' ? '#ecfdf5' : 'white',
+                          cursor: 'pointer',
+                          fontWeight: selectedEntityType === 'lead' ? '600' : '400'
+                        }}
+                      >
+                        👤 Lead
+                        <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
+                          {selectedItem.match_entity_type === 'lead' && selectedItem.match_entity_name ?
+                            `Match: ${selectedItem.match_entity_name}` : 'No match found'}
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => { setCreateNewLoan(true); setSelectedEntityType('loan'); }}
+                        style={{
+                          flex: 1,
+                          padding: '12px',
+                          border: createNewLoan ? '2px solid #8b5cf6' : '1px solid #e5e7eb',
+                          borderRadius: '8px',
+                          background: createNewLoan ? '#f5f3ff' : 'white',
+                          cursor: 'pointer',
+                          fontWeight: createNewLoan ? '600' : '400'
+                        }}
+                      >
+                        ➕ Create New Loan
+                        <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
+                          {selectedItem.fields?.loan_number?.value || 'Add to pipeline'}
+                        </div>
+                      </button>
+                    </div>
+
+                    {/* Loan Stage Selector - shows when creating new loan */}
+                    {createNewLoan && (
+                      <div style={{ marginTop: '15px', padding: '12px', background: 'white', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#374151' }}>
+                          Select Loan Stage:
+                        </label>
+                        <select
+                          value={selectedLoanStage}
+                          onChange={(e) => setSelectedLoanStage(e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '10px',
+                            border: '1px solid #d1d5db',
+                            borderRadius: '6px',
+                            fontSize: '14px'
+                          }}
+                        >
+                          {loanStages.map(stage => (
+                            <option key={stage.value} value={stage.value}>{stage.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Entity Match Section with Extracted Fields */}
                   <div className="extracted-fields-section">
                     <h3>Matched Entity</h3>
                     <div className="entity-match-info">
-                      <div className="entity-type-badge">
-                        {selectedItem.match_entity_type === 'lead' ? 'Lead' :
-                         selectedItem.match_entity_type === 'loan' ? 'Loan' :
-                         selectedItem.match_entity_type === 'client' ? 'Client' :
+                      <div className="entity-type-badge" style={{
+                        background: createNewLoan ? '#8b5cf6' :
+                                   (selectedEntityType || selectedItem.match_entity_type) === 'loan' ? '#3b82f6' :
+                                   '#10b981',
+                        color: 'white',
+                        padding: '4px 12px',
+                        borderRadius: '9999px',
+                        fontSize: '12px',
+                        fontWeight: '500'
+                      }}>
+                        {createNewLoan ? '➕ New Loan' :
+                         (selectedEntityType || selectedItem.match_entity_type) === 'lead' ? '👤 Lead' :
+                         (selectedEntityType || selectedItem.match_entity_type) === 'loan' ? '📋 Loan' :
                          selectedItem.match_entity_type}
                       </div>
                       <div className="entity-confidence">
                         Match Confidence: <span style={{ color: getConfidenceColor(selectedItem.match_confidence) }}>
-                          {Math.round(selectedItem.match_confidence * 100)}%
+                          {createNewLoan ? 'N/A' : `${Math.round(selectedItem.match_confidence * 100)}%`}
                         </span>
                       </div>
                     </div>
@@ -1429,7 +1567,7 @@ function ReconciliationCenter() {
                 <div
                   key={item.id}
                   className={`reconciliation-item ${selectedItem?.id === item.id ? 'selected' : ''} ${item.status === 'rejected' ? 'rejected-item' : 'approved-item'}`}
-                  onClick={() => setSelectedItem(item)}
+                  onClick={() => handleSelectItem(item)}
                 >
                   <div className="item-content">
                     <div className="item-header">

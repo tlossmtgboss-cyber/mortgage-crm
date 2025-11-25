@@ -2790,6 +2790,11 @@ class ReconciliationApproval(BaseModel):
     delegate_to_ai: Optional[bool] = False  # If user wants AI to handle this task type in future
     email_intent: Optional[str] = None  # Email intent type (for AI delegation)
     recommended_action: Optional[Dict[str, Any]] = None  # Recommended action details
+    # Entity type override - allows user to select if this is a Lead or Active Loan
+    target_entity_type: Optional[str] = None  # "loan" or "lead" - override AI's guess
+    target_entity_id: Optional[int] = None  # Specific entity to apply to (override match)
+    create_new_loan: Optional[bool] = False  # Create a new loan from this data
+    loan_stage: Optional[str] = None  # Stage for new loan (e.g., "PROCESSING", "UW_RECEIVED")
 
 class ReconciliationRejection(BaseModel):
     extracted_data_id: int
@@ -5092,26 +5097,62 @@ When asked about rate lock guidance:
             status_filter = args.get("status", "all")
             today = datetime.now().date()
 
-            query = db.query(Task).filter(Task.owner_id == current_user.id)
-            if status_filter != "all":
-                query = query.filter(Task.status == status_filter)
-            tasks = query.all()
+            # Query tasks WITH related loan and lead info for borrower context
+            task_query = text("""
+                SELECT t.id, t.title, t.due_date, t.status, t.priority, t.description,
+                       COALESCE(ln.borrower_name, ld.name, t.related_contact_name) as borrower_name,
+                       ln.amount as loan_amount, ln.stage as loan_stage, ln.loan_number,
+                       t.loan_id, t.lead_id
+                FROM tasks t
+                LEFT JOIN loans ln ON t.loan_id = ln.id
+                LEFT JOIN leads ld ON t.lead_id = ld.id
+                WHERE t.owner_id = :user_id
+                AND t.status != 'completed'
+                ORDER BY
+                    CASE WHEN t.priority = 'high' THEN 1 WHEN t.priority = 'medium' THEN 2 ELSE 3 END,
+                    t.due_date ASC NULLS LAST
+            """)
+            result = db.execute(task_query, {"user_id": current_user.id})
+            all_task_rows = result.fetchall()
 
-            if timeframe == "today":
-                tasks = [t for t in tasks if t.due_date and t.due_date.date() == today]
-            elif timeframe == "tomorrow":
-                tomorrow = today + timedelta(days=1)
-                tasks = [t for t in tasks if t.due_date and t.due_date.date() == tomorrow]
-            elif timeframe == "this_week":
-                week_end = today + timedelta(days=7)
-                tasks = [t for t in tasks if t.due_date and today <= t.due_date.date() <= week_end]
-            elif timeframe == "overdue":
-                tasks = [t for t in tasks if t.due_date and t.due_date.date() < today and t.status != "completed"]
+            # Filter based on timeframe
+            filtered_tasks = []
+            for row in all_task_rows:
+                task_date = row[2].date() if row[2] else None
+                if timeframe == "today":
+                    if task_date == today:
+                        filtered_tasks.append(row)
+                elif timeframe == "tomorrow":
+                    tomorrow = today + timedelta(days=1)
+                    if task_date == tomorrow:
+                        filtered_tasks.append(row)
+                elif timeframe == "this_week":
+                    week_end = today + timedelta(days=7)
+                    if task_date and today <= task_date <= week_end:
+                        filtered_tasks.append(row)
+                elif timeframe == "overdue":
+                    if task_date and task_date < today:
+                        filtered_tasks.append(row)
+                else:  # all outstanding
+                    filtered_tasks.append(row)
 
             return {
-                "count": len(tasks),
+                "count": len(filtered_tasks),
                 "timeframe": timeframe,
-                "tasks": [{"id": t.id, "title": t.title, "due_date": t.due_date.isoformat() if t.due_date else None, "status": t.status, "priority": t.priority} for t in tasks[:10]]
+                "tasks": [{
+                    "id": r[0],
+                    "title": r[1],
+                    "due_date": r[2].isoformat() if r[2] else None,
+                    "status": r[3],
+                    "priority": r[4],
+                    "description": r[5][:100] if r[5] else None,
+                    "borrower_name": r[6],
+                    "loan_amount": float(r[7]) if r[7] else None,
+                    "loan_stage": r[8],
+                    "loan_number": r[9],
+                    "loan_id": r[10],
+                    "lead_id": r[11]
+                } for r in filtered_tasks[:15]]
             }
 
         async def execute_create_task(args):
@@ -5384,7 +5425,7 @@ When asked about rate lock guidance:
         # Recent leads (last 5)
         recent_leads = sorted(all_leads, key=lambda x: x.created_at or datetime.min, reverse=True)[:5]
 
-        # Helper function to format task details
+        # Helper function to format task details WITH borrower/loan context
         def format_task_detail(task):
             details = [f"**{task.title}**"]
             if task.priority:
@@ -5395,11 +5436,22 @@ When asked about rate lock guidance:
                 details.append(f"Description: {task.description[:100]}{'...' if len(task.description or '') > 100 else ''}")
             if task.status:
                 details.append(f"Status: {task.status}")
-            # Get related lead/loan name
-            if task.lead_id:
+            # Get related loan name and details (check loan first, then lead)
+            if task.loan_id:
+                related_loan = next((ln for ln in all_loans if ln.id == task.loan_id), None)
+                if related_loan:
+                    loan_info = f"FOR: {related_loan.borrower_name}"
+                    if related_loan.amount:
+                        loan_info += f" (${related_loan.amount:,.0f})"
+                    if related_loan.stage:
+                        loan_info += f" - {str(related_loan.stage).replace('LoanStage.', '')}"
+                    details.append(loan_info)
+            elif task.lead_id:
                 related_lead = next((l for l in all_leads if l.id == task.lead_id), None)
                 if related_lead:
-                    details.append(f"Related to: {related_lead.name}")
+                    details.append(f"FOR: {related_lead.name}")
+            elif task.related_contact_name:
+                details.append(f"FOR: {task.related_contact_name}")
             return " | ".join(details)
 
         # Get all outstanding tasks (not completed)
@@ -11095,6 +11147,76 @@ async def approve_reconciliation(
             # Only apply specified fields
             original_fields = extracted.fields.copy()
             extracted.fields = {k: v for k, v in original_fields.items() if k in approval.approved_fields}
+
+        # Handle entity type override from user
+        if approval.target_entity_type:
+            # User explicitly selected entity type (loan or lead)
+            extracted.match_entity_type = approval.target_entity_type
+            if approval.target_entity_id:
+                extracted.match_entity_id = approval.target_entity_id
+
+        # Handle "Create New Loan" option
+        if approval.create_new_loan:
+            # Create a new loan from the extracted data
+            fields = extracted.fields or {}
+
+            def get_val(field_name, default=None):
+                """Helper to get field value"""
+                if field_name in fields and isinstance(fields[field_name], dict):
+                    return fields[field_name].get("value", default)
+                return default
+
+            # Get loan number (required)
+            loan_number = get_val("loan_number")
+            if not loan_number:
+                raise HTTPException(status_code=400, detail="Cannot create loan without loan number")
+
+            # Check if loan already exists
+            existing_loan = db.query(Loan).filter(Loan.loan_number == loan_number).first()
+            if existing_loan:
+                # Use existing loan instead of creating new
+                extracted.match_entity_type = "loan"
+                extracted.match_entity_id = existing_loan.id
+                logger.info(f"Found existing loan {loan_number}, using it instead of creating new")
+            else:
+                # Determine stage
+                stage_str = approval.loan_stage or "PROCESSING"
+                stage_map = {
+                    "DISCLOSED": LoanStage.DISCLOSED,
+                    "PROCESSING": LoanStage.PROCESSING,
+                    "SUBMITTED": LoanStage.SUBMITTED,
+                    "UW_RECEIVED": LoanStage.UW_RECEIVED,
+                    "APPROVED": LoanStage.APPROVED,
+                    "CTC": LoanStage.CTC,
+                    "DOCS": LoanStage.DOCS,
+                    "FUNDED": LoanStage.FUNDED,
+                }
+                stage = stage_map.get(stage_str.upper(), LoanStage.PROCESSING)
+
+                # Create new loan
+                new_loan = Loan(
+                    loan_number=loan_number,
+                    borrower_name=get_val("borrower_name", "Unknown"),
+                    coborrower_name=get_val("coborrower_name"),
+                    stage=stage,
+                    program=get_val("program"),
+                    amount=float(get_val("amount", 0) or get_val("loan_amount", 0) or 0),
+                    property_address=get_val("property_address"),
+                    property_city=get_val("property_city"),
+                    property_state=get_val("property_state"),
+                    property_zip=get_val("property_zip"),
+                    processor=get_val("processor"),
+                    lender=get_val("lender"),
+                    loan_officer_id=current_user.id
+                )
+                db.add(new_loan)
+                db.flush()  # Get the ID
+
+                # Update extracted data to point to new loan
+                extracted.match_entity_type = "loan"
+                extracted.match_entity_id = new_loan.id
+
+                logger.info(f"Created new loan {loan_number} (ID: {new_loan.id}) in {stage.value} stage")
 
         # Apply to CRM
         applied = apply_extracted_data(extracted, db)
