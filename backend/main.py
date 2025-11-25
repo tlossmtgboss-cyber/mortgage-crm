@@ -14951,6 +14951,198 @@ async def reprocess_unextracted_emails(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@app.post("/api/v1/reconciliation/reextract/{extracted_data_id}")
+async def reextract_email_data(
+    extracted_data_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Force re-extraction of a specific email using updated AI classification"""
+    try:
+        # Get the extracted data record
+        extracted = db.query(ExtractedData).filter(
+            ExtractedData.id == extracted_data_id
+        ).first()
+
+        if not extracted:
+            raise HTTPException(status_code=404, detail="Extracted data not found")
+
+        # Get the original email event
+        event = db.query(IncomingDataEvent).filter(
+            IncomingDataEvent.id == extracted.event_id
+        ).first()
+
+        if not event:
+            raise HTTPException(status_code=404, detail="Original email not found")
+
+        # Get the email content
+        content = event.raw_text or event.raw_html or ""
+        subject = event.subject or ""
+        sender = event.sender or ""
+
+        logger.info(f"Re-extracting email {extracted_data_id}: {subject[:50]}...")
+
+        # Use Claude parser for re-extraction
+        try:
+            from ai_providers.claude_parser import get_claude_parser
+            parser = get_claude_parser()
+
+            claude_email_data = {
+                "subject": subject,
+                "body_text": content,
+                "sender": sender,
+                "received_at": event.received_at.isoformat() if event.received_at else None
+            }
+
+            # Re-classify the email type
+            profile_type = parser.classify_email(claude_email_data)
+            logger.info(f"Re-classified as: {profile_type}")
+
+            # Re-parse with Claude
+            parsed_result = await parser.parse_email(
+                claude_email_data,
+                profile_type,
+                None
+            )
+
+            extracted_fields = parsed_result.get('extracted_fields', {})
+            confidence_scores = parsed_result.get('confidence_scores', {})
+
+            # Build new fields dict
+            new_fields = {}
+            for field_name, field_value in extracted_fields.items():
+                if field_value is not None:
+                    confidence = confidence_scores.get(field_name, 80)
+                    new_fields[field_name] = {
+                        "value": field_value,
+                        "confidence": confidence / 100 if confidence > 1 else confidence
+                    }
+
+            # Update the extracted data record
+            extracted.fields = new_fields
+            extracted.match_confidence = parsed_result.get('overall_confidence', 0) / 100
+            extracted.email_intent = parsed_result.get('email_summary', profile_type)
+            extracted.updated_at = datetime.utcnow()
+
+            db.commit()
+
+            logger.info(f"✅ Re-extracted {len(new_fields)} fields for email {extracted_data_id}")
+
+            return {
+                "status": "success",
+                "profile_type": profile_type,
+                "fields_extracted": len(new_fields),
+                "fields": new_fields,
+                "confidence": parsed_result.get('overall_confidence', 0)
+            }
+
+        except Exception as parse_error:
+            logger.error(f"Claude parsing error: {parse_error}")
+            raise HTTPException(status_code=500, detail=f"Parsing error: {str(parse_error)}")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Re-extraction error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/reconciliation/reextract-all-pending")
+async def reextract_all_pending_emails(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Force re-extraction of ALL pending reconciliation items using updated AI"""
+    try:
+        # Get all pending items
+        pending = db.query(ExtractedData).filter(
+            ExtractedData.status == "pending_review"
+        ).all()
+
+        if not pending:
+            return {
+                "status": "success",
+                "message": "No pending items to reprocess",
+                "reprocessed": 0
+            }
+
+        logger.info(f"Re-extracting {len(pending)} pending items...")
+
+        success_count = 0
+        errors = []
+
+        from ai_providers.claude_parser import get_claude_parser
+        parser = get_claude_parser()
+
+        for extracted in pending:
+            try:
+                # Get the original email event
+                event = db.query(IncomingDataEvent).filter(
+                    IncomingDataEvent.id == extracted.event_id
+                ).first()
+
+                if not event:
+                    continue
+
+                content = event.raw_text or event.raw_html or ""
+                subject = event.subject or ""
+                sender = event.sender or ""
+
+                claude_email_data = {
+                    "subject": subject,
+                    "body_text": content,
+                    "sender": sender,
+                    "received_at": event.received_at.isoformat() if event.received_at else None
+                }
+
+                # Re-classify and parse
+                profile_type = parser.classify_email(claude_email_data)
+                parsed_result = await parser.parse_email(claude_email_data, profile_type, None)
+
+                extracted_fields = parsed_result.get('extracted_fields', {})
+                confidence_scores = parsed_result.get('confidence_scores', {})
+
+                # Build new fields dict
+                new_fields = {}
+                for field_name, field_value in extracted_fields.items():
+                    if field_value is not None:
+                        confidence = confidence_scores.get(field_name, 80)
+                        new_fields[field_name] = {
+                            "value": field_value,
+                            "confidence": confidence / 100 if confidence > 1 else confidence
+                        }
+
+                # Update the record
+                extracted.fields = new_fields
+                extracted.match_confidence = parsed_result.get('overall_confidence', 0) / 100
+                extracted.email_intent = parsed_result.get('email_summary', profile_type)
+                extracted.updated_at = datetime.utcnow()
+
+                success_count += 1
+                logger.info(f"Re-extracted {extracted.id}: {len(new_fields)} fields as {profile_type}")
+
+            except Exception as item_error:
+                errors.append(f"Item {extracted.id}: {str(item_error)}")
+                logger.error(f"Error re-extracting item {extracted.id}: {item_error}")
+
+        db.commit()
+
+        return {
+            "status": "success",
+            "total_pending": len(pending),
+            "reprocessed": success_count,
+            "errors": errors[:5] if errors else [],
+            "message": f"Re-extracted {success_count}/{len(pending)} items"
+        }
+
+    except Exception as e:
+        logger.error(f"Bulk re-extraction error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/v1/microsoft/sync-calendar")
 async def sync_microsoft_calendar(
     current_user: User = Depends(get_current_user),
