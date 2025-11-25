@@ -8689,25 +8689,56 @@ def extract_borrower_from_subject(subject: str) -> Optional[str]:
     if not subject:
         return None
 
-    # Pattern 1: "Loan # XXX - LastName -" or "Loan # XXX - LastName - Status"
+    # Pattern 1: "FirstName LastName RCA0000006026" - Full name before loan number
+    # e.g., "Emma Spink RCA0000006026 - Accepted Electronic Consent"
+    match = re.search(r'^([A-Za-z]+(?:\s+[A-Za-z]+)+)\s+[A-Z]{2,3}\d{7,}', subject)
+    if match:
+        return match.group(1).strip()
+
+    # Pattern 2: "Closing Docs Downloaded, FirstName LastName, RCA..."
+    # e.g., "Closing Docs Downloaded, Kelly M Capps, RCA0000010910"
+    match = re.search(r',\s*([A-Za-z]+(?:\s+[A-Za-z]+)+)\s*,\s*[A-Z]{2,3}\d+', subject)
+    if match:
+        return match.group(1).strip()
+
+    # Pattern 3: "LastName - RCA0000011023" format
+    # e.g., "Davis - RCA0000011023 Signing Completed"
+    match = re.search(r'([A-Za-z]+)\s*-\s*[A-Z]{2,3}\d{7,}', subject)
+    if match:
+        return match.group(1).strip()
+
+    # Pattern 4: "Loan # XXX - LastName -" or "Loan # XXX - LastName - Status"
     match = re.search(r'Loan\s*#?\s*\w+\s*-\s*([A-Za-z]+)\s*-', subject, re.IGNORECASE)
     if match:
         return match.group(1).strip()
 
-    # Pattern 2: "[LastName-LoanNumber]" like "[Spink-RCA0000006026]"
+    # Pattern 5: "[LastName-LoanNumber]" like "[Spink-RCA0000006026]"
     match = re.search(r'\[([A-Za-z]+)-\w+\]', subject)
     if match:
         return match.group(1).strip()
 
-    # Pattern 3: "LastName-LoanNumber:" or "Name - LoanNumber"
-    match = re.search(r'([A-Za-z]+)\s*-\s*[A-Z]{2,3}\d+', subject)
+    # Pattern 6: "Disclosures for FirstName LastName, RCA..."
+    # e.g., "CMG Mortgage... - Disclosures for John Whitten, RCA0000006456"
+    match = re.search(r'Disclosures for\s+([A-Za-z]+(?:\s+[A-Za-z]+)+)\s*,', subject, re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
+
+    # Pattern 7: "Package Sent, RCA..." - check body instead
+    # Pattern 8: "for FirstName LastName were" - generic
+    match = re.search(r'for\s+([A-Za-z]+(?:\s+[A-Za-z]+)+)\s+were', subject, re.IGNORECASE)
     if match:
         return match.group(1).strip()
 
     return None
 
 def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str, Any]:
-    """Match extracted fields to existing CRM entities"""
+    """Match extracted fields to existing CRM entities
+
+    Enhanced matching includes:
+    - Loan number exact and partial matching
+    - Borrower name matching (primary and co-borrower)
+    - Last name matching for spouse/family identification
+    """
 
     match_results = {
         "entity_type": None,
@@ -8715,6 +8746,31 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
         "confidence": 0.0,
         "candidates": []
     }
+
+    def get_last_name(full_name: str) -> str:
+        """Extract last name from full name"""
+        if not full_name:
+            return ""
+        parts = full_name.strip().split()
+        return parts[-1].lower() if parts else ""
+
+    def names_match(name1: str, name2: str) -> tuple[bool, float]:
+        """Check if names match - returns (is_match, confidence)"""
+        if not name1 or not name2:
+            return False, 0.0
+        n1 = name1.lower().strip()
+        n2 = name2.lower().strip()
+        # Exact match
+        if n1 == n2:
+            return True, 0.95
+        # One contains the other (partial name match)
+        if n1 in n2 or n2 in n1:
+            return True, 0.80
+        # Last name match (likely spouse/family)
+        ln1, ln2 = get_last_name(name1), get_last_name(name2)
+        if ln1 and ln2 and ln1 == ln2:
+            return True, 0.75
+        return False, 0.0
 
     # Try to match by loan number first (highest confidence)
     if "loan_number" in fields and fields["loan_number"].get("value"):
@@ -8763,74 +8819,115 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
             match_results["confidence"] = 0.85
             return match_results
 
-    # Try to match by borrower name + fuzzy matching
+    # Extract borrower name from fields
+    borrower_name = None
     if "borrower_name" in fields and fields["borrower_name"].get("value"):
-        borrower = fields["borrower_name"]["value"].lower().strip()
+        borrower_name = fields["borrower_name"]["value"]
+
+    # Try to match by borrower name + co-borrower name + last name matching
+    if borrower_name:
+        borrower = borrower_name.lower().strip()
+        borrower_last_name = get_last_name(borrower_name)
+        logger.info(f"Attempting to match borrower name: '{borrower}' (last name: '{borrower_last_name}')")
 
         # Try leads first - user's leads
         leads = db.query(Lead).filter(Lead.owner_id == user_id).all()
         for lead in leads:
             if lead.name:
-                lead_name_lower = lead.name.lower()
-                # Exact match
-                if borrower == lead_name_lower:
+                is_match, conf = names_match(borrower_name, lead.name)
+                if is_match:
                     match_results["candidates"].append({
                         "type": "lead",
                         "id": lead.id,
                         "name": lead.name,
-                        "confidence": 0.90
-                    })
-                # Partial match (name contained in either direction)
-                elif borrower in lead_name_lower or lead_name_lower in borrower:
-                    match_results["candidates"].append({
-                        "type": "lead",
-                        "id": lead.id,
-                        "name": lead.name,
-                        "confidence": 0.75
+                        "confidence": conf,
+                        "match_type": "lead_name"
                     })
 
-        # Try loans - user's loans first
+        # Try loans - check borrower_name AND coborrower_name
         loans = db.query(Loan).filter(Loan.loan_officer_id == user_id).all()
         for loan in loans:
+            # Match against primary borrower
             if loan.borrower_name:
-                loan_name_lower = loan.borrower_name.lower()
-                # Exact match
-                if borrower == loan_name_lower:
+                is_match, conf = names_match(borrower_name, loan.borrower_name)
+                if is_match:
                     match_results["candidates"].append({
                         "type": "loan",
                         "id": loan.id,
                         "name": loan.borrower_name,
-                        "confidence": 0.92
-                    })
-                # Partial match
-                elif borrower in loan_name_lower or loan_name_lower in borrower:
-                    match_results["candidates"].append({
-                        "type": "loan",
-                        "id": loan.id,
-                        "name": loan.borrower_name,
-                        "confidence": 0.80
+                        "confidence": conf,
+                        "match_type": "borrower_name"
                     })
 
-        # If no matches found with user filter, try broader search
-        if not match_results["candidates"]:
-            all_loans = db.query(Loan).all()
-            for loan in all_loans:
-                if loan.borrower_name:
-                    loan_name_lower = loan.borrower_name.lower()
-                    if borrower in loan_name_lower or loan_name_lower in borrower:
+            # Match against co-borrower (spouse)
+            if loan.coborrower_name:
+                is_match, conf = names_match(borrower_name, loan.coborrower_name)
+                if is_match:
+                    # Co-borrower match - still high confidence
+                    match_results["candidates"].append({
+                        "type": "loan",
+                        "id": loan.id,
+                        "name": f"{loan.borrower_name} (co-borrower: {loan.coborrower_name})",
+                        "confidence": conf * 0.95,  # Slightly lower for co-borrower
+                        "match_type": "coborrower_name"
+                    })
+
+            # Last name match - check if email name shares last name with borrower/coborrower
+            if borrower_last_name:
+                borrower_ln = get_last_name(loan.borrower_name) if loan.borrower_name else ""
+                coborrower_ln = get_last_name(loan.coborrower_name) if loan.coborrower_name else ""
+
+                if borrower_last_name == borrower_ln or borrower_last_name == coborrower_ln:
+                    # Avoid duplicates - check if we already have this loan
+                    existing = next((c for c in match_results["candidates"]
+                                   if c["type"] == "loan" and c["id"] == loan.id), None)
+                    if not existing:
                         match_results["candidates"].append({
                             "type": "loan",
                             "id": loan.id,
                             "name": loan.borrower_name,
-                            "confidence": 0.70  # Lower confidence for non-owned loan
+                            "confidence": 0.75,  # Last name only match
+                            "match_type": "last_name_family"
+                        })
+
+        # If no matches found with user filter, try broader search
+        if not match_results["candidates"]:
+            logger.info("No matches with user filter, trying all loans...")
+            all_loans = db.query(Loan).all()
+            for loan in all_loans:
+                # Check borrower name
+                if loan.borrower_name:
+                    is_match, conf = names_match(borrower_name, loan.borrower_name)
+                    if is_match:
+                        match_results["candidates"].append({
+                            "type": "loan",
+                            "id": loan.id,
+                            "name": loan.borrower_name,
+                            "confidence": conf * 0.85,  # Lower for non-owned loan
+                            "match_type": "borrower_name_global"
+                        })
+
+                # Check co-borrower name
+                if loan.coborrower_name:
+                    is_match, conf = names_match(borrower_name, loan.coborrower_name)
+                    if is_match:
+                        match_results["candidates"].append({
+                            "type": "loan",
+                            "id": loan.id,
+                            "name": f"{loan.borrower_name} (co-borrower: {loan.coborrower_name})",
+                            "confidence": conf * 0.80,
+                            "match_type": "coborrower_name_global"
                         })
 
     # Return best candidate if found
     if match_results["candidates"]:
         best = max(match_results["candidates"], key=lambda x: x["confidence"])
+        logger.info(f"Best match: {best['type']} id={best['id']} conf={best['confidence']:.2f} via {best.get('match_type', 'unknown')}")
         match_results["entity_type"] = best["type"]
         match_results["entity_id"] = best["id"]
         match_results["confidence"] = best["confidence"]
+    else:
+        logger.info("No entity match found")
 
     return match_results
 
