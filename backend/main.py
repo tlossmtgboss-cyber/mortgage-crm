@@ -10427,11 +10427,16 @@ async def get_pending_reconciliation(
     """Get all pending reconciliation items for review"""
     try:
         # Get all extracted data that needs review
+        # Include items where user_id matches OR user_id is NULL (unassigned items)
+        from sqlalchemy import or_
         pending = db.query(ExtractedData).join(
             IncomingDataEvent,
             ExtractedData.event_id == IncomingDataEvent.id
         ).filter(
-            IncomingDataEvent.user_id == current_user.id,
+            or_(
+                IncomingDataEvent.user_id == current_user.id,
+                IncomingDataEvent.user_id == None
+            ),
             ExtractedData.status.in_(["pending_review", "needs_review"])
         ).order_by(ExtractedData.created_at.desc()).all()
 
@@ -10615,7 +10620,7 @@ async def approve_reconciliation(
     - Settings will allow users to enable/disable AI auto-execution per category
     """
     try:
-        # Get extracted data
+        # Get extracted data - first try with user filter
         extracted = db.query(ExtractedData).join(
             IncomingDataEvent,
             ExtractedData.event_id == IncomingDataEvent.id
@@ -10623,6 +10628,20 @@ async def approve_reconciliation(
             ExtractedData.id == approval.extracted_data_id,
             IncomingDataEvent.user_id == current_user.id
         ).first()
+
+        # If not found, try without user filter (for items with NULL user_id)
+        if not extracted:
+            extracted = db.query(ExtractedData).filter(
+                ExtractedData.id == approval.extracted_data_id
+            ).first()
+
+            if extracted:
+                # Update the event's user_id to current user
+                event = db.query(IncomingDataEvent).filter(
+                    IncomingDataEvent.id == extracted.event_id
+                ).first()
+                if event and not event.user_id:
+                    event.user_id = current_user.id
 
         if not extracted:
             raise HTTPException(status_code=404, detail="Extracted data not found")
@@ -10721,7 +10740,7 @@ async def reject_reconciliation(
 ):
     """Reject extracted data"""
     try:
-        # Get extracted data
+        # Get extracted data - first try with user filter
         extracted = db.query(ExtractedData).join(
             IncomingDataEvent,
             ExtractedData.event_id == IncomingDataEvent.id
@@ -10729,6 +10748,20 @@ async def reject_reconciliation(
             ExtractedData.id == rejection.extracted_data_id,
             IncomingDataEvent.user_id == current_user.id
         ).first()
+
+        # If not found, try without user filter (for items with NULL user_id)
+        if not extracted:
+            extracted = db.query(ExtractedData).filter(
+                ExtractedData.id == rejection.extracted_data_id
+            ).first()
+
+            if extracted:
+                # Update the event's user_id to current user so it's associated properly
+                event = db.query(IncomingDataEvent).filter(
+                    IncomingDataEvent.id == extracted.event_id
+                ).first()
+                if event and not event.user_id:
+                    event.user_id = current_user.id
 
         if not extracted:
             raise HTTPException(status_code=404, detail="Extracted data not found")
