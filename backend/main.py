@@ -412,6 +412,19 @@ class Loan(Base):
     predicted_close_date = Column(DateTime)
     risk_score = Column(Integer, default=0)
     user_metadata = Column(JSON)
+    # Appraisal tracking fields
+    appraisal_ordered_date = Column(DateTime)
+    appraisal_scheduled_date = Column(DateTime)
+    appraisal_completed_date = Column(DateTime)
+    appraisal_value = Column(Float)
+    # Rate lock fields
+    lock_expiration_date = Column(DateTime)
+    # Property details (split address)
+    property_city = Column(String)
+    property_state = Column(String)
+    property_zip = Column(String)
+    # Lender info
+    lender = Column(String)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     loan_officer = relationship("User", back_populates="loans")
@@ -8855,56 +8868,248 @@ def generate_recommended_action(email_intent: Dict[str, Any], entity_type: str, 
     }
 
 def apply_extracted_data(extracted_data: ExtractedData, db: Session) -> bool:
-    """Apply extracted data to CRM entities"""
+    """Apply extracted data to CRM entities - save all extracted fields to the borrower's profile"""
+
+    def get_field_value(fields: dict, field_name: str, min_confidence: float = 0.70):
+        """Helper to safely get field value if confidence is high enough"""
+        if field_name in fields:
+            field = fields[field_name]
+            if isinstance(field, dict) and field.get("confidence", 0) >= min_confidence:
+                return field.get("value")
+        return None
+
+    def parse_date(date_str):
+        """Parse various date formats to datetime"""
+        if not date_str:
+            return None
+        try:
+            if isinstance(date_str, datetime):
+                return date_str
+            # Try ISO format first
+            return datetime.fromisoformat(str(date_str).replace('Z', '+00:00'))
+        except:
+            try:
+                # Try common formats
+                from dateutil import parser
+                return parser.parse(str(date_str))
+            except:
+                return None
 
     try:
+        fields = extracted_data.fields or {}
+        updated_fields = []
+
         if extracted_data.match_entity_type == "loan" and extracted_data.match_entity_id:
             loan = db.query(Loan).filter(Loan.id == extracted_data.match_entity_id).first()
             if not loan:
+                logger.warning(f"Loan {extracted_data.match_entity_id} not found for data application")
                 return False
 
-            # Apply high-confidence fields
-            fields = extracted_data.fields
+            logger.info(f"Applying extracted data to loan {loan.id} ({loan.loan_number})")
 
-            if "rate" in fields and fields["rate"]["confidence"] > 0.85:
-                loan.rate = float(fields["rate"]["value"])
+            # Borrower name
+            if value := get_field_value(fields, "borrower_name"):
+                loan.borrower_name = str(value)
+                updated_fields.append("borrower_name")
 
-            if "loan_amount" in fields and fields["loan_amount"]["confidence"] > 0.85:
-                loan.loan_amount = float(fields["loan_amount"]["value"])
+            # Co-borrower name
+            if value := get_field_value(fields, "coborrower_name"):
+                loan.coborrower_name = str(value)
+                updated_fields.append("coborrower_name")
 
-            if "closing_date" in fields and fields["closing_date"]["confidence"] > 0.80:
-                loan.closing_date = datetime.fromisoformat(fields["closing_date"]["value"])
+            # Amount / Loan Amount
+            if value := get_field_value(fields, "amount"):
+                loan.amount = float(value)
+                updated_fields.append("amount")
+            elif value := get_field_value(fields, "loan_amount"):
+                loan.amount = float(value)
+                updated_fields.append("amount")
 
-            if "milestone" in fields and fields["milestone"]["confidence"] > 0.90:
-                # Update stage based on milestone
-                milestone = fields["milestone"]["value"]
-                if "ClearToClose" in milestone or "CTC" in milestone:
+            # Rate
+            if value := get_field_value(fields, "rate"):
+                loan.rate = float(value)
+                updated_fields.append("rate")
+
+            # Program
+            if value := get_field_value(fields, "program"):
+                loan.program = str(value)
+                updated_fields.append("program")
+
+            # Property Address
+            if value := get_field_value(fields, "property_address"):
+                loan.property_address = str(value)
+                updated_fields.append("property_address")
+
+            # Property City
+            if value := get_field_value(fields, "property_city"):
+                loan.property_city = str(value)
+                updated_fields.append("property_city")
+
+            # Property State
+            if value := get_field_value(fields, "property_state"):
+                loan.property_state = str(value)
+                updated_fields.append("property_state")
+
+            # Property Zip
+            if value := get_field_value(fields, "property_zip"):
+                loan.property_zip = str(value)
+                updated_fields.append("property_zip")
+
+            # Processor
+            if value := get_field_value(fields, "processor"):
+                loan.processor = str(value)
+                updated_fields.append("processor")
+
+            # Underwriter
+            if value := get_field_value(fields, "underwriter"):
+                loan.underwriter = str(value)
+                updated_fields.append("underwriter")
+
+            # Lender
+            if value := get_field_value(fields, "lender"):
+                loan.lender = str(value)
+                updated_fields.append("lender")
+
+            # Realtor
+            if value := get_field_value(fields, "realtor_name"):
+                loan.realtor_agent = str(value)
+                updated_fields.append("realtor_agent")
+
+            # Title Company
+            if value := get_field_value(fields, "title_company"):
+                loan.title_company = str(value)
+                updated_fields.append("title_company")
+
+            # Closing Date
+            if value := get_field_value(fields, "closing_date"):
+                if parsed := parse_date(value):
+                    loan.closing_date = parsed
+                    updated_fields.append("closing_date")
+            elif value := get_field_value(fields, "closing_scheduled_date"):
+                if parsed := parse_date(value):
+                    loan.closing_date = parsed
+                    updated_fields.append("closing_date")
+
+            # Lock Date
+            if value := get_field_value(fields, "rate_lock_date"):
+                if parsed := parse_date(value):
+                    loan.lock_date = parsed
+                    updated_fields.append("lock_date")
+
+            # Lock Expiration
+            if value := get_field_value(fields, "lock_expiration"):
+                if parsed := parse_date(value):
+                    loan.lock_expiration_date = parsed
+                    updated_fields.append("lock_expiration_date")
+
+            # Appraisal Ordered Date
+            if value := get_field_value(fields, "appraisal_ordered_date"):
+                if parsed := parse_date(value):
+                    loan.appraisal_ordered_date = parsed
+                    updated_fields.append("appraisal_ordered_date")
+
+            # Appraisal Scheduled Date
+            if value := get_field_value(fields, "appraisal_scheduled_date"):
+                if parsed := parse_date(value):
+                    loan.appraisal_scheduled_date = parsed
+                    updated_fields.append("appraisal_scheduled_date")
+
+            # Appraisal Completed Date
+            if value := get_field_value(fields, "appraisal_completed_date"):
+                if parsed := parse_date(value):
+                    loan.appraisal_completed_date = parsed
+                    updated_fields.append("appraisal_completed_date")
+
+            # Appraisal Value
+            if value := get_field_value(fields, "appraisal_value"):
+                loan.appraisal_value = float(value)
+                updated_fields.append("appraisal_value")
+
+            # Milestone - update stage based on milestone
+            if value := get_field_value(fields, "milestone", min_confidence=0.85):
+                milestone = str(value).lower()
+                if "clearto" in milestone or "ctc" in milestone:
                     loan.stage = LoanStage.CTC
-                elif "Processing" in milestone:
+                    updated_fields.append("stage->CTC")
+                elif "approved" in milestone:
+                    loan.stage = LoanStage.APPROVED
+                    updated_fields.append("stage->APPROVED")
+                elif "processing" in milestone:
                     loan.stage = LoanStage.PROCESSING
+                    updated_fields.append("stage->PROCESSING")
+                elif "u/w" in milestone or "underwriting" in milestone or "received" in milestone:
+                    loan.stage = LoanStage.UW_RECEIVED
+                    updated_fields.append("stage->UW_RECEIVED")
+                elif "submitted" in milestone:
+                    loan.stage = LoanStage.SUBMITTED
+                    updated_fields.append("stage->SUBMITTED")
+                elif "funded" in milestone:
+                    loan.stage = LoanStage.FUNDED
+                    loan.funded_date = datetime.now(timezone.utc)
+                    updated_fields.append("stage->FUNDED")
+
+            # Update the updated_at timestamp
+            loan.updated_at = datetime.now(timezone.utc)
 
             db.commit()
+            logger.info(f"✅ Applied {len(updated_fields)} fields to loan {loan.loan_number}: {', '.join(updated_fields)}")
             return True
 
         elif extracted_data.match_entity_type == "lead" and extracted_data.match_entity_id:
             lead = db.query(Lead).filter(Lead.id == extracted_data.match_entity_id).first()
             if not lead:
+                logger.warning(f"Lead {extracted_data.match_entity_id} not found for data application")
                 return False
 
-            fields = extracted_data.fields
+            logger.info(f"Applying extracted data to lead {lead.id} ({lead.name})")
 
-            if "credit_score" in fields and fields["credit_score"]["confidence"] > 0.85:
-                lead.credit_score = int(fields["credit_score"]["value"])
+            # Update lead fields
+            if value := get_field_value(fields, "borrower_name"):
+                lead.name = str(value)
+                updated_fields.append("name")
 
-            if "loan_amount" in fields and fields["loan_amount"]["confidence"] > 0.80:
-                lead.loan_amount = float(fields["loan_amount"]["value"])
+            if value := get_field_value(fields, "email"):
+                lead.email = str(value)
+                updated_fields.append("email")
+
+            if value := get_field_value(fields, "phone"):
+                lead.phone = str(value)
+                updated_fields.append("phone")
+
+            if value := get_field_value(fields, "credit_score"):
+                lead.credit_score = int(value)
+                updated_fields.append("credit_score")
+
+            if value := get_field_value(fields, "loan_amount"):
+                lead.loan_amount = float(value)
+                updated_fields.append("loan_amount")
+            elif value := get_field_value(fields, "amount"):
+                lead.loan_amount = float(value)
+                updated_fields.append("loan_amount")
+
+            if value := get_field_value(fields, "property_address"):
+                lead.property_address = str(value)
+                updated_fields.append("property_address")
+
+            if value := get_field_value(fields, "program"):
+                lead.loan_type = str(value)
+                updated_fields.append("loan_type")
+
+            # Update timestamp
+            lead.updated_at = datetime.now(timezone.utc)
 
             db.commit()
+            logger.info(f"✅ Applied {len(updated_fields)} fields to lead {lead.name}: {', '.join(updated_fields)}")
             return True
 
-        return False
+        # No match - return True anyway since data was extracted, just nowhere to apply
+        logger.info("No matched entity to apply data to")
+        return True
+
     except Exception as e:
         logger.error(f"Apply extracted data error: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         db.rollback()
         return False
 
