@@ -1,23 +1,42 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import ProgressIndicator from './ProgressIndicator';
 import Step1Registration from './steps/Step1Registration';
+import Step2ProfileSetup from './steps/Step2ProfileSetup';
+import Step3AIPreferences from './steps/Step3AIPreferences';
+import Step4Training from './steps/Step4Training';
+import Step5Confirmation from './steps/Step5Confirmation';
 import './OnboardingWizard.css';
+
+const TOTAL_STEPS = 5;
+const API_BASE = 'https://mortgage-crm-production-7a9a.up.railway.app/api/v1';
 
 const OnboardingWizard = () => {
   const { step } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const currentStep = parseInt(step) || 1;
 
+  // Get invite token from URL if present
+  const inviteToken = searchParams.get('token');
+
   const [progressId, setProgressId] = useState(null);
-  const [stepData, setStepData] = useState({});
+  const [inviteData, setInviteData] = useState(null);
+  const [allStepData, setAllStepData] = useState({
+    step1: {},
+    step2: {},
+    step3: {},
+    step4: {},
+    step5: {}
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState('');
+  const [error, setError] = useState(null);
 
   // Load progress on mount
   useEffect(() => {
-    loadProgress();
+    initializeOnboarding();
   }, []);
 
   // Auto-save every 30 seconds
@@ -26,15 +45,56 @@ const OnboardingWizard = () => {
 
     const autoSaveInterval = setInterval(() => {
       autoSave();
-    }, 30000); // 30 seconds
+    }, 30000);
 
     return () => clearInterval(autoSaveInterval);
-  }, [progressId, stepData, currentStep]);
+  }, [progressId, allStepData, currentStep]);
+
+  const initializeOnboarding = async () => {
+    try {
+      // If there's an invite token, validate it first
+      if (inviteToken) {
+        await validateInviteToken(inviteToken);
+      }
+
+      await loadProgress();
+    } catch (error) {
+      console.error('Error initializing onboarding:', error);
+      setError('Failed to initialize onboarding. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const validateInviteToken = async (token) => {
+    try {
+      const response = await fetch(`${API_BASE}/onboarding/invite/validate/${token}`);
+
+      if (response.ok) {
+        const data = await response.json();
+        setInviteData(data);
+
+        // Pre-populate step 2 with invite data
+        setAllStepData(prev => ({
+          ...prev,
+          step2: {
+            ...prev.step2,
+            first_name: data.first_name || '',
+            last_name: data.last_name || ''
+          }
+        }));
+      } else if (response.status === 404 || response.status === 400) {
+        setError('This invite link is invalid or has expired.');
+      }
+    } catch (error) {
+      console.error('Error validating invite:', error);
+    }
+  };
 
   const loadProgress = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('https://mortgage-crm-production-7a9a.up.railway.app/api/v1/onboarding/resume', {
+      const response = await fetch(`${API_BASE}/onboarding/resume`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -45,15 +105,22 @@ const OnboardingWizard = () => {
         const data = await response.json();
         setProgressId(data.id);
 
-        // Load step-specific data if it exists
-        const stepKey = `step_${currentStep}_data`;
-        if (data[stepKey]) {
-          setStepData(data[stepKey]);
-        }
+        // Load all step data
+        const loadedData = {
+          step1: data.step_1_data || {},
+          step2: data.step_2_data || {},
+          step3: data.step_3_data || {},
+          step4: data.step_4_data || {},
+          step5: data.step_5_data || {}
+        };
+        setAllStepData(prev => ({
+          ...prev,
+          ...loadedData
+        }));
 
         // If current URL step doesn't match saved progress, redirect
-        if (data.current_step !== currentStep) {
-          navigate(`/onboarding/${data.current_step}`);
+        if (data.current_step && data.current_step !== currentStep) {
+          navigate(`/onboarding/${data.current_step}${inviteToken ? `?token=${inviteToken}` : ''}`);
         }
       } else if (response.status === 404) {
         // No progress found, start new onboarding
@@ -61,20 +128,21 @@ const OnboardingWizard = () => {
       }
     } catch (error) {
       console.error('Error loading progress:', error);
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const startOnboarding = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('https://mortgage-crm-production-7a9a.up.railway.app/api/v1/onboarding/start', {
+      const response = await fetch(`${API_BASE}/onboarding/start`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify({
+          invite_token: inviteToken || null
+        })
       });
 
       if (response.ok) {
@@ -87,13 +155,16 @@ const OnboardingWizard = () => {
   };
 
   const autoSave = async () => {
-    if (!progressId || Object.keys(stepData).length === 0) return;
+    if (!progressId) return;
+
+    const currentStepData = allStepData[`step${currentStep}`];
+    if (!currentStepData || Object.keys(currentStepData).length === 0) return;
 
     try {
       setAutoSaveStatus('Saving...');
       const token = localStorage.getItem('token');
 
-      const response = await fetch('https://mortgage-crm-production-7a9a.up.railway.app/api/v1/onboarding/auto-save', {
+      const response = await fetch(`${API_BASE}/onboarding/auto-save`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -101,7 +172,7 @@ const OnboardingWizard = () => {
         },
         body: JSON.stringify({
           step_number: currentStep,
-          step_data: stepData
+          step_data: currentStepData
         })
       });
 
@@ -121,7 +192,7 @@ const OnboardingWizard = () => {
       setIsSaving(true);
       const token = localStorage.getItem('token');
 
-      const response = await fetch(`https://mortgage-crm-production-7a9a.up.railway.app/api/v1/onboarding/step-${currentStep}/save`, {
+      const response = await fetch(`${API_BASE}/onboarding/step-${currentStep}/save`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -131,11 +202,14 @@ const OnboardingWizard = () => {
       });
 
       if (response.ok) {
-        setStepData(data);
+        setAllStepData(prev => ({
+          ...prev,
+          [`step${currentStep}`]: data
+        }));
         return true;
       } else {
-        const error = await response.json();
-        console.error('Save error:', error);
+        const errorData = await response.json();
+        console.error('Save error:', errorData);
         return false;
       }
     } catch (error) {
@@ -150,7 +224,7 @@ const OnboardingWizard = () => {
     try {
       const token = localStorage.getItem('token');
 
-      const response = await fetch(`https://mortgage-crm-production-7a9a.up.railway.app/api/v1/onboarding/step/${currentStep}/complete`, {
+      const response = await fetch(`${API_BASE}/onboarding/step/${currentStep}/complete`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -166,8 +240,10 @@ const OnboardingWizard = () => {
   };
 
   const handleNext = async () => {
+    const currentStepData = allStepData[`step${currentStep}`];
+
     // Save current step data
-    const saved = await saveStep(stepData);
+    const saved = await saveStep(currentStepData);
     if (!saved) {
       alert('Please fix the errors before proceeding.');
       return;
@@ -181,30 +257,73 @@ const OnboardingWizard = () => {
     }
 
     // Navigate to next step
-    if (currentStep < 10) {
-      navigate(`/onboarding/${currentStep + 1}`);
-    } else {
-      // Onboarding complete
-      navigate('/dashboard');
+    if (currentStep < TOTAL_STEPS) {
+      navigate(`/onboarding/${currentStep + 1}${inviteToken ? `?token=${inviteToken}` : ''}`);
     }
   };
 
   const handleBack = () => {
     if (currentStep > 1) {
-      navigate(`/onboarding/${currentStep - 1}`);
+      navigate(`/onboarding/${currentStep - 1}${inviteToken ? `?token=${inviteToken}` : ''}`);
     }
   };
 
   const handleSaveAndExit = async () => {
-    await saveStep(stepData);
+    const currentStepData = allStepData[`step${currentStep}`];
+    await saveStep(currentStepData);
     navigate('/dashboard');
   };
 
   const handleStepDataChange = (newData) => {
-    setStepData(prevData => ({
-      ...prevData,
-      ...newData
+    setAllStepData(prev => ({
+      ...prev,
+      [`step${currentStep}`]: {
+        ...prev[`step${currentStep}`],
+        ...newData
+      }
     }));
+  };
+
+  const handleOnboardingComplete = async () => {
+    try {
+      setIsSaving(true);
+      const token = localStorage.getItem('token');
+
+      // Complete onboarding
+      const response = await fetch(`${API_BASE}/onboarding/complete`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          invite_token: inviteToken || null
+        })
+      });
+
+      if (response.ok) {
+        // If this was from an invite, accept it
+        if (inviteToken) {
+          await fetch(`${API_BASE}/onboarding/invite/accept/${inviteToken}`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+        }
+
+        // Navigate to dashboard
+        navigate('/dashboard?onboarding=complete');
+      } else {
+        alert('Error completing onboarding. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error completing onboarding:', error);
+      alert('Error completing onboarding. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (isLoading) {
@@ -218,14 +337,37 @@ const OnboardingWizard = () => {
     );
   }
 
+  if (error) {
+    return (
+      <div className="onboarding-wizard">
+        <div className="error-container">
+          <div className="error-icon">⚠️</div>
+          <h2>Oops!</h2>
+          <p>{error}</p>
+          <button
+            className="btn-primary"
+            onClick={() => navigate('/login')}
+          >
+            Return to Login
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="onboarding-wizard">
       <div className="wizard-header">
-        <h1>Welcome to Your CRM Setup</h1>
-        <p className="wizard-subtitle">Let's get you set up in just 10 simple steps</p>
+        <h1>Welcome to Pipeline 360</h1>
+        <p className="wizard-subtitle">
+          {inviteData
+            ? `Hi ${inviteData.first_name}! Let's get you set up in just ${TOTAL_STEPS} simple steps`
+            : `Let's get you set up in just ${TOTAL_STEPS} simple steps`
+          }
+        </p>
       </div>
 
-      <ProgressIndicator currentStep={currentStep} totalSteps={10} />
+      <ProgressIndicator currentStep={currentStep} totalSteps={TOTAL_STEPS} />
 
       {autoSaveStatus && (
         <div className={`auto-save-indicator ${autoSaveStatus === 'Save failed' ? 'error' : ''}`}>
@@ -236,56 +378,73 @@ const OnboardingWizard = () => {
       <div className="wizard-content">
         {currentStep === 1 && (
           <Step1Registration
-            data={stepData}
+            data={allStepData.step1}
             onChange={handleStepDataChange}
           />
         )}
         {currentStep === 2 && (
-          <div className="placeholder-step">
-            <h2>Step 2: Coming Soon</h2>
-            <p>This step will be implemented in the next phase.</p>
-          </div>
+          <Step2ProfileSetup
+            data={allStepData.step2}
+            onChange={handleStepDataChange}
+            inviteData={inviteData}
+          />
         )}
-        {currentStep >= 3 && currentStep <= 10 && (
-          <div className="placeholder-step">
-            <h2>Step {currentStep}: Coming Soon</h2>
-            <p>This step will be implemented in future phases.</p>
-          </div>
+        {currentStep === 3 && (
+          <Step3AIPreferences
+            data={allStepData.step3}
+            onChange={handleStepDataChange}
+          />
+        )}
+        {currentStep === 4 && (
+          <Step4Training
+            data={allStepData.step4}
+            onChange={handleStepDataChange}
+          />
+        )}
+        {currentStep === 5 && (
+          <Step5Confirmation
+            profileData={allStepData.step2}
+            aiPreferences={allStepData.step3}
+            trainingData={allStepData.step4}
+            onComplete={handleOnboardingComplete}
+          />
         )}
       </div>
 
-      <div className="wizard-footer">
-        <div className="footer-left">
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={handleSaveAndExit}
-            disabled={isSaving}
-          >
-            Save & Exit
-          </button>
-        </div>
-        <div className="footer-right">
-          {currentStep > 1 && (
+      {currentStep < 5 && (
+        <div className="wizard-footer">
+          <div className="footer-left">
             <button
               type="button"
               className="btn-secondary"
-              onClick={handleBack}
+              onClick={handleSaveAndExit}
               disabled={isSaving}
             >
-              ← Back
+              Save & Exit
             </button>
-          )}
-          <button
-            type="button"
-            className="btn-primary"
-            onClick={handleNext}
-            disabled={isSaving}
-          >
-            {currentStep === 10 ? 'Complete Setup' : 'Next →'}
-          </button>
+          </div>
+          <div className="footer-right">
+            {currentStep > 1 && (
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={handleBack}
+                disabled={isSaving}
+              >
+                ← Back
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={handleNext}
+              disabled={isSaving}
+            >
+              {isSaving ? 'Saving...' : 'Next →'}
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };

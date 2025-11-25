@@ -97,6 +97,35 @@
   margin-bottom: 1rem;
 }
 
+/* Error Container */
+.error-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 50vh;
+  gap: 1rem;
+  text-align: center;
+  padding: 2rem;
+}
+
+.error-icon {
+  font-size: 4rem;
+}
+
+.error-container h2 {
+  color: #1a202c;
+  font-size: 1.75rem;
+  margin: 0;
+}
+
+.error-container p {
+  color: #64748b;
+  font-size: 1rem;
+  max-width: 400px;
+  margin: 0;
+}
+
 .wizard-footer {
   display: flex;
   justify-content: space-between;

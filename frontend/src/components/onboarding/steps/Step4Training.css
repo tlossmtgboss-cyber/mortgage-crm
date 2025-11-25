@@ -1,0 +1,404 @@
+.step4-training {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.step4-training h2 {
+  color: #1a202c;
+  font-size: 1.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.step-description {
+  color: #718096;
+  font-size: 1rem;
+  margin-bottom: 2rem;
+}
+
+/* Training Progress */
+.training-progress {
+  margin-bottom: 2rem;
+  padding: 1.25rem;
+  background-color: #f8fafc;
+  border-radius: 12px;
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.progress-label {
+  font-weight: 600;
+  color: #1a202c;
+}
+
+.progress-count {
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+.progress-bar {
+  height: 8px;
+  background-color: #e2e8f0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #2563eb);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+/* Training Mode Toggle */
+.training-mode-section {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.training-mode-label {
+  font-weight: 600;
+  color: #374151;
+}
+
+.training-mode-options {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.mode-button {
+  padding: 0.625rem 1.25rem;
+  border: 2px solid #e2e8f0;
+  background-color: white;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.mode-button:hover {
+  border-color: #cbd5e1;
+  background-color: #f8fafc;
+}
+
+.mode-button.active {
+  border-color: #3b82f6;
+  background-color: #eff6ff;
+  color: #3b82f6;
+}
+
+/* Training Modules */
+.training-modules {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.training-module {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 1.25rem;
+  background-color: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  transition: all 0.2s;
+}
+
+.training-module:hover:not(.completed) {
+  border-color: #cbd5e1;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.training-module.completed {
+  background-color: #f0fdf4;
+  border-color: #86efac;
+}
+
+.module-icon {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  background-color: #f1f5f9;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+
+.training-module.completed .module-icon {
+  background-color: #dcfce7;
+}
+
+.module-content {
+  flex: 1;
+}
+
+.module-content h4 {
+  color: #1a202c;
+  font-size: 1rem;
+  margin-bottom: 0.25rem;
+}
+
+.module-content p {
+  color: #64748b;
+  font-size: 0.8125rem;
+  margin-bottom: 0.5rem;
+  line-height: 1.4;
+}
+
+.module-duration {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.module-action {
+  flex-shrink: 0;
+}
+
+.start-button {
+  padding: 0.625rem 1.5rem;
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.start-button:hover {
+  background-color: #2563eb;
+}
+
+.completed-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: #16a34a;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.completed-badge svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Tour Modal */
+.tour-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.tour-modal {
+  background-color: white;
+  border-radius: 16px;
+  padding: 2rem;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+}
+
+.tour-progress {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.tour-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #e2e8f0;
+  transition: all 0.2s;
+}
+
+.tour-dot.active {
+  background-color: #3b82f6;
+  transform: scale(1.25);
+}
+
+.tour-dot.completed {
+  background-color: #10b981;
+}
+
+.tour-content {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.tour-content h3 {
+  color: #1a202c;
+  font-size: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.tour-content p {
+  color: #64748b;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+}
+
+.tour-illustration {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 2rem;
+}
+
+.illustration-placeholder {
+  width: 120px;
+  height: 120px;
+  background: linear-gradient(135deg, #eff6ff, #dbeafe);
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3rem;
+}
+
+.tour-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.tour-skip {
+  padding: 0.625rem 1rem;
+  background-color: transparent;
+  border: none;
+  color: #64748b;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.tour-skip:hover {
+  color: #374151;
+}
+
+.tour-navigation {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.tour-prev,
+.tour-next {
+  padding: 0.625rem 1.25rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tour-prev {
+  background-color: white;
+  border: 2px solid #e2e8f0;
+  color: #64748b;
+}
+
+.tour-prev:hover:not(:disabled) {
+  border-color: #cbd5e1;
+  background-color: #f8fafc;
+}
+
+.tour-prev:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tour-next {
+  background-color: #3b82f6;
+  border: none;
+  color: white;
+}
+
+.tour-next:hover {
+  background-color: #2563eb;
+}
+
+/* Skip Message */
+.skip-message {
+  text-align: center;
+  padding: 3rem 2rem;
+  background-color: #f8fafc;
+  border-radius: 12px;
+}
+
+.skip-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.skip-message h3 {
+  color: #1a202c;
+  font-size: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.skip-message p {
+  color: #64748b;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .step4-training h2 {
+    font-size: 1.5rem;
+  }
+
+  .training-mode-section {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .training-module {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .module-content h4 {
+    margin-top: 0.5rem;
+  }
+
+  .tour-modal {
+    padding: 1.5rem;
+  }
+
+  .tour-actions {
+    flex-direction: column-reverse;
+    gap: 1rem;
+  }
+
+  .tour-navigation {
+    width: 100%;
+  }
+
+  .tour-prev,
+  .tour-next {
+    flex: 1;
+  }
+}

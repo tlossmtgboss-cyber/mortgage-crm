@@ -4,18 +4,30 @@ import './ProgressIndicator.css';
 const ProgressIndicator = ({ currentStep, totalSteps }) => {
   const progressPercentage = (currentStep / totalSteps) * 100;
 
-  const steps = [
-    { number: 1, name: 'Registration' },
-    { number: 2, name: 'Business Info' },
-    { number: 3, name: 'Team Setup' },
-    { number: 4, name: 'Integrations' },
-    { number: 5, name: 'Preferences' },
-    { number: 6, name: 'Templates' },
-    { number: 7, name: 'Workflows' },
-    { number: 8, name: 'Training' },
-    { number: 9, name: 'Review' },
-    { number: 10, name: 'Launch' }
-  ];
+  // Dynamic step names based on totalSteps
+  const stepConfigs = {
+    5: [
+      { number: 1, name: 'Registration' },
+      { number: 2, name: 'Profile' },
+      { number: 3, name: 'AI Setup' },
+      { number: 4, name: 'Training' },
+      { number: 5, name: 'Confirm' }
+    ],
+    10: [
+      { number: 1, name: 'Registration' },
+      { number: 2, name: 'Business Info' },
+      { number: 3, name: 'Team Setup' },
+      { number: 4, name: 'Integrations' },
+      { number: 5, name: 'Preferences' },
+      { number: 6, name: 'Templates' },
+      { number: 7, name: 'Workflows' },
+      { number: 8, name: 'Training' },
+      { number: 9, name: 'Review' },
+      { number: 10, name: 'Launch' }
+    ]
+  };
+
+  const steps = stepConfigs[totalSteps] || stepConfigs[5];
 
   return (
     <div className="progress-indicator">
