@@ -362,6 +362,12 @@ class Lead(Base):
     appraisal_value = Column(Float)
     ltv = Column(Float)
     dti = Column(Float)
+    # Milestone dates for task triggering
+    application_started_date = Column(DateTime)
+    application_completed_date = Column(DateTime)
+    credit_pulled_date = Column(DateTime)
+    preapproval_issued_date = Column(DateTime)
+    property_address = Column(String)
     # Metadata
     user_metadata = Column(JSON)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -8963,6 +8969,177 @@ def generate_recommended_action(email_intent: Dict[str, Any], entity_type: str, 
         "learning_status": "Learning from your approvals to auto-execute in the future"
     }
 
+
+def create_milestone_tasks(loan, updated_fields: list, db: Session) -> list:
+    """
+    Create tasks automatically when milestone dates are populated.
+    This is triggered when reconciliation data is applied to a loan.
+    """
+    tasks_created = []
+
+    # Define task triggers based on milestone dates
+    # Format: (field_updated, task_title, task_description, days_offset, priority)
+    milestone_task_triggers = [
+        # Application milestones
+        ("stage->PROCESSING", "Review Application Package", "Review newly submitted application for completeness", 0, "high"),
+        ("stage->SUBMITTED", "Monitor UW Queue", "Application submitted - monitor underwriting queue", 1, "medium"),
+        ("stage->UW_RECEIVED", "Follow Up on Underwriting", "File in underwriting - follow up for status", 2, "high"),
+        ("stage->APPROVED", "Review Approval Conditions", "Loan approved - review and clear any conditions", 0, "high"),
+        ("stage->CTC", "Schedule Closing", "Clear to Close received - coordinate closing date", 0, "urgent"),
+        ("stage->FUNDED", "Send Thank You & Request Review", "Loan funded - send thank you and request review", 1, "medium"),
+
+        # Appraisal milestones
+        ("appraisal_ordered_date", "Follow Up on Appraisal", "Appraisal ordered - follow up in 3 days if not scheduled", 3, "medium"),
+        ("appraisal_scheduled_date", "Confirm Appraisal Access", "Appraisal scheduled - confirm property access", 0, "medium"),
+        ("appraisal_completed_date", "Review Appraisal Report", "Appraisal completed - review report for value/issues", 1, "high"),
+
+        # Lock milestones
+        ("lock_date", "Monitor Lock Expiration", "Rate locked - monitor expiration and closing timeline", 0, "high"),
+        ("lock_expiration_date", "Lock Expiration Alert", "Rate lock expires soon - verify closing timeline", -3, "urgent"),
+
+        # Closing milestones
+        ("closing_date", "7-Day Closing Checklist", "Closing approaching - verify all items ready", -7, "high"),
+        ("closing_date", "Final Closing Prep", "Closing in 3 days - final verification", -3, "urgent"),
+    ]
+
+    try:
+        for trigger_field, task_title, task_desc, days_offset, priority in milestone_task_triggers:
+            # Check if this field was just updated
+            if trigger_field not in updated_fields:
+                continue
+
+            # Determine the due date
+            due_date = None
+            if trigger_field.startswith("stage->"):
+                # Stage changes - task is due immediately or with offset from now
+                due_date = datetime.now(timezone.utc) + timedelta(days=days_offset)
+            else:
+                # Date fields - task is due relative to the date value
+                date_value = getattr(loan, trigger_field, None)
+                if date_value:
+                    if isinstance(date_value, datetime):
+                        due_date = date_value + timedelta(days=days_offset)
+                    else:
+                        due_date = datetime.now(timezone.utc) + timedelta(days=max(0, days_offset))
+
+            if not due_date:
+                due_date = datetime.now(timezone.utc) + timedelta(days=1)
+
+            # Check if task already exists for this loan with same title
+            existing_task = db.query(Task).filter(
+                Task.loan_id == loan.id,
+                Task.title == task_title,
+                Task.status != TaskStatus.COMPLETED
+            ).first()
+
+            if existing_task:
+                logger.info(f"Task '{task_title}' already exists for loan {loan.loan_number}, skipping")
+                continue
+
+            # Create the task
+            new_task = Task(
+                title=task_title,
+                description=f"{task_desc}\n\nLoan: {loan.loan_number}\nBorrower: {loan.borrower_name or 'N/A'}",
+                status=TaskStatus.PENDING,
+                priority=priority,
+                due_date=due_date,
+                loan_id=loan.id,
+                owner_id=loan.owner_id,
+                source="ai_reconciliation",
+                created_at=datetime.now(timezone.utc)
+            )
+
+            db.add(new_task)
+            tasks_created.append(task_title)
+            logger.info(f"📋 Created task: '{task_title}' for loan {loan.loan_number}, due: {due_date}")
+
+        if tasks_created:
+            db.commit()
+
+    except Exception as e:
+        logger.error(f"Error creating milestone tasks: {e}")
+        db.rollback()
+
+    return tasks_created
+
+
+def create_lead_milestone_tasks(lead, updated_fields: list, db: Session) -> list:
+    """
+    Create tasks automatically when lead milestone dates are populated.
+    This is triggered when reconciliation data is applied to a lead.
+    """
+    tasks_created = []
+
+    # Define task triggers for lead milestones
+    lead_task_triggers = [
+        # Application milestones
+        ("application_started_date", "Review Started Application", "Application started - follow up to encourage completion", 1, "high"),
+        ("application_completed_date", "Review Completed Application", "Application completed - review for completeness and pull credit", 0, "high"),
+        ("stage->APPLICATION", "Process Application Package", "Application received - begin processing and verification", 0, "high"),
+        ("credit_pulled_date", "Review Credit Report", "Credit pulled - review report and discuss with borrower", 0, "high"),
+        ("preapproval_issued_date", "Send Preapproval Letter", "Preapproval issued - send letter to borrower and realtor", 0, "high"),
+        ("stage->PRE_APPROVED", "Connect with Realtor", "Lead pre-approved - connect with realtor for home search", 1, "medium"),
+    ]
+
+    try:
+        for trigger_field, task_title, task_desc, days_offset, priority in lead_task_triggers:
+            # Check if this field was just updated
+            if trigger_field not in updated_fields:
+                continue
+
+            # Determine the due date
+            due_date = None
+            if trigger_field.startswith("stage->"):
+                due_date = datetime.now(timezone.utc) + timedelta(days=days_offset)
+            else:
+                date_value = getattr(lead, trigger_field, None)
+                if date_value:
+                    if isinstance(date_value, datetime):
+                        due_date = date_value + timedelta(days=days_offset)
+                    else:
+                        due_date = datetime.now(timezone.utc) + timedelta(days=max(0, days_offset))
+
+            if not due_date:
+                due_date = datetime.now(timezone.utc) + timedelta(days=1)
+
+            # Check if task already exists
+            existing_task = db.query(Task).filter(
+                Task.lead_id == lead.id,
+                Task.title == task_title,
+                Task.status != TaskStatus.COMPLETED
+            ).first()
+
+            if existing_task:
+                logger.info(f"Task '{task_title}' already exists for lead {lead.name}, skipping")
+                continue
+
+            # Create the task
+            new_task = Task(
+                title=task_title,
+                description=f"{task_desc}\n\nLead: {lead.name}\nEmail: {lead.email or 'N/A'}",
+                status=TaskStatus.PENDING,
+                priority=priority,
+                due_date=due_date,
+                lead_id=lead.id,
+                owner_id=lead.owner_id,
+                source="ai_reconciliation",
+                created_at=datetime.now(timezone.utc)
+            )
+
+            db.add(new_task)
+            tasks_created.append(task_title)
+            logger.info(f"📋 Created task: '{task_title}' for lead {lead.name}, due: {due_date}")
+
+        if tasks_created:
+            db.commit()
+
+    except Exception as e:
+        logger.error(f"Error creating lead milestone tasks: {e}")
+        db.rollback()
+
+    return tasks_created
+
+
 def apply_extracted_data(extracted_data: ExtractedData, db: Session) -> bool:
     """Apply extracted data to CRM entities - save all extracted fields to the borrower's profile"""
 
@@ -9149,6 +9326,11 @@ def apply_extracted_data(extracted_data: ExtractedData, db: Session) -> bool:
 
             db.commit()
             logger.info(f"✅ Applied {len(updated_fields)} fields to loan {loan.loan_number}: {', '.join(updated_fields)}")
+
+            # TRIGGER TASK CREATION based on updated milestone dates
+            tasks_created = create_milestone_tasks(loan, updated_fields, db)
+            if tasks_created:
+                logger.info(f"📋 Created {len(tasks_created)} tasks for loan {loan.loan_number}: {tasks_created}")
             return True
 
         elif extracted_data.match_entity_type == "lead" and extracted_data.match_entity_id:
@@ -9191,11 +9373,43 @@ def apply_extracted_data(extracted_data: ExtractedData, db: Session) -> bool:
                 lead.loan_type = str(value)
                 updated_fields.append("loan_type")
 
+            # Milestone dates for leads
+            if value := get_field_value(fields, "application_started_date"):
+                if parsed := parse_date(value):
+                    lead.application_started_date = parsed
+                    updated_fields.append("application_started_date")
+
+            if value := get_field_value(fields, "application_completed_date"):
+                if parsed := parse_date(value):
+                    lead.application_completed_date = parsed
+                    updated_fields.append("application_completed_date")
+                    # Also update stage to APPLICATION
+                    lead.stage = LeadStage.APPLICATION
+                    updated_fields.append("stage->APPLICATION")
+
+            if value := get_field_value(fields, "credit_pulled_date"):
+                if parsed := parse_date(value):
+                    lead.credit_pulled_date = parsed
+                    updated_fields.append("credit_pulled_date")
+
+            if value := get_field_value(fields, "preapproval_issued_date"):
+                if parsed := parse_date(value):
+                    lead.preapproval_issued_date = parsed
+                    updated_fields.append("preapproval_issued_date")
+                    # Also update stage to PRE_APPROVED
+                    lead.stage = LeadStage.PRE_APPROVED
+                    updated_fields.append("stage->PRE_APPROVED")
+
             # Update timestamp
             lead.updated_at = datetime.now(timezone.utc)
 
             db.commit()
             logger.info(f"✅ Applied {len(updated_fields)} fields to lead {lead.name}: {', '.join(updated_fields)}")
+
+            # TRIGGER TASK CREATION based on updated milestone dates for leads
+            tasks_created = create_lead_milestone_tasks(lead, updated_fields, db)
+            if tasks_created:
+                logger.info(f"📋 Created {len(tasks_created)} tasks for lead {lead.name}: {tasks_created}")
             return True
 
         # No match - return True anyway since data was extracted, just nowhere to apply
