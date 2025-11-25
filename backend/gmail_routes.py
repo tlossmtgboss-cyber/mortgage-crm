@@ -499,7 +499,7 @@ async def cron_sync_all_gmail(
 ):
     """
     Cron job endpoint to sync Gmail for all connected users.
-    Called by Railway cron service every 10 minutes.
+    Called by Railway cron service every minute.
 
     Requires CRON_API_KEY environment variable for authentication.
     """
