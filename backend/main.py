@@ -431,6 +431,11 @@ class Loan(Base):
     property_zip = Column(String)
     # Lender info
     lender = Column(String)
+    # Disclosure milestone dates
+    initial_disclosures_sent_date = Column(DateTime)
+    initial_disclosures_signed_date = Column(DateTime)
+    cd_received_signed_date = Column(DateTime)
+    final_closing_package_sent_date = Column(DateTime)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     loan_officer = relationship("User", back_populates="loans")
@@ -9395,6 +9400,40 @@ def apply_extracted_data(extracted_data: ExtractedData, db: Session) -> bool:
                 loan.appraisal_value = float(value)
                 updated_fields.append("appraisal_value")
 
+            # Initial Disclosures Sent Date
+            if value := get_field_value(fields, "initial_disclosures_sent_date"):
+                if parsed := parse_date(value):
+                    loan.initial_disclosures_sent_date = parsed
+                    updated_fields.append("initial_disclosures_sent_date")
+
+            # Initial Disclosures Signed Date
+            if value := get_field_value(fields, "initial_disclosures_signed_date"):
+                if parsed := parse_date(value):
+                    loan.initial_disclosures_signed_date = parsed
+                    updated_fields.append("initial_disclosures_signed_date")
+
+            # CD Received/Signed Date
+            if value := get_field_value(fields, "cd_received_signed_date"):
+                if parsed := parse_date(value):
+                    loan.cd_received_signed_date = parsed
+                    updated_fields.append("cd_received_signed_date")
+
+            # Final Closing Package Sent Date - AUTO TRIGGERS STAGE TO CTC
+            if value := get_field_value(fields, "final_closing_package_sent_date"):
+                if parsed := parse_date(value):
+                    loan.final_closing_package_sent_date = parsed
+                    updated_fields.append("final_closing_package_sent_date")
+                    # Auto-update stage to CTC when closing docs are sent
+                    if loan.stage not in [LoanStage.FUNDED, LoanStage.DOCS]:
+                        loan.stage = LoanStage.CTC
+                        updated_fields.append("stage->CTC")
+
+            # Borrower Name (from extracted data)
+            if value := get_field_value(fields, "borrower_name"):
+                if not loan.borrower_name or loan.borrower_name.strip() == "":
+                    loan.borrower_name = str(value)
+                    updated_fields.append("borrower_name")
+
             # Milestone - update stage based on milestone
             if value := get_field_value(fields, "milestone", min_confidence=0.85):
                 milestone = str(value).lower()
@@ -13531,6 +13570,53 @@ async def add_lead_milestone_columns(
 
     except Exception as e:
         logger.error(f"Lead milestone columns migration failed: {e}")
+        db.rollback()
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e)
+        }
+
+
+@app.post("/api/v1/migrations/add-loan-milestone-columns")
+async def add_loan_milestone_columns(
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Add milestone date columns to loans table for task triggering
+    """
+    try:
+        logger.info("Running migration: add loan milestone columns")
+        columns_added = []
+
+        columns_to_add = [
+            ("initial_disclosures_sent_date", "TIMESTAMP WITH TIME ZONE"),
+            ("initial_disclosures_signed_date", "TIMESTAMP WITH TIME ZONE"),
+            ("cd_received_signed_date", "TIMESTAMP WITH TIME ZONE"),
+            ("final_closing_package_sent_date", "TIMESTAMP WITH TIME ZONE")
+        ]
+
+        for col_name, col_type in columns_to_add:
+            result = db.execute(text("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_name = 'loans' AND column_name = :col_name
+            """), {"col_name": col_name})
+
+            if not result.fetchone():
+                db.execute(text(f"ALTER TABLE loans ADD COLUMN {col_name} {col_type}"))
+                columns_added.append(col_name)
+                logger.info(f"Added column {col_name} to loans table")
+
+        db.commit()
+
+        return {
+            "success": True,
+            "columns_added": columns_added,
+            "message": f"Added {len(columns_added)} columns to loans table" if columns_added else "All columns already exist"
+        }
+
+    except Exception as e:
+        logger.error(f"Loan milestone columns migration failed: {e}")
         db.rollback()
         return {
             "success": False,
