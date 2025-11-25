@@ -81,6 +81,12 @@ class ClaudeEmailParser:
             }
         },
         'active_loan': {
+            'borrower_info': {
+                'borrower_name': {'type': 'string', 'description': 'Primary borrower full name', 'required': True},
+                'coborrower_name': {'type': 'string', 'description': 'Co-borrower full name (spouse, etc.)'},
+                'borrower_email': {'type': 'email', 'description': 'Borrower email address'},
+                'borrower_phone': {'type': 'phone', 'description': 'Borrower phone number'}
+            },
             'loan_details': {
                 'loan_number': {'type': 'string', 'description': 'Loan number', 'required': True},
                 'amount': {'type': 'currency', 'description': 'Loan amount'},
