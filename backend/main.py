@@ -9150,7 +9150,7 @@ def create_milestone_tasks(loan, updated_fields: list, db: Session) -> list:
                 priority=priority,
                 due_date=due_date,
                 loan_id=loan.id,
-                owner_id=loan.owner_id,
+                owner_id=loan.loan_officer_id,  # Use loan_officer_id, not owner_id (Loan model doesn't have owner_id)
                 created_at=datetime.now(timezone.utc)
             )
 
@@ -15809,7 +15809,7 @@ async def debug_test_task_creation(
             debug_info["error"] = f"Loan {loan_id} not found"
             return debug_info
 
-        debug_info["steps"].append(f"Found loan: {loan.loan_number}, stage={loan.stage}, owner_id={loan.owner_id}")
+        debug_info["steps"].append(f"Found loan: {loan.loan_number}, stage={loan.stage}, loan_officer_id={loan.loan_officer_id}")
 
         # Step 2: Check Task model
         debug_info["steps"].append(f"Task model columns: {[c.name for c in Task.__table__.columns]}")
