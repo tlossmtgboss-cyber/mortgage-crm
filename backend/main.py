@@ -4808,13 +4808,13 @@ When asked about rate lock guidance:
                 "type": "function",
                 "function": {
                     "name": "send_email",
-                    "description": "Send an email to the user with task summary, pipeline update, or other information",
+                    "description": "Send an email to the user with task summary, pipeline update, or other information. For 'top priorities' or 'outstanding tasks', use timeframe='priorities'",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "subject": {"type": "string", "description": "Email subject line"},
                             "content_type": {"type": "string", "enum": ["task_summary", "pipeline_update", "lead_summary", "custom"], "description": "Type of email content"},
-                            "timeframe": {"type": "string", "enum": ["today", "tomorrow", "this_week"], "description": "Timeframe for task/pipeline data"}
+                            "timeframe": {"type": "string", "enum": ["today", "tomorrow", "this_week", "priorities", "outstanding", "overdue"], "description": "Timeframe for tasks. Use 'priorities' or 'outstanding' for all incomplete tasks sorted by priority"}
                         },
                         "required": ["subject", "content_type"]
                     }
@@ -4955,20 +4955,51 @@ When asked about rate lock guidance:
             # Get relevant data based on content type
             if content_type == "task_summary":
                 today = datetime.now().date()
+                tomorrow = today + timedelta(days=1)
+                week_end = today + timedelta(days=7)
+
+                # Get ALL tasks for this user
+                all_user_tasks = db.query(Task).filter(Task.owner_id == current_user.id).all()
+
+                # Filter based on timeframe
                 if timeframe == "tomorrow":
-                    target_date = today + timedelta(days=1)
+                    tasks = [t for t in all_user_tasks if t.due_date and t.due_date.date() == tomorrow and t.status != "completed"]
                 elif timeframe == "this_week":
-                    target_date = None
+                    tasks = [t for t in all_user_tasks if t.due_date and today <= t.due_date.date() <= week_end and t.status != "completed"]
+                elif timeframe == "outstanding" or timeframe == "priorities":
+                    # Get ALL outstanding (not completed) tasks
+                    tasks = [t for t in all_user_tasks if t.status != "completed"]
+                    # Sort by priority and due date
+                    priority_order = {"high": 0, "medium": 1, "low": 2, None: 3}
+                    tasks.sort(key=lambda x: (priority_order.get(x.priority, 3), x.due_date or datetime.max))
+                elif timeframe == "overdue":
+                    tasks = [t for t in all_user_tasks if t.due_date and t.due_date.date() < today and t.status != "completed"]
+                else:  # today
+                    tasks = [t for t in all_user_tasks if t.due_date and t.due_date.date() == today and t.status != "completed"]
+
+                # Build detailed task list
+                task_lines = []
+                for i, t in enumerate(tasks[:10], 1):
+                    line = f"{i}. {t.title}"
+                    details = []
+                    if t.priority:
+                        details.append(f"Priority: {t.priority.upper()}")
+                    if t.due_date:
+                        details.append(f"Due: {t.due_date.strftime('%m/%d/%Y %I:%M %p')}")
+                    if t.status:
+                        details.append(f"Status: {t.status}")
+                    if t.description:
+                        details.append(f"Notes: {t.description[:100]}")
+                    if details:
+                        line += f"\n   {' | '.join(details)}"
+                    task_lines.append(line)
+
+                task_list = "\n\n".join(task_lines)
+
+                if timeframe in ["outstanding", "priorities"]:
+                    content = f"You have {len(tasks)} outstanding task(s). Here are your top priorities:\n\n{task_list if task_list else 'No outstanding tasks - great job!'}"
                 else:
-                    target_date = today
-
-                tasks = db.query(Task).filter(Task.owner_id == current_user.id).all()
-
-                if target_date:
-                    tasks = [t for t in tasks if t.due_date and t.due_date.date() == target_date]
-
-                task_list = "\n".join([f"• {t.title} (Due: {t.due_date.strftime('%m/%d') if t.due_date else 'No date'})" for t in tasks[:10]])
-                content = f"Here are your tasks for {timeframe}:\n\n{task_list if task_list else 'No tasks scheduled.'}"
+                    content = f"Here are your tasks for {timeframe}:\n\n{task_list if task_list else 'No tasks scheduled.'}"
 
             elif content_type == "pipeline_update":
                 leads = db.query(Lead).filter(Lead.owner_id == current_user.id).all()
@@ -4982,23 +5013,65 @@ When asked about rate lock guidance:
                 stage_summary = "\n".join([f"• {stage}: {count} leads" for stage, count in stages.items()])
                 content = f"Pipeline Summary:\n\n{stage_summary}\n\nTotal: {len(leads)} leads"
             else:
-                content = f"Custom update requested: {subject}"
+                content = args.get("content", f"Custom update requested: {subject}")
+
+            # Actually send the email via SMTP
+            email_sent = False
+            try:
+                import smtplib
+                from email.mime.text import MIMEText
+                from email.mime.multipart import MIMEMultipart
+                import os as os_module
+
+                smtp_host = os_module.environ.get("SMTP_HOST", "smtp.gmail.com")
+                smtp_port = int(os_module.environ.get("SMTP_PORT", "587"))
+                smtp_user = os_module.environ.get("SMTP_USER", "")
+                smtp_pass = os_module.environ.get("SMTP_PASS", "")
+
+                if smtp_user and smtp_pass:
+                    msg = MIMEMultipart()
+                    msg['From'] = smtp_user
+                    msg['To'] = current_user.email
+                    msg['Subject'] = subject
+
+                    # Create HTML version
+                    html_content = f"""
+                    <html>
+                    <body style="font-family: Arial, sans-serif; line-height: 1.6;">
+                        <h2>{subject}</h2>
+                        <pre style="white-space: pre-wrap;">{content}</pre>
+                        <hr>
+                        <p style="color: #666; font-size: 12px;">Sent from Pipeline 360 CRM</p>
+                    </body>
+                    </html>
+                    """
+                    msg.attach(MIMEText(html_content, 'html'))
+
+                    with smtplib.SMTP(smtp_host, smtp_port) as server:
+                        server.starttls()
+                        server.login(smtp_user, smtp_pass)
+                        server.send_message(msg)
+                    email_sent = True
+            except Exception as e:
+                logger.warning(f"Email send failed: {e}")
 
             await log_ai_action_to_mission_control(
                 db=db,
                 agent_name="Email Tool",
                 action_type="send_email",
                 user_id=current_user.id,
-                context={"subject": subject, "content_type": content_type},
+                context={"subject": subject, "content_type": content_type, "email_sent": email_sent},
                 autonomy_level="autonomous",
-                status="completed"
+                status="completed" if email_sent else "logged"
             )
 
             return {
                 "success": True,
-                "message": f"Email sent to {current_user.email}",
+                "email_sent": email_sent,
+                "message": f"Email {'sent' if email_sent else 'prepared'} for {current_user.email}",
                 "subject": subject,
-                "preview": content[:200]
+                "content": content,
+                "preview": content[:500]
             }
 
         async def execute_get_tasks(args):
