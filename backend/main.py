@@ -18260,6 +18260,374 @@ async def delete_loan(loan_id: int, db: Session = Depends(get_db), current_user:
 
 
 # ============================================================================
+# RATE LOCK INTELLIGENCE ENDPOINTS
+# ============================================================================
+
+class RateLockAnalysisRequest(BaseModel):
+    mbs_change_bps: Optional[float] = None
+    treasury_10y_change_bps: Optional[float] = None
+    days_to_close: Optional[int] = None
+    borrower_risk_profile: Optional[str] = None
+
+class RateLockAnalysisResponse(BaseModel):
+    loan_id: int
+    loan_number: str
+    borrower_name: str
+    is_eligible: bool
+    eligibility_reason: Optional[str] = None
+    lock_score: Optional[int] = None
+    recommendation: Optional[str] = None
+    recommendation_reason: Optional[str] = None
+    days_to_close: Optional[int] = None
+    risk_level: Optional[str] = None
+    mbs_impact: Optional[str] = None
+    treasury_impact: Optional[str] = None
+    float_down_available: bool = False
+    extension_analysis: Optional[dict] = None
+    market_conditions: Optional[dict] = None
+
+@app.get("/api/v1/loans/{loan_id}/rate-lock-analysis", response_model=RateLockAnalysisResponse)
+async def get_rate_lock_analysis(
+    loan_id: int,
+    mbs_change_bps: Optional[float] = Query(None, description="MBS price change in basis points"),
+    treasury_10y_change_bps: Optional[float] = Query(None, description="10Y Treasury change in basis points"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get comprehensive rate lock analysis for a loan.
+
+    The Rate Lock Intelligence Engine analyzes:
+    - Lock eligibility based on loan stage
+    - Lock score (0-100) based on market conditions and days to close
+    - Recommendation (Lock Now, Float and Monitor, etc.)
+    - Float-down opportunities
+    - Extension strategy if lock is expiring
+    """
+    from workflows.rate_lock_engine import RateLockIntelligenceEngine
+
+    loan = db.query(Loan).filter(Loan.id == loan_id).first()
+    if not loan:
+        raise HTTPException(status_code=404, detail="Loan not found")
+
+    # Initialize the Rate Lock Intelligence Engine
+    engine = RateLockIntelligenceEngine(loan, db)
+
+    # Run full analysis
+    analysis = engine.run_full_analysis(
+        mbs_change_bps=mbs_change_bps,
+        treasury_10y_change_bps=treasury_10y_change_bps
+    )
+
+    # Build response
+    return RateLockAnalysisResponse(
+        loan_id=loan.id,
+        loan_number=loan.loan_number,
+        borrower_name=loan.borrower_name,
+        is_eligible=analysis.is_eligible,
+        eligibility_reason=analysis.eligibility_reason,
+        lock_score=analysis.lock_score,
+        recommendation=analysis.recommendation.value if analysis.recommendation else None,
+        recommendation_reason=analysis.recommendation_reason,
+        days_to_close=analysis.days_to_close,
+        risk_level=analysis.risk_level,
+        mbs_impact=analysis.mbs_impact,
+        treasury_impact=analysis.treasury_impact,
+        float_down_available=analysis.float_down_available,
+        extension_analysis=analysis.extension_analysis,
+        market_conditions=analysis.market_conditions
+    )
+
+@app.post("/api/v1/loans/{loan_id}/rate-lock-action")
+async def execute_rate_lock_action(
+    loan_id: int,
+    action: str = Query(..., description="Action: lock, float, extend, relock"),
+    lock_term_days: Optional[int] = Query(None, description="Lock term in days (for lock action)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Execute a rate lock action on a loan.
+
+    Actions:
+    - lock: Lock the rate (requires lock_term_days)
+    - float: Enter float monitoring mode
+    - extend: Extend an existing lock
+    - relock: Relock after expiration
+    """
+    from workflows.rate_lock_engine import RateLockIntelligenceEngine
+
+    loan = db.query(Loan).filter(Loan.id == loan_id).first()
+    if not loan:
+        raise HTTPException(status_code=404, detail="Loan not found")
+
+    engine = RateLockIntelligenceEngine(loan, db)
+
+    # Initialize history if needed
+    if not loan.rate_lock_history:
+        loan.rate_lock_history = []
+
+    history_entry = {
+        "action": action,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "user_id": current_user.id,
+        "previous_status": loan.rate_lock_status.value if loan.rate_lock_status else None
+    }
+
+    if action == "lock":
+        if not lock_term_days:
+            raise HTTPException(status_code=400, detail="lock_term_days required for lock action")
+
+        # Check eligibility first
+        is_eligible, reason = engine.check_eligibility()
+        if not is_eligible:
+            raise HTTPException(status_code=400, detail=f"Loan not eligible for rate lock: {reason}")
+
+        loan.rate_lock_status = RateLockStatus.LOCKED
+        loan.lock_term_days = lock_term_days
+        loan.rate_lock_date = datetime.now(timezone.utc).date()
+        loan.rate_lock_expiration = (datetime.now(timezone.utc) + timedelta(days=lock_term_days)).date()
+        history_entry["lock_term_days"] = lock_term_days
+        history_entry["expiration"] = loan.rate_lock_expiration.isoformat()
+
+        message = f"Rate locked for {lock_term_days} days. Expires {loan.rate_lock_expiration}"
+
+    elif action == "float":
+        loan.rate_lock_status = RateLockStatus.FLOAT_MONITORING
+        loan.rate_lock_recommendation = RateLockRecommendation.FLOAT_AND_MONITOR
+        message = "Entered float monitoring mode. Will alert on favorable market movements."
+
+    elif action == "extend":
+        if loan.rate_lock_status != RateLockStatus.LOCKED:
+            raise HTTPException(status_code=400, detail="Can only extend an active lock")
+
+        # Calculate extension
+        extension_analysis = engine.analyze_extension_strategy()
+        extension_days = extension_analysis.get("recommended_extension_days", 15)
+
+        loan.rate_lock_status = RateLockStatus.LOCK_EXTENDED
+        old_expiration = loan.rate_lock_expiration
+        loan.rate_lock_expiration = (datetime.now(timezone.utc) + timedelta(days=extension_days)).date()
+        loan.lock_term_days = (loan.lock_term_days or 0) + extension_days
+
+        history_entry["extension_days"] = extension_days
+        history_entry["old_expiration"] = old_expiration.isoformat() if old_expiration else None
+        history_entry["new_expiration"] = loan.rate_lock_expiration.isoformat()
+
+        message = f"Lock extended by {extension_days} days. New expiration: {loan.rate_lock_expiration}"
+
+    elif action == "relock":
+        if loan.rate_lock_status not in [RateLockStatus.LOCK_EXPIRED, RateLockStatus.LOCK_EXPIRING]:
+            raise HTTPException(status_code=400, detail="Relock only available for expired or expiring locks")
+
+        loan.rate_lock_status = RateLockStatus.LOCKED
+        loan.rate_lock_date = datetime.now(timezone.utc).date()
+        loan.rate_lock_expiration = (datetime.now(timezone.utc) + timedelta(days=lock_term_days or 30)).date()
+        loan.lock_term_days = lock_term_days or 30
+
+        message = f"Rate relocked for {loan.lock_term_days} days"
+
+    else:
+        raise HTTPException(status_code=400, detail=f"Invalid action: {action}. Use: lock, float, extend, relock")
+
+    # Update history
+    loan.rate_lock_history = loan.rate_lock_history + [history_entry]
+
+    db.commit()
+    logger.info(f"Rate lock action '{action}' executed for loan {loan_id}")
+
+    return {
+        "success": True,
+        "loan_id": loan_id,
+        "action": action,
+        "message": message,
+        "new_status": loan.rate_lock_status.value,
+        "rate_lock_expiration": loan.rate_lock_expiration.isoformat() if loan.rate_lock_expiration else None
+    }
+
+@app.get("/api/v1/rate-lock/dashboard")
+async def get_rate_lock_dashboard(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get rate lock dashboard showing all loans and their lock status.
+
+    Returns:
+    - Summary counts by status
+    - Loans requiring attention (expiring soon, high volatility)
+    - Market conditions summary
+    """
+    from workflows.rate_lock_engine import RateLockIntelligenceEngine
+
+    # Get all loans for this user that are in lockable stages
+    lockable_stages = [LoanStage.PROCESSING, LoanStage.SUBMITTED, LoanStage.UNDERWRITING, LoanStage.CONDITIONAL_APPROVAL, LoanStage.CTC]
+    loans = db.query(Loan).filter(
+        Loan.loan_officer_id == current_user.id,
+        Loan.stage.in_(lockable_stages)
+    ).all()
+
+    # Categorize by status
+    status_counts = {
+        "not_eligible": 0,
+        "eligible_no_lock": 0,
+        "locked": 0,
+        "float_monitoring": 0,
+        "lock_expiring": 0,
+        "lock_expired": 0
+    }
+
+    attention_needed = []
+
+    for loan in loans:
+        status = loan.rate_lock_status or RateLockStatus.NOT_ELIGIBLE
+
+        # Count by status
+        if status == RateLockStatus.NOT_ELIGIBLE:
+            status_counts["not_eligible"] += 1
+        elif status == RateLockStatus.ELIGIBLE_NO_LOCK:
+            status_counts["eligible_no_lock"] += 1
+        elif status == RateLockStatus.LOCKED:
+            status_counts["locked"] += 1
+            # Check if expiring soon
+            if loan.rate_lock_expiration:
+                days_until_expiration = (loan.rate_lock_expiration - datetime.now(timezone.utc).date()).days
+                if days_until_expiration <= 5:
+                    attention_needed.append({
+                        "loan_id": loan.id,
+                        "loan_number": loan.loan_number,
+                        "borrower_name": loan.borrower_name,
+                        "issue": "Lock expiring soon",
+                        "days_until_expiration": days_until_expiration,
+                        "priority": "high" if days_until_expiration <= 2 else "medium"
+                    })
+        elif status == RateLockStatus.FLOAT_MONITORING:
+            status_counts["float_monitoring"] += 1
+        elif status == RateLockStatus.LOCK_EXPIRING:
+            status_counts["lock_expiring"] += 1
+            attention_needed.append({
+                "loan_id": loan.id,
+                "loan_number": loan.loan_number,
+                "borrower_name": loan.borrower_name,
+                "issue": "Lock expiring",
+                "priority": "high"
+            })
+        elif status == RateLockStatus.LOCK_EXPIRED:
+            status_counts["lock_expired"] += 1
+            attention_needed.append({
+                "loan_id": loan.id,
+                "loan_number": loan.loan_number,
+                "borrower_name": loan.borrower_name,
+                "issue": "Lock expired - needs relock",
+                "priority": "critical"
+            })
+
+    # Get loans with high volatility scores
+    high_volatility_loans = db.query(Loan).filter(
+        Loan.loan_officer_id == current_user.id,
+        Loan.volatility_score >= 70
+    ).all()
+
+    for loan in high_volatility_loans:
+        if not any(a["loan_id"] == loan.id for a in attention_needed):
+            attention_needed.append({
+                "loan_id": loan.id,
+                "loan_number": loan.loan_number,
+                "borrower_name": loan.borrower_name,
+                "issue": f"High market volatility (score: {loan.volatility_score})",
+                "priority": "medium"
+            })
+
+    return {
+        "total_loans": len(loans),
+        "status_summary": status_counts,
+        "attention_needed": sorted(attention_needed, key=lambda x: {"critical": 0, "high": 1, "medium": 2}.get(x["priority"], 3)),
+        "market_snapshot": {
+            "note": "Connect to real-time market data for live MBS/Treasury feeds",
+            "recommendation": "Review loans in float monitoring mode for lock opportunities"
+        }
+    }
+
+@app.post("/api/v1/rate-lock/bulk-analysis")
+async def bulk_rate_lock_analysis(
+    mbs_change_bps: Optional[float] = Query(None, description="MBS price change in basis points"),
+    treasury_10y_change_bps: Optional[float] = Query(None, description="10Y Treasury change in basis points"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Run rate lock analysis on all eligible loans.
+
+    Useful for daily morning analysis when market data is available.
+    Returns recommendations for all loans that should be locked or monitored.
+    """
+    from workflows.rate_lock_engine import RateLockIntelligenceEngine
+
+    # Get all loans in lockable stages
+    lockable_stages = [LoanStage.PROCESSING, LoanStage.SUBMITTED, LoanStage.UNDERWRITING, LoanStage.CONDITIONAL_APPROVAL, LoanStage.CTC]
+    loans = db.query(Loan).filter(
+        Loan.loan_officer_id == current_user.id,
+        Loan.stage.in_(lockable_stages)
+    ).all()
+
+    results = {
+        "lock_now": [],
+        "float_and_monitor": [],
+        "extend_lock": [],
+        "relock": [],
+        "not_eligible": []
+    }
+
+    for loan in loans:
+        engine = RateLockIntelligenceEngine(loan, db)
+        analysis = engine.run_full_analysis(
+            mbs_change_bps=mbs_change_bps,
+            treasury_10y_change_bps=treasury_10y_change_bps
+        )
+
+        loan_summary = {
+            "loan_id": loan.id,
+            "loan_number": loan.loan_number,
+            "borrower_name": loan.borrower_name,
+            "lock_score": analysis.lock_score,
+            "days_to_close": analysis.days_to_close,
+            "risk_level": analysis.risk_level,
+            "reason": analysis.recommendation_reason
+        }
+
+        if not analysis.is_eligible:
+            results["not_eligible"].append(loan_summary)
+        elif analysis.recommendation == RateLockRecommendation.LOCK_NOW:
+            results["lock_now"].append(loan_summary)
+        elif analysis.recommendation == RateLockRecommendation.FLOAT_AND_MONITOR:
+            results["float_and_monitor"].append(loan_summary)
+        elif analysis.recommendation == RateLockRecommendation.EXTEND_LOCK:
+            results["extend_lock"].append(loan_summary)
+        elif analysis.recommendation == RateLockRecommendation.RELOCK:
+            results["relock"].append(loan_summary)
+
+    # Sort lock_now by score (highest first - most urgent)
+    results["lock_now"] = sorted(results["lock_now"], key=lambda x: x["lock_score"] or 0, reverse=True)
+
+    return {
+        "analysis_timestamp": datetime.now(timezone.utc).isoformat(),
+        "market_inputs": {
+            "mbs_change_bps": mbs_change_bps,
+            "treasury_10y_change_bps": treasury_10y_change_bps
+        },
+        "total_analyzed": len(loans),
+        "recommendations": results,
+        "summary": {
+            "lock_now_count": len(results["lock_now"]),
+            "float_count": len(results["float_and_monitor"]),
+            "extend_count": len(results["extend_lock"]),
+            "relock_count": len(results["relock"]),
+            "not_eligible_count": len(results["not_eligible"])
+        }
+    }
+
+
+# ============================================================================
 # POST-CLOSING WORKFLOW ENDPOINTS
 # ============================================================================
 
