@@ -8449,6 +8449,8 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
     # Try to match by loan number first (highest confidence)
     if "loan_number" in fields and fields["loan_number"].get("value"):
         loan_num = str(fields["loan_number"]["value"])
+
+        # First try exact match with user's loans (highest confidence)
         loan = db.query(Loan).filter(
             Loan.loan_number == loan_num,
             Loan.loan_officer_id == user_id
@@ -8457,34 +8459,96 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
         if loan:
             match_results["entity_type"] = "loan"
             match_results["entity_id"] = loan.id
-            match_results["confidence"] = 0.95
+            match_results["confidence"] = 0.98  # Very high - exact match + user owns it
+            return match_results
+
+        # Try exact loan number match without user filter (still high confidence)
+        loan = db.query(Loan).filter(Loan.loan_number == loan_num).first()
+        if loan:
+            match_results["entity_type"] = "loan"
+            match_results["entity_id"] = loan.id
+            match_results["confidence"] = 0.95  # High - exact loan number match
+            return match_results
+
+        # Try partial loan number match (loan numbers may have prefixes/suffixes)
+        loans = db.query(Loan).filter(
+            Loan.loan_number.ilike(f"%{loan_num}%")
+        ).all()
+        if loans:
+            # Prefer user's loan if multiple matches
+            user_loan = next((l for l in loans if l.loan_officer_id == user_id), None)
+            if user_loan:
+                match_results["entity_type"] = "loan"
+                match_results["entity_id"] = user_loan.id
+                match_results["confidence"] = 0.90
+                return match_results
+            # Otherwise use first match
+            match_results["entity_type"] = "loan"
+            match_results["entity_id"] = loans[0].id
+            match_results["confidence"] = 0.85
             return match_results
 
     # Try to match by borrower name + fuzzy matching
     if "borrower_name" in fields and fields["borrower_name"].get("value"):
-        borrower = fields["borrower_name"]["value"].lower()
+        borrower = fields["borrower_name"]["value"].lower().strip()
 
-        # Try leads first
+        # Try leads first - user's leads
         leads = db.query(Lead).filter(Lead.owner_id == user_id).all()
         for lead in leads:
-            if lead.name and borrower in lead.name.lower():
-                match_results["candidates"].append({
-                    "type": "lead",
-                    "id": lead.id,
-                    "name": lead.name,
-                    "confidence": 0.75
-                })
+            if lead.name:
+                lead_name_lower = lead.name.lower()
+                # Exact match
+                if borrower == lead_name_lower:
+                    match_results["candidates"].append({
+                        "type": "lead",
+                        "id": lead.id,
+                        "name": lead.name,
+                        "confidence": 0.90
+                    })
+                # Partial match (name contained in either direction)
+                elif borrower in lead_name_lower or lead_name_lower in borrower:
+                    match_results["candidates"].append({
+                        "type": "lead",
+                        "id": lead.id,
+                        "name": lead.name,
+                        "confidence": 0.75
+                    })
 
-        # Try loans
+        # Try loans - user's loans first
         loans = db.query(Loan).filter(Loan.loan_officer_id == user_id).all()
         for loan in loans:
-            if loan.borrower_name and borrower in loan.borrower_name.lower():
-                match_results["candidates"].append({
-                    "type": "loan",
-                    "id": loan.id,
-                    "name": loan.borrower_name,
-                    "confidence": 0.80
-                })
+            if loan.borrower_name:
+                loan_name_lower = loan.borrower_name.lower()
+                # Exact match
+                if borrower == loan_name_lower:
+                    match_results["candidates"].append({
+                        "type": "loan",
+                        "id": loan.id,
+                        "name": loan.borrower_name,
+                        "confidence": 0.92
+                    })
+                # Partial match
+                elif borrower in loan_name_lower or loan_name_lower in borrower:
+                    match_results["candidates"].append({
+                        "type": "loan",
+                        "id": loan.id,
+                        "name": loan.borrower_name,
+                        "confidence": 0.80
+                    })
+
+        # If no matches found with user filter, try broader search
+        if not match_results["candidates"]:
+            all_loans = db.query(Loan).all()
+            for loan in all_loans:
+                if loan.borrower_name:
+                    loan_name_lower = loan.borrower_name.lower()
+                    if borrower in loan_name_lower or loan_name_lower in borrower:
+                        match_results["candidates"].append({
+                            "type": "loan",
+                            "id": loan.id,
+                            "name": loan.borrower_name,
+                            "confidence": 0.70  # Lower confidence for non-owned loan
+                        })
 
     # Return best candidate if found
     if match_results["candidates"]:
