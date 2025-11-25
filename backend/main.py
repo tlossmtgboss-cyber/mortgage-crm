@@ -153,17 +153,63 @@ class LeadStage(str, enum.Enum):
     APPLICATION_STARTED = "APPLICATION_STARTED"  # Legacy value - maps to Application stage
     PRE_QUALIFIED = "Pre-Qualified"
     PRE_APPROVED = "Pre-Approved"
+    UNDER_CONTRACT = "Under Contract"  # PRD: Executing a purchase
+    LONG_TERM_NURTURE = "Long-Term Nurture"  # PRD: Not ready to transact
+    CLOSED = "Closed"  # PRD: Loan funded (lead converted)
+    AMR = "AMR"  # PRD: Annual Mortgage Review cycle
+    REFERRAL_SOURCE = "Referral Source"  # PRD: Circle of Cash Flow
     WITHDRAWN = "Withdrawn"
     DOES_NOT_QUALIFY = "Does Not Qualify"
 
 class LoanStage(str, enum.Enum):
     DISCLOSED = "Disclosed"
     PROCESSING = "Processing"
+    SUBMITTED = "Submitted"  # PRD: UW Submitted but not yet received
     UW_RECEIVED = "UW Received"
     APPROVED = "Approved"
     SUSPENDED = "Suspended"
     CTC = "CTC"
     FUNDED = "Funded"
+
+
+# ============================================================================
+# RATE LOCK INTELLIGENCE ENUMS (PRD Section 4.2)
+# ============================================================================
+
+class RateLockStatus(str, enum.Enum):
+    """Rate lock status for borrowers - PRD Section 4.2"""
+    NOT_ELIGIBLE = "Not Eligible"  # No property/loan structure yet
+    ELIGIBLE_NO_LOCK = "Eligible - No Lock"  # Can lock but hasn't
+    LOCKED = "Locked"  # Rate is locked
+    FLOAT_MONITORING = "Float Monitoring"  # Actively floating, monitoring market
+    LOCK_EXPIRING = "Lock Expiring"  # Lock expires within threshold
+    LOCK_EXTENDED = "Lock Extended"  # Lock was extended
+    LOCK_EXPIRED = "Lock Expired"  # Lock expired without closing
+
+
+class RateLockRecommendation(str, enum.Enum):
+    """AI recommendation for rate lock action - PRD Section 4.2"""
+    LOCK_NOW = "Lock Now"  # Strong recommendation to lock
+    FLOAT_AND_MONITOR = "Float and Monitor"  # Continue floating
+    EXTEND_LOCK = "Extend Lock"  # Lock expiring, extend recommended
+    RELOCK = "Relock"  # Lock expired or conditions changed
+    EXPLORE_FLOAT_DOWN = "Explore Float-Down"  # Market improved, check float-down
+
+
+class BuyingTimelineCategory(str, enum.Enum):
+    """Buying timeline categories for touch frequency - PRD Section Power Play 2"""
+    PLATINUM = "Platinum"  # Purchase < 3 months → touch every 7 days
+    GOLD = "Gold"  # Purchase 4-6 months → every 14 days
+    SILVER = "Silver"  # Purchase 7-9 months → every 21 days
+    GREEN = "Green"  # Purchase 10+ months → monthly
+
+
+class BorrowerRiskProfile(str, enum.Enum):
+    """Borrower risk tolerance for rate lock decisions - PRD Section 4.1"""
+    SAFETY_FIRST = "Safety First"  # Prefers certainty, lock early
+    BALANCED = "Balanced"  # Willing to float short-term for savings
+    AGGRESSIVE = "Aggressive"  # Will float longer for best rate
+
 
 class TaskType(str, enum.Enum):
     HUMAN_NEEDED = "Human Needed"
@@ -178,6 +224,21 @@ class ActivityType(str, enum.Enum):
     NOTE = "Note"
     SMS = "SMS"
     DOCUMENT = "Document"
+
+
+class InviteStatus(str, enum.Enum):
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    EXPIRED = "expired"
+    REVOKED = "revoked"
+
+
+class PermissionLevel(str, enum.Enum):
+    NONE = "none"
+    VIEW = "view"
+    EDIT = "edit"
+    FULL = "full"
+
 
 # ============================================================================
 # DATABASE MODELS (ALL TABLES)
@@ -368,6 +429,27 @@ class Lead(Base):
     credit_pulled_date = Column(DateTime)
     preapproval_issued_date = Column(DateTime)
     property_address = Column(String)
+    # PRD Section 4.1 - Borrower Fields for Rate Lock Intelligence
+    buying_timeline_category = Column(SQLEnum(BuyingTimelineCategory))  # Platinum/Gold/Silver/Green
+    borrower_risk_profile = Column(SQLEnum(BorrowerRiskProfile))  # Safety First/Balanced/Aggressive
+    target_payment = Column(Float)  # Target monthly payment for borrower
+    expected_purchase_date = Column(DateTime)  # When borrower expects to buy
+    # PRD Section 4.3 - Referral Fields
+    referral_score = Column(Integer, default=0)  # 0-100 referral potential score
+    referral_source_score = Column(Integer, default=0)  # Score as a referral source
+    employment_referral_flag = Column(Boolean, default=False)  # Has workplace referral potential
+    manager_flag = Column(Boolean, default=False)  # Manages people (high referral potential)
+    employees_managed = Column(Integer, default=0)  # Number of employees managed
+    leadership_level = Column(String)  # Executive/Director/Manager/Team Lead/Senior
+    company_size = Column(Integer)  # Size of employer company
+    employer_name = Column(String)  # Name of employer
+    industry = Column(String)  # Industry for referral scoring
+    circle_of_cash_flow_map = Column(JSON)  # Referral network mapping
+    # Workflow tracking
+    current_workflow_id = Column(String)  # Active workflow identifier
+    workflow_day = Column(Integer, default=0)  # Current day in workflow sequence
+    last_workflow_action = Column(DateTime)  # Last automated action
+    nurture_month = Column(Integer, default=0)  # Month in long-term nurture cycle
     # Metadata
     user_metadata = Column(JSON)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -423,8 +505,23 @@ class Loan(Base):
     appraisal_scheduled_date = Column(DateTime)
     appraisal_completed_date = Column(DateTime)
     appraisal_value = Column(Float)
-    # Rate lock fields
+    # Rate lock fields (existing)
     lock_expiration_date = Column(DateTime)
+    # PRD Section 4.2 - Rate Lock Intelligence Fields
+    rate_lock_status = Column(SQLEnum(RateLockStatus), default=RateLockStatus.NOT_ELIGIBLE)
+    rate_lock_recommendation = Column(SQLEnum(RateLockRecommendation))
+    lock_term_days = Column(Integer)  # 15/30/45/60/75 days
+    float_down_available = Column(Boolean, default=False)
+    float_down_terms = Column(String)  # Terms if float-down is available
+    extension_cost_estimate = Column(Float)  # Estimated cost to extend lock
+    volatility_score = Column(Integer, default=50)  # 0-100, market volatility
+    borrower_risk_profile = Column(SQLEnum(BorrowerRiskProfile))  # Safety First/Balanced/Aggressive
+    lock_score = Column(Integer)  # Calculated lock recommendation score (0-100)
+    lock_decision_date = Column(DateTime)  # When lock/float decision was made
+    lock_decision_notes = Column(Text)  # Notes about lock decision
+    last_rate_check = Column(DateTime)  # Last time market was checked
+    # Rate lock history (stored as JSON for flexibility)
+    rate_lock_history = Column(JSON)  # [{date, action, rate, lock_term, notes}, ...]
     # Property details (split address)
     property_city = Column(String)
     property_state = Column(String)
@@ -436,6 +533,17 @@ class Loan(Base):
     initial_disclosures_signed_date = Column(DateTime)
     cd_received_signed_date = Column(DateTime)
     final_closing_package_sent_date = Column(DateTime)
+    # PRD Section 5 - Under Contract Workflow Fields
+    contract_received_date = Column(DateTime)  # When purchase contract received
+    loan_estimate_sent_date = Column(DateTime)  # When LE was sent
+    conditional_approval_date = Column(DateTime)  # When conditional approval received
+    # AMR (Annual Mortgage Review) tracking
+    last_amr_date = Column(DateTime)  # Last annual review
+    next_amr_date = Column(DateTime)  # Next scheduled review
+    refi_opportunity_score = Column(Integer, default=0)  # 0-100, refi potential
+    # Workflow tracking
+    current_workflow_id = Column(String)  # Active workflow identifier
+    last_workflow_action = Column(DateTime)  # Last automated action
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     loan_officer = relationship("User", back_populates="loans")
@@ -1084,6 +1192,147 @@ class MicrosoftToken(Base):
     scope = Column(String)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
+# ============================================================================
+# ONBOARDING & PERMISSION SYSTEM MODELS
+# ============================================================================
+
+class EmployeeInvite(Base):
+    """Tracks employee invitation lifecycle. Links to user record once invite is accepted."""
+    __tablename__ = "employee_invites"
+
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(255), nullable=False, index=True)
+    first_name = Column(String(100), nullable=False)
+    last_name = Column(String(100), nullable=False)
+    job_title = Column(String(100))
+    permission_role = Column(String(50), nullable=False, default="sales")
+    invite_token = Column(String(64), unique=True, nullable=False, index=True)
+    status = Column(SQLEnum(InviteStatus), default=InviteStatus.PENDING, nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+    expires_at = Column(DateTime, nullable=False)
+    accepted_at = Column(DateTime)
+    invited_by_user_id = Column(Integer, ForeignKey("users.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+    branch_id = Column(Integer, ForeignKey("branches.id"))
+    initial_config = Column(JSON, default=dict)
+    # Relationships defined after User class
+
+
+class CRMPage(Base):
+    """Defines navigable pages/features in the CRM for permission matrix."""
+    __tablename__ = "crm_pages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String(50), unique=True, nullable=False)
+    label = Column(String(100), nullable=False)
+    description = Column(Text)
+    category = Column(String(50))
+    icon = Column(String(50))
+    route = Column(String(100))
+    sort_order = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+    parent_id = Column(Integer, ForeignKey("crm_pages.id"))
+    children = relationship("CRMPage", backref="parent", remote_side="CRMPage.id")
+
+
+class RolePagePermission(Base):
+    """Default page permissions per role."""
+    __tablename__ = "role_page_permissions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    role = Column(String(50), nullable=False)
+    page_id = Column(Integer, ForeignKey("crm_pages.id"), nullable=False)
+    permission_level = Column(SQLEnum(PermissionLevel), default=PermissionLevel.NONE)
+    page = relationship("CRMPage")
+
+    __table_args__ = (UniqueConstraint('role', 'page_id', name='uq_role_page'),)
+
+
+class UserPagePermission(Base):
+    """Per-user permission overrides. Only stores deviations from role defaults."""
+    __tablename__ = "user_page_permissions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    page_id = Column(Integer, ForeignKey("crm_pages.id"), nullable=False)
+    permission_level = Column(SQLEnum(PermissionLevel), nullable=False)
+    page = relationship("CRMPage")
+
+    __table_args__ = (UniqueConstraint('user_id', 'page_id', name='uq_user_page'),)
+
+
+class AIQuickAction(Base):
+    """Defines available AI quick actions for the landing page. Role-gated."""
+    __tablename__ = "ai_quick_actions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String(50), unique=True, nullable=False)
+    label = Column(String(100), nullable=False)
+    subtitle = Column(String(200))
+    description = Column(Text)
+    icon = Column(String(50))
+    primary_prompt = Column(Text)
+    requires_chat = Column(Boolean, default=True)
+    sort_order = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+    requires_page_id = Column(Integer, ForeignKey("crm_pages.id"))
+    requires_page = relationship("CRMPage")
+    requires_permission_level = Column(SQLEnum(PermissionLevel), default=PermissionLevel.VIEW)
+
+
+class AIQuickActionRole(Base):
+    """Maps which roles can see which AI quick actions."""
+    __tablename__ = "ai_quick_action_roles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ai_action_id = Column(Integer, ForeignKey("ai_quick_actions.id"), nullable=False)
+    role = Column(String(50), nullable=False)
+    ai_action = relationship("AIQuickAction", backref="role_mappings")
+
+    __table_args__ = (UniqueConstraint('ai_action_id', 'role', name='uq_quick_action_role'),)
+
+
+class Responsibility(Base):
+    """Defines job responsibilities that can be assigned to users."""
+    __tablename__ = "responsibilities"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String(50), unique=True, nullable=False)
+    label = Column(String(100), nullable=False)
+    description = Column(Text)
+    category = Column(String(50))
+    icon = Column(String(50))
+    sort_order = Column(Integer, default=0)
+    is_active = Column(Boolean, default=True)
+
+
+class RoleResponsibility(Base):
+    """Default responsibilities assigned per role."""
+    __tablename__ = "role_responsibilities"
+
+    id = Column(Integer, primary_key=True, index=True)
+    role = Column(String(50), nullable=False)
+    responsibility_id = Column(Integer, ForeignKey("responsibilities.id"), nullable=False)
+    responsibility = relationship("Responsibility")
+
+    __table_args__ = (UniqueConstraint('role', 'responsibility_id', name='uq_role_responsibility'),)
+
+
+class UserResponsibility(Base):
+    """Actual responsibilities assigned to a user."""
+    __tablename__ = "user_responsibilities"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    responsibility_id = Column(Integer, ForeignKey("responsibilities.id"), nullable=False)
+    is_enabled = Column(Boolean, default=True)
+    sla_config = Column(JSON, default=dict)
+    responsibility = relationship("Responsibility")
+
+    __table_args__ = (UniqueConstraint('user_id', 'responsibility_id', name='uq_user_responsibility'),)
+
 
 class CalendarMapping(Base):
     """Maps lead stages to Calendly event types for automatic scheduling"""
@@ -6356,6 +6605,43 @@ When acting autonomously:
             if risk == "low":
                 autonomous_actions.append(t["tool"])
 
+        # Build prioritized tasks list for the frontend
+        prioritized_tasks_data = []
+        if coaching_mode in ["Daily Briefing", "Priority Decision", "Focus Reset"]:
+            # Get top priority tasks to return as structured data
+            priority_tasks = sorted(
+                [t for t in all_tasks if t.status != "completed"],
+                key=lambda x: (
+                    0 if x.priority == "urgent" else 1 if x.priority == "high" else 2 if x.priority == "medium" else 3,
+                    x.due_date or datetime.max
+                )
+            )[:10]  # Top 10 tasks
+
+            for task in priority_tasks:
+                # Find associated loan for more context
+                loan_info = None
+                if task.loan_id:
+                    loan = next((l for l in all_loans if l.id == task.loan_id), None)
+                    if loan:
+                        loan_info = {
+                            "borrower": loan.borrower_name,
+                            "amount": f"${loan.amount:,.0f}" if loan.amount else None,
+                            "stage": str(loan.stage).replace("LoanStage.", "") if loan.stage else None
+                        }
+
+                prioritized_tasks_data.append({
+                    "id": task.id,
+                    "title": task.title,
+                    "description": task.description,
+                    "priority": task.priority.upper() if task.priority else "MEDIUM",
+                    "due_date": task.due_date.strftime("%m/%d/%Y %I:%M %p") if task.due_date else None,
+                    "client": loan_info["borrower"] if loan_info else (task.borrower_name or "Unknown"),
+                    "loan_amount": loan_info["amount"] if loan_info else None,
+                    "stage": loan_info["stage"] if loan_info else None,
+                    "category": task.category,
+                    "status": task.status
+                })
+
         return {
             "response": ai_response,
             "tools_executed": [t["tool"] for t in tool_results],
@@ -6363,7 +6649,9 @@ When acting autonomously:
             "agent_used": agent_name,
             "specialized_agent": selected_agent["name"] if selected_agent else None,
             "autonomous_mode": autonomous_mode,
-            "autonomous_actions": autonomous_actions
+            "autonomous_actions": autonomous_actions,
+            "coaching_mode": coaching_mode,
+            "prioritized_tasks": prioritized_tasks_data if prioritized_tasks_data else None
         }
 
     except Exception as e:
@@ -27266,12 +27554,14 @@ async def startup_event():
             except Exception as e:
                 logger.warning(f"⚠️ AI Receptionist Dashboard tables creation skipped: {e}")
 
-            # Create sample data
+            # Create sample data and seed permission system
             db = SessionLocal()
             try:
                 create_sample_data(db)
+                # Seed permission system (CRM pages, roles, AI quick actions)
+                seed_permission_system(db)
             except Exception as e:
-                logger.warning(f"⚠️ Sample data creation skipped: {e}")
+                logger.warning(f"⚠️ Sample data/permission seeding skipped: {e}")
             finally:
                 db.close()
 
@@ -30613,6 +30903,411 @@ async def update_workflow_stage(
         db.rollback()
         logger.error(f"Error saving workflow: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# ONBOARDING & PERMISSION SYSTEM SEED DATA
+# ============================================================================
+
+def seed_permission_system(db: Session):
+    """Seed CRM pages, role permissions, AI quick actions, and responsibilities."""
+
+    # Check if already seeded
+    if db.query(CRMPage).count() > 0:
+        logger.info("Permission system already seeded, skipping...")
+        return
+
+    logger.info("Seeding permission system...")
+
+    # Seed CRM Pages
+    pages_data = [
+        {"key": "dashboard", "label": "Dashboard", "category": "Pipeline", "icon": "Dashboard", "route": "/dashboard", "sort_order": 1},
+        {"key": "loans", "label": "Loans", "category": "Pipeline", "icon": "AccountBalance", "route": "/loans", "sort_order": 2},
+        {"key": "contacts", "label": "Contacts", "category": "Pipeline", "icon": "People", "route": "/contacts", "sort_order": 3},
+        {"key": "leads", "label": "Leads", "category": "Pipeline", "icon": "PersonAdd", "route": "/leads", "sort_order": 4},
+        {"key": "tasks", "label": "Tasks", "category": "Pipeline", "icon": "CheckCircle", "route": "/tasks", "sort_order": 5},
+        {"key": "reports", "label": "Reports", "category": "Reports", "icon": "Assessment", "route": "/reports", "sort_order": 10},
+        {"key": "analytics", "label": "Analytics", "category": "Reports", "icon": "TrendingUp", "route": "/analytics", "sort_order": 11},
+        {"key": "profitability", "label": "Profitability", "category": "Reports", "icon": "AttachMoney", "route": "/profitability", "sort_order": 12},
+        {"key": "ai_landing", "label": "AI Assistant", "category": "AI", "icon": "Psychology", "route": "/ai", "sort_order": 20},
+        {"key": "ai_chat", "label": "AI Chat", "category": "AI", "icon": "Chat", "route": "/ai/chat", "sort_order": 21},
+        {"key": "admin_users", "label": "User Management", "category": "Admin", "icon": "ManageAccounts", "route": "/admin/users", "sort_order": 30},
+        {"key": "admin_settings", "label": "Settings", "category": "Admin", "icon": "Settings", "route": "/admin/settings", "sort_order": 31},
+        {"key": "admin_branches", "label": "Branches", "category": "Admin", "icon": "Business", "route": "/admin/branches", "sort_order": 32},
+    ]
+
+    for page_data in pages_data:
+        db.add(CRMPage(**page_data, is_active=True))
+    db.commit()
+
+    # Get pages for role permission mapping
+    pages = {p.key: p for p in db.query(CRMPage).all()}
+
+    # Seed Role Page Permissions
+    role_defaults = {
+        "admin": {"dashboard": "full", "loans": "full", "contacts": "full", "leads": "full", "tasks": "full", "reports": "full", "analytics": "full", "profitability": "full", "ai_landing": "full", "ai_chat": "full", "admin_users": "full", "admin_settings": "full", "admin_branches": "full"},
+        "leadership": {"dashboard": "full", "loans": "full", "contacts": "full", "leads": "full", "tasks": "full", "reports": "full", "analytics": "full", "profitability": "full", "ai_landing": "full", "ai_chat": "full", "admin_users": "view", "admin_settings": "view", "admin_branches": "view"},
+        "management": {"dashboard": "full", "loans": "edit", "contacts": "edit", "leads": "edit", "tasks": "full", "reports": "view", "analytics": "view", "profitability": "view", "ai_landing": "full", "ai_chat": "full", "admin_users": "none", "admin_settings": "none", "admin_branches": "none"},
+        "sales": {"dashboard": "view", "loans": "edit", "contacts": "edit", "leads": "full", "tasks": "edit", "reports": "none", "analytics": "none", "profitability": "none", "ai_landing": "full", "ai_chat": "full", "admin_users": "none", "admin_settings": "none", "admin_branches": "none"},
+        "processing": {"dashboard": "view", "loans": "edit", "contacts": "view", "leads": "none", "tasks": "edit", "reports": "none", "analytics": "none", "profitability": "none", "ai_landing": "full", "ai_chat": "full", "admin_users": "none", "admin_settings": "none", "admin_branches": "none"},
+        "operations": {"dashboard": "view", "loans": "view", "contacts": "view", "leads": "none", "tasks": "edit", "reports": "view", "analytics": "none", "profitability": "none", "ai_landing": "full", "ai_chat": "full", "admin_users": "none", "admin_settings": "none", "admin_branches": "none"},
+    }
+
+    for role, permissions in role_defaults.items():
+        for page_key, level in permissions.items():
+            if page_key in pages:
+                db.add(RolePagePermission(role=role, page_id=pages[page_key].id, permission_level=PermissionLevel(level)))
+    db.commit()
+
+    # Seed AI Quick Actions
+    actions_data = [
+        {"key": "quick_quote", "label": "Quick Quote", "subtitle": "Generate a loan estimate in seconds", "icon": "Calculate", "primary_prompt": "I need to generate a quick loan quote for a borrower.", "requires_chat": True, "roles": ["admin", "leadership", "management", "sales"]},
+        {"key": "lead_summary", "label": "Lead Summary", "subtitle": "Get AI insights on your hottest leads", "icon": "Whatshot", "primary_prompt": "Analyze my current leads and show me which ones need attention.", "requires_chat": False, "roles": ["admin", "leadership", "management", "sales"]},
+        {"key": "pipeline_status", "label": "Pipeline Status", "subtitle": "Overview of loans in progress", "icon": "Timeline", "primary_prompt": "Show me the current status of my pipeline and any bottlenecks.", "requires_chat": False, "roles": ["admin", "leadership", "management", "sales", "processing"]},
+        {"key": "rate_check", "label": "Rate Intelligence", "subtitle": "Current rates and lock recommendations", "icon": "TrendingUp", "primary_prompt": "What are today's rates and do I have any loans that should be locked?", "requires_chat": False, "roles": ["admin", "leadership", "management", "sales"]},
+        {"key": "document_checklist", "label": "Document Checklist", "subtitle": "Missing documents and conditions", "icon": "Checklist", "primary_prompt": "Show me outstanding documents and conditions across my loans.", "requires_chat": False, "roles": ["admin", "leadership", "management", "processing", "operations"]},
+        {"key": "draft_email", "label": "Draft Email", "subtitle": "AI-assisted communication", "icon": "Email", "primary_prompt": "Help me draft an email to a borrower or referral partner.", "requires_chat": True, "roles": ["admin", "leadership", "management", "sales", "processing"]},
+        {"key": "compliance_review", "label": "Compliance Review", "subtitle": "Check disclosure timing and requirements", "icon": "Gavel", "primary_prompt": "Review compliance requirements for my loans in process.", "requires_chat": False, "roles": ["admin", "leadership", "management", "processing", "operations"]},
+        {"key": "daily_briefing", "label": "Daily Briefing", "subtitle": "Your personalized morning update", "icon": "WbSunny", "primary_prompt": "Give me my daily briefing with tasks, pipeline updates, and priorities.", "requires_chat": False, "roles": ["admin", "leadership", "management", "sales", "processing", "operations"]},
+    ]
+
+    for i, action_data in enumerate(actions_data):
+        roles = action_data.pop("roles")
+        action = AIQuickAction(**action_data, is_active=True, sort_order=i)
+        db.add(action)
+        db.flush()
+        for role in roles:
+            db.add(AIQuickActionRole(ai_action_id=action.id, role=role))
+    db.commit()
+
+    # Seed Responsibilities
+    responsibilities_data = [
+        {"key": "lead_follow_up", "label": "Lead Follow-up", "category": "Sales", "icon": "Phone"},
+        {"key": "referral_management", "label": "Referral Partner Management", "category": "Sales", "icon": "Handshake"},
+        {"key": "borrower_communication", "label": "Borrower Communication", "category": "Sales", "icon": "Chat"},
+        {"key": "rate_monitoring", "label": "Rate Lock Monitoring", "category": "Sales", "icon": "TrendingUp"},
+        {"key": "document_collection", "label": "Document Collection", "category": "Processing", "icon": "FolderOpen"},
+        {"key": "condition_clearing", "label": "Condition Clearing", "category": "Processing", "icon": "CheckCircle"},
+        {"key": "title_coordination", "label": "Title Coordination", "category": "Processing", "icon": "Description"},
+        {"key": "appraisal_management", "label": "Appraisal Management", "category": "Processing", "icon": "Home"},
+        {"key": "disclosure_timing", "label": "Disclosure Timing", "category": "Operations", "icon": "Schedule"},
+        {"key": "compliance_review", "label": "Compliance Review", "category": "Operations", "icon": "Gavel"},
+        {"key": "closing_coordination", "label": "Closing Coordination", "category": "Operations", "icon": "EventAvailable"},
+        {"key": "post_closing", "label": "Post-Closing", "category": "Operations", "icon": "Archive"},
+    ]
+
+    for i, resp_data in enumerate(responsibilities_data):
+        db.add(Responsibility(**resp_data, sort_order=i, is_active=True))
+    db.commit()
+
+    # Seed Role Responsibilities
+    role_resp_defaults = {
+        "sales": ["lead_follow_up", "referral_management", "borrower_communication", "rate_monitoring"],
+        "processing": ["document_collection", "condition_clearing", "title_coordination", "appraisal_management"],
+        "operations": ["disclosure_timing", "compliance_review", "closing_coordination", "post_closing"],
+        "management": ["lead_follow_up", "borrower_communication", "rate_monitoring", "compliance_review"],
+    }
+
+    responsibilities = {r.key: r for r in db.query(Responsibility).all()}
+    for role, resp_keys in role_resp_defaults.items():
+        for resp_key in resp_keys:
+            if resp_key in responsibilities:
+                db.add(RoleResponsibility(role=role, responsibility_id=responsibilities[resp_key].id))
+    db.commit()
+
+    logger.info("✅ Permission system seeded successfully")
+
+
+# ============================================================================
+# ONBOARDING API ENDPOINTS
+# ============================================================================
+
+class EmployeeInviteCreate(BaseModel):
+    email: str
+    first_name: str
+    last_name: str
+    job_title: Optional[str] = None
+    permission_role: str = "sales"
+    branch_id: Optional[int] = None
+    page_permissions: Optional[List[dict]] = None
+    responsibilities: Optional[List[str]] = None
+
+
+class InviteAcceptRequest(BaseModel):
+    token: str
+    password: str
+
+
+@app.get("/api/admin/users/check-email")
+async def check_email_availability(
+    email: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Check if email is available for new invite."""
+    existing_user = db.query(User).filter(User.email == email).first()
+    existing_invite = db.query(EmployeeInvite).filter(
+        EmployeeInvite.email == email,
+        EmployeeInvite.status == InviteStatus.PENDING
+    ).first()
+
+    return {
+        "available": existing_user is None and existing_invite is None,
+        "reason": "Email already in use" if existing_user else ("Pending invite exists" if existing_invite else None)
+    }
+
+
+@app.get("/api/user-onboarding/options")
+async def get_onboarding_options(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Get roles, branches, pages, and responsibilities for onboarding wizard."""
+    roles = [
+        {"value": "admin", "label": "Administrator", "description": "Full system access"},
+        {"value": "leadership", "label": "Leadership", "description": "Executive oversight access"},
+        {"value": "management", "label": "Management", "description": "Team management access"},
+        {"value": "sales", "label": "Sales / Loan Officer", "description": "Lead and loan origination"},
+        {"value": "processing", "label": "Processing", "description": "Loan processing access"},
+        {"value": "operations", "label": "Operations", "description": "Operational support access"},
+    ]
+
+    branches = [{"id": b.id, "name": b.name} for b in db.query(Branch).all()]
+    pages = [{"id": p.id, "key": p.key, "label": p.label, "category": p.category} for p in db.query(CRMPage).filter(CRMPage.is_active == True).order_by(CRMPage.sort_order).all()]
+    responsibilities = [{"id": r.id, "key": r.key, "label": r.label, "category": r.category} for r in db.query(Responsibility).filter(Responsibility.is_active == True).order_by(Responsibility.sort_order).all()]
+
+    return {"roles": roles, "branches": branches, "pages": pages, "responsibilities": responsibilities}
+
+
+@app.get("/api/user-onboarding/permissions-preview/{role}")
+async def get_role_permissions_preview(
+    role: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Get default permissions for a role."""
+    role_perms = db.query(RolePagePermission).filter(RolePagePermission.role == role).all()
+    role_resps = db.query(RoleResponsibility).filter(RoleResponsibility.role == role).all()
+
+    return {
+        "permissions": [{"page_id": rp.page_id, "page_key": rp.page.key, "level": rp.permission_level.value} for rp in role_perms],
+        "responsibilities": [{"id": rr.responsibility_id, "key": rr.responsibility.key} for rr in role_resps]
+    }
+
+
+@app.post("/api/admin/users/onboarding")
+async def create_employee_invite(
+    request: EmployeeInviteCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Create a new employee invite."""
+    import secrets
+
+    # Check email availability
+    if db.query(User).filter(User.email == request.email).first():
+        raise HTTPException(status_code=400, detail="Email already in use")
+
+    if db.query(EmployeeInvite).filter(EmployeeInvite.email == request.email, EmployeeInvite.status == InviteStatus.PENDING).first():
+        raise HTTPException(status_code=400, detail="Pending invite already exists for this email")
+
+    # Generate invite token
+    invite_token = secrets.token_urlsafe(32)
+
+    # Create invite
+    invite = EmployeeInvite(
+        email=request.email,
+        first_name=request.first_name,
+        last_name=request.last_name,
+        job_title=request.job_title,
+        permission_role=request.permission_role,
+        branch_id=request.branch_id,
+        invite_token=invite_token,
+        invited_by_user_id=current_user.id,
+        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+        initial_config={
+            "page_permissions": request.page_permissions or [],
+            "responsibilities": request.responsibilities or []
+        }
+    )
+    db.add(invite)
+    db.commit()
+    db.refresh(invite)
+
+    # TODO: Send invite email with token
+    invite_url = f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/accept-invite?token={invite_token}"
+    logger.info(f"Employee invite created: {request.email}, URL: {invite_url}")
+
+    return {
+        "success": True,
+        "invite_id": invite.id,
+        "invite_url": invite_url,
+        "expires_at": invite.expires_at.isoformat()
+    }
+
+
+@app.get("/api/invite/{token}")
+async def get_invite_details(token: str, db: Session = Depends(get_db)):
+    """Get invite details (public endpoint for invite acceptance page)."""
+    invite = db.query(EmployeeInvite).filter(EmployeeInvite.invite_token == token).first()
+
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invite not found")
+
+    if invite.status != InviteStatus.PENDING:
+        raise HTTPException(status_code=400, detail=f"Invite has been {invite.status.value}")
+
+    if invite.expires_at < datetime.now(timezone.utc):
+        invite.status = InviteStatus.EXPIRED
+        db.commit()
+        raise HTTPException(status_code=400, detail="Invite has expired")
+
+    return {
+        "email": invite.email,
+        "first_name": invite.first_name,
+        "last_name": invite.last_name,
+        "job_title": invite.job_title,
+        "permission_role": invite.permission_role,
+        "expires_at": invite.expires_at.isoformat()
+    }
+
+
+@app.post("/api/invite/accept")
+async def accept_invite(request: InviteAcceptRequest, db: Session = Depends(get_db)):
+    """Accept an invite and create user account."""
+    invite = db.query(EmployeeInvite).filter(EmployeeInvite.invite_token == request.token).first()
+
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invite not found")
+
+    if invite.status != InviteStatus.PENDING:
+        raise HTTPException(status_code=400, detail=f"Invite has been {invite.status.value}")
+
+    if invite.expires_at < datetime.now(timezone.utc):
+        invite.status = InviteStatus.EXPIRED
+        db.commit()
+        raise HTTPException(status_code=400, detail="Invite has expired")
+
+    # Create user
+    hashed_password = pwd_context.hash(request.password)
+    user = User(
+        email=invite.email,
+        hashed_password=hashed_password,
+        full_name=f"{invite.first_name} {invite.last_name}",
+        permission_role=invite.permission_role,
+        branch_id=invite.branch_id,
+        is_active=True
+    )
+    db.add(user)
+    db.flush()
+
+    # Apply permission overrides if any
+    if invite.initial_config.get("page_permissions"):
+        for perm in invite.initial_config["page_permissions"]:
+            page = db.query(CRMPage).filter(CRMPage.key == perm.get("page_key")).first()
+            if page:
+                db.add(UserPagePermission(user_id=user.id, page_id=page.id, permission_level=PermissionLevel(perm["level"])))
+
+    # Apply responsibilities
+    if invite.initial_config.get("responsibilities"):
+        for resp_key in invite.initial_config["responsibilities"]:
+            resp = db.query(Responsibility).filter(Responsibility.key == resp_key).first()
+            if resp:
+                db.add(UserResponsibility(user_id=user.id, responsibility_id=resp.id, is_enabled=True))
+
+    # Update invite status
+    invite.status = InviteStatus.ACCEPTED
+    invite.accepted_at = datetime.now(timezone.utc)
+    invite.user_id = user.id
+
+    db.commit()
+
+    # Generate JWT token for immediate login
+    access_token = create_access_token(data={"sub": user.email})
+
+    return {
+        "success": True,
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": {"id": user.id, "email": user.email, "full_name": user.full_name, "permission_role": user.permission_role}
+    }
+
+
+@app.get("/api/admin/invites")
+async def list_invites(
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """List all employee invites."""
+    query = db.query(EmployeeInvite).order_by(EmployeeInvite.created_at.desc())
+
+    if status:
+        query = query.filter(EmployeeInvite.status == InviteStatus(status))
+
+    invites = query.all()
+
+    return {
+        "invites": [{
+            "id": inv.id,
+            "email": inv.email,
+            "first_name": inv.first_name,
+            "last_name": inv.last_name,
+            "job_title": inv.job_title,
+            "permission_role": inv.permission_role,
+            "status": inv.status.value,
+            "created_at": inv.created_at.isoformat() if inv.created_at else None,
+            "expires_at": inv.expires_at.isoformat() if inv.expires_at else None,
+            "accepted_at": inv.accepted_at.isoformat() if inv.accepted_at else None
+        } for inv in invites]
+    }
+
+
+@app.post("/api/admin/invites/{invite_id}/revoke")
+async def revoke_invite(
+    invite_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Revoke a pending invite."""
+    invite = db.query(EmployeeInvite).filter(EmployeeInvite.id == invite_id).first()
+
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invite not found")
+
+    if invite.status != InviteStatus.PENDING:
+        raise HTTPException(status_code=400, detail="Can only revoke pending invites")
+
+    invite.status = InviteStatus.REVOKED
+    db.commit()
+
+    return {"success": True, "message": "Invite revoked"}
+
+
+@app.get("/api/ai/quick-actions")
+async def get_ai_quick_actions(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Get AI quick actions available to the current user based on their role."""
+    user_role = current_user.permission_role or "sales"
+
+    # Get actions for this role
+    actions = db.query(AIQuickAction).join(AIQuickActionRole).filter(
+        AIQuickActionRole.role == user_role,
+        AIQuickAction.is_active == True
+    ).order_by(AIQuickAction.sort_order).all()
+
+    return {
+        "actions": [{
+            "key": a.key,
+            "label": a.label,
+            "subtitle": a.subtitle,
+            "icon": a.icon,
+            "primary_prompt": a.primary_prompt,
+            "requires_chat": a.requires_chat
+        } for a in actions]
+    }
 
 
 @app.on_event("shutdown")
