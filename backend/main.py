@@ -17681,6 +17681,7 @@ async def execute_ai_function(
 
     except Exception as e:
         logger.error(f"Error executing AI function {function_name}: {e}")
+        db.rollback()
         return {"success": False, "error": str(e)}
 
 @app.post("/api/v1/ai/chat", response_model=ConversationResponse)
