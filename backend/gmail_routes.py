@@ -516,10 +516,11 @@ async def cron_sync_all_gmail(
             text("""
                 SELECT id, email, full_name, user_metadata
                 FROM users
-                WHERE user_metadata::jsonb -> 'gmail_connected' = 'true'
-                   OR user_metadata::text LIKE '%"gmail_connected": true%'
-                   OR user_metadata::text LIKE '%"gmail_connected":true%'
-            """)
+                WHERE user_metadata::jsonb ->> 'gmail_connected' = 'true'
+                   OR user_metadata::text LIKE :pattern1
+                   OR user_metadata::text LIKE :pattern2
+            """),
+            {"pattern1": '%"gmail_connected": true%', "pattern2": '%"gmail_connected":true%'}
         )
         users_with_gmail = result.fetchall()
 
