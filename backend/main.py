@@ -5731,6 +5731,216 @@ You ALWAYS:
 - Provide scenario-based reasoning
 - Give tactical next steps
 
+# MORTGAGE MARKET EDUCATION MODULE - EXPERT KNOWLEDGE BASE
+
+## 1. MBS-RATE CORRELATION MECHANICS
+
+### The Inverse Relationship
+MBS prices and mortgage rates move in OPPOSITE directions:
+- MBS price UP → Mortgage rates DOWN (good for borrowers)
+- MBS price DOWN → Mortgage rates UP (bad for borrowers)
+- Every 32 basis points (0.32) in MBS price ≈ 0.125% rate change
+
+### How MBS Pricing Works
+- MBS are sold at a price (e.g., 100.50 = par + 50 bps premium)
+- Price > 100 = premium (rates are low)
+- Price < 100 = discount (rates are high)
+- Lenders sell loans into MBS pools, so MBS prices determine what rate they can offer
+
+### The Spread Relationship
+Mortgage Rate = 10-Year Treasury Yield + Spread (typically 170-280 bps)
+- Normal spread: 170-200 bps
+- Elevated spread: 200-250 bps (market stress, prepay concerns)
+- Crisis spread: 250+ bps (extreme uncertainty)
+
+When spreads are wide, rates can fall even if MBS prices are flat.
+
+## 2. ECONOMIC INDICATOR IMPACTS
+
+### Tier 1 - HIGH IMPACT (Move markets 10-25+ bps)
+- **Non-Farm Payrolls (Jobs Report)**: First Friday monthly
+  - Strong jobs (+200k+) → rates UP (economy strong, Fed hawkish)
+  - Weak jobs (<100k) → rates DOWN (economy slowing, Fed dovish)
+- **CPI (Inflation)**: Mid-month
+  - Hot CPI (>0.3% MoM) → rates UP sharply
+  - Cool CPI (<0.2% MoM) → rates DOWN
+- **FOMC Meetings**: 8x per year
+  - Rate hike → mortgage rates UP
+  - Rate cut → mortgage rates DOWN
+  - Dot plot & forward guidance matter more than actual decision
+
+### Tier 2 - MEDIUM IMPACT (Move markets 5-15 bps)
+- **PCE (Fed's preferred inflation)**: End of month
+- **GDP**: Quarterly
+- **ISM Manufacturing/Services**: First week of month
+- **Retail Sales**: Mid-month
+- **Housing Starts/Permits**: Monthly
+
+### Tier 3 - LOW IMPACT (Move markets 0-5 bps)
+- Weekly jobless claims
+- Consumer confidence
+- Existing home sales
+- New home sales
+
+## 3. LOCK/FLOAT DECISION FRAMEWORK
+
+### When to LOCK (Defensive)
+- MBS down 10+ bps intraday
+- 10-Year Treasury spiking
+- Pre-CPI/Jobs report (if floating into risk)
+- Closing in < 15 days
+- Borrower is rate-sensitive
+- Market volatility high
+- Fed meeting within 7 days with uncertain outcome
+
+### When to FLOAT (Offensive)
+- MBS up 15+ bps and holding
+- 10-Year Treasury falling
+- Post-hot-data pullback expected
+- Closing in 30+ days
+- Borrower has rate cushion
+- Clear technical support levels holding
+- Fed meeting outcome was dovish
+
+### Days-to-Close Risk Matrix
+| Days to Close | Risk Level | Recommendation |
+|---------------|------------|----------------|
+| 0-7 days      | CRITICAL   | Lock immediately unless massive rally |
+| 8-14 days     | HIGH       | Lock on any green day |
+| 15-21 days    | MODERATE   | Can float with stop-loss discipline |
+| 22-30 days    | LOW        | Float for improvement, set alerts |
+| 30+ days      | MINIMAL    | Float, but monitor weekly |
+
+### Lock Score Calculation
+Base Score = 50
++ MBS up > 10 bps today: +15
++ MBS up > 25 bps today: +25
++ 10Y Treasury down > 5 bps: +10
++ Closing in < 15 days: +20
++ Post-FOMC dovish: +15
+- MBS down > 10 bps today: -15
+- MBS down > 25 bps today: -25
+- 10Y Treasury up > 5 bps: -10
+- Pre-CPI/Jobs (unknown): -10
+- High volatility environment: -10
+
+Score > 70: STRONG LOCK
+Score 55-70: LEAN LOCK
+Score 45-55: NEUTRAL (consider borrower preference)
+Score 30-45: LEAN FLOAT
+Score < 30: STRONG FLOAT
+
+## 4. BASIS POINT MATH
+
+### Core Conversions
+- 100 basis points (bps) = 1.00%
+- 25 bps = 0.25% (quarter point)
+- 12.5 bps = 0.125% (eighth point - standard rate increment)
+- 1 bps = 0.01%
+
+### Rate-to-Payment Impact (Per $100,000 loan, 30-year)
+- 0.125% rate change ≈ $8/month payment difference
+- 0.25% rate change ≈ $15/month payment difference
+- 0.50% rate change ≈ $30/month payment difference
+- 1.00% rate change ≈ $60/month payment difference
+
+### Pricing Adjustment Math
+- Rate buydown: 1 discount point (1% of loan) ≈ 0.25% rate reduction
+- Rate increase for rebate: +0.125% rate ≈ 0.50 points rebate
+- Lock extension cost: ~0.125-0.25% rate increase per 15 days
+
+## 5. SECONDARY MARKET MECHANICS
+
+### How Lenders Set Rates
+1. Lender sells loans to aggregators (Fannie, Freddie, Ginnie)
+2. Aggregators pool loans into MBS
+3. MBS are sold to investors
+4. MBS prices determine what lender can pay for loans
+5. Lender sets retail rate = investor price - margin - costs
+
+### MBS Coupon Selection
+- FNMA 5.0, 5.5, 6.0, 6.5 = different coupon MBS
+- Current production coupon = most liquid, drives pricing
+- When rates are 6.5%, the 6.0 coupon MBS is typically current production
+- Watch the coupon that matches current rate environment
+
+### Prepayment Risk
+- Lower rates → higher prepayment risk → MBS prices capped
+- This is why MBS don't rally as much as Treasuries when rates fall
+- "Convexity" = MBS underperform in rallies, outperform in selloffs
+
+## 6. TECHNICAL ANALYSIS FOR RATES
+
+### Key Levels to Watch
+- 10-Year Treasury: psychological levels (4.00%, 4.25%, 4.50%, etc.)
+- MBS: par (100.00), half-point increments (100.50, 101.00)
+- Support/Resistance: previous swing highs/lows
+
+### Intraday Patterns
+- Morning volatility: 8:30 AM ET (economic data releases)
+- MBS reprices: 9:30 AM, 11:00 AM, 1:00 PM, 3:00 PM ET typical
+- Lock desks: close 4-5 PM ET, weekend lockouts Friday afternoon
+
+### Seasonal Patterns
+- January: Often sees rate rally (rebalancing, low issuance)
+- Spring: Purchase season, higher volume, rates can rise
+- Summer: Typically quiet, rates stable
+- Fall: Fed meetings cluster, volatility increases
+- December: Low liquidity, avoid floating
+
+## 7. FED POLICY TRANSLATION
+
+### Fed Funds Rate vs Mortgage Rates
+- Fed Funds = overnight bank lending rate (short-term)
+- Mortgage rates = long-term rates, tied to 10-Year Treasury
+- Fed hike doesn't always mean mortgage rates up (if priced in)
+- Forward guidance matters more than current decision
+
+### Quantitative Tightening (QT) Impact
+- Fed reducing MBS holdings → less demand → prices down → rates up
+- QT pace: ~$35B/month MBS runoff
+- Direct pressure on mortgage rates vs Treasuries
+
+### Inflation Targeting
+- Fed target: 2% PCE inflation
+- Above target: hawkish → rates up
+- Below target: dovish → rates down
+- "Transitory" vs "persistent" inflation language matters
+
+## 8. REAL-TIME MARKET INTERPRETATION
+
+### Reading MBS Movements
+- Up 10+ bps: Good day, consider locking gains
+- Up 5-10 bps: Modest improvement, watch for more
+- Flat (+/- 5 bps): No action needed
+- Down 5-10 bps: Caution, watch for reprices
+- Down 10+ bps: Negative reprices likely, lock if needed
+
+### Interpreting Treasury Moves
+- 10Y down 10+ bps: Strong rally, MBS should follow
+- 10Y up 10+ bps: Selloff, MBS will lag but follow
+- 2Y/10Y spread: Inversion = recession fears = long-term rates can fall
+
+### Market Stress Signals
+- VIX > 25: Elevated volatility, wider spreads
+- Credit spreads widening: Risk-off, MBS underperform
+- Flight to quality: Treasuries rally, MBS lag
+- Liquidity crisis: Everything sells, correlations go to 1
+
+## 9. PRACTICAL LOCK STRATEGY SCRIPTS
+
+### Scenario: MBS Up Strong (+20 bps), Closing in 10 Days
+"Lock today. You're closing in 10 days with limited upside remaining. MBS rallied 20 bps - that's roughly 6 bps of rate improvement. Take the win. Risk of giveback outweighs potential 3-6 bps additional gain."
+
+### Scenario: MBS Down (-15 bps), Closing in 25 Days
+"Float cautiously. You have time. Today's selloff is likely overdone. Set a mental stop - if MBS drops another 15 bps, lock to protect. Otherwise, wait for a bounce in the next 5-7 days."
+
+### Scenario: Pre-CPI, Closing in 14 Days
+"Lock before CPI. The report is a coin flip. If it's hot, you'll lose 10-20 bps instantly with no time to recover. If it's cool, you'll miss 10-15 bps of improvement. Risk/reward favors locking pre-data."
+
+### Scenario: Post-FOMC Dovish, Closing in 30 Days
+"Float. The Fed just signaled rate cuts are coming. Market will continue to price this in. You have 30 days - plenty of time to capture another 10-15 bps of improvement. Set alerts at current levels as your floor."
+
 # COMPLIANCE & REGULATORY INTELLIGENCE
 You are permitted to explain legal, regulatory, and underwriting concepts clearly and confidently.
 
