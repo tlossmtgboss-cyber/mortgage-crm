@@ -13,15 +13,15 @@ from datetime import datetime, timedelta
 # All queries return real data from your database schema
 
 def _query_daily_focus_priorities(db: Session, params: Dict, user_id: int) -> List[Dict]:
-    """AI-prioritized action items based on urgency and revenue impact - includes ALL pending tasks"""
+    """AI-prioritized action items based on urgency and revenue impact - includes ALL pending tasks WITH borrower context"""
     result = db.execute(text("""
         WITH priority_items AS (
-            -- All pending tasks (regardless of due date)
+            -- All pending tasks with associated loan/lead names
             SELECT
                 'task' as type,
                 t.id,
                 t.title,
-                0 as value,
+                COALESCE(ln.amount, 0) as value,
                 t.due_date,
                 CASE
                     WHEN t.due_date IS NOT NULL AND t.due_date < NOW() THEN 100
@@ -35,9 +35,16 @@ def _query_daily_focus_priorities(db: Session, params: Dict, user_id: int) -> Li
                     WHEN t.due_date IS NOT NULL AND t.due_date < NOW() + INTERVAL '1 day' THEN 'Due Today'
                     WHEN t.priority = 'high' THEN 'High Priority'
                     ELSE 'Pending'
-                END as urgency_label
+                END as urgency_label,
+                COALESCE(ln.borrower_name, ld.name, t.related_contact_name, 'General') as borrower_name,
+                t.loan_id,
+                t.lead_id,
+                ln.stage as loan_stage,
+                ln.loan_number
             FROM tasks t
-            WHERE t.assigned_to = :user_id
+            LEFT JOIN loans ln ON t.loan_id = ln.id
+            LEFT JOIN leads ld ON t.lead_id = ld.id
+            WHERE (t.assigned_to = :user_id OR t.owner_id = :user_id)
             AND t.status != 'completed'
 
             UNION ALL
@@ -62,12 +69,18 @@ def _query_daily_focus_priorities(db: Session, params: Dict, user_id: int) -> Li
                     WHEN l.risk_score > 70 THEN 'High Risk'
                     WHEN l.days_in_stage > 14 THEN 'Stalled'
                     ELSE 'Active'
-                END as urgency_label
+                END as urgency_label,
+                l.borrower_name,
+                l.id as loan_id,
+                NULL as lead_id,
+                l.stage as loan_stage,
+                l.loan_number
             FROM loans l
             WHERE l.loan_officer_id = :user_id
             AND l.stage NOT IN ('FUNDED', 'CLOSED', 'CANCELLED')
         )
-        SELECT type, id, title, value, due_date, priority_score, urgency_label
+        SELECT type, id, title, value, due_date, priority_score, urgency_label,
+               borrower_name, loan_id, lead_id, loan_stage, loan_number
         FROM priority_items
         ORDER BY priority_score DESC, due_date ASC NULLS LAST
         LIMIT 50
@@ -80,7 +93,12 @@ def _query_daily_focus_priorities(db: Session, params: Dict, user_id: int) -> Li
         "value": float(r[3] or 0),
         "due_date": r[4].isoformat() if r[4] else None,
         "priority_score": r[5],
-        "urgency_label": r[6]
+        "urgency_label": r[6],
+        "borrower_name": r[7],
+        "loan_id": r[8],
+        "lead_id": r[9],
+        "loan_stage": r[10],
+        "loan_number": r[11]
     } for r in result]
 
 
@@ -125,21 +143,34 @@ def _query_callback_list(db: Session, params: Dict, user_id: int) -> List[Dict]:
 
 
 def _query_overdue_tasks(db: Session, params: Dict, user_id: int) -> List[Dict]:
-    """Past due items sorted by priority"""
+    """Past due items sorted by priority - WITH borrower/loan context"""
     result = db.execute(text("""
-        SELECT id, title, priority, due_date,
-               EXTRACT(DAY FROM (NOW() - due_date))::int as days_overdue
-        FROM tasks
-        WHERE assigned_to = :user_id
-        AND status != 'completed'
-        AND due_date < NOW()
-        ORDER BY priority DESC, due_date ASC
+        SELECT t.id, t.title, t.priority, t.due_date,
+               EXTRACT(DAY FROM (NOW() - t.due_date))::int as days_overdue,
+               COALESCE(ln.borrower_name, ld.name, t.related_contact_name, 'General') as borrower_name,
+               t.loan_id, t.lead_id,
+               ln.stage as loan_stage,
+               ln.loan_number,
+               ln.amount as loan_amount
+        FROM tasks t
+        LEFT JOIN loans ln ON t.loan_id = ln.id
+        LEFT JOIN leads ld ON t.lead_id = ld.id
+        WHERE (t.assigned_to = :user_id OR t.owner_id = :user_id)
+        AND t.status != 'completed'
+        AND t.due_date < NOW()
+        ORDER BY t.priority DESC, t.due_date ASC
         LIMIT 50
     """), {"user_id": user_id})
 
     return [{"id": r[0], "title": r[1], "priority": r[2],
              "due_date": r[3].isoformat() if r[3] else None,
-             "days_overdue": r[4]} for r in result]
+             "days_overdue": r[4],
+             "borrower_name": r[5],
+             "loan_id": r[6],
+             "lead_id": r[7],
+             "loan_stage": r[8],
+             "loan_number": r[9],
+             "loan_amount": float(r[10] or 0)} for r in result]
 
 
 def _query_weekly_calendar(db: Session, params: Dict, user_id: int) -> List[Dict]:
