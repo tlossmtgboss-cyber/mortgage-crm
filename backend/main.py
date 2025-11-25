@@ -9517,7 +9517,7 @@ def apply_extracted_data(extracted_data: ExtractedData, db: Session) -> bool:
         logger.error(f"Apply extracted data error: {e}")
         import traceback
         logger.error(traceback.format_exc())
-        db.rollback()
+        # Don't rollback here - let the calling function handle transactions
         return False
 
 # ============================================================================
@@ -11576,8 +11576,14 @@ async def approve_reconciliation(
 
                 logger.info(f"Created new loan {loan_number} (ID: {new_loan.id}) in {stage.value} stage")
 
-        # Apply to CRM
-        applied = apply_extracted_data(extracted, db)
+        # Apply to CRM - skip if we just created a new loan (data already applied during creation)
+        if approval.create_new_loan:
+            # For new loans, we already set all data during creation
+            # Just mark as applied and continue
+            applied = True
+            logger.info(f"Skipping apply_extracted_data for new loan - data already set during creation")
+        else:
+            applied = apply_extracted_data(extracted, db)
 
         if applied:
             extracted.status = "approved"
