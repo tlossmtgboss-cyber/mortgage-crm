@@ -13387,6 +13387,55 @@ async def add_permanent_memory_migration(
         }
 
 
+@app.post("/api/v1/migrations/add-lead-milestone-columns")
+async def add_lead_milestone_columns(
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Add milestone date columns to leads table for task triggering
+    """
+    try:
+        logger.info("Running migration: add lead milestone columns")
+        columns_added = []
+
+        # Check and add each column
+        columns_to_add = [
+            ("application_started_date", "TIMESTAMP WITH TIME ZONE"),
+            ("application_completed_date", "TIMESTAMP WITH TIME ZONE"),
+            ("credit_pulled_date", "TIMESTAMP WITH TIME ZONE"),
+            ("preapproval_issued_date", "TIMESTAMP WITH TIME ZONE"),
+            ("property_address", "VARCHAR(500)")
+        ]
+
+        for col_name, col_type in columns_to_add:
+            result = db.execute(text("""
+                SELECT column_name FROM information_schema.columns
+                WHERE table_name = 'leads' AND column_name = :col_name
+            """), {"col_name": col_name})
+
+            if not result.fetchone():
+                db.execute(text(f"ALTER TABLE leads ADD COLUMN {col_name} {col_type}"))
+                columns_added.append(col_name)
+                logger.info(f"Added column {col_name} to leads table")
+
+        db.commit()
+
+        return {
+            "success": True,
+            "columns_added": columns_added,
+            "message": f"Added {len(columns_added)} columns to leads table" if columns_added else "All columns already exist"
+        }
+
+    except Exception as e:
+        logger.error(f"Lead milestone columns migration failed: {e}")
+        db.rollback()
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e)
+        }
+
+
 @app.post("/api/v1/migrations/add-subscription-system")
 async def add_subscription_system_migration(
     db: Session = Depends(get_db)
