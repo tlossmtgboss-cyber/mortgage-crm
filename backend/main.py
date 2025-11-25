@@ -8963,8 +8963,8 @@ def apply_extracted_data(extracted_data: ExtractedData, db: Session) -> bool:
         if extracted_data.match_entity_type == "loan" and extracted_data.match_entity_id:
             loan = db.query(Loan).filter(Loan.id == extracted_data.match_entity_id).first()
             if not loan:
-                logger.warning(f"Loan {extracted_data.match_entity_id} not found for data application")
-                return False
+                logger.warning(f"Loan {extracted_data.match_entity_id} not found for data application - approving without applying data")
+                return True  # Allow approval even if loan doesn't exist
 
             logger.info(f"Applying extracted data to loan {loan.id} ({loan.loan_number})")
 
@@ -9119,8 +9119,8 @@ def apply_extracted_data(extracted_data: ExtractedData, db: Session) -> bool:
         elif extracted_data.match_entity_type == "lead" and extracted_data.match_entity_id:
             lead = db.query(Lead).filter(Lead.id == extracted_data.match_entity_id).first()
             if not lead:
-                logger.warning(f"Lead {extracted_data.match_entity_id} not found for data application")
-                return False
+                logger.warning(f"Lead {extracted_data.match_entity_id} not found for data application - approving without applying data")
+                return True  # Allow approval even if lead doesn't exist
 
             logger.info(f"Applying extracted data to lead {lead.id} ({lead.name})")
 
