@@ -18628,6 +18628,281 @@ async def bulk_rate_lock_analysis(
 
 
 # ============================================================================
+# POWER PLAY WORKFLOW ENDPOINTS
+# ============================================================================
+
+class PowerPlayTriggerRequest(BaseModel):
+    trigger: str = "manual"  # new_lead, stage_change, timeline_update, scheduled_touch, etc.
+
+class PowerPlayResponse(BaseModel):
+    workflow_type: str
+    entity_id: int
+    entity_type: str
+    status: str
+    message: str
+    actions_count: int
+    next_touch_date: Optional[str] = None
+
+@app.post("/api/v1/leads/{lead_id}/power-play", response_model=PowerPlayResponse)
+async def trigger_lead_power_play(
+    lead_id: int,
+    request: PowerPlayTriggerRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Trigger the appropriate Power Play workflow for a lead.
+
+    The engine automatically determines which Power Play applies:
+    - Prospect Power Play: Active buyers with timeline-based touches
+    - PreQual Power Play: Soft-pulled, document collection focus
+    - Pre-Approved Power Play: House hunting, rate lock ready
+    - Long-Term Nurture Power Play: 10+ month buyers, monthly touches
+
+    Triggers:
+    - new_lead: New lead created
+    - stage_change: Lead stage changed
+    - timeline_update: Buying timeline updated
+    - scheduled_touch: Time-based touch due
+    - manual: Manual trigger
+    """
+    from workflows.power_play_engine import PowerPlayEngine
+
+    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+
+    engine = PowerPlayEngine(db)
+    result = engine.process_lead_workflow(lead, trigger=request.trigger)
+
+    # Execute actions (create tasks, etc.)
+    actions_executed = await _execute_power_play_actions(result.actions, lead, db, current_user)
+
+    # Update next touch date on lead
+    if result.next_touch_date:
+        lead.next_touch_date = result.next_touch_date
+        db.commit()
+
+    logger.info(f"Power Play triggered for lead {lead_id}: {result.workflow_type.value}")
+
+    return PowerPlayResponse(
+        workflow_type=result.workflow_type.value,
+        entity_id=result.entity_id,
+        entity_type=result.entity_type,
+        status=result.status,
+        message=result.message,
+        actions_count=len(result.actions),
+        next_touch_date=result.next_touch_date.isoformat() if result.next_touch_date else None
+    )
+
+@app.post("/api/v1/loans/{loan_id}/power-play", response_model=PowerPlayResponse)
+async def trigger_loan_power_play(
+    loan_id: int,
+    request: PowerPlayTriggerRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Trigger Under Contract Power Play for an active loan.
+
+    Integrates with Rate Lock Intelligence for lock decisions.
+
+    Triggers:
+    - new_contract: Just went under contract
+    - milestone_reached: Loan reached new milestone
+    - rate_lock_expiring: Rate lock expiration warning
+    - closing_approaching: Closing date approaching
+    - manual: Manual trigger
+    """
+    from workflows.power_play_engine import PowerPlayEngine
+
+    loan = db.query(Loan).filter(Loan.id == loan_id).first()
+    if not loan:
+        raise HTTPException(status_code=404, detail="Loan not found")
+
+    engine = PowerPlayEngine(db)
+    result = engine.process_loan_workflow(loan, trigger=request.trigger)
+
+    # Execute actions
+    actions_executed = await _execute_power_play_actions(result.actions, loan, db, current_user)
+
+    logger.info(f"Under Contract Power Play triggered for loan {loan_id}")
+
+    return PowerPlayResponse(
+        workflow_type=result.workflow_type.value,
+        entity_id=result.entity_id,
+        entity_type=result.entity_type,
+        status=result.status,
+        message=result.message,
+        actions_count=len(result.actions),
+        next_touch_date=result.next_touch_date.isoformat() if result.next_touch_date else None
+    )
+
+@app.get("/api/v1/power-play/dashboard")
+async def get_power_play_dashboard(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get Power Play workflow dashboard showing leads/loans by workflow type.
+
+    Returns counts and lists for each Power Play category.
+    """
+    from workflows.power_play_engine import PowerPlayEngine
+
+    engine = PowerPlayEngine(db)
+
+    # Get leads by workflow type
+    leads = db.query(Lead).filter(Lead.owner_id == current_user.id).all()
+
+    workflow_counts = {
+        "prospect": [],
+        "prequal": [],
+        "pre_approved": [],
+        "long_term_nurture": [],
+        "under_contract": []
+    }
+
+    touches_due_today = []
+    touches_due_this_week = []
+
+    now = datetime.now(timezone.utc)
+    week_from_now = now + timedelta(days=7)
+
+    for lead in leads:
+        workflow_type = engine._determine_lead_workflow(lead)
+
+        lead_summary = {
+            "id": lead.id,
+            "name": lead.name,
+            "stage": lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage),
+            "timeline": getattr(lead, 'buying_timeline_category', None),
+            "next_touch": getattr(lead, 'next_touch_date', None)
+        }
+
+        if workflow_type:
+            type_key = workflow_type.value.replace("_power_play", "")
+            if type_key in workflow_counts:
+                workflow_counts[type_key].append(lead_summary)
+
+        # Check for due touches
+        next_touch = getattr(lead, 'next_touch_date', None)
+        if next_touch:
+            if isinstance(next_touch, datetime):
+                if next_touch <= now:
+                    touches_due_today.append(lead_summary)
+                elif next_touch <= week_from_now:
+                    touches_due_this_week.append(lead_summary)
+
+    # Get active loans for Under Contract
+    active_loans = db.query(Loan).filter(
+        Loan.loan_officer_id == current_user.id,
+        Loan.stage.in_([LoanStage.PROCESSING, LoanStage.SUBMITTED, LoanStage.UNDERWRITING,
+                        LoanStage.CONDITIONAL_APPROVAL, LoanStage.CTC, LoanStage.DOCS_OUT])
+    ).all()
+
+    for loan in active_loans:
+        workflow_counts["under_contract"].append({
+            "id": loan.id,
+            "loan_number": loan.loan_number,
+            "borrower_name": loan.borrower_name,
+            "stage": loan.stage.value if hasattr(loan.stage, 'value') else str(loan.stage),
+            "rate_lock_status": loan.rate_lock_status.value if loan.rate_lock_status else "Not Set"
+        })
+
+    return {
+        "workflow_summary": {
+            "prospect_count": len(workflow_counts["prospect"]),
+            "prequal_count": len(workflow_counts["prequal"]),
+            "pre_approved_count": len(workflow_counts["pre_approved"]),
+            "long_term_nurture_count": len(workflow_counts["long_term_nurture"]),
+            "under_contract_count": len(workflow_counts["under_contract"])
+        },
+        "touches_due": {
+            "today": touches_due_today,
+            "this_week": touches_due_this_week
+        },
+        "workflows": workflow_counts
+    }
+
+@app.post("/api/v1/power-play/run-scheduled-touches")
+async def run_scheduled_touches(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Run all scheduled touches that are due.
+
+    This should be called periodically (e.g., daily) to process time-based workflows.
+    """
+    from workflows.power_play_engine import PowerPlayScheduler
+
+    scheduler = PowerPlayScheduler(db)
+    results = await scheduler.run_scheduled_touches()
+
+    return {
+        "success": True,
+        "touches_processed": len(results),
+        "results": [
+            {
+                "entity_id": r.entity_id,
+                "workflow": r.workflow_type.value,
+                "actions": len(r.actions),
+                "next_touch": r.next_touch_date.isoformat() if r.next_touch_date else None
+            }
+            for r in results
+        ]
+    }
+
+
+async def _execute_power_play_actions(actions: list, entity: Any, db: Session, current_user: User) -> int:
+    """Execute Power Play actions (create tasks, send alerts, etc.)"""
+    from workflows.power_play_engine import WorkflowActionType
+
+    executed = 0
+
+    for action in actions:
+        try:
+            if action.action_type == WorkflowActionType.TASK:
+                # Create task
+                task_data = action.data
+                due_date = datetime.now(timezone.utc) + timedelta(hours=task_data.get("due_hours", 24))
+
+                task = Task(
+                    title=task_data.get("title", "Power Play Task"),
+                    description=task_data.get("description", ""),
+                    due_date=due_date,
+                    priority=task_data.get("priority", "medium"),
+                    status="pending",
+                    owner_id=current_user.id,
+                    loan_id=task_data.get("loan_id"),
+                    lead_id=task_data.get("lead_id")
+                )
+                db.add(task)
+                executed += 1
+
+            elif action.action_type == WorkflowActionType.TAG:
+                # Add tags (would require tag model implementation)
+                pass
+
+            elif action.action_type == WorkflowActionType.ALERT:
+                # Log alert (could integrate with notification system)
+                logger.info(f"ALERT: {action.data.get('message', 'Power Play Alert')}")
+                executed += 1
+
+            elif action.action_type == WorkflowActionType.DRIP_CAMPAIGN:
+                # Start drip campaign (would require drip system)
+                logger.info(f"Drip campaign started: {action.data.get('campaign', 'unknown')}")
+                executed += 1
+
+        except Exception as e:
+            logger.error(f"Error executing Power Play action: {e}")
+
+    db.commit()
+    return executed
+
+
+# ============================================================================
 # POST-CLOSING WORKFLOW ENDPOINTS
 # ============================================================================
 
