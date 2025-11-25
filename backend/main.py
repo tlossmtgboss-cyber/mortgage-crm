@@ -5814,6 +5814,7 @@ When acting autonomously:
 
     except Exception as e:
         logger.error(f"Orchestrator chat error: {e}")
+        db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -18005,6 +18006,7 @@ Be proactive, professional, and action-oriented. Always confirm what you've done
 
     except Exception as e:
         logger.error(f"OpenAI API error: {e}")
+        db.rollback()
         raise HTTPException(status_code=500, detail=f"AI service error: {str(e)}")
 
 @app.get("/api/v1/conversations", response_model=List[ConversationResponse])
