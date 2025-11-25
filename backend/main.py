@@ -15894,6 +15894,63 @@ async def add_appraisal_columns(db: Session = Depends(get_db)):
             content={"status": "error", "message": str(e)}
         )
 
+@app.post("/admin/rematch-extracted-data")
+async def rematch_extracted_data(db: Session = Depends(get_db)):
+    """Admin endpoint to re-run entity matching on all pending extracted data
+
+    This uses the improved matching logic (co-borrower, last name matching)
+    on existing extracted data records that haven't been matched.
+    """
+    try:
+        # Get all extracted data with needs_review status that have no match
+        unmatched = db.query(ExtractedData).filter(
+            ExtractedData.status.in_(["needs_review", "pending_review"]),
+            or_(
+                ExtractedData.match_entity_id.is_(None),
+                ExtractedData.match_confidence < 0.5
+            )
+        ).all()
+
+        logger.info(f"Found {len(unmatched)} unmatched extracted data records to rematch")
+
+        matched_count = 0
+        # Get the default user (loan officer) for matching context
+        default_user = db.query(User).first()
+        user_id = default_user.id if default_user else 1
+
+        for extracted in unmatched:
+            fields = extracted.fields or {}
+            if not fields:
+                continue
+
+            # Re-run matching with improved logic
+            entity_match = match_entity(fields, db, user_id)
+
+            if entity_match["entity_type"] and entity_match["confidence"] > 0.5:
+                extracted.match_entity_type = entity_match["entity_type"]
+                extracted.match_entity_id = entity_match["entity_id"]
+                extracted.match_confidence = entity_match["confidence"]
+                matched_count += 1
+                logger.info(f"Rematched extracted_data {extracted.id}: {entity_match['entity_type']} {entity_match['entity_id']} ({entity_match['confidence']:.2f})")
+
+        db.commit()
+        logger.info(f"✅ Rematched {matched_count}/{len(unmatched)} extracted data records")
+
+        return {
+            "status": "success",
+            "total_unmatched": len(unmatched),
+            "newly_matched": matched_count,
+            "message": f"Rematched {matched_count} of {len(unmatched)} records"
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Failed to rematch extracted data: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
+
 @app.post("/admin/create-dre-tables")
 async def create_dre_tables(db: Session = Depends(get_db)):
     """Admin endpoint to create Data Reconciliation Engine tables"""
