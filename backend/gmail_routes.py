@@ -488,3 +488,178 @@ async def sync_emails(
     except Exception as e:
         logger.error(f"Error syncing emails: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/cron-sync")
+async def cron_sync_all_gmail(
+    api_key: str = Query(..., description="API key for cron authentication"),
+    days_back: int = Query(1, le=7, description="Number of days to sync"),
+    max_results: int = Query(50, le=200),
+    db: Session = Depends(get_db)
+):
+    """
+    Cron job endpoint to sync Gmail for all connected users.
+    Called by Railway cron service every 10 minutes.
+
+    Requires CRON_API_KEY environment variable for authentication.
+    """
+    from sqlalchemy import text
+
+    # Verify API key
+    expected_key = os.getenv("CRON_API_KEY")
+    if not expected_key or api_key != expected_key:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    try:
+        # Find all users with Gmail connected
+        result = db.execute(
+            text("""
+                SELECT id, email, full_name, user_metadata
+                FROM users
+                WHERE user_metadata::jsonb -> 'gmail_connected' = 'true'
+                   OR user_metadata::text LIKE '%"gmail_connected": true%'
+                   OR user_metadata::text LIKE '%"gmail_connected":true%'
+            """)
+        )
+        users_with_gmail = result.fetchall()
+
+        if not users_with_gmail:
+            return {
+                "status": "success",
+                "message": "No users with Gmail connected",
+                "users_synced": 0,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+
+        sync_results = []
+        total_emails_synced = 0
+        total_processed = 0
+
+        for user_row in users_with_gmail:
+            user_id = user_row[0]
+            user_email = user_row[1]
+            settings = user_row[3] or {}
+
+            if isinstance(settings, str):
+                try:
+                    settings = json.loads(settings)
+                except:
+                    settings = {}
+
+            token_data = settings.get('gmail_tokens')
+            if not token_data:
+                sync_results.append({
+                    "user_id": user_id,
+                    "email": user_email,
+                    "status": "skipped",
+                    "reason": "No Gmail tokens found"
+                })
+                continue
+
+            try:
+                credentials = gmail_service.get_credentials(token_data)
+                since_date = datetime.utcnow() - timedelta(days=days_back)
+
+                emails = gmail_service.sync_emails(
+                    credentials,
+                    since_date=since_date,
+                    max_results=max_results
+                )
+
+                # Process emails through extraction pipeline
+                from main import process_microsoft_email_to_dre, IncomingDataEvent, ExtractedData
+
+                processed_count = 0
+                for email in emails:
+                    try:
+                        email_id = email.get("id", "")
+
+                        # Check if already processed
+                        existing = db.execute(
+                            text("""
+                                SELECT id FROM incoming_data_events
+                                WHERE external_message_id = :email_id AND user_id = :user_id
+                            """),
+                            {"email_id": email_id, "user_id": user_id}
+                        ).fetchone()
+
+                        if existing:
+                            continue  # Skip already processed
+
+                        # Convert Gmail format to Microsoft-like format
+                        email_data = {
+                            "id": email_id,
+                            "subject": email.get("subject", ""),
+                            "from": {
+                                "emailAddress": {
+                                    "address": email.get("from", "")
+                                }
+                            },
+                            "toRecipients": [
+                                {"emailAddress": {"address": email.get("to", "")}}
+                            ] if email.get("to") else [],
+                            "receivedDateTime": email.get("date", ""),
+                            "body": {
+                                "contentType": "text" if email.get("body_text") else "html",
+                                "content": email.get("body_text") or email.get("body_html", "")
+                            }
+                        }
+
+                        result = await process_microsoft_email_to_dre(email_data, user_id, db)
+                        if result.get("status") not in ["error", "skipped"]:
+                            processed_count += 1
+
+                    except Exception as e:
+                        logger.warning(f"Error processing email for user {user_id}: {e}")
+                        continue
+
+                total_emails_synced += len(emails)
+                total_processed += processed_count
+
+                # Update last sync time
+                db.execute(
+                    text("""
+                        UPDATE users
+                        SET user_metadata = jsonb_set(
+                            COALESCE(user_metadata, '{}'::jsonb),
+                            '{gmail_last_sync}',
+                            to_jsonb(:sync_time::text)
+                        )
+                        WHERE id = :user_id
+                    """),
+                    {"user_id": user_id, "sync_time": datetime.utcnow().isoformat()}
+                )
+                db.commit()
+
+                sync_results.append({
+                    "user_id": user_id,
+                    "email": user_email,
+                    "status": "success",
+                    "emails_fetched": len(emails),
+                    "emails_processed": processed_count
+                })
+
+            except Exception as e:
+                logger.error(f"Error syncing Gmail for user {user_id}: {e}")
+                sync_results.append({
+                    "user_id": user_id,
+                    "email": user_email,
+                    "status": "error",
+                    "error": str(e)
+                })
+                db.rollback()
+                continue
+
+        return {
+            "status": "success",
+            "users_synced": len([r for r in sync_results if r["status"] == "success"]),
+            "total_users": len(users_with_gmail),
+            "total_emails_fetched": total_emails_synced,
+            "total_emails_processed": total_processed,
+            "results": sync_results,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+
+    except Exception as e:
+        logger.error(f"Cron Gmail sync error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
