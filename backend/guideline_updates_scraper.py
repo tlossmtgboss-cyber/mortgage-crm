@@ -16,6 +16,34 @@ from guideline_updates_models import GuidelineUpdate
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# URLs/domains to exclude (tracking links, newsletters, redirects)
+EXCLUDED_URL_PATTERNS = [
+    'list-manage.com',      # Mailchimp tracking
+    'mailchimp.com',        # Mailchimp
+    'click.email',          # Email tracking
+    'track.click',          # Click tracking
+    'utm_source',           # UTM tracking params
+    'unsubscribe',          # Unsubscribe links
+    'constantcontact.com',  # Constant Contact
+    'sendgrid.net',         # SendGrid tracking
+    'mailgun.org',          # Mailgun tracking
+    'click.pstmrk.it',      # Postmark tracking
+    '/track/',              # Generic tracking paths
+    '/click/',              # Generic click paths
+]
+
+
+def is_excluded_url(url: str) -> bool:
+    """Check if URL should be excluded (tracking links, newsletters, etc.)"""
+    if not url:
+        return True
+    url_lower = url.lower()
+    for pattern in EXCLUDED_URL_PATTERNS:
+        if pattern in url_lower:
+            logger.info(f"  ⏭️  Excluding tracking URL: {url[:60]}...")
+            return True
+    return False
+
 
 class GuidelineUpdateScraper:
     """Scraper for guideline updates from all sources"""
@@ -86,6 +114,10 @@ class GuidelineUpdateScraper:
                 if not url.startswith('http'):
                     url = 'https://selling-guide.fanniemae.com' + url
 
+                # Skip tracking/newsletter URLs
+                if is_excluded_url(url):
+                    continue
+
                 content_hash = self._generate_hash(title + url)
 
                 if not self._is_duplicate(content_hash):
@@ -124,6 +156,10 @@ class GuidelineUpdateScraper:
                 url = link['href']
                 if not url.startswith('http'):
                     url = 'https://guide.freddiemac.com' + url
+
+                # Skip tracking/newsletter URLs
+                if is_excluded_url(url):
+                    continue
 
                 content_hash = self._generate_hash(title + url)
 
@@ -164,6 +200,10 @@ class GuidelineUpdateScraper:
                 if not url.startswith('http'):
                     url = 'https://www.hud.gov' + url
 
+                # Skip tracking/newsletter URLs
+                if is_excluded_url(url):
+                    continue
+
                 content_hash = self._generate_hash(title + url)
 
                 if not self._is_duplicate(content_hash):
@@ -202,6 +242,10 @@ class GuidelineUpdateScraper:
                 url = circular['href']
                 if not url.startswith('http'):
                     url = 'https://www.benefits.va.gov' + url
+
+                # Skip tracking/newsletter URLs
+                if is_excluded_url(url):
+                    continue
 
                 content_hash = self._generate_hash(title + url)
 
@@ -243,6 +287,10 @@ class GuidelineUpdateScraper:
 
                     if not url.startswith('http'):
                         url = 'https://www.rd.usda.gov' + url
+
+                    # Skip tracking/newsletter URLs
+                    if is_excluded_url(url):
+                        continue
 
                     content_hash = self._generate_hash(title + url)
 
