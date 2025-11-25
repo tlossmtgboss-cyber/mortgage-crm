@@ -27,9 +27,24 @@ function ReconciliationCenter() {
   const [newBorrowerForm, setNewBorrowerForm] = useState({
     first_name: '',
     last_name: '',
-    referral_partner_id: ''
+    referral_partner_id: '',
+    loan_stage: 'PROCESSING'
   });
   const [referralPartners, setReferralPartners] = useState([]);
+
+  // Referral partner search state
+  const [referralSearchTerm, setReferralSearchTerm] = useState('');
+  const [referralSearchResults, setReferralSearchResults] = useState([]);
+  const [showReferralDropdown, setShowReferralDropdown] = useState(false);
+  const [selectedReferralPartner, setSelectedReferralPartner] = useState(null);
+  const [showCreateReferralDialog, setShowCreateReferralDialog] = useState(false);
+  const [newReferralPartner, setNewReferralPartner] = useState({
+    name: '',
+    company_name: '',
+    email: '',
+    phone: '',
+    type: 'realtor'
+  });
 
   // Entity type selection state
   const [selectedEntityType, setSelectedEntityType] = useState(null); // 'loan' or 'lead'
@@ -78,6 +93,76 @@ function ReconciliationCenter() {
       }
     } catch (error) {
       console.error('Error fetching referral partners:', error);
+    }
+  };
+
+  // Search referral partners as user types
+  const searchReferralPartners = (searchTerm) => {
+    setReferralSearchTerm(searchTerm);
+    if (!searchTerm.trim()) {
+      setReferralSearchResults([]);
+      setShowReferralDropdown(false);
+      return;
+    }
+
+    const searchLower = searchTerm.toLowerCase();
+    const results = referralPartners.filter(partner => {
+      const name = (partner.name || '').toLowerCase();
+      const company = (partner.company_name || '').toLowerCase();
+      return name.includes(searchLower) || company.includes(searchLower);
+    });
+
+    setReferralSearchResults(results);
+    setShowReferralDropdown(true);
+  };
+
+  // Select a referral partner from search results
+  const selectReferralPartner = (partner) => {
+    setSelectedReferralPartner(partner);
+    setNewBorrowerForm(prev => ({ ...prev, referral_partner_id: partner.id }));
+    setReferralSearchTerm(partner.name || partner.company_name || '');
+    setShowReferralDropdown(false);
+  };
+
+  // Clear referral partner selection
+  const clearReferralPartner = () => {
+    setSelectedReferralPartner(null);
+    setNewBorrowerForm(prev => ({ ...prev, referral_partner_id: '' }));
+    setReferralSearchTerm('');
+    setReferralSearchResults([]);
+  };
+
+  // Create new referral partner
+  const handleCreateReferralPartner = async () => {
+    if (!newReferralPartner.name.trim()) {
+      alert('Please enter a name for the referral partner');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/referral-partners`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(newReferralPartner)
+      });
+
+      if (response.ok) {
+        const created = await response.json();
+        // Add to local list and select it
+        setReferralPartners(prev => [...prev, created]);
+        selectReferralPartner(created);
+        setShowCreateReferralDialog(false);
+        setNewReferralPartner({ name: '', company_name: '', email: '', phone: '', type: 'realtor' });
+      } else {
+        const error = await response.json();
+        alert(`Failed to create referral partner: ${error.detail || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error creating referral partner:', error);
+      alert('Error creating referral partner');
     }
   };
 
@@ -340,27 +425,45 @@ function ReconciliationCenter() {
         return;
       }
 
-      // Create new lead from extracted data
-      const response = await fetch(`${API_BASE_URL}/api/v1/reconciliation/create-lead`, {
+      const itemId = noMatchItemId;
+
+      // Close dialog first
+      setShowNoMatchDialog(false);
+      setNoMatchItemId(null);
+      setNoMatchData(null);
+
+      // Add the borrower name to corrections if not already in extracted fields
+      const corrections = {
+        borrower_name: `${newBorrowerForm.first_name} ${newBorrowerForm.last_name}`
+      };
+
+      // Now approve with create_new_loan option and loan_stage
+      const response = await fetch(`${API_BASE_URL}/api/v1/reconciliation/approve`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          extracted_data_id: noMatchItemId,
-          first_name: newBorrowerForm.first_name,
-          last_name: newBorrowerForm.last_name,
-          referral_partner_id: newBorrowerForm.referral_partner_id || null
+          extracted_data_id: itemId,
+          corrections: corrections,
+          create_new_loan: true,
+          loan_stage: newBorrowerForm.loan_stage,
+          target_entity_type: 'loan'
         })
       });
 
       if (response.ok) {
-        // Close dialog and proceed with approval
-        setShowNoMatchDialog(false);
-        setNoMatchItemId(null);
-        setNoMatchData(null);
-        await proceedWithApproval(noMatchItemId);
+        // Remove from list and reset
+        setPendingItems(prev => prev.filter(item => item.id !== itemId));
+        setPendingReviewItems(prev => prev.filter(item => item.id !== itemId));
+        setSelectedItem(null);
+        setEditedFields({});
+        // Reset referral partner search state
+        setReferralSearchTerm('');
+        setSelectedReferralPartner(null);
+        // Refresh completed items
+        fetchCompletedItems();
       } else {
         const errorData = await response.json().catch(() => ({}));
         alert(`Failed to create borrower: ${errorData.detail || response.statusText}`);
@@ -378,6 +481,10 @@ function ReconciliationCenter() {
     setNoMatchItemId(null);
     setNoMatchData(null);
     setProcessingAction(false);
+    // Reset referral partner state
+    setReferralSearchTerm('');
+    setSelectedReferralPartner(null);
+    setShowReferralDropdown(false);
   };
 
   const handleReject = async (itemId, reason) => {
@@ -1718,39 +1825,176 @@ function ReconciliationCenter() {
 
               <div className="new-borrower-form">
                 <h4>New Borrower Details:</h4>
-                <div className="form-group">
-                  <label>First Name *</label>
-                  <input
-                    type="text"
-                    value={newBorrowerForm.first_name}
-                    onChange={(e) => setNewBorrowerForm(prev => ({ ...prev, first_name: e.target.value }))}
-                    placeholder="Enter first name"
-                    required
-                  />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                  <div className="form-group">
+                    <label>First Name *</label>
+                    <input
+                      type="text"
+                      value={newBorrowerForm.first_name}
+                      onChange={(e) => setNewBorrowerForm(prev => ({ ...prev, first_name: e.target.value }))}
+                      placeholder="Enter first name"
+                      required
+                      style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '6px' }}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Last Name *</label>
+                    <input
+                      type="text"
+                      value={newBorrowerForm.last_name}
+                      onChange={(e) => setNewBorrowerForm(prev => ({ ...prev, last_name: e.target.value }))}
+                      placeholder="Enter last name"
+                      required
+                      style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '6px' }}
+                    />
+                  </div>
                 </div>
-                <div className="form-group">
-                  <label>Last Name *</label>
-                  <input
-                    type="text"
-                    value={newBorrowerForm.last_name}
-                    onChange={(e) => setNewBorrowerForm(prev => ({ ...prev, last_name: e.target.value }))}
-                    placeholder="Enter last name"
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Referral Partner</label>
+
+                {/* Loan Stage Selector */}
+                <div className="form-group" style={{ marginTop: '15px' }}>
+                  <label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>
+                    Loan Stage *
+                  </label>
                   <select
-                    value={newBorrowerForm.referral_partner_id}
-                    onChange={(e) => setNewBorrowerForm(prev => ({ ...prev, referral_partner_id: e.target.value }))}
+                    value={newBorrowerForm.loan_stage}
+                    onChange={(e) => setNewBorrowerForm(prev => ({ ...prev, loan_stage: e.target.value }))}
+                    style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px' }}
                   >
-                    <option value="">Select referral partner (optional)</option>
-                    {referralPartners.map(partner => (
-                      <option key={partner.id} value={partner.id}>
-                        {partner.name || partner.company_name || `Partner #${partner.id}`}
-                      </option>
+                    {loanStages.map(stage => (
+                      <option key={stage.value} value={stage.value}>{stage.label}</option>
                     ))}
                   </select>
+                </div>
+
+                {/* Searchable Referral Partner */}
+                <div className="form-group" style={{ marginTop: '15px', position: 'relative' }}>
+                  <label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>
+                    Referral Partner
+                  </label>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="text"
+                      value={referralSearchTerm}
+                      onChange={(e) => searchReferralPartners(e.target.value)}
+                      onFocus={() => referralSearchTerm && setShowReferralDropdown(true)}
+                      placeholder="Type to search referral partners..."
+                      style={{
+                        width: '100%',
+                        padding: '10px',
+                        paddingRight: selectedReferralPartner ? '35px' : '10px',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '6px',
+                        fontSize: '14px'
+                      }}
+                    />
+                    {selectedReferralPartner && (
+                      <button
+                        onClick={clearReferralPartner}
+                        style={{
+                          position: 'absolute',
+                          right: '10px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontSize: '16px',
+                          color: '#6b7280'
+                        }}
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Search Results Dropdown */}
+                  {showReferralDropdown && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      background: 'white',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      maxHeight: '200px',
+                      overflowY: 'auto',
+                      zIndex: 1000,
+                      boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+                    }}>
+                      {referralSearchResults.length > 0 ? (
+                        referralSearchResults.map(partner => (
+                          <div
+                            key={partner.id}
+                            onClick={() => selectReferralPartner(partner)}
+                            style={{
+                              padding: '10px 15px',
+                              cursor: 'pointer',
+                              borderBottom: '1px solid #f3f4f6',
+                              transition: 'background 0.2s'
+                            }}
+                            onMouseEnter={(e) => e.target.style.background = '#f3f4f6'}
+                            onMouseLeave={(e) => e.target.style.background = 'white'}
+                          >
+                            <div style={{ fontWeight: '500' }}>{partner.name}</div>
+                            {partner.company_name && (
+                              <div style={{ fontSize: '12px', color: '#6b7280' }}>{partner.company_name}</div>
+                            )}
+                            {partner.type && (
+                              <span style={{
+                                fontSize: '11px',
+                                background: '#e5e7eb',
+                                padding: '2px 8px',
+                                borderRadius: '9999px',
+                                marginTop: '4px',
+                                display: 'inline-block'
+                              }}>
+                                {partner.type}
+                              </span>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        <div style={{ padding: '15px', textAlign: 'center' }}>
+                          <p style={{ color: '#6b7280', margin: '0 0 10px 0' }}>
+                            No matching partners found
+                          </p>
+                          <button
+                            onClick={() => {
+                              setNewReferralPartner(prev => ({ ...prev, name: referralSearchTerm }));
+                              setShowCreateReferralDialog(true);
+                              setShowReferralDropdown(false);
+                            }}
+                            style={{
+                              background: '#3b82f6',
+                              color: 'white',
+                              border: 'none',
+                              padding: '8px 16px',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              fontSize: '13px'
+                            }}
+                          >
+                            + Add "{referralSearchTerm}" as new partner
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {selectedReferralPartner && (
+                    <div style={{
+                      marginTop: '8px',
+                      padding: '8px 12px',
+                      background: '#ecfdf5',
+                      borderRadius: '6px',
+                      fontSize: '13px',
+                      color: '#059669'
+                    }}>
+                      ✓ Selected: {selectedReferralPartner.name}
+                      {selectedReferralPartner.company_name && ` (${selectedReferralPartner.company_name})`}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1767,6 +2011,139 @@ function ReconciliationCenter() {
               </button>
             </div>
           </div>
+
+          {/* Create New Referral Partner Dialog */}
+          {showCreateReferralDialog && (
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'rgba(0,0,0,0.5)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 2000
+            }}>
+              <div style={{
+                background: 'white',
+                borderRadius: '12px',
+                width: '450px',
+                maxWidth: '90%',
+                boxShadow: '0 25px 50px rgba(0,0,0,0.25)'
+              }}>
+                <div style={{
+                  padding: '20px',
+                  borderBottom: '1px solid #e5e7eb',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <h3 style={{ margin: 0, fontSize: '18px' }}>Add New Referral Partner</h3>
+                  <button
+                    onClick={() => setShowCreateReferralDialog(false)}
+                    style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer', color: '#6b7280' }}
+                  >
+                    &times;
+                  </button>
+                </div>
+                <div style={{ padding: '20px' }}>
+                  <div className="form-group" style={{ marginBottom: '15px' }}>
+                    <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Name *</label>
+                    <input
+                      type="text"
+                      value={newReferralPartner.name}
+                      onChange={(e) => setNewReferralPartner(prev => ({ ...prev, name: e.target.value }))}
+                      placeholder="Full name"
+                      style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '6px' }}
+                    />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: '15px' }}>
+                    <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Company</label>
+                    <input
+                      type="text"
+                      value={newReferralPartner.company_name}
+                      onChange={(e) => setNewReferralPartner(prev => ({ ...prev, company_name: e.target.value }))}
+                      placeholder="Company name (optional)"
+                      style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '6px' }}
+                    />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>
+                    <div className="form-group">
+                      <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Email</label>
+                      <input
+                        type="email"
+                        value={newReferralPartner.email}
+                        onChange={(e) => setNewReferralPartner(prev => ({ ...prev, email: e.target.value }))}
+                        placeholder="Email (optional)"
+                        style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '6px' }}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Phone</label>
+                      <input
+                        type="tel"
+                        value={newReferralPartner.phone}
+                        onChange={(e) => setNewReferralPartner(prev => ({ ...prev, phone: e.target.value }))}
+                        placeholder="Phone (optional)"
+                        style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '6px' }}
+                      />
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Type</label>
+                    <select
+                      value={newReferralPartner.type}
+                      onChange={(e) => setNewReferralPartner(prev => ({ ...prev, type: e.target.value }))}
+                      style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '6px' }}
+                    >
+                      <option value="realtor">Realtor</option>
+                      <option value="builder">Builder</option>
+                      <option value="financial_advisor">Financial Advisor</option>
+                      <option value="attorney">Attorney</option>
+                      <option value="cpa">CPA</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                </div>
+                <div style={{
+                  padding: '15px 20px',
+                  borderTop: '1px solid #e5e7eb',
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  gap: '10px'
+                }}>
+                  <button
+                    onClick={() => setShowCreateReferralDialog(false)}
+                    style={{
+                      padding: '10px 20px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      background: 'white',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleCreateReferralPartner}
+                    disabled={!newReferralPartner.name.trim()}
+                    style={{
+                      padding: '10px 20px',
+                      border: 'none',
+                      borderRadius: '6px',
+                      background: newReferralPartner.name.trim() ? '#3b82f6' : '#9ca3af',
+                      color: 'white',
+                      cursor: newReferralPartner.name.trim() ? 'pointer' : 'not-allowed'
+                    }}
+                  >
+                    Create Partner
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
