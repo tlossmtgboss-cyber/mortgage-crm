@@ -3,6 +3,55 @@ import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
 import './TaskWorkflowManager.css';
 
+// Power Play definitions with stage mappings
+const powerPlayDefinitions = [
+  {
+    key: 'prospect',
+    name: 'Prospect Power Play',
+    description: 'Active buyers with timeline-based touches',
+    icon: '🎯',
+    color: '#3b82f6',
+    touchFrequency: 'Platinum: 7d | Gold: 14d | Silver: 21d',
+    applicableStages: ['lead']
+  },
+  {
+    key: 'prequal',
+    name: 'PreQual Power Play',
+    description: 'Soft-pulled, document collection focus',
+    icon: '📋',
+    color: '#10b981',
+    touchFrequency: 'Every 3 days until pre-approval',
+    applicableStages: ['lead']
+  },
+  {
+    key: 'pre_approved',
+    name: 'Pre-Approved Power Play',
+    description: 'House hunting, rate lock ready',
+    icon: '🏠',
+    color: '#8b5cf6',
+    touchFrequency: 'Weekly until under contract',
+    applicableStages: ['lead']
+  },
+  {
+    key: 'under_contract',
+    name: 'Under Contract Power Play',
+    description: 'Active loan management with rate lock',
+    icon: '📝',
+    color: '#ef4444',
+    touchFrequency: 'Milestone-driven',
+    applicableStages: ['active_loan']
+  },
+  {
+    key: 'long_term_nurture',
+    name: 'Long-Term Nurture',
+    description: '10+ month buyers, passive engagement',
+    icon: '📅',
+    color: '#f59e0b',
+    touchFrequency: 'Monthly touches',
+    applicableStages: ['lead', 'portfolio']
+  }
+];
+
 function TaskWorkflowManager() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -12,6 +61,7 @@ function TaskWorkflowManager() {
   const [viewMode, setViewMode] = useState('team'); // 'team' or 'edit'
   const [editingTask, setEditingTask] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showPowerPlayModal, setShowPowerPlayModal] = useState(null); // stage key or null
   const [newTask, setNewTask] = useState({
     title: '',
     description: '',
@@ -19,6 +69,13 @@ function TaskWorkflowManager() {
     days_offset: 0,
     owner_id: '',
     activation_time: ''
+  });
+
+  // Track which Power Plays are enabled for each stage
+  const [enabledPowerPlays, setEnabledPowerPlays] = useState({
+    lead: ['prospect', 'prequal', 'pre_approved'],
+    active_loan: ['under_contract'],
+    portfolio: ['long_term_nurture']
   });
 
   // Team members with their workflow progress (will be loaded from API)
@@ -269,6 +326,59 @@ function TaskWorkflowManager() {
     { value: 'milestone', label: 'Milestone' }
   ];
 
+  // Get Power Plays applicable to a stage
+  const getPowerPlaysForStage = (stageKey) => {
+    return powerPlayDefinitions.filter(pp => pp.applicableStages.includes(stageKey));
+  };
+
+  // Toggle a Power Play for a stage
+  const togglePowerPlay = (stageKey, powerPlayKey) => {
+    setEnabledPowerPlays(prev => {
+      const stagePlayys = prev[stageKey] || [];
+      if (stagePlayys.includes(powerPlayKey)) {
+        return {
+          ...prev,
+          [stageKey]: stagePlayys.filter(k => k !== powerPlayKey)
+        };
+      } else {
+        return {
+          ...prev,
+          [stageKey]: [...stagePlayys, powerPlayKey]
+        };
+      }
+    });
+  };
+
+  // Save Power Play configuration
+  const savePowerPlayConfig = async (stageKey) => {
+    setSaving(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/workflow-stages/${stageKey}/power-plays`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          enabled_power_plays: enabledPowerPlays[stageKey] || []
+        })
+      });
+
+      if (response.ok) {
+        setMessage({ type: 'success', text: 'Power Play configuration saved!' });
+        setShowPowerPlayModal(null);
+      } else {
+        setMessage({ type: 'error', text: 'Failed to save Power Play configuration' });
+      }
+    } catch (error) {
+      console.error('Error saving Power Play config:', error);
+      setMessage({ type: 'error', text: 'Error saving configuration' });
+    } finally {
+      setSaving(false);
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+    }
+  };
+
   return (
     <div className="task-workflow-manager">
       <div className="manager-header">
@@ -301,6 +411,40 @@ function TaskWorkflowManager() {
               </div>
             </div>
             <p className="stage-description">{stage.description}</p>
+
+            {/* Power Play Badges */}
+            {getPowerPlaysForStage(key).length > 0 && (
+              <div className="power-play-badges">
+                {getPowerPlaysForStage(key).map(pp => {
+                  const isEnabled = (enabledPowerPlays[key] || []).includes(pp.key);
+                  return (
+                    <div
+                      key={pp.key}
+                      className={`power-play-badge ${isEnabled ? 'enabled' : 'disabled'}`}
+                      style={{ '--pp-color': pp.color }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowPowerPlayModal(key);
+                      }}
+                      title={`${pp.name}: ${pp.description}`}
+                    >
+                      <span className="pp-icon">{pp.icon}</span>
+                      <span className="pp-name">{pp.name.replace(' Power Play', '')}</span>
+                      {isEnabled && <span className="pp-active-dot"></span>}
+                    </div>
+                  );
+                })}
+                <button
+                  className="configure-power-plays-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowPowerPlayModal(key);
+                  }}
+                >
+                  Configure
+                </button>
+              </div>
+            )}
 
             {/* Collapsed Preview */}
             {activeStage !== key && (
@@ -666,6 +810,64 @@ function TaskWorkflowManager() {
           <span className="stat-label">Automated Tasks</span>
         </div>
       </div>
+
+      {/* Power Play Configuration Modal */}
+      {showPowerPlayModal && (
+        <div className="power-play-modal-overlay" onClick={() => setShowPowerPlayModal(null)}>
+          <div className="power-play-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Configure Power Plays for {workflowStages[showPowerPlayModal]?.name}</h3>
+              <button className="close-modal-btn" onClick={() => setShowPowerPlayModal(null)}>×</button>
+            </div>
+            <div className="modal-body">
+              <p className="modal-description">
+                Enable automated engagement workflows for this stage. Power Plays will automatically
+                trigger touches and tasks based on timeline and milestones.
+              </p>
+              <div className="power-play-options">
+                {getPowerPlaysForStage(showPowerPlayModal).map(pp => {
+                  const isEnabled = (enabledPowerPlays[showPowerPlayModal] || []).includes(pp.key);
+                  return (
+                    <div
+                      key={pp.key}
+                      className={`power-play-option ${isEnabled ? 'enabled' : ''}`}
+                      onClick={() => togglePowerPlay(showPowerPlayModal, pp.key)}
+                    >
+                      <div className="pp-option-header">
+                        <div className="pp-option-icon" style={{ backgroundColor: pp.color }}>
+                          {pp.icon}
+                        </div>
+                        <div className="pp-option-info">
+                          <h4>{pp.name}</h4>
+                          <p>{pp.description}</p>
+                        </div>
+                        <div className={`pp-toggle ${isEnabled ? 'on' : 'off'}`}>
+                          <div className="toggle-slider"></div>
+                        </div>
+                      </div>
+                      <div className="pp-option-details">
+                        <span className="frequency-badge">{pp.touchFrequency}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="cancel-btn" onClick={() => setShowPowerPlayModal(null)}>
+                Cancel
+              </button>
+              <button
+                className="save-btn"
+                onClick={() => savePowerPlayConfig(showPowerPlayModal)}
+                disabled={saving}
+              >
+                {saving ? 'Saving...' : 'Save Configuration'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
