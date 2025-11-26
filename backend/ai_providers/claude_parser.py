@@ -531,7 +531,17 @@ SPECIAL INSTRUCTIONS FOR {profile_type.upper()}:
             'newsletter', 'noreply', 'no-reply', 'marketing', 'promo',
             'news@', 'updates@', 'notifications@', 'mailer-daemon',
             'postmaster', 'donotreply', 'info@claude', 'anthropic',
-            'github', 'linkedin', 'twitter', 'facebook', 'google alerts'
+            'github', 'linkedin', 'twitter', 'facebook', 'google alerts',
+            # Tech/deployment services
+            'railway.app', 'vercel.com', 'netlify.com', 'heroku.com', 'aws.amazon',
+            'digitalocean', 'cloudflare', 'sentry.io', 'datadog', 'pagerduty',
+            # Payment/receipt services (non-mortgage)
+            'stripe.com', 'paypal', 'square.com', 'shopify',
+            # SaaS/software
+            'slack.com', 'notion.so', 'figma.com', 'canva.com', 'zoom.us',
+            'calendly.com', 'hubspot', 'mailchimp', 'sendgrid', 'intercom',
+            # Social/marketing
+            'instagram', 'tiktok', 'youtube', 'medium.com', 'substack'
         ]
         if any(sender in from_email for sender in unrelated_senders):
             # Exception: mortgage-related senders
@@ -548,7 +558,15 @@ SPECIAL INSTRUCTIONS FOR {profile_type.upper()}:
             'deal of the day', 'exclusive offer', 'act now', 'limited time offer',
             'save big', 'discount code', 'promo code', 'coupon code',
             'clearance sale', 'final sale', 'last chance', 'ends today',
-            'doorbuster', 'buy one get one', 'free shipping on orders'
+            'doorbuster', 'buy one get one', 'free shipping on orders',
+            # Tech/deployment notifications
+            'deployment crashed', 'deployment failed', 'deployment succeeded',
+            'build failed', 'build succeeded', 'ci/cd', 'pipeline failed',
+            'your receipt from', 'payment receipt', 'invoice #',
+            # Generic marketing
+            'gdpr compliant', 'privacy policy update', 'terms of service',
+            'webinar invitation', 'join us for', 'register now',
+            'networks you\'ll build', 'grow your business'
         ]
         if any(kw in combined for kw in unrelated_keywords):
             # Exception: if it also has mortgage keywords, it's not unrelated
