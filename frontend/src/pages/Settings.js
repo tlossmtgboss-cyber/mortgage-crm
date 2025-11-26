@@ -1389,7 +1389,7 @@ const API_BASE_URL = isProduction
       checkMicrosoftStatus();
       checkGmailStatus();
     }
-    if (activeSection === 'calendly' || activeSection === 'calendar-settings') {
+    if (activeSection === 'calendly') {
       fetchCalendlyEventTypes();
       fetchCalendarMappings();
     }
@@ -1608,12 +1608,6 @@ const API_BASE_URL = isProduction
                 onClick={() => setActiveSection('appointment-types')}
               >
                 <span>Appointment Types</span>
-              </button>
-              <button
-                className={`sidebar-btn child ${activeSection === 'calendar-settings' ? 'active' : ''}`}
-                onClick={() => setActiveSection('calendar-settings')}
-              >
-                <span>Calendar Settings</span>
               </button>
               <button
                 className={`sidebar-btn child ${activeSection === 'availability' ? 'active' : ''}`}
@@ -1853,52 +1847,189 @@ const API_BASE_URL = isProduction
 
           {/* CALENDLY */}
           {activeSection === 'calendly' && (
-            <div className="integration-detail-section">
+            <div className="calendar-settings-section">
               <h2>🗓️ Calendly Integration</h2>
-              <p className="section-description">Automated scheduling for client meetings</p>
-              {calendlyEventTypes.length > 0 ? (
-                <div className="calendly-connected-section">
-                  <div className="integration-status-card">
-                    <div className="status-icon-large" style={{background: '#006bff'}}>🗓️</div>
-                    <h3>Calendly Connected</h3>
-                    <p>Found {calendlyEventTypes.length} event types</p>
+              <p className="section-description">
+                Connect Calendly and configure AI scheduling for automatic appointment booking
+              </p>
+
+              {/* Calendly Connection Status */}
+              <div className="calendly-connection-card">
+                <div className="connection-header">
+                  <div className="connection-icon" style={{background: '#006bff'}}>
+                    🗓️
                   </div>
-                  <div className="calendar-mappings-section">
-                    <h3>Event Type Mappings</h3>
-                    <p className="section-description">Map Calendly event types to lead pipeline stages</p>
-                    {calendarMappings.length > 0 && (
-                      <div className="mappings-list">
-                        {calendarMappings.map((mapping, index) => (
-                          <div key={index} className="mapping-item">
-                            <div className="mapping-info">
-                              <span className="mapping-stage">{mapping.stage_name}</span>
-                              <span className="mapping-arrow">→</span>
-                              <span className="mapping-event">{mapping.event_type_name}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                  <div className="connection-info">
+                    <h3>Calendly Connection</h3>
+                    <p>Connect your Calendly account to sync event types</p>
+                  </div>
+                  <div className="connection-status">
+                    {calendlyEventTypes.length > 0 ? (
+                      <span className="status-badge connected">✓ Connected</span>
+                    ) : (
+                      <span className="status-badge disconnected">Not Connected</span>
                     )}
-                    <div className="add-mapping-form">
-                      <select value={selectedStage} onChange={(e) => setSelectedStage(e.target.value)} className="form-select">
-                        <option value="">Select Lead Stage</option>
-                        {leadStages.map((stage) => (<option key={stage.value} value={stage.value}>{stage.label}</option>))}
+                  </div>
+                </div>
+
+                <div className="connection-actions">
+                  {calendlyEventTypes.length > 0 ? (
+                    <>
+                      <button
+                        className="btn-refresh"
+                        onClick={fetchCalendlyEventTypes}
+                        disabled={loadingCalendly}
+                      >
+                        {loadingCalendly ? 'Refreshing...' : '🔄 Refresh Event Types'}
+                      </button>
+                      <span className="connection-detail">
+                        {calendlyEventTypes.length} event types loaded
+                      </span>
+                    </>
+                  ) : (
+                    <button
+                      className="btn-connect-calendly"
+                      onClick={connectCalendly}
+                      disabled={loadingCalendly}
+                    >
+                      {loadingCalendly ? 'Connecting...' : '🔗 Connect Calendly'}
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* How AI Scheduling Works */}
+              <div className="info-card">
+                <div className="info-icon">🤖</div>
+                <div className="info-content">
+                  <h3>How AI Scheduling Works</h3>
+                  <p>When AI schedules appointments with leads, it automatically selects the right calendar based on the lead's current stage. For example:</p>
+                  <ul>
+                    <li><strong>New Lead</strong> → Discovery Call (30 min)</li>
+                    <li><strong>Qualified</strong> → Consultation (60 min)</li>
+                    <li><strong>Application Started</strong> → Application Review (45 min)</li>
+                  </ul>
+                  <p>Configure your mappings below to tell the AI which calendar to use for each stage.</p>
+                </div>
+              </div>
+
+              {/* Create New Mapping */}
+              <div className="mapping-form-card">
+                <h3>Create Calendar Mapping</h3>
+                <div className="mapping-form">
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label>Lead Stage</label>
+                      <select
+                        value={selectedStage}
+                        onChange={(e) => setSelectedStage(e.target.value)}
+                        className="form-select"
+                      >
+                        <option value="">Select a stage...</option>
+                        {leadStages.map(stage => (
+                          <option key={stage.value} value={stage.value}>
+                            {stage.label}
+                          </option>
+                        ))}
                       </select>
-                      <select value={selectedEventType} onChange={(e) => setSelectedEventType(e.target.value)} className="form-select">
-                        <option value="">Select Calendly Event Type</option>
-                        {calendlyEventTypes.map((eventType) => (<option key={eventType.uri} value={eventType.uri}>{eventType.name}</option>))}
-                      </select>
-                      <button onClick={createCalendarMapping} disabled={!selectedStage || !selectedEventType} className="btn-primary">Add Mapping</button>
+                    </div>
+
+                    <div className="form-group">
+                      <label>Calendly Event Type</label>
+                      {loadingCalendly ? (
+                        <div className="loading-spinner">Loading calendars...</div>
+                      ) : (
+                        <select
+                          value={selectedEventType}
+                          onChange={(e) => setSelectedEventType(e.target.value)}
+                          className="form-select"
+                          disabled={calendlyEventTypes.length === 0}
+                        >
+                          <option value="">Select a calendar...</option>
+                          {calendlyEventTypes.map(eventType => {
+                            const uuid = eventType.uri.split('/').pop();
+                            return (
+                              <option key={uuid} value={uuid}>
+                                {eventType.name} ({eventType.duration} min)
+                              </option>
+                            );
+                          })}
+                        </select>
+                      )}
+                    </div>
+
+                    <div className="form-actions">
+                      <button
+                        onClick={createCalendarMapping}
+                        disabled={!selectedStage || !selectedEventType}
+                        className="btn-save-mapping"
+                      >
+                        Save Mapping
+                      </button>
                     </div>
                   </div>
                 </div>
-              ) : (
-                <div className="integration-connect-card">
-                  <div className="connect-icon" style={{background: '#006bff'}}>🗓️</div>
-                  <h3>Connect Calendly</h3>
-                  <p>Configure your Calendly API key in Settings → API Keys to enable scheduling integration</p>
-                </div>
-              )}
+              </div>
+
+              {/* Current Mappings */}
+              <div className="current-mappings-card">
+                <h3>Current Mappings</h3>
+                {calendarMappings.length === 0 ? (
+                  <div className="empty-state">
+                    <div className="empty-icon">📅</div>
+                    <p>No calendar mappings configured yet.</p>
+                    <p className="empty-hint">Create your first mapping above to get started.</p>
+                  </div>
+                ) : (
+                  <div className="mappings-table">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Lead Stage</th>
+                          <th>Calendar Type</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {calendarMappings.map(mapping => {
+                          const stageLabel = leadStages.find(s => s.value === mapping.stage)?.label || mapping.stage;
+                          return (
+                            <tr key={mapping.id}>
+                              <td>
+                                <div className="stage-cell">
+                                  <span className="stage-badge">{stageLabel}</span>
+                                </div>
+                              </td>
+                              <td>
+                                <div className="calendar-cell">
+                                  <strong>{mapping.event_type_name}</strong>
+                                  <br />
+                                  <span className="calendar-uuid">{mapping.event_type_uuid}</span>
+                                </div>
+                              </td>
+                              <td>
+                                <span className="status-badge active">✓ Active</span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Help Section */}
+              <div className="help-card">
+                <h4>Need Help?</h4>
+                <p>To get your Calendly event types:</p>
+                <ol>
+                  <li>Go to <a href="https://calendly.com/event_types/user/me" target="_blank" rel="noopener noreferrer">calendly.com/event_types</a></li>
+                  <li>Create different event types for each stage (e.g., "Discovery Call", "Consultation")</li>
+                  <li>Come back here and map each stage to the appropriate event type</li>
+                  <li>The AI will automatically use the right calendar when scheduling!</li>
+                </ol>
+              </div>
             </div>
           )}
 
@@ -3339,211 +3470,6 @@ const API_BASE_URL = isProduction
                 Configure different types of appointments and their durations
               </p>
               <p>Coming soon...</p>
-            </div>
-          )}
-
-          {activeSection === 'calendar-settings' && (
-            <div className="calendar-settings-section">
-              <h2>AI Scheduling - Calendar Mappings</h2>
-              <p className="section-description">
-                Map each lead stage to a specific Calendly event type for automatic AI scheduling
-              </p>
-
-              {/* Calendly Connection Status */}
-              <div className="calendly-connection-card">
-                <div className="connection-header">
-                  <div className="connection-icon" style={{background: '#006bff'}}>
-                    🗓️
-                  </div>
-                  <div className="connection-info">
-                    <h3>Calendly Integration</h3>
-                    <p>Connect your Calendly account to sync event types</p>
-                  </div>
-                  <div className="connection-status">
-                    {calendlyEventTypes.length > 0 ? (
-                      <span className="status-badge connected">✓ Connected</span>
-                    ) : (
-                      <span className="status-badge disconnected">Not Connected</span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Debug info */}
-                <div style={{padding: '10px', background: '#f0f0f0', marginBottom: '10px', fontSize: '12px'}}>
-                  Debug: calendlyEventTypes.length = {calendlyEventTypes.length},
-                  loadingCalendly = {loadingCalendly ? 'true' : 'false'},
-                  showCalendlyModal = {showCalendlyModal ? 'true' : 'false'}
-                </div>
-
-                <div className="connection-actions">
-                  {calendlyEventTypes.length > 0 ? (
-                    <>
-                      <button
-                        className="btn-refresh"
-                        onClick={fetchCalendlyEventTypes}
-                        disabled={loadingCalendly}
-                      >
-                        {loadingCalendly ? 'Refreshing...' : '🔄 Refresh Event Types'}
-                      </button>
-                      <span className="connection-detail">
-                        {calendlyEventTypes.length} event types loaded
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <button
-                        className="btn-connect-calendly"
-                        onClick={(e) => {
-                          console.log('Button clicked!', e);
-                          connectCalendly();
-                        }}
-                        disabled={loadingCalendly}
-                        style={{position: 'relative', zIndex: 9999}}
-                      >
-                        {loadingCalendly ? 'Connecting...' : 'Connect Calendly'}
-                      </button>
-                      <button
-                        onClick={() => alert('Test button works!')}
-                        style={{marginLeft: '10px', padding: '10px', background: 'red', color: 'white', border: 'none', cursor: 'pointer'}}
-                      >
-                        TEST
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Explanation Card */}
-              <div className="info-card">
-                <div className="info-icon">🤖</div>
-                <div className="info-content">
-                  <h3>How AI Scheduling Works</h3>
-                  <p>When AI schedules appointments with leads, it automatically selects the right calendar based on the lead's current stage. For example:</p>
-                  <ul>
-                    <li><strong>New Lead</strong> → Discovery Call (30 min)</li>
-                    <li><strong>Qualified</strong> → Consultation (60 min)</li>
-                    <li><strong>Application Started</strong> → Application Review (45 min)</li>
-                  </ul>
-                  <p>Configure your mappings below to tell the AI which calendar to use for each stage.</p>
-                </div>
-              </div>
-
-              {/* Create New Mapping */}
-              <div className="mapping-form-card">
-                <h3>Create Calendar Mapping</h3>
-                <div className="mapping-form">
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>Lead Stage</label>
-                      <select
-                        value={selectedStage}
-                        onChange={(e) => setSelectedStage(e.target.value)}
-                        className="form-select"
-                      >
-                        <option value="">Select a stage...</option>
-                        {leadStages.map(stage => (
-                          <option key={stage.value} value={stage.value}>
-                            {stage.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div className="form-group">
-                      <label>Calendly Event Type</label>
-                      {loadingCalendly ? (
-                        <div className="loading-spinner">Loading calendars...</div>
-                      ) : (
-                        <select
-                          value={selectedEventType}
-                          onChange={(e) => setSelectedEventType(e.target.value)}
-                          className="form-select"
-                        >
-                          <option value="">Select a calendar...</option>
-                          {calendlyEventTypes.map(eventType => {
-                            const uuid = eventType.uri.split('/').pop();
-                            return (
-                              <option key={uuid} value={uuid}>
-                                {eventType.name} ({eventType.duration} min)
-                              </option>
-                            );
-                          })}
-                        </select>
-                      )}
-                    </div>
-
-                    <div className="form-actions">
-                      <button
-                        onClick={createCalendarMapping}
-                        disabled={!selectedStage || !selectedEventType}
-                        className="btn-save-mapping"
-                      >
-                        Save Mapping
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Current Mappings */}
-              <div className="current-mappings-card">
-                <h3>Current Mappings</h3>
-                {calendarMappings.length === 0 ? (
-                  <div className="empty-state">
-                    <div className="empty-icon">📅</div>
-                    <p>No calendar mappings configured yet.</p>
-                    <p className="empty-hint">Create your first mapping above to get started.</p>
-                  </div>
-                ) : (
-                  <div className="mappings-table">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Lead Stage</th>
-                          <th>Calendar Type</th>
-                          <th>Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {calendarMappings.map(mapping => {
-                          const stageLabel = leadStages.find(s => s.value === mapping.stage)?.label || mapping.stage;
-                          return (
-                            <tr key={mapping.id}>
-                              <td>
-                                <div className="stage-cell">
-                                  <span className="stage-badge">{stageLabel}</span>
-                                </div>
-                              </td>
-                              <td>
-                                <div className="calendar-cell">
-                                  <strong>{mapping.event_type_name}</strong>
-                                  <br />
-                                  <span className="calendar-uuid">{mapping.event_type_uuid}</span>
-                                </div>
-                              </td>
-                              <td>
-                                <span className="status-badge active">✓ Active</span>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-
-              {/* Help Section */}
-              <div className="help-card">
-                <h4>Need Help?</h4>
-                <p>To get your Calendly event types:</p>
-                <ol>
-                  <li>Go to <a href="https://calendly.com/event_types/user/me" target="_blank" rel="noopener noreferrer">calendly.com/event_types</a></li>
-                  <li>Create different event types for each stage (e.g., "Discovery Call", "Consultation")</li>
-                  <li>Come back here and map each stage to the appropriate event type</li>
-                  <li>The AI will automatically use the right calendar when scheduling!</li>
-                </ol>
-              </div>
             </div>
           )}
 
