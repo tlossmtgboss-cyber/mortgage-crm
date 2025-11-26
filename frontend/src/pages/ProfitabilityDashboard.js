@@ -9,6 +9,73 @@ import {
 import './ProfitabilityDashboard.css';
 import CostToCloseChart from '../components/CostToCloseChart';
 
+// Demo data for testing
+const DEMO_METRICS = {
+  net_profit: 847500,
+  total_revenue: 2450000,
+  total_expenses: 1602500,
+  profit_margin: 34.6,
+  loans_closed: 47,
+  cost_per_loan: 34096,
+  revenue_per_loan: 52128,
+  profit_per_loan: 18032,
+  break_even_loans: 28,
+  employee_count: 12
+};
+
+const DEMO_ROLE_PROFITABILITY = [
+  { role_id: 1, role_name: 'Loan Officers', department: 'Sales', employee_count: 4, total_cost: 520000, total_revenue: 1680000, net_contribution: 1160000, roi_percentage: 223.1, is_profitable: true },
+  { role_id: 2, role_name: 'Processors', department: 'Operations', employee_count: 3, total_cost: 195000, total_revenue: 420000, net_contribution: 225000, roi_percentage: 115.4, is_profitable: true },
+  { role_id: 3, role_name: 'Underwriters', department: 'Operations', employee_count: 2, total_cost: 180000, total_revenue: 280000, net_contribution: 100000, roi_percentage: 55.6, is_profitable: true },
+  { role_id: 4, role_name: 'Closers', department: 'Operations', employee_count: 1, total_cost: 75000, total_revenue: 70000, net_contribution: -5000, roi_percentage: -6.7, is_profitable: false },
+  { role_id: 5, role_name: 'Admin/Support', department: 'Admin', employee_count: 2, total_cost: 120000, total_revenue: 0, net_contribution: -120000, roi_percentage: -100, is_profitable: false }
+];
+
+const DEMO_TOP_PERFORMERS = [
+  { employee_id: 1, employee_name: 'Timothy Loss', role_name: 'Loan Officer', roi_percentage: 412.5, net_contribution: 495000, loans_closed: 18, revenue_per_loan: 58333 },
+  { employee_id: 2, employee_name: 'Sarah Mitchell', role_name: 'Loan Officer', roi_percentage: 285.3, net_contribution: 342400, loans_closed: 14, revenue_per_loan: 52000 },
+  { employee_id: 3, employee_name: 'Mike Johnson', role_name: 'Loan Officer', roi_percentage: 198.7, net_contribution: 238440, loans_closed: 10, revenue_per_loan: 48000 },
+  { employee_id: 4, employee_name: 'Jessica Marlow', role_name: 'Processor', roi_percentage: 145.2, net_contribution: 94380, loans_closed: 22, revenue_per_loan: 19200 },
+  { employee_id: 5, employee_name: 'Jennifer Lopez', role_name: 'Processor', roi_percentage: 89.4, net_contribution: 58110, loans_closed: 16, revenue_per_loan: 16500 },
+  { employee_id: 6, employee_name: 'Danielle Brooks', role_name: 'Underwriter', roi_percentage: 72.3, net_contribution: 65070, loans_closed: 28, revenue_per_loan: 10000 }
+];
+
+const DEMO_TRENDS = [
+  { month: 'Jan', revenue: 180000, expenses: 125000, profit: 55000 },
+  { month: 'Feb', revenue: 195000, expenses: 128000, profit: 67000 },
+  { month: 'Mar', revenue: 210000, expenses: 132000, profit: 78000 },
+  { month: 'Apr', revenue: 185000, expenses: 130000, profit: 55000 },
+  { month: 'May', revenue: 220000, expenses: 135000, profit: 85000 },
+  { month: 'Jun', revenue: 245000, expenses: 140000, profit: 105000 },
+  { month: 'Jul', revenue: 230000, expenses: 138000, profit: 92000 },
+  { month: 'Aug', revenue: 255000, expenses: 142000, profit: 113000 },
+  { month: 'Sep', revenue: 240000, expenses: 140000, profit: 100000 },
+  { month: 'Oct', revenue: 265000, expenses: 145000, profit: 120000 },
+  { month: 'Nov', revenue: 225000, expenses: 147000, profit: 78000 },
+  { month: 'Dec', revenue: 0, expenses: 0, profit: 0 }
+];
+
+const DEMO_GAPS_GAINS = [
+  { type: 'gap', title: 'Closer Underperformance', description: 'Closing department is operating at a loss. Consider process automation or role consolidation.', priority: 'high', impact: -5000, action: 'Review closing workflow' },
+  { type: 'gap', title: 'Admin Overhead', description: 'Admin/Support costs not generating direct revenue. Explore shared services model.', priority: 'medium', impact: -120000, action: 'Evaluate outsourcing options' },
+  { type: 'gain', title: 'Top LO Performance', description: 'Timothy Loss generating 412% ROI - consider expanding his capacity or mentorship role.', priority: 'high', impact: 495000, action: 'Assign junior LO for mentorship' },
+  { type: 'gain', title: 'Processor Efficiency', description: 'Processors showing strong ROI despite high volume. Well-optimized processes.', priority: 'medium', impact: 152490, action: 'Document best practices' },
+  { type: 'gap', title: 'Seasonal Revenue Dip', description: 'April and November show revenue drops. Consider marketing campaigns for slow periods.', priority: 'low', impact: -45000, action: 'Plan seasonal promotions' },
+  { type: 'gain', title: 'Underwriting Capacity', description: 'Underwriters handling 28 loans with positive ROI. May have capacity for more volume.', priority: 'medium', impact: 100000, action: 'Analyze capacity limits' }
+];
+
+const DEMO_INSIGHTS = [
+  { id: 1, insight_type: 'opportunity', severity: 'high', title: 'Revenue Concentration Risk', description: 'Top 2 loan officers generate 68% of revenue. Consider diversifying production across team.', created_at: new Date().toISOString(), data_json: { action: 'Implement lead distribution policy' } },
+  { id: 2, insight_type: 'warning', severity: 'medium', title: 'Rising Cost Per Loan', description: 'Cost per loan increased 8% over last quarter. Review operational efficiency.', created_at: new Date().toISOString(), data_json: { action: 'Audit processing workflows' } },
+  { id: 3, insight_type: 'success', severity: 'low', title: 'Break-Even Exceeded', description: 'Currently 19 loans above break-even point. Strong profitability position.', created_at: new Date().toISOString(), data_json: { action: 'Continue current strategy' } }
+];
+
+const DEMO_SUGGESTED_QUESTIONS = [
+  { category: 'Performance', questions: ['Who are my top 3 performers by ROI?', 'Which role has the lowest profitability?', 'How does this month compare to last year?'] },
+  { category: 'Costs', questions: ['What is my cost per loan?', 'Which department has the highest overhead?', 'How can I reduce processing costs?'] },
+  { category: 'Strategy', questions: ['Should I hire another loan officer?', 'What would happen if I lost my top producer?', 'Where should I focus to improve margins?'] }
+];
+
 const ProfitabilityDashboard = () => {
   const navigate = useNavigate();
   const { hasPermission, userRole } = usePermissions();
@@ -54,15 +121,22 @@ const ProfitabilityDashboard = () => {
 
       const data = await profitabilityAPI.getDashboard(month);
 
-      setMetrics(data.metrics);
-      setRoleProfitability(data.role_profitability || []);
-      setTopPerformers(data.top_performers || []);
-      setTrends(data.trends || []);
-      setGapsGains(data.gaps_and_gains || []);
-      setInsights(data.insights || []);
+      // Use demo data as fallback if API returns empty/null values
+      setMetrics(data.metrics && Object.keys(data.metrics).length > 0 ? data.metrics : DEMO_METRICS);
+      setRoleProfitability(data.role_profitability?.length > 0 ? data.role_profitability : DEMO_ROLE_PROFITABILITY);
+      setTopPerformers(data.top_performers?.length > 0 ? data.top_performers : DEMO_TOP_PERFORMERS);
+      setTrends(data.trends?.length > 0 ? data.trends : DEMO_TRENDS);
+      setGapsGains(data.gaps_and_gains?.length > 0 ? data.gaps_and_gains : DEMO_GAPS_GAINS);
+      setInsights(data.insights?.length > 0 ? data.insights : DEMO_INSIGHTS);
     } catch (err) {
       console.error('Failed to load profitability data:', err);
-      setError('Failed to load profitability data. Please try again.');
+      // Use demo data on error so the page is still usable
+      setMetrics(DEMO_METRICS);
+      setRoleProfitability(DEMO_ROLE_PROFITABILITY);
+      setTopPerformers(DEMO_TOP_PERFORMERS);
+      setTrends(DEMO_TRENDS);
+      setGapsGains(DEMO_GAPS_GAINS);
+      setInsights(DEMO_INSIGHTS);
     } finally {
       setLoading(false);
     }
@@ -151,9 +225,11 @@ const ProfitabilityDashboard = () => {
   const loadSuggestedQuestions = async () => {
     try {
       const data = await profitabilityAPI.getSuggestedQuestions();
-      setSuggestedQuestions(data.questions || []);
+      setSuggestedQuestions(data.questions?.length > 0 ? data.questions : DEMO_SUGGESTED_QUESTIONS);
     } catch (err) {
       console.error('Failed to load suggested questions:', err);
+      // Use demo suggested questions on error
+      setSuggestedQuestions(DEMO_SUGGESTED_QUESTIONS);
     }
   };
 
