@@ -7337,44 +7337,53 @@ async def orchestrator_chat_stream(
     all_leads = db.query(Lead).filter(Lead.owner_id == current_user.id).all()
     all_loans = db.query(Loan).filter(Loan.loan_officer_id == current_user.id).all()
 
-    # Fetch profitability data for financial questions
+    # Fetch profitability data for financial questions using ProfitabilityService
     try:
-        # Get latest profitability snapshot (monthly summary)
-        latest_snapshot = db.query(ProfitabilitySnapshot).order_by(
-            ProfitabilitySnapshot.snapshot_month.desc()
-        ).first()
+        from services.profitability_service import ProfitabilityService
+        profitability_service = ProfitabilityService(db, organization_id=1)  # Default org
 
-        # Get closed loans this month for revenue calculation
+        # Get comprehensive dashboard metrics
+        dashboard_metrics = profitability_service.get_dashboard_metrics(today)
+
+        # Get expense breakdown
+        all_expenses = db.query(Expense).filter(Expense.is_active == True).all()
+        expense_breakdown = {}
+        for exp in all_expenses:
+            exp_type = exp.expense_type or 'other'
+            if exp_type not in expense_breakdown:
+                expense_breakdown[exp_type] = 0
+            expense_breakdown[exp_type] += float(exp.amount or 0)
+
+        # Get employee costs
+        employee_costs_list = db.query(EmployeeCost).filter(EmployeeCost.is_active == True).all()
+        total_employee_costs = sum(emp.monthly_cost for emp in employee_costs_list)
+        employee_count = len(employee_costs_list)
+
+        # Get closed loans this month
         closed_loans_month = db.query(ProfitabilityLoan).filter(
             ProfitabilityLoan.close_date >= start_of_month
         ).all()
 
-        # Get total expenses this month
-        monthly_expenses = db.query(func.sum(Expense.amount)).filter(
-            Expense.is_active == True,
-            Expense.recurrence == 'monthly'
-        ).scalar() or 0
+        # Calculate metrics from dashboard
+        loans_closed_this_month = dashboard_metrics.get('loans_closed', 0)
+        total_revenue_month = float(dashboard_metrics.get('total_revenue', 0))
+        monthly_expenses = float(dashboard_metrics.get('total_expenses', 0))
+        snapshot_cost_per_loan = float(dashboard_metrics.get('cost_per_loan', 0))
+        snapshot_revenue_per_loan = float(dashboard_metrics.get('revenue_per_loan', 0))
+        snapshot_profit_per_loan = float(dashboard_metrics.get('profit_per_loan', 0))
+        profit_margin = float(dashboard_metrics.get('profit_margin', 0))
+        break_even_loans = dashboard_metrics.get('break_even_loans', 0)
+        net_profit = float(dashboard_metrics.get('net_profit', 0))
 
-        # Calculate metrics
-        loans_closed_this_month = len(closed_loans_month)
-        total_revenue_month = sum(float(l.total_revenue or 0) for l in closed_loans_month)
-        avg_loan_amount = sum(float(l.loan_amount or 0) for l in closed_loans_month) / max(loans_closed_this_month, 1)
+        avg_loan_amount = sum(float(l.loan_amount or 0) for l in closed_loans_month) / max(loans_closed_this_month, 1) if closed_loans_month else 0
 
-        # Cost per closing calculation
-        if loans_closed_this_month > 0:
-            cost_per_closing = float(monthly_expenses) / loans_closed_this_month
-        else:
-            cost_per_closing = float(monthly_expenses)  # Total cost with no closings
+        # Get trends for year-over-year comparison
+        trends = profitability_service.get_trends(3)  # Last 3 months
 
-        # Use snapshot data if available
-        if latest_snapshot:
-            snapshot_cost_per_loan = float(latest_snapshot.cost_per_loan or 0)
-            snapshot_revenue_per_loan = float(latest_snapshot.revenue_per_loan or 0)
-            snapshot_profit_per_loan = float(latest_snapshot.profit_per_loan or 0)
-        else:
-            snapshot_cost_per_loan = cost_per_closing
-            snapshot_revenue_per_loan = total_revenue_month / max(loans_closed_this_month, 1)
-            snapshot_profit_per_loan = snapshot_revenue_per_loan - snapshot_cost_per_loan
+        # Get gaps and gains insights
+        gaps_gains = profitability_service.identify_gaps_and_gains(today)
+
+        has_profitability_data = loans_closed_this_month > 0 or monthly_expenses > 0 or len(all_expenses) > 0
 
     except Exception as e:
         logger.warning(f"Could not fetch profitability data: {e}")
@@ -7382,11 +7391,19 @@ async def orchestrator_chat_stream(
         loans_closed_this_month = 0
         total_revenue_month = 0
         monthly_expenses = 0
-        cost_per_closing = 0
-        avg_loan_amount = 0
         snapshot_cost_per_loan = 0
         snapshot_revenue_per_loan = 0
         snapshot_profit_per_loan = 0
+        avg_loan_amount = 0
+        profit_margin = 0
+        break_even_loans = 0
+        net_profit = 0
+        expense_breakdown = {}
+        total_employee_costs = 0
+        employee_count = 0
+        trends = []
+        gaps_gains = []
+        has_profitability_data = False
 
     # Task breakdown
     tasks_today = [t for t in all_tasks if t.due_date and t.due_date.date() == today and t.status != "completed"]
@@ -7464,12 +7481,26 @@ async def orchestrator_chat_stream(
 ### Financial Metrics (This Month):
 - Loans Closed This Month: {loans_closed_this_month}
 - Total Revenue This Month: ${total_revenue_month:,.2f}
-- Monthly Operating Expenses: ${float(monthly_expenses):,.2f}
+- Monthly Operating Expenses: ${monthly_expenses:,.2f}
+- Net Profit: ${net_profit:,.2f}
+- Profit Margin: {profit_margin:.1f}%
 - Average Loan Amount: ${avg_loan_amount:,.2f}
 - **Cost Per Closing**: ${snapshot_cost_per_loan:,.2f}
 - Revenue Per Loan: ${snapshot_revenue_per_loan:,.2f}
 - Profit Per Loan: ${snapshot_profit_per_loan:,.2f}
-{'- NOTE: No profitability data configured yet. To calculate accurate cost per closing, the user needs to set up their expenses and closed loan data in the Profitability section.' if loans_closed_this_month == 0 and monthly_expenses == 0 else ''}
+- Break-Even Point: {break_even_loans} loans/month
+- Employee Count: {employee_count}
+- Employee Costs (Monthly): ${total_employee_costs:,.2f}
+
+### Expense Breakdown:
+{chr(10).join([f"- {exp_type.replace('_', ' ').title()}: ${amount:,.2f}" for exp_type, amount in expense_breakdown.items()]) if expense_breakdown else "- No expenses configured"}
+
+{'### ⚠️ PROFITABILITY DATA NOT CONFIGURED' if not has_profitability_data else ''}
+{'To calculate accurate cost per closing, set up the Profitability section with:' if not has_profitability_data else ''}
+{'1. Monthly expenses (rent, software, marketing, etc.)' if not has_profitability_data else ''}
+{'2. Employee costs (salaries, benefits, taxes)' if not has_profitability_data else ''}
+{'3. Closed loan records with revenue' if not has_profitability_data else ''}
+{'Navigate to: Settings > Profitability' if not has_profitability_data else ''}
 """
 
     # Detect coaching mode
@@ -7532,15 +7563,60 @@ Current date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
 - When mentioning loans, always include borrower name and amount
 - Use numbered lists for priorities, bullet points for details
 
+# MORTGAGE BUSINESS FINANCIAL DEFINITIONS
+You are an expert in mortgage business operations and profitability. Here are the key metrics and how to calculate them:
+
+## Revenue Sources in Mortgage Operations:
+- **Origination Fee**: Fee charged to borrower for processing their loan (typically 0.5-1% of loan amount)
+- **Processing Fee**: Administrative fee for document collection and verification ($300-$800)
+- **Admin Fee**: General administrative costs passed to borrower ($200-$500)
+- **Commission/Rebate**: Revenue from lender based on rate spread (YSP - Yield Spread Premium)
+- **Typical Revenue Per Loan**: $3,000-$8,000 depending on loan size and pricing
+
+## Cost Categories:
+- **Fixed Costs**: Rent, software subscriptions, insurance, licensing fees - don't change with volume
+- **Variable Costs**: Commission splits, credit reports, appraisals - scale with loan volume
+- **Employee Costs**: Fully-loaded cost = Base Salary + Benefits (25-30%) + Payroll Taxes (7.65%) + Equipment + Training
+- **One-Time Costs**: Equipment purchases, renovations, training programs
+
+## Key Performance Metrics:
+- **Cost Per Closing** = Total Monthly Expenses ÷ Loans Closed This Month
+  - Industry benchmark: $2,000-$5,000 per loan
+  - If no loans closed, show total expenses as the "cost to operate"
+
+- **Revenue Per Loan** = Total Revenue ÷ Loans Closed
+  - Track by loan type (Conv, FHA, VA, Jumbo) as they have different margins
+
+- **Profit Per Loan** = Revenue Per Loan - Cost Per Loan
+  - Healthy target: $1,000-$3,000 per loan
+
+- **Profit Margin** = (Net Profit ÷ Total Revenue) × 100
+  - Industry healthy range: 15-30%
+  - Below 10%: Needs immediate attention
+
+- **Break-Even Point** = Total Monthly Expenses ÷ Average Revenue Per Loan
+  - The minimum number of loans needed to cover all costs
+
+- **Employee ROI** = (Revenue Attributed to Employee - Employee Cost) ÷ Employee Cost × 100
+  - Measures each team member's contribution to profitability
+
+## Expense Types:
+- **fixed**: Recurring costs that don't change (rent, subscriptions, base salaries)
+- **variable**: Costs that scale with volume (commissions, credit reports, appraisals)
+- **one_time**: One-off purchases (equipment, renovations, training)
+
 {coaching_instructions}
 
 {data_context}
 
 # INSTRUCTIONS
-- Reference the real data above when answering questions
-- Be specific with client names and numbers
-- Provide clear, actionable recommendations
-- If asked about priorities/tasks, give a DETAILED conversational response, not just a list"""
+- Reference the real data above when answering questions about financials
+- Be specific with actual numbers from the profitability data
+- When asked about cost per closing, revenue, or profit - use the EXACT figures from the data above
+- If profitability data is not configured, explain how to set it up and offer industry benchmarks
+- For financial analysis questions, provide actionable insights and recommendations
+- Always cite the source of data: "Based on your profitability data..." or "According to your expense records..."
+- Provide clear, actionable recommendations based on the financial metrics"""
 
     async def generate_stream():
         messages = [
