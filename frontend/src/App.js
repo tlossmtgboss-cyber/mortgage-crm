@@ -56,6 +56,8 @@ const ProcessTemplates = lazy(() => import('./pages/ProcessTemplates'));
 const BuyerIntake = lazy(() => import('./pages/BuyerIntake'));
 const VerizonTest = lazy(() => import('./pages/VerizonTest'));
 const PipelineEfficiency = lazy(() => import('./pages/PipelineEfficiency'));
+const StageEmployees = lazy(() => import('./pages/StageEmployees'));
+const EmployeeLoans = lazy(() => import('./pages/EmployeeLoans'));
 const AIReceptionistDashboard = lazy(() => import('./pages/AIReceptionistDashboard'));
 const VoiceOSDashboard = lazy(() => import('./pages/VoiceOSDashboard'));
 const AILandingPage = lazy(() => import('./pages/AILandingPage'));
@@ -468,6 +470,63 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><PipelineEfficiency /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/efficiency"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><PipelineEfficiency /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/efficiency/stage/:stageSlug"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><StageEmployees /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/efficiency/stage/:stageSlug/employee/:employeeId"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><EmployeeLoans /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>

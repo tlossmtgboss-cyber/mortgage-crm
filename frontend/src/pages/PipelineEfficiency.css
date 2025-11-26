@@ -254,6 +254,39 @@
   color: #1a202c;
 }
 
+.view-arrow-cell {
+  text-align: center;
+  width: 40px;
+}
+
+.view-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #e2e8f0;
+  color: #4a5568;
+  font-size: 16px;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.stage-table tbody tr:hover .view-arrow {
+  background: #217F8D;
+  color: white;
+  transform: translateX(3px);
+}
+
+.stage-table-hint {
+  text-align: center;
+  font-size: 13px;
+  color: #718096;
+  margin-top: 12px;
+  margin-bottom: 0;
+}
+
 .efficiency-cell {
   display: flex;
   align-items: center;

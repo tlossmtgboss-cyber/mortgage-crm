@@ -527,8 +527,9 @@ function PipelineEfficiency() {
   };
 
   const handleStageClick = (stage) => {
-    setSelectedStage(stage);
-    setShowStageDrilldown(true);
+    // Navigate to the stage employees page
+    const stageSlug = stage.name.toLowerCase().replace(/\s+/g, '-');
+    navigate(`/efficiency/stage/${stageSlug}`);
   };
 
   const handleCloseStageDrilldown = () => {
@@ -663,6 +664,7 @@ function PipelineEfficiency() {
                   <th>Volume</th>
                   <th>Bottlenecks</th>
                   <th>Trend</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -694,11 +696,15 @@ function PipelineEfficiency() {
                         {stage.trend >= 0 ? '↑' : '↓'} {Math.abs(stage.trend)}%
                       </span>
                     </td>
+                    <td className="view-arrow-cell">
+                      <span className="view-arrow" title="View team members">→</span>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+          <p className="stage-table-hint">Click any row to view team member performance</p>
         </div>
 
         {/* Team Performance Section */}
