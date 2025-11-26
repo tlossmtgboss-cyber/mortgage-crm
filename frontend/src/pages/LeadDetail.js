@@ -957,6 +957,18 @@ function LeadDetail() {
           Team Members
         </button>
         <button
+          className={`tab-btn ${activeTab === 'marketing' ? 'active' : ''}`}
+          onClick={() => setActiveTab('marketing')}
+        >
+          Marketing
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'email' ? 'active' : ''}`}
+          onClick={() => setActiveTab('email')}
+        >
+          Email
+        </button>
+        <button
           className={`tab-btn ${activeTab === 'conversation' ? 'active' : ''}`}
           onClick={() => setActiveTab('conversation')}
         >

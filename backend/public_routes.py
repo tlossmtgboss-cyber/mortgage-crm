@@ -736,3 +736,195 @@ async def generate_workflows(
             for w in created_workflows
         ]
     }
+
+
+# ============================================================================
+# PUBLIC QUESTIONNAIRES (Landing Pages)
+# ============================================================================
+
+class MortgagePlannerSubmission(BaseModel):
+    """Schema for Mortgage Planner Questionnaire submission"""
+    name: str
+    email: EmailStr
+    phone: str
+    isVeteran: str
+    hasOwnedHomeBefore: str
+    currentHousingStatus: str
+    previousMortgageType: Optional[str] = None
+    currentMonthlyPayment: Optional[str] = None
+    mortgageImportance: List[str]
+    personalGoals: List[str]
+    financialPhilosophy: str
+    hasTaxDeferredRetirement: str
+    hasFinancialPlanner: str
+    hasAccountant: str
+    hasLifeInsuranceAgent: str
+    lifeInsuranceAgentRating: Optional[str] = None
+    hasEstatePlanner: str
+    loan_officer_id: Optional[str] = None
+    source: Optional[str] = None
+    submitted_at: Optional[str] = None
+
+
+@router.post("/api/v1/questionnaire/mortgage-planner")
+async def submit_mortgage_planner_questionnaire(
+    submission: MortgagePlannerSubmission,
+    db: Session = Depends(get_db)
+):
+    """
+    Handle Mortgage Planning Questionnaire submissions.
+
+    This endpoint:
+    1. Creates or updates a lead with the questionnaire data
+    2. Creates a task for the loan officer to update Circle of Cashflow
+    3. Identifies referral opportunities based on missing professional network
+    """
+    from main import Lead, Task
+    from sqlalchemy import text
+
+    try:
+        # Determine the loan officer ID (default to demo user ID 1 if not specified)
+        loan_officer_id = int(submission.loan_officer_id) if submission.loan_officer_id else 1
+
+        # Check if lead already exists by email
+        existing_lead = db.query(Lead).filter(Lead.email == submission.email).first()
+
+        if existing_lead:
+            # Update existing lead
+            lead = existing_lead
+            lead.name = submission.name
+            lead.phone = submission.phone
+        else:
+            # Create new lead
+            lead = Lead(
+                name=submission.name,
+                email=submission.email,
+                phone=submission.phone,
+                owner_id=loan_officer_id,
+                source="Mortgage Planner Questionnaire",
+                stage="NEW",
+                status="new"
+            )
+            db.add(lead)
+            db.flush()  # Get the lead ID
+
+        # Store questionnaire responses in lead metadata
+        lead.notes = f"""
+MORTGAGE PLANNER QUESTIONNAIRE RESPONSES
+========================================
+Submitted: {submission.submitted_at or datetime.utcnow().isoformat()}
+
+PERSONAL INFORMATION
+- Name: {submission.name}
+- Email: {submission.email}
+- Phone: {submission.phone}
+- Veteran: {submission.isVeteran}
+
+HOME OWNERSHIP HISTORY
+- Previously owned home: {submission.hasOwnedHomeBefore}
+- Current status: {submission.currentHousingStatus}
+- Previous mortgage type: {submission.previousMortgageType or 'N/A'}
+- Current monthly payment: ${submission.currentMonthlyPayment or 'N/A'}
+
+MORTGAGE PRIORITIES
+{chr(10).join(['- ' + p for p in submission.mortgageImportance])}
+
+PERSONAL GOALS
+{chr(10).join(['- ' + g for g in submission.personalGoals])}
+
+FINANCIAL PHILOSOPHY
+- {submission.financialPhilosophy}
+
+PROFESSIONAL NETWORK (Circle of Cashflow)
+- Tax-deferred retirement plan: {submission.hasTaxDeferredRetirement}
+- Financial Planner: {submission.hasFinancialPlanner}
+- Accountant: {submission.hasAccountant}
+- Life Insurance Agent: {submission.hasLifeInsuranceAgent}
+  Rating: {submission.lifeInsuranceAgentRating or 'N/A'}
+- Estate Planner: {submission.hasEstatePlanner}
+"""
+
+        # Identify referral opportunities based on missing professionals
+        missing_professionals = []
+        if submission.hasFinancialPlanner == 'No':
+            missing_professionals.append('Financial Planner')
+        if submission.hasAccountant == 'No':
+            missing_professionals.append('Accountant')
+        if submission.hasLifeInsuranceAgent == 'No':
+            missing_professionals.append('Life Insurance Agent')
+        if submission.hasEstatePlanner == 'No':
+            missing_professionals.append('Estate Planner')
+
+        # Create task for loan officer to update Circle of Cashflow
+        task_description = f"""Review {submission.name}'s Mortgage Planner Questionnaire and update their Circle of Cashflow profile.
+
+CONTACT INFO:
+- Email: {submission.email}
+- Phone: {submission.phone}
+
+KEY PRIORITIES:
+{chr(10).join(['- ' + p for p in submission.mortgageImportance[:3]])}
+
+FINANCIAL PHILOSOPHY: {submission.financialPhilosophy}
+
+"""
+
+        if missing_professionals:
+            task_description += f"""REFERRAL OPPORTUNITIES - Missing Professionals:
+{chr(10).join(['- ' + p for p in missing_professionals])}
+
+Consider introducing {submission.name} to trusted partners in your network.
+"""
+
+        # Create the task
+        circle_task = Task(
+            title=f"Update Circle of Cashflow - {submission.name}",
+            description=task_description,
+            priority="high",
+            status="pending",
+            owner_id=loan_officer_id,
+            lead_id=lead.id,
+            due_date=datetime.utcnow() + timedelta(days=1),
+            related_type="questionnaire",
+            related_contact_name=submission.name
+        )
+        db.add(circle_task)
+
+        # If they need multiple professionals, create a follow-up task for referral tracking
+        if len(missing_professionals) >= 2:
+            referral_task = Task(
+                title=f"Partner Referral Opportunities - {submission.name}",
+                description=f"""Based on their questionnaire, {submission.name} needs:
+{chr(10).join(['- ' + p for p in missing_professionals])}
+
+This is a great opportunity to strengthen partner relationships by making quality referrals.
+Track which partners you introduce and follow up on the outcomes.
+""",
+                priority="medium",
+                status="pending",
+                owner_id=loan_officer_id,
+                lead_id=lead.id,
+                due_date=datetime.utcnow() + timedelta(days=3),
+                related_type="referral_opportunity",
+                related_contact_name=submission.name
+            )
+            db.add(referral_task)
+
+        db.commit()
+
+        logger.info(f"Mortgage Planner Questionnaire submitted for {submission.name} (Lead ID: {lead.id})")
+
+        return {
+            "success": True,
+            "message": "Questionnaire submitted successfully",
+            "lead_id": lead.id,
+            "referral_opportunities": missing_professionals if missing_professionals else None
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error processing Mortgage Planner Questionnaire: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to process questionnaire. Please try again."
+        )

@@ -68,6 +68,7 @@ const ProfitabilityDashboard = lazy(() => import('./pages/ProfitabilityDashboard
 const ScenarioModeling = lazy(() => import('./pages/ScenarioModeling'));
 const EmployeeOnboardingAdmin = lazy(() => import('./pages/EmployeeOnboardingAdmin'));
 const AcceptInvite = lazy(() => import('./pages/AcceptInvite'));
+const MortgagePlannerQuestionnaire = lazy(() => import('./pages/MortgagePlannerQuestionnaire'));
 
 // Simple loading component
 const PageLoader = () => (
@@ -234,6 +235,7 @@ function App() {
           {/* Public routes */}
           <Route path="/" element={<LandingPage />} />
           <Route path="/apply" element={<BuyerIntake />} />
+          <Route path="/mortgage-planner" element={<LazyPage><MortgagePlannerQuestionnaire /></LazyPage>} />
           <Route path="/register" element={<Registration />} />
           <Route path="/verify-email-sent" element={<EmailVerificationSent />} />
           <Route path="/login" element={<Login />} />

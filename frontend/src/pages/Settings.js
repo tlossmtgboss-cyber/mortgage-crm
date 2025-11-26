@@ -11,6 +11,7 @@ import './Settings.css';
 function Settings() {
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState('integration-marketplace');
+  const [marketingTab, setMarketingTab] = useState('landing-pages');
   const [expandedSections, setExpandedSections] = useState({
     integrations: false,
     organizational: false,
@@ -1416,7 +1417,6 @@ const API_BASE_URL = isProduction
             className={`sidebar-btn parent ${expandedSections.organizational ? 'expanded' : ''}`}
             onClick={() => toggleSection('organizational')}
           >
-            <span className="icon">🏢</span>
             <span>Organizational Settings</span>
             <span className="expand-icon">{expandedSections.organizational ? '▼' : '▶'}</span>
           </button>
@@ -1447,7 +1447,6 @@ const API_BASE_URL = isProduction
             className={`sidebar-btn ${activeSection === 'mission-control' ? 'active' : ''}`}
             onClick={() => setActiveSection('mission-control')}
           >
-            <span className="icon">🎯</span>
             <span>Mission Control</span>
           </button>
 
@@ -1455,7 +1454,6 @@ const API_BASE_URL = isProduction
             className={`sidebar-btn ${activeSection === 'ai-receptionist' ? 'active' : ''}`}
             onClick={() => setActiveSection('ai-receptionist')}
           >
-            <span className="icon">🤖</span>
             <span>AI Receptionist</span>
           </button>
 
@@ -1463,7 +1461,6 @@ const API_BASE_URL = isProduction
             className={`sidebar-btn ${activeSection === 'voice-os' ? 'active' : ''}`}
             onClick={() => navigate('/voice-os-dashboard')}
           >
-            <span className="icon">🎙️</span>
             <span>Voice OS</span>
           </button>
 
@@ -1471,7 +1468,6 @@ const API_BASE_URL = isProduction
             className={`sidebar-btn ${activeSection === 'document-intake' ? 'active' : ''}`}
             onClick={() => setActiveSection('document-intake')}
           >
-            <span className="icon">📄</span>
             <span>Document Intake</span>
           </button>
 
@@ -1479,7 +1475,6 @@ const API_BASE_URL = isProduction
             className={`sidebar-btn ${activeSection === 'email-monitor' ? 'active' : ''}`}
             onClick={() => setActiveSection('email-monitor')}
           >
-            <span className="icon">📧</span>
             <span>Email Monitor</span>
           </button>
 
@@ -1488,7 +1483,6 @@ const API_BASE_URL = isProduction
             className={`sidebar-btn ${activeSection === 'marketing' ? 'active' : ''}`}
             onClick={() => setActiveSection('marketing')}
           >
-            <span className="icon">📣</span>
             <span>Marketing</span>
           </button>
 
@@ -1499,7 +1493,6 @@ const API_BASE_URL = isProduction
                 className={`sidebar-btn parent ${expandedSections.integrations ? 'expanded' : ''}`}
                 onClick={() => toggleSection('integrations')}
               >
-                <span className="icon">🔌</span>
                 <span>Integrations</span>
                 <span className="expand-icon">{expandedSections.integrations ? '▼' : '▶'}</span>
               </button>
@@ -1511,13 +1504,13 @@ const API_BASE_URL = isProduction
                         className={`sidebar-btn child ${activeSection === 'outlook-email' ? 'active' : ''}`}
                         onClick={() => setActiveSection('outlook-email')}
                       >
-                        <span>📧 Outlook Email</span>
+                        <span>Outlook Email</span>
                       </button>
                       <button
                         className={`sidebar-btn child ${activeSection === 'outlook-calendar' ? 'active' : ''}`}
                         onClick={() => setActiveSection('outlook-calendar')}
                       >
-                        <span>📅 Outlook Calendar</span>
+                        <span>Outlook Calendar</span>
                       </button>
                     </>
                   )}
@@ -1526,7 +1519,7 @@ const API_BASE_URL = isProduction
                       className={`sidebar-btn child ${activeSection === 'calendly' ? 'active' : ''}`}
                       onClick={() => setActiveSection('calendly')}
                     >
-                      <span>🗓️ Calendly</span>
+                      <span>Calendly</span>
                     </button>
                   )}
                   {twilioStatus.configured && (
@@ -1534,7 +1527,7 @@ const API_BASE_URL = isProduction
                       className={`sidebar-btn child ${activeSection === 'twilio-sms' ? 'active' : ''}`}
                       onClick={() => setActiveSection('twilio-sms')}
                     >
-                      <span>📱 Twilio SMS</span>
+                      <span>Twilio SMS</span>
                     </button>
                   )}
                 </div>
@@ -1545,7 +1538,6 @@ const API_BASE_URL = isProduction
               className={`sidebar-btn ${activeSection === 'integration-marketplace' ? 'active' : ''}`}
               onClick={() => setActiveSection('integration-marketplace')}
             >
-              <span className="icon">🔌</span>
               <span>Integrations</span>
             </button>
           )}
@@ -1557,7 +1549,6 @@ const API_BASE_URL = isProduction
               fetchApiKeys();
             }}
           >
-            <span className="icon">🔑</span>
             <span>API Keys</span>
           </button>
 
@@ -1565,7 +1556,6 @@ const API_BASE_URL = isProduction
             className={`sidebar-btn ${activeSection === 'it-helpdesk' ? 'active' : ''}`}
             onClick={() => setActiveSection('it-helpdesk')}
           >
-            <span className="icon">🛠️</span>
             <span>IT Helpdesk</span>
           </button>
 
@@ -1574,7 +1564,6 @@ const API_BASE_URL = isProduction
             className={`sidebar-btn parent ${expandedSections.scheduling ? 'expanded' : ''}`}
             onClick={() => toggleSection('scheduling')}
           >
-            <span className="icon">📅</span>
             <span>Scheduling Settings</span>
             <span className="expand-icon">{expandedSections.scheduling ? '▼' : '▶'}</span>
           </button>
@@ -1605,14 +1594,12 @@ const API_BASE_URL = isProduction
             className={`sidebar-btn ${activeSection === 'notifications' ? 'active' : ''}`}
             onClick={() => setActiveSection('notifications')}
           >
-            <span className="icon">🔔</span>
             <span>Notifications</span>
           </button>
           <button
             className={`sidebar-btn ${activeSection === 'data-management' ? 'active' : ''}`}
             onClick={() => navigate('/data-upload')}
           >
-            <span className="icon">📊</span>
             <span>Data Management</span>
           </button>
 
@@ -1621,7 +1608,6 @@ const API_BASE_URL = isProduction
             className={`sidebar-btn parent ${expandedSections.masterAdmin ? 'expanded' : ''}`}
             onClick={() => toggleSection('masterAdmin')}
           >
-            <span className="icon">👑</span>
             <span>Master Administrator</span>
             <span className="expand-icon">{expandedSections.masterAdmin ? '▼' : '▶'}</span>
           </button>
@@ -1667,71 +1653,195 @@ const API_BASE_URL = isProduction
           {/* MARKETING */}
           {activeSection === 'marketing' && (
             <div className="integration-detail-section">
-              <h2>📣 Marketing</h2>
+              <h2>Marketing</h2>
               <p className="section-description">
-                Manage your marketing assets and landing pages
+                Create and manage your marketing campaigns
               </p>
 
-              <div className="marketing-section">
-                <h3>🌐 Landing Pages</h3>
-                <p>Active landing pages for lead generation</p>
+              {/* Marketing Tabs */}
+              <div className="marketing-tabs" style={{ display: 'flex', gap: '0', borderBottom: '1px solid #e5e7eb', marginBottom: '24px' }}>
+                <button
+                  onClick={() => setMarketingTab('landing-pages')}
+                  style={{
+                    padding: '12px 24px',
+                    background: 'none',
+                    border: 'none',
+                    borderBottom: marketingTab === 'landing-pages' ? '2px solid #c9a227' : '2px solid transparent',
+                    color: marketingTab === 'landing-pages' ? '#c9a227' : '#6b7280',
+                    fontWeight: marketingTab === 'landing-pages' ? '600' : '400',
+                    cursor: 'pointer',
+                    fontSize: '14px'
+                  }}
+                >
+                  Landing Pages
+                </button>
+                <button
+                  onClick={() => setMarketingTab('email')}
+                  style={{
+                    padding: '12px 24px',
+                    background: 'none',
+                    border: 'none',
+                    borderBottom: marketingTab === 'email' ? '2px solid #c9a227' : '2px solid transparent',
+                    color: marketingTab === 'email' ? '#c9a227' : '#6b7280',
+                    fontWeight: marketingTab === 'email' ? '600' : '400',
+                    cursor: 'pointer',
+                    fontSize: '14px'
+                  }}
+                >
+                  Email
+                </button>
+                <button
+                  onClick={() => setMarketingTab('texting')}
+                  style={{
+                    padding: '12px 24px',
+                    background: 'none',
+                    border: 'none',
+                    borderBottom: marketingTab === 'texting' ? '2px solid #c9a227' : '2px solid transparent',
+                    color: marketingTab === 'texting' ? '#c9a227' : '#6b7280',
+                    fontWeight: marketingTab === 'texting' ? '600' : '400',
+                    cursor: 'pointer',
+                    fontSize: '14px'
+                  }}
+                >
+                  Texting
+                </button>
+                <button
+                  onClick={() => setMarketingTab('voicemail')}
+                  style={{
+                    padding: '12px 24px',
+                    background: 'none',
+                    border: 'none',
+                    borderBottom: marketingTab === 'voicemail' ? '2px solid #c9a227' : '2px solid transparent',
+                    color: marketingTab === 'voicemail' ? '#c9a227' : '#6b7280',
+                    fontWeight: marketingTab === 'voicemail' ? '600' : '400',
+                    cursor: 'pointer',
+                    fontSize: '14px'
+                  }}
+                >
+                  Voicemail
+                </button>
+              </div>
 
-                <div className="landing-pages-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px', marginTop: '20px' }}>
-                  <div className="landing-page-card" style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '20px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                      <span style={{ fontSize: '24px' }}>📝</span>
-                      <div>
+              {/* Landing Pages Tab */}
+              {marketingTab === 'landing-pages' && (
+                <div className="marketing-section">
+                  <h3>Active Landing Pages</h3>
+                  <p style={{ color: '#6b7280', marginBottom: '20px' }}>Landing pages for lead generation</p>
+
+                  <div className="landing-pages-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
+                    <div className="landing-page-card" style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '20px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                         <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>Buyer Application</h4>
                         <span style={{ fontSize: '12px', color: '#10b981', background: '#d1fae5', padding: '2px 8px', borderRadius: '4px' }}>Active</span>
                       </div>
+                      <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 16px 0' }}>
+                        Lead capture form for potential home buyers
+                      </p>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          onClick={() => navigate('/apply')}
+                          style={{ flex: 1, padding: '8px 16px', background: '#c9a227', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' }}
+                        >
+                          View Page
+                        </button>
+                        <button
+                          onClick={() => window.open('/apply', '_blank')}
+                          style={{ padding: '8px 12px', background: '#f3f4f6', color: '#374151', border: '1px solid #d1d5db', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' }}
+                        >
+                          ↗
+                        </button>
+                      </div>
                     </div>
-                    <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 16px 0' }}>
-                      Lead capture form for potential home buyers
-                    </p>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button
-                        onClick={() => navigate('/apply')}
-                        style={{ flex: 1, padding: '8px 16px', background: '#c9a227', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' }}
-                      >
-                        View Page
-                      </button>
-                      <button
-                        onClick={() => window.open('/apply', '_blank')}
-                        style={{ padding: '8px 12px', background: '#f3f4f6', color: '#374151', border: '1px solid #d1d5db', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' }}
-                      >
-                        ↗
-                      </button>
-                    </div>
-                  </div>
 
-                  <div className="landing-page-card" style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '20px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                      <span style={{ fontSize: '24px' }}>📊</span>
-                      <div>
+                    <div className="landing-page-card" style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '20px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
                         <h4 style={{ margin: 0, fontSize: '16px', fontWeight: '600' }}>Mortgage Planning Questionnaire</h4>
                         <span style={{ fontSize: '12px', color: '#10b981', background: '#d1fae5', padding: '2px 8px', borderRadius: '4px' }}>Active</span>
                       </div>
-                    </div>
-                    <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 16px 0' }}>
-                      Detailed questionnaire for mortgage planning
-                    </p>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <button
-                        onClick={() => navigate('/questionnaire')}
-                        style={{ flex: 1, padding: '8px 16px', background: '#c9a227', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' }}
-                      >
-                        View Page
-                      </button>
-                      <button
-                        onClick={() => window.open('/questionnaire', '_blank')}
-                        style={{ padding: '8px 12px', background: '#f3f4f6', color: '#374151', border: '1px solid #d1d5db', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' }}
-                      >
-                        ↗
-                      </button>
+                      <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 16px 0' }}>
+                        Detailed questionnaire for mortgage planning
+                      </p>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button
+                          onClick={() => navigate('/questionnaire')}
+                          style={{ flex: 1, padding: '8px 16px', background: '#c9a227', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' }}
+                        >
+                          View Page
+                        </button>
+                        <button
+                          onClick={() => window.open('/questionnaire', '_blank')}
+                          style={{ padding: '8px 12px', background: '#f3f4f6', color: '#374151', border: '1px solid #d1d5db', borderRadius: '6px', cursor: 'pointer', fontSize: '14px' }}
+                        >
+                          ↗
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
+
+              {/* Email Tab */}
+              {marketingTab === 'email' && (
+                <div className="marketing-section">
+                  <h3>Email Marketing</h3>
+                  <p style={{ color: '#6b7280', marginBottom: '20px' }}>Create and manage email marketing campaigns</p>
+
+                  <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '40px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>✉️</div>
+                    <h4 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: '600' }}>Email Templates Coming Soon</h4>
+                    <p style={{ color: '#6b7280', margin: '0 0 20px 0' }}>
+                      Create email templates for drip campaigns, newsletters, and automated follow-ups
+                    </p>
+                    <button
+                      style={{ padding: '10px 24px', background: '#c9a227', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', fontWeight: '500' }}
+                    >
+                      + Create Email Template
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Texting Tab */}
+              {marketingTab === 'texting' && (
+                <div className="marketing-section">
+                  <h3>Text Marketing</h3>
+                  <p style={{ color: '#6b7280', marginBottom: '20px' }}>Create and manage SMS marketing campaigns</p>
+
+                  <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '40px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>💬</div>
+                    <h4 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: '600' }}>SMS Templates Coming Soon</h4>
+                    <p style={{ color: '#6b7280', margin: '0 0 20px 0' }}>
+                      Create text message templates for quick client communication and marketing blasts
+                    </p>
+                    <button
+                      style={{ padding: '10px 24px', background: '#c9a227', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', fontWeight: '500' }}
+                    >
+                      + Create SMS Template
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Voicemail Tab */}
+              {marketingTab === 'voicemail' && (
+                <div className="marketing-section">
+                  <h3>Voicemail Drops</h3>
+                  <p style={{ color: '#6b7280', marginBottom: '20px' }}>Create and manage ringless voicemail campaigns</p>
+
+                  <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '40px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎤</div>
+                    <h4 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: '600' }}>Voicemail Templates Coming Soon</h4>
+                    <p style={{ color: '#6b7280', margin: '0 0 20px 0' }}>
+                      Record voicemail templates for ringless voicemail drops and automated outreach
+                    </p>
+                    <button
+                      style={{ padding: '10px 24px', background: '#c9a227', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '14px', fontWeight: '500' }}
+                    >
+                      + Record Voicemail
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

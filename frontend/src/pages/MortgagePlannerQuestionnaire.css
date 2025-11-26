@@ -1,0 +1,467 @@
+/* Mortgage Planner Questionnaire Styles */
+.questionnaire-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8eb 100%);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 40px 20px;
+}
+
+.questionnaire-container {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  max-width: 700px;
+  width: 100%;
+  padding: 40px;
+}
+
+/* Header */
+.questionnaire-header {
+  text-align: center;
+  margin-bottom: 32px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.team-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.logo-icon {
+  font-size: 48px;
+}
+
+.logo-text {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.team-name {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+.form-title {
+  font-size: 16px;
+  color: #b8860b;
+  font-weight: 600;
+}
+
+/* Progress Bar */
+.progress-container {
+  margin-bottom: 32px;
+}
+
+.progress-bar {
+  height: 8px;
+  background: #e0e0e0;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #b8860b 0%, #daa520 100%);
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  text-align: center;
+  margin-top: 8px;
+  font-size: 14px;
+  color: #666;
+}
+
+/* Step Content */
+.step-content {
+  min-height: 400px;
+}
+
+.step h2 {
+  font-size: 24px;
+  color: #1a1a1a;
+  margin-bottom: 8px;
+}
+
+.step-description {
+  color: #666;
+  margin-bottom: 24px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* Form Groups */
+.form-group {
+  margin-bottom: 24px;
+}
+
+.form-group label {
+  display: block;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 8px;
+  font-size: 15px;
+}
+
+.form-group input[type="text"],
+.form-group input[type="email"],
+.form-group input[type="tel"],
+.form-group select {
+  width: 100%;
+  padding: 14px 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 10px;
+  font-size: 16px;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  border-color: #b8860b;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(184, 134, 11, 0.1);
+}
+
+.form-group input::placeholder {
+  color: #aaa;
+}
+
+/* Radio Groups */
+.radio-group {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.radio-group.vertical {
+  flex-direction: column;
+}
+
+.radio-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 20px;
+  border: 2px solid #e0e0e0;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex: 1;
+  min-width: 120px;
+}
+
+.radio-option:hover {
+  border-color: #b8860b;
+  background: #fffbf2;
+}
+
+.radio-option.selected {
+  border-color: #b8860b;
+  background: #fffbf2;
+}
+
+.radio-option input[type="radio"] {
+  display: none;
+}
+
+.radio-option span {
+  font-size: 15px;
+  font-weight: 500;
+  color: #333;
+}
+
+.radio-option.large {
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 16px 20px;
+}
+
+.radio-option.large .option-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.radio-option .option-title {
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.radio-option .option-description {
+  font-size: 13px;
+  color: #666;
+  font-weight: 400;
+}
+
+/* Checkbox Grid */
+.checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.checkbox-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.checkbox-option:hover {
+  border-color: #b8860b;
+  background: #fffbf2;
+}
+
+.checkbox-option.selected {
+  border-color: #b8860b;
+  background: #fffbf2;
+}
+
+.checkbox-option input[type="checkbox"] {
+  display: none;
+}
+
+.checkbox-option .option-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.checkbox-option .option-title {
+  font-weight: 600;
+  color: #1a1a1a;
+  font-size: 14px;
+}
+
+.checkbox-option .option-description {
+  font-size: 12px;
+  color: #666;
+}
+
+/* Selected indicator for checkboxes */
+.checkbox-option::before {
+  content: '';
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.checkbox-option.selected::before {
+  content: '✓';
+  background: #b8860b;
+  border-color: #b8860b;
+  color: white;
+  font-size: 14px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Referral Note */
+.referral-note {
+  background: linear-gradient(135deg, #fffbf2 0%, #fff8e6 100%);
+  border: 1px solid #daa520;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  margin-top: 24px;
+}
+
+.referral-note .note-icon {
+  font-size: 24px;
+}
+
+.referral-note p {
+  margin: 0;
+  color: #5c4a1c;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Button Group */
+.button-group {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.btn-prev,
+.btn-next,
+.btn-submit {
+  padding: 14px 32px;
+  border-radius: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-prev {
+  background: white;
+  border: 2px solid #e0e0e0;
+  color: #666;
+}
+
+.btn-prev:hover {
+  border-color: #b8860b;
+  color: #b8860b;
+}
+
+.btn-next {
+  background: linear-gradient(135deg, #b8860b 0%, #daa520 100%);
+  border: none;
+  color: white;
+  margin-left: auto;
+}
+
+.btn-next:hover {
+  background: linear-gradient(135deg, #9a7209 0%, #c49619 100%);
+  transform: translateY(-1px);
+}
+
+.btn-next:disabled,
+.btn-submit:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-submit {
+  background: linear-gradient(135deg, #2e7d32 0%, #43a047 100%);
+  border: none;
+  color: white;
+  margin-left: auto;
+}
+
+.btn-submit:hover {
+  background: linear-gradient(135deg, #256b29 0%, #388e3c 100%);
+  transform: translateY(-1px);
+}
+
+/* Error Message */
+.error-message {
+  background: #fee;
+  border: 1px solid #fcc;
+  color: #c00;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-top: 16px;
+  font-size: 14px;
+}
+
+/* Success Message */
+.success-message {
+  text-align: center;
+  padding: 60px 40px;
+}
+
+.success-icon {
+  width: 80px;
+  height: 80px;
+  background: linear-gradient(135deg, #2e7d32 0%, #43a047 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 24px;
+  font-size: 40px;
+  color: white;
+}
+
+.success-message h2 {
+  font-size: 28px;
+  color: #1a1a1a;
+  margin-bottom: 16px;
+}
+
+.success-message p {
+  color: #666;
+  font-size: 16px;
+  line-height: 1.6;
+  margin-bottom: 12px;
+}
+
+/* Footer */
+.questionnaire-footer {
+  text-align: center;
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.questionnaire-footer p {
+  margin: 4px 0;
+  font-size: 12px;
+  color: #999;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .questionnaire-page {
+    padding: 20px 12px;
+  }
+
+  .questionnaire-container {
+    padding: 24px;
+  }
+
+  .team-logo {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .logo-text {
+    text-align: center;
+  }
+
+  .step h2 {
+    font-size: 20px;
+  }
+
+  .checkbox-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .radio-group {
+    flex-direction: column;
+  }
+
+  .radio-option {
+    flex: none;
+  }
+
+  .button-group {
+    flex-direction: column;
+  }
+
+  .btn-prev,
+  .btn-next,
+  .btn-submit {
+    width: 100%;
+    margin-left: 0;
+  }
+}
