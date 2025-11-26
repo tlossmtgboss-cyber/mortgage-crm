@@ -21826,6 +21826,97 @@ def init_db():
                     END $$;
                     """))
 
+                    # Add email_intake_id to tasks table for document intake
+                    conn.execute(text("""
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='tasks' AND column_name='email_intake_id') THEN
+                                ALTER TABLE tasks ADD COLUMN email_intake_id INTEGER;
+                            END IF;
+                        END $$;
+                    """))
+
+                    # Create email_intakes table for document intake
+                    conn.execute(text("""
+                        CREATE TABLE IF NOT EXISTS email_intakes (
+                            id SERIAL PRIMARY KEY,
+                            message_id VARCHAR UNIQUE,
+                            from_address VARCHAR NOT NULL,
+                            from_name VARCHAR,
+                            subject VARCHAR,
+                            body_preview TEXT,
+                            received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            matched_loan_id INTEGER REFERENCES loans(id),
+                            matched_lead_id INTEGER REFERENCES leads(id),
+                            match_status VARCHAR DEFAULT 'pending',
+                            match_confidence FLOAT,
+                            match_method VARCHAR,
+                            matched_by_user_id INTEGER REFERENCES users(id),
+                            matched_at TIMESTAMP,
+                            processing_status VARCHAR DEFAULT 'pending',
+                            processing_started_at TIMESTAMP,
+                            processing_completed_at TIMESTAMP,
+                            processing_error TEXT,
+                            raw_email_data JSON,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        );
+                        CREATE INDEX IF NOT EXISTS ix_email_intakes_match_status ON email_intakes(match_status);
+                        CREATE INDEX IF NOT EXISTS ix_email_intakes_received_at ON email_intakes(received_at);
+                    """))
+
+                    # Create attachment_intakes table
+                    conn.execute(text("""
+                        CREATE TABLE IF NOT EXISTS attachment_intakes (
+                            id SERIAL PRIMARY KEY,
+                            email_intake_id INTEGER NOT NULL REFERENCES email_intakes(id),
+                            filename VARCHAR NOT NULL,
+                            content_type VARCHAR,
+                            file_size INTEGER,
+                            storage_path VARCHAR,
+                            storage_url VARCHAR,
+                            classification VARCHAR,
+                            classification_confidence FLOAT,
+                            extracted_data JSON,
+                            processing_status VARCHAR DEFAULT 'pending',
+                            processing_error TEXT,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        );
+                        CREATE INDEX IF NOT EXISTS ix_attachment_intakes_email_intake_id ON attachment_intakes(email_intake_id);
+                    """))
+
+                    # Create classified_documents table
+                    conn.execute(text("""
+                        CREATE TABLE IF NOT EXISTS classified_documents (
+                            id SERIAL PRIMARY KEY,
+                            loan_id INTEGER REFERENCES loans(id),
+                            lead_id INTEGER REFERENCES leads(id),
+                            category VARCHAR NOT NULL,
+                            sub_category VARCHAR,
+                            document_name VARCHAR NOT NULL,
+                            file_path VARCHAR,
+                            file_url VARCHAR,
+                            file_size INTEGER,
+                            mime_type VARCHAR,
+                            upload_source VARCHAR DEFAULT 'manual',
+                            source_email_intake_id INTEGER REFERENCES email_intakes(id),
+                            source_attachment_id INTEGER REFERENCES attachment_intakes(id),
+                            extracted_data JSON,
+                            ai_classification_confidence FLOAT,
+                            verified_by_user_id INTEGER REFERENCES users(id),
+                            verified_at TIMESTAMP,
+                            expiration_date DATE,
+                            notes TEXT,
+                            version INTEGER DEFAULT 1,
+                            is_current BOOLEAN DEFAULT TRUE,
+                            created_by_id INTEGER REFERENCES users(id),
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        );
+                        CREATE INDEX IF NOT EXISTS ix_classified_documents_loan_id ON classified_documents(loan_id);
+                        CREATE INDEX IF NOT EXISTS ix_classified_documents_category ON classified_documents(category);
+                    """))
+
                     # Create api_keys table if it doesn't exist
                     conn.execute(text("""
                         CREATE TABLE IF NOT EXISTS api_keys (
