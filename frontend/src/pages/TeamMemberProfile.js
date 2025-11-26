@@ -9,7 +9,7 @@ import WorkflowMilestonesTab from '../components/WorkflowMilestonesTab';
 import './TeamMemberProfile.css';
 
 function TeamMemberProfile() {
-  const { id } = useParams();
+  const { userId: id } = useParams();
   const navigate = useNavigate();
   const [member, setMember] = useState(null);
   const [loading, setLoading] = useState(true);
