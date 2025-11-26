@@ -543,31 +543,24 @@ function AILandingPage() {
   const routeMessage = (message) => {
     const lower = message.toLowerCase();
 
-    // Coaching mode handlers
+    // Coaching mode handlers - let the AI orchestrator handle the response
     if (lower.includes('daily briefing') || lower.includes('top 3 priorities')) {
-      addMessage("Here's your daily briefing with your top 3 priorities:", 'assistant');
       showDailyView();
     } else if (lower.includes('pipeline audit') || lower.includes('bottlenecks')) {
-      addMessage("Let me audit your pipeline and identify any bottlenecks:", 'assistant');
       showPipelineReport();
     } else if (lower.includes('focus reset') || lower.includes('back on track')) {
-      addMessage("Let's reset your focus. Here are the most critical items that need your attention right now:", 'assistant');
       showDailyView();
     } else if (lower.includes('what should i do next') || lower.includes('priority decision')) {
       if (tasksCompleted) {
         showNextPriorities();
       } else {
-        addMessage("Based on your current workload, here's what you should focus on next:", 'assistant');
         showDailyView();
       }
     } else if (lower.includes('accountability review') || lower.includes('review my performance')) {
-      addMessage("Let's review your performance. Here's where you stand on your key metrics and tasks:", 'assistant');
       showPipelineReport();
     } else if (lower.includes('tough love') || lower.includes('inefficiencies')) {
-      addMessage("Alright, let's be direct. Here are the areas that need immediate attention:", 'assistant');
       showDailyView();
     } else if (lower.includes('teach me the process') || lower.includes('systemic thinking')) {
-      addMessage("Let me walk you through the systematic approach to managing your pipeline effectively:", 'assistant');
       showDailyView();
     } else if (lower.includes('have a question') || lower.includes('ask a question')) {
       addMessage("I'm here to help! What specific question do you have about your pipeline, leads, or tasks?", 'assistant');
@@ -730,17 +723,16 @@ function AILandingPage() {
   };
 
   const showDailyView = async () => {
-    addMessage("I'll show you your daily overview including all tasks, follow-ups, and reconciliation items scheduled for today.", 'assistant');
-
     try {
-      // Query real tasks from the API
-      const response = await aiAPI.processCommand("Show me my tasks for today", {
+      // Query real tasks from the AI orchestrator
+      const response = await aiAPI.processCommand("What are my priorities and tasks for today?", {
         session_id: sessionId,
         conversation_context: conversationHistory.slice(-5)
       });
 
-      if (response.intent === 'DAILY_VIEW' && response.data) {
-        showDailyViewWithData(response.data, null);
+      // If we got a response from the orchestrator, display it
+      if (response.explanation || response.response) {
+        addMessage(response.explanation || response.response, 'assistant');
         return;
       }
 
@@ -850,8 +842,26 @@ function AILandingPage() {
     addMessage('voicemail_campaign', 'assistant', { isSpecialContent: true, contentType: 'voicemail_campaign' });
   };
 
-  const showPipelineReport = () => {
-    addMessage('pipeline_report', 'assistant', { isSpecialContent: true, contentType: 'pipeline_report' });
+  const showPipelineReport = async () => {
+    try {
+      // Query pipeline info from the AI orchestrator
+      const response = await aiAPI.processCommand("Give me a pipeline audit and performance review", {
+        session_id: sessionId,
+        conversation_context: conversationHistory.slice(-5)
+      });
+
+      // If we got a response from the orchestrator, display it
+      if (response.explanation || response.response) {
+        addMessage(response.explanation || response.response, 'assistant');
+        return;
+      }
+
+      // Fallback to special content panel
+      addMessage('pipeline_report', 'assistant', { isSpecialContent: true, contentType: 'pipeline_report' });
+    } catch (error) {
+      console.error('Error fetching pipeline report:', error);
+      addMessage('pipeline_report', 'assistant', { isSpecialContent: true, contentType: 'pipeline_report' });
+    }
   };
 
   const executeAction = async (actionId, modifications = {}) => {
