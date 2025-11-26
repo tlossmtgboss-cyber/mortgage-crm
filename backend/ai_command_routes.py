@@ -2754,11 +2754,18 @@ def get_daily_summary(db: Session, user_id: int) -> Dict[str, Any]:
 
     today = datetime.now().date()
 
-    # Get ALL pending tasks (not just today's)
+    # Get ALL pending tasks (not just today's) with lead/loan info
     all_tasks = db.query(Task).filter(
         Task.owner_id == user_id,
         Task.status != 'completed'
     ).order_by(Task.priority.desc(), Task.due_date.asc()).limit(20).all()
+
+    # Build a map of lead_id -> lead_name for enriching task display
+    lead_ids = [t.lead_id for t in all_tasks if t.lead_id]
+    lead_map = {}
+    if lead_ids:
+        leads_for_tasks = db.query(Lead).filter(Lead.id.in_(lead_ids)).all()
+        lead_map = {l.id: l.name for l in leads_for_tasks}
 
     # Separate today's tasks and overdue tasks
     today_tasks = [t for t in all_tasks if t.due_date and t.due_date.date() == today]
@@ -2813,11 +2820,22 @@ def get_daily_summary(db: Session, user_id: int) -> Dict[str, Any]:
     # Build follow-ups from leads needing attention
     follow_ups = []
 
+    # Helper function to enrich task title with lead name
+    def get_enriched_task_title(task):
+        title = task.title
+        lead_name = lead_map.get(task.lead_id) if task.lead_id else None
+        # If task title is generic and we have a lead name, add context
+        if lead_name and ('lead' in title.lower() or 'follow' in title.lower() or 'meeting' in title.lower()):
+            return f"{title} - {lead_name}"
+        elif lead_name:
+            return f"{title} ({lead_name})"
+        return title
+
     # Overdue tasks need immediate attention
     if overdue_tasks:
         follow_ups.append({
             "type": "Overdue Tasks",
-            "items": [f"{t.title} (Due: {t.due_date.strftime('%m/%d') if t.due_date else 'N/A'})" for t in overdue_tasks[:5]],
+            "items": [f"{get_enriched_task_title(t)} (Due: {t.due_date.strftime('%m/%d') if t.due_date else 'N/A'})" for t in overdue_tasks[:5]],
             "priority": "High"
         })
 
@@ -2884,11 +2902,12 @@ def get_daily_summary(db: Session, user_id: int) -> Dict[str, Any]:
         "tasks": [
             {
                 "id": t.id,
-                "title": t.title,
+                "title": get_enriched_task_title(t),
                 "description": t.description,
                 "priority": t.priority,
                 "due_date": t.due_date.isoformat() if t.due_date else None,
-                "lead_id": t.lead_id
+                "lead_id": t.lead_id,
+                "lead_name": lead_map.get(t.lead_id) if t.lead_id else None
             } for t in all_tasks[:10]
         ],
         "follow_ups": follow_ups,
