@@ -89,12 +89,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 20px;
+  height: 20px;
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-base);
-  font-size: 20px;
+  font-size: 10px;
   text-decoration: none;
   transition: all 250ms ease;
 }
