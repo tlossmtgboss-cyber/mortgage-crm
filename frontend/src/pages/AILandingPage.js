@@ -286,7 +286,33 @@ function AILandingPage() {
     setEmailMode(true);
     setEmailRecipient(null);
     setEmailRecipientSearch('');
-    setEmailSubject('');
+
+    // Auto-generate subject based on structured content type
+    let autoSubject = '';
+    if (structuredContent) {
+      if (structuredContent.type === 'task_priorities') {
+        autoSubject = 'Your Priority Tasks & Action Items';
+      } else if (structuredContent.type === 'pipeline_report') {
+        autoSubject = 'Pipeline Analysis Report';
+      } else if (structuredContent.type === 'search_results') {
+        autoSubject = 'Search Results Summary';
+      } else if (structuredContent.content) {
+        // Extract subject from first line or heading
+        const firstLine = structuredContent.content.split('\n')[0];
+        // Remove markdown formatting
+        autoSubject = firstLine
+          .replace(/^#+\s*/, '')  // Remove heading markers
+          .replace(/\*\*/g, '')    // Remove bold markers
+          .replace(/\*/g, '')      // Remove italic markers
+          .trim();
+        // Truncate if too long
+        if (autoSubject.length > 60) {
+          autoSubject = autoSubject.substring(0, 57) + '...';
+        }
+      }
+    }
+    setEmailSubject(autoSubject || 'Information from Your Mortgage CRM');
+
     // Pre-populate body with structured content if available
     if (structuredContent?.content) {
       setEmailBody(structuredContent.content);
