@@ -501,8 +501,8 @@ function PipelineEfficiency() {
   };
 
   const handleBottleneckClick = (bottleneck) => {
-    setSelectedBottleneck(bottleneck);
-    setShowDrilldownModal(true);
+    // Navigate to bottleneck loans page
+    navigate(`/efficiency/bottleneck/${bottleneck.id}`);
   };
 
   const handleCloseDrilldown = () => {
@@ -517,8 +517,9 @@ function PipelineEfficiency() {
   };
 
   const handleTeamMemberClick = (member) => {
-    setSelectedTeamMember(member);
-    setShowTeamDrilldown(true);
+    // Navigate to team role employees page
+    const roleSlug = member.role.toLowerCase().replace(/\s+/g, '-');
+    navigate(`/efficiency/team/${roleSlug}`);
   };
 
   const handleCloseTeamDrilldown = () => {

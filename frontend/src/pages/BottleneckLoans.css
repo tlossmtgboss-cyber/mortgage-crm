@@ -1,0 +1,453 @@
+/* Bottleneck Loans Page */
+.bottleneck-loans-page {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+  background: var(--color-bg-base, #FCFCF9);
+  min-height: 100vh;
+}
+
+.loading-spinner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  font-size: 16px;
+  color: var(--color-text-secondary, #666);
+}
+
+.error-state {
+  text-align: center;
+  padding: 60px 24px;
+}
+
+.error-state h2 {
+  color: #C0152F;
+  margin-bottom: 12px;
+}
+
+.error-state button {
+  margin-top: 24px;
+  padding: 12px 24px;
+  background: var(--color-primary, #217F8D);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+/* Header */
+.bottleneck-header-section {
+  margin-bottom: 32px;
+}
+
+.header-nav {
+  margin-bottom: 20px;
+}
+
+.btn-back {
+  padding: 10px 16px;
+  background: white;
+  border: 1px solid var(--color-border, rgba(139, 92, 68, 0.15));
+  border-radius: 8px;
+  color: var(--color-text-primary, #1a1a1a);
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.btn-back:hover {
+  background: var(--color-bg-hover, rgba(139, 92, 68, 0.08));
+  border-color: var(--color-primary, #217F8D);
+  color: var(--color-primary, #217F8D);
+}
+
+.bottleneck-header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 32px;
+  flex-wrap: wrap;
+  background: white;
+  padding: 28px;
+  border-radius: 16px;
+  border: 1px solid var(--color-border-light, rgba(139, 92, 68, 0.08));
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+.bottleneck-title-section {
+  flex: 1;
+}
+
+.bottleneck-badge-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.severity-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.severity-badge.severity-high {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.severity-badge.severity-medium {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.severity-badge.severity-low {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.stage-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--color-bg-secondary, rgba(139, 92, 68, 0.08));
+  color: var(--color-text-secondary, #666);
+}
+
+.bottleneck-title-section h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--color-text-primary, #1a1a1a);
+  margin: 0 0 8px 0;
+}
+
+.bottleneck-description {
+  font-size: 15px;
+  color: var(--color-text-secondary, #666);
+  margin: 0;
+}
+
+.bottleneck-metrics {
+  display: flex;
+  gap: 20px;
+}
+
+.metric-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 20px 28px;
+  text-align: center;
+  min-width: 120px;
+}
+
+.metric-box.warning {
+  background: #fef3c7;
+  border-color: #fcd34d;
+}
+
+.metric-box .metric-number {
+  display: block;
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--color-text-primary, #1a1a1a);
+  line-height: 1.2;
+}
+
+.metric-box.warning .metric-number {
+  color: #92400e;
+}
+
+.metric-box .metric-label {
+  font-size: 12px;
+  color: var(--color-text-secondary, #666);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+}
+
+/* Loans by Processor */
+.loans-by-processor {
+  margin-bottom: 32px;
+}
+
+.loans-by-processor h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary, #1a1a1a);
+  margin: 0 0 8px 0;
+}
+
+.section-description {
+  font-size: 14px;
+  color: var(--color-text-secondary, #666);
+  margin: 0 0 24px 0;
+}
+
+.processor-group {
+  margin-bottom: 28px;
+}
+
+.processor-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid var(--color-border-light, rgba(139, 92, 68, 0.1));
+}
+
+.processor-header h3 {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--color-text-primary, #1a1a1a);
+  margin: 0;
+}
+
+.loan-count {
+  background: var(--color-primary, #217F8D);
+  color: white;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.loans-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+}
+
+.loan-card {
+  background: white;
+  border: 1px solid var(--color-border-light, rgba(139, 92, 68, 0.1));
+  border-radius: 12px;
+  padding: 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.loan-card:hover {
+  border-color: var(--color-primary, #217F8D);
+  box-shadow: 0 4px 16px rgba(33, 127, 141, 0.12);
+  transform: translateY(-2px);
+}
+
+.loan-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.loan-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.loan-number {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-primary, #217F8D);
+  font-family: var(--font-mono, monospace);
+}
+
+.borrower-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--color-text-primary, #1a1a1a);
+}
+
+.loan-amount {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text-primary, #1a1a1a);
+}
+
+.missing-items {
+  margin-bottom: 16px;
+  padding: 14px;
+  background: #fef2f2;
+  border-radius: 8px;
+}
+
+.missing-items h4 {
+  font-size: 12px;
+  font-weight: 600;
+  color: #991b1b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 8px 0;
+}
+
+.missing-items ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.missing-items li {
+  font-size: 13px;
+  color: #7f1d1d;
+  margin-bottom: 4px;
+}
+
+.missing-items li:last-child {
+  margin-bottom: 0;
+}
+
+.loan-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border-light, rgba(139, 92, 68, 0.1));
+}
+
+.delay-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.delay-badge {
+  font-size: 13px;
+  font-weight: 600;
+  color: #dc2626;
+}
+
+.last-contact {
+  font-size: 12px;
+  color: var(--color-text-secondary, #666);
+}
+
+.btn-create-task {
+  padding: 8px 16px;
+  background: var(--color-primary, #217F8D);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-create-task:hover {
+  background: #1a6670;
+}
+
+/* Action Summary */
+.action-summary {
+  margin-top: 40px;
+}
+
+.action-summary h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary, #1a1a1a);
+  margin: 0 0 20px 0;
+}
+
+.actions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.action-card {
+  background: white;
+  border: 1px solid var(--color-border-light, rgba(139, 92, 68, 0.1));
+  border-radius: 12px;
+  padding: 24px;
+  text-align: center;
+}
+
+.action-icon {
+  font-size: 36px;
+  margin-bottom: 12px;
+}
+
+.action-card h3 {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--color-text-primary, #1a1a1a);
+  margin: 0 0 8px 0;
+}
+
+.action-card p {
+  font-size: 14px;
+  color: var(--color-text-secondary, #666);
+  margin: 0 0 16px 0;
+  line-height: 1.5;
+}
+
+.btn-action {
+  padding: 10px 24px;
+  background: white;
+  color: var(--color-primary, #217F8D);
+  border: 2px solid var(--color-primary, #217F8D);
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-action:hover {
+  background: var(--color-primary, #217F8D);
+  color: white;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .bottleneck-header-content {
+    flex-direction: column;
+  }
+
+  .bottleneck-metrics {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .loans-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .bottleneck-loans-page {
+    padding: 16px;
+  }
+
+  .bottleneck-header-content {
+    padding: 20px;
+  }
+
+  .bottleneck-title-section h1 {
+    font-size: 22px;
+  }
+
+  .bottleneck-metrics {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .metric-box {
+    padding: 16px 20px;
+  }
+
+  .actions-grid {
+    grid-template-columns: 1fr;
+  }
+}
