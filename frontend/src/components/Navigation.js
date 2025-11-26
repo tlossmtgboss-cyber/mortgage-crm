@@ -131,12 +131,6 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
 
         <div className="nav-actions">
           <NotificationBell />
-          <button
-            className={`nav-link coach-link ${coachOpen ? 'active' : ''}`}
-            onClick={onToggleCoach}
-          >
-            🏆 Coach
-          </button>
           {/* My Profile and Permissions moved to Settings page */}
           {(userRole === 'manager' || userRole === 'management') && (
             <Link
