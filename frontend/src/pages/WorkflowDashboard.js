@@ -312,9 +312,114 @@ function WorkflowAlerts({ alerts, onAcknowledge, onRefresh }) {
 
 // Theme Day Manager Component
 function ThemeDayManager() {
-  const [theme, setTheme] = useState(null);
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedDay, setSelectedDay] = useState(null);
+
+  // Weekly marketing theme schedule
+  const weeklyThemes = [
+    {
+      day: 'Monday',
+      dayNum: 1,
+      name: 'Motivation Monday',
+      icon: '💪',
+      focus: 'inspiration',
+      color: '#4CAF50',
+      description: 'Start the week with motivational content about homeownership dreams',
+      suggestedContent: [
+        'Share homeownership success stories',
+        'Post motivational quotes about achieving dreams',
+        'Highlight first-time homebuyer victories'
+      ]
+    },
+    {
+      day: 'Tuesday',
+      dayNum: 2,
+      name: 'Tip Tuesday',
+      icon: '💡',
+      focus: 'education',
+      color: '#2196F3',
+      description: 'Educational tips about mortgages, credit, and homebuying',
+      suggestedContent: [
+        'Credit score improvement tips',
+        'Down payment saving strategies',
+        'First-time homebuyer program info'
+      ]
+    },
+    {
+      day: 'Wednesday',
+      dayNum: 3,
+      name: 'Wisdom Wednesday',
+      icon: '🧠',
+      focus: 'advice',
+      color: '#9C27B0',
+      description: 'Share expert advice and market insights',
+      suggestedContent: [
+        'Market update analysis',
+        'Rate trend predictions',
+        'Expert Q&A responses'
+      ]
+    },
+    {
+      day: 'Thursday',
+      dayNum: 4,
+      name: 'Throwback Thursday',
+      icon: '📸',
+      focus: 'testimonials',
+      color: '#FF9800',
+      description: 'Feature past client success stories and closings',
+      suggestedContent: [
+        'Client testimonial videos',
+        'Before/after home photos',
+        'Anniversary check-ins with past clients'
+      ]
+    },
+    {
+      day: 'Friday',
+      dayNum: 5,
+      name: 'Feature Friday',
+      icon: '🏠',
+      focus: 'listings',
+      color: '#E91E63',
+      description: 'Highlight featured properties and new listings',
+      suggestedContent: [
+        'New listing announcements',
+        'Open house reminders',
+        'Property highlight videos'
+      ]
+    },
+    {
+      day: 'Saturday',
+      dayNum: 6,
+      name: 'Saturday Showcase',
+      icon: '🎬',
+      focus: 'lifestyle',
+      color: '#00BCD4',
+      description: 'Showcase lifestyle content and community events',
+      suggestedContent: [
+        'Local community events',
+        'Home improvement ideas',
+        'Weekend open house tours'
+      ]
+    },
+    {
+      day: 'Sunday',
+      dayNum: 0,
+      name: 'Sunday Planning',
+      icon: '📅',
+      focus: 'planning',
+      color: '#607D8B',
+      description: 'Help clients plan their week ahead',
+      suggestedContent: [
+        'Week ahead preview',
+        'Rate watch updates',
+        'Schedule appointment reminders'
+      ]
+    }
+  ];
+
+  const today = new Date().getDay();
+  const todayTheme = weeklyThemes.find(t => t.dayNum === today) || weeklyThemes[2];
 
   useEffect(() => {
     fetchThemeData();
@@ -325,17 +430,8 @@ function ThemeDayManager() {
       const token = localStorage.getItem('token');
       const headers = { 'Authorization': `Bearer ${token}` };
 
-      const [themeRes, messagesRes] = await Promise.all([
-        fetch(`${API_BASE}/api/v1/workflow/theme-days/today`, { headers }),
-        fetch(`${API_BASE}/api/v1/workflow/theme-days/scheduled?limit=20`, { headers })
-      ]);
-
-      const [themeData, messagesData] = await Promise.all([
-        themeRes.json(),
-        messagesRes.json()
-      ]);
-
-      setTheme(themeData);
+      const messagesRes = await fetch(`${API_BASE}/api/v1/workflow/theme-days/scheduled?limit=20`, { headers });
+      const messagesData = await messagesRes.json();
       setMessages(messagesData.messages || []);
     } catch (error) {
       console.error('Error fetching theme data:', error);
@@ -352,8 +448,10 @@ function ThemeDayManager() {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       fetchThemeData();
+      alert('Messages scheduled for today\'s theme!');
     } catch (error) {
       console.error('Error scheduling messages:', error);
+      alert('Failed to schedule messages');
     }
   };
 
@@ -362,23 +460,115 @@ function ThemeDayManager() {
   return (
     <div className="theme-day-section">
       <div className="section-header">
-        <h3>Theme Days</h3>
+        <h3>Theme Days - Weekly Marketing Calendar</h3>
         <button onClick={scheduleMessages} className="btn-primary">
           Schedule Today's Messages
         </button>
       </div>
 
-      <div className="theme-today">
+      {/* Today's Theme Highlight */}
+      <div className="theme-today-highlight" style={{ marginBottom: '24px' }}>
         <h4>Today's Theme</h4>
-        <div className="theme-card">
-          <div className="theme-name">{theme?.name || 'No theme'}</div>
-          <div className="theme-focus">Focus: {theme?.focus || 'general'}</div>
+        <div
+          className="theme-card-large"
+          style={{
+            backgroundColor: todayTheme.color,
+            color: 'white',
+            padding: '20px',
+            borderRadius: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '16px'
+          }}
+        >
+          <span style={{ fontSize: '48px' }}>{todayTheme.icon}</span>
+          <div>
+            <div style={{ fontSize: '24px', fontWeight: 'bold' }}>{todayTheme.name}</div>
+            <div style={{ opacity: 0.9, marginTop: '4px' }}>{todayTheme.description}</div>
+            <div style={{ marginTop: '12px', fontSize: '14px', opacity: 0.8 }}>
+              Focus: {todayTheme.focus}
+            </div>
+          </div>
         </div>
       </div>
 
+      {/* Weekly Theme Grid */}
+      <h4 style={{ marginBottom: '16px' }}>Weekly Theme Schedule</h4>
+      <div className="theme-week-grid" style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(7, 1fr)',
+        gap: '12px',
+        marginBottom: '24px'
+      }}>
+        {weeklyThemes.map(theme => (
+          <div
+            key={theme.day}
+            onClick={() => setSelectedDay(selectedDay === theme.day ? null : theme.day)}
+            style={{
+              backgroundColor: theme.dayNum === today ? theme.color : '#f5f5f5',
+              color: theme.dayNum === today ? 'white' : '#333',
+              padding: '16px 12px',
+              borderRadius: '8px',
+              textAlign: 'center',
+              cursor: 'pointer',
+              transition: 'transform 0.2s, box-shadow 0.2s',
+              border: selectedDay === theme.day ? `3px solid ${theme.color}` : '3px solid transparent',
+              boxShadow: theme.dayNum === today ? '0 4px 12px rgba(0,0,0,0.2)' : 'none'
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.transform = 'translateY(-2px)';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = theme.dayNum === today ? '0 4px 12px rgba(0,0,0,0.2)' : 'none';
+            }}
+          >
+            <div style={{ fontSize: '24px', marginBottom: '8px' }}>{theme.icon}</div>
+            <div style={{ fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>{theme.day}</div>
+            <div style={{ fontSize: '11px', opacity: 0.8 }}>{theme.name.split(' ')[0]}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Selected Day Details */}
+      {selectedDay && (
+        <div style={{
+          backgroundColor: '#f8f9fa',
+          padding: '20px',
+          borderRadius: '8px',
+          marginBottom: '24px',
+          borderLeft: `4px solid ${weeklyThemes.find(t => t.day === selectedDay)?.color}`
+        }}>
+          {(() => {
+            const theme = weeklyThemes.find(t => t.day === selectedDay);
+            return (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                  <span style={{ fontSize: '32px' }}>{theme.icon}</span>
+                  <div>
+                    <h4 style={{ margin: 0 }}>{theme.name}</h4>
+                    <p style={{ margin: '4px 0 0 0', color: '#666' }}>{theme.description}</p>
+                  </div>
+                </div>
+                <div>
+                  <strong>Suggested Content Ideas:</strong>
+                  <ul style={{ marginTop: '8px', paddingLeft: '20px' }}>
+                    {theme.suggestedContent.map((content, idx) => (
+                      <li key={idx} style={{ marginBottom: '4px' }}>{content}</li>
+                    ))}
+                  </ul>
+                </div>
+              </>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* Scheduled Messages */}
       <h4>Scheduled Messages</h4>
       {messages.length === 0 ? (
-        <p className="empty-state">No scheduled messages</p>
+        <p className="empty-state">No scheduled messages. Click "Schedule Today's Messages" to create theme-based outreach.</p>
       ) : (
         <table className="workflow-table">
           <thead>
