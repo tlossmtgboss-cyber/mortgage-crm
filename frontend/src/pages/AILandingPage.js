@@ -753,9 +753,7 @@ function AILandingPage() {
                   ...msg,
                   content: fullResponse,
                   isStreaming: false,
-                  statusText: null,
-                  isSpecialContent: true,
-                  contentType: 'chat_response'
+                  statusText: null
                 }
               : msg
           ));
