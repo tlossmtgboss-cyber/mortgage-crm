@@ -532,19 +532,27 @@ function AILandingPage() {
     // - "Name ($XXX,XXX)" or Name ($XXX,XXX)
     // - "Name - $XXX,XXX"
     const borrowerPatterns = [
-      /\*\*([^*]+)\*\*\s*[-–]\s*\$([\d,]+)/g,                                      // **Name** - $amount (TESTED, WORKS)
-      /\*\*([^*]+)\*\*[^$\n]*\$([\d,]+)/g,                                         // **Name** ... $amount on same line
-      /([A-Z][a-z]+\s+[A-Z][a-z]+)\s*[-–]\s*\$([\d,]+)/g,                          // Name - $amount (plain)
+      /\*\*([^*]+)\*\*\s*\(\$?([\d,]+)\)/g,                                        // **Name** ($amount) - MOST COMMON
+      /\*\*([^*]+)\*\*\s*[-–]\s*\$([\d,]+)/g,                                      // **Name** - $amount
+      /[-•]\s*\*\*([^*]+)\*\*\s*\(\$?([\d,]+)\)/g,                                 // - **Name** ($amount)
       /([A-Z][a-z]+\s+[A-Z][a-z]+)\s*\(\$?([\d,]+)\)/g,                            // Name ($amount)
+      /([A-Z][a-z]+\s+[A-Z][a-z]+)\s*[-–]\s*\$([\d,]+)/g,                          // Name - $amount
     ];
 
     const seenBorrowers = new Set();
+    // Pattern to validate person names (First Last or First M Last)
+    const personNamePattern = /^[A-Z][a-z]+\s+(?:[A-Z]\.?\s+)?[A-Z][a-z]+$/;
 
     for (const borrowerPattern of borrowerPatterns) {
       let borrowerMatch;
       while ((borrowerMatch = borrowerPattern.exec(responseText)) !== null) {
         const name = borrowerMatch[1].trim();
         const amount = borrowerMatch[2].replace(/,/g, '');
+
+        // Must look like a person's name (First Last pattern)
+        if (!personNamePattern.test(name)) {
+          continue;
+        }
 
         // Skip duplicates and invalid names (headers, action items, etc.)
         const lowerName = name.toLowerCase();
@@ -556,6 +564,9 @@ function AILandingPage() {
             lowerName.includes('prioritize') ||
             lowerName.includes('follow') ||
             lowerName.includes('regular') ||
+            lowerName.includes('underwriting') ||
+            lowerName.includes('received') ||
+            lowerName.includes('actionable') ||
             lowerName === 'action' ||
             name.length < 5 ||
             name.length > 30) {
