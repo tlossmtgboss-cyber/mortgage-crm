@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { loansAPI, activitiesAPI } from '../services/api';
+import { loansAPI, activitiesAPI, circleOfCashflowAPI } from '../services/api';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import VoicemailDrop from '../components/VoicemailDrop';
 import SMSModal from '../components/SMSModal';
@@ -10,6 +10,7 @@ import CreateTaskModal from '../components/CreateTaskModal';
 import AppointmentModal from '../components/AppointmentModal';
 import EscalationModal from '../components/EscalationModal';
 import TeamAssignment from '../components/TeamAssignment';
+import EmploymentTab from '../components/EmploymentTab';
 import RateLockRecommendation from '../components/RateLockRecommendation';
 import './LeadDetail.css';
 
@@ -70,12 +71,195 @@ function LoanDetail() {
   const [isListening, setIsListening] = useState(false);
   const [emailHistory, setEmailHistory] = useState([]);
   const [selectedEmail, setSelectedEmail] = useState(null);
+  const [noteText, setNoteText] = useState('');
+  const [noteLoading, setNoteLoading] = useState(false);
+
+  // Circle of Cashflow state
+  const [cashflowOpportunities, setCashflowOpportunities] = useState([]);
+  const [cashflowReferrals, setCashflowReferrals] = useState([]);
+  const [cashflowPartners, setCashflowPartners] = useState([]);
+  const [cashflowLoading, setCashflowLoading] = useState(false);
+
+  // Circle of Influence state
+  const [circleContacts, setCircleContacts] = useState([]);
+  const [showCircleModal, setShowCircleModal] = useState(false);
+  const [circleForm, setCircleForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    type: 'Co-Borrower',
+    notes: ''
+  });
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+
+  const circleContactTypes = [
+    { value: 'Co-Borrower', icon: '👥' },
+    { value: 'Real Estate Agent', icon: '🏡' },
+    { value: 'Family Member', icon: '👨‍👩‍👧' },
+    { value: 'Attorney', icon: '⚖️' },
+    { value: 'Financial Advisor', icon: '💼' },
+    { value: 'Insurance Agent', icon: '🛡️' },
+    { value: 'Accountant', icon: '📊' },
+    { value: 'Other Contact', icon: '🤝' }
+  ];
+
+  // Custom fields state
+  const [customFields, setCustomFields] = useState([]);
+  const [showAddFieldModal, setShowAddFieldModal] = useState(false);
+  const [newFieldName, setNewFieldName] = useState('');
 
   useEffect(() => {
     loadLoanData();
     loadEmailHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // Custom field handlers
+  const handleAddCustomField = () => {
+    if (!newFieldName.trim()) return;
+    const fieldKey = newFieldName.toLowerCase().replace(/\s+/g, '_');
+    setCustomFields([...customFields, { key: fieldKey, label: newFieldName }]);
+    setNewFieldName('');
+    setShowAddFieldModal(false);
+  };
+
+  const handleRemoveCustomField = (fieldKey) => {
+    setCustomFields(customFields.filter(f => f.key !== fieldKey));
+  };
+
+  // Circle of Influence handlers
+  const searchContacts = async (query) => {
+    if (query.length < 2) {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+    setSearchLoading(true);
+    try {
+      const response = await loansAPI.search(query);
+      setSearchResults(response.loans || []);
+      setShowSearchResults(true);
+    } catch (error) {
+      console.error('Search error:', error);
+      setSearchResults([]);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const handleNameChange = (e) => {
+    const value = e.target.value;
+    setCircleForm({...circleForm, name: value});
+    searchContacts(value);
+  };
+
+  const selectSearchResult = (contact) => {
+    setCircleForm({
+      ...circleForm,
+      name: contact.borrower_name || contact.name,
+      email: contact.borrower_email || contact.email || '',
+      phone: contact.borrower_phone || contact.phone || ''
+    });
+    setShowSearchResults(false);
+    setSearchResults([]);
+  };
+
+  const handleAddCircleContactSubmit = () => {
+    if (!circleForm.name.trim()) return;
+
+    if (circleForm.editId) {
+      setCircleContacts(circleContacts.map(c =>
+        c.id === circleForm.editId
+          ? { ...c, name: circleForm.name, email: circleForm.email, phone: circleForm.phone, type: circleForm.type, notes: circleForm.notes }
+          : c
+      ));
+    } else {
+      const newContact = {
+        id: Date.now(),
+        loanId: searchResults.find(r => (r.borrower_name || r.name) === circleForm.name)?.id || null,
+        ...circleForm
+      };
+      setCircleContacts([...circleContacts, newContact]);
+    }
+
+    setCircleForm({ name: '', email: '', phone: '', type: 'Co-Borrower', notes: '' });
+    setShowCircleModal(false);
+    setShowSearchResults(false);
+  };
+
+  const handleDeleteCircleContact = (contactId) => {
+    setCircleContacts(circleContacts.filter(c => c.id !== contactId));
+  };
+
+  const handleEditCircleContact = (contact) => {
+    setCircleForm({
+      name: contact.name,
+      email: contact.email || '',
+      phone: contact.phone || '',
+      type: contact.type,
+      notes: contact.notes || '',
+      editId: contact.id,
+      loanId: contact.loanId
+    });
+    setShowCircleModal(true);
+  };
+
+  const getContactIcon = (type) => {
+    const found = circleContactTypes.find(t => t.value === type);
+    return found ? found.icon : '🤝';
+  };
+
+  // Load Circle of Cashflow data
+  const loadCircleOfCashflow = async () => {
+    try {
+      setCashflowLoading(true);
+      const [oppsData, refsData, partnersData] = await Promise.all([
+        circleOfCashflowAPI.getOpportunities(id),
+        circleOfCashflowAPI.getReferrals(id),
+        circleOfCashflowAPI.getPartners()
+      ]);
+      setCashflowOpportunities(oppsData.opportunities || []);
+      setCashflowReferrals(refsData.referrals || []);
+      setCashflowPartners(partnersData.partners || []);
+    } catch (error) {
+      console.error('Failed to load Circle of Cashflow data:', error);
+    } finally {
+      setCashflowLoading(false);
+    }
+  };
+
+  // Load Circle of Cashflow data when Circle tab is selected
+  useEffect(() => {
+    if (activeTab === 'circle') {
+      loadCircleOfCashflow();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  // Add note handler
+  const handleAddNote = async (e) => {
+    e.preventDefault();
+    if (!noteText.trim()) return;
+
+    try {
+      setNoteLoading(true);
+      const noteData = {
+        type: 'Note',
+        content: noteText,
+        loan_id: parseInt(id)
+      };
+      await activitiesAPI.create(noteData);
+      setNoteText('');
+      loadLoanData();
+    } catch (error) {
+      console.error('Failed to add note:', error);
+      alert('Failed to add note');
+    } finally {
+      setNoteLoading(false);
+    }
+  };
 
   const loadEmailHistory = () => {
     // Load sent emails from localStorage (will be API later)
@@ -530,22 +714,22 @@ function LoanDetail() {
           Team Members
         </button>
         <button
-          className={`tab-btn ${activeTab === 'email-history' ? 'active' : ''}`}
-          onClick={() => setActiveTab('email-history')}
-        >
-          Email History {emailHistory.length > 0 && <span className="tab-badge">{emailHistory.length}</span>}
-        </button>
-        <button
           className={`tab-btn ${activeTab === 'conversation' ? 'active' : ''}`}
           onClick={() => setActiveTab('conversation')}
         >
           Conversation Log
         </button>
         <button
-          className={`tab-btn ${activeTab === 'checklist' ? 'active' : ''}`}
-          onClick={() => setActiveTab('checklist')}
+          className={`tab-btn ${activeTab === 'circle' ? 'active' : ''}`}
+          onClick={() => setActiveTab('circle')}
         >
-          Checklist
+          Circle
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'documents' ? 'active' : ''}`}
+          onClick={() => setActiveTab('documents')}
+        >
+          Documents
         </button>
         <button
           className={`tab-btn ${activeTab === 'important-dates' ? 'active' : ''}`}
@@ -561,65 +745,145 @@ function LoanDetail() {
         <div className="left-column">
           {/* Personal Information Tab */}
           {activeTab === 'personal' && (
-          <div className="tab-content">
-            <h2>Personal Information</h2>
-            <div className="form-section">
-              <div className="form-row">
-                <div className="form-group">
-                  <label>First Name</label>
-                  <input
-                    type="text"
-                    value={currentBorrower.data.name?.split(' ')[0] || ''}
-                    disabled
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Last Name</label>
-                  <input
-                    type="text"
-                    value={currentBorrower.data.name?.split(' ').slice(1).join(' ') || ''}
-                    disabled
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Email</label>
-                  {currentBorrower.data.email ? (
-                    <ClickableEmail email={currentBorrower.data.email} />
-                  ) : (
-                    <input type="email" value="" placeholder="No email provided" disabled />
-                  )}
-                </div>
-                <div className="form-group">
-                  <label>Phone</label>
-                  {currentBorrower.data.phone ? (
-                    <ClickablePhone phone={currentBorrower.data.phone} />
-                  ) : (
-                    <input type="tel" value="" placeholder="No phone provided" disabled />
-                  )}
-                </div>
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Loan Number</label>
-                  <input
-                    type="text"
-                    value={formData.loan_number || ''}
-                    onChange={(e) => handleFieldChange('loan_number', e.target.value)}
-                  />
-                </div>
-              </div>
+          <div className="info-section">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h2 style={{ margin: 0 }}>Personal Information</h2>
+              <button
+                onClick={() => setShowAddFieldModal(true)}
+                style={{
+                  background: '#007bff',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: '32px',
+                  height: '32px',
+                  fontSize: '20px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  lineHeight: 1
+                }}
+                title="Add custom field"
+              >
+                +
+              </button>
             </div>
+            <div className="info-grid compact">
+              <div className="info-field">
+                <label>First Name</label>
+                <input
+                  type="text"
+                  value={formData.borrower_first_name || (formData.borrower_name || '').split(' ')[0] || ''}
+                  onChange={(e) => handleFieldChange('borrower_first_name', e.target.value)}
+                />
+              </div>
+              <div className="info-field">
+                <label>Last Name</label>
+                <input
+                  type="text"
+                  value={formData.borrower_last_name || (formData.borrower_name || '').split(' ').slice(1).join(' ') || ''}
+                  onChange={(e) => handleFieldChange('borrower_last_name', e.target.value)}
+                />
+              </div>
+              <div className="info-field">
+                <label>Email</label>
+                <input
+                  type="email"
+                  value={formData.borrower_email || ''}
+                  onChange={(e) => handleFieldChange('borrower_email', e.target.value)}
+                />
+              </div>
+              <div className="info-field">
+                <label>Phone</label>
+                <input
+                  type="tel"
+                  value={formData.borrower_phone || ''}
+                  onChange={(e) => handleFieldChange('borrower_phone', e.target.value)}
+                />
+              </div>
+              <div className="info-field">
+                <label>Loan Number</label>
+                <input
+                  type="text"
+                  value={formData.loan_number || ''}
+                  onChange={(e) => handleFieldChange('loan_number', e.target.value)}
+                />
+              </div>
+              {/* Custom Fields */}
+              {customFields.map((field) => (
+                <div className="info-field" key={field.key}>
+                  <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    {field.label}
+                    <button
+                      onClick={() => handleRemoveCustomField(field.key)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: '#dc3545',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        padding: '0 4px'
+                      }}
+                      title="Remove field"
+                    >
+                      ×
+                    </button>
+                  </label>
+                  <input
+                    type="text"
+                    value={formData[field.key] || ''}
+                    onChange={(e) => handleFieldChange(field.key, e.target.value)}
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* Add Field Modal */}
+            {showAddFieldModal && (
+              <div className="modal-overlay" onClick={() => setShowAddFieldModal(false)}>
+                <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+                  <div className="modal-header">
+                    <h3>Add Custom Field</h3>
+                    <button className="modal-close" onClick={() => setShowAddFieldModal(false)}>×</button>
+                  </div>
+                  <div className="modal-body">
+                    <div className="form-group">
+                      <label>Field Name</label>
+                      <input
+                        type="text"
+                        value={newFieldName}
+                        onChange={e => setNewFieldName(e.target.value)}
+                        className="form-control"
+                        placeholder="Enter field name"
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+                  <div className="modal-footer">
+                    <button className="btn-secondary" onClick={() => setShowAddFieldModal(false)}>Cancel</button>
+                    <button
+                      className="btn-primary"
+                      onClick={handleAddCustomField}
+                      disabled={!newFieldName.trim()}
+                    >
+                      Add Field
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
-        )}
+          )}
 
         {/* Employment Tab */}
         {activeTab === 'employment' && (
-          <div className="tab-content">
-            <h2>Employment Information</h2>
-            <div className="form-section">
-              <p className="info-text">Employment information coming soon</p>
-            </div>
-          </div>
+          <EmploymentTab
+            leadId={id}
+            formData={formData}
+            onFieldChange={handleFieldChange}
+            entityType="loans"
+          />
         )}
 
         {/* Loan Tab */}
@@ -685,128 +949,42 @@ function LoanDetail() {
           </div>
         )}
 
-        {/* Email History Tab - Task Card Style */}
-        {activeTab === 'email-history' && (
-          <div className="email-history-tab">
-            <div className="email-history-layout">
-              {/* Email List (Left Side) */}
-              <div className="email-list-panel">
-                <div className="email-list-header">
-                  <h2>Email History</h2>
-                  <span className="email-count">{emailHistory.length} emails</span>
-                </div>
-                <div className="email-cards">
-                  {emailHistory.length === 0 ? (
-                    <div className="no-emails-card">
-                      <div className="no-emails-icon">📧</div>
-                      <p>No emails sent yet</p>
-                      <span className="no-emails-hint">Sent emails will appear here</span>
-                    </div>
-                  ) : (
-                    emailHistory.map((email) => (
-                      <div
-                        key={email.id}
-                        className={`email-card ${selectedEmail?.id === email.id ? 'selected' : ''}`}
-                        onClick={() => setSelectedEmail(email)}
-                      >
-                        <div className="email-card-header">
-                          <span className="email-type-badge">
-                            {email.sentVia === 'Email' ? '📧' : email.sentVia === 'Text' ? '💬' : '📤'} {email.sentVia || 'Email'}
-                          </span>
-                          <span className="email-status sent">Sent</span>
-                        </div>
-                        <div className="email-card-subject">{email.subject}</div>
-                        <div className="email-card-recipient">
-                          To: {email.to}
-                        </div>
-                        <div className="email-card-date">
-                          {new Date(email.sentAt).toLocaleDateString()} at {new Date(email.sentAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              {/* Email Detail (Right Side) */}
-              <div className="email-detail-panel">
-                {selectedEmail ? (
-                  <>
-                    <div className="email-detail-header">
-                      <div className="email-detail-badge">
-                        {selectedEmail.sentVia === 'Email' ? '📧' : '💬'} {selectedEmail.sentVia || 'Email'}
-                      </div>
-                      <h3>{selectedEmail.subject}</h3>
-                    </div>
-
-                    <div className="email-detail-meta">
-                      <div className="meta-row">
-                        <span className="meta-label">TO</span>
-                        <span className="meta-value">{selectedEmail.to}</span>
-                      </div>
-                      <div className="meta-row">
-                        <span className="meta-label">SENT</span>
-                        <span className="meta-value">
-                          {new Date(selectedEmail.sentAt).toLocaleString()}
-                        </span>
-                      </div>
-                      <div className="meta-row">
-                        <span className="meta-label">STATUS</span>
-                        <span className="meta-value status-sent">✓ Delivered</span>
-                      </div>
-                    </div>
-
-                    <div className="email-detail-body">
-                      <h4>Message Content</h4>
-                      <div className="email-body-content">
-                        {selectedEmail.body?.split('\n').map((line, idx) => (
-                          <p key={idx}>{line || <br />}</p>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="email-detail-actions">
-                      <button className="btn-reply" onClick={() => alert('Reply feature coming soon')}>
-                        ↩️ Reply
-                      </button>
-                      <button className="btn-forward" onClick={() => alert('Forward feature coming soon')}>
-                        ↗️ Forward
-                      </button>
-                    </div>
-                  </>
-                ) : (
-                  <div className="email-detail-empty">
-                    <div className="empty-icon">📬</div>
-                    <p>Select an email to view details</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Conversation Log Tab */}
         {activeTab === 'conversation' && (
-          <div className="tab-content">
+          <div className="info-section">
             <h2>Conversation Log</h2>
-            <div className="activity-feed">
-              {activities.length === 0 ? (
-                <p className="no-activities">No conversation history yet</p>
-              ) : (
+
+            {/* Add Note Form */}
+            <form onSubmit={handleAddNote} className="add-note-form">
+              <textarea
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                placeholder="Add a note to the conversation log..."
+                rows="3"
+                disabled={noteLoading}
+              />
+              <button type="submit" disabled={noteLoading || !noteText.trim()}>
+                {noteLoading ? 'Adding...' : 'Add Note'}
+              </button>
+            </form>
+
+            <div className="conversation-log">
+              {activities.length > 0 ? (
                 activities.map((activity) => (
                   <div key={activity.id} className="activity-item">
-                    <div className="activity-icon">{activity.type}</div>
-                    <div className="activity-details">
-                      <div className="activity-header">
-                        <strong>{activity.title}</strong>
-                        <span className="activity-time">
-                          {new Date(activity.created_at).toLocaleString()}
-                        </span>
-                      </div>
-                      <p>{activity.description}</p>
+                    <div className="activity-header">
+                      <span className={`activity-type ${activity.type}`}>
+                        {activity.type}
+                      </span>
+                      <span className="activity-date">
+                        {new Date(activity.created_at).toLocaleString()}
+                      </span>
                     </div>
+                    <div className="activity-description">{activity.content || activity.description}</div>
                   </div>
                 ))
+              ) : (
+                <div className="empty-state">No activities yet</div>
               )}
             </div>
 
@@ -814,18 +992,388 @@ function LoanDetail() {
             <div className="email-history-section">
               <h3>Email History</h3>
               <div className="email-list">
-                <p className="no-emails">No emails yet</p>
+                {emailHistory.length > 0 ? (
+                  emailHistory.map((email) => (
+                    <div key={email.id} className="email-item">
+                      <div className="email-header">
+                        <span className="email-subject">
+                          {email.subject || 'No subject'}
+                        </span>
+                        <span className="email-date">
+                          {new Date(email.sentAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <div className="email-preview">
+                        {(email.body || '').substring(0, 100)}...
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="empty-state">No emails yet</div>
+                )}
               </div>
             </div>
           </div>
         )}
 
-        {/* Checklist Tab */}
-        {activeTab === 'checklist' && (
-          <div className="tab-content">
-            <h2>Loan Checklist</h2>
-            <div className="form-section">
-              <p className="info-text">Loan checklist coming soon</p>
+        {/* Circle Tab */}
+        {activeTab === 'circle' && (
+          <div className="info-section">
+            <h2>Circle</h2>
+            <div className="circle-content">
+              {/* Circle of Cashflow Section */}
+              <div className="cashflow-section" style={{ marginBottom: '30px' }}>
+                <h3 style={{ marginBottom: '15px', color: '#2e7d32' }}>Circle of Cashflow - Referral Opportunities</h3>
+
+                {cashflowLoading ? (
+                  <p>Loading referral data...</p>
+                ) : (
+                  <>
+                    {/* Opportunities */}
+                    {cashflowOpportunities.length > 0 ? (
+                      <div className="circle-grid" style={{ marginBottom: '20px' }}>
+                        {cashflowOpportunities.map(opp => (
+                          <div key={opp.id} className="circle-card" style={{ borderLeft: '4px solid #ff9800' }}>
+                            <div className="circle-header">
+                              <h3>{opp.category.replace('_', ' ').toUpperCase()}</h3>
+                              <span style={{
+                                padding: '4px 8px',
+                                borderRadius: '4px',
+                                fontSize: '12px',
+                                backgroundColor: opp.status === 'detected' ? '#fff3e0' : opp.status === 'sent' ? '#e8f5e9' : '#e3f2fd',
+                                color: opp.status === 'detected' ? '#e65100' : opp.status === 'sent' ? '#2e7d32' : '#1565c0'
+                              }}>
+                                {opp.status}
+                              </span>
+                            </div>
+                            <div className="circle-list">
+                              <p style={{ fontSize: '14px', color: '#666', margin: '8px 0' }}>{opp.ai_reasoning}</p>
+                              <p style={{ fontSize: '12px', color: '#999' }}>Priority: {opp.priority}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p style={{ color: '#999', fontStyle: 'italic', marginBottom: '20px' }}>
+                        No referral opportunities detected.
+                      </p>
+                    )}
+
+                    {/* Referral History */}
+                    {cashflowReferrals.length > 0 && (
+                      <div style={{ marginBottom: '20px' }}>
+                        <h4 style={{ marginBottom: '10px' }}>Referral History</h4>
+                        <div className="circle-grid">
+                          {cashflowReferrals.map(ref => (
+                            <div key={ref.id} className="circle-card" style={{ borderLeft: '4px solid #4caf50' }}>
+                              <div className="circle-header">
+                                <h3>{ref.partner_name || 'Partner'}</h3>
+                                <span style={{ fontSize: '12px', color: '#666' }}>{ref.status}</span>
+                              </div>
+                              <div className="circle-list">
+                                <p style={{ fontSize: '14px' }}>{ref.category.replace('_', ' ')}</p>
+                                <p style={{ fontSize: '12px', color: '#999' }}>{new Date(ref.referral_date).toLocaleDateString()}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Available Partners */}
+                    {cashflowPartners.length > 0 && (
+                      <div>
+                        <h4 style={{ marginBottom: '10px' }}>Partner Network ({cashflowPartners.length})</h4>
+                        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                          {cashflowPartners.slice(0, 6).map(partner => (
+                            <div key={partner.id} style={{
+                              padding: '8px 12px',
+                              backgroundColor: '#f5f5f5',
+                              borderRadius: '6px',
+                              fontSize: '13px'
+                            }}>
+                              <strong>{partner.business_name}</strong>
+                              <span style={{ color: '#666', marginLeft: '8px' }}>{partner.category.replace('_', ' ')}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Circle of Influence Section */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                <h3 style={{ margin: 0 }}>Circle of Influence</h3>
+                <button
+                  className="btn-add-circle"
+                  onClick={() => setShowCircleModal(true)}
+                  style={{ padding: '8px 16px' }}
+                >
+                  + Add Contact
+                </button>
+              </div>
+              <p className="circle-description">
+                Add and manage the borrower's circle of influence - family members, co-borrowers,
+                real estate agents, and other key contacts involved in the loan process.
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {circleContacts.length === 0 ? (
+                  <div style={{ padding: '20px', textAlign: 'center', color: '#999', backgroundColor: '#f8f9fa', borderRadius: '8px', border: '1px solid #e9ecef' }}>
+                    No contacts added yet. Click "+ Add Contact" to add someone to the circle of influence.
+                  </div>
+                ) : (
+                  circleContacts.map(contact => (
+                    <div key={contact.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 12px', backgroundColor: '#f8f9fa', borderRadius: '6px', border: '1px solid #e9ecef' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+                        <span style={{ fontSize: '18px' }}>{getContactIcon(contact.type)}</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {contact.loanId ? (
+                              <span
+                                onClick={() => navigate(`/loans/${contact.loanId}`)}
+                                style={{ fontWeight: '500', color: '#217f8d', cursor: 'pointer', textDecoration: 'none' }}
+                                onMouseEnter={e => e.target.style.textDecoration = 'underline'}
+                                onMouseLeave={e => e.target.style.textDecoration = 'none'}
+                              >
+                                {contact.name}
+                              </span>
+                            ) : (
+                              <span style={{ fontWeight: '500' }}>{contact.name}</span>
+                            )}
+                            <span style={{ fontSize: '12px', padding: '2px 8px', backgroundColor: '#e0f2f1', color: '#00695c', borderRadius: '12px' }}>{contact.type}</span>
+                          </div>
+                          <div style={{ fontSize: '13px', color: '#666' }}>
+                            {contact.email && <span>{contact.email}</span>}
+                            {contact.email && contact.phone && <span> • </span>}
+                            {contact.phone && <span>{contact.phone}</span>}
+                          </div>
+                          {contact.notes && <div style={{ fontSize: '12px', color: '#999', fontStyle: 'italic' }}>{contact.notes}</div>}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        <button
+                          onClick={() => handleEditCircleContact(contact)}
+                          style={{ background: 'none', border: 'none', color: '#217f8d', cursor: 'pointer', fontSize: '14px', padding: '4px 8px' }}
+                          title="Edit contact"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteCircleContact(contact.id)}
+                          style={{ background: 'none', border: 'none', color: '#dc3545', cursor: 'pointer', fontSize: '16px', padding: '4px 8px' }}
+                          title="Remove contact"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Add Referral Partner Modal */}
+              {showCircleModal && (
+                <div className="modal-overlay" onClick={() => { setShowCircleModal(false); setShowSearchResults(false); }}>
+                  <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+                    <div className="modal-header">
+                      <h3>{circleForm.editId ? 'Edit Referral Partner' : 'Add Referral Partner'}</h3>
+                      <button className="modal-close" onClick={() => { setShowCircleModal(false); setShowSearchResults(false); setCircleForm({ name: '', email: '', phone: '', type: 'Co-Borrower', notes: '' }); }}>×</button>
+                    </div>
+                    <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      <div className="form-group">
+                        <label>Contact Type *</label>
+                        <select
+                          value={circleForm.type}
+                          onChange={e => setCircleForm({...circleForm, type: e.target.value})}
+                          className="form-control"
+                        >
+                          {circleContactTypes.map(type => (
+                            <option key={type.value} value={type.value}>{type.value}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="form-group" style={{ position: 'relative' }}>
+                        <label>Name *</label>
+                        <input
+                          type="text"
+                          value={circleForm.name}
+                          onChange={handleNameChange}
+                          onFocus={() => circleForm.name.length >= 2 && setShowSearchResults(true)}
+                          className="form-control"
+                          placeholder="Start typing to search..."
+                          autoComplete="off"
+                        />
+                        {searchLoading && (
+                          <div style={{ position: 'absolute', right: '10px', top: '35px', color: '#999', fontSize: '12px' }}>
+                            Searching...
+                          </div>
+                        )}
+                        {showSearchResults && searchResults.length > 0 && (
+                          <div style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: 0,
+                            right: 0,
+                            backgroundColor: 'white',
+                            border: '1px solid #ddd',
+                            borderRadius: '4px',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                            maxHeight: '200px',
+                            overflowY: 'auto',
+                            zIndex: 1000
+                          }}>
+                            {searchResults.map(result => (
+                              <div
+                                key={result.id}
+                                onClick={() => selectSearchResult(result)}
+                                style={{
+                                  padding: '10px 12px',
+                                  cursor: 'pointer',
+                                  borderBottom: '1px solid #eee',
+                                  transition: 'background-color 0.15s'
+                                }}
+                                onMouseEnter={e => e.target.style.backgroundColor = '#f5f5f5'}
+                                onMouseLeave={e => e.target.style.backgroundColor = 'white'}
+                              >
+                                <div style={{ fontWeight: '500' }}>{result.borrower_name || result.name}</div>
+                                <div style={{ fontSize: '12px', color: '#666' }}>
+                                  {result.borrower_email && <span>{result.borrower_email}</span>}
+                                  {result.borrower_email && result.borrower_phone && <span> • </span>}
+                                  {result.borrower_phone && <span>{result.borrower_phone}</span>}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="form-group">
+                        <label>Email</label>
+                        <input
+                          type="email"
+                          value={circleForm.email}
+                          onChange={e => setCircleForm({...circleForm, email: e.target.value})}
+                          className="form-control"
+                          placeholder="Enter email address"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Phone</label>
+                        <input
+                          type="tel"
+                          value={circleForm.phone}
+                          onChange={e => setCircleForm({...circleForm, phone: e.target.value})}
+                          className="form-control"
+                          placeholder="Enter phone number"
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label>Notes</label>
+                        <textarea
+                          value={circleForm.notes}
+                          onChange={e => setCircleForm({...circleForm, notes: e.target.value})}
+                          className="form-control"
+                          placeholder="Add any notes about this contact"
+                          rows={3}
+                        />
+                      </div>
+                    </div>
+                    <div className="modal-footer">
+                      <button className="btn-secondary" onClick={() => setShowCircleModal(false)}>Cancel</button>
+                      <button
+                        className="btn-primary"
+                        onClick={handleAddCircleContactSubmit}
+                        disabled={!circleForm.name.trim()}
+                      >
+                        {circleForm.editId ? 'Save Changes' : 'Add Contact'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Documents Tab */}
+        {activeTab === 'documents' && (
+          <div className="info-section">
+            <h2>Documents</h2>
+            <div className="documents-content">
+              <p className="circle-description">
+                Manage and organize all loan-related documents including income verification,
+                credit reports, property documents, and disclosures.
+              </p>
+
+              <div className="documents-upload-area">
+                <button className="btn-upload-document">
+                  Upload Document
+                </button>
+              </div>
+
+              <div className="documents-grid">
+                <div className="document-category">
+                  <div className="category-header">
+                    <h3>Income Verification</h3>
+                    <span className="doc-count">0 files</span>
+                  </div>
+                  <div className="document-list">
+                    <div className="empty-state">No documents uploaded yet</div>
+                  </div>
+                </div>
+
+                <div className="document-category">
+                  <div className="category-header">
+                    <h3>Credit Reports</h3>
+                    <span className="doc-count">0 files</span>
+                  </div>
+                  <div className="document-list">
+                    <div className="empty-state">No documents uploaded yet</div>
+                  </div>
+                </div>
+
+                <div className="document-category">
+                  <div className="category-header">
+                    <h3>Property Documents</h3>
+                    <span className="doc-count">0 files</span>
+                  </div>
+                  <div className="document-list">
+                    <div className="empty-state">No documents uploaded yet</div>
+                  </div>
+                </div>
+
+                <div className="document-category">
+                  <div className="category-header">
+                    <h3>Disclosures & Forms</h3>
+                    <span className="doc-count">0 files</span>
+                  </div>
+                  <div className="document-list">
+                    <div className="empty-state">No documents uploaded yet</div>
+                  </div>
+                </div>
+
+                <div className="document-category">
+                  <div className="category-header">
+                    <h3>Bank Statements</h3>
+                    <span className="doc-count">0 files</span>
+                  </div>
+                  <div className="document-list">
+                    <div className="empty-state">No documents uploaded yet</div>
+                  </div>
+                </div>
+
+                <div className="document-category">
+                  <div className="category-header">
+                    <h3>Other Documents</h3>
+                    <span className="doc-count">0 files</span>
+                  </div>
+                  <div className="document-list">
+                    <div className="empty-state">No documents uploaded yet</div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}

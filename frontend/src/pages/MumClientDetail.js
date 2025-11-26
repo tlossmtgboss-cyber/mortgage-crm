@@ -1235,127 +1235,185 @@ function MumClientDetail() {
           {activeTab === 'important-dates' && (
           <div className="tab-content">
             <div className="info-section">
-              <h2>Lead Stage Dates</h2>
-              <p className="section-subtitle">Track key milestone dates throughout the lead journey</p>
+              <h2>Portfolio Servicing Dates</h2>
+              <p className="section-subtitle">Track key dates for portfolio management and client retention</p>
 
-              <div className="dates-grid">
-                <div className="date-field">
-                  <label>Lead Created Date</label>
-                  <input
-                    type="date"
-                    value={formData.lead_created_date || ''}
-                    onChange={(e) => handleFieldChange('lead_created_date', e.target.value)}
-                  />
+              {/* Loan History Dates */}
+              <div className="dates-section" style={{ marginBottom: '24px' }}>
+                <h3 className="dates-section-title">Loan History</h3>
+                <div className="dates-grid">
+                  <div className="date-field">
+                    <label>Loan Origination Date</label>
+                    <input
+                      type="date"
+                      value={formData.loan_origination_date || formData.closing_date || ''}
+                      onChange={(e) => handleFieldChange('loan_origination_date', e.target.value)}
+                    />
+                    <small className="field-hint">Date the loan was funded</small>
+                  </div>
+
+                  <div className="date-field">
+                    <label>First Payment Date</label>
+                    <input
+                      type="date"
+                      value={formData.first_payment_date || ''}
+                      onChange={(e) => handleFieldChange('first_payment_date', e.target.value)}
+                    />
+                  </div>
+
+                  <div className="date-field">
+                    <label>Last Payment Date</label>
+                    <input
+                      type="date"
+                      value={formData.last_payment_date || ''}
+                      onChange={(e) => handleFieldChange('last_payment_date', e.target.value)}
+                    />
+                  </div>
+
+                  <div className="date-field">
+                    <label>Maturity Date</label>
+                    <input
+                      type="date"
+                      value={formData.maturity_date || ''}
+                      onChange={(e) => handleFieldChange('maturity_date', e.target.value)}
+                    />
+                    <small className="field-hint">When the loan will be paid off</small>
+                  </div>
                 </div>
+              </div>
 
-                <div className="date-field">
-                  <label>First Contact Attempt Date</label>
-                  <input
-                    type="date"
-                    value={formData.first_contact_attempt_date || ''}
-                    onChange={(e) => handleFieldChange('first_contact_attempt_date', e.target.value)}
-                  />
+              {/* Annual Review Dates */}
+              <div className="dates-section" style={{ marginBottom: '24px' }}>
+                <h3 className="dates-section-title">Annual Review Schedule</h3>
+                <div className="dates-grid">
+                  <div className="date-field">
+                    <label>Next Annual Review Date</label>
+                    <input
+                      type="date"
+                      value={formData.next_annual_review_date || ''}
+                      onChange={(e) => handleFieldChange('next_annual_review_date', e.target.value)}
+                    />
+                    <small className="field-hint">Scheduled check-in with client</small>
+                  </div>
+
+                  <div className="date-field">
+                    <label>Last Annual Review Date</label>
+                    <input
+                      type="date"
+                      value={formData.last_annual_review_date || ''}
+                      onChange={(e) => handleFieldChange('last_annual_review_date', e.target.value)}
+                    />
+                  </div>
+
+                  <div className="date-field">
+                    <label>Birthday</label>
+                    <input
+                      type="date"
+                      value={formData.birthday || ''}
+                      onChange={(e) => handleFieldChange('birthday', e.target.value)}
+                    />
+                    <small className="field-hint">For client relationship management</small>
+                  </div>
+
+                  <div className="date-field">
+                    <label>Close Anniversary Date</label>
+                    <input
+                      type="date"
+                      value={formData.close_anniversary_date || formData.closing_date || ''}
+                      onChange={(e) => handleFieldChange('close_anniversary_date', e.target.value)}
+                    />
+                    <small className="field-hint">Annual closing anniversary</small>
+                  </div>
                 </div>
+              </div>
 
-                <div className="date-field">
-                  <label>First Contact Successful Date</label>
-                  <input
-                    type="date"
-                    value={formData.first_contact_successful_date || ''}
-                    onChange={(e) => handleFieldChange('first_contact_successful_date', e.target.value)}
-                  />
+              {/* Credit & Insurance Dates */}
+              <div className="dates-section" style={{ marginBottom: '24px' }}>
+                <h3 className="dates-section-title">Credit & Insurance</h3>
+                <div className="dates-grid">
+                  <div className="date-field">
+                    <label>Credit Refresh Date</label>
+                    <input
+                      type="date"
+                      value={formData.credit_refresh_date || ''}
+                      onChange={(e) => handleFieldChange('credit_refresh_date', e.target.value)}
+                    />
+                    <small className="field-hint">Next credit score update</small>
+                  </div>
+
+                  <div className="date-field">
+                    <label>Insurance Renewal Date</label>
+                    <input
+                      type="date"
+                      value={formData.insurance_renewal_date || ''}
+                      onChange={(e) => handleFieldChange('insurance_renewal_date', e.target.value)}
+                    />
+                    <small className="field-hint">Homeowner's insurance renewal</small>
+                  </div>
+
+                  <div className="date-field">
+                    <label>Tax Escrow Review Date</label>
+                    <input
+                      type="date"
+                      value={formData.tax_escrow_review_date || ''}
+                      onChange={(e) => handleFieldChange('tax_escrow_review_date', e.target.value)}
+                    />
+                  </div>
+
+                  <div className="date-field">
+                    <label>PMI Removal Eligible Date</label>
+                    <input
+                      type="date"
+                      value={formData.pmi_removal_eligible_date || ''}
+                      onChange={(e) => handleFieldChange('pmi_removal_eligible_date', e.target.value)}
+                    />
+                    <small className="field-hint">When LTV reaches 80%</small>
+                  </div>
                 </div>
+              </div>
 
-                <div className="date-field">
-                  <label>Lead Qualification Date</label>
-                  <input
-                    type="date"
-                    value={formData.lead_qualification_date || ''}
-                    onChange={(e) => handleFieldChange('lead_qualification_date', e.target.value)}
-                  />
-                </div>
+              {/* Opportunity Dates */}
+              <div className="dates-section">
+                <h3 className="dates-section-title">Opportunity Tracking</h3>
+                <div className="dates-grid">
+                  <div className="date-field">
+                    <label>Refinance Eligibility Date</label>
+                    <input
+                      type="date"
+                      value={formData.refinance_eligibility_date || ''}
+                      onChange={(e) => handleFieldChange('refinance_eligibility_date', e.target.value)}
+                    />
+                    <small className="field-hint">After seasoning period</small>
+                  </div>
 
-                <div className="date-field">
-                  <label>Application Link Sent Date</label>
-                  <input
-                    type="date"
-                    value={formData.application_link_sent_date || ''}
-                    onChange={(e) => handleFieldChange('application_link_sent_date', e.target.value)}
-                  />
-                </div>
+                  <div className="date-field">
+                    <label>HELOC Eligibility Date</label>
+                    <input
+                      type="date"
+                      value={formData.heloc_eligibility_date || ''}
+                      onChange={(e) => handleFieldChange('heloc_eligibility_date', e.target.value)}
+                    />
+                  </div>
 
-                <div className="date-field">
-                  <label>Application Started Date</label>
-                  <input
-                    type="date"
-                    value={formData.application_started_date || ''}
-                    onChange={(e) => handleFieldChange('application_started_date', e.target.value)}
-                  />
-                </div>
+                  <div className="date-field">
+                    <label>Rate Watch Start Date</label>
+                    <input
+                      type="date"
+                      value={formData.rate_watch_start_date || ''}
+                      onChange={(e) => handleFieldChange('rate_watch_start_date', e.target.value)}
+                    />
+                    <small className="field-hint">Monitoring for rate drop opportunities</small>
+                  </div>
 
-                <div className="date-field">
-                  <label>Application Completed Date</label>
-                  <input
-                    type="date"
-                    value={formData.application_completed_date || ''}
-                    onChange={(e) => handleFieldChange('application_completed_date', e.target.value)}
-                  />
-                </div>
-
-                <div className="date-field">
-                  <label>Credit Pulled Date</label>
-                  <input
-                    type="date"
-                    value={formData.credit_pulled_date || ''}
-                    onChange={(e) => handleFieldChange('credit_pulled_date', e.target.value)}
-                  />
-                </div>
-
-                <div className="date-field">
-                  <label>Pre-Approval Submission Date</label>
-                  <input
-                    type="date"
-                    value={formData.preapproval_submission_date || ''}
-                    onChange={(e) => handleFieldChange('preapproval_submission_date', e.target.value)}
-                  />
-                </div>
-
-                <div className="date-field">
-                  <label>Pre-Approval Issued Date</label>
-                  <input
-                    type="date"
-                    value={formData.preapproval_issued_date || ''}
-                    onChange={(e) => handleFieldChange('preapproval_issued_date', e.target.value)}
-                  />
-                </div>
-
-                <div className="date-field">
-                  <label>Realtor Referral Date</label>
-                  <input
-                    type="date"
-                    value={formData.realtor_referral_date || ''}
-                    onChange={(e) => handleFieldChange('realtor_referral_date', e.target.value)}
-                  />
-                </div>
-
-                <div className="date-field">
-                  <label>Pre-Approval Expiration Date</label>
-                  <input
-                    type="date"
-                    value={formData.preapproval_expiration_date || ''}
-                    onChange={(e) => handleFieldChange('preapproval_expiration_date', e.target.value)}
-                  />
-                  <small className="field-hint">Typically 90 days from credit pull</small>
-                </div>
-
-                <div className="date-field">
-                  <label>Rate Watch Enrollment Date</label>
-                  <input
-                    type="date"
-                    value={formData.rate_watch_enrollment_date || ''}
-                    onChange={(e) => handleFieldChange('rate_watch_enrollment_date', e.target.value)}
-                  />
-                  <small className="field-hint">For shopping-phase automation</small>
+                  <div className="date-field">
+                    <label>Last Contact Date</label>
+                    <input
+                      type="date"
+                      value={formData.last_contact_date || ''}
+                      onChange={(e) => handleFieldChange('last_contact_date', e.target.value)}
+                    />
+                    <small className="field-hint">Most recent client interaction</small>
+                  </div>
                 </div>
               </div>
             </div>
