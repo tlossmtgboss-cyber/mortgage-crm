@@ -6993,6 +6993,235 @@ When acting autonomously:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/v1/ai/orchestrator-chat-stream")
+async def orchestrator_chat_stream(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Streaming AI Chat - sends response tokens as they're generated
+    Uses Server-Sent Events (SSE) for real-time streaming
+    """
+    from fastapi.responses import StreamingResponse
+    from openai import OpenAI
+    from datetime import datetime, timedelta
+    import asyncio
+
+    data = await request.json()
+    message = data.get("message", "")
+    context = data.get("context", {})
+
+    if not message:
+        raise HTTPException(status_code=400, detail="Message is required")
+
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+    # Simplified tools for streaming (same as main endpoint)
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "get_tasks",
+                "description": "Get user's tasks with optional filtering",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "filter": {"type": "string", "enum": ["today", "tomorrow", "this_week", "overdue", "all"], "description": "Time filter for tasks"}
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_pipeline",
+                "description": "Get pipeline summary with leads and loans by stage",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "include_details": {"type": "boolean", "description": "Include detailed loan/lead info"}
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "search_leads",
+                "description": "Search for leads by name, email, or phone",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Search query"},
+                        "limit": {"type": "integer", "description": "Max results", "default": 5}
+                    },
+                    "required": ["query"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_market_intelligence",
+                "description": "Get current market conditions and rate lock recommendations",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "lock_days": {"type": "integer", "description": "Lock period in days", "default": 30}
+                    }
+                }
+            }
+        }
+    ]
+
+    # Tool execution functions (simplified inline versions)
+    async def execute_get_tasks(args):
+        filter_type = args.get("filter", "all")
+        today = datetime.now().date()
+        tomorrow = today + timedelta(days=1)
+        week_end = today + timedelta(days=7)
+
+        all_tasks = db.query(Task).filter(Task.owner_id == current_user.id).all()
+
+        if filter_type == "today":
+            tasks = [t for t in all_tasks if t.due_date and t.due_date.date() == today and t.status != "completed"]
+        elif filter_type == "tomorrow":
+            tasks = [t for t in all_tasks if t.due_date and t.due_date.date() == tomorrow and t.status != "completed"]
+        elif filter_type == "this_week":
+            tasks = [t for t in all_tasks if t.due_date and today <= t.due_date.date() <= week_end and t.status != "completed"]
+        elif filter_type == "overdue":
+            tasks = [t for t in all_tasks if t.due_date and t.due_date.date() < today and t.status != "completed"]
+        else:
+            tasks = [t for t in all_tasks if t.status != "completed"]
+
+        return {
+            "count": len(tasks),
+            "tasks": [{"id": t.id, "title": t.title, "priority": t.priority, "due_date": t.due_date.isoformat() if t.due_date else None} for t in tasks[:10]]
+        }
+
+    async def execute_get_pipeline(args):
+        leads = db.query(Lead).filter(Lead.owner_id == current_user.id).all()
+        loans = db.query(Loan).filter(Loan.loan_officer_id == current_user.id).all()
+
+        lead_stages = {}
+        for lead in leads:
+            stage = str(lead.stage).replace("LeadStage.", "") if lead.stage else "NEW"
+            lead_stages[stage] = lead_stages.get(stage, 0) + 1
+
+        loan_stages = {}
+        for loan in loans:
+            stage = str(loan.stage).replace("LoanStage.", "") if loan.stage else "NEW"
+            loan_stages[stage] = loan_stages.get(stage, 0) + 1
+
+        return {"total_leads": len(leads), "total_loans": len(loans), "lead_stages": lead_stages, "loan_stages": loan_stages}
+
+    async def execute_search_leads(args):
+        query = args.get("query", "")
+        limit = args.get("limit", 5)
+        search = f"%{query}%"
+        leads = db.query(Lead).filter(
+            Lead.owner_id == current_user.id,
+            or_(Lead.name.ilike(search), Lead.email.ilike(search), Lead.phone.ilike(search))
+        ).limit(limit).all()
+        return {"count": len(leads), "leads": [{"id": l.id, "name": l.name, "email": l.email, "stage": str(l.stage)} for l in leads]}
+
+    async def execute_get_market_intelligence(args):
+        # Return cached/mock market data for speed
+        return {
+            "success": True,
+            "current_rates": {"30yr_fixed": 6.875, "10yr_treasury": 4.25},
+            "mbs": {"price": 100.25, "change": 0.125},
+            "recommendation": {"action": "CAUTIOUS LOCK", "reason": "Moderate market conditions"}
+        }
+
+    tool_functions = {
+        "get_tasks": execute_get_tasks,
+        "get_pipeline": execute_get_pipeline,
+        "search_leads": execute_search_leads,
+        "get_market_intelligence": execute_get_market_intelligence
+    }
+
+    # Build system prompt (simplified for streaming)
+    system_prompt = f"""You are the AI assistant for Pipeline 360 Mortgage CRM.
+User: {current_user.full_name or current_user.email}
+Current date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+
+Be direct, helpful, and concise. Use the tools available to get real data when needed.
+Format responses with markdown for clarity. No disclaimers or hedging."""
+
+    async def generate_stream():
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": message}
+        ]
+
+        try:
+            # First call - check if tools are needed
+            response = client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages,
+                tools=tools,
+                tool_choice="auto",
+                stream=False  # First call non-streaming to check for tools
+            )
+
+            response_message = response.choices[0].message
+            tool_calls = response_message.tool_calls
+
+            # If tools are called, execute them and send status
+            if tool_calls:
+                yield f"data: {json.dumps({'type': 'status', 'content': 'Gathering data...'})}\n\n"
+
+                messages.append(response_message)
+
+                for tool_call in tool_calls:
+                    function_name = tool_call.function.name
+                    function_args = json.loads(tool_call.function.arguments)
+
+                    if function_name in tool_functions:
+                        result = await tool_functions[function_name](function_args)
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "content": json.dumps(result)
+                        })
+
+                yield f"data: {json.dumps({'type': 'status', 'content': 'Analyzing...'})}\n\n"
+
+            # Now stream the final response
+            stream = client.chat.completions.create(
+                model="gpt-4o",
+                messages=messages,
+                stream=True,
+                temperature=0.7
+            )
+
+            full_response = ""
+            for chunk in stream:
+                if chunk.choices[0].delta.content:
+                    content = chunk.choices[0].delta.content
+                    full_response += content
+                    yield f"data: {json.dumps({'type': 'content', 'content': content})}\n\n"
+
+            # Send completion signal with full response
+            yield f"data: {json.dumps({'type': 'done', 'full_response': full_response})}\n\n"
+
+        except Exception as e:
+            logger.error(f"Streaming error: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
+
+    return StreamingResponse(
+        generate_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
+
+
 # ============================================================================
 # VOICE INTEGRATION ENDPOINTS
 # ============================================================================

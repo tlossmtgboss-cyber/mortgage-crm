@@ -63,6 +63,12 @@ function AILandingPage() {
   const [allContacts, setAllContacts] = useState([]);
   const [emailSending, setEmailSending] = useState(false);
 
+  // Streaming state
+  const [streamingContent, setStreamingContent] = useState('');
+  const [streamingStatus, setStreamingStatus] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingMessageId, setStreamingMessageId] = useState(null);
+
   const chatAreaRef = useRef(null);
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -690,143 +696,115 @@ function AILandingPage() {
 
   const sendMessage = async (overrideMessage = null) => {
     const message = overrideMessage || inputValue.trim();
-    if (!message || loading) return;
+    if (!message || loading || isStreaming) return;
 
     addMessage(message, 'user');
     setInputValue('');
-    setLoading(true);
+    setIsStreaming(true);
+    setStreamingContent('');
+    setStreamingStatus('');
+
+    // Create a placeholder message for streaming content
+    const streamMsgId = Date.now();
+    setStreamingMessageId(streamMsgId);
 
     // Expand the left sidebar to show the chat when a message is sent
     if (sidebarCollapsed) {
       setSidebarCollapsed(false);
     }
 
+    // Add placeholder message that will be updated as content streams in
+    setMessages(prev => [...prev, {
+      id: streamMsgId,
+      content: '',
+      type: 'assistant',
+      isStreaming: true,
+      timestamp: new Date().toISOString()
+    }]);
+
     try {
-      const response = await aiAPI.processCommand(message, {
-        session_id: sessionId,
-        conversation_context: conversationHistory.slice(-20),
-        action_context: actionContext,
-        permission_scope: selectedPermission,
-        current_state: {
-          last_action_id: Object.keys(actionContext).slice(-1)[0] || null,
-          total_actions: Object.keys(actionContext).length
-        }
-      });
+      await aiAPI.processCommandStream(
+        message,
+        // onContent - called for each chunk of content
+        (content) => {
+          setStreamingContent(prev => prev + content);
+          // Update the streaming message in place
+          setMessages(prev => prev.map(msg =>
+            msg.id === streamMsgId
+              ? { ...msg, content: (msg.content || '') + content }
+              : msg
+          ));
+        },
+        // onStatus - called when AI is gathering data
+        (status) => {
+          setStreamingStatus(status);
+          // Update message to show status
+          setMessages(prev => prev.map(msg =>
+            msg.id === streamMsgId
+              ? { ...msg, statusText: status }
+              : msg
+          ));
+        },
+        // onDone - called when streaming is complete
+        (fullResponse) => {
+          setIsStreaming(false);
+          setStreamingStatus('');
+          setStreamingMessageId(null);
 
-      if (response.session_id && response.session_id !== sessionId) {
-        setSessionId(response.session_id);
-        localStorage.setItem('ai_session_id', response.session_id);
-      }
+          // Finalize the message
+          setMessages(prev => prev.map(msg =>
+            msg.id === streamMsgId
+              ? {
+                  ...msg,
+                  content: fullResponse,
+                  isStreaming: false,
+                  statusText: null,
+                  isSpecialContent: true,
+                  contentType: 'chat_response'
+                }
+              : msg
+          ));
 
-      let historyContent = response.explanation || '';
+          // Check if response should go to sidebar
+          const hasStructuredContent =
+            fullResponse.includes('##') ||
+            fullResponse.includes('**Priority') ||
+            fullResponse.includes('1.') ||
+            fullResponse.includes('- ');
 
-      if (response.action_id && response.preview) {
-        historyContent += `\n[Action ${response.action_id}: ${response.intent} - Preview: ${JSON.stringify(response.preview)}]`;
-
-        setActionContext(prev => ({
-          ...prev,
-          [response.action_id]: {
-            intent: response.intent,
-            preview: response.preview,
-            timestamp: new Date().toISOString(),
-            status: 'previewed'
+          if (hasStructuredContent) {
+            setStructuredContent({
+              type: 'chat_response',
+              content: fullResponse
+            });
+            setShowRightSidebar(true);
           }
-        }));
 
-        // Save as report if it's a report type
-        if (response.intent?.includes('REPORT') || response.intent?.includes('PIPELINE')) {
-          const report = {
-            id: Date.now(),
-            title: message.substring(0, 50),
-            data: response.preview,
-            createdAt: new Date().toISOString()
-          };
-          setReports(prev => [report, ...prev.slice(0, 19)]);
-        }
-      }
+          // Update conversation history
+          setConversationHistory(prev => [
+            ...prev,
+            { role: 'user', content: message },
+            { role: 'assistant', content: fullResponse }
+          ]);
+        },
+        // onError - called if there's an error
+        (error) => {
+          console.error('Streaming error:', error);
+          setIsStreaming(false);
+          setStreamingStatus('');
 
-      setConversationHistory(prev => [
-        ...prev,
-        { role: 'user', content: message },
-        {
-          role: 'assistant',
-          content: historyContent,
-          action_id: response.action_id || null,
-          intent: response.intent || null
+          // Update message to show error
+          setMessages(prev => prev.map(msg =>
+            msg.id === streamMsgId
+              ? { ...msg, content: 'Sorry, there was an error processing your request.', isStreaming: false, isError: true }
+              : msg
+          ));
         }
-      ]);
-
-      // Check if user wanted email - don't show daily view, route to email handler
-      const lowerMessage = message.toLowerCase();
-      const wantsEmail = lowerMessage.includes('email') && (lowerMessage.includes('task') || lowerMessage.includes('things') || lowerMessage.includes('to do') || lowerMessage.includes('tomorrow'));
-
-      if (wantsEmail) {
-        // User wants tasks emailed, not shown - use local routing
-        routeMessage(message);
-      } else if (response.intent === 'DAILY_VIEW' && response.data) {
-        showDailyViewWithData(response.data, response.explanation);
-      } else if (response.intent === 'SEARCH' && response.data) {
-        const results = response.data;
-        let searchContent = response.explanation || "Here are your search results:";
-        if (results.leads?.length > 0 || results.deals?.length > 0) {
-          const resultText = [
-            results.leads?.length > 0 ? `Found ${results.leads.length} leads` : '',
-            results.deals?.length > 0 ? `Found ${results.deals.length} deals` : ''
-          ].filter(Boolean).join(', ');
-          searchContent += '\n\n' + resultText;
-        }
-        addMessage(searchContent, 'assistant', {
-          isSpecialContent: true,
-          contentType: 'chat_response',
-          responseData: results
-        });
-      } else if (response.preview && response.action_id) {
-        addMessage(response.explanation || "Here's what I can do:", 'assistant', {
-          isSpecialContent: true,
-          contentType: 'chat_response',
-          preview: response.preview,
-          actionId: response.action_id,
-          actionType: response.intent
-        });
-      } else if (response.preview) {
-        addMessage(response.explanation || "Here's what I found:", 'assistant', {
-          isSpecialContent: true,
-          contentType: 'chat_response',
-          preview: response.preview,
-          actionType: response.intent
-        });
-      } else if (response.explanation) {
-        // Check if response includes prioritized tasks for interactive display
-        if (response.prioritized_tasks && response.prioritized_tasks.length > 0) {
-          // Use task_priorities contentType for interactive task cards
-          addMessage(response.explanation, 'assistant', {
-            isSpecialContent: true,
-            contentType: 'task_priorities',
-            tasks: response.prioritized_tasks,
-            coachingMode: response.coaching_mode
-          });
-        } else {
-          // Show all AI responses in the right sidebar
-          addMessage(response.explanation, 'assistant', {
-            isSpecialContent: true,
-            contentType: 'chat_response',
-            responseData: response.data || null
-          });
-        }
-      } else if (!response.explanation && !response.data && !response.preview && !response.action_id) {
-        // No useful response - use local routing as fallback
-        routeMessage(message);
-      } else {
-        addMessage("I understand your request.", 'assistant', {
-          isSpecialContent: true,
-          contentType: 'chat_response'
-        });
-      }
+      );
     } catch (error) {
       console.error('AI processing error:', error);
+      setIsStreaming(false);
       routeMessage(message);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -1848,15 +1826,24 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
                 </button>
               </div>
               {messages.map(message => (
-                <div key={message.id} className={`ai-message-new ai-message-${message.type}`}>
+                <div key={message.id} className={`ai-message-new ai-message-${message.type} ${message.isStreaming ? 'ai-message-streaming' : ''}`}>
+                  {/* Show status indicator when gathering data */}
+                  {message.statusText && (
+                    <div className="ai-streaming-status">
+                      <span className="ai-status-dot"></span>
+                      {message.statusText}
+                    </div>
+                  )}
                   {!message.isSpecialContent && (
                     <div className="ai-message-content-new ai-markdown-content">
                       <ReactMarkdown>{message.content}</ReactMarkdown>
+                      {/* Show cursor when streaming */}
+                      {message.isStreaming && <span className="ai-streaming-cursor">|</span>}
                     </div>
                   )}
                 </div>
               ))}
-              {loading && (
+              {loading && !isStreaming && (
                 <div className="ai-message-new ai-message-assistant">
                   <div className="ai-typing-indicator-new">
                     <span></span>

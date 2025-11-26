@@ -358,6 +358,61 @@ export const aiAPI = {
       ...data
     };
   },
+  // Streaming version of processCommand for real-time responses
+  processCommandStream: async (message, onContent, onStatus, onDone, onError) => {
+    const token = localStorage.getItem('token');
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/ai/orchestrator-chat-stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ message })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+
+              if (data.type === 'content' && onContent) {
+                onContent(data.content);
+              } else if (data.type === 'status' && onStatus) {
+                onStatus(data.content);
+              } else if (data.type === 'done' && onDone) {
+                onDone(data.full_response);
+              } else if (data.type === 'error' && onError) {
+                onError(data.content);
+              }
+            } catch (e) {
+              console.warn('Failed to parse SSE data:', e);
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Streaming error:', error);
+      if (onError) onError(error.message);
+    }
+  },
   executeAction: async (actionId, modifications = {}, sessionId = null) => {
     const response = await api.post('/api/v1/ai/execute-action', {
       action_id: actionId,

@@ -479,6 +479,57 @@
   display: none;
 }
 
+/* Streaming message styles */
+.ai-message-streaming {
+  min-height: 24px;
+}
+
+.ai-streaming-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #666;
+  padding: 8px 0;
+  font-style: italic;
+}
+
+.ai-status-dot {
+  width: 8px;
+  height: 8px;
+  background: #d97757;
+  border-radius: 50%;
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.8);
+  }
+}
+
+.ai-streaming-cursor {
+  display: inline-block;
+  color: #d97757;
+  font-weight: bold;
+  animation: blink-cursor 1s step-end infinite;
+  margin-left: 2px;
+}
+
+@keyframes blink-cursor {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
 /* Message Actions - Claude.ai style */
 .ai-message-actions {
   display: flex;
