@@ -13334,6 +13334,63 @@ async def reject_reconciliation(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.delete("/api/v1/reconciliation/items/bulk")
+async def bulk_delete_reconciliation_items(
+    item_ids: List[int],
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Permanently delete multiple extracted data items"""
+    try:
+        deleted_count = 0
+        event_ids_to_check = set()
+
+        for extracted_data_id in item_ids:
+            extracted = db.query(ExtractedData).filter(
+                ExtractedData.id == extracted_data_id
+            ).first()
+
+            if extracted:
+                event_ids_to_check.add(extracted.event_id)
+
+                # Delete training events
+                db.query(AITrainingEvent).filter(
+                    AITrainingEvent.extracted_data_id == extracted_data_id
+                ).delete(synchronize_session=False)
+
+                # Delete extracted data
+                db.delete(extracted)
+                deleted_count += 1
+
+        # Check if events have no more extracted data and delete them
+        # Exclude the IDs we just deleted (still in session until commit)
+        for event_id in event_ids_to_check:
+            if event_id:
+                other_extracted = db.query(ExtractedData).filter(
+                    ExtractedData.event_id == event_id,
+                    ~ExtractedData.id.in_(item_ids)
+                ).first()
+                if not other_extracted:
+                    event = db.query(IncomingDataEvent).filter(
+                        IncomingDataEvent.id == event_id
+                    ).first()
+                    if event:
+                        db.delete(event)
+
+        db.commit()
+
+        logger.info(f"Bulk deleted {deleted_count} items by user {current_user.id}")
+
+        return {
+            "status": "success",
+            "message": f"Deleted {deleted_count} items",
+            "deleted_count": deleted_count
+        }
+    except Exception as e:
+        logger.error(f"Bulk delete error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.delete("/api/v1/reconciliation/items/{extracted_data_id}")
 async def delete_reconciliation_item(
     extracted_data_id: int,
@@ -13355,14 +13412,16 @@ async def delete_reconciliation_item(
         # Delete any training events associated with this extracted data
         db.query(AITrainingEvent).filter(
             AITrainingEvent.extracted_data_id == extracted_data_id
-        ).delete()
+        ).delete(synchronize_session=False)
 
         # Delete the extracted data record
         db.delete(extracted)
 
         # Check if there are any other extracted_data records for this event
+        # Exclude the one we just deleted (it's still in session until commit)
         other_extracted = db.query(ExtractedData).filter(
-            ExtractedData.event_id == event_id
+            ExtractedData.event_id == event_id,
+            ExtractedData.id != extracted_data_id
         ).first()
 
         # If no other extracted data, delete the incoming event too
@@ -13386,61 +13445,6 @@ async def delete_reconciliation_item(
         raise
     except Exception as e:
         logger.error(f"Delete error: {e}")
-        db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.delete("/api/v1/reconciliation/items/bulk")
-async def bulk_delete_reconciliation_items(
-    item_ids: List[int],
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Permanently delete multiple extracted data items"""
-    try:
-        deleted_count = 0
-        event_ids_to_check = set()
-
-        for extracted_data_id in item_ids:
-            extracted = db.query(ExtractedData).filter(
-                ExtractedData.id == extracted_data_id
-            ).first()
-
-            if extracted:
-                event_ids_to_check.add(extracted.event_id)
-
-                # Delete training events
-                db.query(AITrainingEvent).filter(
-                    AITrainingEvent.extracted_data_id == extracted_data_id
-                ).delete()
-
-                # Delete extracted data
-                db.delete(extracted)
-                deleted_count += 1
-
-        # Check if events have no more extracted data and delete them
-        for event_id in event_ids_to_check:
-            if event_id:
-                other_extracted = db.query(ExtractedData).filter(
-                    ExtractedData.event_id == event_id
-                ).first()
-                if not other_extracted:
-                    event = db.query(IncomingDataEvent).filter(
-                        IncomingDataEvent.id == event_id
-                    ).first()
-                    if event:
-                        db.delete(event)
-
-        db.commit()
-
-        logger.info(f"Bulk deleted {deleted_count} items by user {current_user.id}")
-
-        return {
-            "status": "success",
-            "message": f"Deleted {deleted_count} items",
-            "deleted_count": deleted_count
-        }
-    except Exception as e:
-        logger.error(f"Bulk delete error: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
