@@ -68,6 +68,7 @@ class CRMContextService:
                 "loan_officer_performance": CRMContextService._get_loan_officer_performance(db, user_id),
                 "top_referral_borrowers": CRMContextService._get_top_referral_borrowers(db, user_id),
                 "rate_lock_intelligence": CRMContextService._get_rate_lock_context(),
+                "pipeline_efficiency": CRMContextService._get_pipeline_efficiency_context(db, user_id),
             }
             return context
         except Exception as e:
@@ -997,6 +998,199 @@ class CRMContextService:
         return guidance
 
     @staticmethod
+    def _get_pipeline_efficiency_context(db: Session, user_id: int) -> Dict[str, Any]:
+        """Get comprehensive pipeline efficiency metrics for AI analysis"""
+        try:
+            # Stage performance analysis
+            stage_metrics = []
+            stages = [
+                ('Lead Generation', 'leads', 'New'),
+                ('Pre-Qualification', 'leads', 'Prospect'),
+                ('Application', 'leads', 'Application Started'),
+                ('Processing', 'loans', 'Processing'),
+                ('Underwriting', 'loans', 'Underwriting'),
+                ('Clear to Close', 'loans', 'CTC'),
+                ('Closing', 'loans', 'Closing')
+            ]
+
+            for stage_name, table, stage_value in stages:
+                try:
+                    if table == 'leads':
+                        result = db.execute(text(f"""
+                            SELECT
+                                COUNT(*) as count,
+                                AVG(EXTRACT(DAY FROM (CURRENT_TIMESTAMP - created_at))) as avg_days
+                            FROM leads
+                            WHERE stage = :stage
+                        """), {"stage": stage_value})
+                    else:
+                        result = db.execute(text(f"""
+                            SELECT
+                                COUNT(*) as count,
+                                AVG(days_in_stage) as avg_days
+                            FROM loans
+                            WHERE stage = :stage
+                        """), {"stage": stage_value})
+
+                    row = result.fetchone()
+                    count = row[0] or 0
+                    avg_days = float(row[1]) if row[1] else 0
+
+                    # Calculate efficiency based on SLA targets
+                    sla_targets = {
+                        'Lead Generation': 2, 'Pre-Qualification': 5, 'Application': 7,
+                        'Processing': 10, 'Underwriting': 5, 'Clear to Close': 3, 'Closing': 2
+                    }
+                    target = sla_targets.get(stage_name, 7)
+                    efficiency = max(0, min(100, 100 - ((avg_days - target) / target * 50))) if avg_days > 0 else 85
+
+                    stage_metrics.append({
+                        "stage": stage_name,
+                        "count": count,
+                        "avg_days": round(avg_days, 1),
+                        "sla_target_days": target,
+                        "efficiency": round(efficiency, 1),
+                        "is_bottleneck": avg_days > target * 1.5 and count > 2
+                    })
+                except Exception as e:
+                    logger.debug(f"Could not get metrics for {stage_name}: {e}")
+                    stage_metrics.append({
+                        "stage": stage_name, "count": 0, "avg_days": 0,
+                        "sla_target_days": 7, "efficiency": 85, "is_bottleneck": False
+                    })
+
+            # Employee performance by role with efficiency scores
+            employee_performance = {
+                "loan_officers": [],
+                "processors": [],
+                "underwriters": [],
+                "closers": []
+            }
+
+            try:
+                # Get team members with their loan performance
+                result = db.execute(text("""
+                    SELECT
+                        tmp.id, tmp.name, tmp.role, tmp.email,
+                        tmp.loans_processed, tmp.avg_close_time, tmp.satisfaction_score,
+                        COUNT(DISTINCT l.id) as active_loans,
+                        AVG(l.days_in_stage) as current_avg_days
+                    FROM team_member_profiles tmp
+                    LEFT JOIN loans l ON (
+                        (tmp.role = 'processor' AND l.processor = tmp.name) OR
+                        (tmp.role = 'underwriter' AND l.underwriter = tmp.name) OR
+                        (tmp.role = 'closer' AND l.stage IN ('CTC', 'Closing'))
+                    )
+                    WHERE tmp.is_deleted = false AND tmp.status = 'active'
+                    GROUP BY tmp.id, tmp.name, tmp.role, tmp.email,
+                             tmp.loans_processed, tmp.avg_close_time, tmp.satisfaction_score
+                    ORDER BY tmp.role, tmp.loans_processed DESC
+                """))
+
+                for row in result:
+                    role = row[2] or 'processor'
+                    loans_processed = row[4] or 0
+                    avg_close = float(row[5]) if row[5] else 10.0
+                    satisfaction = float(row[6]) if row[6] else 85.0
+                    active_loans = row[7] or 0
+                    current_avg = float(row[8]) if row[8] else 0
+
+                    # Calculate efficiency score (0-100)
+                    # Based on: volume (30%), speed (40%), satisfaction (30%)
+                    volume_score = min(100, (loans_processed / 10) * 100)
+                    speed_score = max(0, 100 - (avg_close - 7) * 10)
+                    sat_score = satisfaction
+                    efficiency = (volume_score * 0.3) + (speed_score * 0.4) + (sat_score * 0.3)
+
+                    member = {
+                        "id": str(row[0]),
+                        "name": row[1],
+                        "role": role,
+                        "efficiency": round(efficiency, 1),
+                        "loans_processed": loans_processed,
+                        "avg_close_time": round(avg_close, 1),
+                        "satisfaction_score": round(satisfaction, 1),
+                        "active_loans": active_loans,
+                        "current_avg_days": round(current_avg, 1),
+                        "trend": round((efficiency - 75) / 75 * 100, 1)  # % above/below baseline
+                    }
+
+                    role_key = role + 's' if not role.endswith('s') else role
+                    if role_key in employee_performance:
+                        employee_performance[role_key].append(member)
+                    elif role == 'processor':
+                        employee_performance['processors'].append(member)
+                    elif role == 'underwriter':
+                        employee_performance['underwriters'].append(member)
+                    elif role == 'closer':
+                        employee_performance['closers'].append(member)
+
+            except Exception as e:
+                logger.debug(f"Could not get employee performance: {e}")
+
+            # Identify bottlenecks
+            bottlenecks = []
+
+            # Stage bottlenecks
+            for stage in stage_metrics:
+                if stage["is_bottleneck"]:
+                    bottlenecks.append({
+                        "type": "stage",
+                        "location": stage["stage"],
+                        "severity": "high" if stage["avg_days"] > stage["sla_target_days"] * 2 else "medium",
+                        "affected_count": stage["count"],
+                        "avg_delay_days": round(stage["avg_days"] - stage["sla_target_days"], 1),
+                        "recommendation": f"Review {stage['stage']} process - {stage['count']} items averaging {stage['avg_days']} days vs {stage['sla_target_days']} day target"
+                    })
+
+            # Employee bottlenecks (low efficiency workers with high volume)
+            for role, members in employee_performance.items():
+                for member in members:
+                    if member["efficiency"] < 60 and member["active_loans"] > 2:
+                        bottlenecks.append({
+                            "type": "employee",
+                            "location": f"{member['name']} ({role})",
+                            "severity": "high" if member["efficiency"] < 50 else "medium",
+                            "affected_count": member["active_loans"],
+                            "efficiency": member["efficiency"],
+                            "recommendation": f"{member['name']} has {member['efficiency']}% efficiency with {member['active_loans']} active loans. Consider workload redistribution or coaching."
+                        })
+
+            # Calculate overall pipeline health
+            total_efficiency = sum(s["efficiency"] for s in stage_metrics) / len(stage_metrics) if stage_metrics else 75
+            high_severity_bottlenecks = len([b for b in bottlenecks if b["severity"] == "high"])
+
+            pipeline_health = "good" if total_efficiency >= 80 and high_severity_bottlenecks == 0 else \
+                              "attention_needed" if total_efficiency >= 60 or high_severity_bottlenecks <= 2 else "critical"
+
+            return {
+                "overall_efficiency": round(total_efficiency, 1),
+                "pipeline_health": pipeline_health,
+                "stage_performance": stage_metrics,
+                "employee_performance": employee_performance,
+                "bottlenecks": bottlenecks,
+                "bottleneck_count": len(bottlenecks),
+                "high_severity_count": high_severity_bottlenecks,
+                "recommendations": [b["recommendation"] for b in bottlenecks[:5]]
+            }
+
+        except Exception as e:
+            logger.error(f"Error getting pipeline efficiency context: {e}")
+            try:
+                db.rollback()
+            except:
+                pass
+            return {
+                "overall_efficiency": 75,
+                "pipeline_health": "unknown",
+                "stage_performance": [],
+                "employee_performance": {},
+                "bottlenecks": [],
+                "bottleneck_count": 0,
+                "recommendations": []
+            }
+
+    @staticmethod
     def _get_top_referral_borrowers(db: Session, user_id: int) -> Dict[str, Any]:
         """Get top borrowers by referral score"""
         try:
@@ -1300,6 +1494,66 @@ class CRMContextService:
                     lines.append(f"    {i}. {b['name']} - Score: {b['referral_score']}/100{employer_info}{job_info}")
                     if b.get('referral_rating'):
                         lines.append(f"       Rating: {b['referral_rating']}, Stage: {b['stage']}")
+
+        # Pipeline Efficiency Analysis
+        efficiency = context.get("pipeline_efficiency", {})
+        if efficiency:
+            lines.append(f"\n\n=== PIPELINE EFFICIENCY ANALYSIS ===")
+            lines.append(f"Overall Efficiency: {efficiency.get('overall_efficiency', 0)}%")
+            lines.append(f"Pipeline Health: {efficiency.get('pipeline_health', 'unknown').upper()}")
+            lines.append(f"Active Bottlenecks: {efficiency.get('bottleneck_count', 0)} ({efficiency.get('high_severity_count', 0)} high severity)")
+
+            # Stage performance
+            stage_perf = efficiency.get("stage_performance", [])
+            if stage_perf:
+                lines.append(f"\n  STAGE PERFORMANCE:")
+                for stage in stage_perf:
+                    status = "🔴 BOTTLENECK" if stage.get("is_bottleneck") else "✅" if stage.get("efficiency", 0) >= 80 else "🟡"
+                    lines.append(f"    {status} {stage['stage']}: {stage['efficiency']}% efficiency | {stage['count']} items | {stage['avg_days']} days avg (target: {stage['sla_target_days']})")
+
+            # Employee performance by role
+            emp_perf = efficiency.get("employee_performance", {})
+
+            # Processors
+            processors = emp_perf.get("processors", [])
+            if processors:
+                lines.append(f"\n  PROCESSOR EFFICIENCY:")
+                for p in processors:
+                    status = "🔴" if p['efficiency'] < 60 else "🟡" if p['efficiency'] < 80 else "✅"
+                    lines.append(f"    {status} {p['name']}: {p['efficiency']}% | {p['active_loans']} active loans | {p['avg_close_time']} days avg | trend: {p['trend']:+.1f}%")
+
+            # Underwriters
+            underwriters = emp_perf.get("underwriters", [])
+            if underwriters:
+                lines.append(f"\n  UNDERWRITER EFFICIENCY:")
+                for u in underwriters:
+                    status = "🔴" if u['efficiency'] < 60 else "🟡" if u['efficiency'] < 80 else "✅"
+                    lines.append(f"    {status} {u['name']}: {u['efficiency']}% | {u['active_loans']} active loans | {u['avg_close_time']} days avg | trend: {u['trend']:+.1f}%")
+
+            # Closers
+            closers = emp_perf.get("closers", [])
+            if closers:
+                lines.append(f"\n  CLOSER EFFICIENCY:")
+                for c in closers:
+                    status = "🔴" if c['efficiency'] < 60 else "🟡" if c['efficiency'] < 80 else "✅"
+                    lines.append(f"    {status} {c['name']}: {c['efficiency']}% | {c['active_loans']} active loans | trend: {c['trend']:+.1f}%")
+
+            # Bottlenecks
+            bottlenecks = efficiency.get("bottlenecks", [])
+            if bottlenecks:
+                lines.append(f"\n  🚨 ACTIVE BOTTLENECKS:")
+                for b in bottlenecks:
+                    severity_icon = "🔴" if b['severity'] == 'high' else "🟡"
+                    lines.append(f"    {severity_icon} [{b['type'].upper()}] {b['location']}")
+                    lines.append(f"       Affected: {b['affected_count']} items | Severity: {b['severity']}")
+                    lines.append(f"       Recommendation: {b['recommendation']}")
+
+            # Top recommendations
+            recs = efficiency.get("recommendations", [])
+            if recs:
+                lines.append(f"\n  💡 TOP RECOMMENDATIONS:")
+                for i, rec in enumerate(recs[:5], 1):
+                    lines.append(f"    {i}. {rec}")
 
         # Rate Lock Intelligence
         rate_lock = context.get("rate_lock_intelligence", {})
