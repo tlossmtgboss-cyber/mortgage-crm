@@ -145,9 +145,74 @@ function AIRateLockCommentary({ marketData }) {
   const [commentary, setCommentary] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // AI Chat state
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const [showChat, setShowChat] = useState(false);
+  const chatEndRef = useRef(null);
+
   useEffect(() => {
     generateCommentary();
   }, [marketData]);
+
+  // Scroll chat to bottom when new messages arrive
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatMessages]);
+
+  // Handle AI chat submission
+  const handleChatSubmit = async (e) => {
+    e.preventDefault();
+    if (!chatInput.trim() || chatLoading) return;
+
+    const userMessage = chatInput.trim();
+    setChatInput('');
+    setChatMessages(prev => [...prev, { role: 'user', content: userMessage }]);
+    setChatLoading(true);
+
+    try {
+      const token = localStorage.getItem('token');
+      const API_URL = process.env.REACT_APP_API_URL || '';
+
+      // Include current market data in the context
+      const marketContext = marketData ? `Current market data: 10Y Treasury: ${marketData.treasury10yr}%, 2Y Treasury: ${marketData.treasury2yr}%, MBS 6.0: ${marketData.mbs60 || 'N/A'}` : '';
+
+      const response = await fetch(`${API_URL}/api/v1/ai/orchestrator-chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          message: `[RATE LOCK GUIDANCE REQUEST] ${marketContext}\n\nUser question: ${userMessage}`,
+          context: { market_data: marketData }
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setChatMessages(prev => [...prev, { role: 'assistant', content: data.response }]);
+      } else {
+        setChatMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I encountered an error. Please try again.' }]);
+      }
+    } catch (error) {
+      console.error('Chat error:', error);
+      setChatMessages(prev => [...prev, { role: 'assistant', content: 'Unable to connect to the AI service. Please check your connection.' }]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  // Quick question buttons
+  const quickQuestions = [
+    { label: 'Lock or Float?', question: 'Should I lock or float right now based on current market conditions?' },
+    { label: 'Rate Outlook', question: 'What is the rate outlook for the next 2 weeks?' },
+    { label: 'Best Lock Period', question: 'What lock period do you recommend for a loan closing in 30 days?' },
+    { label: 'Market Analysis', question: 'Give me a detailed analysis of current MBS pricing and treasury movements.' }
+  ];
 
   const generateCommentary = () => {
     if (!marketData || !marketData.treasury10yr) {
@@ -392,6 +457,117 @@ function AIRateLockCommentary({ marketData }) {
             </div>
             <div className="term-reason">{commentary.recommendations.longTerm.reason}</div>
           </div>
+        </div>
+
+        {/* AI Rate Lock Chat Section */}
+        <div className="rate-lock-chat-section">
+          <div className="chat-header" onClick={() => setShowChat(!showChat)}>
+            <div className="chat-header-left">
+              <span className="chat-icon">💬</span>
+              <h3>Ask AI Rate Lock Advisor</h3>
+            </div>
+            <span className={`chat-toggle ${showChat ? 'expanded' : ''}`}>
+              {showChat ? '▼' : '▶'}
+            </span>
+          </div>
+
+          {showChat && (
+            <div className="chat-container">
+              {/* Quick Question Buttons */}
+              <div className="quick-questions">
+                {quickQuestions.map((q, idx) => (
+                  <button
+                    key={idx}
+                    className="quick-question-btn"
+                    onClick={() => {
+                      setChatInput(q.question);
+                      // Auto-submit the question
+                      setChatMessages(prev => [...prev, { role: 'user', content: q.question }]);
+                      setChatLoading(true);
+                      // Trigger the API call
+                      const token = localStorage.getItem('token');
+                      const API_URL = process.env.REACT_APP_API_URL || '';
+                      const marketContext = marketData ? `Current market data: 10Y Treasury: ${marketData.treasury10yr}%, 2Y Treasury: ${marketData.treasury2yr}%, MBS 6.0: ${marketData.mbs60 || 'N/A'}` : '';
+
+                      fetch(`${API_URL}/api/v1/ai/orchestrator-chat`, {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify({
+                          message: `[RATE LOCK GUIDANCE REQUEST] ${marketContext}\n\nUser question: ${q.question}`,
+                          context: { market_data: marketData }
+                        })
+                      })
+                        .then(res => res.json())
+                        .then(data => {
+                          setChatMessages(prev => [...prev, { role: 'assistant', content: data.response }]);
+                        })
+                        .catch(() => {
+                          setChatMessages(prev => [...prev, { role: 'assistant', content: 'Unable to get response. Please try again.' }]);
+                        })
+                        .finally(() => {
+                          setChatLoading(false);
+                          setChatInput('');
+                        });
+                    }}
+                    disabled={chatLoading}
+                  >
+                    {q.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Chat Messages */}
+              <div className="chat-messages">
+                {chatMessages.length === 0 ? (
+                  <div className="chat-empty">
+                    <p>Ask me anything about rate locks, market conditions, or lock timing strategy.</p>
+                    <p className="chat-hint">Try: "My borrower is closing in 15 days - should I lock now?"</p>
+                  </div>
+                ) : (
+                  chatMessages.map((msg, idx) => (
+                    <div key={idx} className={`chat-message ${msg.role}`}>
+                      <div className="message-avatar">
+                        {msg.role === 'user' ? '👤' : '🤖'}
+                      </div>
+                      <div className="message-content">
+                        {msg.content.split('\n').map((line, i) => (
+                          <p key={i}>{line}</p>
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                )}
+                {chatLoading && (
+                  <div className="chat-message assistant">
+                    <div className="message-avatar">🤖</div>
+                    <div className="message-content typing">
+                      <span className="typing-dot"></span>
+                      <span className="typing-dot"></span>
+                      <span className="typing-dot"></span>
+                    </div>
+                  </div>
+                )}
+                <div ref={chatEndRef} />
+              </div>
+
+              {/* Chat Input */}
+              <form className="chat-input-form" onSubmit={handleChatSubmit}>
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder="Ask about rate locks, market conditions, or timing..."
+                  disabled={chatLoading}
+                />
+                <button type="submit" disabled={chatLoading || !chatInput.trim()}>
+                  {chatLoading ? '...' : 'Ask'}
+                </button>
+              </form>
+            </div>
+          )}
         </div>
       </div>
     </div>

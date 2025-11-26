@@ -117,6 +117,7 @@ function Loans() {
     'Approved',
     'Clear to Close',
     'Suspended',
+    'Funded',
   ];
 
   useEffect(() => {
@@ -329,10 +330,19 @@ function Loans() {
   // Ensure loans is always an array before filtering
   const safeLoans = Array.isArray(loans) ? loans : [];
 
-  // Filter by stage
-  let filteredLoans = activeFilter === 'All'
-    ? safeLoans
-    : safeLoans.filter(loan => loan.stage === activeFilter);
+  // Filter by stage - exclude funded loans from "All" since they're closed
+  const fundedStages = ['Funded This Month', 'Funded Prior Month'];
+  let filteredLoans;
+
+  if (activeFilter === 'All') {
+    // Show only active (non-funded) loans
+    filteredLoans = safeLoans.filter(loan => !fundedStages.includes(loan.stage));
+  } else if (activeFilter === 'Funded') {
+    // Show all funded loans (this month and prior)
+    filteredLoans = safeLoans.filter(loan => fundedStages.includes(loan.stage));
+  } else {
+    filteredLoans = safeLoans.filter(loan => loan.stage === activeFilter);
+  }
 
   // Filter by search query
   if (searchQuery.trim()) {
@@ -353,7 +363,7 @@ function Loans() {
       <div className="page-header">
         <div>
           <h1>Active Loans</h1>
-          <p>{loans.length} active loans</p>
+          <p>{safeLoans.filter(loan => !fundedStages.includes(loan.stage)).length} active loans</p>
         </div>
         <div className="header-actions">
           <button className="btn-secondary" onClick={handleExport}>
@@ -446,59 +456,6 @@ function Loans() {
         </div>
       )}
 
-      {/* Prior Months Closings - shown when viewing Funded This Month */}
-      {activeFilter === 'Funded This Month' && (
-        <div className="prior-months-section">
-          <div className="section-header">
-            <h2>Prior Months Closings</h2>
-            <p>Historical funded loans from previous months</p>
-          </div>
-
-          <div className="table-container">
-            <table className="loans-table">
-              <thead>
-                <tr>
-                  <th>Borrower</th>
-                  <th>Loan Amount</th>
-                  <th>Property Address</th>
-                  <th>Funded Date</th>
-                  <th>Days in Process</th>
-                  <th>Loan Officer</th>
-                </tr>
-              </thead>
-              <tbody>
-                {safeLoans
-                  .filter(loan => loan.stage === 'Funded Prior Month')
-                  .map((loan) => (
-                    <tr
-                      key={loan.id}
-                      onClick={() => navigate(`/loans/${loan.id}`)}
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <td className="borrower-name">{loan.borrower || loan.borrower_name}</td>
-                      <td className="loan-amount">${(loan.amount || 0).toLocaleString()}</td>
-                      <td>{loan.property_address || 'N/A'}</td>
-                      <td>
-                        {loan.funded_date
-                          ? new Date(loan.funded_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-                          : 'N/A'}
-                      </td>
-                      <td>{loan.days_in_process || calculateDays(loan.created_at)}</td>
-                      <td>{loan.loan_officer || 'Unassigned'}</td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
-
-          {loans.filter(loan => loan.stage === 'Funded Prior Month').length === 0 && (
-            <div className="empty-state">
-              <h3>No prior month closings found</h3>
-              <p>There are no funded loans from previous months</p>
-            </div>
-          )}
-        </div>
-      )}
 
       <div className="legacy-loans-grid" style={{ display: 'none' }}>
         <div className="loans-grid">
