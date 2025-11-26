@@ -21917,6 +21917,121 @@ def init_db():
                         CREATE INDEX IF NOT EXISTS ix_classified_documents_category ON classified_documents(category);
                     """))
 
+                    # Add new Loan columns for rate lock intelligence, appraisal, etc.
+                    conn.execute(text("""
+                        DO $$
+                        BEGIN
+                            -- Appraisal tracking columns
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='appraisal_ordered_date') THEN
+                                ALTER TABLE loans ADD COLUMN appraisal_ordered_date TIMESTAMP;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='appraisal_scheduled_date') THEN
+                                ALTER TABLE loans ADD COLUMN appraisal_scheduled_date TIMESTAMP;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='appraisal_completed_date') THEN
+                                ALTER TABLE loans ADD COLUMN appraisal_completed_date TIMESTAMP;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='appraisal_value') THEN
+                                ALTER TABLE loans ADD COLUMN appraisal_value FLOAT;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='lock_expiration_date') THEN
+                                ALTER TABLE loans ADD COLUMN lock_expiration_date TIMESTAMP;
+                            END IF;
+                            -- Rate Lock Intelligence columns
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='rate_lock_status') THEN
+                                ALTER TABLE loans ADD COLUMN rate_lock_status VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='rate_lock_recommendation') THEN
+                                ALTER TABLE loans ADD COLUMN rate_lock_recommendation VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='lock_term_days') THEN
+                                ALTER TABLE loans ADD COLUMN lock_term_days INTEGER;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='float_down_available') THEN
+                                ALTER TABLE loans ADD COLUMN float_down_available BOOLEAN DEFAULT FALSE;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='float_down_terms') THEN
+                                ALTER TABLE loans ADD COLUMN float_down_terms VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='extension_cost_estimate') THEN
+                                ALTER TABLE loans ADD COLUMN extension_cost_estimate FLOAT;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='volatility_score') THEN
+                                ALTER TABLE loans ADD COLUMN volatility_score INTEGER DEFAULT 50;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='borrower_risk_profile') THEN
+                                ALTER TABLE loans ADD COLUMN borrower_risk_profile VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='lock_score') THEN
+                                ALTER TABLE loans ADD COLUMN lock_score INTEGER;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='lock_decision_date') THEN
+                                ALTER TABLE loans ADD COLUMN lock_decision_date TIMESTAMP;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='lock_decision_notes') THEN
+                                ALTER TABLE loans ADD COLUMN lock_decision_notes TEXT;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='last_rate_check') THEN
+                                ALTER TABLE loans ADD COLUMN last_rate_check TIMESTAMP;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='rate_lock_history') THEN
+                                ALTER TABLE loans ADD COLUMN rate_lock_history JSON;
+                            END IF;
+                            -- Property and workflow columns
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='property_city') THEN
+                                ALTER TABLE loans ADD COLUMN property_city VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='property_state') THEN
+                                ALTER TABLE loans ADD COLUMN property_state VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='property_zip') THEN
+                                ALTER TABLE loans ADD COLUMN property_zip VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='lender') THEN
+                                ALTER TABLE loans ADD COLUMN lender VARCHAR;
+                            END IF;
+                            -- Milestone dates
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='initial_disclosures_sent_date') THEN
+                                ALTER TABLE loans ADD COLUMN initial_disclosures_sent_date TIMESTAMP;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='initial_disclosures_signed_date') THEN
+                                ALTER TABLE loans ADD COLUMN initial_disclosures_signed_date TIMESTAMP;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='cd_received_signed_date') THEN
+                                ALTER TABLE loans ADD COLUMN cd_received_signed_date TIMESTAMP;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='final_closing_package_sent_date') THEN
+                                ALTER TABLE loans ADD COLUMN final_closing_package_sent_date TIMESTAMP;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='contract_received_date') THEN
+                                ALTER TABLE loans ADD COLUMN contract_received_date TIMESTAMP;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='loan_estimate_sent_date') THEN
+                                ALTER TABLE loans ADD COLUMN loan_estimate_sent_date TIMESTAMP;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='conditional_approval_date') THEN
+                                ALTER TABLE loans ADD COLUMN conditional_approval_date TIMESTAMP;
+                            END IF;
+                            -- AMR tracking
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='last_amr_date') THEN
+                                ALTER TABLE loans ADD COLUMN last_amr_date TIMESTAMP;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='next_amr_date') THEN
+                                ALTER TABLE loans ADD COLUMN next_amr_date TIMESTAMP;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='refi_opportunity_score') THEN
+                                ALTER TABLE loans ADD COLUMN refi_opportunity_score INTEGER;
+                            END IF;
+                            -- Workflow columns
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='current_workflow_id') THEN
+                                ALTER TABLE loans ADD COLUMN current_workflow_id INTEGER;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='last_workflow_action') THEN
+                                ALTER TABLE loans ADD COLUMN last_workflow_action TIMESTAMP;
+                            END IF;
+                        END $$;
+                    """))
+
                     # Create api_keys table if it doesn't exist
                     conn.execute(text("""
                         CREATE TABLE IF NOT EXISTS api_keys (
