@@ -638,7 +638,7 @@
 /* Back to CRM Button */
 .ai-back-to-crm-new {
   position: fixed;
-  bottom: 100px;
+  bottom: 24px;
   left: 24px;
   padding: 10px 16px;
   background: #fff;
@@ -648,7 +648,8 @@
   cursor: pointer;
   font-size: 13px;
   transition: all 0.2s ease;
-  z-index: 50;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
 .ai-back-to-crm-new:hover {
