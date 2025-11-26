@@ -1768,6 +1768,77 @@ const API_BASE_URL = isProduction
             </div>
           )}
 
+          {/* GMAIL */}
+          {activeSection === 'gmail' && (
+            <div className="integration-detail-section">
+              <h2>📧 Gmail Integration</h2>
+              <p className="section-description">
+                Sync Gmail emails and automatically extract lead information with AI
+              </p>
+
+              {gmailStatus.connected ? (
+                <div className="microsoft-status-panel">
+                  <div className="status-header">
+                    <div className="status-icon" style={{background: '#EA4335'}}>📧</div>
+                    <div className="status-info">
+                      <h3>Gmail Connected</h3>
+                      <p>{gmailStatus.email}</p>
+                    </div>
+                    <div className="status-actions">
+                      <button className="btn-sync" onClick={async () => {
+                        setLoadingGmail(true);
+                        try {
+                          const response = await fetch(`${API_BASE_URL}/api/v1/gmail/sync?days_back=7&max_results=100`, {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                          });
+                          const data = await response.json();
+                          if (response.ok) {
+                            alert(`Gmail sync complete! ${data.processed_count} emails processed.`);
+                          } else {
+                            alert(`Sync failed: ${data.detail || 'Unknown error'}`);
+                          }
+                        } catch (error) {
+                          console.error('Gmail sync error:', error);
+                          alert('Failed to sync Gmail');
+                        } finally {
+                          setLoadingGmail(false);
+                        }
+                      }} disabled={loadingGmail}>
+                        {loadingGmail ? 'Syncing...' : '🔄 Sync Now'}
+                      </button>
+                      <button className="btn-disconnect" onClick={disconnectGmail} disabled={loadingGmail}>
+                        Disconnect
+                      </button>
+                    </div>
+                  </div>
+                  {gmailStatus.connected_at && (
+                    <div className="status-meta">Connected: {new Date(gmailStatus.connected_at).toLocaleString()}</div>
+                  )}
+                </div>
+              ) : (
+                <div className="integration-connect-card">
+                  <div className="connect-icon" style={{background: '#EA4335'}}>📧</div>
+                  <h3>Connect Gmail</h3>
+                  <p>Connect your Gmail account to sync emails and extract lead information automatically</p>
+                  <button className="btn-connect" onClick={connectGmail} disabled={loadingGmail}>
+                    {loadingGmail ? 'Connecting...' : 'Connect Gmail'}
+                  </button>
+                </div>
+              )}
+
+              <div className="integration-features" style={{marginTop: '24px'}}>
+                <h4>Features</h4>
+                <ul>
+                  <li>✅ Automatic email sync every 5 minutes</li>
+                  <li>✅ AI-powered lead extraction</li>
+                  <li>✅ Mortgage-related email detection</li>
+                  <li>✅ Auto-link to existing leads and loans</li>
+                </ul>
+              </div>
+            </div>
+          )}
+
           {/* MICROSOFT TEAMS */}
           {activeSection === 'teams' && (
             <div className="integration-detail-section">

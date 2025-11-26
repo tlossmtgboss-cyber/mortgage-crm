@@ -29355,6 +29355,147 @@ async def auto_sync_emails():
         if db:
             db.close()
 
+
+async def auto_sync_gmail():
+    """Background task to automatically sync Gmail for all users with Gmail connected"""
+    db = None
+    try:
+        # Test database connection before proceeding
+        try:
+            db = SessionLocal()
+            db.execute(text("SELECT 1"))
+        except Exception as conn_error:
+            if db:
+                db.close()
+            return
+
+        # Find all users with Gmail connected
+        result = db.execute(
+            text("""
+                SELECT id, email, full_name, user_metadata
+                FROM users
+                WHERE user_metadata::text LIKE '%gmail_connected%'
+            """)
+        )
+        users_with_gmail = result.fetchall()
+
+        if not users_with_gmail:
+            db.close()
+            return
+
+        logger.info(f"🔄 Gmail Auto-sync: Checking {len(users_with_gmail)} users")
+
+        from integrations.google_gmail import gmail_service
+
+        for user_row in users_with_gmail:
+            user_id = user_row[0]
+            user_email = user_row[1]
+            metadata = user_row[3] or {}
+
+            if isinstance(metadata, str):
+                try:
+                    metadata = json.loads(metadata)
+                except:
+                    metadata = {}
+
+            settings = metadata.get('settings', {}) if isinstance(metadata, dict) else {}
+
+            if not settings.get('gmail_connected'):
+                continue
+
+            token_data = settings.get('gmail_tokens')
+            if not token_data:
+                continue
+
+            # Check last sync time - only sync every 5 minutes
+            last_sync = settings.get('gmail_last_sync')
+            if last_sync:
+                try:
+                    last_sync_dt = datetime.fromisoformat(last_sync.replace('Z', '+00:00'))
+                    if datetime.now(timezone.utc) - last_sync_dt < timedelta(minutes=5):
+                        continue
+                except:
+                    pass
+
+            try:
+                logger.info(f"📧 Gmail Auto-syncing for user {user_id} ({user_email})")
+
+                credentials = gmail_service.get_credentials(token_data)
+                since_date = datetime.utcnow() - timedelta(days=1)
+
+                emails = gmail_service.sync_emails(
+                    credentials,
+                    since_date=since_date,
+                    max_results=50
+                )
+
+                processed_count = 0
+                for email in emails:
+                    try:
+                        email_id = email.get("id", "")
+
+                        # Check if already processed
+                        existing = db.execute(
+                            text("""
+                                SELECT id FROM incoming_data_events
+                                WHERE external_message_id = :email_id AND user_id = :user_id
+                            """),
+                            {"email_id": email_id, "user_id": user_id}
+                        ).fetchone()
+
+                        if existing:
+                            continue
+
+                        # Convert Gmail format to Microsoft-like format
+                        email_data = {
+                            "id": email_id,
+                            "subject": email.get("subject", ""),
+                            "from": {
+                                "emailAddress": {
+                                    "address": email.get("from", "")
+                                }
+                            },
+                            "toRecipients": [
+                                {"emailAddress": {"address": email.get("to", "")}}
+                            ] if email.get("to") else [],
+                            "receivedDateTime": email.get("date", ""),
+                            "body": {
+                                "contentType": "text" if email.get("body_text") else "html",
+                                "content": email.get("body_text") or email.get("body_html", "")
+                            }
+                        }
+
+                        result = await process_microsoft_email_to_dre(email_data, user_id, db)
+                        if result.get("status") not in ["error", "skipped"]:
+                            processed_count += 1
+
+                    except Exception as e:
+                        logger.warning(f"Error processing Gmail for user {user_id}: {e}")
+                        continue
+
+                # Update last sync time
+                settings['gmail_last_sync'] = datetime.utcnow().isoformat()
+                metadata['settings'] = settings
+                db.execute(
+                    text("UPDATE users SET user_metadata = :metadata WHERE id = :id"),
+                    {"metadata": json.dumps(metadata), "id": user_id}
+                )
+                db.commit()
+
+                logger.info(f"✅ Gmail Auto-synced {processed_count}/{len(emails)} emails for user {user_id}")
+
+            except Exception as e:
+                logger.error(f"Error auto-syncing Gmail for user {user_id}: {e}")
+                db.rollback()
+                continue
+
+    except Exception as e:
+        logger.error(f"Gmail auto-sync task error: {e}")
+    finally:
+        if db:
+            db.close()
+
+
 def init_db_with_retry(max_retries=5, initial_delay=2):
     """Initialize database with retry logic for Railway startup"""
     # Railway-specific: Wait for Postgres to be ready
@@ -29665,8 +29806,15 @@ async def startup_event():
             name='Auto-sync Microsoft 365 emails',
             replace_existing=True
         )
+        scheduler.add_job(
+            auto_sync_gmail,
+            trigger=IntervalTrigger(minutes=5),
+            id='auto_sync_gmail',
+            name='Auto-sync Gmail emails',
+            replace_existing=True
+        )
         scheduler.start()
-        logger.info("✅ Auto-sync scheduler started (runs every 5 minutes)")
+        logger.info("✅ Auto-sync scheduler started (Microsoft 365 + Gmail, runs every 5 minutes)")
     except Exception as e:
         logger.error(f"Failed to start auto-sync scheduler: {e}")
 
