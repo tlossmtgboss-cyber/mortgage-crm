@@ -502,6 +502,75 @@ function AILandingPage() {
     }
   };
 
+  // Parse AI response text to extract actionable items for the sidebar
+  const parseResponseForActionItems = (responseText) => {
+    const items = [];
+    const lines = responseText.split('\n');
+
+    // Patterns to match borrower/loan mentions with dollar amounts
+    const nameAmountPattern = /[-•]\s*([A-Z][a-z]+(?:\s+[A-Z]\.?\s*)?[A-Z][a-z]+)\s*\(?\$?([\d,]+(?:,\d{3})*)\)?/g;
+    const stagePattern = /\*\*([^*]+)\*\*:/;
+
+    let currentStage = '';
+    let currentAction = '';
+    let priority = 'MEDIUM';
+    let itemId = 1;
+
+    for (const line of lines) {
+      // Check for stage headers like "**Clear to Close Stage**:"
+      const stageMatch = line.match(stagePattern);
+      if (stageMatch) {
+        currentStage = stageMatch[1].trim();
+        // Set priority based on stage
+        if (currentStage.toLowerCase().includes('clear to close') || currentStage.toLowerCase().includes('closing')) {
+          priority = 'URGENT';
+        } else if (currentStage.toLowerCase().includes('underwriting')) {
+          priority = 'HIGH';
+        } else if (currentStage.toLowerCase().includes('processing')) {
+          priority = 'MEDIUM';
+        }
+      }
+
+      // Check for action items
+      if (line.toLowerCase().includes('action:')) {
+        currentAction = line.replace(/[-•]\s*action:/i, '').trim();
+      }
+
+      // Extract borrower names with amounts
+      let match;
+      const tempLine = line;
+      while ((match = nameAmountPattern.exec(tempLine)) !== null) {
+        const name = match[1].trim();
+        const amount = match[2].replace(/,/g, '');
+
+        // Skip if it's not a valid name (e.g., just "Action" or a stage name)
+        if (name.toLowerCase() === 'action' || name.toLowerCase().includes('stage')) {
+          continue;
+        }
+
+        items.push({
+          id: itemId++,
+          title: currentAction || `Follow up on ${currentStage || 'loan'}`,
+          client: name,
+          stage: currentStage || 'In Progress',
+          priority: priority,
+          type: 'Pipeline Item',
+          source: 'AI Analysis',
+          owner: 'Loan Officer',
+          dateCreated: new Date().toLocaleString(),
+          details: currentAction || `Review status and take necessary action for ${currentStage}`,
+          dueTime: priority === 'URGENT' ? 'Today' : 'This Week',
+          loanAmount: `$${parseInt(amount).toLocaleString()}`
+        });
+      }
+    }
+
+    // Reset regex lastIndex for reuse
+    nameAmountPattern.lastIndex = 0;
+
+    return items;
+  };
+
   const handleNewChat = () => {
     const newId = crypto.randomUUID();
     setSessionId(newId);
@@ -778,6 +847,14 @@ function AILandingPage() {
             setTaskListData(tasks);
             setSelectedTask(tasks[0]);
             setShowRightSidebar(true);
+          } else if (fullResponse) {
+            // Parse the AI response to extract actionable items for the sidebar
+            const extractedItems = parseResponseForActionItems(fullResponse);
+            if (extractedItems.length > 0) {
+              setTaskListData(extractedItems);
+              setSelectedTask(extractedItems[0]);
+              setShowRightSidebar(true);
+            }
           }
 
           // Update conversation history
