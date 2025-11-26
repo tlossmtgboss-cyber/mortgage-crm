@@ -507,9 +507,9 @@ function AILandingPage() {
     const items = [];
     const lines = responseText.split('\n');
 
-    // Patterns to match borrower/loan mentions with dollar amounts
-    const nameAmountPattern = /[-•]\s*([A-Z][a-z]+(?:\s+[A-Z]\.?\s*)?[A-Z][a-z]+)\s*\(?\$?([\d,]+(?:,\d{3})*)\)?/g;
-    const stagePattern = /\*\*([^*]+)\*\*:/;
+    // Pattern to match borrower names with dollar amounts: "- Name ($XXX,XXX)" or "- Name ($XXX,XXX)"
+    const nameAmountPattern = /[-•]\s*([A-Z][a-z]+(?:\s+[A-Z]\.?\s*)?(?:[A-Z][a-z]+)?(?:\s+[A-Z][a-z]+)?)\s*\(\$?([\d,]+)\)/;
+    const stagePattern = /(?:^|\d+\.)\s*\*\*([^*]+)\*\*:?/;
 
     let currentStage = '';
     let currentAction = '';
@@ -517,7 +517,7 @@ function AILandingPage() {
     let itemId = 1;
 
     for (const line of lines) {
-      // Check for stage headers like "**Clear to Close Stage**:"
+      // Check for stage headers like "1. **Clear to Close Stage**:" or "**Processing Stage**:"
       const stageMatch = line.match(stagePattern);
       if (stageMatch) {
         currentStage = stageMatch[1].trim();
@@ -528,6 +528,8 @@ function AILandingPage() {
           priority = 'HIGH';
         } else if (currentStage.toLowerCase().includes('processing')) {
           priority = 'MEDIUM';
+        } else if (currentStage.toLowerCase().includes('bottleneck')) {
+          priority = 'HIGH';
         }
       }
 
@@ -536,21 +538,22 @@ function AILandingPage() {
         currentAction = line.replace(/[-•]\s*action:/i, '').trim();
       }
 
-      // Extract borrower names with amounts
-      let match;
-      const tempLine = line;
-      while ((match = nameAmountPattern.exec(tempLine)) !== null) {
+      // Extract borrower names with amounts from lines like "- Elizabeth Moore ($825,000)"
+      const match = line.match(nameAmountPattern);
+      if (match) {
         const name = match[1].trim();
         const amount = match[2].replace(/,/g, '');
 
         // Skip if it's not a valid name (e.g., just "Action" or a stage name)
-        if (name.toLowerCase() === 'action' || name.toLowerCase().includes('stage')) {
+        if (name.toLowerCase() === 'action' ||
+            name.toLowerCase().includes('stage') ||
+            name.length < 3) {
           continue;
         }
 
         items.push({
           id: itemId++,
-          title: currentAction || `Follow up on ${currentStage || 'loan'}`,
+          title: currentAction || `Review ${currentStage || 'loan status'}`,
           client: name,
           stage: currentStage || 'In Progress',
           priority: priority,
@@ -564,9 +567,6 @@ function AILandingPage() {
         });
       }
     }
-
-    // Reset regex lastIndex for reuse
-    nameAmountPattern.lastIndex = 0;
 
     return items;
   };
