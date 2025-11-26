@@ -7,6 +7,7 @@ import MyProfile from './MyProfile';
 import ExperimentsDashboard from './ExperimentsDashboard';
 import TaskWorkflowManager from '../components/TaskWorkflowManager';
 import PowerPlayManager from '../components/PowerPlayManager';
+import DocumentIntakeManager from '../components/DocumentIntakeManager';
 import EmailMonitorDashboard from './EmailMonitorDashboard';
 import './Settings.css';
 
@@ -1561,6 +1562,14 @@ const API_BASE_URL = isProduction
           </button>
 
           <button
+            className={`sidebar-btn ${activeSection === 'document-intake' ? 'active' : ''}`}
+            onClick={() => setActiveSection('document-intake')}
+          >
+            <span className="icon">📄</span>
+            <span>Document Intake</span>
+          </button>
+
+          <button
             className={`sidebar-btn ${activeSection === 'email-monitor' ? 'active' : ''}`}
             onClick={() => setActiveSection('email-monitor')}
           >
@@ -1842,6 +1851,10 @@ const API_BASE_URL = isProduction
 
           {activeSection === 'power-play' && (
             <PowerPlayManager />
+          )}
+
+          {activeSection === 'document-intake' && (
+            <DocumentIntakeManager />
           )}
 
           {/* OUTLOOK EMAIL */}

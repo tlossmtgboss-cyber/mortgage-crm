@@ -226,6 +226,69 @@ class ActivityType(str, enum.Enum):
     DOCUMENT = "Document"
 
 
+# ============================================================================
+# EMAIL DOCUMENT INTAKE ENUMS
+# ============================================================================
+
+class EmailIntakeMatchStatus(str, enum.Enum):
+    """Status of email-to-borrower matching"""
+    MATCHED = "matched"  # Single clear match to borrower/loan
+    MULTIPLE = "multiple"  # Multiple possible matches - needs selection
+    UNMATCHED = "unmatched"  # No match found - needs manual assignment
+
+class AttachmentClassificationStatus(str, enum.Enum):
+    """Classification status for email attachments"""
+    PENDING = "pending"  # Awaiting classification
+    CLASSIFIED = "classified"  # Classified and attached to borrower
+    DISCARDED = "discarded"  # Marked as irrelevant/junk
+
+class DocumentType(str, enum.Enum):
+    """Standard document types for mortgage files"""
+    # Income Documents
+    W2 = "W2"
+    PAYSTUB = "Paystub"
+    TAX_RETURN_1040 = "Tax Return (1040)"
+    TAX_RETURN_1099 = "1099"
+    PROFIT_LOSS = "Profit & Loss Statement"
+    EMPLOYMENT_VERIFICATION = "Employment Verification"
+    # Asset Documents
+    BANK_STATEMENT = "Bank Statement"
+    RETIREMENT_STATEMENT = "Retirement Account Statement"
+    INVESTMENT_STATEMENT = "Investment Statement"
+    GIFT_LETTER = "Gift Letter"
+    # Credit Documents
+    CREDIT_REPORT = "Credit Report"
+    CREDIT_EXPLANATION = "Credit Explanation Letter"
+    # Property Documents
+    PURCHASE_CONTRACT = "Purchase Contract"
+    ADDENDUM = "Contract Addendum"
+    APPRAISAL = "Appraisal"
+    TITLE_COMMITMENT = "Title Commitment"
+    HOMEOWNERS_INSURANCE = "Homeowners Insurance"
+    # Identity Documents
+    DRIVERS_LICENSE = "Driver's License"
+    PASSPORT = "Passport"
+    SSN_CARD = "Social Security Card"
+    # Disclosure Documents
+    LOAN_ESTIMATE = "Loan Estimate"
+    CLOSING_DISCLOSURE = "Closing Disclosure"
+    INITIAL_DISCLOSURES = "Initial Disclosures"
+    # Other
+    DIVORCE_DECREE = "Divorce Decree"
+    BANKRUPTCY_DISCHARGE = "Bankruptcy Discharge"
+    MISC = "Miscellaneous"
+
+class DocumentCategory(str, enum.Enum):
+    """Document categories for organization"""
+    INCOME = "Income"
+    ASSETS = "Assets"
+    CREDIT = "Credit"
+    PROPERTY = "Property"
+    IDENTITY = "Identity"
+    DISCLOSURES = "Disclosures"
+    MISC = "Miscellaneous"
+
+
 class InviteStatus(str, enum.Enum):
     PENDING = "pending"
     ACCEPTED = "accepted"
@@ -610,6 +673,161 @@ class Task(Base):
     owner = relationship("User", backref="tasks")
     lead = relationship("Lead", backref="tasks")
     loan = relationship("Loan", backref="user_tasks")
+    # Document intake classification task relationship
+    email_intake_id = Column(Integer, ForeignKey("email_intakes.id"), nullable=True)
+    email_intake = relationship("EmailIntake", back_populates="classification_task")
+
+
+# ============================================================================
+# EMAIL DOCUMENT INTAKE MODELS
+# ============================================================================
+
+class EmailIntake(Base):
+    """
+    Represents an inbound email with attachments for document intake.
+    Created when docs@yourcrm.com receives an email.
+    """
+    __tablename__ = "email_intakes"
+    __table_args__ = (
+        Index('ix_email_intakes_match_status', 'match_status'),
+        Index('ix_email_intakes_received_at', 'received_at'),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    from_email = Column(String, nullable=False, index=True)
+    to_email = Column(String)
+    cc_emails = Column(String)  # Comma-separated
+    subject = Column(String)
+    body_snippet = Column(Text)  # First 500 chars of body
+    received_at = Column(DateTime, nullable=False)
+    raw_message_id = Column(String, unique=True, index=True)  # Email Message-ID header
+    in_reply_to = Column(String)  # For thread matching
+
+    # Matching results
+    matched_borrower_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
+    matched_loan_id = Column(Integer, ForeignKey("loans.id"), nullable=True)
+    match_status = Column(SQLEnum(EmailIntakeMatchStatus), default=EmailIntakeMatchStatus.UNMATCHED)
+    match_candidates = Column(JSON)  # List of potential matches if MULTIPLE
+
+    # Processing status
+    processing_status = Column(String, default="pending")  # pending, processed, error
+    processing_error = Column(Text)
+
+    # Audit
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    processed_at = Column(DateTime)
+    processed_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    # Relationships
+    attachments = relationship("AttachmentIntake", back_populates="email_intake", cascade="all, delete-orphan")
+    matched_borrower = relationship("Lead", foreign_keys=[matched_borrower_id])
+    matched_loan = relationship("Loan", foreign_keys=[matched_loan_id])
+    classification_task = relationship("Task", back_populates="email_intake", uselist=False)
+
+
+class AttachmentIntake(Base):
+    """
+    Represents an attachment from an inbound email awaiting classification.
+    """
+    __tablename__ = "attachment_intakes"
+    __table_args__ = (
+        Index('ix_attachment_intakes_classification_status', 'classification_status'),
+        Index('ix_attachment_intakes_email_intake_id', 'email_intake_id'),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    email_intake_id = Column(Integer, ForeignKey("email_intakes.id"), nullable=False)
+
+    # File info
+    filename = Column(String, nullable=False)
+    original_filename = Column(String)  # Before sanitization
+    file_size = Column(Integer)  # Bytes
+    mime_type = Column(String)
+    storage_location = Column(String)  # Temp storage path/URL
+
+    # AI suggestions
+    ai_suggested_doc_type = Column(String)
+    ai_suggested_doc_category = Column(String)
+    ai_suggested_borrower_id = Column(Integer, nullable=True)
+    ai_suggested_loan_id = Column(Integer, nullable=True)
+    ai_confidence = Column(Float)  # 0-1 confidence score
+    ai_extracted_text = Column(Text)  # OCR text snippet for matching
+
+    # Classification (filled by user)
+    classification_status = Column(SQLEnum(AttachmentClassificationStatus), default=AttachmentClassificationStatus.PENDING)
+    classified_doc_type = Column(SQLEnum(DocumentType), nullable=True)
+    classified_doc_category = Column(SQLEnum(DocumentCategory), nullable=True)
+    classified_borrower_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
+    classified_loan_id = Column(Integer, ForeignKey("loans.id"), nullable=True)
+    period_start_date = Column(Date)  # For statements
+    period_end_date = Column(Date)
+    classification_notes = Column(Text)
+
+    # When classified, becomes a Document
+    document_id = Column(Integer, ForeignKey("documents.id"), nullable=True)
+
+    # Audit
+    classified_at = Column(DateTime)
+    classified_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    discarded_reason = Column(String)  # If discarded
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    email_intake = relationship("EmailIntake", back_populates="attachments")
+    classified_borrower = relationship("Lead", foreign_keys=[classified_borrower_id])
+    classified_loan = relationship("Loan", foreign_keys=[classified_loan_id])
+    document = relationship("Document", back_populates="source_attachment")
+
+
+class Document(Base):
+    """
+    A classified document attached to a borrower/loan.
+    Created when an AttachmentIntake is classified.
+    """
+    __tablename__ = "documents"
+    __table_args__ = (
+        Index('ix_documents_borrower_id', 'borrower_id'),
+        Index('ix_documents_loan_id', 'loan_id'),
+        Index('ix_documents_doc_type', 'doc_type'),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    borrower_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
+    loan_id = Column(Integer, ForeignKey("loans.id"), nullable=True)
+
+    # Document info
+    doc_type = Column(SQLEnum(DocumentType), nullable=False)
+    doc_category = Column(SQLEnum(DocumentCategory))
+    filename = Column(String, nullable=False)
+    original_filename = Column(String)
+    file_size = Column(Integer)
+    mime_type = Column(String)
+    file_location = Column(String, nullable=False)  # Final storage path/URL
+
+    # Period info (for statements)
+    period_start_date = Column(Date)
+    period_end_date = Column(Date)
+
+    # Source tracking
+    source = Column(String, default="EMAIL_INTAKE")  # EMAIL_INTAKE, MANUAL_UPLOAD, API
+    source_email_intake_id = Column(Integer, ForeignKey("email_intakes.id"), nullable=True)
+
+    # Status
+    status = Column(String, default="active")  # active, archived, deleted
+    notes = Column(Text)
+
+    # Audit
+    uploaded_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    uploaded_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    borrower = relationship("Lead", foreign_keys=[borrower_id], backref="documents")
+    loan = relationship("Loan", foreign_keys=[loan_id], backref="documents")
+    source_email_intake = relationship("EmailIntake", foreign_keys=[source_email_intake_id])
+    source_attachment = relationship("AttachmentIntake", back_populates="document", uselist=False)
+    uploaded_by = relationship("User", foreign_keys=[uploaded_by_user_id])
+
 
 class ReferralPartner(Base):
     __tablename__ = "referral_partners"
@@ -18900,6 +19118,461 @@ async def _execute_power_play_actions(actions: list, entity: Any, db: Session, c
 
     db.commit()
     return executed
+
+
+# ============================================================================
+# DOCUMENT INTAKE CLASSIFICATION ENDPOINTS
+# ============================================================================
+
+# Pydantic models for Document Intake API
+class EmailProcessRequest(BaseModel):
+    from_email: str
+    to_email: Optional[str] = None
+    cc_emails: Optional[List[str]] = []
+    subject: Optional[str] = ""
+    body: Optional[str] = ""
+    date: Optional[str] = None
+    message_id: Optional[str] = None
+    in_reply_to: Optional[str] = None
+    attachments: Optional[List[Dict[str, Any]]] = []
+
+
+class ClassifyAttachmentRequest(BaseModel):
+    doc_type: str
+    doc_category: str
+    borrower_id: Optional[int] = None
+    loan_id: Optional[int] = None
+    period_start: Optional[str] = None
+    period_end: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class DiscardAttachmentRequest(BaseModel):
+    reason: str
+
+
+class UpdateMatchRequest(BaseModel):
+    borrower_id: Optional[int] = None
+    loan_id: Optional[int] = None
+
+
+@app.post("/api/v1/document-intake/process")
+async def process_inbound_email(
+    email_data: EmailProcessRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Process an inbound email with attachments.
+
+    This endpoint receives email data (from an email provider webhook or manual trigger),
+    parses attachments, attempts to match to a borrower/loan, and creates a classification task.
+    """
+    from workflows.document_intake_engine import DocumentIntakeEngine
+
+    engine = DocumentIntakeEngine(db)
+
+    raw_email = {
+        "from_email": email_data.from_email,
+        "to_email": email_data.to_email,
+        "cc": email_data.cc_emails or [],
+        "subject": email_data.subject or "",
+        "body": email_data.body or "",
+        "date": email_data.date or datetime.now(timezone.utc).isoformat(),
+        "message_id": email_data.message_id or f"manual-{datetime.now().timestamp()}",
+        "in_reply_to": email_data.in_reply_to,
+        "attachments": email_data.attachments or []
+    }
+
+    try:
+        result = await engine.process_inbound_email(raw_email)
+        return result
+    except Exception as e:
+        logger.error(f"Error processing document intake: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to process email: {str(e)}")
+
+
+@app.get("/api/v1/document-intake/pending")
+async def get_pending_intakes(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get all email intakes with pending classifications.
+
+    Returns list of email intakes that have attachments awaiting classification.
+    """
+    pending_intakes = db.query(EmailIntake).filter(
+        EmailIntake.processing_status == "processed"
+    ).options(
+        selectinload(EmailIntake.attachments),
+        selectinload(EmailIntake.matched_borrower),
+        selectinload(EmailIntake.matched_loan)
+    ).order_by(EmailIntake.received_at.desc()).limit(50).all()
+
+    result = []
+    for intake in pending_intakes:
+        pending_attachments = [
+            att for att in intake.attachments
+            if att.classification_status == AttachmentClassificationStatus.PENDING
+        ]
+
+        if pending_attachments:
+            result.append({
+                "id": intake.id,
+                "from_email": intake.from_email,
+                "subject": intake.subject,
+                "received_at": intake.received_at.isoformat() if intake.received_at else None,
+                "match_status": intake.match_status.value if intake.match_status else "unmatched",
+                "matched_borrower": {
+                    "id": intake.matched_borrower.id,
+                    "name": intake.matched_borrower.name
+                } if intake.matched_borrower else None,
+                "matched_loan": {
+                    "id": intake.matched_loan.id,
+                    "loan_number": intake.matched_loan.loan_number,
+                    "borrower_name": intake.matched_loan.borrower_name
+                } if intake.matched_loan else None,
+                "pending_attachments": len(pending_attachments),
+                "total_attachments": len(intake.attachments)
+            })
+
+    return result
+
+
+@app.get("/api/v1/document-intake/{intake_id}")
+async def get_email_intake(
+    intake_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get detailed information about an email intake and its attachments.
+    """
+    intake = db.query(EmailIntake).filter(EmailIntake.id == intake_id).options(
+        selectinload(EmailIntake.attachments),
+        selectinload(EmailIntake.matched_borrower),
+        selectinload(EmailIntake.matched_loan),
+        selectinload(EmailIntake.classification_task)
+    ).first()
+
+    if not intake:
+        raise HTTPException(status_code=404, detail="Email intake not found")
+
+    return {
+        "id": intake.id,
+        "from_email": intake.from_email,
+        "to_email": intake.to_email,
+        "cc_emails": intake.cc_emails.split(",") if intake.cc_emails else [],
+        "subject": intake.subject,
+        "body_snippet": intake.body_snippet,
+        "received_at": intake.received_at.isoformat() if intake.received_at else None,
+        "match_status": intake.match_status.value if intake.match_status else "unmatched",
+        "match_candidates": intake.match_candidates,
+        "matched_borrower": {
+            "id": intake.matched_borrower.id,
+            "name": intake.matched_borrower.name,
+            "email": intake.matched_borrower.email
+        } if intake.matched_borrower else None,
+        "matched_loan": {
+            "id": intake.matched_loan.id,
+            "loan_number": intake.matched_loan.loan_number,
+            "borrower_name": intake.matched_loan.borrower_name
+        } if intake.matched_loan else None,
+        "attachments": [
+            {
+                "id": att.id,
+                "filename": att.filename,
+                "original_filename": att.original_filename,
+                "file_size": att.file_size,
+                "mime_type": att.mime_type,
+                "classification_status": att.classification_status.value if att.classification_status else "pending",
+                "ai_suggested_doc_type": att.ai_suggested_doc_type,
+                "ai_suggested_doc_category": att.ai_suggested_doc_category,
+                "ai_confidence": att.ai_confidence,
+                "classified_doc_type": att.classified_doc_type.value if att.classified_doc_type else None,
+                "classified_doc_category": att.classified_doc_category.value if att.classified_doc_category else None,
+                "period_start_date": att.period_start_date.isoformat() if att.period_start_date else None,
+                "period_end_date": att.period_end_date.isoformat() if att.period_end_date else None,
+                "document_id": att.document_id,
+                "discarded_reason": att.discarded_reason
+            }
+            for att in intake.attachments
+        ],
+        "classification_task": {
+            "id": intake.classification_task.id,
+            "status": intake.classification_task.status,
+            "title": intake.classification_task.title
+        } if intake.classification_task else None,
+        "processing_status": intake.processing_status
+    }
+
+
+@app.put("/api/v1/document-intake/{intake_id}/match")
+async def update_intake_match(
+    intake_id: int,
+    match_data: UpdateMatchRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Update the matched borrower/loan for an email intake.
+
+    Use this when the automatic matching was wrong or when match_status is MULTIPLE/UNMATCHED.
+    """
+    intake = db.query(EmailIntake).filter(EmailIntake.id == intake_id).first()
+
+    if not intake:
+        raise HTTPException(status_code=404, detail="Email intake not found")
+
+    if match_data.borrower_id is not None:
+        # Verify borrower exists
+        borrower = db.query(Lead).filter(Lead.id == match_data.borrower_id).first()
+        if not borrower:
+            raise HTTPException(status_code=400, detail="Borrower not found")
+        intake.matched_borrower_id = match_data.borrower_id
+
+    if match_data.loan_id is not None:
+        # Verify loan exists
+        loan = db.query(Loan).filter(Loan.id == match_data.loan_id).first()
+        if not loan:
+            raise HTTPException(status_code=400, detail="Loan not found")
+        intake.matched_loan_id = match_data.loan_id
+
+    if match_data.borrower_id or match_data.loan_id:
+        intake.match_status = EmailIntakeMatchStatus.MATCHED
+
+    db.commit()
+
+    return {
+        "success": True,
+        "intake_id": intake_id,
+        "matched_borrower_id": intake.matched_borrower_id,
+        "matched_loan_id": intake.matched_loan_id,
+        "match_status": intake.match_status.value
+    }
+
+
+@app.post("/api/v1/document-intake/attachments/{attachment_id}/classify")
+async def classify_attachment(
+    attachment_id: int,
+    classification: ClassifyAttachmentRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Classify an attachment and create a Document record.
+
+    This is called when the user reviews an attachment and confirms its document type.
+    """
+    from workflows.document_intake_engine import DocumentClassificationHandler
+
+    handler = DocumentClassificationHandler(db)
+
+    try:
+        result = await handler.classify_attachment(
+            attachment_id=attachment_id,
+            user_id=current_user.id,
+            doc_type=classification.doc_type,
+            doc_category=classification.doc_category,
+            borrower_id=classification.borrower_id,
+            loan_id=classification.loan_id,
+            period_start=classification.period_start,
+            period_end=classification.period_end,
+            notes=classification.notes
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error classifying attachment: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Classification failed: {str(e)}")
+
+
+@app.post("/api/v1/document-intake/attachments/{attachment_id}/discard")
+async def discard_attachment(
+    attachment_id: int,
+    discard_data: DiscardAttachmentRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Discard an attachment as irrelevant/junk.
+
+    Use this for signature images, email footers, or other non-document attachments.
+    """
+    from workflows.document_intake_engine import DocumentClassificationHandler
+
+    handler = DocumentClassificationHandler(db)
+
+    try:
+        result = await handler.discard_attachment(
+            attachment_id=attachment_id,
+            user_id=current_user.id,
+            reason=discard_data.reason
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error discarding attachment: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Discard failed: {str(e)}")
+
+
+@app.post("/api/v1/document-intake/tasks/{task_id}/complete")
+async def complete_classification_task(
+    task_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Complete a document classification task.
+
+    This should be called after all attachments have been classified or discarded.
+    """
+    from workflows.document_intake_engine import DocumentClassificationHandler
+
+    handler = DocumentClassificationHandler(db)
+
+    try:
+        result = await handler.complete_classification_task(
+            task_id=task_id,
+            user_id=current_user.id
+        )
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error completing task: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to complete task: {str(e)}")
+
+
+@app.get("/api/v1/document-intake/doc-types")
+async def get_document_types(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get available document types and categories for classification UI.
+    """
+    return {
+        "doc_types": [dt.value for dt in DocumentType],
+        "doc_categories": [dc.value for dc in DocumentCategory],
+        "type_to_category": {
+            "W2": "INCOME",
+            "PAYSTUB": "INCOME",
+            "TAX_RETURN_1040": "INCOME",
+            "TAX_RETURN_1099": "INCOME",
+            "BANK_STATEMENT": "ASSETS",
+            "INVESTMENT_STATEMENT": "ASSETS",
+            "RETIREMENT_STATEMENT": "ASSETS",
+            "GIFT_LETTER": "ASSETS",
+            "DRIVERS_LICENSE": "IDENTITY",
+            "PASSPORT": "IDENTITY",
+            "SSN_CARD": "IDENTITY",
+            "GREEN_CARD": "IDENTITY",
+            "PURCHASE_CONTRACT": "PROPERTY",
+            "APPRAISAL": "PROPERTY",
+            "TITLE_COMMITMENT": "PROPERTY",
+            "HOMEOWNERS_INSURANCE": "PROPERTY",
+            "SURVEY": "PROPERTY",
+            "CREDIT_REPORT": "CREDIT",
+            "CREDIT_EXPLANATION": "CREDIT",
+            "VOE": "EMPLOYMENT",
+            "EMPLOYMENT_CONTRACT": "EMPLOYMENT",
+            "BUSINESS_LICENSE": "EMPLOYMENT",
+            "OTHER": "MISC"
+        }
+    }
+
+
+@app.get("/api/v1/documents")
+async def get_documents(
+    borrower_id: Optional[int] = None,
+    loan_id: Optional[int] = None,
+    doc_type: Optional[str] = None,
+    doc_category: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get documents with optional filtering.
+    """
+    query = db.query(Document).filter(Document.status == "active")
+
+    if borrower_id:
+        query = query.filter(Document.borrower_id == borrower_id)
+    if loan_id:
+        query = query.filter(Document.loan_id == loan_id)
+    if doc_type:
+        query = query.filter(Document.doc_type == DocumentType(doc_type))
+    if doc_category:
+        query = query.filter(Document.doc_category == DocumentCategory(doc_category))
+
+    total = query.count()
+    documents = query.order_by(Document.uploaded_at.desc()).offset(offset).limit(limit).all()
+
+    return {
+        "total": total,
+        "documents": [
+            {
+                "id": doc.id,
+                "borrower_id": doc.borrower_id,
+                "loan_id": doc.loan_id,
+                "doc_type": doc.doc_type.value if doc.doc_type else None,
+                "doc_category": doc.doc_category.value if doc.doc_category else None,
+                "filename": doc.filename,
+                "file_size": doc.file_size,
+                "mime_type": doc.mime_type,
+                "period_start_date": doc.period_start_date.isoformat() if doc.period_start_date else None,
+                "period_end_date": doc.period_end_date.isoformat() if doc.period_end_date else None,
+                "source": doc.source,
+                "uploaded_at": doc.uploaded_at.isoformat() if doc.uploaded_at else None,
+                "notes": doc.notes
+            }
+            for doc in documents
+        ]
+    }
+
+
+@app.get("/api/v1/documents/{document_id}")
+async def get_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get a single document by ID.
+    """
+    document = db.query(Document).filter(Document.id == document_id).first()
+
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    return {
+        "id": document.id,
+        "borrower_id": document.borrower_id,
+        "loan_id": document.loan_id,
+        "doc_type": document.doc_type.value if document.doc_type else None,
+        "doc_category": document.doc_category.value if document.doc_category else None,
+        "filename": document.filename,
+        "original_filename": document.original_filename,
+        "file_size": document.file_size,
+        "mime_type": document.mime_type,
+        "file_location": document.file_location,
+        "period_start_date": document.period_start_date.isoformat() if document.period_start_date else None,
+        "period_end_date": document.period_end_date.isoformat() if document.period_end_date else None,
+        "source": document.source,
+        "source_email_intake_id": document.source_email_intake_id,
+        "status": document.status,
+        "notes": document.notes,
+        "uploaded_at": document.uploaded_at.isoformat() if document.uploaded_at else None,
+        "updated_at": document.updated_at.isoformat() if document.updated_at else None
+    }
 
 
 # ============================================================================
