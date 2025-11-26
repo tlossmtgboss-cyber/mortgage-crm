@@ -214,18 +214,18 @@
 }
 
 .btn-impersonate {
-  padding: 10px 20px;
+  padding: 6px 12px;
   background: rgba(255, 255, 255, 0.15);
-  border: 2px solid rgba(255, 255, 255, 0.5);
-  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 6px;
   color: white;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.3s ease;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   white-space: nowrap;
 }
 
