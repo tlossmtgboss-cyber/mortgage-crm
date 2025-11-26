@@ -313,50 +313,52 @@
 .ai-conversation-history {
   flex: 0 0 auto;
   overflow-y: auto;
-  padding: 20px;
+  padding: 16px;
   width: 100%;
-  max-width: 900px;
+  max-width: 500px;
   margin: 24px auto 0 auto;
-  background: #f5f5f5;
-  border-radius: 12px;
-  border: 1px solid #e0e0e0;
+  background: #ffffff;
+  border-radius: 20px;
+  border: 1px solid #e5e5e5;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  max-height: 350px;
+  gap: 4px;
+  max-height: 400px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
 }
 
 .ai-conversation-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #e0e0e0;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f0f0f0;
 }
 
 .ai-conversation-header h3 {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  color: #333;
+  color: #8e8e93;
   margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .ai-clear-conversation {
-  padding: 4px 12px;
+  padding: 4px 10px;
   background: transparent;
-  border: 1px solid #ddd;
-  border-radius: 6px;
+  border: none;
+  border-radius: 12px;
   font-size: 12px;
-  color: #666;
+  color: #007AFF;
   cursor: pointer;
   transition: all 0.2s;
+  font-weight: 500;
 }
 
 .ai-clear-conversation:hover {
-  background: #fff;
-  border-color: #d97757;
-  color: #d97757;
+  background: rgba(0, 122, 255, 0.1);
 }
 
 /* Welcome State - Claude.ai style */
@@ -418,47 +420,60 @@
   color: #666;
 }
 
-/* Messages - Claude.ai style */
+/* Messages - iPhone iMessage style */
 .ai-message-new {
-  margin-bottom: 24px;
+  margin-bottom: 6px;
   position: relative;
+  display: flex;
+  flex-direction: column;
 }
 
 .ai-message-user {
-  display: flex;
-  justify-content: flex-end;
+  align-items: flex-end;
 }
 
 .ai-message-user .ai-message-content-new {
   display: inline-block;
-  background: #f4f4f4;
-  color: #333;
-  padding: 12px 16px;
+  background: #007AFF;
+  color: white;
+  padding: 10px 14px;
   border-radius: 18px;
-  max-width: 75%;
+  border-bottom-right-radius: 4px;
+  max-width: 85%;
   text-align: left;
   font-size: 15px;
-  line-height: 1.5;
+  line-height: 1.4;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .ai-message-assistant {
-  display: flex;
-  flex-direction: column;
   align-items: flex-start;
 }
 
 .ai-message-assistant .ai-message-content-new {
-  background: transparent;
-  padding: 0;
-  max-width: 100%;
-  color: #333;
+  display: inline-block;
+  background: #e9e9eb;
+  color: #000;
+  padding: 10px 14px;
+  border-radius: 18px;
+  border-bottom-left-radius: 4px;
+  max-width: 85%;
   font-size: 15px;
-  line-height: 1.6;
+  line-height: 1.4;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 /* Assistant message with icon - removed orange dot */
 .ai-message-assistant::before {
   display: none;
+}
+
+/* Timestamp style for messages */
+.ai-message-time {
+  font-size: 11px;
+  color: #8e8e93;
+  margin-top: 2px;
+  padding: 0 4px;
 }
 
 /* Message Actions - Claude.ai style */
