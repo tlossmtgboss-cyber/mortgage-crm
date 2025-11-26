@@ -991,3 +991,195 @@
   border-radius: 4px;
   font-size: 14px;
 }
+
+/* ============================================
+   RIGHT SIDEBAR FOR STRUCTURED CONTENT
+   Shows tasks, reports, lists, etc.
+   ============================================ */
+
+.ai-structured-sidebar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 450px;
+  height: 100vh;
+  background: white;
+  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  animation: slideInRight 0.3s ease;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.ai-structured-sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.ai-structured-sidebar-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-sidebar-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.ai-sidebar-close:hover {
+  background: #f3f4f6;
+  color: #1f2937;
+}
+
+.ai-structured-sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+/* Markdown content styling in sidebar */
+.ai-structured-sidebar-content h1,
+.ai-structured-sidebar-content h2,
+.ai-structured-sidebar-content h3 {
+  color: #1f2937;
+  margin-top: 20px;
+  margin-bottom: 12px;
+}
+
+.ai-structured-sidebar-content h1 { font-size: 22px; }
+.ai-structured-sidebar-content h2 { font-size: 18px; }
+.ai-structured-sidebar-content h3 { font-size: 16px; }
+
+.ai-structured-sidebar-content p {
+  color: #374151;
+  line-height: 1.7;
+  margin-bottom: 12px;
+}
+
+.ai-structured-sidebar-content ul,
+.ai-structured-sidebar-content ol {
+  padding-left: 24px;
+  margin-bottom: 16px;
+}
+
+.ai-structured-sidebar-content li {
+  color: #374151;
+  line-height: 1.6;
+  margin-bottom: 8px;
+  padding-left: 8px;
+}
+
+.ai-structured-sidebar-content strong {
+  color: #1f2937;
+  font-weight: 600;
+}
+
+/* Task cards in sidebar */
+.ai-sidebar-tasks {
+  margin-top: 20px;
+}
+
+.ai-sidebar-task-card {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 12px;
+  transition: all 0.2s;
+}
+
+.ai-sidebar-task-card:hover {
+  border-color: #218D8D;
+  box-shadow: 0 2px 8px rgba(33, 141, 141, 0.1);
+}
+
+.ai-sidebar-task-priority {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  margin-bottom: 8px;
+}
+
+.ai-sidebar-task-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 6px;
+}
+
+.ai-sidebar-task-client {
+  font-size: 13px;
+  color: #218D8D;
+  margin-bottom: 4px;
+}
+
+.ai-sidebar-task-stage {
+  font-size: 12px;
+  color: #6b7280;
+  background: #e5e7eb;
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+/* Preview data */
+.ai-sidebar-preview {
+  margin-top: 20px;
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 16px;
+  overflow-x: auto;
+}
+
+.ai-sidebar-preview pre {
+  margin: 0;
+  font-size: 12px;
+  color: #374151;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Conversation indicator for sidebar content */
+.ai-message-new.ai-message-assistant .hasSidebarContent::after {
+  content: '→';
+  margin-left: 8px;
+  color: #218D8D;
+}
+
+/* Responsive adjustments */
+@media (max-width: 900px) {
+  .ai-structured-sidebar {
+    width: 100%;
+    max-width: 100%;
+  }
+}
+

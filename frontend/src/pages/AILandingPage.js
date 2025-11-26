@@ -46,6 +46,10 @@ function AILandingPage() {
   const [dividerPosition, setDividerPosition] = useState(50); // percentage
   const [isDragging, setIsDragging] = useState(false);
 
+  // Right sidebar for structured output (tasks, reports, lists, etc.)
+  const [structuredContent, setStructuredContent] = useState(null);
+  const [showRightSidebar, setShowRightSidebar] = useState(false);
+
   const chatAreaRef = useRef(null);
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -251,12 +255,56 @@ function AILandingPage() {
   };
 
   const addMessage = (content, type, extraData = {}) => {
-    setMessages(prev => [...prev, {
-      id: Date.now(),
-      content,
-      type,
-      ...extraData
-    }]);
+    const messageId = Date.now();
+
+    // Check if this is structured content that should go to the right sidebar
+    const structuredTypes = ['task_priorities', 'pipeline_report', 'search_results', 'report', 'analysis'];
+    const hasStructuredData = extraData.isSpecialContent &&
+      (structuredTypes.includes(extraData.contentType) ||
+       extraData.tasks?.length > 0 ||
+       extraData.preview ||
+       extraData.responseData);
+
+    // Check if content has lists (numbered or bulleted items)
+    const hasListContent = content && (
+      /^\d+\.\s/m.test(content) || // numbered list
+      /^[-•*]\s/m.test(content) || // bulleted list
+      /\n\d+\.\s/m.test(content) || // numbered list after newline
+      content.includes('TODAY') ||
+      content.includes('TOMORROW') ||
+      content.includes('Priority:')
+    );
+
+    if (type === 'assistant' && (hasStructuredData || hasListContent)) {
+      // Extract just a brief summary for the conversation
+      const firstLine = content.split('\n')[0];
+      const briefSummary = firstLine.length > 100 ? firstLine.substring(0, 100) + '...' : firstLine;
+
+      // Add brief message to conversation
+      setMessages(prev => [...prev, {
+        id: messageId,
+        content: briefSummary || 'Here are your results:',
+        type,
+        hasSidebarContent: true
+      }]);
+
+      // Put full structured content in right sidebar
+      setStructuredContent({
+        id: messageId,
+        content,
+        type: extraData.contentType || 'structured',
+        ...extraData
+      });
+      setShowRightSidebar(true);
+    } else {
+      // Regular conversational message
+      setMessages(prev => [...prev, {
+        id: messageId,
+        content,
+        type,
+        ...extraData
+      }]);
+    }
   };
 
   const handleKeyPress = (e) => {
@@ -1649,6 +1697,54 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
         >
           <button onClick={handleSaveAsProject}>Save as Project</button>
           <button onClick={handleDeleteChat}>Delete Chat</button>
+        </div>
+      )}
+
+      {/* Right Sidebar for Structured Content */}
+      {showRightSidebar && structuredContent && (
+        <div className="ai-structured-sidebar">
+          <div className="ai-structured-sidebar-header">
+            <h3>
+              {structuredContent.type === 'task_priorities' ? '📋 Tasks & Priorities' :
+               structuredContent.type === 'pipeline_report' ? '📊 Pipeline Report' :
+               structuredContent.type === 'search_results' ? '🔍 Search Results' :
+               '📄 Details'}
+            </h3>
+            <button
+              className="ai-sidebar-close"
+              onClick={() => setShowRightSidebar(false)}
+            >
+              ×
+            </button>
+          </div>
+          <div className="ai-structured-sidebar-content">
+            <ReactMarkdown>{structuredContent.content}</ReactMarkdown>
+
+            {/* Show tasks if available */}
+            {structuredContent.tasks && structuredContent.tasks.length > 0 && (
+              <div className="ai-sidebar-tasks">
+                {structuredContent.tasks.map((task, idx) => (
+                  <div key={idx} className="ai-sidebar-task-card">
+                    <div className="ai-sidebar-task-priority">
+                      {task.priority === 'High' || task.priority === 'HIGH' ? '🔴' :
+                       task.priority === 'Medium' || task.priority === 'MEDIUM' ? '🟡' : '🟢'}
+                      <span>{task.priority}</span>
+                    </div>
+                    <div className="ai-sidebar-task-title">{task.title || task.name}</div>
+                    {task.client && <div className="ai-sidebar-task-client">{task.client}</div>}
+                    {task.stage && <div className="ai-sidebar-task-stage">{task.stage}</div>}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Show preview data if available */}
+            {structuredContent.preview && (
+              <div className="ai-sidebar-preview">
+                <pre>{JSON.stringify(structuredContent.preview, null, 2)}</pre>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
