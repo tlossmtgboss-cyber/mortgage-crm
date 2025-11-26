@@ -527,54 +527,67 @@ function AILandingPage() {
       });
     }
 
-    // Extract borrowers with dollar amounts: "Name ($XXX,XXX)" or Name ($XXX,XXX)
-    const borrowerPattern = /([A-Z][a-z]+(?:\s+[A-Z]\.?\s*)?[A-Z][a-z]+)\s*\(\$?([\d,]+)\)/g;
-    let borrowerMatch;
+    // Extract borrowers with dollar amounts in various formats:
+    // - "Name ($XXX,XXX)" or Name ($XXX,XXX)
+    // - "**Name** - $XXX,XXX" (markdown bold with dash)
+    // - "Name - $XXX,XXX"
+    // - "Name's loan** for **$XXX,XXX"
+    const borrowerPatterns = [
+      /\*\*([A-Z][a-z]+(?:\s+[A-Z]\.?\s*)?[A-Z][a-z]+)\*\*[^$]*\$\s*([\d,]+)/g,  // **Name** ... $amount
+      /([A-Z][a-z]+(?:\s+[A-Z]\.?\s*)?[A-Z][a-z]+)\s*[-–]\s*\$\s*([\d,]+)/g,      // Name - $amount
+      /([A-Z][a-z]+(?:\s+[A-Z]\.?\s*)?[A-Z][a-z]+)\s*\(\$?([\d,]+)\)/g,           // Name ($amount)
+      /([A-Z][a-z]+(?:\s+[A-Z]\.?\s*)?[A-Z][a-z]+)'s loan[^$]*\$\s*([\d,]+)/gi    // Name's loan ... $amount
+    ];
+
     const seenBorrowers = new Set();
-    while ((borrowerMatch = borrowerPattern.exec(responseText)) !== null) {
-      const name = borrowerMatch[1].trim();
-      const amount = borrowerMatch[2].replace(/,/g, '');
 
-      // Skip duplicates and invalid names
-      if (seenBorrowers.has(name) ||
-          name.toLowerCase().includes('stage') ||
-          name.toLowerCase() === 'action' ||
-          name.length < 5) {
-        continue;
+    for (const borrowerPattern of borrowerPatterns) {
+      let borrowerMatch;
+      while ((borrowerMatch = borrowerPattern.exec(responseText)) !== null) {
+        const name = borrowerMatch[1].trim();
+        const amount = borrowerMatch[2].replace(/,/g, '');
+
+        // Skip duplicates and invalid names
+        if (seenBorrowers.has(name) ||
+            name.toLowerCase().includes('stage') ||
+            name.toLowerCase() === 'action' ||
+            name.length < 5) {
+          continue;
+        }
+        seenBorrowers.add(name);
+
+        // Determine stage/priority from context
+        const contextStart = Math.max(0, borrowerMatch.index - 200);
+        const context = responseText.substring(contextStart, borrowerMatch.index).toLowerCase();
+
+        let stage = 'Active Loan';
+        let priority = 'MEDIUM';
+        if (context.includes('clear to close') || context.includes('closing')) {
+          stage = 'Clear to Close';
+          priority = 'URGENT';
+        } else if (context.includes('underwriting')) {
+          stage = 'Underwriting';
+          priority = 'HIGH';
+        } else if (context.includes('processing')) {
+          stage = 'Processing';
+          priority = 'MEDIUM';
+        }
+
+        items.push({
+          id: itemId++,
+          title: `Follow up - ${stage}`,
+          client: name,
+          stage: stage,
+          priority: priority,
+          type: 'Pipeline Item',
+          source: 'AI Analysis',
+          owner: 'Loan Officer',
+          dateCreated: new Date().toLocaleString(),
+          details: `Review loan status and take necessary action`,
+          dueTime: priority === 'URGENT' ? 'Today' : 'This Week',
+          loanAmount: `$${parseInt(amount).toLocaleString()}`
+        });
       }
-      seenBorrowers.add(name);
-
-      // Determine stage/priority from context
-      const contextStart = Math.max(0, borrowerMatch.index - 200);
-      const context = responseText.substring(contextStart, borrowerMatch.index).toLowerCase();
-
-      let stage = 'Active Loan';
-      let priority = 'MEDIUM';
-      if (context.includes('clear to close') || context.includes('closing')) {
-        stage = 'Clear to Close';
-        priority = 'URGENT';
-      } else if (context.includes('underwriting')) {
-        stage = 'Underwriting';
-        priority = 'HIGH';
-      } else if (context.includes('processing')) {
-        stage = 'Processing';
-        priority = 'MEDIUM';
-      }
-
-      items.push({
-        id: itemId++,
-        title: `Follow up - ${stage}`,
-        client: name,
-        stage: stage,
-        priority: priority,
-        type: 'Pipeline Item',
-        source: 'AI Analysis',
-        owner: 'Loan Officer',
-        dateCreated: new Date().toLocaleString(),
-        details: `Review loan status and take necessary action`,
-        dueTime: priority === 'URGENT' ? 'Today' : 'This Week',
-        loanAmount: `$${parseInt(amount).toLocaleString()}`
-      });
     }
 
     // Extract leads mentioned: "for Lead Name" or "with Lead Name" patterns
