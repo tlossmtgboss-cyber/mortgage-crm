@@ -20,6 +20,20 @@
   margin-right: 400px;
 }
 
+.app-main.with-task-sidebar {
+  margin-right: 420px;
+}
+
+.app-main.with-task-sidebar.with-assistant {
+  margin-right: 820px;
+}
+
+@media (max-width: 900px) {
+  .app-main.with-task-sidebar {
+    margin-right: 0;
+  }
+}
+
 @media (max-width: 768px) {
   .app-main.with-assistant {
     margin-right: 0;

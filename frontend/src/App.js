@@ -10,6 +10,7 @@ import CoachCorner from './components/CoachCorner';
 import OnboardingPrompt from './components/OnboardingPrompt';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import ErrorBoundary from './components/ErrorBoundary';
+import UnifiedTaskSidebar from './components/UnifiedTaskSidebar';
 import './App.css';
 
 // Landing/Auth pages (keep these as regular imports for faster initial load)
@@ -121,6 +122,7 @@ function ConditionalSmartAIChat() {
 function App() {
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [coachOpen, setCoachOpen] = useState(false);
+  const [taskSidebarOpen, setTaskSidebarOpen] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
 
@@ -131,7 +133,8 @@ function App() {
     portfolio: 3,  // MUM tasks
     tasks: 0,
     urgentTasks: 0,
-    partners: 0
+    partners: 0,
+    unifiedTasks: 0  // New unified task count
   });
 
   const toggleAssistant = () => {
@@ -140,6 +143,14 @@ function App() {
 
   const toggleCoach = () => {
     setCoachOpen(!coachOpen);
+  };
+
+  const toggleTaskSidebar = () => {
+    setTaskSidebarOpen(!taskSidebarOpen);
+  };
+
+  const handleUnifiedTaskCountChange = (count) => {
+    setTaskCounts(prev => ({ ...prev, unifiedTasks: count }));
   };
 
   // Removed dismiss handler - onboarding is now mandatory until completion
@@ -290,8 +301,10 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
                     taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
@@ -312,8 +325,10 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
                     taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
@@ -334,8 +349,10 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
                     taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
@@ -356,8 +373,10 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
                     taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
@@ -378,8 +397,10 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
                     taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
@@ -400,8 +421,10 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
                     taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
@@ -422,8 +445,10 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
                     taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
@@ -444,11 +469,13 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
                     taskCounts={taskCounts}
                   />
-                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''} ${taskSidebarOpen ? 'with-task-sidebar' : ''}`}>
                     {/* Show onboarding prompt for users who haven't completed it - persistent until completion */}
                     {showOnboarding && !checkingOnboarding && (
                       <OnboardingPrompt />
@@ -468,8 +495,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><PipelineEfficiency /></LazyPage>
@@ -487,8 +517,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><PipelineEfficiency /></LazyPage>
@@ -506,8 +539,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><StageEmployees /></LazyPage>
@@ -525,8 +561,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><EmployeeLoans /></LazyPage>
@@ -544,8 +583,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><TeamRoleEmployees /></LazyPage>
@@ -563,8 +605,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><EmployeeLoans /></LazyPage>
@@ -582,8 +627,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><BottleneckLoans /></LazyPage>
@@ -601,8 +649,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><Leads /></LazyPage>
@@ -620,8 +671,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><LeadDetail /></LazyPage>
@@ -639,8 +693,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><Loans /></LazyPage>
@@ -658,8 +715,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><LoanDetail /></LazyPage>
@@ -677,8 +737,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><Portfolio /></LazyPage>
@@ -696,8 +759,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><PortfolioDetail /></LazyPage>
@@ -715,8 +781,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><YearOverYear /></LazyPage>
@@ -734,8 +803,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><MumClientDetail /></LazyPage>
@@ -753,8 +825,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><Tasks /></LazyPage>
@@ -772,8 +847,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><Calendar /></LazyPage>
@@ -791,8 +869,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><Scorecard /></LazyPage>
@@ -810,8 +891,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><Assistant /></LazyPage>
@@ -829,8 +913,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><AIReceptionistDashboard /></LazyPage>
@@ -848,8 +935,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><VoiceOSDashboard /></LazyPage>
@@ -867,8 +957,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><ClientProfile /></LazyPage>
@@ -886,8 +979,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><ReferralPartners /></LazyPage>
@@ -905,8 +1001,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><ReferralPartnerDetail /></LazyPage>
@@ -924,8 +1023,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><AIUnderwriter /></LazyPage>
@@ -943,8 +1045,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><GoalTracker /></LazyPage>
@@ -962,8 +1067,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><Coach /></LazyPage>
@@ -981,8 +1089,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><ReconciliationCenter /></LazyPage>
@@ -1000,8 +1111,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <MergeCenter />
@@ -1019,8 +1133,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><Settings /></LazyPage>
@@ -1038,8 +1155,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <TeamMembers />
@@ -1057,8 +1177,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <TeamMemberProfile />
@@ -1076,8 +1199,10 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
                     taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
@@ -1096,8 +1221,10 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
                     taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
@@ -1116,8 +1243,10 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
                     taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
@@ -1136,8 +1265,10 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
                     taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
@@ -1156,8 +1287,10 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
                     taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
@@ -1176,8 +1309,10 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
                     taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
@@ -1196,8 +1331,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <DataUpload />
@@ -1215,8 +1353,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <VerizonTest />
@@ -1234,8 +1375,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <UserProfile />
@@ -1253,8 +1397,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <Users />
@@ -1272,8 +1419,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <UserProfile />
@@ -1291,8 +1441,11 @@ function App() {
                   <Navigation
                     onToggleAssistant={toggleAssistant}
                     onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
                     assistantOpen={assistantOpen}
                     coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <ProcessTemplates />
@@ -1306,6 +1459,12 @@ function App() {
         {/* Global AI Assistant */}
         <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
         <ConditionalSmartAIChat />
+        {/* Unified Task Sidebar */}
+        <UnifiedTaskSidebar
+          isOpen={taskSidebarOpen}
+          onClose={() => setTaskSidebarOpen(false)}
+          onTaskCountChange={handleUnifiedTaskCountChange}
+        />
         </div>
       </Router>
         </PermissionProvider>

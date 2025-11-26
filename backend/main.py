@@ -21549,6 +21549,386 @@ async def delete_task(task_id: int, db: Session = Depends(get_db), current_user:
     return None
 
 # ============================================================================
+# UNIFIED TASKS API - Aggregates tasks, workflow items, and reconciliation
+# ============================================================================
+
+@app.get("/api/v1/unified-tasks")
+async def get_unified_tasks(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Get all actionable items from tasks, workflow, and reconciliation
+    in a unified format with AI confidence scores.
+    """
+    try:
+        unified_tasks = []
+
+        # 1. Get pending AI Tasks
+        ai_tasks = db.query(AITask).filter(
+            AITask.assigned_to_id == current_user.id,
+            AITask.type != TaskType.COMPLETED
+        ).order_by(AITask.created_at.desc()).limit(50).all()
+
+        for task in ai_tasks:
+            # Get entity name
+            entity_name = None
+            if task.loan_id:
+                entity_name = get_entity_name("loan", task.loan_id, db)
+            elif task.lead_id:
+                entity_name = get_entity_name("lead", task.lead_id, db)
+
+            unified_tasks.append({
+                "id": task.id,
+                "source": "task",
+                "title": task.title,
+                "description": task.description,
+                "client_name": task.borrower_name or entity_name,
+                "ai_confidence": int((task.ai_confidence or 0.5) * 100),
+                "ai_suggested_response": task.suggested_action or task.ai_reasoning,
+                "priority": task.priority or "medium",
+                "due_date": task.due_date.isoformat() if task.due_date else None,
+                "created_at": task.created_at.isoformat() if task.created_at else None,
+                "entity_type": "loan" if task.loan_id else "lead" if task.lead_id else None,
+                "entity_id": task.loan_id or task.lead_id
+            })
+
+        # 2. Get pending workflow tasks
+        workflow_tasks = db.query(Task).filter(
+            Task.owner_id == current_user.id,
+            Task.status.in_(["pending", "in_progress"])
+        ).order_by(Task.due_date.asc()).limit(50).all()
+
+        for task in workflow_tasks:
+            # Get entity name
+            entity_name = None
+            if task.loan_id:
+                entity_name = get_entity_name("loan", task.loan_id, db)
+            elif task.lead_id:
+                entity_name = get_entity_name("lead", task.lead_id, db)
+
+            # Calculate AI confidence based on task similarity training
+            # Default to 50%, increase with training data
+            ai_confidence = 50
+
+            unified_tasks.append({
+                "id": task.id,
+                "source": "workflow",
+                "title": task.title,
+                "description": task.description,
+                "client_name": task.related_contact_name or entity_name,
+                "ai_confidence": ai_confidence,
+                "ai_suggested_response": f"Complete task: {task.title}",
+                "priority": task.priority or "medium",
+                "due_date": task.due_date.isoformat() if task.due_date else None,
+                "created_at": task.created_at.isoformat() if task.created_at else None,
+                "entity_type": "loan" if task.loan_id else "lead" if task.lead_id else None,
+                "entity_id": task.loan_id or task.lead_id
+            })
+
+        # 3. Get pending reconciliation items
+        from sqlalchemy import or_
+        pending_reconciliation = db.query(ExtractedData).join(
+            IncomingDataEvent,
+            ExtractedData.event_id == IncomingDataEvent.id
+        ).filter(
+            or_(
+                IncomingDataEvent.user_id == current_user.id,
+                IncomingDataEvent.user_id == None
+            ),
+            ExtractedData.status.in_(["pending_review", "needs_review"])
+        ).order_by(ExtractedData.created_at.desc()).limit(50).all()
+
+        for item in pending_reconciliation:
+            # Get event details
+            event = db.query(IncomingDataEvent).filter(
+                IncomingDataEvent.id == item.event_id
+            ).first()
+
+            # Get entity name
+            entity_name = None
+            if item.match_entity_type and item.match_entity_id:
+                entity_name = get_entity_name(item.match_entity_type, item.match_entity_id, db)
+
+            # Extract borrower name from fields
+            borrower_name = None
+            if item.fields:
+                borrower_name = item.fields.get("borrower_name", {}).get("value")
+
+            # Classify email intent for AI response
+            email_intent = classify_email_intent(
+                event.subject if event else "",
+                event.raw_text if event else "",
+                item.fields or {}
+            )
+
+            # Generate recommended action
+            recommended_action = None
+            if email_intent.get("confidence", 0) > 0.5:
+                recommended_action = generate_recommended_action(
+                    email_intent,
+                    item.match_entity_type,
+                    item.fields or {}
+                )
+
+            ai_response = ""
+            if recommended_action:
+                ai_response = f"{recommended_action.get('title', '')}: {recommended_action.get('description', '')}"
+            elif email_intent.get("description"):
+                ai_response = email_intent.get("description")
+
+            unified_tasks.append({
+                "id": item.id,
+                "source": "reconciliation",
+                "title": event.subject if event else "Email to Review",
+                "description": f"From: {event.sender if event else 'Unknown'}\n\n{(event.raw_text or '')[:300]}..." if event else "",
+                "client_name": borrower_name or entity_name or (event.sender if event else None),
+                "ai_confidence": int((item.ai_confidence or 0.5) * 100),
+                "ai_suggested_response": ai_response or "Review and categorize this email",
+                "priority": "high" if (item.ai_confidence or 0) < 0.7 else "medium",
+                "due_date": None,
+                "created_at": item.created_at.isoformat() if item.created_at else None,
+                "entity_type": item.match_entity_type,
+                "entity_id": item.match_entity_id,
+                "email_from": event.sender if event else None,
+                "email_subject": event.subject if event else None
+            })
+
+        # Sort by priority and due date
+        priority_order = {"high": 0, "medium": 1, "low": 2}
+        unified_tasks.sort(key=lambda x: (
+            priority_order.get(x.get("priority", "medium"), 1),
+            x.get("due_date") or "9999-12-31"
+        ))
+
+        return {
+            "status": "success",
+            "total_count": len(unified_tasks),
+            "tasks": unified_tasks,
+            "counts_by_source": {
+                "task": len([t for t in unified_tasks if t["source"] == "task"]),
+                "workflow": len([t for t in unified_tasks if t["source"] == "workflow"]),
+                "reconciliation": len([t for t in unified_tasks if t["source"] == "reconciliation"])
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting unified tasks: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/unified-tasks/{task_id}/approve")
+async def approve_unified_task(
+    task_id: int,
+    approval: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Approve a unified task and train AI with feedback.
+    """
+    try:
+        source = approval.get("source")
+        approved_response = approval.get("approved_response")
+        feedback = approval.get("feedback")
+
+        if source == "task":
+            # Mark AI task as completed
+            task = db.query(AITask).filter(
+                AITask.id == task_id,
+                AITask.assigned_to_id == current_user.id
+            ).first()
+
+            if not task:
+                raise HTTPException(status_code=404, detail="Task not found")
+
+            task.type = TaskType.COMPLETED
+            task.completed_at = datetime.now(timezone.utc)
+            task.completed_action = approved_response
+            if feedback:
+                task.feedback = feedback
+
+            # Store training data for AI improvement
+            training = AITrainingEvent(
+                field_name="task_response",
+                original_value=task.suggested_action or "",
+                corrected_value=approved_response or task.suggested_action or "",
+                label="approved",
+                user_id=current_user.id
+            )
+            db.add(training)
+
+        elif source == "workflow":
+            # Mark workflow task as completed
+            task = db.query(Task).filter(
+                Task.id == task_id,
+                Task.owner_id == current_user.id
+            ).first()
+
+            if not task:
+                raise HTTPException(status_code=404, detail="Task not found")
+
+            task.status = "completed"
+            task.completed_at = datetime.now(timezone.utc)
+
+            # Store training data
+            if feedback:
+                training = AITrainingEvent(
+                    field_name="workflow_response",
+                    original_value="",
+                    corrected_value=feedback,
+                    label="approved",
+                    user_id=current_user.id
+                )
+                db.add(training)
+
+        elif source == "reconciliation":
+            # Mark reconciliation item as approved
+            extracted = db.query(ExtractedData).filter(
+                ExtractedData.id == task_id
+            ).first()
+
+            if not extracted:
+                raise HTTPException(status_code=404, detail="Item not found")
+
+            extracted.status = "approved"
+            extracted.reviewed_by = current_user.id
+            extracted.reviewed_at = datetime.now(timezone.utc)
+
+            # Store training data
+            for field_name, field_data in (extracted.fields or {}).items():
+                training = AITrainingEvent(
+                    extracted_data_id=extracted.id,
+                    field_name=field_name,
+                    original_value=str(field_data.get("value", "")),
+                    corrected_value=str(field_data.get("value", "")),
+                    label="approved",
+                    user_id=current_user.id
+                )
+                db.add(training)
+
+            if feedback:
+                training = AITrainingEvent(
+                    extracted_data_id=extracted.id,
+                    field_name="user_feedback",
+                    original_value="",
+                    corrected_value=feedback,
+                    label="feedback",
+                    user_id=current_user.id
+                )
+                db.add(training)
+
+        db.commit()
+
+        logger.info(f"Unified task approved: {source}/{task_id} by user {current_user.id}")
+
+        return {
+            "status": "success",
+            "message": "Task approved and AI trained",
+            "task_id": task_id,
+            "source": source
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error approving unified task: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/unified-tasks/{task_id}/reject")
+async def reject_unified_task(
+    task_id: int,
+    rejection: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Reject/skip a unified task and optionally train AI with feedback.
+    """
+    try:
+        source = rejection.get("source")
+        feedback = rejection.get("feedback", "Rejected by user")
+
+        if source == "task":
+            task = db.query(AITask).filter(
+                AITask.id == task_id,
+                AITask.assigned_to_id == current_user.id
+            ).first()
+
+            if not task:
+                raise HTTPException(status_code=404, detail="Task not found")
+
+            task.type = TaskType.COMPLETED
+            task.completed_at = datetime.now(timezone.utc)
+            task.feedback = feedback
+
+            # Store rejection for training
+            training = AITrainingEvent(
+                field_name="task_response",
+                original_value=task.suggested_action or "",
+                corrected_value=feedback,
+                label="rejected",
+                user_id=current_user.id
+            )
+            db.add(training)
+
+        elif source == "workflow":
+            task = db.query(Task).filter(
+                Task.id == task_id,
+                Task.owner_id == current_user.id
+            ).first()
+
+            if not task:
+                raise HTTPException(status_code=404, detail="Task not found")
+
+            task.status = "completed"
+            task.completed_at = datetime.now(timezone.utc)
+
+        elif source == "reconciliation":
+            extracted = db.query(ExtractedData).filter(
+                ExtractedData.id == task_id
+            ).first()
+
+            if not extracted:
+                raise HTTPException(status_code=404, detail="Item not found")
+
+            extracted.status = "rejected"
+            extracted.reviewed_by = current_user.id
+            extracted.reviewed_at = datetime.now(timezone.utc)
+
+            # Store rejection for training
+            training = AITrainingEvent(
+                extracted_data_id=extracted.id,
+                field_name="rejection_reason",
+                original_value="",
+                corrected_value=feedback,
+                label="rejected",
+                user_id=current_user.id
+            )
+            db.add(training)
+
+        db.commit()
+
+        logger.info(f"Unified task rejected: {source}/{task_id} by user {current_user.id}")
+
+        return {
+            "status": "success",
+            "message": "Task rejected",
+            "task_id": task_id,
+            "source": source
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error rejecting unified task: {e}", exc_info=True)
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
 # REFERRAL PARTNERS CRUD
 # ============================================================================
 

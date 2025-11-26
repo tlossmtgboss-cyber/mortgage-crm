@@ -4,7 +4,7 @@ import { usePermissions } from '../contexts/PermissionContext';
 import NotificationBell from './NotificationBell';
 import './Navigation.css';
 
-function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen, taskCounts = {} }) {
+function Navigation({ onToggleAssistant, onToggleCoach, onToggleTaskSidebar, assistantOpen, coachOpen, taskSidebarOpen, taskCounts = {} }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { userRole } = usePermissions();
@@ -130,6 +130,16 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
         </div>
 
         <div className="nav-actions">
+          {/* Unified Action Items Sidebar Toggle */}
+          {onToggleTaskSidebar && (
+            <button
+              className={`action-items-btn ${taskSidebarOpen ? 'active' : ''}`}
+              onClick={onToggleTaskSidebar}
+              title="Action Items"
+            >
+              🎯 {taskCounts.unifiedTasks > 0 && <span className="action-items-badge">{taskCounts.unifiedTasks}</span>}
+            </button>
+          )}
           <NotificationBell />
           {/* My Profile and Permissions moved to Settings page */}
           {(userRole === 'manager' || userRole === 'management') && (
