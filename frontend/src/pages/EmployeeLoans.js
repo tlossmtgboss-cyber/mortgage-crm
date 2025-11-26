@@ -228,9 +228,10 @@ const stageNameFromSlug = {
 };
 
 function EmployeeLoans() {
-  const { stageSlug, employeeId } = useParams();
+  const { stageSlug, employeeId, roleSlug } = useParams();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('active');
 
   useEffect(() => {
     setTimeout(() => setLoading(false), 300);
@@ -238,6 +239,31 @@ function EmployeeLoans() {
 
   const employeeData = employeeLoanData[employeeId];
   const stageName = stageNameFromSlug[stageSlug] || stageSlug;
+
+  // Filter loans by category
+  const getFilteredLoans = () => {
+    if (!employeeData) return { active: [], closed: [], dead: [] };
+
+    const activeStages = ['Pre-Qualification', 'Application', 'In Processing', 'Conditional Approval', 'Clear to Close', 'Closing'];
+    const closedStages = ['Funded', 'Closed'];
+    const deadStages = ['Dead', 'Withdrawn', 'Denied', 'Cancelled', 'Suspended'];
+
+    return {
+      active: employeeData.loans.filter(loan =>
+        activeStages.includes(loan.stage) ||
+        (loan.status !== 'Closed' && !deadStages.includes(loan.stage) && !closedStages.includes(loan.stage))
+      ),
+      closed: employeeData.loans.filter(loan =>
+        closedStages.includes(loan.stage) || loan.status === 'Closed'
+      ),
+      dead: employeeData.loans.filter(loan =>
+        deadStages.includes(loan.stage) || loan.status === 'Dead' || loan.status === 'Withdrawn'
+      )
+    };
+  };
+
+  const filteredLoans = getFilteredLoans();
+  const currentLoans = filteredLoans[activeTab] || [];
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-US', {
@@ -284,14 +310,35 @@ function EmployeeLoans() {
     );
   }
 
+  // Determine back navigation path
+  const getBackPath = () => {
+    if (roleSlug) {
+      return `/efficiency/team/${roleSlug}`;
+    }
+    return `/efficiency/stage/${stageSlug}`;
+  };
+
+  const getBackLabel = () => {
+    if (roleSlug) {
+      const roleNames = {
+        'loan-officers': 'Loan Officers',
+        'processors': 'Processors',
+        'underwriters': 'Underwriters',
+        'closers': 'Closers'
+      };
+      return roleNames[roleSlug] || roleSlug;
+    }
+    return stageName;
+  };
+
   if (!employeeData) {
     return (
       <div className="employee-loans-page">
         <div className="error-state">
           <h2>Employee Not Found</h2>
           <p>The requested employee "{employeeId}" was not found.</p>
-          <button onClick={() => navigate(`/efficiency/stage/${stageSlug}`)}>
-            ← Back to {stageName}
+          <button onClick={() => navigate(getBackPath())}>
+            ← Back to {getBackLabel()}
           </button>
         </div>
       </div>
@@ -301,7 +348,9 @@ function EmployeeLoans() {
   // Calculate loan stats
   const totalLoans = employeeData.loans.length;
   const issueLoans = employeeData.loans.filter(l => l.issue).length;
-  const closedLoans = employeeData.loans.filter(l => l.status === 'Closed').length;
+  const closedLoansCount = filteredLoans.closed.length;
+  const activeLoansCount = filteredLoans.active.length;
+  const deadLoansCount = filteredLoans.dead.length;
   const avgDaysInStage = Math.round(
     employeeData.loans.filter(l => l.status !== 'Closed').reduce((sum, l) => sum + l.daysInStage, 0) /
     employeeData.loans.filter(l => l.status !== 'Closed').length || 0
@@ -312,8 +361,8 @@ function EmployeeLoans() {
       {/* Header */}
       <div className="employee-loans-header">
         <div className="header-nav">
-          <button className="btn-back" onClick={() => navigate(`/efficiency/stage/${stageSlug}`)}>
-            ← Back to {stageName}
+          <button className="btn-back" onClick={() => navigate(getBackPath())}>
+            ← Back to {getBackLabel()}
           </button>
         </div>
 
@@ -362,7 +411,7 @@ function EmployeeLoans() {
           <span className="stat-label">Total Loans</span>
         </div>
         <div className="quick-stat">
-          <span className="stat-number good">{closedLoans}</span>
+          <span className="stat-number good">{closedLoansCount}</span>
           <span className="stat-label">Closed</span>
         </div>
         <div className="quick-stat">
@@ -375,71 +424,122 @@ function EmployeeLoans() {
         </div>
       </div>
 
-      {/* Loans Table */}
+      {/* Loans Section with Tabs */}
       <div className="loans-section">
-        <h2>Loan Files ({totalLoans})</h2>
-        <p className="section-description">
-          Review individual loan performance to identify what drove positive or negative outcomes
-        </p>
-
-        <div className="loans-table-container">
-          <table className="loans-table">
-            <thead>
-              <tr>
-                <th>Loan #</th>
-                <th>Borrower</th>
-                <th>Loan Amount</th>
-                <th>Program</th>
-                <th>Stage</th>
-                <th>Days</th>
-                <th>Status</th>
-                <th>Issue/Notes</th>
-              </tr>
-            </thead>
-            <tbody>
-              {employeeData.loans.map((loan) => (
-                <tr
-                  key={loan.id}
-                  className={`loan-row ${loan.issue ? 'has-issue' : ''} ${loan.outcome === 'positive' ? 'positive-outcome' : ''}`}
-                >
-                  <td className="loan-number-cell">
-                    <span className="loan-number">{loan.id}</span>
-                    {loan.outcome && (
-                      <span className={`outcome-icon ${loan.outcome}`}>
-                        {getOutcomeIcon(loan.outcome)}
-                      </span>
-                    )}
-                  </td>
-                  <td className="borrower-cell">
-                    <span className="borrower-name">{loan.borrowerName}</span>
-                  </td>
-                  <td className="amount-cell">{formatCurrency(loan.loanAmount)}</td>
-                  <td className="program-cell">{loan.program}</td>
-                  <td className="stage-cell">
-                    <span className="stage-badge">{loan.stage}</span>
-                  </td>
-                  <td className="days-cell">
-                    <span className={loan.daysInStage > 14 ? 'days-warning' : ''}>
-                      {loan.daysInStage}
-                    </span>
-                  </td>
-                  <td className="status-cell">
-                    <span className={`status-badge ${getStatusClass(loan.status)}`}>
-                      {loan.status}
-                    </span>
-                  </td>
-                  <td className="issue-cell">
-                    {loan.issue ? (
-                      <div className="issue-text">{loan.issue}</div>
-                    ) : (
-                      <span className="no-issue">—</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="loans-section-header">
+          <div>
+            <h2>Loan Files ({currentLoans.length})</h2>
+            <p className="section-description">
+              Review individual loan performance to identify what drove positive or negative outcomes
+            </p>
+          </div>
         </div>
+
+        {/* Tab Navigation */}
+        <div className="loan-tabs">
+          <button
+            className={`loan-tab ${activeTab === 'active' ? 'active' : ''}`}
+            onClick={() => setActiveTab('active')}
+          >
+            <span className="tab-icon">📋</span>
+            Active Loans
+            <span className="tab-count">{activeLoansCount}</span>
+          </button>
+          <button
+            className={`loan-tab ${activeTab === 'closed' ? 'active' : ''}`}
+            onClick={() => setActiveTab('closed')}
+          >
+            <span className="tab-icon">✅</span>
+            Closed Loans
+            <span className="tab-count">{closedLoansCount}</span>
+          </button>
+          <button
+            className={`loan-tab ${activeTab === 'dead' ? 'active' : ''}`}
+            onClick={() => setActiveTab('dead')}
+          >
+            <span className="tab-icon">❌</span>
+            Dead Loans
+            <span className="tab-count">{deadLoansCount}</span>
+          </button>
+        </div>
+
+        {/* Tab Content */}
+        {currentLoans.length === 0 ? (
+          <div className="empty-loans-state">
+            <div className="empty-icon">
+              {activeTab === 'active' ? '📋' : activeTab === 'closed' ? '✅' : '❌'}
+            </div>
+            <h3>No {activeTab === 'active' ? 'Active' : activeTab === 'closed' ? 'Closed' : 'Dead'} Loans</h3>
+            <p>
+              {activeTab === 'active'
+                ? 'This employee has no loans currently in progress.'
+                : activeTab === 'closed'
+                ? 'This employee has no closed/funded loans yet.'
+                : 'This employee has no dead, withdrawn, or denied loans.'}
+            </p>
+          </div>
+        ) : (
+          <div className="loans-table-container">
+            <table className="loans-table">
+              <thead>
+                <tr>
+                  <th>Loan #</th>
+                  <th>Borrower</th>
+                  <th>Loan Amount</th>
+                  <th>Program</th>
+                  <th>Stage</th>
+                  <th>Days</th>
+                  <th>Status</th>
+                  <th>Issue/Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {currentLoans.map((loan) => (
+                  <tr
+                    key={loan.id}
+                    className={`loan-row ${loan.issue ? 'has-issue' : ''} ${loan.outcome === 'positive' ? 'positive-outcome' : ''}`}
+                    onClick={() => navigate(`/loans/${loan.id}`)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <td className="loan-number-cell">
+                      <span className="loan-number">{loan.id}</span>
+                      {loan.outcome && (
+                        <span className={`outcome-icon ${loan.outcome}`}>
+                          {getOutcomeIcon(loan.outcome)}
+                        </span>
+                      )}
+                    </td>
+                    <td className="borrower-cell">
+                      <span className="borrower-name">{loan.borrowerName}</span>
+                    </td>
+                    <td className="amount-cell">{formatCurrency(loan.loanAmount)}</td>
+                    <td className="program-cell">{loan.program}</td>
+                    <td className="stage-cell">
+                      <span className="stage-badge">{loan.stage}</span>
+                    </td>
+                    <td className="days-cell">
+                      <span className={loan.daysInStage > 14 ? 'days-warning' : ''}>
+                        {loan.daysInStage}
+                      </span>
+                    </td>
+                    <td className="status-cell">
+                      <span className={`status-badge ${getStatusClass(loan.status)}`}>
+                        {loan.status}
+                      </span>
+                    </td>
+                    <td className="issue-cell">
+                      {loan.issue ? (
+                        <div className="issue-text">{loan.issue}</div>
+                      ) : (
+                        <span className="no-issue">—</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Performance Summary */}

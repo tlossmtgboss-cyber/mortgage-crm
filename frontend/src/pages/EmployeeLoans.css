@@ -505,3 +505,119 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ============================================
+   LOAN TABS
+   ============================================ */
+
+.loans-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.loan-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid var(--color-border-light, rgba(139, 92, 68, 0.1));
+  padding-bottom: 0;
+}
+
+.loan-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-secondary, #666);
+  transition: all 0.2s;
+  margin-bottom: -2px;
+}
+
+.loan-tab:hover {
+  color: var(--color-primary, #217F8D);
+  background: rgba(33, 127, 141, 0.05);
+}
+
+.loan-tab.active {
+  color: var(--color-primary, #217F8D);
+  border-bottom-color: var(--color-primary, #217F8D);
+  font-weight: 600;
+}
+
+.tab-icon {
+  font-size: 16px;
+}
+
+.tab-count {
+  background: var(--color-bg-secondary, rgba(139, 92, 68, 0.08));
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.loan-tab.active .tab-count {
+  background: var(--color-primary, #217F8D);
+  color: white;
+}
+
+/* Empty State */
+.empty-loans-state {
+  text-align: center;
+  padding: 60px 24px;
+  background: var(--color-bg-secondary, rgba(139, 92, 68, 0.04));
+  border-radius: 12px;
+  margin: 20px 0;
+}
+
+.empty-loans-state .empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.empty-loans-state h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text-primary, #1a1a1a);
+  margin: 0 0 8px 0;
+}
+
+.empty-loans-state p {
+  font-size: 14px;
+  color: var(--color-text-secondary, #666);
+  margin: 0;
+}
+
+/* Clickable loan rows */
+.loan-row {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.loan-row:hover {
+  background-color: rgba(33, 127, 141, 0.08) !important;
+}
+
+/* Responsive tabs */
+@media (max-width: 768px) {
+  .loan-tabs {
+    flex-wrap: wrap;
+  }
+
+  .loan-tab {
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+
+  .tab-icon {
+    display: none;
+  }
+}
