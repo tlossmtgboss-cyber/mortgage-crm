@@ -10853,6 +10853,13 @@ async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Ses
 
             logger.info(f"📧 Email classified as: {profile_type}")
 
+            # Skip unrelated emails BEFORE trying to parse
+            if profile_type == "unrelated":
+                db_event.processed = True
+                db.commit()
+                logger.info(f"Skipped unrelated email (Claude): {subject[:50]}")
+                return {"status": "skipped", "reason": "Email classified as unrelated to mortgage business"}
+
             # Parse with Claude
             parsed_result = await parser.parse_email(
                 claude_email_data,

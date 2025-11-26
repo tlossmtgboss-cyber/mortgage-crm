@@ -526,52 +526,77 @@ SPECIAL INSTRUCTIONS FOR {profile_type.upper()}:
         from_email = email_data.get('from_email', '').lower()
         combined = subject + ' ' + body
 
-        # FIRST: Check for clearly unrelated emails (newsletters, marketing, tech updates)
-        unrelated_senders = [
-            'newsletter', 'noreply', 'no-reply', 'marketing', 'promo',
-            'news@', 'updates@', 'notifications@', 'mailer-daemon',
-            'postmaster', 'donotreply', 'info@claude', 'anthropic',
-            'github', 'linkedin', 'twitter', 'facebook', 'google alerts',
-            # Tech/deployment services
-            'railway.app', 'vercel.com', 'netlify.com', 'heroku.com', 'aws.amazon',
-            'digitalocean', 'cloudflare', 'sentry.io', 'datadog', 'pagerduty',
-            # Payment/receipt services (non-mortgage)
-            'stripe.com', 'paypal', 'square.com', 'shopify',
-            # SaaS/software
-            'slack.com', 'notion.so', 'figma.com', 'canva.com', 'zoom.us',
-            'calendly.com', 'hubspot', 'mailchimp', 'sendgrid', 'intercom',
-            # Social/marketing
-            'instagram', 'tiktok', 'youtube', 'medium.com', 'substack'
+        # WHITELIST: Known mortgage company domains - ALWAYS process these
+        mortgage_company_domains = [
+            'cmgfi.com', 'cmghomeloans.com', 'cmgfinancial.com',
+            'fanniemae.com', 'freddiemac.com', 'fha.gov', 'va.gov',
+            'quickenloans.com', 'rocketmortgage.com', 'unitedwholesale.com',
+            'wellsfargo.com', 'chase.com', 'bankofamerica.com',
+            'firstam.com', 'oldrepublictitle.com', 'stewartitle.com',
+            'fidelitynational.com', 'chicagotitle.com',
+            'encompass360.com', 'elliemae.com', 'blend.com', 'loanlogics.com',
+            'totalmortgage.com', 'loandepot.com', 'pennymac.com',
+            'caliberhomeloans.com', 'flagstar.com', 'freedommortgage.com',
+            'newrez.com', 'mrcooper.com', 'guild.com', 'academy.com'
         ]
-        if any(sender in from_email for sender in unrelated_senders):
-            # Exception: mortgage-related senders
-            if not any(kw in from_email for kw in ['mortgage', 'loan', 'title', 'escrow', 'appraisal']):
+        is_mortgage_company = any(domain in from_email for domain in mortgage_company_domains)
+
+        # Also check if subject/body clearly indicates mortgage content
+        strong_mortgage_indicators = [
+            'loan', 'mortgage', 'borrower', 'closing', 'appraisal',
+            'milestone', 'rate lock', 'underwriting', 'escrow',
+            'property address', 'loan number', 'loan #'
+        ]
+        has_mortgage_content = any(ind in combined for ind in strong_mortgage_indicators)
+
+        # If from mortgage company OR has strong mortgage content, skip unrelated filtering
+        if is_mortgage_company or has_mortgage_content:
+            # Jump directly to classification
+            pass
+        else:
+            # FIRST: Check for clearly unrelated emails (newsletters, marketing, tech updates)
+            unrelated_senders = [
+                'newsletter', 'noreply', 'no-reply', 'marketing', 'promo',
+                'news@', 'updates@', 'notifications@', 'mailer-daemon',
+                'postmaster', 'donotreply', 'info@claude', 'anthropic',
+                'github', 'linkedin', 'twitter', 'facebook', 'google alerts',
+                # Tech/deployment services
+                'railway.app', 'vercel.com', 'netlify.com', 'heroku.com', 'aws.amazon',
+                'digitalocean', 'cloudflare', 'sentry.io', 'datadog', 'pagerduty',
+                # Payment/receipt services (non-mortgage)
+                'stripe.com', 'paypal', 'square.com', 'shopify',
+                # SaaS/software
+                'slack.com', 'notion.so', 'figma.com', 'canva.com', 'zoom.us',
+                'calendly.com', 'hubspot', 'mailchimp', 'sendgrid', 'intercom',
+                # Social/marketing
+                'instagram', 'tiktok', 'youtube', 'medium.com', 'substack'
+            ]
+            if any(sender in from_email for sender in unrelated_senders):
                 return 'unrelated'
 
-        unrelated_keywords = [
-            'unsubscribe from this', 'click here to unsubscribe',
-            'update your preferences', 'view in browser',
-            'product announcement', 'new feature', 'we\'re excited to announce',
-            'software update', 'version release', 'changelog',
-            'your weekly digest', 'newsletter', 'promotional',
-            'black friday', 'cyber monday', 'holiday sale', 'flash sale',
-            'deal of the day', 'exclusive offer', 'act now', 'limited time offer',
-            'save big', 'discount code', 'promo code', 'coupon code',
-            'clearance sale', 'final sale', 'last chance', 'ends today',
-            'doorbuster', 'buy one get one', 'free shipping on orders',
-            # Tech/deployment notifications
-            'deployment crashed', 'deployment failed', 'deployment succeeded',
-            'build failed', 'build succeeded', 'ci/cd', 'pipeline failed',
-            'your receipt from', 'payment receipt', 'invoice #',
-            # Generic marketing
-            'gdpr compliant', 'privacy policy update', 'terms of service',
-            'webinar invitation', 'join us for', 'register now',
-            'networks you\'ll build', 'grow your business'
-        ]
-        if any(kw in combined for kw in unrelated_keywords):
-            # Exception: if it also has mortgage keywords, it's not unrelated
-            mortgage_indicators = ['loan', 'mortgage', 'borrower', 'closing', 'rate', 'appraisal']
-            if not any(mi in combined for mi in mortgage_indicators):
+        # Only check unrelated keywords if not already identified as mortgage content
+        if not is_mortgage_company and not has_mortgage_content:
+            unrelated_keywords = [
+                'unsubscribe from this', 'click here to unsubscribe',
+                'update your preferences', 'view in browser',
+                'product announcement', 'new feature', 'we\'re excited to announce',
+                'software update', 'version release', 'changelog',
+                'your weekly digest', 'newsletter', 'promotional',
+                'black friday', 'cyber monday', 'holiday sale', 'flash sale',
+                'deal of the day', 'exclusive offer', 'act now', 'limited time offer',
+                'save big', 'discount code', 'promo code', 'coupon code',
+                'clearance sale', 'final sale', 'last chance', 'ends today',
+                'doorbuster', 'buy one get one', 'free shipping on orders',
+                # Tech/deployment notifications
+                'deployment crashed', 'deployment failed', 'deployment succeeded',
+                'build failed', 'build succeeded', 'ci/cd', 'pipeline failed',
+                'your receipt from', 'payment receipt', 'invoice #',
+                # Generic marketing
+                'gdpr compliant', 'privacy policy update', 'terms of service',
+                'webinar invitation', 'join us for', 'register now',
+                'networks you\'ll build', 'grow your business'
+            ]
+            if any(kw in combined for kw in unrelated_keywords):
                 return 'unrelated'
 
         # Active loan indicators (CHECK FIRST - loan data is most distinctive)
@@ -584,7 +609,10 @@ SPECIAL INSTRUCTIONS FOR {profile_type.upper()}:
             'conventional', 'usda', 'application date', 'funded', 'closing scheduled',
             'processor submission', 'conditions', 'conditional approval',
             'property address', 'borrower:', 'co-borrower', 'loan amount',
-            'branch:', 'payroll date', 'rca', 'cmg-', 'status updated'
+            'branch:', 'payroll date', 'rca', 'cmg-', 'status updated',
+            # Milestone notifications
+            'milestone', 'milestones achieved', 'task update', 'task completed',
+            'loan status', 'status change', 'submitted to processing'
         ]
         if any(kw in combined for kw in active_loan_keywords):
             return 'active_loan'
