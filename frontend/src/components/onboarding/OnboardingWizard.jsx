@@ -9,7 +9,8 @@ import Step5Confirmation from './steps/Step5Confirmation';
 import './OnboardingWizard.css';
 
 const TOTAL_STEPS = 5;
-const API_BASE = 'https://mortgage-crm-production-7a9a.up.railway.app/api/v1';
+const API_BASE = 'https://mortgage-crm-production-7a9a.up.railway.app/api';
+const API_V1 = `${API_BASE}/v1`;
 
 const OnboardingWizard = () => {
   const { step } = useParams();
@@ -68,7 +69,8 @@ const OnboardingWizard = () => {
 
   const validateInviteToken = async (token) => {
     try {
-      const response = await fetch(`${API_BASE}/onboarding/invite/validate/${token}`);
+      // Use the public invite endpoint
+      const response = await fetch(`${API_BASE}/invite/${token}`);
 
       if (response.ok) {
         const data = await response.json();
@@ -84,7 +86,8 @@ const OnboardingWizard = () => {
           }
         }));
       } else if (response.status === 404 || response.status === 400) {
-        setError('This invite link is invalid or has expired.');
+        const errorData = await response.json().catch(() => ({}));
+        setError(errorData.detail || 'This invite link is invalid or has expired.');
       }
     } catch (error) {
       console.error('Error validating invite:', error);
@@ -94,7 +97,7 @@ const OnboardingWizard = () => {
   const loadProgress = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/onboarding/resume`, {
+      const response = await fetch(`${API_V1}/onboarding/resume`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -134,7 +137,7 @@ const OnboardingWizard = () => {
   const startOnboarding = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/onboarding/start`, {
+      const response = await fetch(`${API_V1}/onboarding/start`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -164,7 +167,7 @@ const OnboardingWizard = () => {
       setAutoSaveStatus('Saving...');
       const token = localStorage.getItem('token');
 
-      const response = await fetch(`${API_BASE}/onboarding/auto-save`, {
+      const response = await fetch(`${API_V1}/onboarding/auto-save`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -192,7 +195,7 @@ const OnboardingWizard = () => {
       setIsSaving(true);
       const token = localStorage.getItem('token');
 
-      const response = await fetch(`${API_BASE}/onboarding/step-${currentStep}/save`, {
+      const response = await fetch(`${API_V1}/onboarding/step-${currentStep}/save`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -224,7 +227,7 @@ const OnboardingWizard = () => {
     try {
       const token = localStorage.getItem('token');
 
-      const response = await fetch(`${API_BASE}/onboarding/step/${currentStep}/complete`, {
+      const response = await fetch(`${API_V1}/onboarding/step/${currentStep}/complete`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -290,7 +293,7 @@ const OnboardingWizard = () => {
       const token = localStorage.getItem('token');
 
       // Complete onboarding
-      const response = await fetch(`${API_BASE}/onboarding/complete`, {
+      const response = await fetch(`${API_V1}/onboarding/complete`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -302,17 +305,6 @@ const OnboardingWizard = () => {
       });
 
       if (response.ok) {
-        // If this was from an invite, accept it
-        if (inviteToken) {
-          await fetch(`${API_BASE}/onboarding/invite/accept/${inviteToken}`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            }
-          });
-        }
-
         // Navigate to dashboard
         navigate('/dashboard?onboarding=complete');
       } else {

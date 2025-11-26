@@ -6,6 +6,7 @@ import AIReceptionist from '../components/AIReceptionist';
 import MyProfile from './MyProfile';
 import ExperimentsDashboard from './ExperimentsDashboard';
 import TaskWorkflowManager from '../components/TaskWorkflowManager';
+import PowerPlayManager from '../components/PowerPlayManager';
 import EmailMonitorDashboard from './EmailMonitorDashboard';
 import './Settings.css';
 
@@ -1552,6 +1553,14 @@ const API_BASE_URL = isProduction
           </button>
 
           <button
+            className={`sidebar-btn ${activeSection === 'power-play' ? 'active' : ''}`}
+            onClick={() => setActiveSection('power-play')}
+          >
+            <span className="icon">⚡</span>
+            <span>Power Play Workflows</span>
+          </button>
+
+          <button
             className={`sidebar-btn ${activeSection === 'email-monitor' ? 'active' : ''}`}
             onClick={() => setActiveSection('email-monitor')}
           >
@@ -1829,6 +1838,10 @@ const API_BASE_URL = isProduction
 
           {activeSection === 'task-workflow' && (
             <TaskWorkflowManager />
+          )}
+
+          {activeSection === 'power-play' && (
+            <PowerPlayManager />
           )}
 
           {/* OUTLOOK EMAIL */}
