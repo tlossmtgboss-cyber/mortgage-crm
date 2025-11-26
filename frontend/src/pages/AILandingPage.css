@@ -422,15 +422,9 @@
   line-height: 1.6;
 }
 
-/* Assistant message with icon */
+/* Assistant message with icon - removed orange dot */
 .ai-message-assistant::before {
-  content: '';
-  display: block;
-  width: 28px;
-  height: 28px;
-  background: linear-gradient(135deg, #d97757 0%, #c5684a 100%);
-  border-radius: 50%;
-  margin-bottom: 8px;
+  display: none;
 }
 
 /* Message Actions - Claude.ai style */
