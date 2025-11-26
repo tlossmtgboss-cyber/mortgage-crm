@@ -528,15 +528,14 @@ function AILandingPage() {
     }
 
     // Extract borrowers with dollar amounts in various formats:
+    // - "**Name** - $XXX,XXX" (markdown bold with dash) - MOST COMMON
     // - "Name ($XXX,XXX)" or Name ($XXX,XXX)
-    // - "**Name** - $XXX,XXX" (markdown bold with dash)
     // - "Name - $XXX,XXX"
-    // - "Name's loan** for **$XXX,XXX"
     const borrowerPatterns = [
-      /\*\*([A-Z][a-z]+(?:\s+[A-Z]\.?\s*)?[A-Z][a-z]+)\*\*[^$]*\$\s*([\d,]+)/g,  // **Name** ... $amount
-      /([A-Z][a-z]+(?:\s+[A-Z]\.?\s*)?[A-Z][a-z]+)\s*[-–]\s*\$\s*([\d,]+)/g,      // Name - $amount
-      /([A-Z][a-z]+(?:\s+[A-Z]\.?\s*)?[A-Z][a-z]+)\s*\(\$?([\d,]+)\)/g,           // Name ($amount)
-      /([A-Z][a-z]+(?:\s+[A-Z]\.?\s*)?[A-Z][a-z]+)'s loan[^$]*\$\s*([\d,]+)/gi    // Name's loan ... $amount
+      /\*\*([^*]+)\*\*\s*[-–]\s*\$([\d,]+)/g,                                      // **Name** - $amount (TESTED, WORKS)
+      /\*\*([^*]+)\*\*[^$\n]*\$([\d,]+)/g,                                         // **Name** ... $amount on same line
+      /([A-Z][a-z]+\s+[A-Z][a-z]+)\s*[-–]\s*\$([\d,]+)/g,                          // Name - $amount (plain)
+      /([A-Z][a-z]+\s+[A-Z][a-z]+)\s*\(\$?([\d,]+)\)/g,                            // Name ($amount)
     ];
 
     const seenBorrowers = new Set();
@@ -547,11 +546,19 @@ function AILandingPage() {
         const name = borrowerMatch[1].trim();
         const amount = borrowerMatch[2].replace(/,/g, '');
 
-        // Skip duplicates and invalid names
+        // Skip duplicates and invalid names (headers, action items, etc.)
+        const lowerName = name.toLowerCase();
         if (seenBorrowers.has(name) ||
-            name.toLowerCase().includes('stage') ||
-            name.toLowerCase() === 'action' ||
-            name.length < 5) {
+            lowerName.includes('stage') ||
+            lowerName.includes('review') ||
+            lowerName.includes('completeness') ||
+            lowerName.includes('communicate') ||
+            lowerName.includes('prioritize') ||
+            lowerName.includes('follow') ||
+            lowerName.includes('regular') ||
+            lowerName === 'action' ||
+            name.length < 5 ||
+            name.length > 30) {
           continue;
         }
         seenBorrowers.add(name);
