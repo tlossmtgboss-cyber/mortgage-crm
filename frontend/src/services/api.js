@@ -398,7 +398,8 @@ export const aiAPI = {
               } else if (data.type === 'status' && onStatus) {
                 onStatus(data.content);
               } else if (data.type === 'done' && onDone) {
-                onDone(data.full_response);
+                // Pass full response and any additional data (like prioritized_tasks)
+                onDone(data.full_response, data);
               } else if (data.type === 'error' && onError) {
                 onError(data.content);
               }

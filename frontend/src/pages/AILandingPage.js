@@ -741,7 +741,7 @@ function AILandingPage() {
           ));
         },
         // onDone - called when streaming is complete
-        (fullResponse) => {
+        (fullResponse, data) => {
           setIsStreaming(false);
           setStreamingStatus('');
           setStreamingMessageId(null);
@@ -758,9 +758,27 @@ function AILandingPage() {
               : msg
           ));
 
-          // Don't auto-show right sidebar for regular chat responses
-          // The conversation is already shown in the left pane
-          // Right sidebar should only be used for explicit structured reports/data
+          // If prioritized_tasks are returned, show them in the right sidebar
+          if (data && data.prioritized_tasks && data.prioritized_tasks.length > 0) {
+            // Convert to task format for the sidebar
+            const tasks = data.prioritized_tasks.map((task, idx) => ({
+              id: task.id || idx + 1,
+              title: task.title,
+              client: task.client || 'Unknown',
+              stage: task.stage || task.status || 'Pending',
+              priority: task.priority || 'MEDIUM',
+              type: 'Outstanding Task',
+              source: 'AI Priorities',
+              owner: 'Loan Officer',
+              dateCreated: new Date().toLocaleString(),
+              details: task.description || '',
+              dueTime: task.due_date || 'Today',
+              loanAmount: task.loan_amount
+            }));
+            setTaskListData(tasks);
+            setSelectedTask(tasks[0]);
+            setShowRightSidebar(true);
+          }
 
           // Update conversation history
           setConversationHistory(prev => [

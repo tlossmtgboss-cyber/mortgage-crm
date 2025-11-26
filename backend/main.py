@@ -7151,13 +7151,158 @@ async def orchestrator_chat_stream(
         "get_market_intelligence": execute_get_market_intelligence
     }
 
-    # Build system prompt (simplified for streaming)
-    system_prompt = f"""You are the AI assistant for Pipeline 360 Mortgage CRM.
+    # Pre-fetch real data for rich context
+    today = datetime.now().date()
+    tomorrow = today + timedelta(days=1)
+    week_end = today + timedelta(days=7)
+
+    all_tasks = db.query(Task).filter(Task.owner_id == current_user.id).all()
+    all_leads = db.query(Lead).filter(Lead.owner_id == current_user.id).all()
+    all_loans = db.query(Loan).filter(Loan.loan_officer_id == current_user.id).all()
+
+    # Task breakdown
+    tasks_today = [t for t in all_tasks if t.due_date and t.due_date.date() == today and t.status != "completed"]
+    tasks_tomorrow = [t for t in all_tasks if t.due_date and t.due_date.date() == tomorrow and t.status != "completed"]
+    tasks_overdue = [t for t in all_tasks if t.due_date and t.due_date.date() < today and t.status != "completed"]
+    outstanding_tasks = [t for t in all_tasks if t.status != "completed"]
+
+    # Helper to format task details
+    def format_task(task):
+        parts = [f"**{task.title}**"]
+        if task.priority:
+            parts.append(f"Priority: {task.priority.title()}")
+        if task.due_date:
+            parts.append(f"Due: {task.due_date.strftime('%m/%d/%Y')}")
+        # Get related loan/lead info
+        if task.loan_id:
+            loan = next((l for l in all_loans if l.id == task.loan_id), None)
+            if loan:
+                parts.append(f"FOR: {loan.borrower_name} (${loan.amount:,.0f})" if loan.amount else f"FOR: {loan.borrower_name}")
+        elif task.lead_id:
+            lead = next((l for l in all_leads if l.id == task.lead_id), None)
+            if lead:
+                parts.append(f"FOR: {lead.name}")
+        return " | ".join(parts)
+
+    # Format stage name
+    def format_stage(stage):
+        if not stage:
+            return "Unknown"
+        stage_str = str(stage).replace('LoanStage.', '').replace('LeadStage.', '')
+        stage_map = {
+            'CTC': 'Clear to Close', 'UW_RECEIVED': 'Underwriting Received',
+            'DISCLOSED': 'Disclosed', 'PROCESSING': 'Processing',
+            'APPROVED': 'Approved', 'FUNDED': 'Funded', 'NEW': 'New',
+            'PROSPECT': 'Prospect', 'PRE_QUALIFIED': 'Pre-Qualified',
+            'PRE_APPROVED': 'Pre-Approved', 'APPLICATION_STARTED': 'Application Started'
+        }
+        return stage_map.get(stage_str, stage_str.replace('_', ' ').title())
+
+    # Build loans by stage
+    loans_by_stage = {}
+    for loan in all_loans:
+        stage_name = format_stage(loan.stage)
+        if stage_name not in loans_by_stage:
+            loans_by_stage[stage_name] = []
+        loans_by_stage[stage_name].append(loan)
+
+    # Lead stages
+    pipeline_stages = {}
+    for lead in all_leads:
+        stage = str(lead.stage).replace("LeadStage.", "") if lead.stage else "NEW"
+        if stage not in pipeline_stages:
+            pipeline_stages[stage] = []
+        pipeline_stages[stage].append(lead.name)
+
+    # Build data context
+    data_context = f"""
+## YOUR CURRENT DATA (Real-time):
+
+### Tasks Overview:
+- Tasks due TODAY: {len(tasks_today)}
+- Tasks due TOMORROW: {len(tasks_tomorrow)}
+- OVERDUE tasks: {len(tasks_overdue)}
+- TOTAL OUTSTANDING: {len(outstanding_tasks)}
+
+### Outstanding Tasks (Detailed):
+{chr(10).join([f"- {format_task(t)}" for t in outstanding_tasks[:10]]) if outstanding_tasks else "- No outstanding tasks"}
+
+### Active Loans BY STAGE:
+{chr(10).join([f"**{stage}** ({len(loans)} loans): " + ", ".join([f"{loan.borrower_name} (${loan.amount:,.0f})" if loan.amount else loan.borrower_name for loan in loans]) for stage, loans in loans_by_stage.items()]) if loans_by_stage else "- No active loans"}
+
+### Pipeline Summary ({len(all_leads)} leads):
+{chr(10).join([f"- {stage}: {len(names)} leads" for stage, names in pipeline_stages.items()]) if pipeline_stages else "- No leads"}
+"""
+
+    # Detect coaching mode
+    message_lower = message.lower()
+    coaching_instructions = ""
+
+    if "daily briefing" in message_lower or "top 3 priorities" in message_lower or "what should i do" in message_lower or "priorities today" in message_lower or "what do i need to do" in message_lower or "outstanding tasks" in message_lower:
+        has_real_data = len(outstanding_tasks) > 0 or len(all_leads) > 0 or len(all_loans) > 0
+        coaching_instructions = f"""
+
+## COACHING MODE: DAILY BRIEFING
+You are providing a detailed, actionable daily briefing. Be CONVERSATIONAL and HELPFUL, not just a list.
+
+CRITICAL RULES:
+- **NEVER INVENT OR MAKE UP TASKS** - Only reference tasks that exist in the data above
+- The user has EXACTLY {len(tasks_overdue)} OVERDUE tasks
+- The user has EXACTLY {len(outstanding_tasks)} total outstanding tasks
+- The user has {len(all_leads)} leads and {len(all_loans)} active loans
+
+{'**NO DATA FOUND - Tell the user they have no outstanding tasks and offer to help them add a new lead or import data.**' if not has_real_data else ''}
+
+OUTPUT FORMAT (be conversational, not robotic):
+1. Start with a friendly greeting and summary: "Good morning! Here's your priority breakdown for today..."
+2. If overdue tasks exist, HIGHLIGHT them first with urgency
+3. List each task with FULL CONTEXT (borrower name, loan amount, what needs to be done)
+4. End with a clear action recommendation: "I'd suggest starting with [X] because [reason]"
+5. Be encouraging and actionable, not just a data dump
+
+Example good response:
+"Good morning! You have 3 outstanding tasks that need attention today.
+
+**Priority #1: Follow up with Sarah Johnson** ($450,000 loan in Processing)
+This is your most time-sensitive item - the appraisal was received yesterday and needs your review.
+
+**Priority #2: Discuss Revised Numbers with Mike Chen**
+Mike's file is in Underwriting and he's waiting on updated figures.
+
+**Priority #3: Follow-up meetings with leads** (8 contacts due today)
+Your lead nurturing tasks - I'd batch these after handling the urgent items above.
+
+I'd suggest starting with Sarah's appraisal review since it directly impacts her closing timeline. Would you like me to pull up her file?"
+"""
+
+    # Build comprehensive system prompt
+    system_prompt = f"""# IDENTITY
+You are the AI Assistant for Pipeline 360 Mortgage CRM - a confident, expert mortgage industry copilot.
 User: {current_user.full_name or current_user.email}
 Current date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
 
-Be direct, helpful, and concise. Use the tools available to get real data when needed.
-Format responses with markdown for clarity. No disclaimers or hedging."""
+# VOICE & TONE
+- Confident, expert, and decisive
+- No hedging, no disclaimers, no "I think" or "maybe"
+- Be conversational and helpful, not robotic
+- Always provide specific names, amounts, and actionable next steps
+- Format with markdown for clarity (bold for emphasis, bullet points for lists)
+
+# FORMATTING RULES
+- Never use ALL CAPS - use **bold** for emphasis instead
+- Format stage names properly: "Clear to Close" not "CTC"
+- When mentioning loans, always include borrower name and amount
+- Use numbered lists for priorities, bullet points for details
+
+{coaching_instructions}
+
+{data_context}
+
+# INSTRUCTIONS
+- Reference the real data above when answering questions
+- Be specific with client names and numbers
+- Provide clear, actionable recommendations
+- If asked about priorities/tasks, give a DETAILED conversational response, not just a list"""
 
     async def generate_stream():
         messages = [
@@ -7213,8 +7358,47 @@ Format responses with markdown for clarity. No disclaimers or hedging."""
                     full_response += content
                     yield f"data: {json.dumps({'type': 'content', 'content': content})}\n\n"
 
-            # Send completion signal with full response
-            yield f"data: {json.dumps({'type': 'done', 'full_response': full_response})}\n\n"
+            # Build prioritized tasks list for the sidebar
+            prioritized_tasks_data = []
+            priority_tasks = sorted(
+                outstanding_tasks,
+                key=lambda x: (
+                    0 if x.priority == "urgent" else 1 if x.priority == "high" else 2 if x.priority == "medium" else 3,
+                    x.due_date or datetime.max
+                )
+            )[:10]
+
+            for task in priority_tasks:
+                loan_info = None
+                if task.loan_id:
+                    loan = next((l for l in all_loans if l.id == task.loan_id), None)
+                    if loan:
+                        loan_info = {
+                            "borrower": loan.borrower_name,
+                            "amount": f"${loan.amount:,.0f}" if loan.amount else None,
+                            "stage": format_stage(loan.stage)
+                        }
+
+                lead_name = None
+                if task.lead_id:
+                    lead = next((l for l in all_leads if l.id == task.lead_id), None)
+                    if lead:
+                        lead_name = lead.name
+
+                prioritized_tasks_data.append({
+                    "id": task.id,
+                    "title": task.title,
+                    "description": task.description,
+                    "priority": task.priority.upper() if task.priority else "MEDIUM",
+                    "due_date": task.due_date.strftime("%m/%d/%Y") if task.due_date else None,
+                    "client": loan_info["borrower"] if loan_info else (lead_name or task.related_contact_name or ""),
+                    "loan_amount": loan_info["amount"] if loan_info else None,
+                    "stage": loan_info["stage"] if loan_info else None,
+                    "status": task.status
+                })
+
+            # Send completion signal with full response AND prioritized tasks
+            yield f"data: {json.dumps({'type': 'done', 'full_response': full_response, 'prioritized_tasks': prioritized_tasks_data})}\n\n"
 
         except Exception as e:
             logger.error(f"Streaming error: {e}")
