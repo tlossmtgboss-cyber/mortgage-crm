@@ -13617,10 +13617,29 @@ async def approve_reconciliation(
                     return fields[field_name].get("value", default)
                 return default
 
-            # Get loan number (required)
+            # Get loan number - generate if not provided
             loan_number = get_val("loan_number")
+            borrower_name = get_val("borrower_name", "Unknown")
+
+            # If no loan number, try to find existing loan by borrower name first
             if not loan_number:
-                raise HTTPException(status_code=400, detail="Cannot create loan without loan number")
+                existing_by_name = db.query(Loan).filter(
+                    Loan.borrower_name.ilike(f"%{borrower_name}%")
+                ).first() if borrower_name and borrower_name != "Unknown" else None
+
+                if existing_by_name:
+                    # Found existing loan by borrower name - use it
+                    extracted.match_entity_type = "loan"
+                    extracted.match_entity_id = existing_by_name.id
+                    logger.info(f"Found existing loan by borrower name '{borrower_name}', using loan {existing_by_name.loan_number}")
+                    # Skip creating new loan, just apply data
+                    db.commit()
+                    return {"status": "approved", "message": f"Matched to existing loan {existing_by_name.loan_number}"}
+
+                # Generate a loan number
+                import random
+                loan_number = f"NEW{datetime.now().strftime('%Y%m%d')}{random.randint(1000, 9999)}"
+                logger.info(f"Generated loan number {loan_number} for borrower {borrower_name}")
 
             # Check if loan already exists
             existing_loan = db.query(Loan).filter(Loan.loan_number == loan_number).first()
@@ -13647,7 +13666,7 @@ async def approve_reconciliation(
                 # Create new loan
                 new_loan = Loan(
                     loan_number=loan_number,
-                    borrower_name=get_val("borrower_name", "Unknown"),
+                    borrower_name=borrower_name,
                     coborrower_name=get_val("coborrower_name"),
                     stage=stage,
                     program=get_val("program"),
