@@ -967,59 +967,50 @@ function AILandingPage() {
             });
             setShowRightSidebar(true);
           } else if (fullResponse) {
-            // Only parse response for sidebar items if the question is about tasks/pipeline/bottlenecks
-            // Don't show sidebar for general questions like "cost per closing", "how do I...", etc.
+            // ONLY show the right sidebar for specific task-related questions
+            // User must be explicitly asking about tasks to do, what needs to be done, or priorities
             const msgLower = message.toLowerCase();
-            const isSidebarRelevantQuestion =
-              msgLower.includes('bottleneck') ||
-              msgLower.includes('stuck') ||
-              msgLower.includes('stall') ||
-              msgLower.includes('pipeline') ||
-              msgLower.includes('deal') ||
-              msgLower.includes('task') ||
-              msgLower.includes('priorit') ||
-              msgLower.includes('today') ||
-              msgLower.includes('briefing') ||
-              msgLower.includes('outstanding') ||
-              msgLower.includes('overdue');
 
-            if (isSidebarRelevantQuestion) {
+            // Patterns that indicate user is asking about their tasks/to-do list
+            const isAskingAboutTasks =
+              // Direct task questions
+              (msgLower.includes('task') && (msgLower.includes('what') || msgLower.includes('my') || msgLower.includes('need') || msgLower.includes('do'))) ||
+              // "What do I need to do" variations
+              (msgLower.includes('what') && msgLower.includes('need') && msgLower.includes('do')) ||
+              (msgLower.includes('what') && msgLower.includes('should') && msgLower.includes('do')) ||
+              // Priority questions
+              (msgLower.includes('priorit') && (msgLower.includes('what') || msgLower.includes('my') || msgLower.includes('top'))) ||
+              // "What's on my plate" / "what's pending"
+              msgLower.includes('what\'s pending') ||
+              msgLower.includes('what is pending') ||
+              msgLower.includes('outstanding task') ||
+              msgLower.includes('overdue task') ||
+              // Daily briefing / to-do
+              (msgLower.includes('daily') && msgLower.includes('briefing')) ||
+              msgLower.includes('to-do') ||
+              msgLower.includes('todo') ||
+              // Explicit task completion questions
+              (msgLower.includes('tasks') && msgLower.includes('complet'));
+
+            if (isAskingAboutTasks) {
               // Parse the AI response to extract actionable items for the sidebar
-              // Pass the user's question to get context-aware parsing
               const extractedItems = parseResponseForActionItems(fullResponse, message);
               if (extractedItems.length > 0) {
                 setTaskListData(extractedItems);
                 setSelectedTask(extractedItems[0]);
 
-                // Determine the sidebar type based on the question
-                let sidebarType = 'analysis_results';
-                let sidebarTitle = 'Analysis Results';
-                if (msgLower.includes('bottleneck') || msgLower.includes('stuck') || msgLower.includes('stall')) {
-                  sidebarType = 'bottleneck_analysis';
-                  sidebarTitle = 'Bottleneck Analysis';
-                } else if (msgLower.includes('pipeline') || msgLower.includes('deal')) {
-                  sidebarType = 'pipeline_review';
-                  sidebarTitle = 'Pipeline Review';
-                } else if (msgLower.includes('closing') || msgLower.includes('close')) {
-                  sidebarType = 'closing_review';
-                  sidebarTitle = 'Closing Review';
-                } else if (msgLower.includes('task') || msgLower.includes('priorit') || msgLower.includes('today')) {
-                  sidebarType = 'task_priorities';
-                  sidebarTitle = 'Tasks';
-                }
-
                 // Set structured content for the right sidebar
                 setStructuredContent({
                   id: Date.now(),
                   content: fullResponse,
-                  type: sidebarType,
-                  title: sidebarTitle,
+                  type: 'task_priorities',
+                  title: 'Tasks',
                   tasks: extractedItems
                 });
                 setShowRightSidebar(true);
               }
             }
-            // For non-task questions (like cost per closing), just show the answer without sidebar
+            // For all other questions (pipeline audit, bottlenecks, etc.), just show the answer without sidebar
           }
 
           // Update conversation history
