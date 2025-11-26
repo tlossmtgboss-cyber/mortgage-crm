@@ -304,6 +304,7 @@ function Leads() {
     loan_number: '',
     preapproval_amount: '',
     source: '',
+    stage: 'New',
     notes: '',
   });
 
@@ -406,8 +407,8 @@ function Leads() {
 
       // Clean up data - convert empty strings to null for numeric fields
       const formData = Object.entries(rawData).reduce((acc, [key, value]) => {
-        // Always include name and first_time_buyer
-        if (key === 'name' || key === 'first_time_buyer') {
+        // Always include name, first_time_buyer, and stage
+        if (key === 'name' || key === 'first_time_buyer' || key === 'stage') {
           acc[key] = value;
           return acc;
         }
@@ -438,6 +439,9 @@ function Leads() {
       setShowModal(false);
       setEditingLead(null);
       resetForm();
+      // Clear cache to ensure new lead appears immediately
+      localStorage.removeItem('leads_data');
+      localStorage.removeItem('leads_data_time');
       loadLeads();
     } catch (err) {
       console.error('Failed to save lead:', err);
@@ -486,6 +490,7 @@ function Leads() {
       loan_number: lead.loan_number || '',
       preapproval_amount: lead.preapproval_amount || '',
       source: lead.source || '',
+      stage: lead.stage || 'New',
       notes: lead.notes || '',
     });
 
@@ -533,6 +538,7 @@ function Leads() {
       loan_number: '',
       preapproval_amount: '',
       source: '',
+      stage: 'New',
       notes: '',
     });
 
@@ -1009,14 +1015,33 @@ function Leads() {
                 </div>
               </div>
 
-              <div className="form-group">
-                <label>Source</label>
-                <input
-                  type="text"
-                  value={loanData.source}
-                  onChange={(e) => setLoanData({ ...loanData, source: e.target.value })}
-                  placeholder="Website, Referral, etc."
-                />
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Source</label>
+                  <input
+                    type="text"
+                    value={loanData.source}
+                    onChange={(e) => setLoanData({ ...loanData, source: e.target.value })}
+                    placeholder="Website, Referral, etc."
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Lead Status</label>
+                  <select
+                    value={loanData.stage}
+                    onChange={(e) => setLoanData({ ...loanData, stage: e.target.value })}
+                  >
+                    <option value="New">New</option>
+                    <option value="Attempted Contact">Attempted Contact</option>
+                    <option value="Prospect">Prospect</option>
+                    <option value="Application">Application</option>
+                    <option value="Pre-Qualified">Pre-Qualified</option>
+                    <option value="Pre-Approved">Pre-Approved</option>
+                    <option value="Withdrawn">Withdrawn</option>
+                    <option value="Does Not Qualify">Does Not Qualify</option>
+                  </select>
+                </div>
               </div>
 
               <div className="form-group">
