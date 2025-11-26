@@ -1799,6 +1799,9 @@ class ExtractedData(Base):
     reviewed_at = Column(DateTime)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
+    # Relationship to incoming event
+    incoming_event = relationship("IncomingDataEvent", foreign_keys=[event_id])
+
 class AITrainingEvent(Base):
     __tablename__ = "ai_training_events"
     id = Column(Integer, primary_key=True, index=True)
@@ -6022,7 +6025,7 @@ When asked about rate lock guidance:
 {chr(10).join([f"**{stage}** ({len(loans)} loans):{chr(10)}" + chr(10).join([f"  - {loan.borrower_name} (${loan.amount:,.0f}) - Loan #{loan.loan_number or 'N/A'}" for loan in loans]) for stage, loans in loans_by_stage.items()]) if loans_by_stage else "- No active loans"}
 
 ### PENDING EMAIL REVIEWS (Reconciliation Center - {len(pending_reconciliation)} items need your attention):
-{chr(10).join([f"- EMAIL: '{r.incoming_event.subject[:50]}...' from {r.incoming_event.sender_email} | Category: {r.category or 'Unknown'} | Status: NEEDS REVIEW" for r in pending_reconciliation[:10] if r.incoming_event]) if pending_reconciliation else "- No pending email reviews"}
+{chr(10).join([f"- EMAIL: '{r.incoming_event.subject[:50] if r.incoming_event.subject else 'No Subject'}...' from {r.incoming_event.sender or 'Unknown'} | Category: {r.category or 'Unknown'} | Status: NEEDS REVIEW" for r in pending_reconciliation[:10] if r.incoming_event]) if pending_reconciliation else "- No pending email reviews"}
 
 {'**ACTION REQUIRED:** You have ' + str(len(pending_reconciliation)) + ' emails in the Reconciliation Center that need review (approve, delete, or block sender).' if pending_reconciliation else ''}
 """
