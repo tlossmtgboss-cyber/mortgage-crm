@@ -968,7 +968,171 @@ function LoanDetail() {
         {activeTab === 'team' && (
           <div className="info-section">
             <h2>Team Members</h2>
-            <TeamAssignment leadId={id} />
+            <div className="team-members-display">
+              <h4 style={{ marginBottom: '15px', color: '#333' }}>Team Members on File</h4>
+
+              {/* Loan Officer */}
+              {(loan?.loan_officer_name || loan?.loan_officer_email) && (
+                <div className="team-member-card" style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '12px 16px',
+                  backgroundColor: '#f8f9fa',
+                  borderRadius: '8px',
+                  marginBottom: '10px'
+                }}>
+                  <div style={{
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '50%',
+                    backgroundColor: '#2563eb',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'white',
+                    fontWeight: 'bold',
+                    marginRight: '12px'
+                  }}>
+                    {loan?.loan_officer_name?.charAt(0) || 'L'}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: '600', color: '#333' }}>{loan?.loan_officer_name || 'Not assigned'}</div>
+                    <div style={{ fontSize: '12px', color: '#666' }}>Loan Officer</div>
+                    {loan?.loan_officer_email && <div style={{ fontSize: '12px', color: '#2563eb' }}>{loan?.loan_officer_email}</div>}
+                  </div>
+                </div>
+              )}
+
+              {/* Processor */}
+              {(loan?.processor || loan?.processor_email) && (
+                <div className="team-member-card" style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '12px 16px',
+                  backgroundColor: '#f8f9fa',
+                  borderRadius: '8px',
+                  marginBottom: '10px'
+                }}>
+                  <div style={{
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '50%',
+                    backgroundColor: '#059669',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'white',
+                    fontWeight: 'bold',
+                    marginRight: '12px'
+                  }}>
+                    {loan?.processor?.charAt(0) || 'P'}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: '600', color: '#333' }}>{loan?.processor || 'Not assigned'}</div>
+                    <div style={{ fontSize: '12px', color: '#666' }}>Processor</div>
+                    {loan?.processor_email && <div style={{ fontSize: '12px', color: '#2563eb' }}>{loan?.processor_email}</div>}
+                  </div>
+                </div>
+              )}
+
+              {/* Underwriter */}
+              {(loan?.underwriter || loan?.underwriter_email) && (
+                <div className="team-member-card" style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '12px 16px',
+                  backgroundColor: '#f8f9fa',
+                  borderRadius: '8px',
+                  marginBottom: '10px'
+                }}>
+                  <div style={{
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '50%',
+                    backgroundColor: '#7c3aed',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'white',
+                    fontWeight: 'bold',
+                    marginRight: '12px'
+                  }}>
+                    {loan?.underwriter?.charAt(0) || 'U'}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: '600', color: '#333' }}>{loan?.underwriter || 'Not assigned'}</div>
+                    <div style={{ fontSize: '12px', color: '#666' }}>Underwriter</div>
+                    {loan?.underwriter_email && <div style={{ fontSize: '12px', color: '#2563eb' }}>{loan?.underwriter_email}</div>}
+                  </div>
+                </div>
+              )}
+
+              {/* Closer */}
+              {(loan?.closer || loan?.closer_email) && (
+                <div className="team-member-card" style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '12px 16px',
+                  backgroundColor: '#f8f9fa',
+                  borderRadius: '8px',
+                  marginBottom: '10px'
+                }}>
+                  <div style={{
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '50%',
+                    backgroundColor: '#dc2626',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'white',
+                    fontWeight: 'bold',
+                    marginRight: '12px'
+                  }}>
+                    {loan?.closer?.charAt(0) || 'C'}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: '600', color: '#333' }}>{loan?.closer || 'Not assigned'}</div>
+                    <div style={{ fontSize: '12px', color: '#666' }}>Closer</div>
+                    {loan?.closer_email && <div style={{ fontSize: '12px', color: '#2563eb' }}>{loan?.closer_email}</div>}
+                  </div>
+                </div>
+              )}
+
+              {/* Show message if no team members */}
+              {!loan?.loan_officer_name && !loan?.processor && !loan?.underwriter && !loan?.closer && (
+                <div style={{
+                  padding: '20px',
+                  backgroundColor: '#f8f9fa',
+                  borderRadius: '8px',
+                  textAlign: 'center',
+                  color: '#666'
+                }}>
+                  No team members assigned yet
+                </div>
+              )}
+
+              {/* Add Team Member Button */}
+              <button
+                style={{
+                  marginTop: '15px',
+                  padding: '10px 20px',
+                  backgroundColor: 'white',
+                  border: '1px dashed #d1d5db',
+                  borderRadius: '8px',
+                  color: '#666',
+                  cursor: 'pointer',
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px'
+                }}
+              >
+                <span style={{ fontSize: '18px' }}>+</span>
+                <span>Add Team Member</span>
+              </button>
+            </div>
           </div>
         )}
 

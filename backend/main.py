@@ -607,6 +607,13 @@ class Loan(Base):
     # Workflow tracking
     current_workflow_id = Column(String)  # Active workflow identifier
     last_workflow_action = Column(DateTime)  # Last automated action
+    # Team member fields (for populate endpoint)
+    loan_officer_name = Column(String)
+    loan_officer_email = Column(String)
+    processor_email = Column(String)
+    underwriter_email = Column(String)
+    closer = Column(String)
+    closer_email = Column(String)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     loan_officer = relationship("User", back_populates="loans")
@@ -2690,6 +2697,15 @@ class LoanResponse(BaseModel):
     days_in_stage: int
     sla_status: str
     created_at: datetime
+    # Team member fields
+    loan_officer_name: Optional[str] = None
+    loan_officer_email: Optional[str] = None
+    processor: Optional[str] = None
+    processor_email: Optional[str] = None
+    underwriter: Optional[str] = None
+    underwriter_email: Optional[str] = None
+    closer: Optional[str] = None
+    closer_email: Optional[str] = None
     class Config:
         from_attributes = True
 
@@ -17740,6 +17756,58 @@ async def create_microsoft_oauth_table(db: Session = Depends(get_db)):
             content={"status": "error", "message": str(e)}
         )
 
+@app.post("/admin/populate-loan-team-members")
+async def populate_loan_team_members(db: Session = Depends(get_db)):
+    """Admin endpoint to populate team members for all active loans"""
+    try:
+        # Team member data to assign
+        team_members = {
+            "processor": {"name": "Robert Garcia", "email": "robert.garcia@company.com"},
+            "processor_assistant": {"name": "Amanda Foster", "email": "amanda.foster@company.com"},
+            "underwriter": {"name": "Rachel Stevens", "email": "rachel.stevens@company.com"},
+            "closer": {"name": "Lisa Wong", "email": "lisa.wong@company.com"},
+            "loan_officer": {"name": "Timothy Loss", "email": "tloss@cmgfi.com"}
+        }
+
+        # Get all loans (using Loan model which is already defined in main.py)
+        loans = db.query(Loan).all()
+
+        updated_count = 0
+        for loan in loans:
+            # Update loan officer
+            loan.loan_officer_name = team_members["loan_officer"]["name"]
+            loan.loan_officer_email = team_members["loan_officer"]["email"]
+
+            # Update processor
+            loan.processor = team_members["processor"]["name"]
+            loan.processor_email = team_members["processor"]["email"]
+
+            # Update underwriter
+            loan.underwriter = team_members["underwriter"]["name"]
+            loan.underwriter_email = team_members["underwriter"]["email"]
+
+            # Update closer
+            loan.closer = team_members["closer"]["name"]
+            loan.closer_email = team_members["closer"]["email"]
+
+            updated_count += 1
+
+        db.commit()
+
+        logger.info(f"✅ Updated {updated_count} loans with team members")
+        return {
+            "status": "success",
+            "message": f"Updated {updated_count} loans with team members",
+            "loans_updated": updated_count
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Failed to populate loan team members: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": str(e)}
+        )
+
 @app.post("/admin/create-zapier-api-key")
 async def create_zapier_api_key(db: Session = Depends(get_db)):
     """Admin endpoint to create the Zapier API key for integration"""
@@ -22844,6 +22912,25 @@ def init_db():
                             END IF;
                             IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='last_workflow_action') THEN
                                 ALTER TABLE loans ADD COLUMN last_workflow_action TIMESTAMP;
+                            END IF;
+                            -- Team member fields
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='loan_officer_name') THEN
+                                ALTER TABLE loans ADD COLUMN loan_officer_name VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='loan_officer_email') THEN
+                                ALTER TABLE loans ADD COLUMN loan_officer_email VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='processor_email') THEN
+                                ALTER TABLE loans ADD COLUMN processor_email VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='underwriter_email') THEN
+                                ALTER TABLE loans ADD COLUMN underwriter_email VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='closer') THEN
+                                ALTER TABLE loans ADD COLUMN closer VARCHAR;
+                            END IF;
+                            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='loans' AND column_name='closer_email') THEN
+                                ALTER TABLE loans ADD COLUMN closer_email VARCHAR;
                             END IF;
                         END $$;
                     """))
