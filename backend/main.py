@@ -61,6 +61,9 @@ from crud import onboarding as onboarding_crud
 from workflows.lead_workflow_engine import LeadWorkflowEngine, TimeBasedWorkflowEngine, LeadStatusChange
 from workflows.workflow_actions import WorkflowActionExecutor
 
+# Import profitability models for AI financial context
+from models.profitability import ProfitabilitySnapshot, ProfitabilityLoan, Expense, EmployeeCost
+
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -7327,10 +7330,63 @@ async def orchestrator_chat_stream(
     today = datetime.now().date()
     tomorrow = today + timedelta(days=1)
     week_end = today + timedelta(days=7)
+    start_of_month = today.replace(day=1)
+    start_of_year = today.replace(month=1, day=1)
 
     all_tasks = db.query(Task).filter(Task.owner_id == current_user.id).all()
     all_leads = db.query(Lead).filter(Lead.owner_id == current_user.id).all()
     all_loans = db.query(Loan).filter(Loan.loan_officer_id == current_user.id).all()
+
+    # Fetch profitability data for financial questions
+    try:
+        # Get latest profitability snapshot (monthly summary)
+        latest_snapshot = db.query(ProfitabilitySnapshot).order_by(
+            ProfitabilitySnapshot.snapshot_month.desc()
+        ).first()
+
+        # Get closed loans this month for revenue calculation
+        closed_loans_month = db.query(ProfitabilityLoan).filter(
+            ProfitabilityLoan.close_date >= start_of_month
+        ).all()
+
+        # Get total expenses this month
+        monthly_expenses = db.query(func.sum(Expense.amount)).filter(
+            Expense.is_active == True,
+            Expense.recurrence == 'monthly'
+        ).scalar() or 0
+
+        # Calculate metrics
+        loans_closed_this_month = len(closed_loans_month)
+        total_revenue_month = sum(float(l.total_revenue or 0) for l in closed_loans_month)
+        avg_loan_amount = sum(float(l.loan_amount or 0) for l in closed_loans_month) / max(loans_closed_this_month, 1)
+
+        # Cost per closing calculation
+        if loans_closed_this_month > 0:
+            cost_per_closing = float(monthly_expenses) / loans_closed_this_month
+        else:
+            cost_per_closing = float(monthly_expenses)  # Total cost with no closings
+
+        # Use snapshot data if available
+        if latest_snapshot:
+            snapshot_cost_per_loan = float(latest_snapshot.cost_per_loan or 0)
+            snapshot_revenue_per_loan = float(latest_snapshot.revenue_per_loan or 0)
+            snapshot_profit_per_loan = float(latest_snapshot.profit_per_loan or 0)
+        else:
+            snapshot_cost_per_loan = cost_per_closing
+            snapshot_revenue_per_loan = total_revenue_month / max(loans_closed_this_month, 1)
+            snapshot_profit_per_loan = snapshot_revenue_per_loan - snapshot_cost_per_loan
+
+    except Exception as e:
+        logger.warning(f"Could not fetch profitability data: {e}")
+        # Default values if profitability tables don't exist yet
+        loans_closed_this_month = 0
+        total_revenue_month = 0
+        monthly_expenses = 0
+        cost_per_closing = 0
+        avg_loan_amount = 0
+        snapshot_cost_per_loan = 0
+        snapshot_revenue_per_loan = 0
+        snapshot_profit_per_loan = 0
 
     # Task breakdown
     tasks_today = [t for t in all_tasks if t.due_date and t.due_date.date() == today and t.status != "completed"]
@@ -7404,6 +7460,16 @@ async def orchestrator_chat_stream(
 
 ### Pipeline Summary ({len(all_leads)} leads):
 {chr(10).join([f"- {stage}: {len(names)} leads" for stage, names in pipeline_stages.items()]) if pipeline_stages else "- No leads"}
+
+### Financial Metrics (This Month):
+- Loans Closed This Month: {loans_closed_this_month}
+- Total Revenue This Month: ${total_revenue_month:,.2f}
+- Monthly Operating Expenses: ${float(monthly_expenses):,.2f}
+- Average Loan Amount: ${avg_loan_amount:,.2f}
+- **Cost Per Closing**: ${snapshot_cost_per_loan:,.2f}
+- Revenue Per Loan: ${snapshot_revenue_per_loan:,.2f}
+- Profit Per Loan: ${snapshot_profit_per_loan:,.2f}
+{'- NOTE: No profitability data configured yet. To calculate accurate cost per closing, the user needs to set up their expenses and closed loan data in the Profitability section.' if loans_closed_this_month == 0 and monthly_expenses == 0 else ''}
 """
 
     # Detect coaching mode
@@ -7530,47 +7596,55 @@ Current date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
                     full_response += content
                     yield f"data: {json.dumps({'type': 'content', 'content': content})}\n\n"
 
-            # Build prioritized tasks list for the sidebar
+            # Only return prioritized tasks if the user asked about tasks/priorities/briefing
+            # Don't show tasks sidebar for unrelated questions like "cost per closing"
+            is_task_question = any(keyword in message_lower for keyword in [
+                'task', 'priority', 'priorities', 'briefing', 'what should i do',
+                'what do i need', 'outstanding', 'overdue', 'due today', 'due tomorrow',
+                'bottleneck', 'pipeline', 'deal', 'loan status', 'closing soon'
+            ])
+
             prioritized_tasks_data = []
-            priority_tasks = sorted(
-                outstanding_tasks,
-                key=lambda x: (
-                    0 if x.priority == "urgent" else 1 if x.priority == "high" else 2 if x.priority == "medium" else 3,
-                    x.due_date or datetime.max
-                )
-            )[:10]
+            if is_task_question:
+                priority_tasks = sorted(
+                    outstanding_tasks,
+                    key=lambda x: (
+                        0 if x.priority == "urgent" else 1 if x.priority == "high" else 2 if x.priority == "medium" else 3,
+                        x.due_date or datetime.max
+                    )
+                )[:10]
 
-            for task in priority_tasks:
-                loan_info = None
-                if task.loan_id:
-                    loan = next((l for l in all_loans if l.id == task.loan_id), None)
-                    if loan:
-                        loan_info = {
-                            "borrower": loan.borrower_name,
-                            "amount": f"${loan.amount:,.0f}" if loan.amount else None,
-                            "stage": format_stage(loan.stage)
-                        }
+                for task in priority_tasks:
+                    loan_info = None
+                    if task.loan_id:
+                        loan = next((l for l in all_loans if l.id == task.loan_id), None)
+                        if loan:
+                            loan_info = {
+                                "borrower": loan.borrower_name,
+                                "amount": f"${loan.amount:,.0f}" if loan.amount else None,
+                                "stage": format_stage(loan.stage)
+                            }
 
-                lead_name = None
-                if task.lead_id:
-                    lead = next((l for l in all_leads if l.id == task.lead_id), None)
-                    if lead:
-                        lead_name = lead.name
+                    lead_name = None
+                    if task.lead_id:
+                        lead = next((l for l in all_leads if l.id == task.lead_id), None)
+                        if lead:
+                            lead_name = lead.name
 
-                prioritized_tasks_data.append({
-                    "id": task.id,
-                    "title": task.title,
-                    "description": task.description,
-                    "priority": task.priority.upper() if task.priority else "MEDIUM",
-                    "due_date": task.due_date.strftime("%m/%d/%Y") if task.due_date else None,
-                    "client": loan_info["borrower"] if loan_info else (lead_name or task.related_contact_name or ""),
-                    "loan_amount": loan_info["amount"] if loan_info else None,
-                    "stage": loan_info["stage"] if loan_info else None,
-                    "status": task.status
-                })
+                    prioritized_tasks_data.append({
+                        "id": task.id,
+                        "title": task.title,
+                        "description": task.description,
+                        "priority": task.priority.upper() if task.priority else "MEDIUM",
+                        "due_date": task.due_date.strftime("%m/%d/%Y") if task.due_date else None,
+                        "client": loan_info["borrower"] if loan_info else (lead_name or task.related_contact_name or ""),
+                        "loan_amount": loan_info["amount"] if loan_info else None,
+                        "stage": loan_info["stage"] if loan_info else None,
+                        "status": task.status
+                    })
 
-            # Send completion signal with full response AND prioritized tasks
-            yield f"data: {json.dumps({'type': 'done', 'full_response': full_response, 'prioritized_tasks': prioritized_tasks_data})}\n\n"
+            # Send completion signal with full response (and prioritized tasks only if relevant)
+            yield f"data: {json.dumps({'type': 'done', 'full_response': full_response, 'prioritized_tasks': prioritized_tasks_data if prioritized_tasks_data else None})}\n\n"
 
         except Exception as e:
             logger.error(f"Streaming error: {e}")

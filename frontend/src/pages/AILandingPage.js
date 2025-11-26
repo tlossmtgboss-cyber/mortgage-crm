@@ -967,41 +967,59 @@ function AILandingPage() {
             });
             setShowRightSidebar(true);
           } else if (fullResponse) {
-            // Parse the AI response to extract actionable items for the sidebar
-            // Pass the user's question to get context-aware parsing
-            const extractedItems = parseResponseForActionItems(fullResponse, message);
-            if (extractedItems.length > 0) {
-              setTaskListData(extractedItems);
-              setSelectedTask(extractedItems[0]);
+            // Only parse response for sidebar items if the question is about tasks/pipeline/bottlenecks
+            // Don't show sidebar for general questions like "cost per closing", "how do I...", etc.
+            const msgLower = message.toLowerCase();
+            const isSidebarRelevantQuestion =
+              msgLower.includes('bottleneck') ||
+              msgLower.includes('stuck') ||
+              msgLower.includes('stall') ||
+              msgLower.includes('pipeline') ||
+              msgLower.includes('deal') ||
+              msgLower.includes('task') ||
+              msgLower.includes('priorit') ||
+              msgLower.includes('today') ||
+              msgLower.includes('briefing') ||
+              msgLower.includes('outstanding') ||
+              msgLower.includes('overdue');
 
-              // Determine the sidebar type based on the question
-              const msgLower = message.toLowerCase();
-              let sidebarType = 'analysis_results';
-              let sidebarTitle = 'Analysis Results';
-              if (msgLower.includes('bottleneck') || msgLower.includes('stuck') || msgLower.includes('stall')) {
-                sidebarType = 'bottleneck_analysis';
-                sidebarTitle = 'Bottleneck Analysis';
-              } else if (msgLower.includes('pipeline') || msgLower.includes('deal')) {
-                sidebarType = 'pipeline_review';
-                sidebarTitle = 'Pipeline Review';
-              } else if (msgLower.includes('closing') || msgLower.includes('close')) {
-                sidebarType = 'closing_review';
-                sidebarTitle = 'Closing Review';
-              } else if (msgLower.includes('task') || msgLower.includes('priorit') || msgLower.includes('today')) {
-                sidebarType = 'task_priorities';
-                sidebarTitle = 'Tasks';
+            if (isSidebarRelevantQuestion) {
+              // Parse the AI response to extract actionable items for the sidebar
+              // Pass the user's question to get context-aware parsing
+              const extractedItems = parseResponseForActionItems(fullResponse, message);
+              if (extractedItems.length > 0) {
+                setTaskListData(extractedItems);
+                setSelectedTask(extractedItems[0]);
+
+                // Determine the sidebar type based on the question
+                let sidebarType = 'analysis_results';
+                let sidebarTitle = 'Analysis Results';
+                if (msgLower.includes('bottleneck') || msgLower.includes('stuck') || msgLower.includes('stall')) {
+                  sidebarType = 'bottleneck_analysis';
+                  sidebarTitle = 'Bottleneck Analysis';
+                } else if (msgLower.includes('pipeline') || msgLower.includes('deal')) {
+                  sidebarType = 'pipeline_review';
+                  sidebarTitle = 'Pipeline Review';
+                } else if (msgLower.includes('closing') || msgLower.includes('close')) {
+                  sidebarType = 'closing_review';
+                  sidebarTitle = 'Closing Review';
+                } else if (msgLower.includes('task') || msgLower.includes('priorit') || msgLower.includes('today')) {
+                  sidebarType = 'task_priorities';
+                  sidebarTitle = 'Tasks';
+                }
+
+                // Set structured content for the right sidebar
+                setStructuredContent({
+                  id: Date.now(),
+                  content: fullResponse,
+                  type: sidebarType,
+                  title: sidebarTitle,
+                  tasks: extractedItems
+                });
+                setShowRightSidebar(true);
               }
-
-              // Set structured content for the right sidebar
-              setStructuredContent({
-                id: Date.now(),
-                content: fullResponse,
-                type: sidebarType,
-                title: sidebarTitle,
-                tasks: extractedItems
-              });
-              setShowRightSidebar(true);
             }
+            // For non-task questions (like cost per closing), just show the answer without sidebar
           }
 
           // Update conversation history
