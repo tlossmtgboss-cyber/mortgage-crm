@@ -369,3 +369,59 @@
   color: #1a1a2e;
   font-size: 14px;
 }
+
+/* Header Actions */
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+/* Clickable Rows */
+.clickable-row {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.clickable-row:hover {
+  background-color: #f0f9fa !important;
+}
+
+/* View Button */
+.btn-view {
+  padding: 6px 12px;
+  background: #217F8D;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.btn-view:hover {
+  background: #1a6670;
+}
+
+/* Tab Sections */
+.leads-tab-section,
+.active-loans-tab-section,
+.portfolio-tab-section {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* Responsive tabs */
+@media (max-width: 1200px) {
+  .workflow-tabs {
+    flex-wrap: wrap;
+  }
+
+  .workflow-tabs button {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+}

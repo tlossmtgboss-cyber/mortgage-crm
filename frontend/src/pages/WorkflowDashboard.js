@@ -10,6 +10,9 @@ function WorkflowDashboard() {
   const [dashboard, setDashboard] = useState(null);
   const [tasks, setTasks] = useState([]);
   const [alerts, setAlerts] = useState([]);
+  const [leads, setLeads] = useState([]);
+  const [loans, setLoans] = useState([]);
+  const [portfolio, setPortfolio] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
 
@@ -22,21 +25,31 @@ function WorkflowDashboard() {
       const token = localStorage.getItem('token');
       const headers = { 'Authorization': `Bearer ${token}` };
 
-      const [dashRes, tasksRes, alertsRes] = await Promise.all([
+      const [dashRes, tasksRes, alertsRes, leadsRes, loansRes] = await Promise.all([
         fetch(`${API_BASE}/api/v1/workflow/dashboard/summary?organization_id=1`, { headers }),
         fetch(`${API_BASE}/api/v1/workflow/tasks?status=pending&limit=10`, { headers }),
-        fetch(`${API_BASE}/api/v1/workflow/alerts?limit=10`, { headers })
+        fetch(`${API_BASE}/api/v1/workflow/alerts?limit=10`, { headers }),
+        fetch(`${API_BASE}/api/v1/leads`, { headers }).catch(() => ({ json: () => [] })),
+        fetch(`${API_BASE}/api/v1/loans`, { headers }).catch(() => ({ json: () => [] }))
       ]);
 
-      const [dashData, tasksData, alertsData] = await Promise.all([
+      const [dashData, tasksData, alertsData, leadsData, loansData] = await Promise.all([
         dashRes.json(),
         tasksRes.json(),
-        alertsRes.json()
+        alertsRes.json(),
+        leadsRes.json ? leadsRes.json() : [],
+        loansRes.json ? loansRes.json() : []
       ]);
 
       setDashboard(dashData);
       setTasks(tasksData.tasks || []);
       setAlerts(alertsData.alerts || []);
+      setLeads(Array.isArray(leadsData) ? leadsData : []);
+
+      // Separate active loans and portfolio (closed loans)
+      const allLoans = Array.isArray(loansData) ? loansData : [];
+      setLoans(allLoans.filter(loan => loan.status !== 'Closed' && loan.status !== 'Funded'));
+      setPortfolio(allLoans.filter(loan => loan.status === 'Closed' || loan.status === 'Funded'));
     } catch (error) {
       console.error('Error fetching dashboard:', error);
     } finally {
@@ -128,6 +141,24 @@ function WorkflowDashboard() {
           Alerts ({alerts.length})
         </button>
         <button
+          className={activeTab === 'leads' ? 'active' : ''}
+          onClick={() => setActiveTab('leads')}
+        >
+          Leads ({leads.length})
+        </button>
+        <button
+          className={activeTab === 'active-loans' ? 'active' : ''}
+          onClick={() => setActiveTab('active-loans')}
+        >
+          Active Loans ({loans.length})
+        </button>
+        <button
+          className={activeTab === 'portfolio' ? 'active' : ''}
+          onClick={() => setActiveTab('portfolio')}
+        >
+          Portfolio ({portfolio.length})
+        </button>
+        <button
           className={activeTab === 'theme-days' ? 'active' : ''}
           onClick={() => setActiveTab('theme-days')}
         >
@@ -205,6 +236,18 @@ function WorkflowDashboard() {
 
         {activeTab === 'alerts' && (
           <WorkflowAlerts alerts={alerts} onAcknowledge={acknowledgeAlert} onRefresh={fetchDashboardData} />
+        )}
+
+        {activeTab === 'leads' && (
+          <LeadsTab leads={leads} navigate={navigate} onRefresh={fetchDashboardData} />
+        )}
+
+        {activeTab === 'active-loans' && (
+          <ActiveLoansTab loans={loans} navigate={navigate} onRefresh={fetchDashboardData} />
+        )}
+
+        {activeTab === 'portfolio' && (
+          <PortfolioTab portfolio={portfolio} navigate={navigate} onRefresh={fetchDashboardData} />
         )}
 
         {activeTab === 'theme-days' && (
@@ -665,6 +708,250 @@ function LastMileTracker() {
                 <td>
                   <button onClick={() => completeTask(task.task_id)} className="btn-complete">
                     Complete
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+// Leads Tab Component
+function LeadsTab({ leads, navigate, onRefresh }) {
+  const formatCurrency = (amount) => {
+    if (!amount) return '-';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount);
+  };
+
+  const getStatusColor = (status) => {
+    const colors = {
+      'New': '#3b82f6',
+      'Contacted': '#8b5cf6',
+      'Qualified': '#22c55e',
+      'Nurturing': '#f59e0b',
+      'Lost': '#ef4444'
+    };
+    return colors[status] || '#6b7280';
+  };
+
+  return (
+    <div className="leads-tab-section">
+      <div className="section-header">
+        <h3>Leads Pipeline</h3>
+        <div className="header-actions">
+          <button onClick={onRefresh} className="btn-refresh">Refresh</button>
+          <button onClick={() => navigate('/leads')} className="btn-primary">View All Leads</button>
+        </div>
+      </div>
+      {leads.length === 0 ? (
+        <p className="empty-state">No leads found</p>
+      ) : (
+        <table className="workflow-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Phone</th>
+              <th>Source</th>
+              <th>Status</th>
+              <th>Est. Loan Amount</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {leads.slice(0, 20).map(lead => (
+              <tr key={lead.id} className="clickable-row" onClick={() => navigate(`/leads/${lead.id}`)}>
+                <td><strong>{lead.first_name} {lead.last_name}</strong></td>
+                <td>{lead.email || '-'}</td>
+                <td>{lead.phone || '-'}</td>
+                <td>{lead.source || '-'}</td>
+                <td>
+                  <span
+                    className="status-badge"
+                    style={{ backgroundColor: getStatusColor(lead.status), color: 'white' }}
+                  >
+                    {lead.status || 'New'}
+                  </span>
+                </td>
+                <td>{formatCurrency(lead.estimated_loan_amount)}</td>
+                <td>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); navigate(`/leads/${lead.id}`); }}
+                    className="btn-view"
+                  >
+                    View
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+// Active Loans Tab Component
+function ActiveLoansTab({ loans, navigate, onRefresh }) {
+  const formatCurrency = (amount) => {
+    if (!amount) return '-';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount);
+  };
+
+  const getStageColor = (stage) => {
+    const colors = {
+      'Pre-Qualification': '#3b82f6',
+      'Application': '#8b5cf6',
+      'Processing': '#f59e0b',
+      'Underwriting': '#ec4899',
+      'Conditional Approval': '#14b8a6',
+      'Clear to Close': '#22c55e',
+      'Closing': '#10b981'
+    };
+    return colors[stage] || '#6b7280';
+  };
+
+  return (
+    <div className="active-loans-tab-section">
+      <div className="section-header">
+        <h3>Active Loans</h3>
+        <div className="header-actions">
+          <button onClick={onRefresh} className="btn-refresh">Refresh</button>
+          <button onClick={() => navigate('/loans')} className="btn-primary">View All Loans</button>
+        </div>
+      </div>
+      {loans.length === 0 ? (
+        <p className="empty-state">No active loans</p>
+      ) : (
+        <table className="workflow-table">
+          <thead>
+            <tr>
+              <th>Loan #</th>
+              <th>Borrower</th>
+              <th>Stage</th>
+              <th>Loan Amount</th>
+              <th>Rate</th>
+              <th>Est. Close Date</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loans.slice(0, 20).map(loan => (
+              <tr key={loan.id} className="clickable-row" onClick={() => navigate(`/loans/${loan.loan_number || loan.id}`)}>
+                <td><strong>{loan.loan_number || `LOAN-${loan.id}`}</strong></td>
+                <td>{loan.borrower_name || '-'}</td>
+                <td>
+                  <span
+                    className="status-badge"
+                    style={{ backgroundColor: getStageColor(loan.stage || loan.status), color: 'white' }}
+                  >
+                    {loan.stage || loan.status || 'Processing'}
+                  </span>
+                </td>
+                <td>{formatCurrency(loan.loan_amount)}</td>
+                <td>{loan.interest_rate ? `${loan.interest_rate}%` : '-'}</td>
+                <td>{loan.estimated_close_date ? new Date(loan.estimated_close_date).toLocaleDateString() : '-'}</td>
+                <td>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); navigate(`/loans/${loan.loan_number || loan.id}`); }}
+                    className="btn-view"
+                  >
+                    View
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+// Portfolio Tab Component
+function PortfolioTab({ portfolio, navigate, onRefresh }) {
+  const formatCurrency = (amount) => {
+    if (!amount) return '-';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }).format(amount);
+  };
+
+  // Calculate portfolio stats
+  const totalVolume = portfolio.reduce((sum, loan) => sum + (loan.loan_amount || 0), 0);
+  const avgLoanSize = portfolio.length > 0 ? totalVolume / portfolio.length : 0;
+
+  return (
+    <div className="portfolio-tab-section">
+      <div className="section-header">
+        <h3>Closed Loan Portfolio</h3>
+        <div className="header-actions">
+          <button onClick={onRefresh} className="btn-refresh">Refresh</button>
+        </div>
+      </div>
+
+      {/* Portfolio Stats */}
+      <div className="portfolio-stats" style={{ display: 'flex', gap: '20px', marginBottom: '24px' }}>
+        <div className="stat-card" style={{ background: '#f0fdf4', padding: '16px 24px', borderRadius: '8px', border: '1px solid #bbf7d0' }}>
+          <div style={{ fontSize: '24px', fontWeight: '700', color: '#166534' }}>{portfolio.length}</div>
+          <div style={{ fontSize: '13px', color: '#15803d' }}>Closed Loans</div>
+        </div>
+        <div className="stat-card" style={{ background: '#eff6ff', padding: '16px 24px', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
+          <div style={{ fontSize: '24px', fontWeight: '700', color: '#1e40af' }}>{formatCurrency(totalVolume)}</div>
+          <div style={{ fontSize: '13px', color: '#1d4ed8' }}>Total Volume</div>
+        </div>
+        <div className="stat-card" style={{ background: '#faf5ff', padding: '16px 24px', borderRadius: '8px', border: '1px solid #e9d5ff' }}>
+          <div style={{ fontSize: '24px', fontWeight: '700', color: '#6b21a8' }}>{formatCurrency(avgLoanSize)}</div>
+          <div style={{ fontSize: '13px', color: '#7c3aed' }}>Avg. Loan Size</div>
+        </div>
+      </div>
+
+      {portfolio.length === 0 ? (
+        <p className="empty-state">No closed loans in portfolio</p>
+      ) : (
+        <table className="workflow-table">
+          <thead>
+            <tr>
+              <th>Loan #</th>
+              <th>Borrower</th>
+              <th>Loan Amount</th>
+              <th>Rate</th>
+              <th>Close Date</th>
+              <th>Loan Type</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {portfolio.slice(0, 20).map(loan => (
+              <tr key={loan.id} className="clickable-row" onClick={() => navigate(`/loans/${loan.loan_number || loan.id}`)}>
+                <td><strong>{loan.loan_number || `LOAN-${loan.id}`}</strong></td>
+                <td>{loan.borrower_name || '-'}</td>
+                <td>{formatCurrency(loan.loan_amount)}</td>
+                <td>{loan.interest_rate ? `${loan.interest_rate}%` : '-'}</td>
+                <td>{loan.close_date ? new Date(loan.close_date).toLocaleDateString() : '-'}</td>
+                <td>{loan.loan_type || '-'}</td>
+                <td>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); navigate(`/loans/${loan.loan_number || loan.id}`); }}
+                    className="btn-view"
+                  >
+                    View
                   </button>
                 </td>
               </tr>
