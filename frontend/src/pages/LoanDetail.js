@@ -815,14 +815,6 @@ function LoanDetail() {
                   onChange={(e) => handleFieldChange('borrower_phone', e.target.value)}
                 />
               </div>
-              <div className="info-field">
-                <label>Loan Number</label>
-                <input
-                  type="text"
-                  value={formData.loan_number || ''}
-                  onChange={(e) => handleFieldChange('loan_number', e.target.value)}
-                />
-              </div>
               {/* Custom Fields */}
               {customFields.map((field) => (
                 <div className="info-field" key={field.key}>
@@ -1776,7 +1768,6 @@ function LoanDetail() {
             <button
               className="action-btn call"
               onClick={() => handleAction('call')}
-              disabled={!loan.borrower_phone && !formData.borrower_phone}
               title="Click to call using your phone"
             >
               <span className="icon">📞</span>
@@ -1785,7 +1776,6 @@ function LoanDetail() {
             <button
               className="action-btn sms"
               onClick={() => handleAction('sms')}
-              disabled={!loan.borrower_phone && !formData.borrower_phone}
               title="Send SMS using your phone"
             >
               <span className="icon">💬</span>
@@ -1794,7 +1784,6 @@ function LoanDetail() {
             <button
               className="action-btn email"
               onClick={() => handleAction('email')}
-              disabled={!loan.borrower_email && !formData.borrower_email}
             >
               <span className="icon">✉️</span>
               <span>Send Email</span>
@@ -1832,7 +1821,6 @@ function LoanDetail() {
             <button
               className="action-btn voicemail"
               onClick={() => handleAction('voicemail')}
-              disabled={!loan.borrower_phone && !formData.borrower_phone}
               title="Drop voicemail message"
             >
               <span className="icon">📞</span>
