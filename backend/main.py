@@ -6039,23 +6039,32 @@ When asked about rate lock guidance:
             coaching_mode = "Daily Briefing"
             total_outstanding = len([t for t in all_tasks if t.status != "completed"])
             pending_recon_count = len(pending_reconciliation)
+            has_real_data = total_outstanding > 0 or len(all_leads) > 0 or len(all_loans) > 0 or pending_recon_count > 0
+
             coaching_instructions = f"""
 
 ## COACHING MODE: DAILY BRIEFING
-Your job: Give the user their TOP 3 PRIORITIES for today based on their actual task and pipeline data.
+Your job: Give the user their TOP 3 PRIORITIES for today based on their ACTUAL task and pipeline data.
 
-CRITICAL RULES:
-- The user has {len(tasks_overdue)} OVERDUE tasks and {total_outstanding} total outstanding tasks
-- The user has {pending_recon_count} PENDING EMAIL REVIEWS in the Reconciliation Center
+{'**NO DATA FOUND - The user has NO tasks, NO leads, NO loans, and NO pending items.**' if not has_real_data else ''}
+
+ABSOLUTE CRITICAL RULES:
+- **NEVER INVENT OR MAKE UP TASKS** - Only reference tasks that exist in the data above
+- **NEVER say "Follow-up meeting with lead"** unless that exact task title exists in the data
+- The user has EXACTLY {len(tasks_overdue)} OVERDUE tasks
+- The user has EXACTLY {total_outstanding} total outstanding tasks
+- The user has EXACTLY {len(all_leads)} leads and {len(all_loans)} active loans
+- The user has EXACTLY {pending_recon_count} PENDING EMAIL REVIEWS
+
+{'**IF NO DATA EXISTS:** Tell the user "You have no outstanding tasks, leads, or loans in the system. Your pipeline is empty. Would you like me to help you add a new lead or import your data?"' if not has_real_data else ''}
+
+{'**WITH DATA:** ' if has_real_data else ''}
 - If OVERDUE tasks > 0: START with "You have {len(tasks_overdue)} overdue tasks that need immediate attention"
-- If total outstanding tasks > 0: Say "You have {total_outstanding} outstanding tasks" NOT "no tasks"
-- If pending reconciliation > 0: ALWAYS mention "{pending_recon_count} emails need your review in the Reconciliation Center - go to Reconciliation tab to approve, delete, or block senders"
-- NEVER say "no tasks" if overdue or outstanding tasks exist
-- ALWAYS prioritize overdue tasks first
-- Use ACTUAL task names and due dates from the data above
-- Be specific and actionable - no generic advice
-- Format as numbered list (1, 2, 3)
-- Include ACTIONABLE items from PENDING EMAIL REVIEWS - these are real items that need attention!
+- If total outstanding tasks > 0: List each task BY ITS EXACT TITLE from the data
+- Use ONLY the EXACT task titles, borrower names, and loan amounts from the data above
+- Include the borrower name and loan amount for EVERY task that has one
+- Be specific: "Call Sarah Johnson about her $450,000 loan" NOT "Follow-up meeting with lead"
+- Format as numbered list with FULL DETAILS for each item
 """
         elif "pipeline audit" in message_lower or "bottlenecks" in message_lower:
             coaching_mode = "Pipeline Audit"
@@ -6968,10 +6977,10 @@ When acting autonomously:
                     "description": task.description,
                     "priority": task.priority.upper() if task.priority else "MEDIUM",
                     "due_date": task.due_date.strftime("%m/%d/%Y %I:%M %p") if task.due_date else None,
-                    "client": loan_info["borrower"] if loan_info else (task.borrower_name or "Unknown"),
+                    "client": loan_info["borrower"] if loan_info else (task.related_contact_name or "Unknown"),
                     "loan_amount": loan_info["amount"] if loan_info else None,
                     "stage": loan_info["stage"] if loan_info else None,
-                    "category": task.category,
+                    "category": task.related_type or "general",
                     "status": task.status
                 })
 
@@ -30087,6 +30096,39 @@ async def seed_demo_people(
                 """), {"loan_number": loan["loan_number"], "borrower_name": loan["borrower_name"], "coborrower_name": loan.get("coborrower_name"), "program": loan.get("program"), "loan_type": loan.get("loan_type"), "amount": loan["amount"], "purchase_price": loan.get("purchase_price"), "down_payment": loan.get("down_payment"), "rate": loan.get("rate"), "term": loan.get("term"), "property_address": loan.get("property_address"), "closing_date": closing_date, "lo_id": owner_id})
                 loans_count += 1
 
+        # TASKS - Linked to loans and leads with specific details
+        tasks_data = [
+            {"title": "Call Michael Roberts about missing pay stubs", "description": "Need last 2 months pay stubs for loan #2025-001234. Borrower requested callback after 2pm.", "priority": "high", "due_days": 0, "loan_number": "2025-001234", "related_contact": "Michael Roberts"},
+            {"title": "Order appraisal for Jennifer Kim - FHA loan", "description": "FHA appraisal needed for 5678 Elm Avenue, Houston. Loan #2025-001235. Contact appraiser AMC Express.", "priority": "high", "due_days": 1, "loan_number": "2025-001235", "related_contact": "Jennifer Kim"},
+            {"title": "Follow up with Christopher Davis on pre-approval docs", "description": "Jumbo loan pre-approval. Need 2 years tax returns and bank statements for $680k approval.", "priority": "medium", "due_days": 0, "related_contact": "Christopher Davis"},
+            {"title": "Schedule closing for Elizabeth Moore - CTC", "description": "Loan #2025-001237 is Clear to Close. Coordinate with title company for closing at 7890 Highland Drive.", "priority": "high", "due_days": 2, "loan_number": "2025-001237", "related_contact": "Elizabeth Moore"},
+            {"title": "Review William Turner VA loan conditions", "description": "Underwriting approved with conditions. Review VA appraisal repairs and termite inspection.", "priority": "medium", "due_days": 1, "loan_number": "2025-001236", "related_contact": "William Turner"},
+            {"title": "Send rate lock reminder to James Wilson", "description": "New lead interested in $450k purchase. Current rate 6.875% - discuss lock options before rate changes.", "priority": "medium", "due_days": 0, "related_contact": "James Wilson"},
+        ]
+
+        tasks_count = 0
+        for task_item in tasks_data:
+            # Find related loan if loan_number provided
+            loan_id = None
+            if task_item.get("loan_number"):
+                loan_row = db.execute(text("SELECT id FROM loans WHERE loan_number = :ln"), {"ln": task_item["loan_number"]}).fetchone()
+                loan_id = loan_row.id if loan_row else None
+
+            due_date = datetime.now(timezone.utc) + timedelta(days=task_item["due_days"])
+            db.execute(text("""
+                INSERT INTO tasks (title, description, priority, due_date, status, owner_id, loan_id, related_contact_name, created_at, updated_at)
+                VALUES (:title, :desc, :priority, :due_date, 'pending', :owner_id, :loan_id, :contact, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+            """), {
+                "title": task_item["title"],
+                "desc": task_item.get("description"),
+                "priority": task_item["priority"],
+                "due_date": due_date,
+                "owner_id": owner_id,
+                "loan_id": loan_id,
+                "contact": task_item.get("related_contact")
+            })
+            tasks_count += 1
+
         # MUM CLIENTS
         mum_data = [
             {"name": "Charles Bennett", "email": "charles.bennett@email.com", "phone": "(555) 111-2222", "loan_number": "MUM-2023-001", "original_loan_amount": 385000, "current_property_value": 485000, "days_ago": 730},
@@ -30122,8 +30164,9 @@ async def seed_demo_people(
             "team_members": team_count,
             "leads": leads_count,
             "active_loans": loans_count,
+            "tasks": tasks_count,
             "mum_clients": mum_count,
-            "total": team_count + leads_count + loans_count + mum_count
+            "total": team_count + leads_count + loans_count + tasks_count + mum_count
         }
 
         logger.info(f"Seeded demo data: {results}")
