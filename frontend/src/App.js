@@ -73,6 +73,7 @@ const ScenarioModeling = lazy(() => import('./pages/ScenarioModeling'));
 const EmployeeOnboardingAdmin = lazy(() => import('./pages/EmployeeOnboardingAdmin'));
 const AcceptInvite = lazy(() => import('./pages/AcceptInvite'));
 const MortgagePlannerQuestionnaire = lazy(() => import('./pages/MortgagePlannerQuestionnaire'));
+const KnowledgeBase = lazy(() => import('./pages/KnowledgeBase'));
 
 // Simple loading component
 const PageLoader = () => (
@@ -1161,6 +1162,26 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><EmployeeOnboardingAdmin /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/knowledge-base"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><KnowledgeBase /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>

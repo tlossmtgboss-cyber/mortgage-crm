@@ -13,7 +13,7 @@
 # ✅ Zapier Integration via API Keys
 # ============================================================================
 
-from fastapi import FastAPI, Depends, HTTPException, status, Request, Query
+from fastapi import FastAPI, Depends, HTTPException, status, Request, Query, UploadFile, File, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -1190,6 +1190,35 @@ class IntegrationCredential(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+class AIKnowledgeBase(Base):
+    """AI Knowledge Base - Documents and content for AI to learn from"""
+    __tablename__ = "ai_knowledge_base"
+    __table_args__ = (
+        Index('ix_ai_knowledge_base_category', 'category'),
+        Index('ix_ai_knowledge_base_is_active', 'is_active'),
+        {'extend_existing': True}
+    )
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False, index=True)
+    category = Column(String, nullable=False)  # loan_products, compliance, underwriting, sales_scripts, company_policies, workflows, other
+    content = Column(Text, nullable=False)  # The actual knowledge content
+    summary = Column(Text)  # AI-generated summary for quick reference
+    source_type = Column(String, default="manual")  # manual, document_upload, email, url
+    source_url = Column(String)  # Original URL if from web
+    source_filename = Column(String)  # Original filename if uploaded
+    file_type = Column(String)  # pdf, docx, txt, etc.
+    tags = Column(JSON)  # List of tags for categorization
+    is_active = Column(Boolean, default=True)
+    priority = Column(Integer, default=5)  # 1-10, higher = more important to reference
+    last_reviewed = Column(DateTime)  # When content was last verified
+    created_by = Column(Integer, ForeignKey("users.id"))
+    organization_id = Column(Integer, default=1)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    # Relationships
+    creator = relationship("User", backref="knowledge_entries")
+
 
 class ScheduledWorkflow(Base):
     """Autonomous scheduled workflows for recurring AI tasks"""
@@ -7099,6 +7128,323 @@ When acting autonomously:
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# =============================================================================
+# AI KNOWLEDGE BASE ENDPOINTS
+# =============================================================================
+
+class KnowledgeBaseCreate(BaseModel):
+    title: str
+    category: str  # loan_products, compliance, underwriting, sales_scripts, company_policies, workflows, other
+    content: str
+    summary: Optional[str] = None
+    source_type: Optional[str] = "manual"
+    source_url: Optional[str] = None
+    source_filename: Optional[str] = None
+    file_type: Optional[str] = None
+    tags: Optional[List[str]] = None
+    priority: Optional[int] = 5
+
+class KnowledgeBaseUpdate(BaseModel):
+    title: Optional[str] = None
+    category: Optional[str] = None
+    content: Optional[str] = None
+    summary: Optional[str] = None
+    tags: Optional[List[str]] = None
+    priority: Optional[int] = None
+    is_active: Optional[bool] = None
+
+class KnowledgeBaseResponse(BaseModel):
+    id: int
+    title: str
+    category: str
+    content: str
+    summary: Optional[str]
+    source_type: str
+    source_url: Optional[str]
+    source_filename: Optional[str]
+    file_type: Optional[str]
+    tags: Optional[List[str]]
+    is_active: bool
+    priority: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+@app.get("/api/v1/ai/knowledge-base")
+async def list_knowledge_base(
+    category: Optional[str] = None,
+    search: Optional[str] = None,
+    is_active: bool = True,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """List all knowledge base entries with optional filtering"""
+    query = db.query(AIKnowledgeBase).filter(AIKnowledgeBase.is_active == is_active)
+
+    if category:
+        query = query.filter(AIKnowledgeBase.category == category)
+
+    if search:
+        search_term = f"%{search}%"
+        query = query.filter(
+            or_(
+                AIKnowledgeBase.title.ilike(search_term),
+                AIKnowledgeBase.content.ilike(search_term),
+                AIKnowledgeBase.summary.ilike(search_term)
+            )
+        )
+
+    entries = query.order_by(AIKnowledgeBase.priority.desc(), AIKnowledgeBase.created_at.desc()).all()
+
+    return [{
+        "id": e.id,
+        "title": e.title,
+        "category": e.category,
+        "content": e.content[:500] + "..." if len(e.content) > 500 else e.content,  # Truncate for list view
+        "summary": e.summary,
+        "source_type": e.source_type,
+        "source_filename": e.source_filename,
+        "tags": e.tags or [],
+        "is_active": e.is_active,
+        "priority": e.priority,
+        "created_at": e.created_at.isoformat() if e.created_at else None,
+        "updated_at": e.updated_at.isoformat() if e.updated_at else None
+    } for e in entries]
+
+@app.get("/api/v1/ai/knowledge-base/categories")
+async def get_knowledge_categories(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Get all available knowledge base categories with counts"""
+    categories = [
+        {"id": "loan_products", "name": "Loan Products", "description": "Conventional, FHA, VA, USDA, Jumbo loan guidelines"},
+        {"id": "compliance", "name": "Compliance & Regulations", "description": "TRID, RESPA, HMDA, state regulations"},
+        {"id": "underwriting", "name": "Underwriting Guidelines", "description": "DTI, LTV, credit requirements, income docs"},
+        {"id": "sales_scripts", "name": "Sales & Scripts", "description": "Objection handling, follow-up scripts, talking points"},
+        {"id": "company_policies", "name": "Company Policies", "description": "Internal procedures, pricing, guidelines"},
+        {"id": "workflows", "name": "Workflows & Processes", "description": "Stage definitions, checklists, procedures"},
+        {"id": "market_intel", "name": "Market Intelligence", "description": "Rate trends, market conditions, economic indicators"},
+        {"id": "other", "name": "Other", "description": "Miscellaneous knowledge and resources"}
+    ]
+
+    # Get counts for each category
+    for cat in categories:
+        count = db.query(AIKnowledgeBase).filter(
+            AIKnowledgeBase.category == cat["id"],
+            AIKnowledgeBase.is_active == True
+        ).count()
+        cat["count"] = count
+
+    return categories
+
+@app.get("/api/v1/ai/knowledge-base/{entry_id}")
+async def get_knowledge_entry(
+    entry_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Get a single knowledge base entry with full content"""
+    entry = db.query(AIKnowledgeBase).filter(AIKnowledgeBase.id == entry_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Knowledge entry not found")
+
+    return {
+        "id": entry.id,
+        "title": entry.title,
+        "category": entry.category,
+        "content": entry.content,
+        "summary": entry.summary,
+        "source_type": entry.source_type,
+        "source_url": entry.source_url,
+        "source_filename": entry.source_filename,
+        "file_type": entry.file_type,
+        "tags": entry.tags or [],
+        "is_active": entry.is_active,
+        "priority": entry.priority,
+        "last_reviewed": entry.last_reviewed.isoformat() if entry.last_reviewed else None,
+        "created_at": entry.created_at.isoformat() if entry.created_at else None,
+        "updated_at": entry.updated_at.isoformat() if entry.updated_at else None
+    }
+
+@app.post("/api/v1/ai/knowledge-base")
+async def create_knowledge_entry(
+    entry: KnowledgeBaseCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Create a new knowledge base entry"""
+    # Generate summary if not provided using AI
+    summary = entry.summary
+    if not summary and len(entry.content) > 200:
+        try:
+            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "Summarize this content in 1-2 sentences for quick reference. Be concise."},
+                    {"role": "user", "content": entry.content[:3000]}
+                ],
+                max_tokens=100
+            )
+            summary = response.choices[0].message.content
+        except Exception as e:
+            logger.warning(f"Could not generate summary: {e}")
+            summary = entry.content[:200] + "..."
+
+    new_entry = AIKnowledgeBase(
+        title=entry.title,
+        category=entry.category,
+        content=entry.content,
+        summary=summary,
+        source_type=entry.source_type,
+        source_url=entry.source_url,
+        source_filename=entry.source_filename,
+        file_type=entry.file_type,
+        tags=entry.tags,
+        priority=entry.priority or 5,
+        created_by=current_user.id,
+        organization_id=1
+    )
+
+    db.add(new_entry)
+    db.commit()
+    db.refresh(new_entry)
+
+    return {"id": new_entry.id, "message": "Knowledge entry created successfully"}
+
+@app.put("/api/v1/ai/knowledge-base/{entry_id}")
+async def update_knowledge_entry(
+    entry_id: int,
+    update: KnowledgeBaseUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Update an existing knowledge base entry"""
+    entry = db.query(AIKnowledgeBase).filter(AIKnowledgeBase.id == entry_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Knowledge entry not found")
+
+    update_data = update.dict(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(entry, key, value)
+
+    db.commit()
+    db.refresh(entry)
+
+    return {"id": entry.id, "message": "Knowledge entry updated successfully"}
+
+@app.delete("/api/v1/ai/knowledge-base/{entry_id}")
+async def delete_knowledge_entry(
+    entry_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Soft delete a knowledge base entry"""
+    entry = db.query(AIKnowledgeBase).filter(AIKnowledgeBase.id == entry_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Knowledge entry not found")
+
+    entry.is_active = False
+    db.commit()
+
+    return {"message": "Knowledge entry deleted successfully"}
+
+@app.post("/api/v1/ai/knowledge-base/upload")
+async def upload_knowledge_document(
+    file: UploadFile = File(...),
+    title: str = Form(...),
+    category: str = Form(...),
+    priority: int = Form(5),
+    tags: str = Form(""),  # Comma-separated tags
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Upload a document to the knowledge base (PDF, DOCX, TXT)"""
+    import io
+
+    # Validate file type
+    allowed_types = [".pdf", ".docx", ".doc", ".txt", ".md"]
+    file_ext = os.path.splitext(file.filename)[1].lower()
+    if file_ext not in allowed_types:
+        raise HTTPException(status_code=400, detail=f"File type not allowed. Supported: {', '.join(allowed_types)}")
+
+    # Read file content
+    content = await file.read()
+    text_content = ""
+
+    try:
+        if file_ext == ".txt" or file_ext == ".md":
+            text_content = content.decode("utf-8")
+        elif file_ext == ".pdf":
+            # Use PyPDF2 or similar to extract text
+            try:
+                import PyPDF2
+                pdf_reader = PyPDF2.PdfReader(io.BytesIO(content))
+                text_content = "\n".join([page.extract_text() for page in pdf_reader.pages])
+            except ImportError:
+                # Fallback if PyPDF2 not available
+                text_content = f"[PDF content from {file.filename} - install PyPDF2 to extract text]"
+        elif file_ext in [".docx", ".doc"]:
+            try:
+                import docx
+                doc = docx.Document(io.BytesIO(content))
+                text_content = "\n".join([para.text for para in doc.paragraphs])
+            except ImportError:
+                text_content = f"[DOCX content from {file.filename} - install python-docx to extract text]"
+    except Exception as e:
+        logger.error(f"Error extracting document content: {e}")
+        text_content = f"[Could not extract content from {file.filename}]"
+
+    # Generate summary using AI
+    summary = None
+    if text_content and len(text_content) > 200:
+        try:
+            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "Summarize this document in 2-3 sentences for quick reference. Be concise."},
+                    {"role": "user", "content": text_content[:4000]}
+                ],
+                max_tokens=150
+            )
+            summary = response.choices[0].message.content
+        except Exception as e:
+            logger.warning(f"Could not generate summary: {e}")
+
+    # Parse tags
+    tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []
+
+    # Create knowledge entry
+    new_entry = AIKnowledgeBase(
+        title=title,
+        category=category,
+        content=text_content,
+        summary=summary,
+        source_type="document_upload",
+        source_filename=file.filename,
+        file_type=file_ext.replace(".", ""),
+        tags=tag_list,
+        priority=priority,
+        created_by=current_user.id,
+        organization_id=1
+    )
+
+    db.add(new_entry)
+    db.commit()
+    db.refresh(new_entry)
+
+    return {
+        "id": new_entry.id,
+        "message": f"Document '{file.filename}' uploaded and processed successfully",
+        "summary": summary,
+        "content_length": len(text_content)
+    }
+
+
 @app.post("/api/v1/ai/orchestrator-chat-stream")
 async def orchestrator_chat_stream(
     request: Request,
@@ -7405,6 +7751,50 @@ async def orchestrator_chat_stream(
         gaps_gains = []
         has_profitability_data = False
 
+    # Fetch relevant knowledge base entries for the user's question
+    knowledge_context = ""
+    try:
+        # Get active knowledge base entries
+        knowledge_entries = db.query(AIKnowledgeBase).filter(
+            AIKnowledgeBase.is_active == True
+        ).order_by(AIKnowledgeBase.priority.desc()).limit(20).all()
+
+        if knowledge_entries:
+            # Search for entries relevant to the user's question
+            message_lower = message.lower()
+            relevant_entries = []
+
+            for entry in knowledge_entries:
+                # Check if entry title, content, or tags match the question
+                entry_text = f"{entry.title} {entry.content} {' '.join(entry.tags or [])}".lower()
+
+                # Simple keyword matching - check if any significant words from the question appear in the entry
+                question_words = [w for w in message_lower.split() if len(w) > 3]
+                match_score = sum(1 for word in question_words if word in entry_text)
+
+                if match_score > 0:
+                    relevant_entries.append((match_score, entry))
+
+            # Sort by relevance and take top 5
+            relevant_entries.sort(key=lambda x: x[0], reverse=True)
+            top_entries = [entry for score, entry in relevant_entries[:5]]
+
+            if top_entries:
+                knowledge_context = "\n\n# KNOWLEDGE BASE CONTEXT\n"
+                knowledge_context += "The following information from your organization's knowledge base may be relevant:\n\n"
+                for entry in top_entries:
+                    knowledge_context += f"## {entry.title} ({entry.category.replace('_', ' ').title()})\n"
+                    # Include summary if available, otherwise truncate content
+                    if entry.summary:
+                        knowledge_context += f"{entry.summary}\n\n"
+                    else:
+                        # Truncate content to first 500 chars
+                        content_preview = entry.content[:500] + "..." if len(entry.content) > 500 else entry.content
+                        knowledge_context += f"{content_preview}\n\n"
+    except Exception as e:
+        logger.warning(f"Could not fetch knowledge base entries: {e}")
+        knowledge_context = ""
+
     # Task breakdown
     tasks_today = [t for t in all_tasks if t.due_date and t.due_date.date() == today and t.status != "completed"]
     tasks_tomorrow = [t for t in all_tasks if t.due_date and t.due_date.date() == tomorrow and t.status != "completed"]
@@ -7664,6 +8054,7 @@ When users ask where to find something or need to navigate, direct them to these
 - **/admin/employee-onboarding** - Employee onboarding management
 - **/compliance** - Compliance dashboard for regulatory tracking
 - **/data-upload** - Data import/upload center
+- **/knowledge-base** - AI Knowledge Base - upload documents and add content for AI to learn from
 
 ## Public Pages
 - **/apply** - Buyer intake form (public loan application)
@@ -7675,6 +8066,8 @@ When users ask where to find something or need to navigate, direct them to these
 
 {data_context}
 
+{knowledge_context}
+
 # INSTRUCTIONS
 - Reference the real data above when answering questions about financials
 - Be specific with actual numbers from the profitability data
@@ -7684,7 +8077,10 @@ When users ask where to find something or need to navigate, direct them to these
 - Always cite the source of data: "Based on your profitability data..." or "According to your expense records..."
 - Provide clear, actionable recommendations based on the financial metrics
 - When users ask where to find something, direct them to the appropriate page from the CRM Page Directory above
-- Always provide the full URL path (e.g., "Go to /profitability to view your cost per closing")"""
+- Always provide the full URL path (e.g., "Go to /profitability to view your cost per closing")
+- If the knowledge base contains relevant information for the user's question, use it to provide more specific answers
+- Reference knowledge base entries when applicable: "Based on your company guidelines..." or "According to your training materials..."
+- Navigate users to /knowledge-base to add or manage organizational knowledge"""
 
     async def generate_stream():
         messages = [

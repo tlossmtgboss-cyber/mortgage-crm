@@ -2218,207 +2218,124 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
         </div>
       )}
 
-      {/* Right Sidebar for Tasks - Email Layout like Tasks Page */}
+      {/* Right Sidebar - Task Completion Panel */}
+      {/* Only appears when user asks about tasks to do, priorities, or daily briefing */}
       {showRightSidebar && structuredContent && structuredContent.tasks && structuredContent.tasks.length > 0 && (
-        <div className="ai-tasks-sidebar">
-          {/* Task List Panel */}
-          <div className="ai-tasks-list-panel">
-            <div className="ai-tasks-list-header">
-              <h3>{structuredContent.title || 'Results'}</h3>
-              <span className="ai-tasks-count">{structuredContent.tasks.length}</span>
-            </div>
-            <div className="ai-tasks-list">
-              {structuredContent.tasks.map((task, idx) => (
-                <div
-                  key={task.id || idx}
-                  className={`ai-task-item ${selectedTask?.id === task.id || (!selectedTask && idx === 0) ? 'selected' : ''}`}
-                  onClick={() => setSelectedTask(task)}
-                >
-                  <div className="ai-task-item-icon">
-                    {task.priority === 'HIGH' || task.priority === 'URGENT' ? '🔴' :
-                     task.priority === 'MEDIUM' ? '🟡' : '🟢'}
-                  </div>
-                  <div className="ai-task-item-content">
-                    <div className="ai-task-item-title">{task.title}</div>
-                    <div className="ai-task-item-client">{task.client}</div>
-                    <div className="ai-task-item-stage">{task.stage}</div>
-                  </div>
-                  <div className={`ai-task-item-dot ${task.priority?.toLowerCase()}`}></div>
-                </div>
-              ))}
-            </div>
+        <div className="task-sidebar">
+          <div className="task-sidebar-header">
+            <h2>Tasks to Complete</h2>
+            <span className="task-count-badge">{structuredContent.tasks.length}</span>
+            <button
+              className="task-sidebar-close"
+              onClick={() => {
+                setShowRightSidebar(false);
+                setStructuredContent(null);
+                setSelectedTask(null);
+              }}
+            >
+              ×
+            </button>
           </div>
 
-          {/* Task Detail Panel */}
-          <div className="ai-task-detail-panel">
+          <div className="task-sidebar-content">
+            {/* Task List */}
+            <div className="task-list-section">
+              {structuredContent.tasks.map((task, idx) => {
+                const isSelected = selectedTask?.id === task.id || (!selectedTask && idx === 0);
+                return (
+                  <div
+                    key={task.id || idx}
+                    className={`task-list-item ${isSelected ? 'selected' : ''}`}
+                    onClick={() => setSelectedTask(task)}
+                  >
+                    <div className={`task-priority-indicator ${(task.priority || 'medium').toLowerCase()}`}></div>
+                    <div className="task-item-content">
+                      <div className="task-item-title">{task.title}</div>
+                      <div className="task-item-meta">
+                        <span className="task-client">{task.client || 'Unknown'}</span>
+                        {task.stage && <span className="task-stage">{task.stage}</span>}
+                      </div>
+                    </div>
+                    <span className={`task-priority-badge ${(task.priority || 'medium').toLowerCase()}`}>
+                      {task.priority || 'MEDIUM'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Selected Task Detail */}
             {(selectedTask || structuredContent.tasks[0]) && (() => {
               const task = selectedTask || structuredContent.tasks[0];
               return (
-                <>
-                  <div className="ai-task-detail-header">
-                    <div className="ai-task-detail-source">
-                      <span className="ai-engine-icon">🤖</span>
-                      <span>AI ENGINE</span>
-                    </div>
-                    <h2>{task.title}</h2>
-                    <button
-                      className="ai-task-close-btn"
-                      onClick={() => {
-                        setShowRightSidebar(false);
-                        setStructuredContent(null);
-                        setSelectedTask(null);
-                      }}
-                    >
-                      ×
-                    </button>
+                <div className="task-detail-section">
+                  <div className="task-detail-header">
+                    <h3>{task.title}</h3>
+                    <span className={`task-priority-badge large ${(task.priority || 'medium').toLowerCase()}`}>
+                      {task.priority || 'MEDIUM'}
+                    </span>
                   </div>
 
-                  <div className="ai-task-detail-body">
-                    <div className="ai-task-info-grid">
-                      <div className="ai-task-info-item">
-                        <span className="ai-task-label">CLIENT</span>
-                        <span className="ai-task-value">{task.client || 'Unknown'}</span>
-                      </div>
-                      <div className="ai-task-info-item">
-                        <span className="ai-task-label">STAGE</span>
-                        <span className="ai-task-value">{task.stage || 'AI Suggested'}</span>
-                      </div>
-                      <div className="ai-task-info-item">
-                        <span className="ai-task-label">PRIORITY</span>
-                        <span className={`ai-task-priority-badge ${task.priority?.toLowerCase()}`}>
-                          {task.priority || 'MEDIUM'}
-                        </span>
-                      </div>
-                      <div className="ai-task-info-item">
-                        <span className="ai-task-label">SOURCE</span>
-                        <span className="ai-task-value">{task.source || 'AI Engine'}</span>
-                      </div>
-                      <div className="ai-task-info-item">
-                        <span className="ai-task-label">OWNER</span>
-                        <span className="ai-task-value">{task.owner || 'Loan Officer'}</span>
-                      </div>
-                      <div className="ai-task-info-item">
-                        <span className="ai-task-label">DATE CREATED</span>
-                        <span className="ai-task-value">{task.dateCreated || new Date().toLocaleString()}</span>
-                      </div>
+                  <div className="task-detail-info">
+                    <div className="task-info-row">
+                      <span className="task-info-label">Client</span>
+                      <span className="task-info-value">{task.client || 'Unknown'}</span>
                     </div>
-
-                    <div className="ai-task-send-via-section">
-                      <span className="ai-task-label">SEND VIA</span>
-                      <div className="ai-task-send-buttons">
-                        <button
-                          className={`ai-send-btn ${selectedSendMethod === 'email' ? 'active' : ''}`}
-                          onClick={() => setSelectedSendMethod('email')}
-                        >
-                          📧 Email
-                        </button>
-                        <button
-                          className={`ai-send-btn ${selectedSendMethod === 'text' ? 'active' : ''}`}
-                          onClick={() => setSelectedSendMethod('text')}
-                        >
-                          💬 Text
-                        </button>
-                        <button
-                          className={`ai-send-btn ${selectedSendMethod === 'phone' ? 'active' : ''}`}
-                          onClick={() => setSelectedSendMethod('phone')}
-                        >
-                          📞 Phone
-                        </button>
-                        <button
-                          className={`ai-send-btn ${selectedSendMethod === 'voicemail' ? 'active' : ''}`}
-                          onClick={() => setSelectedSendMethod('voicemail')}
-                        >
-                          🎙️ Voicemail
-                        </button>
-                      </div>
+                    <div className="task-info-row">
+                      <span className="task-info-label">Stage</span>
+                      <span className="task-info-value">{task.stage || 'Pending'}</span>
                     </div>
+                    {task.loanAmount && (
+                      <div className="task-info-row">
+                        <span className="task-info-label">Loan Amount</span>
+                        <span className="task-info-value">${task.loanAmount.toLocaleString()}</span>
+                      </div>
+                    )}
+                    {task.details && (
+                      <div className="task-info-row">
+                        <span className="task-info-label">Details</span>
+                        <span className="task-info-value">{task.details}</span>
+                      </div>
+                    )}
+                  </div>
 
-                    {/* Train AI Section */}
-                    <div className="ai-task-train-section">
-                      <div className="ai-train-header">
-                        <span className="ai-train-icon">🎓</span>
-                        <span className="ai-train-title">Train AI (Optional)</span>
-                      </div>
-                      <textarea
-                        className="ai-train-textarea"
-                        placeholder="Type instructions to teach AI how to handle similar tasks in the future... (e.g., 'Always mention our competitive rates when following up on pre-approvals')"
-                        rows={3}
-                      />
-                    </div>
-
-                    {/* AI-Drafted Message Section */}
-                    <div className="ai-task-message-section">
-                      <div className="ai-message-header">
-                        <div className="ai-message-title-row">
-                          <span className="ai-icon">🤖</span>
-                          <span>AI-Drafted Message</span>
-                        </div>
-                        <button
-                          className="ai-edit-message-btn"
-                          onClick={() => setEditingMessage(!editingMessage)}
-                        >
-                          {editingMessage ? '✓ Done Editing' : '✏️ Edit Message'}
-                        </button>
-                      </div>
-                      <div className="ai-message-body">
-                        {editingMessage ? (
-                          <textarea
-                            className="ai-message-editor"
-                            value={editedMessage || `Hi ${task.client?.split(' ')[0] || 'there'},\n\nI wanted to follow up regarding your loan application.\n\nBest regards`}
-                            onChange={(e) => setEditedMessage(e.target.value)}
-                            rows={8}
-                          />
-                        ) : (
-                          <div className="ai-message-preview">
-                            Hi {task.client?.split(' ')[0] || 'there'},
-                          </div>
-                        )}
-                      </div>
+                  {/* Communication Options */}
+                  <div className="task-communication">
+                    <span className="task-section-label">Send Via</span>
+                    <div className="task-send-options">
+                      <button
+                        className={`task-send-btn ${selectedSendMethod === 'email' ? 'active' : ''}`}
+                        onClick={() => setSelectedSendMethod('email')}
+                      >
+                        Email
+                      </button>
+                      <button
+                        className={`task-send-btn ${selectedSendMethod === 'text' ? 'active' : ''}`}
+                        onClick={() => setSelectedSendMethod('text')}
+                      >
+                        Text
+                      </button>
+                      <button
+                        className={`task-send-btn ${selectedSendMethod === 'phone' ? 'active' : ''}`}
+                        onClick={() => setSelectedSendMethod('phone')}
+                      >
+                        Phone
+                      </button>
                     </div>
                   </div>
 
-                  {/* Action Buttons Footer */}
-                  <div className="ai-task-detail-footer">
+                  {/* Action Buttons */}
+                  <div className="task-actions">
                     <button
-                      className="ai-action-btn send"
+                      className="task-action-btn primary"
                       onClick={() => {
                         alert(`Sending via ${selectedSendMethod} to ${task.client}`);
                       }}
                     >
-                      📤 Send via {selectedSendMethod.charAt(0).toUpperCase() + selectedSendMethod.slice(1)}
+                      Send {selectedSendMethod.charAt(0).toUpperCase() + selectedSendMethod.slice(1)}
                     </button>
                     <button
-                      className="ai-action-btn approve"
-                      onClick={() => {
-                        alert(`Approved AI action for ${task.title}`);
-                        // Remove task from list
-                        const newTasks = structuredContent.tasks.filter(t => t.id !== task.id);
-                        if (newTasks.length > 0) {
-                          setStructuredContent({ ...structuredContent, tasks: newTasks });
-                          setSelectedTask(newTasks[0]);
-                        } else {
-                          setShowRightSidebar(false);
-                          setStructuredContent(null);
-                          setSelectedTask(null);
-                        }
-                      }}
-                    >
-                      Approve AI Action
-                    </button>
-                    <button
-                      className="ai-action-btn secondary"
-                      onClick={() => alert('Task snoozed')}
-                    >
-                      💤 Snooze
-                    </button>
-                    <button
-                      className="ai-action-btn secondary"
-                      onClick={() => alert('Delegate task')}
-                    >
-                      👥 Delegate
-                    </button>
-                    <button
-                      className="ai-action-btn danger"
+                      className="task-action-btn success"
                       onClick={() => {
                         const newTasks = structuredContent.tasks.filter(t => t.id !== task.id);
                         if (newTasks.length > 0) {
@@ -2431,184 +2348,22 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
                         }
                       }}
                     >
-                      🗑️ Delete
+                      Complete Task
+                    </button>
+                    <button
+                      className="task-action-btn secondary"
+                      onClick={() => alert('Task snoozed for later')}
+                    >
+                      Snooze
                     </button>
                   </div>
-                </>
+                </div>
               );
             })()}
           </div>
         </div>
       )}
 
-      {/* Task List Display */}
-      {taskListData && taskListData.length > 0 && (
-        <div className="ai-task-list-container">
-          <div className="ai-task-sidebar">
-            <div className="ai-task-sidebar-header">
-              <h3>Tasks</h3>
-              <span className="ai-task-count">{taskListData.length}</span>
-            </div>
-            <div className="ai-task-list">
-              {taskListData.map(task => (
-                <div
-                  key={task.id}
-                  className={`ai-task-list-item ${selectedTask?.id === task.id ? 'selected' : ''}`}
-                  onClick={() => setSelectedTask(task)}
-                >
-                  <div className="ai-task-list-icon">
-                    {task.priority === 'HIGH' ? '🔴' : task.type === 'Milestone Alert' ? '⚡' : '📋'}
-                  </div>
-                  <div className="ai-task-list-content">
-                    <div className="ai-task-list-title">{task.title}</div>
-                    <div className="ai-task-list-client">{task.client}</div>
-                    <div className="ai-task-list-stage">{task.stage}</div>
-                  </div>
-                  {task.priority === 'HIGH' && <div className="ai-task-dot high"></div>}
-                  {task.priority === 'MEDIUM' && <div className="ai-task-dot medium"></div>}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {selectedTask && (
-            <div className="ai-task-detail-panel">
-              <div className="ai-task-detail-header">
-                <span className={`ai-task-detail-badge ${selectedTask.source === 'Manual Priority' ? 'manual' : 'system'}`}>
-                  {selectedTask.source === 'Manual Priority' ? 'MANUAL PRIORITY' : selectedTask.source.toUpperCase()}
-                </span>
-                <h2>{selectedTask.title}</h2>
-              </div>
-
-              <div className="ai-task-detail-info">
-                <div className="ai-task-detail-row">
-                  <span className="ai-task-detail-label">CLIENT</span>
-                  <span className="ai-task-detail-value">{selectedTask.client}</span>
-                </div>
-                <div className="ai-task-detail-row">
-                  <span className="ai-task-detail-label">STAGE</span>
-                  <span className="ai-task-detail-value">{selectedTask.stage}</span>
-                </div>
-                <div className="ai-task-detail-row">
-                  <span className="ai-task-detail-label">PRIORITY</span>
-                  <span className={`ai-priority-badge ${selectedTask.priority.toLowerCase()}`}>
-                    {selectedTask.priority}
-                  </span>
-                </div>
-                <div className="ai-task-detail-row">
-                  <span className="ai-task-detail-label">SOURCE</span>
-                  <span className="ai-task-detail-value">{selectedTask.source}</span>
-                </div>
-                <div className="ai-task-detail-row">
-                  <span className="ai-task-detail-label">OWNER</span>
-                  <span className="ai-task-detail-value">{selectedTask.owner}</span>
-                </div>
-                <div className="ai-task-detail-row">
-                  <span className="ai-task-detail-label">DATE CREATED</span>
-                  <span className="ai-task-detail-value">{selectedTask.dateCreated}</span>
-                </div>
-              </div>
-
-              <div className="ai-task-send-via">
-                <span className="ai-task-detail-label">SEND VIA</span>
-                <div className="ai-send-via-buttons">
-                  <button
-                    className={`ai-send-via-btn ${selectedSendMethod === 'email' ? 'active' : ''}`}
-                    onClick={() => handleSendMethodChange('email')}
-                  >Email</button>
-                  <button
-                    className={`ai-send-via-btn ${selectedSendMethod === 'text' ? 'active' : ''}`}
-                    onClick={() => handleSendMethodChange('text')}
-                  >Text</button>
-                  <button
-                    className={`ai-send-via-btn ${selectedSendMethod === 'phone' ? 'active' : ''}`}
-                    onClick={() => handleSendMethodChange('phone')}
-                  >Phone</button>
-                  <button
-                    className={`ai-send-via-btn ${selectedSendMethod === 'voicemail' ? 'active' : ''}`}
-                    onClick={() => handleSendMethodChange('voicemail')}
-                  >Voicemail</button>
-                </div>
-              </div>
-
-              <div className="ai-train-section">
-                <div className="ai-train-header">
-                  <span>Train AI (Optional)</span>
-                </div>
-                <textarea
-                  className="ai-train-input"
-                  placeholder="Type instructions to teach AI how to handle similar tasks in the future..."
-                />
-              </div>
-
-              {selectedTask.aiDraftedMessage && (
-                <div className="ai-drafted-message">
-                  <div className="ai-drafted-header">
-                    <span>AI-Drafted Message</span>
-                    {editingMessage ? (
-                      <button className="ai-edit-message-btn" onClick={handleSaveMessage}>Save</button>
-                    ) : (
-                      <button className="ai-edit-message-btn" onClick={handleEditMessage}>Edit</button>
-                    )}
-                  </div>
-
-                  <div className="generate-message-buttons">
-                    <button
-                      className={`generate-btn ${generatingMessageType === 'email' ? 'generating' : ''}`}
-                      onClick={() => generateFullMessage('email')}
-                      disabled={generatingMessageType !== null}
-                    >
-                      {generatingMessageType === 'email' ? 'Generating...' : 'Generate Full Email'}
-                    </button>
-                    <button
-                      className={`generate-btn ${generatingMessageType === 'text' ? 'generating' : ''}`}
-                      onClick={() => generateFullMessage('text')}
-                      disabled={generatingMessageType !== null}
-                    >
-                      {generatingMessageType === 'text' ? 'Generating...' : 'Generate Text'}
-                    </button>
-                    <button
-                      className={`generate-btn ${generatingMessageType === 'phone' ? 'generating' : ''}`}
-                      onClick={() => generateFullMessage('phone')}
-                      disabled={generatingMessageType !== null}
-                    >
-                      {generatingMessageType === 'phone' ? 'Generating...' : 'Generate Phone Script'}
-                    </button>
-                    <button
-                      className={`generate-btn ${generatingMessageType === 'voicemail' ? 'generating' : ''}`}
-                      onClick={() => generateFullMessage('voicemail')}
-                      disabled={generatingMessageType !== null}
-                    >
-                      {generatingMessageType === 'voicemail' ? 'Generating...' : 'Generate Voicemail'}
-                    </button>
-                  </div>
-
-                  {editingMessage ? (
-                    <textarea
-                      className="ai-drafted-content-edit"
-                      value={editedMessage}
-                      onChange={(e) => setEditedMessage(e.target.value)}
-                      rows={12}
-                    />
-                  ) : (
-                    <div className="ai-drafted-content">
-                      {selectedTask.aiDraftedMessage}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              <div className="ai-task-actions">
-                <button className="ai-action-btn send" onClick={handleSendViaEmail}>Send via Email</button>
-                <button className="ai-action-btn approve" onClick={handleApproveAIAction}>Approve AI Action</button>
-                <button className="ai-action-btn snooze" onClick={handleSnooze}>Snooze</button>
-                <button className="ai-action-btn delegate" onClick={handleDelegate}>Delegate</button>
-                <button className="ai-action-btn delete" onClick={handleDeleteTask}>Delete</button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
