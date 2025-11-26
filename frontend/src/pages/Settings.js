@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { teamAPI } from '../services/api';
 import MissionControl from './MissionControl';
 import AIReceptionist from '../components/AIReceptionist';
-import MyProfile from './MyProfile';
 import ExperimentsDashboard from './ExperimentsDashboard';
 import TaskWorkflowManager from '../components/TaskWorkflowManager';
 import DocumentIntakeManager from '../components/DocumentIntakeManager';
@@ -1743,13 +1742,6 @@ const API_BASE_URL = isProduction
           )}
 
           <button
-            className={`sidebar-btn ${activeSection === 'profile' ? 'active' : ''}`}
-            onClick={() => setActiveSection('profile')}
-          >
-            <span className="icon">👤</span>
-            <span>Profile</span>
-          </button>
-          <button
             className={`sidebar-btn ${activeSection === 'notifications' ? 'active' : ''}`}
             onClick={() => setActiveSection('notifications')}
           >
@@ -2744,10 +2736,6 @@ const API_BASE_URL = isProduction
                 </div>
               )}
             </div>
-          )}
-
-          {activeSection === 'profile' && (
-            <MyProfile />
           )}
 
           {activeSection === 'notifications' && (
