@@ -15,7 +15,6 @@ const UnifiedTaskSidebar = ({ isOpen, onClose, onTaskCountChange }) => {
   const [feedbackText, setFeedbackText] = useState('');
   const [editedResponse, setEditedResponse] = useState('');
   const [isEditing, setIsEditing] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
 
   // Fetch unified tasks from all sources
   const fetchUnifiedTasks = useCallback(async () => {
@@ -97,70 +96,66 @@ const UnifiedTaskSidebar = ({ isOpen, onClose, onTaskCountChange }) => {
     setIsEditing(false);
   };
 
-  // Handle approve action
-  const handleApprove = async () => {
+  // Handle approve action - instant, optimistic UI
+  const handleApprove = () => {
     if (!selectedTask) return;
 
-    setSubmitting(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/unified-tasks/${selectedTask.id}/approve`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          source: selectedTask.source,
-          approved_response: isEditing ? editedResponse : selectedTask.ai_suggested_response,
-          feedback: feedbackText || null
-        })
-      });
+    const taskToApprove = selectedTask;
 
-      if (response.ok) {
-        // Remove from list and clear selection
-        setTasks(prev => prev.filter(t => t.id !== selectedTask.id || t.source !== selectedTask.source));
-        setSelectedTask(null);
-        setFeedbackText('');
-        setEditedResponse('');
-        // Refresh to get updated counts
-        fetchUnifiedTasks();
-      }
-    } catch (error) {
-      console.error('Error approving task:', error);
-    } finally {
-      setSubmitting(false);
+    // Optimistic UI - remove immediately
+    setTasks(prev => prev.filter(t => t.id !== taskToApprove.id || t.source !== taskToApprove.source));
+    setSelectedTask(null);
+    setFeedbackText('');
+    setEditedResponse('');
+
+    // Update count
+    if (onTaskCountChange) {
+      onTaskCountChange(tasks.length - 1);
     }
+
+    // API call in background
+    fetch(`${API_BASE_URL}/api/v1/unified-tasks/${taskToApprove.id}/approve`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        source: taskToApprove.source,
+        approved_response: isEditing ? editedResponse : taskToApprove.ai_suggested_response,
+        feedback: feedbackText || null
+      })
+    }).catch(err => console.error('Approve failed:', err));
   };
 
-  // Handle reject/skip action
-  const handleReject = async () => {
+  // Handle reject/skip action - instant, optimistic UI
+  const handleReject = () => {
     if (!selectedTask) return;
 
-    setSubmitting(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/unified-tasks/${selectedTask.id}/reject`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          source: selectedTask.source,
-          feedback: feedbackText || 'Rejected by user'
-        })
-      });
+    const taskToReject = selectedTask;
 
-      if (response.ok) {
-        setTasks(prev => prev.filter(t => t.id !== selectedTask.id || t.source !== selectedTask.source));
-        setSelectedTask(null);
-        setFeedbackText('');
-        fetchUnifiedTasks();
-      }
-    } catch (error) {
-      console.error('Error rejecting task:', error);
-    } finally {
-      setSubmitting(false);
+    // Optimistic UI - remove immediately
+    setTasks(prev => prev.filter(t => t.id !== taskToReject.id || t.source !== taskToReject.source));
+    setSelectedTask(null);
+    setFeedbackText('');
+
+    // Update count
+    if (onTaskCountChange) {
+      onTaskCountChange(tasks.length - 1);
     }
+
+    // API call in background
+    fetch(`${API_BASE_URL}/api/v1/unified-tasks/${taskToReject.id}/reject`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        source: taskToReject.source,
+        feedback: feedbackText || 'Rejected by user'
+      })
+    }).catch(err => console.error('Reject failed:', err));
   };
 
   // Count by source
@@ -351,14 +346,12 @@ const UnifiedTaskSidebar = ({ isOpen, onClose, onTaskCountChange }) => {
                 <button
                   className="btn-approve"
                   onClick={handleApprove}
-                  disabled={submitting}
                 >
-                  {submitting ? 'Processing...' : '✓ Approve & Complete'}
+                  ✓ Approve & Complete
                 </button>
                 <button
                   className="btn-reject"
                   onClick={handleReject}
-                  disabled={submitting}
                 >
                   ✗ Reject / Skip
                 </button>

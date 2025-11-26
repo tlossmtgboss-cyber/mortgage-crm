@@ -749,94 +749,54 @@ function ReconciliationCenter() {
   };
 
   const bulkDeleteReviewItems = async () => {
-    if (selectedReviewItems.size === 0) {
-      alert('Please select items to delete');
-      return;
-    }
+    if (selectedReviewItems.size === 0) return;
 
-    if (!window.confirm(`Delete ${selectedReviewItems.size} pending review item(s)? This action cannot be undone.`)) {
-      return;
-    }
-
-    setBulkProcessing(true);
-    let successCount = 0;
-
-    for (const itemId of selectedReviewItems) {
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/v1/reconciliation/items/${itemId}`, {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
-          }
-        });
-
-        if (response.ok) {
-          successCount++;
-        }
-      } catch (error) {
-        console.error(`Error deleting item ${itemId}:`, error);
-      }
-    }
-
-    // Refresh the list
-    await fetchPendingItems();
-
-    // Clear selections
+    // Optimistic UI update - remove items immediately
+    const itemsToDelete = new Set(selectedReviewItems);
+    setPendingReviewItems(prev => prev.filter(item => !itemsToDelete.has(item.id)));
     setSelectedReviewItems(new Set());
-    setBulkProcessing(false);
 
-    alert(`Successfully deleted ${successCount} out of ${selectedReviewItems.size} items`);
+    // Delete in background - no waiting
+    for (const itemId of itemsToDelete) {
+      fetch(`${API_BASE_URL}/api/v1/reconciliation/items/${itemId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      }).catch(err => console.error(`Delete failed for ${itemId}:`, err));
+    }
   };
 
   const bulkApproveReviewItems = async () => {
-    if (selectedReviewItems.size === 0) {
-      alert('Please select items to approve');
-      return;
-    }
+    if (selectedReviewItems.size === 0) return;
 
-    if (!window.confirm(`Approve ${selectedReviewItems.size} item(s) and apply to matching records?`)) {
-      return;
-    }
-
-    setBulkProcessing(true);
-    let successCount = 0;
-
-    for (const itemId of selectedReviewItems) {
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/v1/reconciliation/approve`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            extracted_data_id: itemId,
-            corrections: null
-          })
-        });
-
-        if (response.ok) {
-          successCount++;
-        }
-      } catch (error) {
-        console.error(`Error approving item ${itemId}:`, error);
-      }
-    }
-
-    await fetchPendingItems();
+    // Optimistic UI update - remove items immediately
+    const itemsToApprove = new Set(selectedReviewItems);
+    setPendingReviewItems(prev => prev.filter(item => !itemsToApprove.has(item.id)));
     setSelectedReviewItems(new Set());
-    setBulkProcessing(false);
-    alert(`Successfully approved ${successCount} out of ${selectedReviewItems.size} items`);
+
+    // Approve in background - no waiting
+    for (const itemId of itemsToApprove) {
+      fetch(`${API_BASE_URL}/api/v1/reconciliation/approve`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          extracted_data_id: itemId,
+          corrections: null
+        })
+      }).catch(err => console.error(`Approve failed for ${itemId}:`, err));
+    }
   };
 
   const bulkBlockSenders = async () => {
-    if (selectedReviewItems.size === 0) {
-      alert('Please select items to block senders');
-      return;
-    }
+    if (selectedReviewItems.size === 0) return;
 
     // Get unique senders from selected items
     const sendersToBlock = new Set();
+    const itemsToRemove = new Set(selectedReviewItems);
     selectedReviewItems.forEach(itemId => {
       const item = pendingReviewItems.find(i => i.id === itemId);
       if (item?.email_from) {
@@ -844,56 +804,35 @@ function ReconciliationCenter() {
       }
     });
 
-    if (!window.confirm(`Block ${sendersToBlock.size} sender(s) and delete ${selectedReviewItems.size} item(s)?\n\nBlocked senders:\n${Array.from(sendersToBlock).join('\n')}\n\nFuture emails from these senders will be automatically ignored.`)) {
-      return;
-    }
-
-    setBulkProcessing(true);
-    let successCount = 0;
-
-    // Block each sender
-    for (const sender of sendersToBlock) {
-      try {
-        await fetch(`${API_BASE_URL}/api/v1/reconciliation/block-sender`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ sender_email: sender })
-        });
-      } catch (error) {
-        console.error(`Error blocking sender ${sender}:`, error);
-      }
-    }
-
-    // Delete the selected items
-    for (const itemId of selectedReviewItems) {
-      try {
-        const response = await fetch(`${API_BASE_URL}/api/v1/reconciliation/reject`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            extracted_data_id: itemId,
-            reason: 'Sender blocked by user'
-          })
-        });
-
-        if (response.ok) {
-          successCount++;
-        }
-      } catch (error) {
-        console.error(`Error deleting item ${itemId}:`, error);
-      }
-    }
-
-    await fetchPendingItems();
+    // Optimistic UI update - remove items immediately
+    setPendingReviewItems(prev => prev.filter(item => !itemsToRemove.has(item.id)));
     setSelectedReviewItems(new Set());
-    setBulkProcessing(false);
-    alert(`Blocked ${sendersToBlock.size} sender(s) and deleted ${successCount} items`);
+
+    // Block senders and reject items in background
+    for (const sender of sendersToBlock) {
+      fetch(`${API_BASE_URL}/api/v1/reconciliation/block-sender`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ sender_email: sender })
+      }).catch(err => console.error(`Block sender failed for ${sender}:`, err));
+    }
+
+    for (const itemId of itemsToRemove) {
+      fetch(`${API_BASE_URL}/api/v1/reconciliation/reject`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          extracted_data_id: itemId,
+          reason: 'Sender blocked by user'
+        })
+      }).catch(err => console.error(`Reject failed for ${itemId}:`, err));
+    }
   };
 
   const getConfidenceColor = (confidence) => {
