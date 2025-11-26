@@ -534,7 +534,7 @@ function MumClientDetail() {
 
   if (loading) {
     return (
-      <div className="mum-detail-page">
+      <div className="lead-detail-page">
         <div className="loading">Loading lead details...</div>
       </div>
     );
@@ -542,18 +542,18 @@ function MumClientDetail() {
 
   if (!client) {
     return (
-      <div className="mum-detail-page">
+      <div className="lead-detail-page">
         <div className="error">Lead not found</div>
       </div>
     );
   }
 
   return (
-    <div className="mum-detail-page">
+    <div className="lead-detail-page">
       {/* Header */}
       <div className="detail-header">
-        <button className="btn-back" onClick={() => navigate('/mum')}>
-          ← Back to Leads
+        <button className="btn-back" onClick={() => navigate('/portfolio')}>
+          ← Back to Portfolio
         </button>
         <div className="header-actions">
           {editing ? (
