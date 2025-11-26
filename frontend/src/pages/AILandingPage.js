@@ -1471,35 +1471,38 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
             <h1>Back at it, {userName}</h1>
           </div>
 
-          <div className="ai-welcome-state">
-            <h2>What would you like to do today?</h2>
-            <p>Ask me anything about your CRM data, clients, or tasks. I'll handle the rest.</p>
+          {/* Welcome state - only show when no messages */}
+          {messages.length === 0 && (
+            <div className="ai-welcome-state">
+              <h2>What would you like to do today?</h2>
+              <p>Ask me anything about your CRM data, clients, or tasks. I'll handle the rest.</p>
 
-            <div className="ai-example-prompts-new">
-              <button onClick={() => handleExamplePrompt('Daily Briefing - Get my top 3 priorities for today')}>
-                <strong>Daily Briefing</strong>
-                <span>Get your top 3 priorities for today</span>
-              </button>
-              <button onClick={() => handleExamplePrompt('Pipeline Audit - Identify bottlenecks and stalled deals')}>
-                <strong>Pipeline Audit</strong>
-                <span>Identify bottlenecks and stalled deals</span>
-              </button>
-              <button onClick={() => handleExamplePrompt('Focus Reset - Help me get back on track')}>
-                <strong>Focus Reset</strong>
-                <span>Get back on track when scattered</span>
-              </button>
-              <button onClick={() => handleExamplePrompt('What should I do next?')}>
-                <strong>What Should I Do Next?</strong>
-                <span>Priority decision guidance</span>
-              </button>
-              <button onClick={() => handleExamplePrompt('Accountability Review - Review my performance')}>
-                <strong>Accountability Review</strong>
-                <span>Review your performance</span>
-              </button>
+              <div className="ai-example-prompts-new">
+                <button onClick={() => handleExamplePrompt('Daily Briefing - Get my top 3 priorities for today')}>
+                  <strong>Daily Briefing</strong>
+                  <span>Get your top 3 priorities for today</span>
+                </button>
+                <button onClick={() => handleExamplePrompt('Pipeline Audit - Identify bottlenecks and stalled deals')}>
+                  <strong>Pipeline Audit</strong>
+                  <span>Identify bottlenecks and stalled deals</span>
+                </button>
+                <button onClick={() => handleExamplePrompt('Focus Reset - Help me get back on track')}>
+                  <strong>Focus Reset</strong>
+                  <span>Get back on track when scattered</span>
+                </button>
+                <button onClick={() => handleExamplePrompt('What should I do next?')}>
+                  <strong>What Should I Do Next?</strong>
+                  <span>Priority decision guidance</span>
+                </button>
+                <button onClick={() => handleExamplePrompt('Accountability Review - Review my performance')}>
+                  <strong>Accountability Review</strong>
+                  <span>Review your performance</span>
+                </button>
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* Conversation History - Above Input */}
+          {/* Conversation History */}
           {messages.length > 0 && (
             <div className="ai-conversation-history" ref={chatAreaRef}>
               {messages.map(message => (
