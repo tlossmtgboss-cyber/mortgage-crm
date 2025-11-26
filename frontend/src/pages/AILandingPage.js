@@ -708,11 +708,6 @@ function AILandingPage() {
     const streamMsgId = Date.now();
     setStreamingMessageId(streamMsgId);
 
-    // Expand the left sidebar to show the chat when a message is sent
-    if (sidebarCollapsed) {
-      setSidebarCollapsed(false);
-    }
-
     // Add placeholder message that will be updated as content streams in
     setMessages(prev => [...prev, {
       id: streamMsgId,
