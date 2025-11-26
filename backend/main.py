@@ -20491,7 +20491,13 @@ async def update_task(task_id: int, task_update: TaskUpdate, db: Session = Depen
 
 @app.delete("/api/v1/tasks/{task_id}", status_code=204)
 async def delete_task(task_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # Try to find in AITask first
     task = db.query(AITask).filter(AITask.id == task_id, AITask.assigned_to_id == current_user.id).first()
+
+    # If not found in AITask, try regular Task table
+    if not task:
+        task = db.query(Task).filter(Task.id == task_id, Task.owner_id == current_user.id).first()
+
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
