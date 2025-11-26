@@ -45,6 +45,8 @@ function AILandingPage() {
   const [isListening, setIsListening] = useState(false);
   const [dividerPosition, setDividerPosition] = useState(50); // percentage
   const [isDragging, setIsDragging] = useState(false);
+  const [draggedChat, setDraggedChat] = useState(null);
+  const [dropTargetActive, setDropTargetActive] = useState(false);
 
   // Right sidebar for structured output (tasks, reports, lists, etc.)
   const [structuredContent, setStructuredContent] = useState(null);
@@ -361,6 +363,51 @@ function AILandingPage() {
   const handleDeleteChat = () => {
     setChatHistory(prev => prev.filter(c => c.id !== contextMenu.chatId));
     setContextMenu({ visible: false, x: 0, y: 0, chatId: null });
+  };
+
+  // Drag and drop handlers for moving chats to reports
+  const handleDragStart = (e, chat) => {
+    setDraggedChat(chat);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', chat.id);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedChat(null);
+    setDropTargetActive(false);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDropTargetActive(true);
+  };
+
+  const handleDragLeave = () => {
+    setDropTargetActive(false);
+  };
+
+  const handleDropOnReports = (e) => {
+    e.preventDefault();
+    setDropTargetActive(false);
+
+    if (draggedChat) {
+      // Check if chat is already in reports
+      const alreadyInReports = reports.some(r => r.id === draggedChat.id);
+      if (!alreadyInReports) {
+        const reportItem = {
+          ...draggedChat,
+          isReport: true,
+          addedToReportsAt: new Date().toISOString()
+        };
+        setReports(prev => [reportItem, ...prev]);
+      }
+      setDraggedChat(null);
+    }
+  };
+
+  const handleRemoveFromReports = (reportId) => {
+    setReports(prev => prev.filter(r => r.id !== reportId));
   };
 
   const handleFileUpload = async (e) => {
@@ -1377,13 +1424,17 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
                 Chats
               </button>
               <button
-                className={`ai-nav-btn ${sidebarView === 'reports' ? 'active' : ''}`}
+                className={`ai-nav-btn ${sidebarView === 'reports' ? 'active' : ''} ${dropTargetActive ? 'drop-target' : ''}`}
                 onClick={() => setSidebarView('reports')}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDropOnReports}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
                 </svg>
                 Reports
+                {dropTargetActive && <span className="drop-hint">Drop here</span>}
               </button>
               <button
                 className={`ai-nav-btn ${sidebarView === 'suggestions' ? 'active' : ''}`}
@@ -1415,13 +1466,19 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
                       filteredChats.map(chat => (
                         <div
                           key={chat.id}
-                          className={`ai-chat-item ${chat.id === sessionId ? 'active' : ''}`}
+                          className={`ai-chat-item ${chat.id === sessionId ? 'active' : ''} ${draggedChat?.id === chat.id ? 'dragging' : ''}`}
                           onClick={() => handleLoadChat(chat)}
                           onContextMenu={(e) => handleContextMenu(e, chat.id)}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, chat)}
+                          onDragEnd={handleDragEnd}
                         >
-                          <div className="ai-chat-title">{chat.title}</div>
-                          <div className="ai-chat-time">
-                            {new Date(chat.timestamp).toLocaleDateString()}
+                          <div className="ai-chat-drag-handle">⋮⋮</div>
+                          <div className="ai-chat-info">
+                            <div className="ai-chat-title">{chat.title}</div>
+                            <div className="ai-chat-time">
+                              {new Date(chat.timestamp).toLocaleDateString()}
+                            </div>
                           </div>
                         </div>
                       ))
@@ -1431,16 +1488,44 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
               )}
 
               {sidebarView === 'reports' && (
-                <div className="ai-reports-list">
+                <div
+                  className={`ai-reports-list ${dropTargetActive ? 'drop-target-area' : ''}`}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDropOnReports}
+                >
                   {reports.length === 0 ? (
-                    <div className="ai-empty-list">No reports yet. Generate reports from your chats!</div>
+                    <div className="ai-empty-list">
+                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{marginBottom: '8px', opacity: 0.5}}>
+                        <path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>
+                      </svg>
+                      <p>No reports yet</p>
+                      <p className="ai-drop-instruction">Drag a chat here to save it as a report</p>
+                    </div>
                   ) : (
                     reports.map(report => (
-                      <div key={report.id} className="ai-report-item">
-                        <div className="ai-report-title">{report.title}</div>
-                        <div className="ai-report-time">
-                          {new Date(report.createdAt).toLocaleDateString()}
+                      <div
+                        key={report.id}
+                        className={`ai-report-item ${report.id === sessionId ? 'active' : ''}`}
+                        onClick={() => handleLoadChat(report)}
+                      >
+                        <div className="ai-report-icon">📊</div>
+                        <div className="ai-report-info">
+                          <div className="ai-report-title">{report.title}</div>
+                          <div className="ai-report-time">
+                            {new Date(report.addedToReportsAt || report.timestamp).toLocaleDateString()}
+                          </div>
                         </div>
+                        <button
+                          className="ai-report-remove"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveFromReports(report.id);
+                          }}
+                          title="Remove from reports"
+                        >
+                          ×
+                        </button>
                       </div>
                     ))
                   )}
@@ -1710,12 +1795,34 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
                structuredContent.type === 'search_results' ? '🔍 Search Results' :
                '📄 Details'}
             </h3>
-            <button
-              className="ai-sidebar-close"
-              onClick={() => setShowRightSidebar(false)}
-            >
-              ×
-            </button>
+            <div className="ai-sidebar-actions">
+              <button
+                className="ai-sidebar-action-btn"
+                onClick={() => {
+                  navigator.clipboard.writeText(structuredContent.content);
+                  alert('Copied to clipboard!');
+                }}
+                title="Copy to clipboard"
+              >
+                📋 Copy
+              </button>
+              <button
+                className="ai-sidebar-action-btn"
+                onClick={() => {
+                  setStructuredContent(null);
+                }}
+                title="Clear content"
+              >
+                🗑️ Clear
+              </button>
+              <button
+                className="ai-sidebar-close"
+                onClick={() => setShowRightSidebar(false)}
+                title="Close sidebar"
+              >
+                ×
+              </button>
+            </div>
           </div>
           <div className="ai-structured-sidebar-content">
             <ReactMarkdown>{structuredContent.content}</ReactMarkdown>

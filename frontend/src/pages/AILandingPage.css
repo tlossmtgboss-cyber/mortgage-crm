@@ -162,7 +162,10 @@
   padding: 10px 12px;
   border-radius: 8px;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: background 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .ai-chat-item:hover {
@@ -171,6 +174,37 @@
 
 .ai-chat-item.active {
   background: #e8e8e8;
+}
+
+.ai-chat-item.dragging {
+  opacity: 0.5;
+  transform: scale(0.98);
+}
+
+.ai-chat-item[draggable="true"] {
+  cursor: grab;
+}
+
+.ai-chat-item[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.ai-chat-drag-handle {
+  color: #aaa;
+  font-size: 12px;
+  letter-spacing: -2px;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.ai-chat-item:hover .ai-chat-drag-handle {
+  color: #666;
+}
+
+.ai-chat-info {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .ai-chat-title {
@@ -803,6 +837,14 @@
 .ai-reports-list,
 .ai-suggestions-view {
   padding: 12px;
+  min-height: 100px;
+  transition: all 0.2s ease;
+}
+
+.ai-reports-list.drop-target-area {
+  background: #fff8f5;
+  border: 2px dashed #d97757;
+  border-radius: 8px;
 }
 
 .ai-report-item {
@@ -812,21 +854,92 @@
   border-radius: 8px;
   cursor: pointer;
   margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .ai-report-item:hover {
   border-color: #d97757;
 }
 
+.ai-report-item.active {
+  border-color: #d97757;
+  background: #fff8f5;
+}
+
+.ai-report-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.ai-report-info {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .ai-report-title {
   font-size: 14px;
   color: #333;
   margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .ai-report-time {
   font-size: 12px;
   color: #888;
+}
+
+.ai-report-remove {
+  background: none;
+  border: none;
+  color: #aaa;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.ai-report-remove:hover {
+  background: #fee;
+  color: #c00;
+}
+
+/* Drop target styles for nav button */
+.ai-nav-btn.drop-target {
+  background: #fff8f5 !important;
+  border: 2px dashed #d97757 !important;
+  color: #d97757 !important;
+}
+
+.drop-hint {
+  font-size: 10px;
+  margin-left: 4px;
+  background: #d97757;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.ai-drop-instruction {
+  font-size: 11px;
+  color: #999;
+  margin-top: 4px;
+}
+
+.ai-empty-list {
+  text-align: center;
+  padding: 20px 12px;
+  color: #888;
+}
+
+.ai-empty-list p {
+  margin: 4px 0;
 }
 
 /* Projects Section */
@@ -1035,19 +1148,45 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px 24px;
+  padding: 16px 20px;
   border-bottom: 1px solid #e5e7eb;
   background: #f9fafb;
+  flex-shrink: 0;
 }
 
 .ai-structured-sidebar-header h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   color: #1f2937;
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.ai-sidebar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-sidebar-action-btn {
+  background: white;
+  border: 1px solid #e5e7eb;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ai-sidebar-action-btn:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
 }
 
 .ai-sidebar-close {
@@ -1059,11 +1198,12 @@
   padding: 4px 8px;
   border-radius: 6px;
   transition: all 0.2s;
+  line-height: 1;
 }
 
 .ai-sidebar-close:hover {
-  background: #f3f4f6;
-  color: #1f2937;
+  background: #fee2e2;
+  color: #dc2626;
 }
 
 .ai-structured-sidebar-content {
