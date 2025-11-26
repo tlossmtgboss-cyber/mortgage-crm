@@ -7,6 +7,7 @@ API endpoints for Gmail OAuth authentication and email operations.
 from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from typing import Optional
 from datetime import datetime, timedelta
 import logging
@@ -438,12 +439,27 @@ async def sync_emails(
                         IncomingDataEvent.user_id == current_user.id
                     ).first()
                     if existing:
-                        # Delete associated ExtractedData first
-                        db.query(ExtractedData).filter(
-                            ExtractedData.event_id == existing.id
-                        ).delete()
-                        db.delete(existing)
-                        db.commit()
+                        try:
+                            # Delete ai_training_events that reference extracted_data first
+                            db.execute(
+                                text("""
+                                    DELETE FROM ai_training_events
+                                    WHERE extracted_data_id IN (
+                                        SELECT id FROM extracted_data WHERE event_id = :event_id
+                                    )
+                                """),
+                                {"event_id": existing.id}
+                            )
+                            # Delete associated ExtractedData
+                            db.query(ExtractedData).filter(
+                                ExtractedData.event_id == existing.id
+                            ).delete()
+                            db.delete(existing)
+                            db.commit()
+                        except Exception as del_error:
+                            logger.warning(f"Error deleting existing email {email_id}: {del_error}")
+                            db.rollback()
+                            continue  # Skip this email and continue with others
 
                 # Convert Gmail format to Microsoft-like format for processing
                 email_data = {
