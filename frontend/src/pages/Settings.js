@@ -1411,6 +1411,38 @@ const API_BASE_URL = isProduction
       <div className="settings-content">
         {/* Sidebar */}
         <div className="settings-sidebar">
+          {/* Organizational Settings - Expandable (MOVED TO TOP) */}
+          <button
+            className={`sidebar-btn parent ${expandedSections.organizational ? 'expanded' : ''}`}
+            onClick={() => toggleSection('organizational')}
+          >
+            <span className="icon">🏢</span>
+            <span>Organizational Settings</span>
+            <span className="expand-icon">{expandedSections.organizational ? '▼' : '▶'}</span>
+          </button>
+          {expandedSections.organizational && (
+            <div className="sidebar-children">
+              <button
+                className={`sidebar-btn child ${activeSection === 'company-info' ? 'active' : ''}`}
+                onClick={() => setActiveSection('company-info')}
+              >
+                <span>Company Info</span>
+              </button>
+              <button
+                className={`sidebar-btn child ${activeSection === 'team-members' ? 'active' : ''}`}
+                onClick={() => navigate('/team-members')}
+              >
+                <span>Team Members</span>
+              </button>
+              <button
+                className={`sidebar-btn child ${activeSection === 'branding' ? 'active' : ''}`}
+                onClick={() => setActiveSection('branding')}
+              >
+                <span>Branding</span>
+              </button>
+            </div>
+          )}
+
           <button
             className={`sidebar-btn ${activeSection === 'mission-control' ? 'active' : ''}`}
             onClick={() => setActiveSection('mission-control')}
@@ -1553,38 +1585,6 @@ const API_BASE_URL = isProduction
             <span className="icon">🛠️</span>
             <span>IT Helpdesk</span>
           </button>
-
-          {/* Organizational Settings - Expandable */}
-          <button
-            className={`sidebar-btn parent ${expandedSections.organizational ? 'expanded' : ''}`}
-            onClick={() => toggleSection('organizational')}
-          >
-            <span className="icon">🏢</span>
-            <span>Organizational Settings</span>
-            <span className="expand-icon">{expandedSections.organizational ? '▼' : '▶'}</span>
-          </button>
-          {expandedSections.organizational && (
-            <div className="sidebar-children">
-              <button
-                className={`sidebar-btn child ${activeSection === 'company-info' ? 'active' : ''}`}
-                onClick={() => setActiveSection('company-info')}
-              >
-                <span>Company Info</span>
-              </button>
-              <button
-                className={`sidebar-btn child ${activeSection === 'team-members' ? 'active' : ''}`}
-                onClick={() => navigate('/team-members')}
-              >
-                <span>Team Members</span>
-              </button>
-              <button
-                className={`sidebar-btn child ${activeSection === 'branding' ? 'active' : ''}`}
-                onClick={() => setActiveSection('branding')}
-              >
-                <span>Branding</span>
-              </button>
-            </div>
-          )}
 
           {/* Scheduling Settings - Expandable */}
           <button
