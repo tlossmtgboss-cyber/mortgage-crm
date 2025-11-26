@@ -331,16 +331,48 @@ class CRMContextService:
                     "status": row[4]
                 })
 
+            # Get pending reconciliation items that need review
+            result = db.execute(text("""
+                SELECT ed.id, ed.category, ed.subcategory, ed.fields, ed.match_confidence,
+                       ide.subject, ide.sender_email, ide.created_at
+                FROM extracted_data ed
+                JOIN incoming_data_events ide ON ed.event_id = ide.id
+                WHERE ed.status IN ('pending_review', 'needs_review')
+                AND (ide.user_id = :user_id OR ide.user_id IS NULL)
+                ORDER BY ide.created_at DESC
+                LIMIT 20
+            """), {"user_id": user_id})
+
+            pending_reconciliation = []
+            for row in result:
+                fields = row[3] if row[3] else {}
+                borrower_name = None
+                if isinstance(fields, dict):
+                    borrower_name = fields.get('borrower_name', {}).get('value') if isinstance(fields.get('borrower_name'), dict) else fields.get('borrower_name')
+
+                pending_reconciliation.append({
+                    "id": row[0],
+                    "category": row[1],
+                    "subcategory": row[2],
+                    "borrower_name": borrower_name,
+                    "match_confidence": row[4],
+                    "subject": row[5],
+                    "sender": row[6],
+                    "received_at": row[7].isoformat() if row[7] else None
+                })
+
             return {
                 "total": sum(status_counts.values()),
                 "by_status": status_counts,
                 "overdue": overdue,
                 "todays_tasks": todays_tasks,
-                "upcoming": upcoming
+                "upcoming": upcoming,
+                "pending_reconciliation": pending_reconciliation,
+                "pending_reconciliation_count": len(pending_reconciliation)
             }
         except Exception as e:
             logger.error(f"Error getting tasks context: {e}")
-            return {"total": 0, "by_status": {}, "overdue": 0, "todays_tasks": [], "upcoming": []}
+            return {"total": 0, "by_status": {}, "overdue": 0, "todays_tasks": [], "upcoming": [], "pending_reconciliation": [], "pending_reconciliation_count": 0}
 
     @staticmethod
     def _get_mum_context(db: Session, user_id: int) -> Dict[str, Any]:

@@ -5887,6 +5887,18 @@ When asked about rate lock guidance:
         all_tasks = db.query(Task).filter(Task.owner_id == current_user.id).all()
         all_loans = db.query(Loan).filter(Loan.loan_officer_id == current_user.id).all()
 
+        # Get pending reconciliation items that need review
+        pending_reconciliation = db.query(ExtractedData).join(
+            IncomingDataEvent,
+            ExtractedData.event_id == IncomingDataEvent.id
+        ).filter(
+            ExtractedData.status.in_(["pending_review", "needs_review"]),
+            or_(
+                IncomingDataEvent.user_id == current_user.id,
+                IncomingDataEvent.user_id == None
+            )
+        ).all()
+
         # Tasks breakdown
         tasks_today = [t for t in all_tasks if t.due_date and t.due_date.date() == today and t.status != "completed"]
         tasks_tomorrow = [t for t in all_tasks if t.due_date and t.due_date.date() == tomorrow and t.status != "completed"]
@@ -5967,6 +5979,11 @@ When asked about rate lock guidance:
 
 ### Active Loans (for task correlation - ALWAYS reference these when discussing tasks):
 {chr(10).join([f"- **{loan.borrower_name}** - Loan #{loan.loan_number or 'N/A'} | ${loan.amount:,.0f} | Stage: {str(loan.stage).replace('LoanStage.', '') if loan.stage else 'Unknown'}" for loan in all_loans[:15]]) if all_loans else "- No active loans"}
+
+### PENDING EMAIL REVIEWS (Reconciliation Center - {len(pending_reconciliation)} items need your attention):
+{chr(10).join([f"- EMAIL: '{r.incoming_event.subject[:50]}...' from {r.incoming_event.sender_email} | Category: {r.category or 'Unknown'} | Status: NEEDS REVIEW" for r in pending_reconciliation[:10] if r.incoming_event]) if pending_reconciliation else "- No pending email reviews"}
+
+{'**ACTION REQUIRED:** You have ' + str(len(pending_reconciliation)) + ' emails in the Reconciliation Center that need review (approve, delete, or block sender).' if pending_reconciliation else ''}
 """
 
         # Detect coaching mode from message
@@ -5977,6 +5994,7 @@ When asked about rate lock guidance:
         if "daily briefing" in message_lower or "top 3 priorities" in message_lower:
             coaching_mode = "Daily Briefing"
             total_outstanding = len([t for t in all_tasks if t.status != "completed"])
+            pending_recon_count = len(pending_reconciliation)
             coaching_instructions = f"""
 
 ## COACHING MODE: DAILY BRIEFING
@@ -5984,13 +6002,16 @@ Your job: Give the user their TOP 3 PRIORITIES for today based on their actual t
 
 CRITICAL RULES:
 - The user has {len(tasks_overdue)} OVERDUE tasks and {total_outstanding} total outstanding tasks
+- The user has {pending_recon_count} PENDING EMAIL REVIEWS in the Reconciliation Center
 - If OVERDUE tasks > 0: START with "You have {len(tasks_overdue)} overdue tasks that need immediate attention"
 - If total outstanding tasks > 0: Say "You have {total_outstanding} outstanding tasks" NOT "no tasks"
+- If pending reconciliation > 0: ALWAYS mention "{pending_recon_count} emails need your review in the Reconciliation Center - go to Reconciliation tab to approve, delete, or block senders"
 - NEVER say "no tasks" if overdue or outstanding tasks exist
 - ALWAYS prioritize overdue tasks first
 - Use ACTUAL task names and due dates from the data above
 - Be specific and actionable - no generic advice
 - Format as numbered list (1, 2, 3)
+- Include ACTIONABLE items from PENDING EMAIL REVIEWS - these are real items that need attention!
 """
         elif "pipeline audit" in message_lower or "bottlenecks" in message_lower:
             coaching_mode = "Pipeline Audit"
