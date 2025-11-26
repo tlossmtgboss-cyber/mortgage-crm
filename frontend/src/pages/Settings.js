@@ -117,7 +117,8 @@ function Settings() {
     setLoadingTeam(true);
     try {
       const data = await teamAPI.getWorkflowMembers();
-      setTeamMembers(data.team_members || []);
+      // API returns { members: [...] } not { team_members: [...] }
+      setTeamMembers(data.members || data.team_members || []);
       setAvailableRoles([]); // Workflow members don't use the role system
     } catch (error) {
       console.error('Error loading team members:', error);
