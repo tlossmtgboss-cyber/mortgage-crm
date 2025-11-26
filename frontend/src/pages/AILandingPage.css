@@ -1001,7 +1001,9 @@
   position: fixed;
   top: 0;
   right: 0;
-  width: 450px;
+  width: 50%;
+  min-width: 350px;
+  max-width: 80%;
   height: 100vh;
   background: white;
   box-shadow: -4px 0 20px rgba(0, 0, 0, 0.1);
@@ -1009,6 +1011,13 @@
   display: flex;
   flex-direction: column;
   animation: slideInRight 0.3s ease;
+  resize: horizontal;
+  overflow: auto;
+  direction: rtl; /* Makes resize handle appear on left */
+}
+
+.ai-structured-sidebar > * {
+  direction: ltr; /* Reset direction for content */
 }
 
 @keyframes slideInRight {
@@ -1176,10 +1185,18 @@
 }
 
 /* Responsive adjustments */
+@media (max-width: 1200px) {
+  .ai-structured-sidebar {
+    width: 60%;
+  }
+}
+
 @media (max-width: 900px) {
   .ai-structured-sidebar {
     width: 100%;
     max-width: 100%;
+    min-width: 100%;
+    resize: none;
   }
 }
 
