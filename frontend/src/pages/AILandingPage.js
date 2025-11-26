@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { aiAPI } from '../services/api';
+import { aiAPI, leadsAPI, loansAPI } from '../services/api';
 import './AILandingPage.css';
 
 function AILandingPage() {
@@ -51,6 +51,17 @@ function AILandingPage() {
   // Right sidebar for structured output (tasks, reports, lists, etc.)
   const [structuredContent, setStructuredContent] = useState(null);
   const [showRightSidebar, setShowRightSidebar] = useState(false);
+
+  // Email compose state
+  const [emailMode, setEmailMode] = useState(false);
+  const [emailRecipient, setEmailRecipient] = useState(null);
+  const [emailRecipientSearch, setEmailRecipientSearch] = useState('');
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailBody, setEmailBody] = useState('');
+  const [recipientSuggestions, setRecipientSuggestions] = useState([]);
+  const [showRecipientDropdown, setShowRecipientDropdown] = useState(false);
+  const [allContacts, setAllContacts] = useState([]);
+  const [emailSending, setEmailSending] = useState(false);
 
   const chatAreaRef = useRef(null);
   const textareaRef = useRef(null);
@@ -195,6 +206,139 @@ function AILandingPage() {
 
   const handleDeleteMessage = (messageId) => {
     setMessages(prev => prev.filter(m => m.id !== messageId));
+  };
+
+  // Load contacts for email autocomplete
+  useEffect(() => {
+    const loadContacts = async () => {
+      try {
+        const [leads, loans] = await Promise.all([
+          leadsAPI.getAll().catch(() => []),
+          loansAPI.getAll().catch(() => [])
+        ]);
+
+        const contacts = [];
+
+        // Add leads as contacts
+        leads.forEach(lead => {
+          if (lead.name || lead.email) {
+            contacts.push({
+              id: `lead-${lead.id}`,
+              name: lead.name || 'Unknown',
+              email: lead.email || '',
+              type: 'Lead',
+              phone: lead.phone || ''
+            });
+          }
+        });
+
+        // Add loan borrowers as contacts
+        loans.forEach(loan => {
+          if (loan.borrower_name || loan.borrower_email) {
+            contacts.push({
+              id: `loan-${loan.id}`,
+              name: loan.borrower_name || 'Unknown',
+              email: loan.borrower_email || '',
+              type: 'Borrower',
+              phone: loan.borrower_phone || '',
+              loanId: loan.id
+            });
+          }
+        });
+
+        setAllContacts(contacts);
+      } catch (error) {
+        console.error('Error loading contacts:', error);
+      }
+    };
+
+    loadContacts();
+  }, []);
+
+  // Filter recipient suggestions based on search
+  useEffect(() => {
+    if (emailRecipientSearch.length > 0) {
+      const searchLower = emailRecipientSearch.toLowerCase();
+      const filtered = allContacts.filter(contact =>
+        contact.name.toLowerCase().includes(searchLower) ||
+        contact.email.toLowerCase().includes(searchLower)
+      ).slice(0, 8);
+      setRecipientSuggestions(filtered);
+      setShowRecipientDropdown(filtered.length > 0);
+    } else {
+      setRecipientSuggestions([]);
+      setShowRecipientDropdown(false);
+    }
+  }, [emailRecipientSearch, allContacts]);
+
+  // Handle starting email compose
+  const handleStartEmail = () => {
+    setEmailMode(true);
+    setEmailRecipient(null);
+    setEmailRecipientSearch('');
+    setEmailSubject('');
+    // Pre-populate body with structured content if available
+    if (structuredContent?.content) {
+      setEmailBody(structuredContent.content);
+    } else {
+      setEmailBody('');
+    }
+  };
+
+  // Handle selecting a recipient
+  const handleSelectRecipient = (contact) => {
+    setEmailRecipient(contact);
+    setEmailRecipientSearch(contact.name);
+    setShowRecipientDropdown(false);
+  };
+
+  // Handle sending the email
+  const handleSendEmail = async () => {
+    if (!emailRecipient || !emailSubject || !emailBody) {
+      alert('Please fill in all fields');
+      return;
+    }
+
+    setEmailSending(true);
+
+    try {
+      // Store the sent email in localStorage for now
+      const sentEmails = JSON.parse(localStorage.getItem('sentEmails') || '[]');
+      sentEmails.push({
+        id: `email-${Date.now()}`,
+        to: emailRecipient.email,
+        toName: emailRecipient.name,
+        subject: emailSubject,
+        body: emailBody,
+        sentAt: new Date().toISOString(),
+        status: 'sent',
+        loanId: emailRecipient.loanId || null
+      });
+      localStorage.setItem('sentEmails', JSON.stringify(sentEmails));
+
+      // Reset email mode
+      setEmailMode(false);
+      setEmailRecipient(null);
+      setEmailRecipientSearch('');
+      setEmailSubject('');
+      setEmailBody('');
+
+      alert('Email sent successfully!');
+    } catch (error) {
+      console.error('Error sending email:', error);
+      alert('Failed to send email');
+    } finally {
+      setEmailSending(false);
+    }
+  };
+
+  // Handle canceling email compose
+  const handleCancelEmail = () => {
+    setEmailMode(false);
+    setEmailRecipient(null);
+    setEmailRecipientSearch('');
+    setEmailSubject('');
+    setEmailBody('');
   };
 
   // Initialize speech recognition
@@ -1567,7 +1711,7 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
       </div>
 
       {/* Main Content Area - Split Pane */}
-      <div className="ai-main-content" ref={containerRef}>
+      <div className={`ai-main-content ${showRightSidebar ? 'with-right-sidebar' : ''}`} ref={containerRef}>
         {/* Top Right Buttons */}
         <div className="ai-top-right-buttons">
           {messages.length > 0 && (
@@ -1790,66 +1934,174 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
         <div className="ai-structured-sidebar">
           <div className="ai-structured-sidebar-header">
             <h3>
-              {structuredContent.type === 'task_priorities' ? '📋 Tasks & Priorities' :
+              {emailMode ? '✉️ Compose Email' :
+               structuredContent.type === 'task_priorities' ? '📋 Tasks & Priorities' :
                structuredContent.type === 'pipeline_report' ? '📊 Pipeline Report' :
                structuredContent.type === 'search_results' ? '🔍 Search Results' :
                '📄 Details'}
             </h3>
             <div className="ai-sidebar-actions">
-              <button
-                className="ai-sidebar-action-btn"
-                onClick={() => {
-                  navigator.clipboard.writeText(structuredContent.content);
-                  alert('Copied to clipboard!');
-                }}
-                title="Copy to clipboard"
-              >
-                📋 Copy
-              </button>
-              <button
-                className="ai-sidebar-action-btn"
-                onClick={() => {
-                  setStructuredContent(null);
-                }}
-                title="Clear content"
-              >
-                🗑️ Clear
-              </button>
+              {!emailMode && (
+                <>
+                  <button
+                    className="ai-sidebar-action-btn"
+                    onClick={handleStartEmail}
+                    title="Email this content"
+                  >
+                    ✉️ Email
+                  </button>
+                  <button
+                    className="ai-sidebar-action-btn"
+                    onClick={() => {
+                      navigator.clipboard.writeText(structuredContent.content);
+                      alert('Copied to clipboard!');
+                    }}
+                    title="Copy to clipboard"
+                  >
+                    📋 Copy
+                  </button>
+                  <button
+                    className="ai-sidebar-action-btn"
+                    onClick={() => {
+                      setStructuredContent(null);
+                    }}
+                    title="Clear content"
+                  >
+                    🗑️ Clear
+                  </button>
+                </>
+              )}
               <button
                 className="ai-sidebar-close"
-                onClick={() => setShowRightSidebar(false)}
-                title="Close sidebar"
+                onClick={() => {
+                  if (emailMode) {
+                    handleCancelEmail();
+                  } else {
+                    setShowRightSidebar(false);
+                  }
+                }}
+                title={emailMode ? "Cancel email" : "Close sidebar"}
               >
                 ×
               </button>
             </div>
           </div>
           <div className="ai-structured-sidebar-content">
-            <ReactMarkdown>{structuredContent.content}</ReactMarkdown>
-
-            {/* Show tasks if available */}
-            {structuredContent.tasks && structuredContent.tasks.length > 0 && (
-              <div className="ai-sidebar-tasks">
-                {structuredContent.tasks.map((task, idx) => (
-                  <div key={idx} className="ai-sidebar-task-card">
-                    <div className="ai-sidebar-task-priority">
-                      {task.priority === 'High' || task.priority === 'HIGH' ? '🔴' :
-                       task.priority === 'Medium' || task.priority === 'MEDIUM' ? '🟡' : '🟢'}
-                      <span>{task.priority}</span>
-                    </div>
-                    <div className="ai-sidebar-task-title">{task.title || task.name}</div>
-                    {task.client && <div className="ai-sidebar-task-client">{task.client}</div>}
-                    {task.stage && <div className="ai-sidebar-task-stage">{task.stage}</div>}
+            {/* Email Compose Mode */}
+            {emailMode ? (
+              <div className="ai-email-compose">
+                <div className="ai-email-field">
+                  <label>To:</label>
+                  <div className="ai-email-recipient-input">
+                    <input
+                      type="text"
+                      value={emailRecipientSearch}
+                      onChange={(e) => setEmailRecipientSearch(e.target.value)}
+                      placeholder="Type a name to search..."
+                      autoFocus
+                    />
+                    {showRecipientDropdown && (
+                      <div className="ai-recipient-dropdown">
+                        {recipientSuggestions.map(contact => (
+                          <div
+                            key={contact.id}
+                            className="ai-recipient-option"
+                            onClick={() => handleSelectRecipient(contact)}
+                          >
+                            <div className="ai-recipient-name">{contact.name}</div>
+                            <div className="ai-recipient-details">
+                              <span className="ai-recipient-email">{contact.email}</span>
+                              <span className="ai-recipient-type">{contact.type}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                ))}
-              </div>
-            )}
+                  {emailRecipient && (
+                    <div className="ai-selected-recipient">
+                      <span className="ai-recipient-chip">
+                        {emailRecipient.name}
+                        <span className="ai-recipient-chip-email">({emailRecipient.email})</span>
+                        <button
+                          className="ai-recipient-remove"
+                          onClick={() => {
+                            setEmailRecipient(null);
+                            setEmailRecipientSearch('');
+                          }}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    </div>
+                  )}
+                </div>
 
-            {/* Show preview data if available */}
-            {structuredContent.preview && (
-              <div className="ai-sidebar-preview">
-                <pre>{JSON.stringify(structuredContent.preview, null, 2)}</pre>
+                <div className="ai-email-field">
+                  <label>Subject:</label>
+                  <input
+                    type="text"
+                    value={emailSubject}
+                    onChange={(e) => setEmailSubject(e.target.value)}
+                    placeholder="Enter email subject..."
+                  />
+                </div>
+
+                <div className="ai-email-field ai-email-body-field">
+                  <label>Message:</label>
+                  <textarea
+                    value={emailBody}
+                    onChange={(e) => setEmailBody(e.target.value)}
+                    placeholder="Compose your message..."
+                    rows={12}
+                  />
+                </div>
+
+                <div className="ai-email-actions">
+                  <button
+                    className="ai-email-cancel-btn"
+                    onClick={handleCancelEmail}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="ai-email-send-btn"
+                    onClick={handleSendEmail}
+                    disabled={!emailRecipient || !emailSubject || !emailBody || emailSending}
+                  >
+                    {emailSending ? 'Sending...' : 'Send Email'}
+                  </button>
+                </div>
               </div>
+            ) : (
+              <>
+                <ReactMarkdown>{structuredContent.content}</ReactMarkdown>
+
+                {/* Show tasks if available */}
+                {structuredContent.tasks && structuredContent.tasks.length > 0 && (
+                  <div className="ai-sidebar-tasks">
+                    {structuredContent.tasks.map((task, idx) => (
+                      <div key={idx} className="ai-sidebar-task-card">
+                        <div className="ai-sidebar-task-priority">
+                          {task.priority === 'High' || task.priority === 'HIGH' ? '🔴' :
+                           task.priority === 'Medium' || task.priority === 'MEDIUM' ? '🟡' : '🟢'}
+                          <span>{task.priority}</span>
+                        </div>
+                        <div className="ai-sidebar-task-title">{task.title || task.name}</div>
+                        {task.client && <div className="ai-sidebar-task-client">{task.client}</div>}
+                        {task.stage && <div className="ai-sidebar-task-stage">{task.stage}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Show preview data if available */}
+                {structuredContent.preview && (
+                  <div className="ai-sidebar-preview">
+                    <pre>{JSON.stringify(structuredContent.preview, null, 2)}</pre>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

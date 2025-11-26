@@ -12,7 +12,8 @@
   display: flex;
   flex-direction: row;
   margin-left: 260px;
-  transition: margin-left 0.3s ease;
+  margin-right: 0;
+  transition: margin-left 0.3s ease, margin-right 0.3s ease;
   height: 100vh;
   position: relative;
   background: #fff;
@@ -21,6 +22,23 @@
 .ai-sidebar-new.collapsed ~ .ai-main-content,
 .ai-landing-page-new:has(.ai-sidebar-new.collapsed) .ai-main-content {
   margin-left: 0;
+}
+
+/* When right sidebar is open, shift content left */
+.ai-main-content.with-right-sidebar {
+  margin-right: 50%;
+}
+
+@media (max-width: 1200px) {
+  .ai-main-content.with-right-sidebar {
+    margin-right: 60%;
+  }
+}
+
+@media (max-width: 900px) {
+  .ai-main-content.with-right-sidebar {
+    margin-right: 0;
+  }
 }
 
 /* Left Sidebar - Claude.ai style */
