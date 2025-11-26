@@ -908,6 +908,13 @@ function AILandingPage() {
             }));
             setTaskListData(tasks);
             setSelectedTask(tasks[0]);
+            // Set structured content for the right sidebar
+            setStructuredContent({
+              id: Date.now(),
+              content: fullResponse,
+              type: 'task_priorities',
+              tasks: tasks
+            });
             setShowRightSidebar(true);
           } else if (fullResponse) {
             // Parse the AI response to extract actionable items for the sidebar
@@ -915,6 +922,13 @@ function AILandingPage() {
             if (extractedItems.length > 0) {
               setTaskListData(extractedItems);
               setSelectedTask(extractedItems[0]);
+              // Set structured content for the right sidebar
+              setStructuredContent({
+                id: Date.now(),
+                content: fullResponse,
+                type: 'task_priorities',
+                tasks: extractedItems
+              });
               setShowRightSidebar(true);
             }
           }
