@@ -2288,8 +2288,8 @@ class Skill(Base):
     description = Column(Text, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
-class UserResponsibility(Base):
-    __tablename__ = "user_responsibilities"
+class EmployeeResponsibility(Base):
+    __tablename__ = "employee_responsibilities"
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     title = Column(String(255), nullable=False)
@@ -2307,7 +2307,7 @@ class UserResponsibility(Base):
 
 class ResponsibilitySkill(Base):
     __tablename__ = "responsibility_skills"
-    responsibility_id = Column(Integer, ForeignKey("user_responsibilities.id", ondelete="CASCADE"), primary_key=True)
+    responsibility_id = Column(Integer, ForeignKey("employee_responsibilities.id", ondelete="CASCADE"), primary_key=True)
     skill_id = Column(Integer, ForeignKey("skills.id", ondelete="CASCADE"), primary_key=True)
 
 # Goals & OKRs Models
@@ -2370,7 +2370,7 @@ class GoalManagerAssessment(Base):
 class GoalResponsibility(Base):
     __tablename__ = "goal_responsibilities"
     goal_id = Column(Integer, ForeignKey("user_goals.id", ondelete="CASCADE"), primary_key=True)
-    responsibility_id = Column(Integer, ForeignKey("user_responsibilities.id", ondelete="CASCADE"), primary_key=True)
+    responsibility_id = Column(Integer, ForeignKey("employee_responsibilities.id", ondelete="CASCADE"), primary_key=True)
 
 # Skills Assessment Model
 class UserSkillAssessment(Base):
