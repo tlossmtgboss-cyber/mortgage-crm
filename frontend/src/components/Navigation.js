@@ -50,7 +50,7 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
             to="/portfolio"
             className={`nav-link ${isActive('/portfolio') ? 'active' : ''}`}
           >
-            Portfolio {renderBadge(taskCounts.portfolio)}
+            Portfolio
           </Link>
           <Link
             to="/workflow"
