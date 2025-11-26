@@ -503,9 +503,16 @@ function AILandingPage() {
   };
 
   // Parse AI response text to extract actionable items for the sidebar
-  const parseResponseForActionItems = (responseText) => {
+  // userQuestion is used to determine the context/type of the sidebar content
+  const parseResponseForActionItems = (responseText, userQuestion = '') => {
     const items = [];
     let itemId = 1;
+    const questionLower = userQuestion.toLowerCase();
+
+    // Determine the analysis type based on the question
+    const isBottleneckQuestion = questionLower.includes('bottleneck') || questionLower.includes('stuck') || questionLower.includes('stall');
+    const isPipelineQuestion = questionLower.includes('pipeline') || questionLower.includes('deal') || questionLower.includes('loan');
+    const isClosingQuestion = questionLower.includes('closing') || questionLower.includes('close') || questionLower.includes('clear to close');
 
     // Extract tasks with due dates: "Task name" (Due: MM/DD/YYYY) or *"Task name"* (Due: ...)
     const taskPattern = /[*-•]\s*[""]([^""]+)[""][*]?\s*\(Due:\s*([^)]+)\)/gi;
@@ -591,17 +598,36 @@ function AILandingPage() {
           priority = 'MEDIUM';
         }
 
+        // Create title based on question context
+        let title = `Follow up - ${stage}`;
+        let type = 'Pipeline Item';
+        let details = `Review loan status and take necessary action`;
+
+        if (isBottleneckQuestion) {
+          title = `${stage} Bottleneck`;
+          type = 'Bottleneck';
+          details = `Loan stuck in ${stage.toLowerCase()} - needs attention`;
+        } else if (isClosingQuestion) {
+          title = `${stage} - Ready to Close`;
+          type = 'Closing';
+          details = `Review closing requirements and schedule`;
+        } else if (isPipelineQuestion) {
+          title = `${stage} Review`;
+          type = 'Pipeline Review';
+          details = `Check loan progress in ${stage.toLowerCase()}`;
+        }
+
         items.push({
           id: itemId++,
-          title: `Follow up - ${stage}`,
+          title: title,
           client: name,
           stage: stage,
           priority: priority,
-          type: 'Pipeline Item',
+          type: type,
           source: 'AI Analysis',
           owner: 'Loan Officer',
           dateCreated: new Date().toLocaleString(),
-          details: `Review loan status and take necessary action`,
+          details: details,
           dueTime: priority === 'URGENT' ? 'Today' : 'This Week',
           loanAmount: `$${parseInt(amount).toLocaleString()}`
         });
@@ -822,8 +848,11 @@ function AILandingPage() {
     setSelectedTask(null);
     setConversationHistory([]);
     setActionContext({});
+    setStructuredContent(null);
+    setShowRightSidebar(false);
 
-    setInputValue(prompt);
+    // Clear inputValue and send directly with the prompt
+    setInputValue('');
     setTimeout(() => sendMessage(prompt), 100);
   };
 
@@ -929,15 +958,36 @@ function AILandingPage() {
             setShowRightSidebar(true);
           } else if (fullResponse) {
             // Parse the AI response to extract actionable items for the sidebar
-            const extractedItems = parseResponseForActionItems(fullResponse);
+            // Pass the user's question to get context-aware parsing
+            const extractedItems = parseResponseForActionItems(fullResponse, message);
             if (extractedItems.length > 0) {
               setTaskListData(extractedItems);
               setSelectedTask(extractedItems[0]);
+
+              // Determine the sidebar type based on the question
+              const msgLower = message.toLowerCase();
+              let sidebarType = 'analysis_results';
+              let sidebarTitle = 'Analysis Results';
+              if (msgLower.includes('bottleneck') || msgLower.includes('stuck') || msgLower.includes('stall')) {
+                sidebarType = 'bottleneck_analysis';
+                sidebarTitle = 'Bottleneck Analysis';
+              } else if (msgLower.includes('pipeline') || msgLower.includes('deal')) {
+                sidebarType = 'pipeline_review';
+                sidebarTitle = 'Pipeline Review';
+              } else if (msgLower.includes('closing') || msgLower.includes('close')) {
+                sidebarType = 'closing_review';
+                sidebarTitle = 'Closing Review';
+              } else if (msgLower.includes('task') || msgLower.includes('priorit') || msgLower.includes('today')) {
+                sidebarType = 'task_priorities';
+                sidebarTitle = 'Tasks';
+              }
+
               // Set structured content for the right sidebar
               setStructuredContent({
                 id: Date.now(),
                 content: fullResponse,
-                type: 'task_priorities',
+                type: sidebarType,
+                title: sidebarTitle,
                 tasks: extractedItems
               });
               setShowRightSidebar(true);
@@ -2143,7 +2193,7 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
           {/* Task List Panel */}
           <div className="ai-tasks-list-panel">
             <div className="ai-tasks-list-header">
-              <h3>Tasks</h3>
+              <h3>{structuredContent.title || 'Results'}</h3>
               <span className="ai-tasks-count">{structuredContent.tasks.length}</span>
             </div>
             <div className="ai-tasks-list">
