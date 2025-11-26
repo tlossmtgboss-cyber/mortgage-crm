@@ -81,9 +81,19 @@ function AILandingPage() {
   // Save chat history when messages change
   useEffect(() => {
     if (messages.length > 0) {
+      // Find first user message for title
+      const firstUserMessage = messages.find(m => m.type === 'user');
+      const titleContent = firstUserMessage?.content || messages[0]?.content || 'New Chat';
+      // Create a clean title - truncate at 40 chars without cutting words
+      let title = titleContent.substring(0, 40);
+      if (titleContent.length > 40) {
+        title = title.substring(0, title.lastIndexOf(' ')) || title;
+        title += '...';
+      }
+
       const currentChat = {
         id: sessionId,
-        title: messages[0]?.content?.substring(0, 50) + '...' || 'New Chat',
+        title: title,
         messages: messages,
         timestamp: new Date().toISOString(),
         isProject: false
@@ -649,6 +659,11 @@ function AILandingPage() {
     addMessage(message, 'user');
     setInputValue('');
     setLoading(true);
+
+    // Expand the left sidebar to show the chat when a message is sent
+    if (sidebarCollapsed) {
+      setSidebarCollapsed(false);
+    }
 
     try {
       const response = await aiAPI.processCommand(message, {
