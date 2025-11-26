@@ -89,8 +89,8 @@
   top: 12px;
   width: 44px;
   height: 44px;
-  background: #d97757;
-  border: 2px solid #c5684a;
+  background: #217F8D;
+  border: 2px solid #1a6670;
   border-radius: 12px;
   cursor: pointer;
   display: flex;
@@ -100,14 +100,14 @@
   font-size: 18px;
   font-weight: bold;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 8px rgba(217, 119, 87, 0.3);
+  box-shadow: 0 2px 8px rgba(33, 127, 141, 0.3);
 }
 
 .ai-sidebar-toggle:hover {
-  background: #c5684a;
+  background: #1a6670;
   color: #fff;
   transform: scale(1.05);
-  box-shadow: 0 4px 12px rgba(217, 119, 87, 0.4);
+  box-shadow: 0 4px 12px rgba(33, 127, 141, 0.4);
 }
 
 /* New Chat Button */
@@ -285,7 +285,7 @@
 
 .ai-pane-divider:hover,
 .ai-pane-divider.dragging {
-  background: #d97757;
+  background: #217F8D;
 }
 
 /* Header - minimal Claude style */
@@ -378,8 +378,8 @@
 
 .ai-clear-conversation:hover {
   background: #fff;
-  border-color: #d97757;
-  color: #d97757;
+  border-color: #217F8D;
+  color: #217F8D;
 }
 
 /* Welcome State - Claude.ai style */
@@ -426,7 +426,7 @@
 }
 
 .ai-example-prompts-new button:hover {
-  border-color: #d97757;
+  border-color: #217F8D;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
@@ -502,7 +502,7 @@
 .ai-status-dot {
   width: 8px;
   height: 8px;
-  background: #d97757;
+  background: #217F8D;
   border-radius: 50%;
   animation: pulse-dot 1.5s ease-in-out infinite;
 }
@@ -520,7 +520,7 @@
 
 .ai-streaming-cursor {
   display: inline-block;
-  color: #d97757;
+  color: #217F8D;
   font-weight: bold;
   animation: blink-cursor 1s step-end infinite;
   margin-left: 2px;
@@ -603,7 +603,7 @@
 .ai-typing-indicator-new span {
   width: 8px;
   height: 8px;
-  background: #d97757;
+  background: #217F8D;
   border-radius: 50%;
   animation: typing 1.4s infinite ease-in-out;
 }
@@ -648,8 +648,8 @@
 }
 
 .ai-input-container-new:focus-within {
-  border-color: #d97757;
-  box-shadow: 0 0 0 2px rgba(217, 119, 87, 0.1);
+  border-color: #217F8D;
+  box-shadow: 0 0 0 2px rgba(33, 127, 141, 0.1);
 }
 
 .ai-upload-btn,
@@ -723,9 +723,9 @@
   height: 12px;
 }
 
-/* Send Button - Claude.ai style */
+/* Send Button - CRM style */
 .ai-send-btn-new {
-  background: #d97757;
+  background: #217F8D;
   border: none;
   color: white;
   width: 36px;
@@ -740,7 +740,7 @@
 }
 
 .ai-send-btn-new:hover:not(:disabled) {
-  background: #c5684a;
+  background: #1a6670;
 }
 
 .ai-send-btn-new:disabled {
@@ -791,8 +791,8 @@
 
 .ai-back-to-crm-new:hover {
   background: #f0f0f0;
-  border-color: #d97757;
-  color: #d97757;
+  border-color: #217F8D;
+  color: #217F8D;
 }
 
 /* Search Box */
@@ -811,7 +811,7 @@
 
 .ai-search-box input:focus {
   outline: none;
-  border-color: #d97757;
+  border-color: #217F8D;
 }
 
 /* Empty List */
@@ -880,7 +880,7 @@
 }
 
 .ai-markdown-content blockquote {
-  border-left: 3px solid #d97757;
+  border-left: 3px solid #217F8D;
   padding-left: 16px;
   margin: 16px 0;
   color: #666;
@@ -916,8 +916,8 @@
 }
 
 .ai-reports-list.drop-target-area {
-  background: #fff8f5;
-  border: 2px dashed #d97757;
+  background: #f0f9fa;
+  border: 2px dashed #217F8D;
   border-radius: 8px;
 }
 
@@ -934,12 +934,12 @@
 }
 
 .ai-report-item:hover {
-  border-color: #d97757;
+  border-color: #217F8D;
 }
 
 .ai-report-item.active {
-  border-color: #d97757;
-  background: #fff8f5;
+  border-color: #217F8D;
+  background: #f0f9fa;
 }
 
 .ai-report-icon {
@@ -986,15 +986,15 @@
 
 /* Drop target styles for nav button */
 .ai-nav-btn.drop-target {
-  background: #fff8f5 !important;
-  border: 2px dashed #d97757 !important;
-  color: #d97757 !important;
+  background: #f0f9fa !important;
+  border: 2px dashed #217F8D !important;
+  color: #217F8D !important;
 }
 
 .drop-hint {
   font-size: 10px;
   margin-left: 4px;
-  background: #d97757;
+  background: #217F8D;
   color: white;
   padding: 2px 6px;
   border-radius: 4px;
@@ -1680,7 +1680,7 @@
 }
 
 .ai-conv-message.user .ai-conv-content {
-  background: #d97757;
+  background: #217F8D;
   color: white;
   border-bottom-right-radius: 4px;
 }
