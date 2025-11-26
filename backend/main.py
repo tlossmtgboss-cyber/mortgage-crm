@@ -21747,6 +21747,82 @@ def init_db():
                         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='dti') THEN
                             ALTER TABLE leads ADD COLUMN dti FLOAT;
                         END IF;
+                        -- Lead tracking date columns
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='application_started_date') THEN
+                            ALTER TABLE leads ADD COLUMN application_started_date TIMESTAMP;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='application_completed_date') THEN
+                            ALTER TABLE leads ADD COLUMN application_completed_date TIMESTAMP;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='credit_pulled_date') THEN
+                            ALTER TABLE leads ADD COLUMN credit_pulled_date TIMESTAMP;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='preapproval_issued_date') THEN
+                            ALTER TABLE leads ADD COLUMN preapproval_issued_date TIMESTAMP;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='property_address') THEN
+                            ALTER TABLE leads ADD COLUMN property_address VARCHAR;
+                        END IF;
+                        -- Buying timeline and risk profile (enum as VARCHAR for flexibility)
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='buying_timeline_category') THEN
+                            ALTER TABLE leads ADD COLUMN buying_timeline_category VARCHAR;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='borrower_risk_profile') THEN
+                            ALTER TABLE leads ADD COLUMN borrower_risk_profile VARCHAR;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='target_payment') THEN
+                            ALTER TABLE leads ADD COLUMN target_payment FLOAT;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='expected_purchase_date') THEN
+                            ALTER TABLE leads ADD COLUMN expected_purchase_date TIMESTAMP;
+                        END IF;
+                        -- Referral scoring columns
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='referral_score') THEN
+                            ALTER TABLE leads ADD COLUMN referral_score INTEGER DEFAULT 0;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='referral_source_score') THEN
+                            ALTER TABLE leads ADD COLUMN referral_source_score INTEGER DEFAULT 0;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='employment_referral_flag') THEN
+                            ALTER TABLE leads ADD COLUMN employment_referral_flag BOOLEAN DEFAULT FALSE;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='manager_flag') THEN
+                            ALTER TABLE leads ADD COLUMN manager_flag BOOLEAN DEFAULT FALSE;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='employees_managed') THEN
+                            ALTER TABLE leads ADD COLUMN employees_managed INTEGER;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='leadership_level') THEN
+                            ALTER TABLE leads ADD COLUMN leadership_level VARCHAR;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='company_size') THEN
+                            ALTER TABLE leads ADD COLUMN company_size VARCHAR;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='employer_name') THEN
+                            ALTER TABLE leads ADD COLUMN employer_name VARCHAR;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='industry') THEN
+                            ALTER TABLE leads ADD COLUMN industry VARCHAR;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='circle_of_cash_flow_map') THEN
+                            ALTER TABLE leads ADD COLUMN circle_of_cash_flow_map JSON;
+                        END IF;
+                        -- Workflow columns
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='current_workflow_id') THEN
+                            ALTER TABLE leads ADD COLUMN current_workflow_id INTEGER;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='workflow_day') THEN
+                            ALTER TABLE leads ADD COLUMN workflow_day INTEGER DEFAULT 0;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='last_workflow_action') THEN
+                            ALTER TABLE leads ADD COLUMN last_workflow_action TIMESTAMP;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='nurture_month') THEN
+                            ALTER TABLE leads ADD COLUMN nurture_month INTEGER DEFAULT 0;
+                        END IF;
+                        IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='user_metadata') THEN
+                            ALTER TABLE leads ADD COLUMN user_metadata JSON;
+                        END IF;
                     END $$;
                     """))
 
