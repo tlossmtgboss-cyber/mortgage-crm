@@ -948,7 +948,7 @@ function LeadDetail() {
           className={`tab-btn ${activeTab === 'loan' ? 'active' : ''}`}
           onClick={() => setActiveTab('loan')}
         >
-          Loan
+          Property
         </button>
         <button
           className={`tab-btn ${activeTab === 'team' ? 'active' : ''}`}
