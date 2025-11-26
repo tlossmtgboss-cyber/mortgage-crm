@@ -27,6 +27,7 @@ function ReconciliationCenter() {
   const [newBorrowerForm, setNewBorrowerForm] = useState({
     first_name: '',
     last_name: '',
+    loan_number: '',
     referral_partner_id: '',
     loan_stage: 'PROCESSING'
   });
@@ -372,9 +373,34 @@ function ReconciliationCenter() {
           // No match found - show dialog to create new borrower
           setNoMatchItemId(itemId);
           setNoMatchData(matchData);
+
+          // Extract first and last name from fields object
+          const fields = matchData.fields || {};
+          const getFieldValue = (fieldName) => {
+            const field = fields[fieldName];
+            return typeof field === 'object' ? field.value : field;
+          };
+
+          // Try to get names from specific fields first, then fall back to extracted_name
+          let firstName = getFieldValue('first_name') || getFieldValue('borrower_first_name') || '';
+          let lastName = getFieldValue('last_name') || getFieldValue('borrower_last_name') || '';
+          let loanNumber = getFieldValue('loan_number') || getFieldValue('loan_id') || getFieldValue('file_number') || '';
+
+          // If no specific name fields, try to parse from extracted_name or borrower_name
+          if (!firstName && !lastName) {
+            const fullName = matchData.extracted_name || getFieldValue('borrower_name') || '';
+            if (fullName) {
+              const nameParts = fullName.trim().split(' ');
+              firstName = nameParts[0] || '';
+              lastName = nameParts.slice(1).join(' ') || '';
+            }
+          }
+
           setNewBorrowerForm({
-            first_name: matchData.extracted_name?.split(' ')[0] || '',
-            last_name: matchData.extracted_name?.split(' ').slice(1).join(' ') || '',
+            first_name: firstName,
+            last_name: lastName,
+            loan_number: loanNumber,
+            loan_stage: 'disclosed',
             referral_partner_id: ''
           });
           setShowNoMatchDialog(true);
@@ -467,10 +493,15 @@ function ReconciliationCenter() {
       setNoMatchItemId(null);
       setNoMatchData(null);
 
-      // Add the borrower name to corrections if not already in extracted fields
+      // Add the borrower name and loan number to corrections
       const corrections = {
         borrower_name: `${newBorrowerForm.first_name} ${newBorrowerForm.last_name}`
       };
+
+      // Add loan number if provided
+      if (newBorrowerForm.loan_number) {
+        corrections.loan_number = newBorrowerForm.loan_number;
+      }
 
       // Now approve with create_new_loan option and loan_stage
       const response = await fetch(`${API_BASE_URL}/api/v1/reconciliation/approve`, {
@@ -484,6 +515,7 @@ function ReconciliationCenter() {
           corrections: corrections,
           create_new_loan: true,
           loan_stage: newBorrowerForm.loan_stage,
+          loan_number: newBorrowerForm.loan_number || null,
           target_entity_type: 'loan'
         })
       });
@@ -1878,6 +1910,16 @@ function ReconciliationCenter() {
                       onChange={(e) => setNewBorrowerForm(prev => ({ ...prev, last_name: e.target.value }))}
                       placeholder="Enter last name"
                       required
+                      style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '6px' }}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Loan Number</label>
+                    <input
+                      type="text"
+                      value={newBorrowerForm.loan_number}
+                      onChange={(e) => setNewBorrowerForm(prev => ({ ...prev, loan_number: e.target.value }))}
+                      placeholder="Enter loan number"
                       style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '6px' }}
                     />
                   </div>
