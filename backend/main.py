@@ -7605,6 +7605,72 @@ You are an expert in mortgage business operations and profitability. Here are th
 - **variable**: Costs that scale with volume (commissions, credit reports, appraisals)
 - **one_time**: One-off purchases (equipment, renovations, training)
 
+# CRM PAGE DIRECTORY
+When users ask where to find something or need to navigate, direct them to these pages:
+
+## Main Navigation
+- **/dashboard** - Main dashboard with overview metrics, pipeline summary, and quick actions
+- **/ai** - AI Assistant landing page for conversational queries and daily briefings
+- **/leads** - Lead management - view, add, and manage prospective borrowers
+- **/leads/:id** - Individual lead detail page with full profile and activity
+- **/loans** - Active loan pipeline - all loans in progress
+- **/loans/:id** - Individual loan detail page with milestones, documents, and team
+- **/tasks** - Task management center - all outstanding and completed tasks
+- **/calendar** - Calendar view for appointments, closings, and deadlines
+
+## Client Management
+- **/portfolio** - Client for Life (MUM) portfolio - past clients for retention marketing
+- **/portfolio/:id** - Individual client profile from portfolio
+- **/portfolio/year-over-year** - Year-over-year comparison of portfolio performance
+- **/referral-partners** - Referral partner management (realtors, builders, etc.)
+- **/referral-partners/:id** - Individual referral partner detail page
+- **/partner-roi** - Partner ROI dashboard - track which partners generate most business
+
+## AI & Automation
+- **/ai** - AI Orchestrator chat interface for questions and coaching
+- **/ai-underwriter** - AI Underwriter for loan analysis and risk assessment
+- **/ai-receptionist-dashboard** - AI Receptionist call logs and performance
+- **/voice-os-dashboard** - Voice OS dashboard for call handling metrics
+- **/assistant** - AI Assistant interface (legacy)
+- **/coach** - AI Coach for performance improvement suggestions
+
+## Analytics & Reporting
+- **/profitability** - **Profitability Intelligence Dashboard** - cost per closing, revenue, expenses, profit margins
+- **/profitability/scenarios** - Scenario modeling - what-if analysis for staffing and expenses
+- **/scorecard** - Performance scorecard with KPIs and metrics
+- **/efficiency** - Pipeline efficiency dashboard - bottlenecks and stage performance
+- **/efficiency/stage/:stageSlug** - Employees by stage breakdown
+- **/efficiency/bottleneck/:bottleneckId** - Loans stuck at a specific bottleneck
+- **/market** - Market dashboard with rates, trends, and economic indicators
+- **/goal-tracker** - Goal tracking and OKR management
+
+## Workflow & Process
+- **/workflow** - Workflow dashboard - loan stages and automation status
+- **/workflow/:stage** - Stage-specific workflow management
+- **/checkin** - Morning check-in for daily planning
+- **/reconciliation** - Data reconciliation center for resolving discrepancies
+- **/merge** - Merge center for combining duplicate records
+- **/process-templates** - Process templates for loan workflows
+
+## Team & Settings
+- **/team-members** - Team member directory and management
+- **/team-members/:id** - Individual team member profile
+- **/users** - User management (admin)
+- **/users/:id** - Individual user profile
+- **/my-profile** - Current user's profile settings
+- **/my-permissions** - View your current permissions
+- **/settings** - Application settings and preferences
+- **/admin/settings** - Admin settings (system configuration)
+- **/admin/employee-onboarding** - Employee onboarding management
+- **/compliance** - Compliance dashboard for regulatory tracking
+- **/data-upload** - Data import/upload center
+
+## Public Pages
+- **/apply** - Buyer intake form (public loan application)
+- **/mortgage-planner** - Mortgage planner questionnaire (public)
+- **/login** - Login page
+- **/register** - Registration page
+
 {coaching_instructions}
 
 {data_context}
@@ -7613,10 +7679,12 @@ You are an expert in mortgage business operations and profitability. Here are th
 - Reference the real data above when answering questions about financials
 - Be specific with actual numbers from the profitability data
 - When asked about cost per closing, revenue, or profit - use the EXACT figures from the data above
-- If profitability data is not configured, explain how to set it up and offer industry benchmarks
+- If profitability data is not configured, explain how to set it up and direct user to /profitability
 - For financial analysis questions, provide actionable insights and recommendations
 - Always cite the source of data: "Based on your profitability data..." or "According to your expense records..."
-- Provide clear, actionable recommendations based on the financial metrics"""
+- Provide clear, actionable recommendations based on the financial metrics
+- When users ask where to find something, direct them to the appropriate page from the CRM Page Directory above
+- Always provide the full URL path (e.g., "Go to /profitability to view your cost per closing")"""
 
     async def generate_stream():
         messages = [
