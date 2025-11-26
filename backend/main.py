@@ -5916,11 +5916,52 @@ When asked about rate lock guidance:
         # Recent leads (last 5)
         recent_leads = sorted(all_leads, key=lambda x: x.created_at or datetime.min, reverse=True)[:5]
 
+        # Helper function to format stage names properly (no CAPS, no underscores)
+        def format_stage_name(stage):
+            if not stage:
+                return "Unknown"
+            stage_str = str(stage).replace('LoanStage.', '').replace('LeadStage.', '')
+            # Map common abbreviations to full names
+            stage_map = {
+                'CTC': 'Clear to Close',
+                'UW_RECEIVED': 'Underwriting Received',
+                'UW Received': 'Underwriting Received',
+                'DISCLOSED': 'Disclosed',
+                'PROCESSING': 'Processing',
+                'SUBMITTED': 'Submitted',
+                'APPROVED': 'Approved',
+                'SUSPENDED': 'Suspended',
+                'FUNDED': 'Funded',
+                'NEW': 'New',
+                'PROSPECT': 'Prospect',
+                'APPLICATION': 'Application',
+                'APPLICATION_STARTED': 'Application Started',
+                'PRE_QUALIFIED': 'Pre-Qualified',
+                'PRE_APPROVED': 'Pre-Approved',
+                'UNDER_CONTRACT': 'Under Contract',
+                'LONG_TERM_NURTURE': 'Long-Term Nurture',
+                'CLOSED': 'Closed',
+                'ATTEMPTED_CONTACT': 'Attempted Contact',
+                'AMR': 'Annual Mortgage Review',
+                'REFERRAL_SOURCE': 'Referral Source',
+                'WITHDRAWN': 'Withdrawn',
+                'DOES_NOT_QUALIFY': 'Does Not Qualify'
+            }
+            return stage_map.get(stage_str, stage_str.replace('_', ' ').title())
+
+        # Group loans by stage for detailed listing
+        loans_by_stage = {}
+        for loan in all_loans:
+            stage_name = format_stage_name(loan.stage)
+            if stage_name not in loans_by_stage:
+                loans_by_stage[stage_name] = []
+            loans_by_stage[stage_name].append(loan)
+
         # Helper function to format task details WITH borrower/loan context
         def format_task_detail(task):
             details = [f"**{task.title}**"]
             if task.priority:
-                details.append(f"Priority: {task.priority.upper()}")
+                details.append(f"Priority: **{task.priority.title()}**")
             if task.due_date:
                 details.append(f"Due: {task.due_date.strftime('%m/%d/%Y %I:%M %p')}")
             if task.description:
@@ -5935,7 +5976,7 @@ When asked about rate lock guidance:
                     if related_loan.amount:
                         loan_info += f" (${related_loan.amount:,.0f})"
                     if related_loan.stage:
-                        loan_info += f" - {str(related_loan.stage).replace('LoanStage.', '')}"
+                        loan_info += f" - {format_stage_name(related_loan.stage)}"
                     details.append(loan_info)
             elif task.lead_id:
                 related_lead = next((l for l in all_leads if l.id == task.lead_id), None)
@@ -5977,8 +6018,8 @@ When asked about rate lock guidance:
 ### Recent Leads:
 {chr(10).join([f"- {l.name} ({str(l.stage).replace('LeadStage.', '') if l.stage else 'NEW'})" for l in recent_leads]) if recent_leads else "- No leads yet"}
 
-### Active Loans (for task correlation - ALWAYS reference these when discussing tasks):
-{chr(10).join([f"- **{loan.borrower_name}** - Loan #{loan.loan_number or 'N/A'} | ${loan.amount:,.0f} | Stage: {str(loan.stage).replace('LoanStage.', '') if loan.stage else 'Unknown'}" for loan in all_loans[:15]]) if all_loans else "- No active loans"}
+### Active Loans BY STAGE (ALWAYS list specific borrowers when discussing pipeline):
+{chr(10).join([f"**{stage}** ({len(loans)} loans):{chr(10)}" + chr(10).join([f"  - {loan.borrower_name} (${loan.amount:,.0f}) - Loan #{loan.loan_number or 'N/A'}" for loan in loans]) for stage, loans in loans_by_stage.items()]) if loans_by_stage else "- No active loans"}
 
 ### PENDING EMAIL REVIEWS (Reconciliation Center - {len(pending_reconciliation)} items need your attention):
 {chr(10).join([f"- EMAIL: '{r.incoming_event.subject[:50]}...' from {r.incoming_event.sender_email} | Category: {r.category or 'Unknown'} | Status: NEEDS REVIEW" for r in pending_reconciliation[:10] if r.incoming_event]) if pending_reconciliation else "- No pending email reviews"}
@@ -6021,11 +6062,20 @@ CRITICAL RULES:
 Your job: Identify bottlenecks and stalled deals in the pipeline.
 
 CRITICAL RULES:
+- **LIST EVERY LOAN BY NAME** when discussing stages - don't just say "7 loans in CTC", list all 7 with borrower names and amounts
 - Use ACTUAL lead/loan names and stages from the data above
 - Call out specific deals that are stuck or delayed
 - Identify missing actions or pending items
 - Be direct and specific - name names and amounts
 - Prioritize by deal size and urgency
+- Format stage names properly: "Clear to Close" not "CTC", "Underwriting Received" not "UW_RECEIVED"
+- Use **bold** for borrower names and stage names
+- Never use ALL CAPS or underscores in your response
+
+OUTPUT FORMAT:
+1. **Bottlenecks Identified** - List each stage with issues, then list EVERY loan in that stage by name
+2. **Stalled Deals** - List each stalled deal with borrower name, amount, stage, and days stalled
+3. **Actionable Steps** - Specific actions for each bottleneck
 """
         elif "focus reset" in message_lower or "back on track" in message_lower:
             coaching_mode = "Focus Reset"
@@ -6162,6 +6212,28 @@ Your communication style is:
 - No "I think," "maybe," or "possibly"
 - Every sentence carries authority
 - Always moves the user forward
+
+# FORMATTING RULES (CRITICAL)
+1. **NEVER use ALL CAPS** - No word should be fully capitalized (e.g., write "Clear to Close" not "CTC", write "Underwriting Received" not "UW_RECEIVED")
+2. **NEVER use underscores** - Replace underscores with spaces (e.g., "UW_RECEIVED" should be "Underwriting Received")
+3. **Use bold for emphasis** - Instead of CAPS, use **bold** for important words
+4. **Stage name formatting:**
+   - "CTC" → "Clear to Close"
+   - "UW_RECEIVED" or "UW Received" → "Underwriting Received"
+   - "DISCLOSED" → "Disclosed"
+   - "PROCESSING" → "Processing"
+   - "SUBMITTED" → "Submitted"
+   - "APPROVED" → "Approved"
+   - "FUNDED" → "Funded"
+   - "PRE_QUALIFIED" → "Pre-Qualified"
+   - "PRE_APPROVED" → "Pre-Approved"
+   - "UNDER_CONTRACT" → "Under Contract"
+   - "LONG_TERM_NURTURE" → "Long-Term Nurture"
+5. **When mentioning counts, LIST THE SPECIFIC ITEMS:**
+   - BAD: "7 loans in Clear to Close stage"
+   - GOOD: "7 loans in **Clear to Close** stage: **John Smith** ($450,000), **Jane Doe** ($325,000), **Mike Johnson** ($500,000)..." (list all of them)
+6. **Always list specific borrower names and amounts** when discussing loans or deals
+7. **Format lists with bullet points or numbered lists** for clarity
 
 You NEVER say:
 - "I think..."
