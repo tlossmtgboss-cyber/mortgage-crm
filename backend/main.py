@@ -12468,6 +12468,116 @@ async def reject_reconciliation(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.delete("/api/v1/reconciliation/items/{extracted_data_id}")
+async def delete_reconciliation_item(
+    extracted_data_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Permanently delete an extracted data item and its associated event"""
+    try:
+        # Get extracted data
+        extracted = db.query(ExtractedData).filter(
+            ExtractedData.id == extracted_data_id
+        ).first()
+
+        if not extracted:
+            raise HTTPException(status_code=404, detail="Item not found")
+
+        event_id = extracted.event_id
+
+        # Delete any training events associated with this extracted data
+        db.query(AITrainingEvent).filter(
+            AITrainingEvent.extracted_data_id == extracted_data_id
+        ).delete()
+
+        # Delete the extracted data record
+        db.delete(extracted)
+
+        # Check if there are any other extracted_data records for this event
+        other_extracted = db.query(ExtractedData).filter(
+            ExtractedData.event_id == event_id
+        ).first()
+
+        # If no other extracted data, delete the incoming event too
+        if not other_extracted and event_id:
+            event = db.query(IncomingDataEvent).filter(
+                IncomingDataEvent.id == event_id
+            ).first()
+            if event:
+                db.delete(event)
+
+        db.commit()
+
+        logger.info(f"Deleted extracted data {extracted_data_id} by user {current_user.id}")
+
+        return {
+            "status": "success",
+            "message": "Item permanently deleted",
+            "extracted_data_id": extracted_data_id
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Delete error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/v1/reconciliation/items/bulk")
+async def bulk_delete_reconciliation_items(
+    item_ids: List[int],
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Permanently delete multiple extracted data items"""
+    try:
+        deleted_count = 0
+        event_ids_to_check = set()
+
+        for extracted_data_id in item_ids:
+            extracted = db.query(ExtractedData).filter(
+                ExtractedData.id == extracted_data_id
+            ).first()
+
+            if extracted:
+                event_ids_to_check.add(extracted.event_id)
+
+                # Delete training events
+                db.query(AITrainingEvent).filter(
+                    AITrainingEvent.extracted_data_id == extracted_data_id
+                ).delete()
+
+                # Delete extracted data
+                db.delete(extracted)
+                deleted_count += 1
+
+        # Check if events have no more extracted data and delete them
+        for event_id in event_ids_to_check:
+            if event_id:
+                other_extracted = db.query(ExtractedData).filter(
+                    ExtractedData.event_id == event_id
+                ).first()
+                if not other_extracted:
+                    event = db.query(IncomingDataEvent).filter(
+                        IncomingDataEvent.id == event_id
+                    ).first()
+                    if event:
+                        db.delete(event)
+
+        db.commit()
+
+        logger.info(f"Bulk deleted {deleted_count} items by user {current_user.id}")
+
+        return {
+            "status": "success",
+            "message": f"Deleted {deleted_count} items",
+            "deleted_count": deleted_count
+        }
+    except Exception as e:
+        logger.error(f"Bulk delete error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/v1/reconciliation/block-sender")
 async def block_sender(
     request: BlockSenderRequest,

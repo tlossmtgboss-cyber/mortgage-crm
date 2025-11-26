@@ -731,16 +731,11 @@ function ReconciliationCenter() {
 
     for (const itemId of selectedReviewItems) {
       try {
-        const response = await fetch(`${API_BASE_URL}/api/v1/reconciliation/reject`, {
-          method: 'POST',
+        const response = await fetch(`${API_BASE_URL}/api/v1/reconciliation/items/${itemId}`, {
+          method: 'DELETE',
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            extracted_data_id: itemId,
-            reason: 'Bulk deleted by user'
-          })
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
         });
 
         if (response.ok) {

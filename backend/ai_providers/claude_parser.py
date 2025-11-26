@@ -543,7 +543,12 @@ SPECIAL INSTRUCTIONS FOR {profile_type.upper()}:
             'update your preferences', 'view in browser',
             'product announcement', 'new feature', 'we\'re excited to announce',
             'software update', 'version release', 'changelog',
-            'your weekly digest', 'newsletter', 'promotional'
+            'your weekly digest', 'newsletter', 'promotional',
+            'black friday', 'cyber monday', 'holiday sale', 'flash sale',
+            'deal of the day', 'exclusive offer', 'act now', 'limited time offer',
+            'save big', 'discount code', 'promo code', 'coupon code',
+            'clearance sale', 'final sale', 'last chance', 'ends today',
+            'doorbuster', 'buy one get one', 'free shipping on orders'
         ]
         if any(kw in combined for kw in unrelated_keywords):
             # Exception: if it also has mortgage keywords, it's not unrelated

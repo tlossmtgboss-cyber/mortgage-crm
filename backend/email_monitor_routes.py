@@ -98,7 +98,12 @@ class EmailIntelligenceFilter:
 
     SPAM_INDICATORS = [
         'unsubscribe', 'marketing@', 'noreply@', 'do-not-reply',
-        'newsletter', 'promotional', 'special offer', 'limited time'
+        'newsletter', 'promotional', 'special offer', 'limited time',
+        'black friday', 'cyber monday', 'holiday sale', 'flash sale',
+        'deal of the day', 'exclusive offer', 'act now', 'don\'t miss',
+        'save big', 'discount code', 'promo code', 'coupon',
+        'clearance', 'final sale', 'last chance', 'ends today',
+        'free shipping', 'buy one get one', 'doorbuster'
     ]
 
     def __init__(self, db: Session, anthropic_api_key: str):
