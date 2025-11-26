@@ -443,7 +443,7 @@ function AILandingPage() {
   };
 
   const addMessage = (content, type, extraData = {}) => {
-    const messageId = Date.now();
+    const messageId = Date.now() + Math.random(); // Ensure unique ID
 
     // Check if this is structured content that should go to the right sidebar
     const structuredTypes = ['task_priorities', 'pipeline_report', 'search_results', 'report', 'analysis'];
@@ -468,13 +468,18 @@ function AILandingPage() {
       const firstLine = content.split('\n')[0];
       const briefSummary = firstLine.length > 100 ? firstLine.substring(0, 100) + '...' : firstLine;
 
-      // Add brief message to conversation
-      setMessages(prev => [...prev, {
-        id: messageId,
-        content: briefSummary || 'Here are your results:',
-        type,
-        hasSidebarContent: true
-      }]);
+      // Add brief message to conversation - check for duplicates first
+      setMessages(prev => {
+        // Prevent adding duplicate content
+        const isDuplicate = prev.some(m => m.content === briefSummary && m.type === type);
+        if (isDuplicate) return prev;
+        return [...prev, {
+          id: messageId,
+          content: briefSummary || 'Here are your results:',
+          type,
+          hasSidebarContent: true
+        }];
+      });
 
       // Put full structured content in right sidebar
       setStructuredContent({
@@ -485,13 +490,18 @@ function AILandingPage() {
       });
       setShowRightSidebar(true);
     } else {
-      // Regular conversational message
-      setMessages(prev => [...prev, {
-        id: messageId,
-        content,
-        type,
-        ...extraData
-      }]);
+      // Regular conversational message - check for duplicates first
+      setMessages(prev => {
+        // Prevent adding duplicate content
+        const isDuplicate = prev.some(m => m.content === content && m.type === type);
+        if (isDuplicate) return prev;
+        return [...prev, {
+          id: messageId,
+          content,
+          type,
+          ...extraData
+        }];
+      });
     }
   };
 
@@ -2011,40 +2021,52 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
           </div>
 
           {/* Conversation Area - Shows when there are messages */}
-          {messages.filter(m => !m.isSpecialContent).length > 0 ? (
-            <div className="ai-conversation-area">
-              <div className="ai-conversation-messages">
-                {messages.filter(m => !m.isSpecialContent).map((msg, idx) => (
-                  <div key={msg.id || idx} className={`ai-conv-message ${msg.type}`}>
-                    <div className="ai-conv-avatar">
-                      {msg.type === 'user' ? '👤' : '🤖'}
-                    </div>
-                    <div className="ai-conv-content">
-                      {msg.isStreaming && !msg.content ? (
-                        <div className="ai-typing-indicator">
-                          <span></span>
-                          <span></span>
-                          <span></span>
-                        </div>
-                      ) : (
-                        <>
-                          {msg.statusText && (
-                            <div className="ai-status-text">{msg.statusText}</div>
-                          )}
-                          <div className="ai-conv-text">
-                            {msg.content?.split('\n').map((line, i) => (
-                              <p key={i}>{line || '\u00A0'}</p>
-                            ))}
+          {(() => {
+            // Deduplicate messages by ID to prevent duplicates
+            const seenIds = new Set();
+            const uniqueMessages = messages.filter(m => {
+              if (!m.isSpecialContent && !seenIds.has(m.id)) {
+                seenIds.add(m.id);
+                return true;
+              }
+              return false;
+            });
+
+            return uniqueMessages.length > 0 ? (
+              <div className="ai-conversation-area">
+                <div className="ai-conversation-messages">
+                  {uniqueMessages.map((msg) => (
+                    <div key={msg.id} className={`ai-conv-message ${msg.type}`}>
+                      <div className="ai-conv-avatar">
+                        {msg.type === 'user' ? '👤' : '🤖'}
+                      </div>
+                      <div className="ai-conv-content">
+                        {msg.isStreaming && !msg.content ? (
+                          <div className="ai-typing-indicator">
+                            <span></span>
+                            <span></span>
+                            <span></span>
                           </div>
-                        </>
-                      )}
+                        ) : (
+                          <>
+                            {msg.statusText && (
+                              <div className="ai-status-text">{msg.statusText}</div>
+                            )}
+                            <div className="ai-conv-text">
+                              {msg.content?.split('\n').map((line, i) => (
+                                <p key={i}>{line || '\u00A0'}</p>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
-                <div ref={containerRef} />
+                  ))}
+                  <div ref={containerRef} />
+                </div>
               </div>
-            </div>
-          ) : (
+            ) : null;
+          })() || (
             /* Quick Actions - Show when no messages */
             <div className="ai-welcome-state">
               <h2>What would you like to do today?</h2>
