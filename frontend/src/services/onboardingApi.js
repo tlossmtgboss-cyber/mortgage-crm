@@ -163,13 +163,13 @@ export const validateInviteToken = async (token) => {
 /**
  * Accept an invite and create user account
  * @param {string} token - The invite token
- * @param {string} password - The user's password
+ * @param {Object} data - Object containing password
  */
-export const acceptInvite = async (token, password) => {
+export const acceptInvite = async (token, data) => {
   const response = await fetch(`${API_BASE}/api/invite/accept`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token, password })
+    body: JSON.stringify({ token, password: data.password })
   });
 
   if (!response.ok) {

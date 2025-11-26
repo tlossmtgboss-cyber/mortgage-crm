@@ -67,6 +67,7 @@ const PartnerROIDashboard = lazy(() => import('./pages/PartnerROIDashboard'));
 const ProfitabilityDashboard = lazy(() => import('./pages/ProfitabilityDashboard'));
 const ScenarioModeling = lazy(() => import('./pages/ScenarioModeling'));
 const EmployeeOnboardingAdmin = lazy(() => import('./pages/EmployeeOnboardingAdmin'));
+const AcceptInvite = lazy(() => import('./pages/AcceptInvite'));
 
 // Simple loading component
 const PageLoader = () => (
@@ -236,6 +237,10 @@ function App() {
           <Route path="/register" element={<Registration />} />
           <Route path="/verify-email-sent" element={<EmailVerificationSent />} />
           <Route path="/login" element={<Login />} />
+
+          {/* Employee Invite Accept (public) */}
+          <Route path="/invite/accept/:token" element={<LazyPage><AcceptInvite /></LazyPage>} />
+          <Route path="/accept-invite" element={<LazyPage><AcceptInvite /></LazyPage>} />
 
           {/* Onboarding Page (old) */}
           <Route
