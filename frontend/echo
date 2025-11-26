@@ -1,1 +1,0 @@
-=== Test 1: Bottleneck question via streaming endpoint === curl -s -X POST https://mortgage-crm-production-7a9a.up.railway.app/api/v1/ai/orchestrator-chat-stream  -H Authorization: Bearer   -H Content-Type: application/json  -d {"message": "where are the bottlenecks"}  --max-time 60
