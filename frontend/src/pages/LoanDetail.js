@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { loansAPI, activitiesAPI, circleOfCashflowAPI } from '../services/api';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import VoicemailDrop from '../components/VoicemailDrop';
+import VoicemailModal from '../components/VoicemailModal';
 import SMSModal from '../components/SMSModal';
 import TeamsModal from '../components/TeamsModal';
 import RecordingModal from '../components/RecordingModal';
@@ -886,56 +887,74 @@ function LoanDetail() {
           />
         )}
 
-        {/* Loan Tab */}
+        {/* Property Tab */}
         {activeTab === 'loan' && (
-          <div className="tab-content">
-            <h2>Property & Loan Details</h2>
-            <div className="form-section">
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Property Address</label>
-                  <input
-                    type="text"
-                    value={formData.property_address || ''}
-                    onChange={(e) => handleFieldChange('property_address', e.target.value)}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Property City</label>
-                  <input
-                    type="text"
-                    value={formData.property_city || ''}
-                    onChange={(e) => handleFieldChange('property_city', e.target.value)}
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Property State</label>
-                  <input
-                    type="text"
-                    value={formData.property_state || ''}
-                    onChange={(e) => handleFieldChange('property_state', e.target.value)}
-                    maxLength="2"
-                  />
-                </div>
-                <div className="form-group">
-                  <label>Property ZIP</label>
-                  <input
-                    type="text"
-                    value={formData.property_zip || ''}
-                    onChange={(e) => handleFieldChange('property_zip', e.target.value)}
-                  />
-                </div>
+          <div className="info-section">
+            <h2>Loan Information</h2>
+            <div className="info-grid compact">
+              <div className="info-field">
+                <label>Property Address</label>
+                <input
+                  type="text"
+                  value={formData.property_address || formData.address || ''}
+                  onChange={(e) => handleFieldChange('property_address', e.target.value)}
+                />
               </div>
-              <div className="form-row">
-                <div className="form-group" style={{gridColumn: 'span 4'}}>
-                  <label>Notes</label>
-                  <textarea
-                    rows="4"
-                    value={formData.notes || ''}
-                    onChange={(e) => handleFieldChange('notes', e.target.value)}
-                    placeholder="Add notes about this loan..."
-                  />
-                </div>
+              <div className="info-field">
+                <label>City</label>
+                <input
+                  type="text"
+                  value={formData.property_city || formData.city || ''}
+                  onChange={(e) => handleFieldChange('property_city', e.target.value)}
+                />
+              </div>
+              <div className="info-field">
+                <label>State</label>
+                <input
+                  type="text"
+                  value={formData.property_state || formData.state || ''}
+                  onChange={(e) => handleFieldChange('property_state', e.target.value)}
+                />
+              </div>
+              <div className="info-field">
+                <label>Zip Code</label>
+                <input
+                  type="text"
+                  value={formData.property_zip || formData.zip_code || ''}
+                  onChange={(e) => handleFieldChange('property_zip', e.target.value)}
+                />
+              </div>
+              <div className="info-field">
+                <label>Property Type</label>
+                <input
+                  type="text"
+                  value={formData.property_type || ''}
+                  onChange={(e) => handleFieldChange('property_type', e.target.value)}
+                />
+              </div>
+              <div className="info-field">
+                <label>Property Value</label>
+                <input
+                  type="number"
+                  value={formData.property_value || ''}
+                  onChange={(e) => handleFieldChange('property_value', parseFloat(e.target.value))}
+                />
+              </div>
+              <div className="info-field">
+                <label>Down Payment</label>
+                <input
+                  type="number"
+                  value={formData.down_payment || ''}
+                  onChange={(e) => handleFieldChange('down_payment', parseFloat(e.target.value))}
+                />
+              </div>
+              <div className="info-field">
+                <label>Credit Score</label>
+                <input
+                  type="number"
+                  value={formData.credit_score || ''}
+                  onChange={(e) => handleFieldChange('credit_score', parseInt(e.target.value))}
+                />
               </div>
             </div>
           </div>
@@ -1035,7 +1054,7 @@ function LoanDetail() {
                         {cashflowOpportunities.map(opp => (
                           <div key={opp.id} className="circle-card" style={{ borderLeft: '4px solid #ff9800' }}>
                             <div className="circle-header">
-                              <h3>{opp.category.replace('_', ' ').toUpperCase()}</h3>
+                              <h3>💡 {opp.category.replace('_', ' ').toUpperCase()}</h3>
                               <span style={{
                                 padding: '4px 8px',
                                 borderRadius: '4px',
@@ -1067,7 +1086,7 @@ function LoanDetail() {
                           {cashflowReferrals.map(ref => (
                             <div key={ref.id} className="circle-card" style={{ borderLeft: '4px solid #4caf50' }}>
                               <div className="circle-header">
-                                <h3>{ref.partner_name || 'Partner'}</h3>
+                                <h3>📤 {ref.partner_name || 'Partner'}</h3>
                                 <span style={{ fontSize: '12px', color: '#666' }}>{ref.status}</span>
                               </div>
                               <div className="circle-list">
@@ -1159,7 +1178,7 @@ function LoanDetail() {
                           style={{ background: 'none', border: 'none', color: '#217f8d', cursor: 'pointer', fontSize: '14px', padding: '4px 8px' }}
                           title="Edit contact"
                         >
-                          Edit
+                          ✏️
                         </button>
                         <button
                           onClick={() => handleDeleteCircleContact(contact.id)}
@@ -1309,14 +1328,14 @@ function LoanDetail() {
 
               <div className="documents-upload-area">
                 <button className="btn-upload-document">
-                  Upload Document
+                  📄 Upload Document
                 </button>
               </div>
 
               <div className="documents-grid">
                 <div className="document-category">
                   <div className="category-header">
-                    <h3>Income Verification</h3>
+                    <h3>📋 Income Verification</h3>
                     <span className="doc-count">0 files</span>
                   </div>
                   <div className="document-list">
@@ -1326,7 +1345,7 @@ function LoanDetail() {
 
                 <div className="document-category">
                   <div className="category-header">
-                    <h3>Credit Reports</h3>
+                    <h3>💳 Credit Reports</h3>
                     <span className="doc-count">0 files</span>
                   </div>
                   <div className="document-list">
@@ -1336,7 +1355,7 @@ function LoanDetail() {
 
                 <div className="document-category">
                   <div className="category-header">
-                    <h3>Property Documents</h3>
+                    <h3>🏠 Property Documents</h3>
                     <span className="doc-count">0 files</span>
                   </div>
                   <div className="document-list">
@@ -1346,7 +1365,7 @@ function LoanDetail() {
 
                 <div className="document-category">
                   <div className="category-header">
-                    <h3>Disclosures & Forms</h3>
+                    <h3>✍️ Disclosures & Forms</h3>
                     <span className="doc-count">0 files</span>
                   </div>
                   <div className="document-list">
@@ -1356,7 +1375,7 @@ function LoanDetail() {
 
                 <div className="document-category">
                   <div className="category-header">
-                    <h3>Bank Statements</h3>
+                    <h3>🏦 Bank Statements</h3>
                     <span className="doc-count">0 files</span>
                   </div>
                   <div className="document-list">
@@ -1366,7 +1385,7 @@ function LoanDetail() {
 
                 <div className="document-category">
                   <div className="category-header">
-                    <h3>Other Documents</h3>
+                    <h3>📑 Other Documents</h3>
                     <span className="doc-count">0 files</span>
                   </div>
                   <div className="document-list">
