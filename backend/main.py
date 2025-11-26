@@ -25949,7 +25949,10 @@ async def get_team_members(
 
         # Get tasks count for each role
         team_members = []
+        existing_ids = set()
+
         for user in all_users:
+            existing_ids.add(user.id)
             # Extract metadata
             metadata = user.user_metadata or {}
 
@@ -25970,6 +25973,30 @@ async def get_team_members(
 
             # Add to list
             team_members.append(member_data)
+
+        # Add demo members if they don't exist in DB
+        demo_members = [
+            {"id": 2, "first_name": "Sarah", "last_name": "Johnson", "email": "sjohnson@cmgfi.com", "role": "Processor", "title": "Senior Processor"},
+            {"id": 3, "first_name": "Michael", "last_name": "Chen", "email": "mchen@cmgfi.com", "role": "Jr. Loan Officer", "title": "Jr. Loan Officer"},
+            {"id": 4, "first_name": "Emily", "last_name": "Davis", "email": "edavis@cmgfi.com", "role": "Loan Officer Assistant", "title": "LOA"},
+            {"id": 5, "first_name": "James", "last_name": "Wilson", "email": "jwilson@cmgfi.com", "role": "Concierge", "title": "Concierge"},
+        ]
+
+        for demo in demo_members:
+            if demo["id"] not in existing_ids:
+                team_members.append({
+                    "id": demo["id"],
+                    "email": demo["email"],
+                    "full_name": f"{demo['first_name']} {demo['last_name']}",
+                    "first_name": demo["first_name"],
+                    "last_name": demo["last_name"],
+                    "phone": "(555) 123-4567",
+                    "role": demo["role"],
+                    "title": demo["title"],
+                    "created_at": datetime.now().isoformat(),
+                    "onboarding_completed": True,
+                    "tasks_count": 0
+                })
 
         # Also include current user
         current_metadata = current_user.user_metadata or {}
@@ -26028,6 +26055,46 @@ async def get_team_member_detail(
         # Get the user
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
+            # Return demo data for users that don't exist
+            demo_members = {
+                1: {"first_name": "Timothy", "last_name": "Loss", "email": "tloss@cmgfi.com", "role": "Loan Officer", "department": "Origination"},
+                2: {"first_name": "Sarah", "last_name": "Johnson", "email": "sjohnson@cmgfi.com", "role": "Processor", "department": "Processing"},
+                3: {"first_name": "Michael", "last_name": "Chen", "email": "mchen@cmgfi.com", "role": "Jr. Loan Officer", "department": "Origination"},
+                4: {"first_name": "Emily", "last_name": "Davis", "email": "edavis@cmgfi.com", "role": "Loan Officer Assistant", "department": "Origination"},
+                5: {"first_name": "James", "last_name": "Wilson", "email": "jwilson@cmgfi.com", "role": "Concierge", "department": "Operations"},
+            }
+
+            if user_id in demo_members:
+                demo = demo_members[user_id]
+                return {
+                    "id": user_id,
+                    "email": demo["email"],
+                    "first_name": demo["first_name"],
+                    "last_name": demo["last_name"],
+                    "full_name": f"{demo['first_name']} {demo['last_name']}",
+                    "role": demo["role"],
+                    "phone": "(555) 123-4567",
+                    "photo_url": None,
+                    "employee_id": f"EMP{user_id:04d}",
+                    "start_date": "2023-01-15",
+                    "department": demo["department"],
+                    "manager": "Timothy Loss",
+                    "title": demo["role"],
+                    "disc_d": 50,
+                    "disc_i": 50,
+                    "disc_s": 50,
+                    "disc_c": 50,
+                    "disc_summary": "",
+                    "birthday": "",
+                    "anniversary": "",
+                    "spouse_name": "",
+                    "children": "",
+                    "hobbies": "",
+                    "emergency_contact": "",
+                    "emergency_phone": "",
+                    "created_at": datetime.now().isoformat(),
+                    "onboarding_completed": True
+                }
             raise HTTPException(status_code=404, detail="User not found")
 
         # Parse user_metadata if it exists
