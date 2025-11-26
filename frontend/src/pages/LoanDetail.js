@@ -68,11 +68,24 @@ function LoanDetail() {
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [showEscalationModal, setShowEscalationModal] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [emailHistory, setEmailHistory] = useState([]);
+  const [selectedEmail, setSelectedEmail] = useState(null);
 
   useEffect(() => {
     loadLoanData();
+    loadEmailHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  const loadEmailHistory = () => {
+    // Load sent emails from localStorage (will be API later)
+    const sentEmails = JSON.parse(localStorage.getItem('sentEmails') || '[]');
+    // Filter emails for this loan/borrower
+    const loanEmails = sentEmails.filter(email =>
+      email.loanId === id || email.loanId === parseInt(id)
+    );
+    setEmailHistory(loanEmails);
+  };
 
   const loadLoanData = async () => {
     try {
@@ -517,6 +530,12 @@ function LoanDetail() {
           Team Members
         </button>
         <button
+          className={`tab-btn ${activeTab === 'email-history' ? 'active' : ''}`}
+          onClick={() => setActiveTab('email-history')}
+        >
+          Email History {emailHistory.length > 0 && <span className="tab-badge">{emailHistory.length}</span>}
+        </button>
+        <button
           className={`tab-btn ${activeTab === 'conversation' ? 'active' : ''}`}
           onClick={() => setActiveTab('conversation')}
         >
@@ -663,6 +682,106 @@ function LoanDetail() {
           <div className="info-section">
             <h2>Team Members</h2>
             <TeamAssignment leadId={id} />
+          </div>
+        )}
+
+        {/* Email History Tab - Task Card Style */}
+        {activeTab === 'email-history' && (
+          <div className="email-history-tab">
+            <div className="email-history-layout">
+              {/* Email List (Left Side) */}
+              <div className="email-list-panel">
+                <div className="email-list-header">
+                  <h2>Email History</h2>
+                  <span className="email-count">{emailHistory.length} emails</span>
+                </div>
+                <div className="email-cards">
+                  {emailHistory.length === 0 ? (
+                    <div className="no-emails-card">
+                      <div className="no-emails-icon">📧</div>
+                      <p>No emails sent yet</p>
+                      <span className="no-emails-hint">Sent emails will appear here</span>
+                    </div>
+                  ) : (
+                    emailHistory.map((email) => (
+                      <div
+                        key={email.id}
+                        className={`email-card ${selectedEmail?.id === email.id ? 'selected' : ''}`}
+                        onClick={() => setSelectedEmail(email)}
+                      >
+                        <div className="email-card-header">
+                          <span className="email-type-badge">
+                            {email.sentVia === 'Email' ? '📧' : email.sentVia === 'Text' ? '💬' : '📤'} {email.sentVia || 'Email'}
+                          </span>
+                          <span className="email-status sent">Sent</span>
+                        </div>
+                        <div className="email-card-subject">{email.subject}</div>
+                        <div className="email-card-recipient">
+                          To: {email.to}
+                        </div>
+                        <div className="email-card-date">
+                          {new Date(email.sentAt).toLocaleDateString()} at {new Date(email.sentAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Email Detail (Right Side) */}
+              <div className="email-detail-panel">
+                {selectedEmail ? (
+                  <>
+                    <div className="email-detail-header">
+                      <div className="email-detail-badge">
+                        {selectedEmail.sentVia === 'Email' ? '📧' : '💬'} {selectedEmail.sentVia || 'Email'}
+                      </div>
+                      <h3>{selectedEmail.subject}</h3>
+                    </div>
+
+                    <div className="email-detail-meta">
+                      <div className="meta-row">
+                        <span className="meta-label">TO</span>
+                        <span className="meta-value">{selectedEmail.to}</span>
+                      </div>
+                      <div className="meta-row">
+                        <span className="meta-label">SENT</span>
+                        <span className="meta-value">
+                          {new Date(selectedEmail.sentAt).toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="meta-row">
+                        <span className="meta-label">STATUS</span>
+                        <span className="meta-value status-sent">✓ Delivered</span>
+                      </div>
+                    </div>
+
+                    <div className="email-detail-body">
+                      <h4>Message Content</h4>
+                      <div className="email-body-content">
+                        {selectedEmail.body?.split('\n').map((line, idx) => (
+                          <p key={idx}>{line || <br />}</p>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="email-detail-actions">
+                      <button className="btn-reply" onClick={() => alert('Reply feature coming soon')}>
+                        ↩️ Reply
+                      </button>
+                      <button className="btn-forward" onClick={() => alert('Forward feature coming soon')}>
+                        ↗️ Forward
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="email-detail-empty">
+                    <div className="empty-icon">📬</div>
+                    <p>Select an email to view details</p>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
 

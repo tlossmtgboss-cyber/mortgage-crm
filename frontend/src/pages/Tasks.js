@@ -1034,8 +1034,37 @@ function Tasks() {
   };
 
   const handleApproveAiTask = async (taskId) => {
-    // TODO: Implement AI task approval
-    alert(`Approved task ${taskId}`);
+    try {
+      // Get the task details before completing
+      const task = selectedTask;
+
+      // If there's an AI message, log it as a sent email
+      if (task && task.ai_message) {
+        // Store the sent email in localStorage for now (will be API later)
+        const sentEmails = JSON.parse(localStorage.getItem('sentEmails') || '[]');
+        sentEmails.push({
+          id: `email-${Date.now()}`,
+          taskId: taskId,
+          to: task.borrower,
+          subject: task.title,
+          body: task.ai_message,
+          sentAt: new Date().toISOString(),
+          sentVia: communicationMethod,
+          status: 'sent',
+          loanId: task.loan_id || task.loanId || null
+        });
+        localStorage.setItem('sentEmails', JSON.stringify(sentEmails));
+      }
+
+      // Mark task as complete
+      handleComplete(taskId);
+
+      // Show success message
+      alert('AI action approved and sent!');
+    } catch (error) {
+      console.error('Error approving AI task:', error);
+      alert('Failed to approve task');
+    }
   };
 
   const getUrgencyColor = (urgency) => {
