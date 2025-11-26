@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { teamAPI } from '../services/api';
 import MissionControl from './MissionControl';
 import AIReceptionist from '../components/AIReceptionist';
-import ExperimentsDashboard from './ExperimentsDashboard';
 import TaskWorkflowManager from '../components/TaskWorkflowManager';
 import DocumentIntakeManager from '../components/DocumentIntakeManager';
 import EmailMonitorDashboard from './EmailMonitorDashboard';
@@ -1438,14 +1437,6 @@ const API_BASE_URL = isProduction
           </button>
 
           <button
-            className={`sidebar-btn ${activeSection === 'experiments' ? 'active' : ''}`}
-            onClick={() => setActiveSection('experiments')}
-          >
-            <span className="icon">🧪</span>
-            <span>A/B Testing</span>
-          </button>
-
-          <button
             className={`sidebar-btn ${activeSection === 'document-intake' ? 'active' : ''}`}
             onClick={() => setActiveSection('document-intake')}
           >
@@ -1691,10 +1682,6 @@ const API_BASE_URL = isProduction
 
           {activeSection === 'email-monitor' && (
             <EmailMonitorDashboard />
-          )}
-
-          {activeSection === 'experiments' && (
-            <ExperimentsDashboard />
           )}
 
           {activeSection === 'document-intake' && (
