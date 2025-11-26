@@ -106,6 +106,11 @@ const NotificationBell = () => {
     return date.toLocaleDateString();
   };
 
+  // Only show bell when there are unread notifications
+  if (unreadCount === 0) {
+    return null;
+  }
+
   return (
     <div className="notification-bell-container" ref={dropdownRef}>
       <button
@@ -114,9 +119,7 @@ const NotificationBell = () => {
         aria-label="Notifications"
       >
         <span className="bell-icon">🔔</span>
-        {unreadCount > 0 && (
-          <span className="notification-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
-        )}
+        <span className="notification-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
       </button>
 
       {showDropdown && (
