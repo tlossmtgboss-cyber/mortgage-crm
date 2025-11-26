@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { teamAPI, tasksAPI } from '../services/api';
 import MergeCenter from './MergeCenter';
+import PowerPlayManager from '../components/PowerPlayManager';
 import './Tasks.css';
 
 // Mock data functions
@@ -1443,6 +1444,12 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
         >
           ✅ Completed Tasks ({completedTasks.size})
         </button>
+        <button
+          className={`tab-button ${activeTab === 'power-play' ? 'active' : ''}`}
+          onClick={() => setActiveTab('power-play')}
+        >
+          ⚡ Power Play Workflows
+        </button>
       </div>
 
       {/* Outstanding Tasks Tab */}
@@ -1477,6 +1484,13 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
       {activeTab === 'completed' && (
         <div className="tab-content">
           <TaskEmailLayout tasks={tabTasks} emptyMessage="No completed tasks yet" />
+        </div>
+      )}
+
+      {/* Power Play Workflows Tab */}
+      {activeTab === 'power-play' && (
+        <div className="tab-content power-play-tab">
+          <PowerPlayManager />
         </div>
       )}
 
