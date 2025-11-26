@@ -760,20 +760,9 @@ function AILandingPage() {
               : msg
           ));
 
-          // Check if response should go to sidebar
-          const hasStructuredContent =
-            fullResponse.includes('##') ||
-            fullResponse.includes('**Priority') ||
-            fullResponse.includes('1.') ||
-            fullResponse.includes('- ');
-
-          if (hasStructuredContent) {
-            setStructuredContent({
-              type: 'chat_response',
-              content: fullResponse
-            });
-            setShowRightSidebar(true);
-          }
+          // Don't auto-show right sidebar for regular chat responses
+          // The conversation is already shown in the left pane
+          // Right sidebar should only be used for explicit structured reports/data
 
           // Update conversation history
           setConversationHistory(prev => [
@@ -1810,45 +1799,6 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
               </button>
             </div>
           </div>
-
-          {/* Conversation History - Shows below quick actions */}
-          {messages.length > 0 && (
-            <div className="ai-conversation-history" ref={chatAreaRef}>
-              <div className="ai-conversation-header">
-                <h3>Conversation</h3>
-                <button className="ai-clear-conversation" onClick={handleClearContent} title="Clear conversation">
-                  Clear
-                </button>
-              </div>
-              {messages.map(message => (
-                <div key={message.id} className={`ai-message-new ai-message-${message.type} ${message.isStreaming ? 'ai-message-streaming' : ''}`}>
-                  {/* Show status indicator when gathering data */}
-                  {message.statusText && (
-                    <div className="ai-streaming-status">
-                      <span className="ai-status-dot"></span>
-                      {message.statusText}
-                    </div>
-                  )}
-                  {!message.isSpecialContent && (
-                    <div className="ai-message-content-new ai-markdown-content">
-                      <ReactMarkdown>{message.content}</ReactMarkdown>
-                      {/* Show cursor when streaming */}
-                      {message.isStreaming && <span className="ai-streaming-cursor">|</span>}
-                    </div>
-                  )}
-                </div>
-              ))}
-              {loading && !isStreaming && (
-                <div className="ai-message-new ai-message-assistant">
-                  <div className="ai-typing-indicator-new">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
 
           {/* Input Area */}
           <div className="ai-input-area">
