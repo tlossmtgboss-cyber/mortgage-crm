@@ -715,6 +715,18 @@ function LoanDetail() {
           Team Members
         </button>
         <button
+          className={`tab-btn ${activeTab === 'marketing' ? 'active' : ''}`}
+          onClick={() => setActiveTab('marketing')}
+        >
+          Marketing
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'email' ? 'active' : ''}`}
+          onClick={() => setActiveTab('email')}
+        >
+          Email
+        </button>
+        <button
           className={`tab-btn ${activeTab === 'conversation' ? 'active' : ''}`}
           onClick={() => setActiveTab('conversation')}
         >
@@ -968,6 +980,92 @@ function LoanDetail() {
           </div>
         )}
 
+        {/* Marketing Tab */}
+        {activeTab === 'marketing' && (
+          <div className="info-section">
+            <h2>Marketing</h2>
+            <div className="marketing-content">
+              <p className="section-description" style={{ color: '#666', marginBottom: '20px' }}>
+                View and manage marketing campaigns, drip sequences, and promotional content for this borrower.
+              </p>
+
+              <div className="marketing-campaigns" style={{ marginBottom: '24px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h3 style={{ margin: 0 }}>Active Campaigns</h3>
+                  <button className="btn-primary" style={{ padding: '8px 16px', fontSize: '14px' }}>
+                    + Add to Campaign
+                  </button>
+                </div>
+                <div style={{ backgroundColor: '#f8f9fa', borderRadius: '8px', padding: '20px', textAlign: 'center', color: '#666' }}>
+                  No active campaigns. Add this borrower to a marketing campaign to start automated outreach.
+                </div>
+              </div>
+
+              <div className="drip-sequences" style={{ marginBottom: '24px' }}>
+                <h3 style={{ marginBottom: '16px' }}>Drip Sequences</h3>
+                <div style={{ backgroundColor: '#f8f9fa', borderRadius: '8px', padding: '20px', textAlign: 'center', color: '#666' }}>
+                  No drip sequences assigned. Set up automated follow-up sequences in Settings.
+                </div>
+              </div>
+
+              <div className="marketing-history">
+                <h3 style={{ marginBottom: '16px' }}>Marketing History</h3>
+                <div style={{ backgroundColor: '#f8f9fa', borderRadius: '8px', padding: '20px', textAlign: 'center', color: '#666' }}>
+                  No marketing activities recorded yet.
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Email Tab */}
+        {activeTab === 'email' && (
+          <div className="info-section">
+            <h2>Email</h2>
+            <div className="email-content">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <p className="section-description" style={{ color: '#666', margin: 0 }}>
+                  View all email communications with this borrower.
+                </p>
+                <button
+                  className="btn-primary"
+                  style={{ padding: '8px 16px', fontSize: '14px' }}
+                  onClick={() => (loan?.borrower_email || formData?.borrower_email) && window.open(`mailto:${loan?.borrower_email || formData?.borrower_email}`, '_blank')}
+                  disabled={!loan?.borrower_email && !formData?.borrower_email}
+                >
+                  + Compose Email
+                </button>
+              </div>
+
+              {/* Email History */}
+              <div className="email-history-section">
+                <h3>Email History</h3>
+                <div className="email-list">
+                  {emailHistory.length > 0 ? (
+                    emailHistory.map((email) => (
+                      <div key={email.id} className="email-item">
+                        <div className="email-header">
+                          <span className="email-subject">
+                            {email.subject || 'No subject'}
+                          </span>
+                          <span className="email-date">
+                            {new Date(email.sentAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <div className="email-preview">
+                          {(email.body || '').substring(0, 100)}...
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="empty-state">No emails yet</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Conversation Log Tab */}
         {activeTab === 'conversation' && (
           <div className="info-section">
@@ -1005,32 +1103,6 @@ function LoanDetail() {
               ) : (
                 <div className="empty-state">No activities yet</div>
               )}
-            </div>
-
-            {/* Email History */}
-            <div className="email-history-section">
-              <h3>Email History</h3>
-              <div className="email-list">
-                {emailHistory.length > 0 ? (
-                  emailHistory.map((email) => (
-                    <div key={email.id} className="email-item">
-                      <div className="email-header">
-                        <span className="email-subject">
-                          {email.subject || 'No subject'}
-                        </span>
-                        <span className="email-date">
-                          {new Date(email.sentAt).toLocaleDateString()}
-                        </span>
-                      </div>
-                      <div className="email-preview">
-                        {(email.body || '').substring(0, 100)}...
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="empty-state">No emails yet</div>
-                )}
-              </div>
             </div>
           </div>
         )}
