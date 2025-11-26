@@ -27,11 +27,7 @@ function Settings() {
   const [loadingCalendly, setLoadingCalendly] = useState(false);
   const [selectedStage, setSelectedStage] = useState('');
   const [selectedEventType, setSelectedEventType] = useState('');
-  const [onboardingSteps, setOnboardingSteps] = useState([]);
-  const [loadingSteps, setLoadingSteps] = useState(false);
-  const [editingSteps, setEditingSteps] = useState([]);
-  const [processTree, setProcessTree] = useState(null);
-  const [apiKeys, setApiKeys] = useState([]);
+    const [apiKeys, setApiKeys] = useState([]);
   const [loadingApiKeys, setLoadingApiKeys] = useState(false);
   const [newApiKeyName, setNewApiKeyName] = useState('');
   const [createdKey, setCreatedKey] = useState(null);
@@ -256,95 +252,6 @@ function Settings() {
     } catch (error) {
       console.error('Error fetching calendar mappings:', error);
     }
-  };
-
-  const loadProcessTree = () => {
-    try {
-      const userStr = localStorage.getItem('user');
-      if (userStr) {
-        const user = JSON.parse(userStr);
-        // Check if user has completed onboarding and stored process tree
-        const savedProcessTree = localStorage.getItem('onboardingProcessTree');
-        if (savedProcessTree) {
-          setProcessTree(JSON.parse(savedProcessTree));
-        }
-      }
-    } catch (error) {
-      console.error('Error loading process tree:', error);
-    }
-  };
-
-  const fetchOnboardingSteps = async () => {
-    setLoadingSteps(true);
-    try {
-      const response = await fetch('/api/v1/onboarding/steps', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      const data = await response.json();
-      setOnboardingSteps(data.steps || []);
-      setEditingSteps(data.steps || []);
-    } catch (error) {
-      console.error('Error fetching onboarding steps:', error);
-    } finally {
-      setLoadingSteps(false);
-    }
-  };
-
-  const updateOnboardingSteps = async () => {
-    try {
-      const response = await fetch('/api/v1/onboarding/steps', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          steps: editingSteps
-        })
-      });
-
-      if (response.ok) {
-        alert('Onboarding process updated successfully!');
-        fetchOnboardingSteps();
-      } else {
-        alert('Failed to update onboarding process');
-      }
-    } catch (error) {
-      console.error('Error updating onboarding steps:', error);
-      alert('Error updating onboarding process');
-    }
-  };
-
-  const addOnboardingStep = () => {
-    const newStep = {
-      step_number: editingSteps.length + 1,
-      title: 'New Step',
-      description: 'Describe what the user should do in this step',
-      icon: '📌',
-      required: false,
-      fields: []
-    };
-    setEditingSteps([...editingSteps, newStep]);
-  };
-
-  const removeOnboardingStep = (index) => {
-    const updated = editingSteps.filter((_, i) => i !== index);
-    // Renumber steps
-    updated.forEach((step, i) => {
-      step.step_number = i + 1;
-    });
-    setEditingSteps(updated);
-  };
-
-  const updateStep = (index, field, value) => {
-    const updated = [...editingSteps];
-    updated[index] = {
-      ...updated[index],
-      [field]: value
-    };
-    setEditingSteps(updated);
   };
 
   const createCalendarMapping = async () => {
@@ -1491,12 +1398,6 @@ const API_BASE_URL = isProduction
     if (activeSection === 'twilio-sms') {
       checkTwilioStatus();
     }
-    if (activeSection === 'onboarding-current') {
-      loadProcessTree();
-    }
-    if (activeSection === 'onboarding-update') {
-      fetchOnboardingSteps();
-    }
     if (activeSection === 'it-helpdesk') {
       fetchItTickets();
     }
@@ -1542,14 +1443,6 @@ const API_BASE_URL = isProduction
           >
             <span className="icon">🧪</span>
             <span>A/B Testing</span>
-          </button>
-
-          <button
-            className={`sidebar-btn ${activeSection === 'task-workflow' ? 'active' : ''}`}
-            onClick={() => setActiveSection('task-workflow')}
-          >
-            <span className="icon">📋</span>
-            <span>Task & Workflow Management</span>
           </button>
 
           <button
@@ -1749,31 +1642,6 @@ const API_BASE_URL = isProduction
             <span>Notifications</span>
           </button>
           <button
-            className={`sidebar-btn parent ${expandedSections.onboarding ? 'expanded' : ''}`}
-            onClick={() => toggleSection('onboarding')}
-          >
-            <span className="icon">🚀</span>
-            <span>Onboarding</span>
-            <span className="expand-icon">{expandedSections.onboarding ? '▼' : '▶'}</span>
-          </button>
-          {expandedSections.onboarding && (
-            <div className="sidebar-children">
-              <button
-                className={`sidebar-btn child ${activeSection === 'onboarding-current' ? 'active' : ''}`}
-                onClick={() => setActiveSection('onboarding-current')}
-              >
-                <span>Current Process</span>
-              </button>
-              <button
-                className={`sidebar-btn child ${activeSection === 'onboarding-update' ? 'active' : ''}`}
-                onClick={() => setActiveSection('onboarding-update')}
-              >
-                <span>Update Process</span>
-              </button>
-            </div>
-          )}
-
-          <button
             className={`sidebar-btn ${activeSection === 'data-management' ? 'active' : ''}`}
             onClick={() => navigate('/data-upload')}
           >
@@ -1827,10 +1695,6 @@ const API_BASE_URL = isProduction
 
           {activeSection === 'experiments' && (
             <ExperimentsDashboard />
-          )}
-
-          {activeSection === 'task-workflow' && (
-            <TaskWorkflowManager />
           )}
 
           {activeSection === 'document-intake' && (
@@ -2742,199 +2606,6 @@ const API_BASE_URL = isProduction
             <div className="notifications-section">
               <h2>Notification Preferences</h2>
               <p>Coming soon...</p>
-            </div>
-          )}
-
-          {activeSection === 'onboarding-current' && (
-            <div className="onboarding-current-section">
-              <h2>Current Process Tree</h2>
-              <p className="section-description">
-                Visual representation of your loan process milestones and tasks
-              </p>
-
-              {!processTree ? (
-                <div className="empty-state">
-                  <div className="empty-icon">📋</div>
-                  <h3>No Process Tree Found</h3>
-                  <p>You haven't created a process tree yet during onboarding.</p>
-                  <p className="empty-hint">
-                    Complete the onboarding wizard and upload your process documents to generate your process tree.
-                  </p>
-                </div>
-              ) : (
-                <>
-                  <div className="info-card" style={{ marginBottom: '24px' }}>
-                    <div className="info-icon">🤖</div>
-                    <div className="info-content">
-                      <h3>Process Overview</h3>
-                      <p>
-                        Your process tree contains <strong>{processTree.milestones}</strong> milestones
-                        with <strong>{processTree.tasks}</strong> total tasks across <strong>{processTree.roles}</strong> roles.
-                      </p>
-                      <p>
-                        This was generated from your uploaded process documents and defines your loan workflow.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="process-tree-visual">
-                    {processTree.milestonesData && processTree.milestonesData.map((milestone, idx) => (
-                      <div key={idx} className="milestone-card">
-                        <div className="milestone-header">
-                          <div className="milestone-number">{idx + 1}</div>
-                          <div className="milestone-info">
-                            <h3>{milestone.name}</h3>
-                            <span className="task-count-badge">{milestone.tasks.length} tasks</span>
-                          </div>
-                        </div>
-
-                        <div className="milestone-tasks">
-                          {milestone.tasks.map((task, taskIdx) => (
-                            <div key={taskIdx} className="process-task-item">
-                              <div className="task-left">
-                                <div className="task-number">{taskIdx + 1}</div>
-                                <div className="task-details">
-                                  <div className="task-name">{task.name}</div>
-                                  <div className="task-meta">
-                                    <span className="task-owner">👤 {task.owner}</span>
-                                    <span className="task-sla">⏱️ {task.sla} {task.slaUnit}</span>
-                                    {task.aiAuto && (
-                                      <span className="task-ai-badge">🤖 AI Auto</span>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="process-summary-stats">
-                    <div className="stat-box">
-                      <div className="stat-value">{processTree.milestones}</div>
-                      <div className="stat-label">Milestones</div>
-                    </div>
-                    <div className="stat-box">
-                      <div className="stat-value">{processTree.tasks}</div>
-                      <div className="stat-label">Total Tasks</div>
-                    </div>
-                    <div className="stat-box">
-                      <div className="stat-value">{processTree.roles}</div>
-                      <div className="stat-label">Roles</div>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          {activeSection === 'onboarding-update' && (
-            <div className="onboarding-update-section">
-              <h2>Update Onboarding Process</h2>
-              <p className="section-description">
-                Customize the onboarding steps for new users
-              </p>
-
-              {loadingSteps ? (
-                <div className="loading-spinner">Loading...</div>
-              ) : (
-                <>
-                  <div className="help-card" style={{ marginBottom: '24px' }}>
-                    <h4>How to Customize</h4>
-                    <p>
-                      Edit the title, description, icon, and fields for each step below. You can
-                      also add or remove steps. Changes will apply to all new users going through
-                      onboarding.
-                    </p>
-                  </div>
-
-                  <div className="editing-steps-list">
-                    {editingSteps.map((step, index) => (
-                      <div key={index} className="editing-step-card">
-                        <div className="step-header-edit">
-                          <h4>Step {index + 1}</h4>
-                          <button
-                            className="btn-remove-step"
-                            onClick={() => removeOnboardingStep(index)}
-                            disabled={editingSteps.length === 1}
-                          >
-                            ✕ Remove
-                          </button>
-                        </div>
-
-                        <div className="form-row">
-                          <div className="form-group">
-                            <label>Title</label>
-                            <input
-                              type="text"
-                              value={step.title}
-                              onChange={(e) => updateStep(index, 'title', e.target.value)}
-                              className="text-input"
-                              placeholder="Step Title"
-                            />
-                          </div>
-
-                          <div className="form-group">
-                            <label>Icon (Emoji)</label>
-                            <input
-                              type="text"
-                              value={step.icon}
-                              onChange={(e) => updateStep(index, 'icon', e.target.value)}
-                              className="text-input"
-                              placeholder="📄"
-                              maxLength="2"
-                              style={{ width: '80px' }}
-                            />
-                          </div>
-                        </div>
-
-                        <div className="form-group">
-                          <label>Description</label>
-                          <textarea
-                            value={step.description}
-                            onChange={(e) => updateStep(index, 'description', e.target.value)}
-                            className="text-input"
-                            placeholder="Describe what the user should do..."
-                            rows="3"
-                          />
-                        </div>
-
-                        <div className="form-group">
-                          <label className="checkbox-label">
-                            <input
-                              type="checkbox"
-                              checked={step.required || false}
-                              onChange={(e) => updateStep(index, 'required', e.target.checked)}
-                            />
-                            Required Step (user must complete to finish onboarding)
-                          </label>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <button className="btn-add-step" onClick={addOnboardingStep}>
-                    + Add Step
-                  </button>
-
-                  <div className="update-actions" style={{ marginTop: '32px', display: 'flex', gap: '12px' }}>
-                    <button className="btn-primary" onClick={updateOnboardingSteps}>
-                      Save Changes
-                    </button>
-                    <button
-                      className="btn-secondary"
-                      onClick={() => {
-                        fetchOnboardingSteps();
-                        alert('Changes discarded');
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </>
-              )}
             </div>
           )}
 
