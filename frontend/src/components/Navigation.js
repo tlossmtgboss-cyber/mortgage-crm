@@ -47,16 +47,16 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
             Active Loans {renderBadge(taskCounts.loans)}
           </Link>
           <Link
-            to="/workflow"
-            className={`nav-link ${isActive('/workflow') ? 'active' : ''}`}
-          >
-            Workflow
-          </Link>
-          <Link
             to="/portfolio"
             className={`nav-link ${isActive('/portfolio') ? 'active' : ''}`}
           >
             Portfolio {renderBadge(taskCounts.portfolio)}
+          </Link>
+          <Link
+            to="/workflow"
+            className={`nav-link ${isActive('/workflow') ? 'active' : ''}`}
+          >
+            Workflow
           </Link>
           <Link
             to="/tasks"
