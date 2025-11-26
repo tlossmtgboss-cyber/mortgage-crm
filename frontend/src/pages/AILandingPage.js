@@ -669,6 +669,16 @@ function AILandingPage() {
   };
 
   const handleExamplePrompt = (prompt) => {
+    // Start a new chat for each preset question
+    const newId = crypto.randomUUID();
+    setSessionId(newId);
+    localStorage.setItem('ai_session_id', newId);
+    setMessages([]);
+    setTaskListData(null);
+    setSelectedTask(null);
+    setConversationHistory([]);
+    setActionContext({});
+
     setInputValue(prompt);
     setTimeout(() => sendMessage(prompt), 100);
   };
