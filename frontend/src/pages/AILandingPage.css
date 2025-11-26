@@ -40,9 +40,10 @@
 }
 
 .ai-sidebar-new.collapsed {
-  width: 50px;
-  padding: 10px;
+  width: 0;
+  padding: 0;
   overflow: hidden;
+  border-right: none;
 }
 
 .ai-sidebar-new.collapsed .ai-new-chat-btn span,
@@ -60,12 +61,13 @@
 }
 
 .ai-sidebar-new.collapsed .ai-sidebar-toggle {
-  right: -50px;
+  left: 10px;
+  right: auto;
 }
 
 .ai-sidebar-toggle {
-  position: absolute;
-  right: -50px;
+  position: fixed;
+  left: 270px;
   top: 12px;
   width: 44px;
   height: 44px;
