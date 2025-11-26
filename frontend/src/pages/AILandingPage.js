@@ -505,69 +505,107 @@ function AILandingPage() {
   // Parse AI response text to extract actionable items for the sidebar
   const parseResponseForActionItems = (responseText) => {
     const items = [];
-    const lines = responseText.split('\n');
-
-    // Pattern to match borrower names with dollar amounts: "- Name ($XXX,XXX)" or "- Name ($XXX,XXX)"
-    const nameAmountPattern = /[-•]\s*([A-Z][a-z]+(?:\s+[A-Z]\.?\s*)?(?:[A-Z][a-z]+)?(?:\s+[A-Z][a-z]+)?)\s*\(\$?([\d,]+)\)/;
-    const stagePattern = /(?:^|\d+\.)\s*\*\*([^*]+)\*\*:?/;
-
-    let currentStage = '';
-    let currentAction = '';
-    let priority = 'MEDIUM';
     let itemId = 1;
 
-    for (const line of lines) {
-      // Check for stage headers like "1. **Clear to Close Stage**:" or "**Processing Stage**:"
-      const stageMatch = line.match(stagePattern);
-      if (stageMatch) {
-        currentStage = stageMatch[1].trim();
-        // Set priority based on stage
-        if (currentStage.toLowerCase().includes('clear to close') || currentStage.toLowerCase().includes('closing')) {
-          priority = 'URGENT';
-        } else if (currentStage.toLowerCase().includes('underwriting')) {
-          priority = 'HIGH';
-        } else if (currentStage.toLowerCase().includes('processing')) {
-          priority = 'MEDIUM';
-        } else if (currentStage.toLowerCase().includes('bottleneck')) {
-          priority = 'HIGH';
-        }
+    // Extract tasks with due dates: "Task name" (Due: MM/DD/YYYY) or *"Task name"* (Due: ...)
+    const taskPattern = /[*-•]\s*[""]([^""]+)[""][*]?\s*\(Due:\s*([^)]+)\)/gi;
+    let taskMatch;
+    while ((taskMatch = taskPattern.exec(responseText)) !== null) {
+      items.push({
+        id: itemId++,
+        title: taskMatch[1].trim(),
+        client: '',
+        stage: 'Task',
+        priority: taskMatch[2].includes('overdue') || new Date(taskMatch[2]) < new Date() ? 'URGENT' : 'HIGH',
+        type: 'Outstanding Task',
+        source: 'AI Analysis',
+        owner: 'Loan Officer',
+        dateCreated: new Date().toLocaleString(),
+        details: `Due: ${taskMatch[2]}`,
+        dueTime: taskMatch[2],
+        loanAmount: null
+      });
+    }
+
+    // Extract borrowers with dollar amounts: "Name ($XXX,XXX)" or Name ($XXX,XXX)
+    const borrowerPattern = /([A-Z][a-z]+(?:\s+[A-Z]\.?\s*)?[A-Z][a-z]+)\s*\(\$?([\d,]+)\)/g;
+    let borrowerMatch;
+    const seenBorrowers = new Set();
+    while ((borrowerMatch = borrowerPattern.exec(responseText)) !== null) {
+      const name = borrowerMatch[1].trim();
+      const amount = borrowerMatch[2].replace(/,/g, '');
+
+      // Skip duplicates and invalid names
+      if (seenBorrowers.has(name) ||
+          name.toLowerCase().includes('stage') ||
+          name.toLowerCase() === 'action' ||
+          name.length < 5) {
+        continue;
+      }
+      seenBorrowers.add(name);
+
+      // Determine stage/priority from context
+      const contextStart = Math.max(0, borrowerMatch.index - 200);
+      const context = responseText.substring(contextStart, borrowerMatch.index).toLowerCase();
+
+      let stage = 'Active Loan';
+      let priority = 'MEDIUM';
+      if (context.includes('clear to close') || context.includes('closing')) {
+        stage = 'Clear to Close';
+        priority = 'URGENT';
+      } else if (context.includes('underwriting')) {
+        stage = 'Underwriting';
+        priority = 'HIGH';
+      } else if (context.includes('processing')) {
+        stage = 'Processing';
+        priority = 'MEDIUM';
       }
 
-      // Check for action items
-      if (line.toLowerCase().includes('action:')) {
-        currentAction = line.replace(/[-•]\s*action:/i, '').trim();
-      }
+      items.push({
+        id: itemId++,
+        title: `Follow up - ${stage}`,
+        client: name,
+        stage: stage,
+        priority: priority,
+        type: 'Pipeline Item',
+        source: 'AI Analysis',
+        owner: 'Loan Officer',
+        dateCreated: new Date().toLocaleString(),
+        details: `Review loan status and take necessary action`,
+        dueTime: priority === 'URGENT' ? 'Today' : 'This Week',
+        loanAmount: `$${parseInt(amount).toLocaleString()}`
+      });
+    }
 
-      // Extract borrower names with amounts from lines like "- Elizabeth Moore ($825,000)"
-      const match = line.match(nameAmountPattern);
-      if (match) {
-        const name = match[1].trim();
-        const amount = match[2].replace(/,/g, '');
+    // Extract leads mentioned: "for Lead Name" or "with Lead Name" patterns
+    const leadPattern = /(?:for|with|contact|follow[- ]?up)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/gi;
+    let leadMatch;
+    const seenLeads = new Set();
+    while ((leadMatch = leadPattern.exec(responseText)) !== null) {
+      const name = leadMatch[1].trim();
+      if (seenLeads.has(name) || seenBorrowers.has(name) || name.length < 4) continue;
+      seenLeads.add(name);
 
-        // Skip if it's not a valid name (e.g., just "Action" or a stage name)
-        if (name.toLowerCase() === 'action' ||
-            name.toLowerCase().includes('stage') ||
-            name.length < 3) {
-          continue;
-        }
-
+      // Only add if it looks like a person's name (2 words, proper case)
+      if (/^[A-Z][a-z]+\s+[A-Z][a-z]+$/.test(name)) {
         items.push({
           id: itemId++,
-          title: currentAction || `Review ${currentStage || 'loan status'}`,
+          title: `Contact ${name}`,
           client: name,
-          stage: currentStage || 'In Progress',
-          priority: priority,
-          type: 'Pipeline Item',
+          stage: 'Lead',
+          priority: 'MEDIUM',
+          type: 'Lead Follow-up',
           source: 'AI Analysis',
           owner: 'Loan Officer',
           dateCreated: new Date().toLocaleString(),
-          details: currentAction || `Review status and take necessary action for ${currentStage}`,
-          dueTime: priority === 'URGENT' ? 'Today' : 'This Week',
-          loanAmount: `$${parseInt(amount).toLocaleString()}`
+          details: 'Follow up with lead',
+          dueTime: 'This Week',
+          loanAmount: null
         });
       }
     }
 
+    console.log('Parsed action items from response:', items);
     return items;
   };
 
@@ -826,6 +864,10 @@ function AILandingPage() {
                 }
               : msg
           ));
+
+          console.log('AI Response done. Full response length:', fullResponse?.length);
+          console.log('Data from backend:', data);
+          console.log('Prioritized tasks from backend:', data?.prioritized_tasks);
 
           // If prioritized_tasks are returned, show them in the right sidebar
           if (data && data.prioritized_tasks && data.prioritized_tasks.length > 0) {
