@@ -380,6 +380,17 @@
   margin: 0 0 20px 0;
 }
 
+.form-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.form-row .form-group {
+  flex: 1;
+  margin-bottom: 0;
+}
+
 .form-group {
   margin-bottom: 16px;
 }

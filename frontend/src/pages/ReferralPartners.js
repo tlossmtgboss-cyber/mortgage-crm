@@ -255,7 +255,8 @@ function ReferralPartners() {
 
 function AddPartnerModal({ onClose, onAdd, defaultCategory }) {
   const [formData, setFormData] = useState({
-    name: '',
+    first_name: '',
+    last_name: '',
     company: '',
     type: '',
     phone: '',
@@ -265,7 +266,12 @@ function AddPartnerModal({ onClose, onAdd, defaultCategory }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onAdd(formData);
+    // Combine first and last name for the API
+    const submitData = {
+      ...formData,
+      name: `${formData.first_name} ${formData.last_name}`.trim()
+    };
+    onAdd(submitData);
   };
 
   return (
@@ -273,14 +279,27 @@ function AddPartnerModal({ onClose, onAdd, defaultCategory }) {
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <h3>Add Referral Partner</h3>
         <form onSubmit={handleSubmit}>
-          <div className="form-group">
-            <label>Name *</label>
-            <input
-              type="text"
-              required
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            />
+          <div className="form-row">
+            <div className="form-group">
+              <label>First Name *</label>
+              <input
+                type="text"
+                required
+                value={formData.first_name}
+                onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                placeholder="Enter first name"
+              />
+            </div>
+            <div className="form-group">
+              <label>Last Name *</label>
+              <input
+                type="text"
+                required
+                value={formData.last_name}
+                onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                placeholder="Enter last name"
+              />
+            </div>
           </div>
           <div className="form-group">
             <label>Company</label>
