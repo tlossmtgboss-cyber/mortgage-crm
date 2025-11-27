@@ -2575,12 +2575,13 @@ class AgentTelephonySettings(Base):
     __tablename__ = "agent_telephony_settings"
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
-    cell_phone = Column(String, nullable=False)
-    business_caller_id = Column(String, nullable=False)
+    cell_phone = Column(String, nullable=True)  # Allow null initially
+    business_caller_id = Column(String, nullable=True)  # Allow null initially
     dialer_enabled = Column(Boolean, default=True)
     max_calls_per_day = Column(Integer, default=200)
     max_concurrent_sessions = Column(Integer, default=1)
-    pause_timeout_seconds = Column(Integer, default=90)
+    auto_advance = Column(Boolean, default=True)  # Auto-advance to next call
+    pause_between_calls = Column(Integer, default=3)  # Seconds between calls
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     user = relationship("User", backref="telephony_settings")
