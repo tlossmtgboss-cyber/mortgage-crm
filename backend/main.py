@@ -14441,11 +14441,16 @@ async def approve_reconciliation(
                         name=borrower_name,
                         email=get_val("borrower_email"),
                         phone=get_val("borrower_phone"),
-                        stage=lead_stage_enum,
                         source="reconciliation",
                         owner_id=current_user.id
                     )
                     db.add(new_lead)
+                    db.flush()
+
+                    # Update stage using raw SQL to ensure correct enum value is used
+                    # SQLAlchemy's SQLEnum uses names but PostgreSQL expects values
+                    db.execute(text(f"UPDATE leads SET stage = :stage WHERE id = :id"),
+                               {"stage": lead_stage_enum.value, "id": new_lead.id})
                     db.flush()
 
                     extracted.match_entity_type = "lead"
@@ -14462,17 +14467,16 @@ async def approve_reconciliation(
                         "status": "approved",
                         "entity_type": "lead",
                         "entity_id": new_lead.id,
-                        "message": f"Created new lead {borrower_name} in {lead_stage.value} stage"
+                        "message": f"Created new lead {borrower_name} in {lead_stage_enum.value} stage"
                     }
 
                 stage = loan_stage_map.get(stage_upper, LoanStage.PROCESSING)
 
-                # Create new loan
+                # Create new loan without stage first (SQLAlchemy may send enum name instead of value)
                 new_loan = Loan(
                     loan_number=loan_number,
                     borrower_name=borrower_name,
                     coborrower_name=get_val("coborrower_name"),
-                    stage=stage,
                     program=get_val("program"),
                     amount=float(get_val("amount", 0) or get_val("loan_amount", 0) or 0),
                     property_address=get_val("property_address"),
@@ -14485,6 +14489,12 @@ async def approve_reconciliation(
                 )
                 db.add(new_loan)
                 db.flush()  # Get the ID
+
+                # Update stage using raw SQL to ensure correct enum value is used
+                # PostgreSQL enum expects values like 'Processing', not names like 'PROCESSING'
+                db.execute(text("UPDATE loans SET stage = :stage WHERE id = :id"),
+                           {"stage": stage.value, "id": new_loan.id})
+                db.flush()
 
                 # Update extracted data to point to new loan
                 extracted.match_entity_type = "loan"
