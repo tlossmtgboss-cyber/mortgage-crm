@@ -915,6 +915,7 @@ class MUMClient(Base):
     original_close_date = Column(DateTime, nullable=False)
     close_date = Column(DateTime)  # Alias for original_close_date
     closing_date = Column("closing_date", DateTime, nullable=False)  # NOT NULL in DB
+    first_payment_date = Column("first_payment_date", DateTime, nullable=False)  # NOT NULL in DB
     days_since_funding = Column(Integer)
     original_rate = Column(Float)
     current_rate = Column(Float)
