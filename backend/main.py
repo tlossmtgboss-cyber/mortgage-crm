@@ -907,7 +907,8 @@ class ReferralPartner(Base):
 class MUMClient(Base):
     __tablename__ = "mum_clients"
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, nullable=False)
+    # Map 'name' property to 'client_name' column in the database
+    client_name = Column("client_name", String, nullable=False)
     email = Column(String)
     phone = Column(String)
     loan_number = Column(String, unique=True, index=True)
@@ -937,6 +938,15 @@ class MUMClient(Base):
     closer_email = Column(String)
     user_id = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    # Property to access client_name as 'name' for backwards compatibility
+    @property
+    def name(self):
+        return self.client_name
+
+    @name.setter
+    def name(self, value):
+        self.client_name = value
 
 class Activity(Base):
     __tablename__ = "activities"
@@ -23557,9 +23567,10 @@ async def create_mum_client(client: MUMClientCreate, db: Session = Depends(get_d
         original_close_dt = client.original_close_date if client.original_close_date.tzinfo else client.original_close_date.replace(tzinfo=timezone.utc)
         days_since = (datetime.now(timezone.utc) - original_close_dt).days
 
-        # Create MUM client with explicit field assignment to avoid issues
+        # Create MUM client with explicit field assignment
+        # Use client_name to match the actual database column name
         db_client = MUMClient(
-            name=client.name,
+            client_name=client.name,  # Map to 'client_name' column in PostgreSQL
             email=client.email,
             phone=client.phone,
             loan_number=client.loan_number,
