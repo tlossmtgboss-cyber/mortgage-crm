@@ -914,6 +914,7 @@ class MUMClient(Base):
     loan_number = Column(String, unique=True, index=True)
     original_close_date = Column(DateTime, nullable=False)
     close_date = Column(DateTime)  # Alias for original_close_date
+    closing_date = Column("closing_date", DateTime, nullable=False)  # NOT NULL in DB
     days_since_funding = Column(Integer)
     original_rate = Column(Float)
     current_rate = Column(Float)
@@ -23583,6 +23584,7 @@ async def create_mum_client(client: MUMClientCreate, db: Session = Depends(get_d
             phone=client.phone,
             loan_number=client.loan_number,
             original_close_date=client.original_close_date,
+            closing_date=client.original_close_date,                # NOT NULL in DB
             original_rate=client.original_rate,
             interest_rate=client.original_rate,                     # NOT NULL in DB
             original_loan_amount=client.loan_balance,               # NOT NULL in DB
