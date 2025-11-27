@@ -689,32 +689,16 @@ async def check_day_health(
         day.health_status = TaskHealthStatus.BROKEN
         day.health_message = "; ".join(issues)
 
-        # Create admin alert for broken task
-        from main import Task, User
-
-        # Find admin user
-        admin = db.query(User).filter(User.role == 'admin').first()
-        if admin:
-            # Create task for admin to fix
-            admin_task = Task(
-                user_id=admin.id,
-                title=f"Fix broken workflow task: {workflow.workflow_name} - {day.day_label}",
-                description=f"Issues found:\n" + "\n".join(f"- {issue}" for issue in issues),
-                priority="high",
-                task_type="workflow_fix"
-            )
-            db.add(admin_task)
-
-            # Create alert record
-            alert = BrokenTaskAlert(
-                workflow_id=workflow.id,
-                day_config_id=day.id,
-                alert_type='config_error',
-                alert_message="; ".join(issues),
-                severity='high',
-                admin_task_id=admin_task.id if admin_task else None
-            )
-            db.add(alert)
+        # Create alert record for broken task
+        alert = BrokenTaskAlert(
+            workflow_id=workflow.id,
+            day_config_id=day.id,
+            alert_type='config_error',
+            alert_message="; ".join(issues),
+            severity='high'
+        )
+        db.add(alert)
+        logger.warning(f"Health check failed for {workflow.workflow_name} - {day.day_label}: {issues}")
     else:
         day.health_status = TaskHealthStatus.HEALTHY
         day.health_message = None

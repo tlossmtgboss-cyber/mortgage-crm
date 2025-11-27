@@ -884,6 +884,7 @@ class ReferralPartner(Base):
     __tablename__ = "referral_partners"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False, index=True)
+    business_name = Column(String, nullable=False, default="")  # Required by DB schema
     company = Column(String)
     type = Column(String)
     phone = Column(String)
@@ -23277,7 +23278,10 @@ async def reject_unified_task(
 @app.post("/api/v1/referral-partners/", response_model=ReferralPartnerResponse, status_code=201)
 async def create_referral_partner(partner: ReferralPartnerCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
-        db_partner = ReferralPartner(**partner.model_dump())
+        partner_data = partner.model_dump()
+        # Set business_name from company or name if not provided
+        partner_data['business_name'] = partner_data.get('company') or partner_data.get('name') or ""
+        db_partner = ReferralPartner(**partner_data)
         db.add(db_partner)
         db.commit()
         db.refresh(db_partner)
