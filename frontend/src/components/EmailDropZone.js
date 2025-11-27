@@ -36,6 +36,103 @@ function EmailDropZone({ children }) {
     return docExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
   };
 
+  // Parse email content from dragged HTML/text (from Outlook, Gmail, etc.)
+  const parseEmailFromDragContent = (content, contentType) => {
+    let textContent = content;
+    let fromAddress = '';
+    let toAddress = '';
+    let subject = '';
+    let dateStr = '';
+    let body = '';
+
+    if (contentType === 'html') {
+      // Extract text from HTML
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = content;
+
+      // Try to find email headers in the HTML
+      const allText = tempDiv.textContent || tempDiv.innerText;
+      textContent = allText;
+
+      // Look for common email header patterns in HTML
+      const fromMatch = content.match(/From:?\s*<?([^<>\n\r]+@[^<>\n\r]+)>?/i) ||
+                       content.match(/from[:\s]+([^\n<]+)/i);
+      const toMatch = content.match(/To:?\s*<?([^<>\n\r]+@[^<>\n\r]+)>?/i);
+      const subjectMatch = content.match(/Subject:?\s*([^\n\r<]+)/i) ||
+                          content.match(/<title>([^<]+)<\/title>/i);
+      const dateMatch = content.match(/Date:?\s*([^\n\r<]+)/i) ||
+                       content.match(/Sent:?\s*([^\n\r<]+)/i);
+
+      fromAddress = fromMatch ? fromMatch[1].trim() : '';
+      toAddress = toMatch ? toMatch[1].trim() : '';
+      subject = subjectMatch ? subjectMatch[1].trim() : '';
+      dateStr = dateMatch ? dateMatch[1].trim() : '';
+      body = allText.substring(0, 3000);
+    } else {
+      // Plain text - parse as standard email format
+      const fromMatch = textContent.match(/From:\s*(.+)/i);
+      const toMatch = textContent.match(/To:\s*(.+)/i);
+      const subjectMatch = textContent.match(/Subject:\s*(.+)/i);
+      const dateMatch = textContent.match(/Date:\s*(.+)/i) ||
+                       textContent.match(/Sent:\s*(.+)/i);
+
+      fromAddress = fromMatch ? fromMatch[1].trim() : '';
+      toAddress = toMatch ? toMatch[1].trim() : '';
+      subject = subjectMatch ? subjectMatch[1].trim() : '';
+      dateStr = dateMatch ? dateMatch[1].trim() : '';
+
+      // Body is everything after headers
+      const bodyStart = textContent.search(/\n\n|\r\n\r\n/);
+      body = bodyStart > -1 ? textContent.substring(bodyStart + 2, bodyStart + 3000) : textContent.substring(0, 3000);
+    }
+
+    // Try to extract email from the from field if it contains a name
+    const emailMatch = fromAddress.match(/[\w\.-]+@[\w\.-]+\.\w+/);
+    if (emailMatch) {
+      fromAddress = emailMatch[0];
+    }
+
+    // Try to extract borrower name from content
+    const borrowerPatterns = [
+      /(?:borrower|client|customer):\s*([A-Z][a-z]+\s+[A-Z][a-z]+)/i,
+      /(?:Dear|Hi|Hello)\s+([A-Z][a-z]+)/i,
+      /(?:my name is|I am|I'm)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
+    ];
+
+    let matchedBorrower = null;
+    for (const pattern of borrowerPatterns) {
+      const match = textContent.match(pattern);
+      if (match) {
+        matchedBorrower = match[1];
+        break;
+      }
+    }
+
+    // Try to extract loan number
+    const loanMatch = textContent.match(/(?:loan\s*#?|loan\s*number|file\s*#?)[\s:]*([A-Z0-9-]+)/i);
+
+    // Calculate confidence
+    let confidence = 40;
+    if (fromAddress) confidence += 15;
+    if (subject) confidence += 10;
+    if (matchedBorrower) confidence += 15;
+    if (loanMatch) confidence += 20;
+
+    return {
+      id: Date.now(),
+      filename: `dragged_email_${Date.now()}.txt`,
+      from: fromAddress || 'Unknown Sender',
+      to: toAddress || '',
+      subject: subject || 'Dragged Email Content',
+      date: dateStr || new Date().toLocaleString(),
+      body: body,
+      rawContent: textContent,
+      matchedBorrower,
+      matchedLoanNumber: loanMatch ? loanMatch[1] : null,
+      confidence: Math.min(confidence, 95),
+    };
+  };
+
   // Parse email file content
   const parseEmailFile = async (file) => {
     return new Promise((resolve, reject) => {
@@ -115,8 +212,14 @@ function EmailDropZone({ children }) {
     e.preventDefault();
     e.stopPropagation();
 
-    // Check if dragging files
-    if (e.dataTransfer.types.includes('Files')) {
+    // Check if dragging files OR email content (text/html from email clients)
+    const types = Array.from(e.dataTransfer.types);
+    console.log('DragEnter - types:', types);
+
+    if (types.includes('Files') ||
+        types.includes('text/html') ||
+        types.includes('text/plain') ||
+        types.includes('text/uri-list')) {
       setIsDragging(true);
     }
   }, []);
@@ -141,10 +244,71 @@ function EmailDropZone({ children }) {
     e.stopPropagation();
     setIsDragging(false);
 
+    // Log what we received for debugging
+    console.log('Drop event - types:', e.dataTransfer.types);
+    console.log('Drop event - files:', e.dataTransfer.files.length);
+
     const files = Array.from(e.dataTransfer.files);
-    if (files.length === 0) return;
+
+    // First, check for dragged email content (from Outlook, Gmail, etc.)
+    // This happens when dragging directly from email client
+    if (files.length === 0) {
+      // Try to get text/html or text/plain content
+      let content = '';
+      let contentType = '';
+
+      if (e.dataTransfer.types.includes('text/html')) {
+        content = e.dataTransfer.getData('text/html');
+        contentType = 'html';
+      } else if (e.dataTransfer.types.includes('text/plain')) {
+        content = e.dataTransfer.getData('text/plain');
+        contentType = 'text';
+      } else if (e.dataTransfer.types.includes('text/uri-list')) {
+        content = e.dataTransfer.getData('text/uri-list');
+        contentType = 'uri';
+      }
+
+      console.log('Drag content type:', contentType, 'Content length:', content?.length);
+
+      if (content && content.length > 20) {
+        setParsing(true);
+        try {
+          // Parse the dragged content as email
+          const parsed = parseEmailFromDragContent(content, contentType);
+          setEmailData(parsed);
+
+          // Try AI parsing
+          try {
+            const aiResult = await emailDropAPI.parse(parsed);
+            setAiParseResult(aiResult);
+            if (aiResult.success) {
+              parsed.aiExtractedFields = aiResult.extracted_fields;
+              parsed.aiConfidenceScores = aiResult.confidence_scores;
+              parsed.aiSuggestedAction = aiResult.suggested_action;
+              parsed.aiQuestions = aiResult.questions;
+              parsed.aiSummary = aiResult.ai_summary;
+              parsed.matchedEntities = aiResult.matched_entities;
+            }
+          } catch (aiError) {
+            console.warn('AI parsing failed:', aiError);
+          }
+
+          setShowChoiceModal(true);
+        } catch (error) {
+          console.error('Failed to parse dragged content:', error);
+          alert('Could not parse this email. Try saving it as a .eml file first and then drag that file.');
+        }
+        setParsing(false);
+        return;
+      }
+
+      // No valid content found
+      alert('No valid file or email content detected. Try:\n1. Save the email as .eml file and drag that\n2. Or copy/paste the email content');
+      return;
+    }
 
     const file = files[0];
+    console.log('File dropped:', file.name, file.type, file.size);
 
     // Check if it's an email file
     if (isEmailFile(file)) {
@@ -186,7 +350,7 @@ function EmailDropZone({ children }) {
       return;
     }
 
-    // Try to parse as text email anyway
+    // Try to parse as text email anyway (for .txt or unknown files)
     setParsing(true);
     try {
       const parsed = await parseEmailFile(file);
@@ -284,8 +448,8 @@ function EmailDropZone({ children }) {
         <div className="email-drop-overlay">
           <div className="email-drop-content">
             <div className="email-drop-icon">📧📄</div>
-            <h2>Drop File Here</h2>
-            <p>Drop emails (.eml, .msg) or documents (.pdf, .doc, images) to import</p>
+            <h2>Drop Here</h2>
+            <p>Drag emails from Outlook/Gmail, .eml files, or documents to import</p>
           </div>
         </div>
       )}
