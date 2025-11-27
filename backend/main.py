@@ -11359,52 +11359,8 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
         except Exception as e:
             logger.warning(f"Portfolio matching failed (table may not exist): {e}")
 
-    # ========== LOAN EMAIL/PHONE MATCHING ==========
-    # Also try matching loans by borrower email/phone (not just name)
-    if extracted_email or extracted_phone:
-        logger.info("Trying loan email/phone match...")
-        all_loans = db.query(Loan).all()
-        for loan in all_loans:
-            loan_conf = 0.0
-            match_reasons = []
-
-            # Check borrower email
-            if extracted_email and loan.borrower_email:
-                if normalize_email(extracted_email) == normalize_email(loan.borrower_email):
-                    loan_conf = max(loan_conf, 0.96)
-                    match_reasons.append("borrower_email")
-
-            # Check borrower phone
-            if extracted_phone and loan.borrower_phone:
-                if normalize_phone(extracted_phone) == normalize_phone(loan.borrower_phone):
-                    loan_conf = max(loan_conf, 0.92)
-                    match_reasons.append("borrower_phone")
-
-            # Check co-borrower email
-            if extracted_email and hasattr(loan, 'coborrower_email') and loan.coborrower_email:
-                if normalize_email(extracted_email) == normalize_email(loan.coborrower_email):
-                    loan_conf = max(loan_conf, 0.90)
-                    match_reasons.append("coborrower_email")
-
-            if loan_conf > 0.5:
-                # Avoid duplicates
-                existing = next((c for c in match_results["candidates"]
-                               if c["type"] == "loan" and c["id"] == loan.id), None)
-                if existing:
-                    existing["confidence"] = min(0.99, max(existing["confidence"], loan_conf))
-                    existing["match_type"] += "+" + "+".join(match_reasons)
-                else:
-                    # Boost confidence if user owns this loan
-                    if loan.loan_officer_id == user_id:
-                        loan_conf = min(0.99, loan_conf + 0.03)
-                    match_results["candidates"].append({
-                        "type": "loan",
-                        "id": loan.id,
-                        "name": loan.borrower_name or f"Loan #{loan.loan_number}",
-                        "confidence": loan_conf,
-                        "match_type": "+".join(match_reasons)
-                    })
-                    logger.info(f"Loan email/phone match found: {loan.borrower_name} ({loan_conf:.2f})")
+    # Note: Loan model doesn't have borrower_email/phone fields,
+    # so loan matching is done via loan_number and borrower_name only (handled above)
 
     # Return best candidate if found
     if match_results["candidates"]:
