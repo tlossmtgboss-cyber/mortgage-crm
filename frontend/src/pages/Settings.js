@@ -7,6 +7,7 @@ import TaskWorkflowManager from '../components/TaskWorkflowManager';
 import DocumentIntakeManager from '../components/DocumentIntakeManager';
 import EmailMonitorDashboard from './EmailMonitorDashboard';
 import EmailSignatureTab from '../components/EmailSignatureTab';
+import SmartScheduler from '../components/SmartScheduler';
 import './Settings.css';
 
 // Use HTTPS Railway URL in production, localhost for development
@@ -1722,6 +1723,18 @@ const API_BASE_URL = isProduction
                 <span>Team Members</span>
               </button>
               <button
+                className={`sidebar-btn child ${activeSection === 'add-team-member' ? 'active' : ''}`}
+                onClick={() => navigate('/users/create')}
+              >
+                <span>Add Team Member</span>
+              </button>
+              <button
+                className={`sidebar-btn child ${activeSection === 'bulk-upload' ? 'active' : ''}`}
+                onClick={() => navigate('/users/bulk-upload')}
+              >
+                <span>Bulk Upload Users</span>
+              </button>
+              <button
                 className={`sidebar-btn child ${activeSection === 'branding' ? 'active' : ''}`}
                 onClick={() => setActiveSection('branding')}
               >
@@ -1853,36 +1866,13 @@ const API_BASE_URL = isProduction
             <span>IT Helpdesk</span>
           </button>
 
-          {/* Scheduling Settings - Expandable */}
+          {/* Smart Scheduler */}
           <button
-            className={`sidebar-btn parent ${expandedSections.scheduling ? 'expanded' : ''}`}
-            onClick={() => toggleSection('scheduling')}
+            className={`sidebar-btn ${activeSection === 'smart-scheduler' ? 'active' : ''}`}
+            onClick={() => setActiveSection('smart-scheduler')}
           >
-            <span>Scheduling Settings</span>
-            <span className="expand-icon">{expandedSections.scheduling ? '▼' : '▶'}</span>
+            <span>Smart Scheduler</span>
           </button>
-          {expandedSections.scheduling && (
-            <div className="sidebar-children">
-              <button
-                className={`sidebar-btn child ${activeSection === 'business-hours' ? 'active' : ''}`}
-                onClick={() => setActiveSection('business-hours')}
-              >
-                <span>Business Hours</span>
-              </button>
-              <button
-                className={`sidebar-btn child ${activeSection === 'appointment-types' ? 'active' : ''}`}
-                onClick={() => setActiveSection('appointment-types')}
-              >
-                <span>Appointment Types</span>
-              </button>
-              <button
-                className={`sidebar-btn child ${activeSection === 'availability' ? 'active' : ''}`}
-                onClick={() => setActiveSection('availability')}
-              >
-                <span>Availability</span>
-              </button>
-            </div>
-          )}
 
           <button
             className={`sidebar-btn ${activeSection === 'notifications' ? 'active' : ''}`}
@@ -3924,35 +3914,9 @@ const API_BASE_URL = isProduction
             </div>
           )}
 
-          {/* Scheduling Settings Sections */}
-          {activeSection === 'business-hours' && (
-            <div className="business-hours-section">
-              <h2>Business Hours</h2>
-              <p className="section-description">
-                Set your operating hours and holidays
-              </p>
-              <p>Coming soon...</p>
-            </div>
-          )}
-
-          {activeSection === 'appointment-types' && (
-            <div className="appointment-types-section">
-              <h2>Appointment Types</h2>
-              <p className="section-description">
-                Configure different types of appointments and their durations
-              </p>
-              <p>Coming soon...</p>
-            </div>
-          )}
-
-          {activeSection === 'availability' && (
-            <div className="availability-section">
-              <h2>Availability</h2>
-              <p className="section-description">
-                Set your personal availability and time-off
-              </p>
-              <p>Coming soon...</p>
-            </div>
+          {/* Smart Scheduler */}
+          {activeSection === 'smart-scheduler' && (
+            <SmartScheduler />
           )}
 
           {/* Master Administrator - User Management */}
