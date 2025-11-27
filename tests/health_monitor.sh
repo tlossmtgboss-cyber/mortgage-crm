@@ -5,10 +5,18 @@
 # Usage: ./tests/health_monitor.sh [API_URL] [--continuous]
 # Example: ./tests/health_monitor.sh https://mortgage-crm-production-7a9a.up.railway.app
 #          ./tests/health_monitor.sh --continuous   # Run every 5 minutes
+#
+# Environment Variables:
+#   TEST_API_KEY - API key to bypass IP restrictions (set in server .env)
+#
+# Examples:
+#   ./tests/health_monitor.sh https://staging-api.example.com
+#   TEST_API_KEY=your-secret-key ./tests/health_monitor.sh https://api.example.com
 
 set -e
 
 API_URL="${1:-https://mortgage-crm-production-7a9a.up.railway.app}"
+TEST_API_KEY="${TEST_API_KEY:-}"
 CONTINUOUS=false
 INTERVAL=300  # 5 minutes
 
@@ -17,10 +25,17 @@ if [ "$1" = "--continuous" ] || [ "$2" = "--continuous" ]; then
     CONTINUOUS=true
 fi
 
+# Build API key header if provided
+API_KEY_HEADER=""
+if [ -n "$TEST_API_KEY" ]; then
+    API_KEY_HEADER="-H X-Test-API-Key:$TEST_API_KEY"
+fi
+
 echo "=============================================="
 echo "  Pipeline360 Health Monitor"
 echo "=============================================="
 echo "API URL: $API_URL"
+echo "Using Test API Key: $([ -n "$TEST_API_KEY" ] && echo "Yes" || echo "No")"
 echo "Mode: $([ "$CONTINUOUS" = true ] && echo "Continuous (every $INTERVAL seconds)" || echo "Single check")"
 echo ""
 
@@ -72,7 +87,7 @@ except: pass
     # 3. Auth endpoint check
     echo ""
     echo "3. Authentication Endpoint"
-    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$API_URL/token" -X POST \
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$API_URL/token" $API_KEY_HEADER -X POST \
         -H "Content-Type: application/x-www-form-urlencoded" \
         -d "username=demo@example.com&password=demo123" --max-time 10 || echo "000")
     if [ "$HTTP_CODE" = "200" ]; then
@@ -86,8 +101,8 @@ except: pass
     echo ""
     echo "4. API Response Time"
     START_TIME=$(python3 -c "import time; print(time.time())")
-    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$API_URL/api/v1/loans/" \
-        -H "Authorization: Bearer $(curl -s -X POST "$API_URL/token" \
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$API_URL/api/v1/loans/" $API_KEY_HEADER \
+        -H "Authorization: Bearer $(curl -s -X POST "$API_URL/token" $API_KEY_HEADER \
             -H "Content-Type: application/x-www-form-urlencoded" \
             -d "username=demo@example.com&password=demo123" | \
             python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null)" \

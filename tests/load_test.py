@@ -5,16 +5,22 @@ Pipeline360 Load Testing Script
 Simulates concurrent users making API requests to test system performance.
 
 Usage:
-    python tests/load_test.py [API_URL] [--users N] [--requests N]
+    python tests/load_test.py [API_URL] [--users N] [--requests N] [--api-key KEY]
+
+Environment Variables:
+    TEST_API_KEY - API key to bypass IP restrictions (set in server .env)
 
 Examples:
     python tests/load_test.py https://mortgage-crm-production-7a9a.up.railway.app
     python tests/load_test.py --users 50 --requests 10
+    TEST_API_KEY=your-key python tests/load_test.py https://api.example.com
+    python tests/load_test.py --api-key your-key https://api.example.com
 """
 
 import asyncio
 import aiohttp
 import argparse
+import os
 import sys
 import time
 from dataclasses import dataclass
@@ -36,16 +42,22 @@ class RequestResult:
 class LoadTester:
     """Load testing utility for Pipeline360 API"""
 
-    def __init__(self, api_url: str, token: str = None):
+    def __init__(self, api_url: str, token: str = None, test_api_key: str = None):
         self.api_url = api_url.rstrip('/')
         self.token = token
+        self.test_api_key = test_api_key or os.getenv("TEST_API_KEY", "")
         self.results: List[RequestResult] = []
 
     async def get_token(self, session: aiohttp.ClientSession) -> str:
         """Get authentication token"""
         try:
+            headers = {}
+            if self.test_api_key:
+                headers["X-Test-API-Key"] = self.test_api_key
+
             async with session.post(
                 f"{self.api_url}/token",
+                headers=headers,
                 data={
                     "username": "demo@example.com",
                     "password": "demo123"
@@ -70,6 +82,8 @@ class LoadTester:
         headers = {}
         if self.token:
             headers["Authorization"] = f"Bearer {self.token}"
+        if self.test_api_key:
+            headers["X-Test-API-Key"] = self.test_api_key
 
         start = time.time()
         try:
@@ -297,6 +311,11 @@ async def main():
         type=str,
         help="Auth token (will fetch if not provided)"
     )
+    parser.add_argument(
+        "--api-key",
+        type=str,
+        help="Test API key to bypass IP restrictions (or set TEST_API_KEY env var)"
+    )
 
     args = parser.parse_args()
 
@@ -309,7 +328,10 @@ async def main():
         {"path": "/health", "method": "GET"},
     ]
 
-    tester = LoadTester(args.api_url, args.token)
+    # Get API key from argument or environment
+    api_key = args.api_key or os.getenv("TEST_API_KEY", "")
+
+    tester = LoadTester(args.api_url, args.token, api_key)
     results = await tester.run_test(
         endpoints=endpoints,
         concurrent_users=args.users,

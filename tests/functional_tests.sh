@@ -4,18 +4,33 @@
 # =============================================================================
 # Usage: ./tests/functional_tests.sh [API_URL]
 # Tests complete workflows: CRUD operations, clips, meetings, AI features
+#
+# Environment Variables:
+#   TEST_API_KEY - API key to bypass IP restrictions (set in server .env)
+#
+# Examples:
+#   ./tests/functional_tests.sh https://staging-api.example.com
+#   TEST_API_KEY=your-secret-key ./tests/functional_tests.sh https://api.example.com
 
 set -e
 
 API_URL="${1:-https://mortgage-crm-production-7a9a.up.railway.app}"
+TEST_API_KEY="${TEST_API_KEY:-}"
 PASS_COUNT=0
 FAIL_COUNT=0
 TOKEN=""
+
+# Build API key header if provided
+API_KEY_HEADER=""
+if [ -n "$TEST_API_KEY" ]; then
+    API_KEY_HEADER="-H X-Test-API-Key:$TEST_API_KEY"
+fi
 
 echo "=============================================="
 echo "  Pipeline360 Functional Test Suite"
 echo "=============================================="
 echo "API URL: $API_URL"
+echo "Using Test API Key: $([ -n "$TEST_API_KEY" ] && echo "Yes" || echo "No")"
 echo "Time: $(date)"
 echo ""
 
@@ -36,7 +51,7 @@ info() {
 
 # Get auth token
 get_token() {
-    TOKEN=$(curl -s -X POST "$API_URL/token" \
+    TOKEN=$(curl -s -X POST "$API_URL/token" $API_KEY_HEADER \
         -H "Content-Type: application/x-www-form-urlencoded" \
         -d "username=demo@example.com&password=demo123" | \
         python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))")

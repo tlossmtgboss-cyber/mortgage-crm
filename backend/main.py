@@ -43,6 +43,7 @@ import time
 
 # Import security middleware
 from security_middleware import (
+    IPAccessControlMiddleware,
     RateLimitMiddleware,
     SecurityHeadersMiddleware,
     IPBlockingMiddleware,
@@ -3722,13 +3723,16 @@ app.add_middleware(
 )
 
 # Add security middleware (order matters - first added is last executed)
+# IPAccessControlMiddleware should be early in the chain to block unauthorized IPs
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RequestValidationMiddleware)
 app.add_middleware(IPBlockingMiddleware)
 app.add_middleware(RateLimitMiddleware, requests_per_minute=100, requests_per_hour=2000)
+app.add_middleware(IPAccessControlMiddleware)  # Environment-aware IP access control
 app.add_middleware(SecurityLoggingMiddleware)
 
-logger.info("✅ Security middleware enabled: Rate limiting, IP blocking, security headers, request validation, and logging")
+logger.info(f"✅ Security middleware enabled (ENVIRONMENT={os.getenv('ENVIRONMENT', 'development')}): "
+            "IP access control, rate limiting, IP blocking, security headers, request validation, and logging")
 
 # ============================================================================
 # PRODUCTION HARDENING - Sentry, structured logging, request tracing

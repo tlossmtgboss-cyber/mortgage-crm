@@ -1,6 +1,15 @@
 """
 Security middleware for the Mortgage CRM application
 Protects against common web vulnerabilities and attacks
+
+Environment-Based Security:
+- Production: Full security with IP whitelist enforcement
+- Staging: Relaxed IP restrictions for testing, but other security active
+- Development: All security checks disabled for local development
+
+Test API Key:
+- Set TEST_API_KEY environment variable to enable automated testing bypass
+- Include X-Test-API-Key header in requests to bypass IP restrictions
 """
 from fastapi import Request, HTTPException, status
 from fastapi.responses import JSONResponse
@@ -9,14 +18,75 @@ from datetime import datetime, timedelta
 from collections import defaultdict
 import re
 import logging
-from typing import Dict, Tuple
+import os
+import ipaddress
+from typing import Dict, Tuple, Optional, Set, List
 import time
 
 logger = logging.getLogger(__name__)
 
+# Environment detection
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+TEST_API_KEY = os.getenv("TEST_API_KEY", "")
+
+# IP Whitelist Configuration
+WHITELISTED_IPS: Set[str] = set(filter(None, [
+    os.getenv("ADMIN_IP_1", ""),
+    os.getenv("ADMIN_IP_2", ""),
+    os.getenv("ADMIN_IP_3", ""),
+    "127.0.0.1",
+    "localhost",
+]))
+
+# CIDR ranges for private networks (allowed in staging/dev)
+PRIVATE_NETWORKS = [
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("127.0.0.0/8"),
+]
+
+# Paths that bypass IP restrictions (always accessible)
+PUBLIC_PATHS = [
+    "/health",
+    "/health/ready",
+    "/health/live",
+    "/health/detailed",
+    "/docs",
+    "/redoc",
+    "/openapi.json",
+]
+
 # ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
+
+def is_public_path(path: str) -> bool:
+    """Check if path should be publicly accessible without IP restrictions"""
+    return any(path.startswith(p) for p in PUBLIC_PATHS)
+
+
+def is_ip_in_private_network(ip: str) -> bool:
+    """Check if IP is in a private network range"""
+    try:
+        ip_obj = ipaddress.ip_address(ip)
+        return any(ip_obj in network for network in PRIVATE_NETWORKS)
+    except ValueError:
+        return False
+
+
+def is_ip_whitelisted(ip: str) -> bool:
+    """Check if IP is explicitly whitelisted"""
+    return ip in WHITELISTED_IPS
+
+
+def has_valid_test_api_key(request: Request) -> bool:
+    """Check if request has valid test API key header"""
+    if not TEST_API_KEY:
+        return False
+    api_key = request.headers.get("X-Test-API-Key", "")
+    return api_key == TEST_API_KEY
+
 
 def is_websocket_request(request: Request) -> bool:
     """
@@ -38,6 +108,87 @@ def is_websocket_request(request: Request) -> bool:
     is_ws_upgrade = "upgrade" in connection and upgrade == "websocket"
 
     return is_ws_path or is_ws_upgrade
+
+
+# ============================================================================
+# IP ACCESS CONTROL MIDDLEWARE (Environment-Aware)
+# ============================================================================
+
+class IPAccessControlMiddleware(BaseHTTPMiddleware):
+    """
+    Environment-aware IP access control.
+
+    Production: Strict IP whitelist enforcement
+    Staging: Relaxed - allows test API key bypass and private networks
+    Development: No IP restrictions
+
+    Always allows:
+    - Public paths (health checks, docs)
+    - WebSocket connections
+    - Requests with valid test API key (if configured)
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        path = str(request.url.path)
+
+        # Always allow WebSocket connections
+        if is_websocket_request(request):
+            return await call_next(request)
+
+        # Always allow public paths
+        if is_public_path(path):
+            return await call_next(request)
+
+        # Development mode: no IP restrictions
+        if ENVIRONMENT == "development":
+            return await call_next(request)
+
+        # Check for valid test API key (allows automated testing)
+        if has_valid_test_api_key(request):
+            logger.info(f"Access granted via test API key: {path}")
+            return await call_next(request)
+
+        # Get client IP
+        client_ip = self._get_client_ip(request)
+
+        # Staging mode: allow whitelisted IPs and private networks
+        if ENVIRONMENT == "staging":
+            if is_ip_whitelisted(client_ip) or is_ip_in_private_network(client_ip):
+                return await call_next(request)
+            # In staging, log but allow (for easier testing)
+            logger.info(f"Staging access from non-whitelisted IP: {client_ip}")
+            return await call_next(request)
+
+        # Production mode: strict whitelist enforcement
+        if ENVIRONMENT == "production":
+            if is_ip_whitelisted(client_ip):
+                return await call_next(request)
+
+            # Also allow Railway internal IPs (100.64.x.x range)
+            if client_ip.startswith("100.64."):
+                return await call_next(request)
+
+            logger.warning(f"Access denied for IP {client_ip}: {request.method} {path}")
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "Access denied"}
+            )
+
+        # Default: allow (unknown environment)
+        return await call_next(request)
+
+    def _get_client_ip(self, request: Request) -> str:
+        """Get real client IP, accounting for proxies"""
+        forwarded = request.headers.get("X-Forwarded-For")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+
+        real_ip = request.headers.get("X-Real-IP")
+        if real_ip:
+            return real_ip
+
+        return request.client.host if request.client else "unknown"
+
 
 # ============================================================================
 # RATE LIMITING MIDDLEWARE
