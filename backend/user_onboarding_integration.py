@@ -1024,6 +1024,18 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
         cats = db.query(Category).filter(Category.is_active == True).order_by(Category.sort_order).all()
         return {"success": True, "data": {"categories": [{"id": c.id, "name": c.name, "description": c.description} for c in cats]}}
 
+    @router.get("/responsibilities")
+    async def list_responsibilities(db = Depends(get_db), current_user = Depends(get_current_user)):
+        """List all active responsibilities with their category info"""
+        if not check_admin_permission(current_user):
+            raise HTTPException(status_code=403, detail="Permission denied")
+        resps = db.query(Responsibility).filter(Responsibility.is_active == True).order_by(Responsibility.category_id, Responsibility.name).all()
+        result = []
+        for r in resps:
+            cat = db.query(Category).filter(Category.id == r.category_id).first()
+            result.append({"id": r.id, "name": r.name, "description": r.description, "category_id": r.category_id, "category_name": cat.name if cat else ""})
+        return {"success": True, "data": {"responsibilities": result}}
+
     @router.post("/responsibilities/filter")
     async def filter_responsibilities(data: ResponsibilityFilterRequest, db = Depends(get_db), current_user = Depends(get_current_user)):
         if not check_admin_permission(current_user):

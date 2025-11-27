@@ -885,6 +885,7 @@ class ReferralPartner(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False, index=True)
     business_name = Column(String, nullable=False, default="")  # Required by DB schema
+    contact_name = Column(String, nullable=False, default="")  # Required by DB schema
     company = Column(String)
     type = Column(String)
     phone = Column(String)
@@ -23279,8 +23280,9 @@ async def reject_unified_task(
 async def create_referral_partner(partner: ReferralPartnerCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
         partner_data = partner.model_dump()
-        # Set business_name from company or name if not provided
+        # Set business_name and contact_name from available data (required by DB schema)
         partner_data['business_name'] = partner_data.get('company') or partner_data.get('name') or ""
+        partner_data['contact_name'] = partner_data.get('name') or ""
         db_partner = ReferralPartner(**partner_data)
         db.add(db_partner)
         db.commit()
@@ -37265,3 +37267,4 @@ if __name__ == "__main__":
         reload=True,
         log_level="info"
     )
+
