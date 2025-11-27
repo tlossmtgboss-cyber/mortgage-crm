@@ -36279,12 +36279,33 @@ async def get_dialer_settings(
     current_user: User = Depends(get_current_user_flexible)
 ):
     """Get agent telephony settings"""
-    settings = db.query(AgentTelephonySettings).filter(
-        AgentTelephonySettings.user_id == current_user.id
-    ).first()
+    try:
+        settings = db.query(AgentTelephonySettings).filter(
+            AgentTelephonySettings.user_id == current_user.id
+        ).first()
 
-    if not settings:
-        # Return defaults
+        if not settings:
+            # Return defaults
+            return {
+                "cell_phone": None,
+                "business_caller_id": None,
+                "dialer_enabled": False,
+                "max_calls_per_day": 100,
+                "auto_advance": True,
+                "pause_between_calls": 3
+            }
+
+        return {
+            "cell_phone": settings.cell_phone,
+            "business_caller_id": settings.business_caller_id,
+            "dialer_enabled": settings.dialer_enabled,
+            "max_calls_per_day": settings.max_calls_per_day,
+            "auto_advance": getattr(settings, 'auto_advance', True),
+            "pause_between_calls": getattr(settings, 'pause_between_calls', 3)
+        }
+    except Exception as e:
+        logger.error(f"Error getting dialer settings: {e}")
+        # Return defaults on any error (table may not exist yet)
         return {
             "cell_phone": None,
             "business_caller_id": None,
@@ -36293,15 +36314,6 @@ async def get_dialer_settings(
             "auto_advance": True,
             "pause_between_calls": 3
         }
-
-    return {
-        "cell_phone": settings.cell_phone,
-        "business_caller_id": settings.business_caller_id,
-        "dialer_enabled": settings.dialer_enabled,
-        "max_calls_per_day": settings.max_calls_per_day,
-        "auto_advance": settings.auto_advance,
-        "pause_between_calls": settings.pause_between_calls
-    }
 
 
 @app.put("/api/v1/dialer/settings")
