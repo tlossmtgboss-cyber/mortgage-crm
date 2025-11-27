@@ -11303,7 +11303,6 @@ def get_calendly_time_slots_for_user(user_id: int, db: Session, num_slots: int =
 
 def generate_scheduling_email_draft(
     client_name: str,
-    task_title: str,
     calendly_slots: dict,
     user_name: str = "Your Loan Officer"
 ) -> str:
@@ -22263,7 +22262,6 @@ async def get_unified_tasks(
                 user_name = current_user.full_name or current_user.email or "Your Loan Officer"
                 ai_response = generate_scheduling_email_draft(
                     client_name=client_name,
-                    task_title=task.title or "",
                     calendly_slots=calendly_slots,
                     user_name=user_name
                 )
@@ -22322,7 +22320,6 @@ async def get_unified_tasks(
                 user_name = current_user.full_name or current_user.email or "Your Loan Officer"
                 ai_response = generate_scheduling_email_draft(
                     client_name=client_name,
-                    task_title=task.title or "",
                     calendly_slots=calendly_slots,
                     user_name=user_name
                 )

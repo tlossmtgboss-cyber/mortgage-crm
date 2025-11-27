@@ -272,7 +272,10 @@ Loan Officer`;
                 />
                 <div className="task-item-content">
                   <div className="task-item-header-v2">
-                    <span className="task-title-v2">{task.title}</span>
+                    <span className="task-title-v2">
+                      {task.has_calendly_slots && <span style={{ marginRight: '6px' }}>📅</span>}
+                      {task.title}
+                    </span>
                     <span
                       className="priority-badge-small"
                       style={{
@@ -285,7 +288,9 @@ Loan Officer`;
                   </div>
                   <div className="task-meta-v2">
                     <span className="client-name-v2">{task.client_name || 'Unknown Client'}</span>
-                    <span className="task-stage">{task.stage || task.source}</span>
+                    <span className="task-stage">
+                      {task.has_calendly_slots ? '📆 Calendly Ready' : (task.stage || task.source)}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -414,8 +419,15 @@ Loan Officer`;
                   <div
                     className="ai-message-content"
                     dangerouslySetInnerHTML={{
-                      __html: (editedResponse || selectedTask.ai_suggested_response || 'No AI message generated yet.')
-                        .replace(/\n/g, '<br />')
+                      __html: (() => {
+                        const content = editedResponse || selectedTask.ai_suggested_response || 'No AI message generated yet.';
+                        // Check if content contains HTML tags (Calendly scheduling emails)
+                        if (content.includes('<div') || content.includes('<a href')) {
+                          return content;
+                        }
+                        // Plain text - convert newlines to breaks
+                        return content.replace(/\n/g, '<br />');
+                      })()
                     }}
                   />
                 )}
