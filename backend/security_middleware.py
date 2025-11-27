@@ -159,20 +159,27 @@ class IPAccessControlMiddleware(BaseHTTPMiddleware):
             logger.info(f"Staging access from non-whitelisted IP: {client_ip}")
             return await call_next(request)
 
-        # Production mode: strict whitelist enforcement
+        # Production mode: IP whitelist enforcement only for admin paths
+        # Note: Full enforcement disabled until admin IPs are properly configured
         if ENVIRONMENT == "production":
-            if is_ip_whitelisted(client_ip):
-                return await call_next(request)
+            # Only enforce whitelist for admin-level endpoints
+            admin_paths = ["/api/v1/admin/", "/api/v1/migrations/"]
+            is_admin_path = any(path.startswith(p) for p in admin_paths)
 
-            # Also allow Railway internal IPs (100.64.x.x range)
-            if client_ip.startswith("100.64."):
-                return await call_next(request)
+            if is_admin_path:
+                if is_ip_whitelisted(client_ip):
+                    return await call_next(request)
+                # Also allow Railway internal IPs (100.64.x.x range)
+                if client_ip.startswith("100.64."):
+                    return await call_next(request)
+                logger.warning(f"Admin access denied for IP {client_ip}: {request.method} {path}")
+                return JSONResponse(
+                    status_code=403,
+                    content={"detail": "Access denied - admin access requires whitelisted IP"}
+                )
 
-            logger.warning(f"Access denied for IP {client_ip}: {request.method} {path}")
-            return JSONResponse(
-                status_code=403,
-                content={"detail": "Access denied"}
-            )
+            # Allow all other paths in production (normal API traffic)
+            return await call_next(request)
 
         # Default: allow (unknown environment)
         return await call_next(request)
