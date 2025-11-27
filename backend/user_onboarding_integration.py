@@ -420,13 +420,22 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
     """
     router = APIRouter(prefix="/api/v1/admin/users", tags=["User Creation & Onboarding"])
 
-    # Permission check helper - allow admin, leadership, and managers to access user management
-    ALLOWED_ROLES = ['admin', 'leadership', 'manager', 'loan_officer']  # loan_officer for demo
+    # Permission check helper - allow admin, leadership, managers, and sales to access user management
+    # Note: In production, you'd restrict this more - for demo purposes we allow broader access
+    ALLOWED_PERMISSION_ROLES = ['admin', 'leadership', 'management', 'sales']  # Phase 2 permission_role values
+    ALLOWED_LEGACY_ROLES = ['admin', 'manager', 'loan_officer']  # Legacy role values
 
     def check_admin_permission(user):
         """Check if user has admin-level permissions for user management"""
-        permission_role = getattr(user, 'permission_role', None) or getattr(user, 'role', None)
-        return permission_role in ALLOWED_ROLES
+        # Check Phase 2 permission_role first
+        permission_role = getattr(user, 'permission_role', None)
+        if permission_role and permission_role in ALLOWED_PERMISSION_ROLES:
+            return True
+        # Fallback to legacy role
+        legacy_role = getattr(user, 'role', None)
+        if legacy_role and legacy_role in ALLOWED_LEGACY_ROLES:
+            return True
+        return False
 
     Role = models['Role']
     Category = models['Category']
