@@ -344,6 +344,7 @@ async def delete_day_config(
 
     WorkflowConfiguration = _models['WorkflowConfiguration']
     WorkflowDayConfig = _models['WorkflowDayConfig']
+    BrokenTaskAlert = _models['BrokenTaskAlert']
 
     workflow = db.query(WorkflowConfiguration).filter(
         WorkflowConfiguration.workflow_key == workflow_key
@@ -359,6 +360,11 @@ async def delete_day_config(
 
     if not day:
         raise HTTPException(status_code=404, detail=f"Day config {day_id} not found")
+
+    # Delete related alerts first (to avoid foreign key constraint)
+    db.query(BrokenTaskAlert).filter(
+        BrokenTaskAlert.day_config_id == day_id
+    ).delete()
 
     db.delete(day)
 

@@ -596,18 +596,19 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
 
             # Handle permissions
             permissions_data = {}
+            permission_source = "custom"
             if data.permission_template_id:
                 template = db.query(PermissionTemplate).filter(PermissionTemplate.id == data.permission_template_id).first()
                 if template:
                     permissions_data = template.permissions or {}
+                    permission_source = "template"
             elif data.custom_permissions:
                 permissions_data = data.custom_permissions
 
             user_perms = UserPermissions(
-                user_id=new_user.id,
-                permission_template_id=data.permission_template_id,
-                custom_permissions=data.custom_permissions,
-                effective_permissions=permissions_data
+                user_profile_id=profile.id,
+                permissions=permissions_data,
+                source=permission_source
             )
             db.add(user_perms)
 
@@ -615,8 +616,7 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
             scorecard_config = generate_kpi_scorecard_config(data.responsibility_ids, db)
             scorecard = KPIScorecard(
                 user_profile_id=profile.id,
-                kpi_config=scorecard_config,
-                created_by=current_user.id
+                scorecard_config=scorecard_config
             )
             db.add(scorecard)
 
