@@ -843,8 +843,9 @@ def click_to_dial(
     if not settings or not settings.business_caller_id:
         return {"success": False, "error": "No verified caller ID configured"}
 
-    # Build callback URLs
-    callback_url = f"{base_url}/api/v1/dialer/twiml/click-to-dial"
+    # Build callback URLs - include destination number for the TwiML to dial
+    from urllib.parse import quote
+    callback_url = f"{base_url}/api/v1/dialer/twiml/click-to-dial?destination={quote(phone_number)}&contact_name={quote(contact_name or 'Contact')}"
     status_callback_url = f"{base_url}/api/v1/dialer/webhook/click-to-dial-status?agent_id={agent_id}"
 
     # Acquire soft lock
@@ -857,11 +858,15 @@ def click_to_dial(
     if not lock_acquired:
         return {"success": False, "error": "Number currently in use by another agent"}
 
-    # Place the call
+    # First, call the agent's cell phone. When they answer, the TwiML will dial the contact.
+    agent_phone = settings.cell_phone
+    if not agent_phone:
+        return {"success": False, "error": "Agent cell phone not configured"}
+
     result = provider.place_call(
-        to_number=phone_number,
+        to_number=agent_phone,  # Call agent first
         from_number=settings.business_caller_id,
-        callback_url=callback_url,
+        callback_url=callback_url,  # TwiML will dial the contact
         status_callback_url=status_callback_url,
         timeout=30
     )

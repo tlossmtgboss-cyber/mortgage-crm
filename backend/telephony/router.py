@@ -525,3 +525,184 @@ async def websocket_status():
         "connected_agents": ws_manager.get_connected_agents(),
         "total_connections": sum(len(conns) for conns in ws_manager.active_connections.values())
     }
+
+
+# =============================================================================
+# Twilio Webhook Endpoints (TwiML)
+# =============================================================================
+
+from fastapi.responses import Response
+
+@router.post("/twiml/click-to-dial")
+@router.get("/twiml/click-to-dial")
+async def twiml_click_to_dial(
+    request: Request,
+    destination: Optional[str] = None,
+    contact_name: Optional[str] = None
+):
+    """
+    TwiML endpoint for click-to-dial calls.
+
+    When Twilio connects to the agent's phone, this tells Twilio to:
+    1. Say a brief message with contact name
+    2. Dial the destination number (the contact)
+
+    The flow is:
+    - Twilio calls agent's cell phone
+    - Agent answers
+    - This TwiML plays and dials the contact
+    - Agent and contact are bridged together
+    """
+    # Get form data from Twilio
+    form_data = await request.form()
+    from_number = form_data.get("From", "")  # The Twilio number (caller ID)
+
+    logger.info(f"TwiML click-to-dial: destination={destination}, contact={contact_name}, from={from_number}")
+
+    if not destination:
+        # Fallback error
+        twiml = """<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say voice="alice">Sorry, no destination number was provided.</Say>
+    <Hangup/>
+</Response>"""
+        return Response(content=twiml, media_type="application/xml")
+
+    # Announce the contact name if provided
+    announcement = f"Connecting you to {contact_name}." if contact_name else "Connecting your call."
+
+    twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say voice="alice">{announcement}</Say>
+    <Dial callerId="{from_number}" timeout="30">
+        <Number>{destination}</Number>
+    </Dial>
+</Response>"""
+
+    return Response(content=twiml, media_type="application/xml")
+
+
+@router.post("/twiml/outbound")
+@router.get("/twiml/outbound")
+async def twiml_outbound(
+    request: Request,
+    session_id: Optional[int] = None,
+    task_id: Optional[int] = None
+):
+    """
+    TwiML endpoint for power dialer outbound calls.
+
+    Similar to click-to-dial but includes session tracking.
+    """
+    form_data = await request.form()
+    to_number = form_data.get("To", "")
+    from_number = form_data.get("From", "")
+
+    logger.info(f"TwiML outbound: session={session_id}, task={task_id}, To={to_number}")
+
+    twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say voice="alice">Connecting your call.</Say>
+    <Dial callerId="{from_number}" timeout="30" action="/api/v1/dialer/webhook/dial-status?session_id={session_id}&amp;task_id={task_id}">
+        <Number>{to_number}</Number>
+    </Dial>
+</Response>"""
+
+    return Response(content=twiml, media_type="application/xml")
+
+
+@router.post("/webhook/click-to-dial-status")
+async def webhook_click_to_dial_status(
+    request: Request,
+    agent_id: Optional[int] = None
+):
+    """
+    Status callback for click-to-dial calls.
+
+    Twilio calls this when the call status changes (ringing, answered, completed, etc.)
+    """
+    form_data = await request.form()
+    call_sid = form_data.get("CallSid", "")
+    call_status = form_data.get("CallStatus", "")
+    duration = form_data.get("CallDuration", "0")
+
+    logger.info(f"Click-to-dial status: agent={agent_id}, sid={call_sid}, status={call_status}, duration={duration}")
+
+    # Send WebSocket notification if agent is connected
+    if agent_id:
+        try:
+            await ws_manager.send_to_agent(str(agent_id), {
+                "type": "call_status",
+                "call_sid": call_sid,
+                "status": call_status,
+                "duration": int(duration) if duration else 0
+            })
+        except Exception as e:
+            logger.error(f"WebSocket notification error: {e}")
+
+    return {"success": True}
+
+
+@router.post("/webhook/status")
+async def webhook_call_status(
+    request: Request,
+    session_id: Optional[int] = None,
+    task_id: Optional[int] = None,
+    db: Session = Depends(lambda: get_db()),
+    current_user = Depends(lambda: get_current_user())
+):
+    """
+    Status callback for power dialer session calls.
+
+    Updates session state based on call progress.
+    """
+    form_data = await request.form()
+    call_sid = form_data.get("CallSid", "")
+    call_status = form_data.get("CallStatus", "")
+    duration = form_data.get("CallDuration", "0")
+    answered_by = form_data.get("AnsweredBy", "")
+
+    logger.info(f"Dialer status: session={session_id}, task={task_id}, status={call_status}")
+
+    if session_id and task_id:
+        try:
+            engine = DialerEngine(db, current_user.id if current_user else 0)
+            engine.handle_call_status(
+                session_id=session_id,
+                task_id=task_id,
+                call_sid=call_sid,
+                status=call_status,
+                duration=int(duration) if duration else 0,
+                answered_by=answered_by
+            )
+        except Exception as e:
+            logger.error(f"Error handling call status: {e}")
+
+    return {"success": True}
+
+
+@router.post("/webhook/dial-status")
+async def webhook_dial_status(
+    request: Request,
+    session_id: Optional[int] = None,
+    task_id: Optional[int] = None
+):
+    """
+    Dial action callback - called when the <Dial> verb completes.
+
+    This is different from status callback - it's called when the actual
+    dial attempt finishes (answered, busy, no-answer, etc.)
+    """
+    form_data = await request.form()
+    dial_call_status = form_data.get("DialCallStatus", "")
+    dial_call_duration = form_data.get("DialCallDuration", "0")
+
+    logger.info(f"Dial completed: session={session_id}, task={task_id}, status={dial_call_status}")
+
+    # Return TwiML to hang up after dial completes
+    twiml = """<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Hangup/>
+</Response>"""
+
+    return Response(content=twiml, media_type="application/xml")
