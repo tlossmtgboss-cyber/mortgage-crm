@@ -921,6 +921,8 @@ class MUMClient(Base):
     interest_rate = Column("interest_rate", Float, nullable=False)  # NOT NULL in DB
     original_loan_amount = Column("original_loan_amount", Float, nullable=False)  # NOT NULL in DB
     current_loan_amount = Column("current_loan_amount", Float, nullable=False)  # NOT NULL in DB
+    appraisal_value_at_closing = Column("appraisal_value_at_closing", Float, nullable=False)  # NOT NULL in DB
+    current_property_value = Column("current_property_value", Float, nullable=False)  # NOT NULL in DB
     loan_balance = Column(Float)  # Keep as separate column for compatibility
     refinance_opportunity = Column(Boolean, default=False)
     estimated_savings = Column(Float)
@@ -23573,6 +23575,8 @@ async def create_mum_client(client: MUMClientCreate, db: Session = Depends(get_d
 
         # Create MUM client with explicit field assignment
         # Map to actual database column names (several have NOT NULL constraints)
+        # Use loan_balance * 1.2 as estimated property value for appraisal values
+        estimated_property_value = client.loan_balance * 1.2  # Assume 80% LTV
         db_client = MUMClient(
             client_name=client.name,  # Map to 'client_name' column (NOT NULL)
             email=client.email,
@@ -23580,9 +23584,11 @@ async def create_mum_client(client: MUMClientCreate, db: Session = Depends(get_d
             loan_number=client.loan_number,
             original_close_date=client.original_close_date,
             original_rate=client.original_rate,
-            interest_rate=client.original_rate,        # Map to 'interest_rate' column (NOT NULL)
-            original_loan_amount=client.loan_balance,  # Map to 'original_loan_amount' column (NOT NULL)
-            current_loan_amount=client.loan_balance,   # Map to 'current_loan_amount' column (NOT NULL)
+            interest_rate=client.original_rate,                     # NOT NULL in DB
+            original_loan_amount=client.loan_balance,               # NOT NULL in DB
+            current_loan_amount=client.loan_balance,                # NOT NULL in DB
+            appraisal_value_at_closing=estimated_property_value,    # NOT NULL in DB
+            current_property_value=estimated_property_value,        # NOT NULL in DB
             loan_balance=client.loan_balance,
             status=client.status or "Active",
             notes=client.notes,
