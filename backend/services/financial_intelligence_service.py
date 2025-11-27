@@ -243,7 +243,16 @@ class FinancialIntelligenceService:
         """Calculate break-even production volume."""
         if not month:
             month = date.today().replace(day=1)
-        return self.profitability_service.get_break_even_analysis(month)
+        # Use dashboard metrics which includes break-even analysis
+        metrics = self.profitability_service.get_dashboard_metrics(month)
+        return {
+            "break_even_loans": metrics.get("break_even_loans", 0),
+            "current_loans": metrics.get("loans_closed", 0),
+            "margin_to_break_even": metrics.get("loans_closed", 0) - metrics.get("break_even_loans", 0),
+            "revenue_per_loan": metrics.get("revenue_per_loan", 0),
+            "cost_per_loan": metrics.get("cost_per_loan", 0),
+            "is_profitable": metrics.get("net_profit", 0) > 0
+        }
 
     # ============ Question 7: Warehouse Optimization ============
 
