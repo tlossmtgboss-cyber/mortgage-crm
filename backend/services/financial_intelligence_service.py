@@ -592,17 +592,22 @@ class FinancialIntelligenceService:
             SecondaryMetrics.metric_date >= month_start
         ).first()
 
+        # Handle None secondary gracefully
+        lock_ext_count = (secondary.lock_extensions or 0) if secondary else 0
+        relock_count = (secondary.relocks or 0) if secondary else 0
+        fallout_rate = (secondary.fallout_rate or 0) if secondary else 0
+
         return {
             "lock_extensions": {
-                "count": secondary.lock_extensions if secondary else 0,
-                "estimated_cost": (secondary.lock_extensions or 0) * 500  # $500 avg per extension
+                "count": lock_ext_count,
+                "estimated_cost": lock_ext_count * 500  # $500 avg per extension
             },
             "relocks": {
-                "count": secondary.relocks if secondary else 0,
-                "estimated_cost": (secondary.relocks or 0) * 1000  # $1000 avg per relock
+                "count": relock_count,
+                "estimated_cost": relock_count * 1000  # $1000 avg per relock
             },
             "fallout": {
-                "rate": secondary.fallout_rate if secondary else 0,
+                "rate": fallout_rate,
                 "estimated_revenue_lost": 0  # Would need pipeline data
             },
             "bottleneck_costs": {
