@@ -69,6 +69,63 @@ def generate_room_code(length: int = 9) -> str:
 
 
 # ============================================================================
+# AUTHORIZATION HELPERS
+# ============================================================================
+
+def verify_room_access(room, current_user, db) -> bool:
+    """
+    Verify user has access to a meeting room.
+    Access is granted if:
+    - User is the host
+    - User is a participant
+    - User is in the same organization (if org tracking enabled)
+    """
+    if room.host_user_id == current_user.id:
+        return True
+
+    # Check if user is a participant
+    MeetingParticipant = _models.get('MeetingParticipant')
+    participant = db.query(MeetingParticipant).filter(
+        MeetingParticipant.meeting_id == room.id,
+        MeetingParticipant.user_id == current_user.id
+    ).first()
+    if participant:
+        return True
+
+    # Check organization access (if organizations are used)
+    if hasattr(room, 'organization_id') and hasattr(current_user, 'organization_id'):
+        if room.organization_id and room.organization_id == current_user.organization_id:
+            return True
+
+    return False
+
+
+def verify_recording_access(recording_id: int, current_user, db) -> bool:
+    """Verify user has access to a recording by checking the parent meeting"""
+    MeetingRecording = _models.get('MeetingRecording')
+    VideoMeetingRoom = _models.get('VideoMeetingRoom')
+
+    recording = db.query(MeetingRecording).filter(
+        MeetingRecording.id == recording_id
+    ).first()
+    if not recording:
+        return False
+
+    room = db.query(VideoMeetingRoom).filter(
+        VideoMeetingRoom.id == recording.meeting_id
+    ).first()
+    if not room:
+        return False
+
+    return verify_room_access(room, current_user, db)
+
+
+def verify_host_permission(room, current_user) -> bool:
+    """Verify user is the host of a meeting (for admin operations)"""
+    return room.host_user_id == current_user.id
+
+
+# ============================================================================
 # PYDANTIC SCHEMAS
 # ============================================================================
 
@@ -355,6 +412,10 @@ async def get_meeting_room(
     if not room:
         raise HTTPException(status_code=404, detail="Meeting room not found")
 
+    # SECURITY: Verify user has access to this room
+    if not verify_room_access(room, current_user, db):
+        raise HTTPException(status_code=403, detail="Access denied")
+
     # Get participants
     participants = []
     if MeetingParticipant:
@@ -613,7 +674,15 @@ async def update_participant(
     if _models is None:
         raise HTTPException(status_code=500, detail="Video meeting models not initialized")
 
+    VideoMeetingRoom = _models.get('VideoMeetingRoom')
     MeetingParticipant = _models.get('MeetingParticipant')
+
+    # SECURITY: Verify user is the host of this meeting
+    room = db.query(VideoMeetingRoom).filter(VideoMeetingRoom.id == room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Meeting room not found")
+    if not verify_host_permission(room, current_user):
+        raise HTTPException(status_code=403, detail="Only the host can modify participants")
 
     participant = db.query(MeetingParticipant).filter(
         MeetingParticipant.id == participant_id,
@@ -644,7 +713,15 @@ async def remove_participant(
     if _models is None:
         raise HTTPException(status_code=500, detail="Video meeting models not initialized")
 
+    VideoMeetingRoom = _models.get('VideoMeetingRoom')
     MeetingParticipant = _models.get('MeetingParticipant')
+
+    # SECURITY: Verify user is the host of this meeting
+    room = db.query(VideoMeetingRoom).filter(VideoMeetingRoom.id == room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Meeting room not found")
+    if not verify_host_permission(room, current_user):
+        raise HTTPException(status_code=403, detail="Only the host can remove participants")
 
     participant = db.query(MeetingParticipant).filter(
         MeetingParticipant.id == participant_id,
@@ -799,7 +876,16 @@ async def list_recordings(
     if _models is None:
         raise HTTPException(status_code=500, detail="Video meeting models not initialized")
 
+    VideoMeetingRoom = _models.get('VideoMeetingRoom')
     MeetingRecording = _models.get('MeetingRecording')
+
+    # SECURITY: Verify user has access to this room
+    room = db.query(VideoMeetingRoom).filter(VideoMeetingRoom.id == room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Meeting room not found")
+    if not verify_room_access(room, current_user, db):
+        raise HTTPException(status_code=403, detail="Access denied")
+
     if MeetingRecording is None:
         return {"recordings": []}
 
@@ -1505,6 +1591,10 @@ async def get_recording_transcript(
     if _models is None:
         raise HTTPException(status_code=500, detail="Models not initialized")
 
+    # SECURITY: Verify user has access to this recording
+    if not verify_recording_access(recording_id, current_user, db):
+        raise HTTPException(status_code=403, detail="Access denied")
+
     RecordingTranscript = _models.get('RecordingTranscript')
     if RecordingTranscript is None:
         return {"error": "Transcripts not available"}
@@ -1538,6 +1628,10 @@ async def get_recording_analysis(
     """Get AI analysis for a recording."""
     if _models is None:
         raise HTTPException(status_code=500, detail="Models not initialized")
+
+    # SECURITY: Verify user has access to this recording
+    if not verify_recording_access(recording_id, current_user, db):
+        raise HTTPException(status_code=403, detail="Access denied")
 
     MeetingAIAnalysis = _models.get('MeetingAIAnalysis')
     if MeetingAIAnalysis is None:
@@ -1687,6 +1781,10 @@ async def get_recording_analytics(
     """Get analytics for all participants in a recording"""
     if _models is None:
         raise HTTPException(status_code=500, detail="Models not initialized")
+
+    # SECURITY: Verify user has access to this recording
+    if not verify_recording_access(recording_id, current_user, db):
+        raise HTTPException(status_code=403, detail="Access denied")
 
     ParticipantAnalytics = _models.get('ParticipantAnalytics')
     MeetingParticipant = _models.get('MeetingParticipant')
@@ -1973,6 +2071,10 @@ async def get_mortgage_intelligence(
     """Get mortgage-specific intelligence from a recording"""
     if _models is None:
         raise HTTPException(status_code=500, detail="Models not initialized")
+
+    # SECURITY: Verify user has access to this recording
+    if not verify_recording_access(recording_id, current_user, db):
+        raise HTTPException(status_code=403, detail="Access denied")
 
     MortgageIntelligence = _models.get('MortgageIntelligence')
     if not MortgageIntelligence:

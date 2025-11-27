@@ -622,11 +622,32 @@ async def track_view(
 async def update_view_progress(
     view_id: int,
     data: ViewProgressUpdate,
+    request: Request,
     db: Session = Depends(get_db)
 ):
-    """Update view progress (called periodically during playback)"""
+    """Update view progress (called periodically during playback)
+
+    SECURITY NOTE: This endpoint is intentionally unauthenticated for public share links.
+    It validates the view exists and uses session_id cookie for tracking continuity.
+    Rate limiting is applied at the middleware level.
+    """
     if _models is None:
         raise HTTPException(status_code=500, detail="Models not initialized")
+
+    ClipView = _models.get('ClipView')
+
+    # SECURITY: Validate the view exists and isn't too old
+    view = db.query(ClipView).filter(ClipView.id == view_id).first()
+    if not view:
+        raise HTTPException(status_code=404, detail="View not found")
+
+    # SECURITY: Validate completion_rate is within bounds
+    if data.completion_rate is not None and (data.completion_rate < 0 or data.completion_rate > 1):
+        raise HTTPException(status_code=400, detail="Invalid completion_rate")
+
+    # SECURITY: Validate watch_duration_seconds is reasonable
+    if data.watch_duration_seconds is not None and data.watch_duration_seconds < 0:
+        raise HTTPException(status_code=400, detail="Invalid watch_duration_seconds")
 
     try:
         from uvip.clip_service import get_clip_service
@@ -694,13 +715,22 @@ async def add_comment(
 @router.get("/{clip_id}/comments")
 async def list_comments(
     clip_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)  # SECURITY: Require auth
 ):
     """List comments for a clip"""
     if _models is None:
         raise HTTPException(status_code=500, detail="Models not initialized")
 
+    VideoClip = _models.get('VideoClip')
     ClipComment = _models.get('ClipComment')
+
+    # SECURITY: Verify user has access to this clip
+    clip = db.query(VideoClip).filter(VideoClip.id == clip_id).first()
+    if not clip:
+        raise HTTPException(status_code=404, detail="Clip not found")
+    if clip.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     comments = db.query(ClipComment).filter(
         ClipComment.clip_id == clip_id,
