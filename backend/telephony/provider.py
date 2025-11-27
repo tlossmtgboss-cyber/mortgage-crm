@@ -127,13 +127,23 @@ class TwilioProvider(TelephonyProvider):
 
     def place_call(
         self,
-        to: str,
-        from_: str,
-        url: str,
-        status_callback: str,
-        timeout: int = 30
+        to: str = None,
+        from_: str = None,
+        url: str = None,
+        status_callback: str = None,
+        timeout: int = 30,
+        # Alternative parameter names
+        to_number: str = None,
+        from_number: str = None,
+        callback_url: str = None,
+        status_callback_url: str = None
     ) -> CallResult:
         """Place an outbound call via Twilio"""
+        # Support both naming conventions
+        to = to or to_number
+        from_ = from_ or from_number
+        url = url or callback_url
+        status_callback = status_callback or status_callback_url
         self._ensure_client()
 
         try:
