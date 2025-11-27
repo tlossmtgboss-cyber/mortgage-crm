@@ -562,11 +562,12 @@ class FinancialIntelligenceService:
 
         # This would need tech expense tracking
         # For now, estimate based on typical allocations
-        total_expenses = metrics.get("total_expenses", 0)
+        # Convert to float for calculations
+        total_expenses = float(metrics.get("total_expenses", 0) or 0)
         tech_expenses = total_expenses * 0.08  # Typical 8% of expenses
 
         # Estimate productivity gains
-        loans_closed = metrics.get("loans_closed", 0)
+        loans_closed = int(metrics.get("loans_closed", 0) or 0)
         estimated_time_saved_hours = loans_closed * 2  # 2 hours per loan
         hourly_rate = 50
         productivity_value = estimated_time_saved_hours * hourly_rate
