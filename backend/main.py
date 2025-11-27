@@ -5528,6 +5528,99 @@ When asked about rate lock guidance:
 2. Analyze the market conditions, MBS prices, and treasury yields
 3. Provide a clear lock or float recommendation with reasoning
 4. Consider days to close if provided"""
+            },
+            "hr_onboarding": {
+                "name": "HR & Onboarding Agent",
+                "keywords": ["onboard", "new hire", "add user", "create user", "new employee", "team member", "invite", "activate", "bulk upload", "permissions", "roles", "responsibilities", "kpi", "scorecard"],
+                "prompt": """You are the HR & Onboarding Agent specializing in user management and employee onboarding.
+
+Your expertise:
+- Adding new team members to the CRM system
+- Setting up user roles and permissions
+- Configuring KPI scorecards for new hires
+- Managing bulk user imports
+- Account activation and password setup
+
+## HOW TO ONBOARD A NEW HIRE - STEP BY STEP
+
+### Method 1: Single User Creation (Add Team Member)
+1. **Navigate to Settings** - Click the gear icon (Settings) in the navigation bar
+2. **Open Organizational Settings** - Expand the "Organizational Settings" section in the left sidebar
+3. **Click "Add Team Member"** - This opens the User Creation Wizard at /users/create
+
+4. **Step 1 - Basic Information:**
+   - First Name (required)
+   - Last Name (required)
+   - Email Address (required) - must be unique
+   - Phone Number (optional)
+   - Internal Title (optional)
+
+5. **Step 2 - Role Selection:**
+   Choose from 10 available roles:
+   - Application Analysis - Reviews loan applications for eligibility and risk
+   - Concierge - Manages borrower communication and milestone updates
+   - Jr. Loan Officer - Assists with lead qualification under supervision
+   - Jr. Processor - Supports loan processing with document collection
+   - Loan Officer - Originates loans and manages borrower relationships
+   - Loan Officer Assistant - Supports LOs with admin tasks
+   - Processing Assistant - Assists processors with documentation
+   - Processor - Manages complete loan processing
+   - Production Assistant 1 - Entry-level production support
+   - Production Assistant 2 - Mid-level production support
+
+6. **Step 3 - Category Assignment:**
+   Select work categories (10 available):
+   - Lead Generation, Pre-Qualification, Application Support, Processing Assistance,
+   - Document Collection, Condition Management, Client Communication, Pipeline Management,
+   - Closing Coordination, Post-Closing Follow-up
+
+7. **Step 4 - Responsibilities:**
+   Assign specific job responsibilities (15 available) which auto-configure KPI scorecard
+
+8. **Step 5 - Permissions:**
+   Choose a permission template or customize:
+   - Full Access - All permissions enabled
+   - Standard Loan Officer - Lead management, pipeline, client communication
+   - Read Only - View-only access
+   - Custom - Define specific permissions
+
+9. **Activation:**
+   - System generates activation token
+   - New hire receives activation email (if enabled)
+   - They click link, set password, account becomes active
+   - They can now log in with their email and password
+
+### Method 2: Bulk User Upload
+1. **Navigate to Settings > Organizational Settings > Bulk Upload Users**
+2. **Prepare CSV file** with columns: first_name, last_name, email, phone
+3. **Upload CSV** - System parses and shows preview
+4. **Map columns** - Match CSV headers to required fields
+5. **Validate data** - System checks for duplicates, valid emails
+6. **Assign default role** - All bulk users get same initial role
+7. **Process** - Users created with activation tokens
+8. **Distribute activation links** - Send to new hires to set passwords
+
+### API Endpoints (for developers):
+- GET /api/v1/admin/users/roles - List available roles
+- GET /api/v1/admin/users/categories - List work categories
+- GET /api/v1/admin/users/responsibilities - List responsibilities
+- GET /api/v1/admin/users/permission-templates - List permission templates
+- POST /api/v1/admin/users/create - Create single user
+- POST /api/v1/admin/users/bulk/parse - Parse CSV file
+- POST /api/v1/admin/users/bulk/validate - Validate mapped data
+- POST /api/v1/admin/users/bulk/process - Create users from CSV
+- POST /api/v1/admin/users/activate/validate - Validate activation token
+- POST /api/v1/admin/users/activate/complete - Complete activation with password
+
+### Access Requirements:
+Only users with management, admin, or sales permission_role can access user creation.
+The Team menu item appears for managers and management roles.
+
+### After Onboarding:
+- New user appears in Team Members list
+- Their KPI scorecard is auto-configured based on responsibilities
+- They can access assigned areas based on permissions
+- Manager can view their performance metrics"""
             }
         }
 
@@ -10637,6 +10730,7 @@ except Exception as e:
     logger.warning(f"⚠️ Could not load Smart Scheduler routes: {e}")
 
 # Include Video Meeting routes (UVIP - Ultimate Video Intelligence Platform)
+_video_meeting_error = None
 try:
     from video_meeting_models import create_video_meeting_models
     from video_meeting_routes import router as video_meeting_router, set_dependencies as set_video_meeting_deps
@@ -10652,8 +10746,17 @@ try:
     logger.info("✅ Video Meeting (UVIP) routes loaded")
 except Exception as e:
     import traceback
+    _video_meeting_error = f"{e}\n{traceback.format_exc()}"
     logger.error(f"⚠️ Could not load Video Meeting routes: {e}")
     logger.error(f"Traceback: {traceback.format_exc()}")
+
+# Debug endpoint to check video meeting loading status
+@app.get("/api/v1/debug/video-meetings-status", tags=["Debug"])
+async def debug_video_meetings_status():
+    """Check if video meeting routes loaded successfully"""
+    if _video_meeting_error:
+        return {"status": "failed", "error": _video_meeting_error}
+    return {"status": "loaded"}
 
 # Include Market Chat routes
 from market_chat_routes import router as market_chat_router
