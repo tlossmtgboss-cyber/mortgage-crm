@@ -14436,14 +14436,14 @@ async def approve_reconciliation(
                 stage_upper = stage_str.upper()
                 if stage_upper in lead_stage_map:
                     # This is a Lead stage - create a Lead instead
-                    lead_stage = lead_stage_map[stage_upper]
+                    lead_stage_enum = lead_stage_map[stage_upper]
                     new_lead = Lead(
                         name=borrower_name,
                         email=get_val("borrower_email"),
                         phone=get_val("borrower_phone"),
-                        stage=lead_stage,
+                        stage=lead_stage_enum,
                         source="reconciliation",
-                        owner_id=current_user.id  # Lead model uses owner_id, not loan_officer_id
+                        owner_id=current_user.id
                     )
                     db.add(new_lead)
                     db.flush()
