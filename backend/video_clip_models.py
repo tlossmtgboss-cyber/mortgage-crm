@@ -290,7 +290,7 @@ def create_video_clip_models(Base):
         average_completion_rate = Column(Float, default=0.0)
 
         # Metadata
-        metadata = Column(JSON, default=dict)
+        clip_metadata = Column(JSON, default=dict)  # Renamed from 'metadata' which is reserved
         tags = Column(JSON, default=list)
 
         # Branding
