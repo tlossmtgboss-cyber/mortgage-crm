@@ -11268,6 +11268,144 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
                             "match_type": "coborrower_name_global"
                         })
 
+    # ========== PARTNER MATCHING (Referral Partners) ==========
+    # Try to match against referral partners by name, email, phone, or company
+    partner_name = fields.get("partner_name", {}).get("value") or fields.get("agent_name", {}).get("value") or fields.get("realtor_name", {}).get("value")
+    partner_email = fields.get("partner_email", {}).get("value") or fields.get("agent_email", {}).get("value") or fields.get("realtor_email", {}).get("value")
+    partner_phone = fields.get("partner_phone", {}).get("value") or fields.get("agent_phone", {}).get("value") or fields.get("realtor_phone", {}).get("value")
+    partner_company = fields.get("partner_company", {}).get("value") or fields.get("brokerage", {}).get("value") or fields.get("company", {}).get("value")
+
+    if partner_name or partner_email or partner_phone:
+        logger.info(f"Trying partner match: name='{partner_name}', email='{partner_email}', phone='{partner_phone}'")
+        all_partners = db.query(ReferralPartner).filter(ReferralPartner.status == "active").all()
+
+        for partner in all_partners:
+            partner_conf = 0.0
+            match_reasons = []
+
+            # Email match (highest confidence)
+            if partner_email and partner.email:
+                if normalize_email(partner_email) == normalize_email(partner.email):
+                    partner_conf = max(partner_conf, 0.95)
+                    match_reasons.append("email")
+
+            # Phone match
+            if partner_phone and partner.phone:
+                if normalize_phone(partner_phone) == normalize_phone(partner.phone):
+                    partner_conf = max(partner_conf, 0.90)
+                    match_reasons.append("phone")
+
+            # Name match
+            if partner_name and partner.name:
+                is_match, conf = names_match(partner_name, partner.name)
+                if is_match:
+                    partner_conf = max(partner_conf, conf * 0.90)
+                    match_reasons.append("name")
+
+            # Company match (lower confidence boost)
+            if partner_company and partner.company:
+                if partner_company.lower().strip() in partner.company.lower() or partner.company.lower() in partner_company.lower().strip():
+                    partner_conf = min(0.98, partner_conf + 0.10)
+                    match_reasons.append("company")
+
+            if partner_conf > 0.5:
+                match_results["candidates"].append({
+                    "type": "partner",
+                    "id": partner.id,
+                    "name": partner.name,
+                    "confidence": partner_conf,
+                    "match_type": "+".join(match_reasons)
+                })
+                logger.info(f"Partner match found: {partner.name} ({partner_conf:.2f}) via {'+'.join(match_reasons)}")
+
+    # ========== PORTFOLIO/MUM CLIENT MATCHING ==========
+    # Match against past clients (portfolio) for retention/referral opportunities
+    if borrower_name or extracted_email or extracted_phone:
+        logger.info("Trying portfolio/MUM client match...")
+        try:
+            all_mum_clients = db.query(MUMClient).all()
+            for client in all_mum_clients:
+                client_conf = 0.0
+                match_reasons = []
+
+                # Email match
+                if extracted_email and client.email:
+                    if normalize_email(extracted_email) == normalize_email(client.email):
+                        client_conf = max(client_conf, 0.95)
+                        match_reasons.append("email")
+
+                # Phone match
+                if extracted_phone and client.phone:
+                    if normalize_phone(extracted_phone) == normalize_phone(client.phone):
+                        client_conf = max(client_conf, 0.90)
+                        match_reasons.append("phone")
+
+                # Name match
+                if borrower_name and client.name:
+                    is_match, conf = names_match(borrower_name, client.name)
+                    if is_match:
+                        client_conf = max(client_conf, conf * 0.88)
+                        match_reasons.append("name")
+
+                if client_conf > 0.5:
+                    match_results["candidates"].append({
+                        "type": "portfolio",
+                        "id": client.id,
+                        "name": client.name,
+                        "confidence": client_conf,
+                        "match_type": "+".join(match_reasons)
+                    })
+                    logger.info(f"Portfolio match found: {client.name} ({client_conf:.2f}) via {'+'.join(match_reasons)}")
+        except Exception as e:
+            logger.warning(f"Portfolio matching failed (table may not exist): {e}")
+
+    # ========== LOAN EMAIL/PHONE MATCHING ==========
+    # Also try matching loans by borrower email/phone (not just name)
+    if extracted_email or extracted_phone:
+        logger.info("Trying loan email/phone match...")
+        all_loans = db.query(Loan).all()
+        for loan in all_loans:
+            loan_conf = 0.0
+            match_reasons = []
+
+            # Check borrower email
+            if extracted_email and loan.borrower_email:
+                if normalize_email(extracted_email) == normalize_email(loan.borrower_email):
+                    loan_conf = max(loan_conf, 0.96)
+                    match_reasons.append("borrower_email")
+
+            # Check borrower phone
+            if extracted_phone and loan.borrower_phone:
+                if normalize_phone(extracted_phone) == normalize_phone(loan.borrower_phone):
+                    loan_conf = max(loan_conf, 0.92)
+                    match_reasons.append("borrower_phone")
+
+            # Check co-borrower email
+            if extracted_email and hasattr(loan, 'coborrower_email') and loan.coborrower_email:
+                if normalize_email(extracted_email) == normalize_email(loan.coborrower_email):
+                    loan_conf = max(loan_conf, 0.90)
+                    match_reasons.append("coborrower_email")
+
+            if loan_conf > 0.5:
+                # Avoid duplicates
+                existing = next((c for c in match_results["candidates"]
+                               if c["type"] == "loan" and c["id"] == loan.id), None)
+                if existing:
+                    existing["confidence"] = min(0.99, max(existing["confidence"], loan_conf))
+                    existing["match_type"] += "+" + "+".join(match_reasons)
+                else:
+                    # Boost confidence if user owns this loan
+                    if loan.loan_officer_id == user_id:
+                        loan_conf = min(0.99, loan_conf + 0.03)
+                    match_results["candidates"].append({
+                        "type": "loan",
+                        "id": loan.id,
+                        "name": loan.borrower_name or f"Loan #{loan.loan_number}",
+                        "confidence": loan_conf,
+                        "match_type": "+".join(match_reasons)
+                    })
+                    logger.info(f"Loan email/phone match found: {loan.borrower_name} ({loan_conf:.2f})")
+
     # Return best candidate if found
     if match_results["candidates"]:
         best = max(match_results["candidates"], key=lambda x: x["confidence"])
@@ -12105,6 +12243,89 @@ def apply_extracted_data(extracted_data: ExtractedData, db: Session) -> bool:
             tasks_created = create_lead_milestone_tasks(lead, updated_fields, db)
             if tasks_created:
                 logger.info(f"📋 Created {len(tasks_created)} tasks for lead {lead.name}: {tasks_created}")
+            return True
+
+        elif extracted_data.match_entity_type == "partner" and extracted_data.match_entity_id:
+            partner = db.query(ReferralPartner).filter(ReferralPartner.id == extracted_data.match_entity_id).first()
+            if not partner:
+                logger.warning(f"Partner {extracted_data.match_entity_id} not found for data application")
+                return True
+
+            logger.info(f"Applying extracted data to partner {partner.id} ({partner.name})")
+
+            # Update partner fields
+            if value := get_field_value(fields, "partner_name"):
+                partner.name = str(value)
+                updated_fields.append("name")
+            elif value := get_field_value(fields, "agent_name"):
+                partner.name = str(value)
+                updated_fields.append("name")
+            elif value := get_field_value(fields, "realtor_name"):
+                partner.name = str(value)
+                updated_fields.append("name")
+
+            if value := get_field_value(fields, "partner_email"):
+                partner.email = str(value)
+                updated_fields.append("email")
+            elif value := get_field_value(fields, "agent_email"):
+                partner.email = str(value)
+                updated_fields.append("email")
+
+            if value := get_field_value(fields, "partner_phone"):
+                partner.phone = str(value)
+                updated_fields.append("phone")
+            elif value := get_field_value(fields, "agent_phone"):
+                partner.phone = str(value)
+                updated_fields.append("phone")
+
+            if value := get_field_value(fields, "partner_company"):
+                partner.company = str(value)
+                updated_fields.append("company")
+            elif value := get_field_value(fields, "brokerage"):
+                partner.company = str(value)
+                updated_fields.append("company")
+
+            # Update last interaction timestamp
+            partner.last_interaction = datetime.now(timezone.utc)
+            updated_fields.append("last_interaction")
+
+            db.commit()
+            logger.info(f"✅ Applied {len(updated_fields)} fields to partner {partner.name}: {', '.join(updated_fields)}")
+            return True
+
+        elif extracted_data.match_entity_type == "portfolio" and extracted_data.match_entity_id:
+            # Portfolio clients (MUM clients) - past borrowers
+            try:
+                client = db.query(MUMClient).filter(MUMClient.id == extracted_data.match_entity_id).first()
+                if not client:
+                    logger.warning(f"Portfolio client {extracted_data.match_entity_id} not found")
+                    return True
+
+                logger.info(f"Applying extracted data to portfolio client {client.id} ({client.name})")
+
+                # Update portfolio client fields
+                if value := get_field_value(fields, "borrower_name"):
+                    client.name = str(value)
+                    updated_fields.append("name")
+
+                if value := get_field_value(fields, "borrower_email"):
+                    client.email = str(value)
+                    updated_fields.append("email")
+                elif value := get_field_value(fields, "email"):
+                    client.email = str(value)
+                    updated_fields.append("email")
+
+                if value := get_field_value(fields, "borrower_phone"):
+                    client.phone = str(value)
+                    updated_fields.append("phone")
+                elif value := get_field_value(fields, "phone"):
+                    client.phone = str(value)
+                    updated_fields.append("phone")
+
+                db.commit()
+                logger.info(f"✅ Applied {len(updated_fields)} fields to portfolio client {client.name}: {', '.join(updated_fields)}")
+            except Exception as e:
+                logger.warning(f"Portfolio client update failed: {e}")
             return True
 
         # No match - return True anyway since data was extracted, just nowhere to apply
