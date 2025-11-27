@@ -397,15 +397,33 @@ function Settings() {
   }, [activeSection]);
 
   const leadStages = [
+    // Lead Stages
     { value: 'new', label: 'New Lead' },
     { value: 'contacted', label: 'Contacted' },
     { value: 'qualified', label: 'Qualified' },
     { value: 'meeting_scheduled', label: 'Meeting Scheduled' },
+    // Application & Processing
     { value: 'application_started', label: 'Application Started' },
+    { value: 'disclosed', label: 'Disclosed' },
     { value: 'processing', label: 'Processing' },
+    { value: 'submitted', label: 'Submitted to UW' },
+    { value: 'uw_received', label: 'UW Received' },
+    // Underwriting Outcomes
     { value: 'approved', label: 'Approved' },
-    { value: 'closed', label: 'Closed' },
-    { value: 'lost', label: 'Lost' }
+    { value: 'approved_with_conditions', label: 'Approved with Conditions' },
+    { value: 'suspended', label: 'Suspended' },
+    // Last Mile - Clear to Close & Closing
+    { value: 'ctc', label: 'Clear to Close (CTC)' },
+    { value: 'closing_scheduled', label: 'Closing Scheduled' },
+    { value: 'closing_docs_sent', label: 'Closing Docs Sent' },
+    { value: 'closing', label: 'At Closing' },
+    { value: 'funded', label: 'Funded' },
+    // Post-Close
+    { value: 'post_close', label: 'Post-Close' },
+    { value: 'closed', label: 'Closed (Complete)' },
+    // Other
+    { value: 'on_hold', label: 'On Hold' },
+    { value: 'lost', label: 'Lost/Withdrawn' }
   ];
 
   const connectCalendly = () => {
