@@ -11,6 +11,7 @@ import OnboardingPrompt from './components/OnboardingPrompt';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import ErrorBoundary from './components/ErrorBoundary';
 import UnifiedTaskSidebar from './components/UnifiedTaskSidebar';
+import EmailDropZone from './components/EmailDropZone';
 import './App.css';
 
 // Landing/Auth pages (keep these as regular imports for faster initial load)
@@ -245,6 +246,7 @@ function App() {
       <ImpersonationProvider>
         <PermissionProvider>
           <Router>
+            <EmailDropZone>
             <ImpersonationBanner />
             <div className="app">
         <Routes>
@@ -1466,6 +1468,7 @@ function App() {
           onTaskCountChange={handleUnifiedTaskCountChange}
         />
         </div>
+            </EmailDropZone>
       </Router>
         </PermissionProvider>
       </ImpersonationProvider>
