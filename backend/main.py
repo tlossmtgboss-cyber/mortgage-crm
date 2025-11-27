@@ -10954,6 +10954,22 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ User Onboarding System not loaded: {e}")
 
+# Include Beta Application routes
+try:
+    from routes.beta_routes import router as beta_router
+    app.include_router(beta_router, tags=["Beta Program"])
+    logger.info("✅ Beta Application routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Beta Application routes not loaded: {e}")
+
+# Include Analytics Tracking routes
+try:
+    from routes.analytics_tracking_routes import router as analytics_tracking_router
+    app.include_router(analytics_tracking_router, tags=["Analytics Tracking"])
+    logger.info("✅ Analytics Tracking routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Analytics Tracking routes not loaded: {e}")
+
 # Email Monitor Migration Endpoint
 @app.post("/api/v1/migrations/add-email-monitor")
 async def add_email_monitor_migration(db: Session = Depends(get_db)):

@@ -1,0 +1,367 @@
+/* Beta Application Page Styles */
+
+.beta-application-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  color: #333;
+}
+
+/* Header */
+.beta-header {
+  text-align: center;
+  padding: 60px 24px 40px;
+  color: white;
+}
+
+.logo {
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 24px;
+  color: #3498db;
+}
+
+.beta-header h1 {
+  font-size: 42px;
+  margin: 0 0 16px;
+  font-weight: 700;
+}
+
+.subtitle {
+  font-size: 20px;
+  color: #a0a0c0;
+  margin: 0 0 48px;
+}
+
+/* Benefits */
+.benefits {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 24px;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.benefit {
+  display: flex;
+  gap: 16px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  text-align: left;
+}
+
+.benefit-icon {
+  font-size: 32px;
+  flex-shrink: 0;
+}
+
+.benefit strong {
+  display: block;
+  font-size: 16px;
+  margin-bottom: 4px;
+  color: white;
+}
+
+.benefit p {
+  margin: 0;
+  font-size: 14px;
+  color: #a0a0c0;
+}
+
+/* Form */
+.beta-form {
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 40px;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.error-message {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  background: #ffebee;
+  border-left: 4px solid #ef5350;
+  border-radius: 4px;
+  color: #c62828;
+  margin-bottom: 24px;
+}
+
+.form-section {
+  margin-bottom: 32px;
+}
+
+.form-section h2 {
+  font-size: 20px;
+  color: #333;
+  margin: 0 0 20px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 12px 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 15px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  font-family: inherit;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+  outline: none;
+}
+
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+  color: #aaa;
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+
+.form-group select {
+  cursor: pointer;
+  background: white url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E") no-repeat right 16px center;
+  appearance: none;
+  padding-right: 40px;
+}
+
+/* Submit Button */
+.submit-button {
+  width: 100%;
+  padding: 16px 32px;
+  background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 18px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.submit-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(52, 152, 219, 0.4);
+}
+
+.submit-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.privacy-note {
+  text-align: center;
+  color: #888;
+  font-size: 14px;
+  margin-top: 16px;
+}
+
+/* Footer */
+.beta-footer {
+  text-align: center;
+  padding: 32px 24px;
+  color: #a0a0c0;
+  font-size: 14px;
+}
+
+.footer-links {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin-top: 12px;
+}
+
+.footer-links a {
+  color: #a0a0c0;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.footer-links a:hover {
+  color: white;
+}
+
+/* Success Page */
+.beta-success-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.success-content {
+  text-align: center;
+  background: white;
+  padding: 60px 48px;
+  border-radius: 16px;
+  max-width: 600px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.success-icon {
+  font-size: 72px;
+  margin-bottom: 24px;
+}
+
+.success-content h1 {
+  font-size: 32px;
+  color: #333;
+  margin: 0 0 12px;
+}
+
+.success-subtitle {
+  font-size: 18px;
+  color: #666;
+  margin: 0 0 8px;
+}
+
+.success-content > p {
+  color: #888;
+  margin-bottom: 32px;
+}
+
+.next-steps-card {
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 24px;
+  text-align: left;
+  margin-bottom: 24px;
+}
+
+.next-steps-card h3 {
+  font-size: 18px;
+  color: #333;
+  margin: 0 0 20px;
+}
+
+.next-steps-card ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  counter-reset: steps;
+}
+
+.next-steps-card li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #eee;
+  counter-increment: steps;
+}
+
+.next-steps-card li:last-child {
+  border-bottom: none;
+}
+
+.next-steps-card .step-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.contact-info {
+  color: #666;
+}
+
+.contact-info a {
+  color: #3498db;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.contact-info a:hover {
+  text-decoration: underline;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .beta-header {
+    padding: 40px 16px 32px;
+  }
+
+  .beta-header h1 {
+    font-size: 28px;
+  }
+
+  .subtitle {
+    font-size: 16px;
+  }
+
+  .benefits {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .beta-form {
+    margin: 0 16px;
+    padding: 24px;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .success-content {
+    padding: 40px 24px;
+  }
+
+  .success-icon {
+    font-size: 56px;
+  }
+
+  .success-content h1 {
+    font-size: 24px;
+  }
+}
