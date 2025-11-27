@@ -759,10 +759,42 @@ function Tasks() {
     }
   };
 
-  const handleDelegate = (teamMember) => {
-    alert(`Task delegated to ${teamMember}`);
+  const handleDelegate = async (member) => {
+    if (!selectedTask) return;
+
+    const memberName = `${member.first_name} ${member.last_name}`;
+    const taskId = selectedTask.id;
+    const taskSource = selectedTask.source;
+
+    // Optimistic UI: remove task from list immediately
+    if (taskSource === 'AI Engine') {
+      setAiTasks(prev => ({
+        pending: prev.pending.filter(t => t.id !== taskId),
+        waiting: prev.waiting.filter(t => t.id !== taskId)
+      }));
+    } else if (taskSource === 'Client for Life') {
+      setMumAlerts(prev => prev.filter(t => t.id !== taskId));
+    } else if (taskSource === 'Messages') {
+      setMessages(prev => prev.filter(t => t.id !== taskId));
+    } else {
+      setPrioritizedTasks(prev => prev.filter(t => t.id !== taskId));
+      setLoanIssues(prev => prev.filter(t => t.id !== taskId));
+    }
+
+    // Move to next task
+    const tabTasks = getTasksForTab();
+    const currentIndex = tabTasks.findIndex(t => t.id === taskId);
+    const nextTask = tabTasks[currentIndex + 1] || tabTasks[currentIndex - 1] || null;
+    setSelectedTask(nextTask);
     setShowDelegateModal(false);
-    handleComplete(selectedTask.id);
+
+    // Call API in background
+    try {
+      await tasksAPI.delegate(taskId, member.id);
+      console.log(`Task ${taskId} delegated to ${memberName}`);
+    } catch (error) {
+      console.error('Failed to delegate task:', error);
+    }
   };
 
   // Get tasks filtered by active tab
@@ -820,10 +852,12 @@ function Tasks() {
 
     // Add completed AI pending tasks
     aiTasks.pending.forEach((task, idx) => {
-      if (completedTasks.has(`ai-pending-${idx}`)) {
+      const taskId = `ai-pending-${idx}`;
+      if (completedTasks.has(taskId)) {
+        const { id: _originalId, ...taskWithoutId } = task;
         tasks.push({
-          id: `ai-pending-${idx}`,
-          ...task,
+          ...taskWithoutId,
+          id: taskId,
           title: task.task,
           stage: 'AI Suggested',
           urgency: task.urgency || 'medium',
@@ -836,10 +870,12 @@ function Tasks() {
 
     // Add completed AI waiting tasks
     aiTasks.waiting.forEach((task, idx) => {
-      if (completedTasks.has(`ai-waiting-${idx}`)) {
+      const taskId = `ai-waiting-${idx}`;
+      if (completedTasks.has(taskId)) {
+        const { id: _originalId, ...taskWithoutId } = task;
         tasks.push({
-          id: `ai-waiting-${idx}`,
-          ...task,
+          ...taskWithoutId,
+          id: taskId,
           title: task.task,
           stage: 'Needs Approval',
           urgency: task.urgency || 'low',
@@ -884,10 +920,12 @@ function Tasks() {
 
     // Add completed messages
     messages.filter(m => !m.read).forEach((msg, idx) => {
-      if (completedTasks.has(`message-${idx}`)) {
+      const msgId = `message-${idx}`;
+      if (completedTasks.has(msgId)) {
+        const { id: _originalId, ...msgWithoutId } = msg;
         tasks.push({
-          id: `message-${idx}`,
-          ...msg,
+          ...msgWithoutId,
+          id: msgId,
           title: `Message from ${msg.from}`,
           borrower: msg.from,
           stage: 'Communication',
@@ -935,10 +973,12 @@ function Tasks() {
 
     // Add AI pending tasks
     aiTasks.pending.forEach((task, idx) => {
-      if (!completedTasks.has(`ai-pending-${idx}`)) {
+      const taskId = `ai-pending-${idx}`;
+      if (!completedTasks.has(taskId)) {
+        const { id: _originalId, ...taskWithoutId } = task; // Exclude original id
         tasks.push({
-          id: `ai-pending-${idx}`,
-          ...task,
+          ...taskWithoutId,
+          id: taskId,  // Set our id LAST to ensure it's not overwritten
           title: task.task,
           stage: 'AI Suggested',
           urgency: task.urgency || 'medium',
@@ -951,10 +991,12 @@ function Tasks() {
 
     // Add AI waiting tasks
     aiTasks.waiting.forEach((task, idx) => {
-      if (!completedTasks.has(`ai-waiting-${idx}`)) {
+      const taskId = `ai-waiting-${idx}`;
+      if (!completedTasks.has(taskId)) {
+        const { id: _originalId, ...taskWithoutId } = task; // Exclude original id
         tasks.push({
-          id: `ai-waiting-${idx}`,
-          ...task,
+          ...taskWithoutId,
+          id: taskId,  // Set our id LAST to ensure it's not overwritten
           title: task.task,
           stage: 'Needs Approval',
           urgency: task.urgency || 'low',
@@ -999,10 +1041,12 @@ function Tasks() {
 
     // Add unread messages as tasks
     messages.filter(m => !m.read).forEach((msg, idx) => {
-      if (!completedTasks.has(`message-${idx}`)) {
+      const msgId = `message-${idx}`;
+      if (!completedTasks.has(msgId)) {
+        const { id: _originalId, ...msgWithoutId } = msg; // Exclude original id
         tasks.push({
-          id: `message-${idx}`,
-          ...msg,
+          ...msgWithoutId,
+          id: msgId,  // Set our id LAST to ensure it's not overwritten
           title: `Message from ${msg.from}`,
           borrower: msg.from,
           stage: 'Communication',
@@ -1569,7 +1613,7 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
                   <button
                     key={member.id}
                     className="team-member-btn"
-                    onClick={() => handleDelegate(`${member.first_name} ${member.last_name}`)}
+                    onClick={() => handleDelegate(member)}
                   >
                     👤 {member.first_name} {member.last_name}
                     {member.role && <span style={{ fontSize: '12px', color: '#666', marginLeft: '8px' }}>({member.role})</span>}

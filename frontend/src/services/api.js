@@ -181,6 +181,10 @@ export const tasksAPI = {
   delete: async (id) => {
     await api.delete(`/api/v1/tasks/${id}`);
   },
+  delegate: async (id, delegateToId) => {
+    const response = await api.post(`/api/v1/tasks/${id}/delegate`, { delegate_to_id: delegateToId });
+    return response.data;
+  },
 };
 
 // Referral Partners

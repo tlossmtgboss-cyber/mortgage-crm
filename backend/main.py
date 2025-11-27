@@ -365,6 +365,47 @@ class UserSettings(Base):
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     __table_args__ = (UniqueConstraint('user_id', 'setting_key', name='uix_user_setting'),)
 
+class EmailSignature(Base):
+    """Email signature configuration for users"""
+    __tablename__ = "email_signatures"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False, index=True)
+    # Personal info
+    full_name = Column(String, nullable=True)
+    title = Column(String, nullable=True)  # e.g., "Branch Manager"
+    team_name = Column(String, nullable=True)  # e.g., "Tim Loss Team"
+    # Images (stored as URLs or base64)
+    headshot_url = Column(Text, nullable=True)
+    company_logo_url = Column(Text, nullable=True)
+    # Contact info
+    email = Column(String, nullable=True)
+    office_phone = Column(String, nullable=True)
+    cell_phone = Column(String, nullable=True)
+    fax = Column(String, nullable=True)
+    address = Column(Text, nullable=True)
+    # Links
+    website_url = Column(String, nullable=True)
+    apply_now_url = Column(String, nullable=True)
+    doc_upload_url = Column(String, nullable=True)
+    schedule_url = Column(String, nullable=True)
+    # Social links
+    linkedin_url = Column(String, nullable=True)
+    facebook_url = Column(String, nullable=True)
+    instagram_url = Column(String, nullable=True)
+    twitter_url = Column(String, nullable=True)
+    # License info
+    nmls_id = Column(String, nullable=True)
+    branch_nmls_id = Column(String, nullable=True)
+    corporate_nmls_id = Column(String, nullable=True)
+    # Branding
+    primary_color = Column(String, default="#006B6B")  # Teal color from template
+    secondary_color = Column(String, default="#1B3A4B")  # Dark blue from template
+    tagline = Column(String, nullable=True)  # e.g., "SIMPLIFIED. TRUSTED. COMMITTED."
+    # Settings
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
 class ImpersonationSession(Base):
     __tablename__ = "impersonation_sessions"
     id = Column(Integer, primary_key=True, index=True)
@@ -21550,22 +21591,110 @@ async def update_task(task_id: int, task_update: TaskUpdate, db: Session = Depen
     logger.info(f"Task updated: {task.title}")
     return task
 
+@app.post("/api/v1/tasks/{task_id}/delegate")
+async def delegate_task(
+    task_id: int,
+    delegate_data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delegate a task to another team member - removes from current user's list"""
+    try:
+        new_owner_id = delegate_data.get("delegate_to_id")
+        if not new_owner_id:
+            raise HTTPException(status_code=400, detail="delegate_to_id is required")
+
+        # Find the task - check AITask first
+        task = db.query(AITask).filter(
+            AITask.id == task_id,
+            AITask.assigned_to_id == current_user.id
+        ).first()
+
+        if not task:
+            # Also check regular Task table
+            regular_task = db.query(Task).filter(
+                Task.id == task_id,
+                Task.owner_id == current_user.id
+            ).first()
+            if regular_task:
+                regular_task.owner_id = new_owner_id
+                regular_task.updated_at = datetime.now(timezone.utc)
+                db.commit()
+                return {"success": True, "message": "Task delegated successfully"}
+            raise HTTPException(status_code=404, detail="Task not found or not owned by you")
+
+        # Get the new owner's info for logging
+        new_owner = db.query(User).filter(User.id == new_owner_id).first()
+        new_owner_name = new_owner.full_name if new_owner else f"User {new_owner_id}"
+
+        # Update the task assignment
+        old_owner_id = task.assigned_to_id
+        task.assigned_to_id = new_owner_id
+        task.updated_at = datetime.now(timezone.utc)
+
+        # Add delegation note to metadata if exists
+        if hasattr(task, 'metadata') and task.metadata:
+            try:
+                meta = json.loads(task.metadata) if isinstance(task.metadata, str) else task.metadata
+            except:
+                meta = {}
+            meta['delegated_from'] = current_user.id
+            meta['delegated_from_name'] = current_user.full_name
+            meta['delegated_at'] = datetime.now(timezone.utc).isoformat()
+            task.metadata = json.dumps(meta)
+
+        db.commit()
+
+        logger.info(f"Task {task_id} delegated from user {old_owner_id} to user {new_owner_id}")
+        return {
+            "success": True,
+            "message": f"Task delegated to {new_owner_name}",
+            "task_id": task_id,
+            "new_owner_id": new_owner_id
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Delegate task error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.delete("/api/v1/tasks/{task_id}", status_code=204)
 async def delete_task(task_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    # Try to find in AITask first
-    task = db.query(AITask).filter(AITask.id == task_id, AITask.assigned_to_id == current_user.id).first()
+    try:
+        # Try to find in AITask first
+        task = db.query(AITask).filter(AITask.id == task_id, AITask.assigned_to_id == current_user.id).first()
+        task_type = "AITask"
 
-    # If not found in AITask, try regular Task table
-    if not task:
-        task = db.query(Task).filter(Task.id == task_id, Task.owner_id == current_user.id).first()
+        # If not found in AITask, try regular Task table
+        if not task:
+            task = db.query(Task).filter(Task.id == task_id, Task.owner_id == current_user.id).first()
+            task_type = "Task"
 
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
+        # If still not found, try without user filter (for admin cleanup)
+        if not task:
+            task = db.query(AITask).filter(AITask.id == task_id).first()
+            task_type = "AITask (any user)"
 
-    db.delete(task)
-    db.commit()
-    logger.info(f"Task deleted: {task.title}")
-    return None
+        if not task:
+            task = db.query(Task).filter(Task.id == task_id).first()
+            task_type = "Task (any user)"
+
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+
+        task_title = task.title
+        db.delete(task)
+        db.commit()
+        logger.info(f"{task_type} deleted: {task_title} (ID: {task_id})")
+        return None
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deleting task {task_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete task: {str(e)}")
 
 # ============================================================================
 # UNIFIED TASKS API - Aggregates tasks, workflow items, and reconciliation
