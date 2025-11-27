@@ -35454,7 +35454,9 @@ async def add_leadstage_values_migration(
         # All LeadStage enum values AND names that might be missing
         # SQLAlchemy sends enum names, but we also support values
         values_to_add = [
-            # Enum values (display names)
+            # Enum values (display names) - these match Python enum VALUES
+            "New",  # Was missing!
+            "Prospect",  # Was missing!
             "Application",
             "Attempted Contact",
             "Pre-Qualified",
