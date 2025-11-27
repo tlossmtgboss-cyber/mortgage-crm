@@ -36252,6 +36252,97 @@ async def create_financial_intelligence_tables_migration(
         }
 
 
+@app.post("/api/v1/migrations/create-beta-tables", response_model=None)
+async def create_beta_tables_migration(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Create beta program tables.
+
+    Creates tables required for the beta program:
+    - beta_applications: Beta program application submissions
+    - analytics_events: User behavior event tracking
+    """
+    try:
+        logger.info(f"Running migration: create beta tables (user: {current_user.id})")
+
+        # Create beta_applications table
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS beta_applications (
+                id SERIAL PRIMARY KEY,
+                company_name VARCHAR(255) NOT NULL,
+                contact_name VARCHAR(255) NOT NULL,
+                email VARCHAR(255) NOT NULL,
+                phone VARCHAR(50),
+                team_size VARCHAR(50),
+                current_crm VARCHAR(255),
+                monthly_loans VARCHAR(50),
+                pain_points TEXT,
+                use_cases TEXT,
+                referral_source VARCHAR(100),
+                status VARCHAR(50) DEFAULT 'pending',
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                contacted_at TIMESTAMP,
+                activated_at TIMESTAMP
+            )
+        """))
+
+        # Create index on email
+        try:
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_beta_applications_email ON beta_applications(email)"))
+        except Exception:
+            pass  # Index may already exist
+
+        # Create analytics_events table
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS analytics_events (
+                id SERIAL PRIMARY KEY,
+                event_name VARCHAR(255) NOT NULL,
+                event_category VARCHAR(100),
+                user_id INTEGER,
+                properties JSONB DEFAULT '{}',
+                session_id VARCHAR(100),
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                page_url TEXT,
+                referrer TEXT,
+                user_agent TEXT
+            )
+        """))
+
+        # Create indexes for analytics_events
+        try:
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_analytics_events_name ON analytics_events(event_name)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_analytics_events_category ON analytics_events(event_category)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_analytics_events_user ON analytics_events(user_id)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_analytics_events_timestamp ON analytics_events(timestamp)"))
+        except Exception:
+            pass  # Indexes may already exist
+
+        db.commit()
+
+        logger.info("Beta tables migration completed successfully")
+
+        return {
+            "success": True,
+            "message": "Beta program tables created successfully",
+            "tables_created": ["beta_applications", "analytics_events"]
+        }
+
+    except Exception as e:
+        logger.error(f"Beta tables migration failed: {e}")
+        db.rollback()
+        import traceback
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+
 # ============================================================================
 # MUM (MORTGAGES UNDER MANAGEMENT) API
 # ============================================================================
