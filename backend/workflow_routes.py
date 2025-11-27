@@ -482,3 +482,256 @@ async def get_workflow_dashboard(
     except Exception as e:
         logger.error(f"Dashboard error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============== Workflow Definitions ==============
+
+# The 10 pre-configured workflows with their task templates
+WORKFLOW_DEFINITIONS = {
+    "prospect": {
+        "id": "workflow_prospect",
+        "name": "prospect",
+        "display_name": "Prospect",
+        "description": "Statuses impacted: New, Attempted Contact, Prospect",
+        "objective": "Get the lead to complete the application for pre-approval",
+        "color": "#3b82f6",
+        "task_count": 18
+    },
+    "prequal": {
+        "id": "workflow_prequal",
+        "name": "prequal",
+        "display_name": "PreQual",
+        "description": "Statuses impacted: Application and PreQual",
+        "objective": "Have clients return supporting documents",
+        "color": "#8b5cf6",
+        "task_count": 18
+    },
+    "pre_approved": {
+        "id": "workflow_pre_approved",
+        "name": "pre_approved",
+        "display_name": "Pre-Approval",
+        "description": "Statuses impacted: Pre-Approved",
+        "objective": "Stay in contact with Pre-Approved Borrower until they find the house",
+        "color": "#10b981",
+        "task_count": 13
+    },
+    "under_contract": {
+        "id": "workflow_under_contract",
+        "name": "under_contract",
+        "display_name": "Under Contract",
+        "description": "Statuses impacted: LE Pending, In Processing, In Underwriting, Approved, Clear to Close",
+        "objective": "Create a 5-star processing experience",
+        "color": "#f59e0b",
+        "task_count": 9
+    },
+    "lead_purchase": {
+        "id": "workflow_lead_purchase",
+        "name": "lead_purchase",
+        "display_name": "Lead Purchase",
+        "description": "High-touch nurturing for purchased leads",
+        "objective": "Get the lead to complete the application for pre-approval",
+        "color": "#ec4899",
+        "task_count": 36
+    },
+    "theme_day": {
+        "id": "workflow_theme_day",
+        "name": "theme_day",
+        "display_name": "Theme Day",
+        "description": "Weekly themed communications for active loans",
+        "objective": "Create a 5-star experience with themed touchpoints",
+        "color": "#06b6d4",
+        "task_count": 3
+    },
+    "last_mile": {
+        "id": "workflow_last_mile",
+        "name": "last_mile",
+        "display_name": "Last Mile",
+        "description": "7-day pre-closing preparation",
+        "objective": "Prepare the buyer for closing and life after closing",
+        "color": "#14b8a6",
+        "task_count": 1
+    },
+    "post_close": {
+        "id": "workflow_post_close",
+        "name": "post_close",
+        "display_name": "Post Close",
+        "description": "Statuses impacted: Funded",
+        "objective": "Guide homebuyers over the next 12 months",
+        "color": "#22c55e",
+        "task_count": 5
+    },
+    "credit_repair": {
+        "id": "workflow_credit_repair",
+        "name": "credit_repair",
+        "display_name": "Credit Repair",
+        "description": "Long-term credit improvement nurturing",
+        "objective": "Stay in contact with lead until they're ready",
+        "color": "#f97316",
+        "task_count": 12
+    },
+    "nurture": {
+        "id": "workflow_nurture",
+        "name": "nurture",
+        "display_name": "Nurture",
+        "description": "Lead conversion over time",
+        "objective": "Stay in contact with lead until they're ready",
+        "color": "#6366f1",
+        "task_count": 12
+    }
+}
+
+
+@router.get("/definitions")
+async def get_workflow_definitions(
+    db: Session = Depends(get_db)
+):
+    """Get all workflow definitions with task counts"""
+    try:
+        # Try to get actual task counts from database if tables exist
+        workflows = []
+        for key, workflow in WORKFLOW_DEFINITIONS.items():
+            workflow_data = workflow.copy()
+
+            # Try to get actual task count from DB
+            try:
+                result = db.execute(text("""
+                    SELECT COUNT(*) FROM workflow_task_templates
+                    WHERE workflow_id = :workflow_id
+                """), {"workflow_id": workflow["id"]})
+                count = result.scalar()
+                if count and count > 0:
+                    workflow_data["task_count"] = count
+            except:
+                pass  # Use default count if table doesn't exist
+
+            workflows.append(workflow_data)
+
+        return {
+            "workflows": workflows,
+            "total_workflows": len(workflows),
+            "total_tasks": sum(w["task_count"] for w in workflows)
+        }
+    except Exception as e:
+        logger.error(f"Get workflow definitions error: {e}")
+        # Return default definitions even on error
+        return {
+            "workflows": list(WORKFLOW_DEFINITIONS.values()),
+            "total_workflows": len(WORKFLOW_DEFINITIONS),
+            "total_tasks": 127
+        }
+
+
+@router.get("/definitions/{workflow_name}")
+async def get_workflow_definition(
+    workflow_name: str,
+    db: Session = Depends(get_db)
+):
+    """Get a specific workflow definition with its tasks"""
+    if workflow_name not in WORKFLOW_DEFINITIONS:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    workflow = WORKFLOW_DEFINITIONS[workflow_name].copy()
+
+    # Try to get tasks from database
+    try:
+        result = db.execute(text("""
+            SELECT id, sequence_order, name, timing_type, timing_value, timing_label,
+                   requires_phone_call, requires_text_message, requires_email,
+                   requires_referral_partner_contact, assigned_to, is_automated
+            FROM workflow_task_templates
+            WHERE workflow_id = :workflow_id
+            ORDER BY sequence_order ASC
+        """), {"workflow_id": workflow["id"]})
+
+        tasks = [{
+            "id": str(r[0]),
+            "sequence": r[1],
+            "name": r[2],
+            "timing_type": r[3],
+            "timing_value": r[4],
+            "timing_label": r[5],
+            "requires_phone": r[6],
+            "requires_text": r[7],
+            "requires_email": r[8],
+            "requires_partner_contact": r[9],
+            "assigned_to": r[10],
+            "is_automated": r[11]
+        } for r in result]
+
+        workflow["tasks"] = tasks
+        workflow["task_count"] = len(tasks) if tasks else workflow["task_count"]
+    except Exception as e:
+        logger.warning(f"Could not fetch tasks from DB: {e}")
+        workflow["tasks"] = []
+
+    return workflow
+
+
+@router.get("/definitions/{workflow_name}/tasks")
+async def get_workflow_tasks_for_user(
+    workflow_name: str,
+    lead_id: Optional[int] = None,
+    loan_id: Optional[int] = None,
+    status: Optional[str] = "pending",
+    limit: int = 50,
+    db: Session = Depends(get_db)
+):
+    """Get workflow task instances for a specific workflow"""
+    if workflow_name not in WORKFLOW_DEFINITIONS:
+        raise HTTPException(status_code=404, detail="Workflow not found")
+
+    workflow_id = WORKFLOW_DEFINITIONS[workflow_name]["id"]
+
+    try:
+        # Get task instances from workflow_task_instances table
+        query = """
+            SELECT wti.id, wti.task_name, wti.scheduled_date, wti.status,
+                   wti.lead_id, wti.loan_id, wti.assigned_to, wti.completed_at,
+                   COALESCE(l.borrower_name, CONCAT(ld.first_name, ' ', ld.last_name)) as borrower_name
+            FROM workflow_task_instances wti
+            LEFT JOIN loans l ON wti.loan_id = l.id
+            LEFT JOIN leads ld ON wti.lead_id = ld.id
+            WHERE wti.workflow_id = :workflow_id
+        """
+        params = {"workflow_id": workflow_id, "limit": limit}
+
+        if status:
+            query += " AND wti.status = :status"
+            params["status"] = status
+
+        if lead_id:
+            query += " AND wti.lead_id = :lead_id"
+            params["lead_id"] = lead_id
+
+        if loan_id:
+            query += " AND wti.loan_id = :loan_id"
+            params["loan_id"] = loan_id
+
+        query += " ORDER BY wti.scheduled_date ASC NULLS LAST LIMIT :limit"
+
+        result = db.execute(text(query), params)
+        tasks = [{
+            "id": str(r[0]),
+            "task_name": r[1],
+            "scheduled_date": r[2].isoformat() if r[2] else None,
+            "status": r[3],
+            "lead_id": r[4],
+            "loan_id": r[5],
+            "assigned_to": r[6],
+            "completed_at": r[7].isoformat() if r[7] else None,
+            "borrower_name": r[8] or "Unknown"
+        } for r in result]
+
+        return {
+            "workflow": WORKFLOW_DEFINITIONS[workflow_name],
+            "tasks": tasks,
+            "count": len(tasks)
+        }
+    except Exception as e:
+        logger.error(f"Get workflow tasks error: {e}")
+        return {
+            "workflow": WORKFLOW_DEFINITIONS[workflow_name],
+            "tasks": [],
+            "count": 0,
+            "note": "Workflow task instances table may not exist yet"
+        }

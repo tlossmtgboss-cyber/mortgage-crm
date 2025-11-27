@@ -425,3 +425,258 @@
     font-size: 13px;
   }
 }
+
+/* Tab count badge */
+.tab-count {
+  font-size: 11px;
+  opacity: 0.7;
+  margin-left: 4px;
+}
+
+/* Tab loading state */
+.tab-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 40px;
+  color: #666;
+  font-size: 14px;
+}
+
+/* Workflow Tab Section */
+.workflow-tab-section {
+  padding: 0;
+}
+
+.workflow-header-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 20px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 12px 12px 0 0;
+  margin: -24px -24px 24px -24px;
+}
+
+.workflow-info h3 {
+  margin: 0 0 8px 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.workflow-description {
+  color: #666;
+  font-size: 14px;
+  margin: 0 0 8px 0;
+}
+
+.workflow-objective {
+  color: #444;
+  font-size: 13px;
+  margin: 0;
+}
+
+.workflow-stats {
+  display: flex;
+  gap: 24px;
+}
+
+.stat-item {
+  text-align: center;
+}
+
+.stat-number {
+  display: block;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+}
+
+/* Task Templates Section */
+.task-templates-section {
+  margin-bottom: 24px;
+}
+
+.task-templates-section h4 {
+  margin: 0;
+  font-size: 16px;
+  color: #1a1a2e;
+}
+
+.template-count {
+  font-size: 13px;
+  color: #666;
+}
+
+.task-templates-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.task-template-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border-left: 3px solid #667eea;
+  position: relative;
+}
+
+.template-sequence {
+  width: 28px;
+  height: 28px;
+  background: #667eea;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.template-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.template-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: #1a1a2e;
+  margin-bottom: 4px;
+}
+
+.template-timing {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.template-channels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.channel-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.channel-badge.phone {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.channel-badge.text {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.channel-badge.email {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.channel-badge.partner {
+  background: #fce7f3;
+  color: #db2777;
+}
+
+.template-assigned {
+  font-size: 11px;
+  color: #888;
+  margin-top: 6px;
+}
+
+.auto-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: #10b981;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+/* Active Tasks Section */
+.active-tasks-section {
+  margin-top: 24px;
+}
+
+.active-tasks-section h4 {
+  margin: 0;
+  font-size: 16px;
+  color: #1a1a2e;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.empty-hint {
+  font-size: 12px;
+  color: #999;
+  margin-top: 4px;
+}
+
+/* Workflow tabs scrollable on mobile */
+@media (max-width: 900px) {
+  .workflow-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    padding-bottom: 8px;
+  }
+
+  .workflow-tabs::-webkit-scrollbar {
+    height: 4px;
+  }
+
+  .workflow-tabs::-webkit-scrollbar-thumb {
+    background: #ddd;
+    border-radius: 2px;
+  }
+
+  .workflow-tabs button {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .workflow-header-section {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .workflow-stats {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .task-templates-grid {
+    grid-template-columns: 1fr;
+  }
+}
