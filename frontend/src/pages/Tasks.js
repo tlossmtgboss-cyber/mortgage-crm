@@ -1491,31 +1491,31 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
           className={`tab-button ${activeTab === 'outstanding' ? 'active' : ''}`}
           onClick={() => setActiveTab('outstanding')}
         >
-          Outstanding Tasks ({allTasks.length})
+          Outstanding Tasks ({allTasks.filter(t => !snoozedTasks.has(t.id)).length})
         </button>
         <button
           className={`tab-button ${activeTab === 'ai-approval' ? 'active' : ''}`}
           onClick={() => setActiveTab('ai-approval')}
         >
-          🤖 Pending Your Approval ({aiTasks.pending.length + aiTasks.waiting.length})
+          🤖 Pending Your Approval ({allTasks.filter(t => t.source === 'AI Engine' && !snoozedTasks.has(t.id)).length})
         </button>
         <button
           className={`tab-button ${activeTab === 'messages' ? 'active' : ''}`}
           onClick={() => setActiveTab('messages')}
         >
-          📬 Unified Messages ({messages.filter(m => !m.read).length})
+          📬 Unified Messages ({allTasks.filter(t => t.source === 'Messages' && !snoozedTasks.has(t.id)).length})
         </button>
         <button
           className={`tab-button ${activeTab === 'mum' ? 'active' : ''}`}
           onClick={() => setActiveTab('mum')}
         >
-          ♻️ Client for Life Engine (MUM) ({mumAlerts.length})
+          ♻️ Client for Life Engine (MUM) ({allTasks.filter(t => t.source === 'Client for Life' && !snoozedTasks.has(t.id)).length})
         </button>
         <button
           className={`tab-button ${activeTab === 'completed' ? 'active' : ''}`}
           onClick={() => setActiveTab('completed')}
         >
-          ✅ Completed Tasks ({completedTasks.size})
+          ✅ Completed Tasks ({getCompletedTasks().length})
         </button>
       </div>
 
