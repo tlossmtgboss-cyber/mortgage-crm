@@ -1863,3 +1863,69 @@ async def seed_default_appointment_types(
         "message": f"Seeded {created_count} default appointment types",
         "config_id": config.id
     }
+
+
+# ============================================================================
+# MIGRATION ENDPOINT
+# ============================================================================
+
+@router.post("/migrate")
+async def run_scheduler_migration(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Create all scheduler tables if they don't exist.
+    This is safe to call multiple times.
+    """
+    user = await get_current_user(request, db)
+
+    try:
+        # Get all model classes
+        SchedulerConfig = _models['SchedulerConfig']
+        AvailabilitySlot = _models['AvailabilitySlot']
+        AppointmentType = _models['AppointmentType']
+        Appointment = _models['Appointment']
+        RoutingRule = _models['RoutingRule']
+        BlockedTime = _models['BlockedTime']
+        BookingLink = _models['BookingLink']
+        AppointmentReminder = _models['AppointmentReminder']
+
+        # Get the metadata from any model
+        metadata = SchedulerConfig.__table__.metadata
+
+        # Create all tables
+        from sqlalchemy import inspect
+        inspector = inspect(db.bind)
+        existing_tables = inspector.get_table_names()
+
+        tables_to_create = [
+            'scheduler_configs',
+            'availability_slots',
+            'appointment_types',
+            'scheduler_appointments',
+            'scheduler_routing_rules',
+            'scheduler_blocked_times',
+            'scheduler_booking_links',
+            'scheduler_reminders'
+        ]
+
+        created = []
+        for table_name in tables_to_create:
+            if table_name not in existing_tables:
+                created.append(table_name)
+
+        # Create tables
+        metadata.create_all(bind=db.bind, checkfirst=True)
+
+        logger.info(f"Scheduler migration complete. Created tables: {created}")
+
+        return {
+            "message": "Scheduler migration complete",
+            "created_tables": created,
+            "existing_tables": [t for t in tables_to_create if t in existing_tables]
+        }
+
+    except Exception as e:
+        logger.error(f"Migration error: {e}")
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
