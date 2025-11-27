@@ -29,7 +29,7 @@ function ReconciliationCenter() {
     last_name: '',
     loan_number: '',
     referral_partner_id: '',
-    loan_stage: 'PROCESSING'
+    loan_stage: 'NEW'
   });
   const [referralPartners, setReferralPartners] = useState([]);
 
@@ -52,17 +52,39 @@ function ReconciliationCenter() {
   const [selectedLoanStage, setSelectedLoanStage] = useState('UW_RECEIVED');
   const [createNewLoan, setCreateNewLoan] = useState(false);
 
-  // Loan stages for dropdown
-  const loanStages = [
-    { value: 'DISCLOSED', label: 'Disclosed' },
-    { value: 'PROCESSING', label: 'Processing' },
-    { value: 'SUBMITTED', label: 'Submitted' },
-    { value: 'UW_RECEIVED', label: 'Underwriting Received' },
-    { value: 'APPROVED', label: 'Approved' },
-    { value: 'CTC', label: 'Clear to Close' },
-    { value: 'DOCS', label: 'Docs Out' },
-    { value: 'FUNDED', label: 'Funded' }
+  // All stages for dropdown - Lead stages, Active Loan stages, and MUM/Portfolio stages
+  const allStages = [
+    // Lead Stages
+    { value: 'NEW', label: 'New Lead', category: 'Lead' },
+    { value: 'ATTEMPTED_CONTACT', label: 'Attempted Contact', category: 'Lead' },
+    { value: 'PROSPECT', label: 'Prospect', category: 'Lead' },
+    { value: 'APPLICATION', label: 'Application', category: 'Lead' },
+    { value: 'APPLICATION_STARTED', label: 'Application Started', category: 'Lead' },
+    { value: 'PRE_QUALIFIED', label: 'Pre-Qualified', category: 'Lead' },
+    { value: 'PRE_APPROVED', label: 'Pre-Approved', category: 'Lead' },
+    { value: 'UNDER_CONTRACT', label: 'Under Contract', category: 'Lead' },
+    { value: 'LONG_TERM_NURTURE', label: 'Long-Term Nurture', category: 'Lead' },
+    // Active Loan Stages
+    { value: 'DISCLOSED', label: 'Disclosed', category: 'Active Loan' },
+    { value: 'PROCESSING', label: 'Processing', category: 'Active Loan' },
+    { value: 'SUBMITTED', label: 'Submitted', category: 'Active Loan' },
+    { value: 'UW_RECEIVED', label: 'Underwriting Received', category: 'Active Loan' },
+    { value: 'APPROVED', label: 'Approved', category: 'Active Loan' },
+    { value: 'SUSPENDED', label: 'Suspended', category: 'Active Loan' },
+    { value: 'CTC', label: 'Clear to Close', category: 'Active Loan' },
+    { value: 'DOCS', label: 'Docs Out', category: 'Active Loan' },
+    { value: 'FUNDED', label: 'Funded', category: 'Active Loan' },
+    // MUM / Portfolio Stages
+    { value: 'CLOSED', label: 'Closed (Portfolio)', category: 'MUM' },
+    { value: 'AMR', label: 'Annual Mortgage Review', category: 'MUM' },
+    { value: 'REFERRAL_SOURCE', label: 'Referral Source', category: 'MUM' },
+    // Other
+    { value: 'WITHDRAWN', label: 'Withdrawn', category: 'Other' },
+    { value: 'DOES_NOT_QUALIFY', label: 'Does Not Qualify', category: 'Other' }
   ];
+
+  // Keep loanStages for backwards compatibility in some places
+  const loanStages = allStages;
 
   // Helper function to clean email preview text
   const cleanEmailPreview = (text) => {
@@ -400,7 +422,7 @@ function ReconciliationCenter() {
             first_name: firstName,
             last_name: lastName,
             loan_number: loanNumber,
-            loan_stage: 'disclosed',
+            loan_stage: 'NEW', // Default to New Lead stage
             referral_partner_id: ''
           });
           setShowNoMatchDialog(true);
@@ -1537,9 +1559,26 @@ function ReconciliationCenter() {
                             fontSize: '14px'
                           }}
                         >
-                          {loanStages.map(stage => (
-                            <option key={stage.value} value={stage.value}>{stage.label}</option>
-                          ))}
+                          <optgroup label="Lead Stages">
+                            {allStages.filter(s => s.category === 'Lead').map(stage => (
+                              <option key={stage.value} value={stage.value}>{stage.label}</option>
+                            ))}
+                          </optgroup>
+                          <optgroup label="Active Loan Stages">
+                            {allStages.filter(s => s.category === 'Active Loan').map(stage => (
+                              <option key={stage.value} value={stage.value}>{stage.label}</option>
+                            ))}
+                          </optgroup>
+                          <optgroup label="MUM / Portfolio">
+                            {allStages.filter(s => s.category === 'MUM').map(stage => (
+                              <option key={stage.value} value={stage.value}>{stage.label}</option>
+                            ))}
+                          </optgroup>
+                          <optgroup label="Other">
+                            {allStages.filter(s => s.category === 'Other').map(stage => (
+                              <option key={stage.value} value={stage.value}>{stage.label}</option>
+                            ))}
+                          </optgroup>
                         </select>
                       </div>
                     )}
@@ -1864,19 +1903,36 @@ function ReconciliationCenter() {
                   </div>
                 </div>
 
-                {/* Loan Stage Selector */}
+                {/* Stage Selector - All Stages */}
                 <div className="form-group" style={{ marginTop: '15px' }}>
                   <label style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>
-                    Loan Stage *
+                    Stage *
                   </label>
                   <select
                     value={newBorrowerForm.loan_stage}
                     onChange={(e) => setNewBorrowerForm(prev => ({ ...prev, loan_stage: e.target.value }))}
                     style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px' }}
                   >
-                    {loanStages.map(stage => (
-                      <option key={stage.value} value={stage.value}>{stage.label}</option>
-                    ))}
+                    <optgroup label="Lead Stages">
+                      {allStages.filter(s => s.category === 'Lead').map(stage => (
+                        <option key={stage.value} value={stage.value}>{stage.label}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Active Loan Stages">
+                      {allStages.filter(s => s.category === 'Active Loan').map(stage => (
+                        <option key={stage.value} value={stage.value}>{stage.label}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="MUM / Portfolio">
+                      {allStages.filter(s => s.category === 'MUM').map(stage => (
+                        <option key={stage.value} value={stage.value}>{stage.label}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Other">
+                      {allStages.filter(s => s.category === 'Other').map(stage => (
+                        <option key={stage.value} value={stage.value}>{stage.label}</option>
+                      ))}
+                    </optgroup>
                   </select>
                 </div>
 
