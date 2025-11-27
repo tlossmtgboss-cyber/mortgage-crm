@@ -10635,6 +10635,21 @@ app.include_router(financial_intelligence_router, tags=["Financial Intelligence"
 from email_monitor_routes import router as email_monitor_router
 app.include_router(email_monitor_router, tags=["Email Monitor"])
 
+# Include Disposition routes (voice notes + AI summarization)
+from telephony.disposition_router import router as disposition_router, set_dependencies as set_disposition_deps
+set_disposition_deps(get_db, get_current_user)
+app.include_router(disposition_router, prefix="/api/v1/dialer", tags=["Dialer Dispositions"])
+
+# Include Dialer Analytics routes
+from telephony.analytics_router import router as dialer_analytics_router, set_dependencies as set_analytics_deps
+set_analytics_deps(get_db, get_current_user)
+app.include_router(dialer_analytics_router, prefix="/api/v1/dialer", tags=["Dialer Analytics"])
+
+# Include Dialer Admin routes (caller ID management)
+from telephony.admin_router import router as dialer_admin_router, set_dependencies as set_admin_deps
+set_admin_deps(get_db, get_current_user)
+app.include_router(dialer_admin_router, prefix="/api/v1/dialer", tags=["Dialer Admin"])
+
 # Email Monitor Migration Endpoint
 @app.post("/api/v1/migrations/add-email-monitor")
 async def add_email_monitor_migration(db: Session = Depends(get_db)):
@@ -32211,6 +32226,30 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Failed to start auto-sync scheduler: {e}")
 
+    # Add dialer compliance lock cleanup job
+    try:
+        async def cleanup_dialer_locks():
+            """Clean up expired soft locks for dialer compliance"""
+            db = SessionLocal()
+            try:
+                compliance = ComplianceChecker(db)
+                compliance.cleanup_expired_locks()
+            except Exception as e:
+                logger.error(f"Dialer lock cleanup error: {e}")
+            finally:
+                db.close()
+
+        scheduler.add_job(
+            cleanup_dialer_locks,
+            trigger=IntervalTrigger(minutes=5),
+            id='cleanup_dialer_locks',
+            name='Clean up expired dialer locks',
+            replace_existing=True
+        )
+        logger.info("✅ Dialer lock cleanup job added (runs every 5 minutes)")
+    except Exception as e:
+        logger.warning(f"⚠️ Dialer lock cleanup job not added: {e}")
+
     logger.info("✅ CRM is ready!")
     logger.info("📚 API Documentation: http://localhost:8000/docs")
     logger.info("🔐 Demo Login: demo@example.com / demo123")
@@ -36448,7 +36487,26 @@ async def webhook_call_status(
         answered_by=answered_by
     )
 
-    # TODO: Emit WebSocket event for real-time UI update
+    # Emit WebSocket event for real-time UI update
+    try:
+        # Determine if we should show disposition modal
+        show_disposition = call_status in ["completed", "no-answer", "busy", "failed"]
+
+        event = {
+            "type": "call_status_update",
+            "session_id": session_id,
+            "task_id": task_id,
+            "call_sid": call_sid,
+            "status": call_status,
+            "duration_seconds": int(duration) if duration else 0,
+            "show_disposition_modal": show_disposition and call_status == "completed",
+            "result": result
+        }
+
+        import asyncio
+        asyncio.create_task(ws_manager.send_to_agent(str(session.agent_id), event))
+    except Exception as e:
+        logger.error(f"WebSocket event error: {e}")
 
     return {"received": True, "result": result}
 
@@ -36482,6 +36540,23 @@ async def webhook_click_to_dial_status(
     if to_number:
         compliance.release_soft_lock(to_number, agent_id)
 
+    # Emit WebSocket event for UI update
+    try:
+        event = {
+            "type": "click_to_dial_status",
+            "call_sid": call_sid,
+            "status": call_status,
+            "duration_seconds": int(duration) if duration else 0,
+            "to_number": to_number,
+            "call_log_id": call_log.id if call_log else None,
+            "show_disposition_modal": call_status == "completed"
+        }
+
+        import asyncio
+        asyncio.create_task(ws_manager.send_to_agent(str(agent_id), event))
+    except Exception as e:
+        logger.error(f"WebSocket event error: {e}")
+
     return {"received": True}
 
 
@@ -36503,10 +36578,15 @@ async def websocket_dialer(websocket: WebSocket, agent_id: str):
     await ws_manager.connect(websocket, agent_id)
     try:
         while True:
-            # Keep connection alive, handle incoming messages if needed
+            # Keep connection alive, handle incoming messages
             data = await websocket.receive_text()
-            # Echo back acknowledgment (can be extended for bi-directional communication)
-            await websocket.send_json({"type": "ack", "message": data})
+
+            # Handle ping/pong for connection keepalive
+            if data == "ping":
+                await websocket.send_text("pong")
+            else:
+                # Echo back acknowledgment for other messages
+                await websocket.send_json({"type": "ack", "message": data})
     except WebSocketDisconnect:
         ws_manager.disconnect(websocket, agent_id)
         logger.info(f"WebSocket disconnected for agent {agent_id}")

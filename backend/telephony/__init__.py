@@ -4,6 +4,9 @@ from .dialer_engine import DialerEngine, click_to_dial
 from .compliance import ComplianceChecker, ComplianceError
 from .websocket import ws_manager, WebSocketManager, DialerEvent
 from .router import router as dialer_router, set_dependencies
+from .disposition_router import router as disposition_router, set_dependencies as set_disposition_dependencies
+from .analytics_router import router as analytics_router, set_dependencies as set_analytics_dependencies
+from .admin_router import router as admin_router, set_dependencies as set_admin_dependencies
 
 # Schemas
 from .schemas import (
@@ -43,6 +46,12 @@ __all__ = [
     # Router
     'dialer_router',
     'set_dependencies',
+    'disposition_router',
+    'set_disposition_dependencies',
+    'analytics_router',
+    'set_analytics_dependencies',
+    'admin_router',
+    'set_admin_dependencies',
     # Schemas
     'AgentTelephonySettingsUpdate',
     'ClickToDialRequest',
