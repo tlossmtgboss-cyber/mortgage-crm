@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import WorkflowConfigEditor from '../components/WorkflowConfigEditor';
 import './WorkflowDashboard.css';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://mortgage-crm-production-7a9a.up.railway.app';
@@ -27,6 +28,8 @@ function WorkflowDashboard() {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tabLoading, setTabLoading] = useState(false);
+  const [showConfigEditor, setShowConfigEditor] = useState(false);
+  const [configEditorWorkflow, setConfigEditorWorkflow] = useState(null);
 
   useEffect(() => {
     fetchDashboardData();
@@ -113,6 +116,18 @@ function WorkflowDashboard() {
     return workflow?.task_count || 0;
   };
 
+  const openConfigEditor = (workflow) => {
+    setConfigEditorWorkflow(workflow);
+    setShowConfigEditor(true);
+  };
+
+  const closeConfigEditor = () => {
+    setShowConfigEditor(false);
+    setConfigEditorWorkflow(null);
+    // Refresh data after editing
+    fetchWorkflowTasks(activeTab);
+  };
+
   if (loading) {
     return <div className="workflow-loading">Loading workflow dashboard...</div>;
   }
@@ -166,6 +181,15 @@ function WorkflowDashboard() {
           >
             {tab.name}
             <span className="tab-count">({getWorkflowTaskCount(tab.key)})</span>
+            {activeTab === tab.key && (
+              <span
+                className="tab-config-btn"
+                onClick={(e) => { e.stopPropagation(); openConfigEditor(tab); }}
+                title="Configure Workflow"
+              >
+                &#9881;
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -182,15 +206,30 @@ function WorkflowDashboard() {
             onComplete={completeTask}
             onRefresh={() => fetchWorkflowTasks(activeTab)}
             navigate={navigate}
+            onOpenConfig={() => openConfigEditor(activeWorkflow)}
           />
         )}
       </div>
+
+      {/* Workflow Config Editor Modal */}
+      {showConfigEditor && configEditorWorkflow && (
+        <div className="config-editor-overlay" onClick={closeConfigEditor}>
+          <div className="config-editor-modal" onClick={(e) => e.stopPropagation()}>
+            <WorkflowConfigEditor
+              workflowKey={configEditorWorkflow.key}
+              workflowName={configEditorWorkflow.name}
+              workflowColor={configEditorWorkflow.color}
+              onClose={closeConfigEditor}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // Workflow Tab Content Component
-function WorkflowTabContent({ workflow, tasks, activeWorkflow, onComplete, onRefresh, navigate }) {
+function WorkflowTabContent({ workflow, tasks, activeWorkflow, onComplete, onRefresh, navigate, onOpenConfig }) {
   if (!workflow) {
     return (
       <div className="workflow-tab-section">
@@ -226,6 +265,9 @@ function WorkflowTabContent({ workflow, tasks, activeWorkflow, onComplete, onRef
             <span className="stat-number">{tasks.length}</span>
             <span className="stat-label">Pending</span>
           </div>
+          <button className="btn-configure-workflow" onClick={onOpenConfig} title="Configure Workflow">
+            Configure Workflow
+          </button>
         </div>
       </div>
 

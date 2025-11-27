@@ -1,0 +1,595 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import './WorkflowConfigEditor.css';
+
+const API_BASE = process.env.REACT_APP_API_URL || 'https://mortgage-crm-production-7a9a.up.railway.app';
+
+// Communication method columns
+const COMMUNICATION_METHODS = [
+  { key: 'phone', label: 'Phone', color: '#3b82f6' },
+  { key: 'text', label: 'Text', color: '#10b981' },
+  { key: 'email', label: 'Email', color: '#f59e0b' },
+  { key: 'referral_partner', label: 'Referral Partner', color: '#ec4899' }
+];
+
+// Task responsibility roles
+const RESPONSIBILITY_ROLES = [
+  { key: 'lo', label: 'LO', fullName: 'Loan Officer' },
+  { key: 'jr_lo', label: 'Jr. LO', fullName: 'Junior Loan Officer' },
+  { key: 'production_asst', label: 'Production Asst.', fullName: 'Production Assistant' },
+  { key: 'ai', label: 'AI', fullName: 'AI Automation' }
+];
+
+function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClose }) {
+  const [workflowConfig, setWorkflowConfig] = useState(null);
+  const [days, setDays] = useState([]);
+  const [roleAssignments, setRoleAssignments] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [alerts, setAlerts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const [showAddDay, setShowAddDay] = useState(false);
+  const [newDay, setNewDay] = useState({ label: '', value: '' });
+  const [showRoleDropdown, setShowRoleDropdown] = useState(null);
+  const [editingRole, setEditingRole] = useState(null);
+
+  const fetchWorkflowConfig = useCallback(async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const headers = { 'Authorization': `Bearer ${token}` };
+
+      // Fetch workflow configuration
+      const response = await fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}`, { headers });
+
+      if (!response.ok) {
+        // If workflow doesn't exist, try to seed defaults first
+        if (response.status === 404) {
+          await fetch(`${API_BASE}/api/v1/workflow-config/seed`, {
+            method: 'POST',
+            headers
+          });
+          // Try again
+          const retryResponse = await fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}`, { headers });
+          if (retryResponse.ok) {
+            const data = await retryResponse.json();
+            setWorkflowConfig(data);
+            setDays(data.days || []);
+            setRoleAssignments(data.role_assignments || []);
+          } else {
+            throw new Error('Workflow not found');
+          }
+        } else {
+          throw new Error('Failed to fetch workflow configuration');
+        }
+      } else {
+        const data = await response.json();
+        setWorkflowConfig(data);
+        setDays(data.days || []);
+        setRoleAssignments(data.role_assignments || []);
+      }
+
+      // Fetch users for role assignment
+      const usersResponse = await fetch(`${API_BASE}/api/v1/users`, { headers });
+      if (usersResponse.ok) {
+        const usersData = await usersResponse.json();
+        setUsers(usersData.users || usersData || []);
+      }
+
+      // Fetch alerts for this workflow
+      const alertsResponse = await fetch(`${API_BASE}/api/v1/workflow-config/alerts?workflow_key=${workflowKey}&unresolved_only=true`, { headers });
+      if (alertsResponse.ok) {
+        const alertsData = await alertsResponse.json();
+        setAlerts(alertsData || []);
+      }
+
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching workflow config:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [workflowKey]);
+
+  useEffect(() => {
+    fetchWorkflowConfig();
+  }, [fetchWorkflowConfig]);
+
+  // Toggle communication method for a day
+  const toggleCommunication = async (dayId, method) => {
+    const day = days.find(d => d.id === dayId);
+    if (!day) return;
+
+    const fieldMap = {
+      phone: 'phone_enabled',
+      text: 'text_enabled',
+      email: 'email_enabled',
+      referral_partner: 'referral_partner_enabled'
+    };
+
+    const field = fieldMap[method];
+    const newValue = !day[field];
+
+    try {
+      setSaving(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}/days/${dayId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ [field]: newValue })
+      });
+
+      if (response.ok) {
+        setDays(prev => prev.map(d =>
+          d.id === dayId ? { ...d, [field]: newValue } : d
+        ));
+      }
+    } catch (err) {
+      console.error('Error updating communication method:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Toggle responsibility for a day
+  const toggleResponsibility = async (dayId, role) => {
+    const day = days.find(d => d.id === dayId);
+    if (!day) return;
+
+    const fieldMap = {
+      lo: 'lo_responsible',
+      jr_lo: 'jr_lo_responsible',
+      production_asst: 'production_asst_responsible',
+      ai: 'ai_responsible'
+    };
+
+    const field = fieldMap[role];
+    const newValue = !day[field];
+
+    try {
+      setSaving(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}/days/${dayId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ [field]: newValue })
+      });
+
+      if (response.ok) {
+        setDays(prev => prev.map(d =>
+          d.id === dayId ? { ...d, [field]: newValue } : d
+        ));
+      }
+    } catch (err) {
+      console.error('Error updating responsibility:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Add a new day
+  const handleAddDay = async () => {
+    if (!newDay.label || !newDay.value) return;
+
+    try {
+      setSaving(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}/days`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          day_label: newDay.label,
+          day_value: parseInt(newDay.value),
+          day_order: days.length + 1
+        })
+      });
+
+      if (response.ok) {
+        const addedDay = await response.json();
+        setDays(prev => [...prev, addedDay].sort((a, b) => a.day_order - b.day_order));
+        setNewDay({ label: '', value: '' });
+        setShowAddDay(false);
+      }
+    } catch (err) {
+      console.error('Error adding day:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Delete a day
+  const handleDeleteDay = async (dayId) => {
+    if (!window.confirm('Are you sure you want to delete this day?')) return;
+
+    try {
+      setSaving(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}/days/${dayId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        setDays(prev => prev.filter(d => d.id !== dayId));
+      }
+    } catch (err) {
+      console.error('Error deleting day:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Assign user to role
+  const handleAssignUser = async (role, userId) => {
+    try {
+      setSaving(true);
+      const token = localStorage.getItem('token');
+
+      // Check if role assignment exists
+      const existingAssignment = roleAssignments.find(ra => ra.role === role);
+
+      let response;
+      if (existingAssignment) {
+        response = await fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}/roles/${existingAssignment.id}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ user_id: userId || null })
+        });
+      } else {
+        response = await fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}/roles`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ role, user_id: userId || null })
+        });
+      }
+
+      if (response.ok) {
+        const updatedAssignment = await response.json();
+        setRoleAssignments(prev => {
+          const filtered = prev.filter(ra => ra.role !== role);
+          return [...filtered, updatedAssignment];
+        });
+      }
+
+      setEditingRole(null);
+      setShowRoleDropdown(null);
+    } catch (err) {
+      console.error('Error assigning user:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Get user name by ID
+  const getUserName = (userId) => {
+    const user = users.find(u => u.id === userId);
+    return user ? user.name || user.email : 'Unassigned';
+  };
+
+  // Get assigned user for a role
+  const getAssignedUser = (role) => {
+    const roleMap = {
+      lo: 'loan_officer',
+      jr_lo: 'junior_loan_officer',
+      production_asst: 'production_assistant',
+      ai: 'ai'
+    };
+    const assignment = roleAssignments.find(ra => ra.role === roleMap[role]);
+    return assignment?.user_id;
+  };
+
+  // Check day health
+  const runHealthCheck = async (dayId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}/days/${dayId}/check-health`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setDays(prev => prev.map(d =>
+          d.id === dayId ? { ...d, health_status: result.health_status, health_message: result.health_message } : d
+        ));
+
+        // Refresh alerts
+        fetchWorkflowConfig();
+      }
+    } catch (err) {
+      console.error('Error running health check:', err);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="workflow-config-editor">
+        <div className="editor-loading">Loading workflow configuration...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="workflow-config-editor">
+        <div className="editor-error">
+          <p>Error: {error}</p>
+          <button onClick={fetchWorkflowConfig} className="btn-retry">Retry</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="workflow-config-editor">
+      {/* Header */}
+      <div className="editor-header" style={{ borderColor: workflowColor }}>
+        <div className="editor-title">
+          <h2 style={{ color: workflowColor }}>{workflowName} Workflow Configuration</h2>
+          {workflowConfig && (
+            <p className="editor-objective">
+              <strong>Objective:</strong> {workflowConfig.objective}
+            </p>
+          )}
+        </div>
+        <div className="editor-actions">
+          {saving && <span className="saving-indicator">Saving...</span>}
+          <button onClick={onClose} className="btn-close">Close</button>
+        </div>
+      </div>
+
+      {/* Alerts Banner */}
+      {alerts.length > 0 && (
+        <div className="alerts-banner">
+          <div className="alert-icon">!</div>
+          <div className="alert-content">
+            <strong>{alerts.length} Broken Task{alerts.length > 1 ? 's' : ''}</strong>
+            <span>Some tasks need admin attention</span>
+          </div>
+        </div>
+      )}
+
+      {/* Role Assignments Section */}
+      <div className="role-assignments-section">
+        <h3>Role Assignments</h3>
+        <p className="section-description">Click on a role to assign a specific user to handle those tasks</p>
+        <div className="role-assignments-grid">
+          {RESPONSIBILITY_ROLES.filter(r => r.key !== 'ai').map(role => {
+            const roleMap = {
+              lo: 'loan_officer',
+              jr_lo: 'junior_loan_officer',
+              production_asst: 'production_assistant'
+            };
+            const assignedUserId = getAssignedUser(role.key);
+
+            return (
+              <div key={role.key} className="role-assignment-card">
+                <div className="role-header">
+                  <span className="role-name">{role.fullName}</span>
+                  <span className="role-abbr">({role.label})</span>
+                </div>
+                <div className="role-user" onClick={() => setEditingRole(role.key)}>
+                  {editingRole === role.key ? (
+                    <select
+                      autoFocus
+                      value={assignedUserId || ''}
+                      onChange={(e) => handleAssignUser(roleMap[role.key], e.target.value ? parseInt(e.target.value) : null)}
+                      onBlur={() => setEditingRole(null)}
+                    >
+                      <option value="">-- Unassigned --</option>
+                      {users.map(user => (
+                        <option key={user.id} value={user.id}>
+                          {user.name || user.email}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className={assignedUserId ? 'assigned' : 'unassigned'}>
+                      {assignedUserId ? getUserName(assignedUserId) : 'Click to assign'}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Workflow Grid */}
+      <div className="workflow-grid-container">
+        <table className="workflow-config-grid">
+          <thead>
+            <tr>
+              <th className="health-col">Status</th>
+              <th className="day-col">Day</th>
+              <th colSpan={COMMUNICATION_METHODS.length} className="comm-header">
+                Communication Method
+              </th>
+              <th colSpan={RESPONSIBILITY_ROLES.length} className="resp-header">
+                Task Responsibility
+              </th>
+              <th className="actions-col">Actions</th>
+            </tr>
+            <tr className="sub-header">
+              <th></th>
+              <th></th>
+              {COMMUNICATION_METHODS.map(method => (
+                <th key={method.key} style={{ color: method.color }}>
+                  {method.label}
+                </th>
+              ))}
+              {RESPONSIBILITY_ROLES.map(role => (
+                <th key={role.key}>{role.label}</th>
+              ))}
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {days.map(day => (
+              <tr key={day.id} className={day.health_status === 'broken' ? 'row-broken' : ''}>
+                {/* Health Status Dot */}
+                <td className="health-cell">
+                  <span
+                    className={`health-dot ${day.health_status || 'healthy'}`}
+                    title={day.health_message || (day.health_status === 'healthy' ? 'Task is functioning' : day.health_status === 'broken' ? 'Task has issues' : 'Task is disabled')}
+                    onClick={() => runHealthCheck(day.id)}
+                  ></span>
+                </td>
+
+                {/* Day Label */}
+                <td className="day-cell">
+                  <span className="day-label">{day.day_label}</span>
+                  {day.day_value && (
+                    <span className="day-value">({day.day_value} days)</span>
+                  )}
+                </td>
+
+                {/* Communication Method Checkboxes */}
+                {COMMUNICATION_METHODS.map(method => {
+                  const fieldMap = {
+                    phone: 'phone_enabled',
+                    text: 'text_enabled',
+                    email: 'email_enabled',
+                    referral_partner: 'referral_partner_enabled'
+                  };
+                  const isEnabled = day[fieldMap[method.key]];
+
+                  return (
+                    <td key={method.key} className="checkbox-cell">
+                      <label className="checkbox-wrapper">
+                        <input
+                          type="checkbox"
+                          checked={isEnabled || false}
+                          onChange={() => toggleCommunication(day.id, method.key)}
+                          disabled={saving}
+                        />
+                        <span
+                          className="custom-checkbox"
+                          style={{ borderColor: isEnabled ? method.color : '#ccc', backgroundColor: isEnabled ? method.color : 'transparent' }}
+                        ></span>
+                      </label>
+                    </td>
+                  );
+                })}
+
+                {/* Responsibility Checkboxes */}
+                {RESPONSIBILITY_ROLES.map(role => {
+                  const fieldMap = {
+                    lo: 'lo_responsible',
+                    jr_lo: 'jr_lo_responsible',
+                    production_asst: 'production_asst_responsible',
+                    ai: 'ai_responsible'
+                  };
+                  const isResponsible = day[fieldMap[role.key]];
+
+                  return (
+                    <td key={role.key} className="checkbox-cell">
+                      <label className="checkbox-wrapper">
+                        <input
+                          type="checkbox"
+                          checked={isResponsible || false}
+                          onChange={() => toggleResponsibility(day.id, role.key)}
+                          disabled={saving}
+                        />
+                        <span className={`custom-checkbox ${isResponsible ? 'checked' : ''}`}></span>
+                      </label>
+                    </td>
+                  );
+                })}
+
+                {/* Actions */}
+                <td className="actions-cell">
+                  <button
+                    className="btn-delete-day"
+                    onClick={() => handleDeleteDay(day.id)}
+                    title="Delete this day"
+                    disabled={saving}
+                  >
+                    &times;
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Add Day Section */}
+      <div className="add-day-section">
+        {showAddDay ? (
+          <div className="add-day-form">
+            <input
+              type="text"
+              placeholder="Day Label (e.g., Day 15)"
+              value={newDay.label}
+              onChange={(e) => setNewDay(prev => ({ ...prev, label: e.target.value }))}
+              className="input-day-label"
+            />
+            <input
+              type="number"
+              placeholder="Day Value"
+              value={newDay.value}
+              onChange={(e) => setNewDay(prev => ({ ...prev, value: e.target.value }))}
+              className="input-day-value"
+            />
+            <button onClick={handleAddDay} disabled={saving || !newDay.label || !newDay.value} className="btn-save-day">
+              Add Day
+            </button>
+            <button onClick={() => { setShowAddDay(false); setNewDay({ label: '', value: '' }); }} className="btn-cancel">
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button onClick={() => setShowAddDay(true)} className="btn-add-day">
+            + Add Day
+          </button>
+        )}
+      </div>
+
+      {/* Task Description Legend */}
+      <div className="legend-section">
+        <h4>Legend</h4>
+        <div className="legend-items">
+          <div className="legend-item">
+            <span className="health-dot healthy"></span>
+            <span>Task is active and functioning</span>
+          </div>
+          <div className="legend-item">
+            <span className="health-dot broken"></span>
+            <span>Task has issues - admin task created</span>
+          </div>
+          <div className="legend-item">
+            <span className="health-dot disabled"></span>
+            <span>Task is disabled</span>
+          </div>
+        </div>
+        <div className="legend-items">
+          {COMMUNICATION_METHODS.map(method => (
+            <div key={method.key} className="legend-item">
+              <span className="method-dot" style={{ backgroundColor: method.color }}></span>
+              <span>{method.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default WorkflowConfigEditor;

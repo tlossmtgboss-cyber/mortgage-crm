@@ -10593,6 +10593,23 @@ app.include_router(subscription_router, tags=["Subscriptions"])
 from workflow_routes import router as workflow_router
 app.include_router(workflow_router, tags=["Workflow"])
 
+# Include Workflow Configuration routes (editable workflow definitions)
+try:
+    from workflow_config_models import create_workflow_config_models
+    from workflow_config_routes import router as workflow_config_router, set_dependencies as set_workflow_config_deps
+
+    # Create workflow config models using our Base
+    workflow_config_models = create_workflow_config_models(Base)
+
+    # Set dependencies for the routes
+    set_workflow_config_deps(get_db, get_current_user, workflow_config_models)
+
+    # Include the router
+    app.include_router(workflow_config_router, tags=["Workflow Configuration"])
+    logger.info("✅ Workflow Configuration routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load Workflow Configuration routes: {e}")
+
 # Include Market Chat routes
 from market_chat_routes import router as market_chat_router
 app.include_router(market_chat_router, tags=["Market Chat"])
@@ -35049,6 +35066,151 @@ async def add_profitability_tables_migration(
 
     except Exception as e:
         logger.error(f"Profitability tables migration failed: {e}")
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e)
+        }
+
+
+@app.post("/api/v1/migrations/add-workflow-config-tables", response_model=None)
+async def add_workflow_config_tables_migration(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Add Workflow Configuration tables for editable workflow definitions.
+    Creates tables for workflow configs, day configs, role assignments, task instances, and alerts.
+    """
+    try:
+        logger.info(f"Running migration: add workflow config tables (user: {current_user.id})")
+
+        # Create workflow_configurations table
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS workflow_configurations (
+                id SERIAL PRIMARY KEY,
+                workflow_key VARCHAR(50) UNIQUE NOT NULL,
+                workflow_name VARCHAR(100) NOT NULL,
+                description TEXT,
+                objective TEXT,
+                statuses_impacted JSONB,
+                color VARCHAR(20),
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+
+        # Create workflow_day_configs table
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS workflow_day_configs (
+                id SERIAL PRIMARY KEY,
+                workflow_id INTEGER REFERENCES workflow_configurations(id) ON DELETE CASCADE,
+                day_label VARCHAR(50) NOT NULL,
+                day_order INTEGER NOT NULL,
+                day_value INTEGER,
+                phone_enabled BOOLEAN DEFAULT FALSE,
+                text_enabled BOOLEAN DEFAULT FALSE,
+                email_enabled BOOLEAN DEFAULT FALSE,
+                referral_partner_enabled BOOLEAN DEFAULT FALSE,
+                lo_responsible BOOLEAN DEFAULT FALSE,
+                jr_lo_responsible BOOLEAN DEFAULT FALSE,
+                production_asst_responsible BOOLEAN DEFAULT FALSE,
+                ai_responsible BOOLEAN DEFAULT FALSE,
+                health_status VARCHAR(20) DEFAULT 'healthy',
+                health_message VARCHAR(255),
+                last_health_check TIMESTAMP,
+                is_active BOOLEAN DEFAULT TRUE,
+                task_description TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+
+        # Create workflow_role_assignments table
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS workflow_role_assignments (
+                id SERIAL PRIMARY KEY,
+                workflow_id INTEGER REFERENCES workflow_configurations(id) ON DELETE CASCADE,
+                role VARCHAR(50) NOT NULL,
+                user_id INTEGER REFERENCES users(id),
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+
+        # Create workflow_task_instances table
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS workflow_task_instances (
+                id SERIAL PRIMARY KEY,
+                workflow_id INTEGER REFERENCES workflow_configurations(id),
+                day_config_id INTEGER REFERENCES workflow_day_configs(id),
+                lead_id INTEGER REFERENCES leads(id),
+                loan_id INTEGER REFERENCES loans(id),
+                task_name VARCHAR(255),
+                task_description TEXT,
+                communication_method VARCHAR(50),
+                assigned_role VARCHAR(50),
+                assigned_user_id INTEGER REFERENCES users(id),
+                scheduled_date TIMESTAMP,
+                due_date TIMESTAMP,
+                completed_at TIMESTAMP,
+                status VARCHAR(50) DEFAULT 'pending',
+                health_status VARCHAR(20) DEFAULT 'healthy',
+                error_message TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+
+        # Create broken_task_alerts table
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS broken_task_alerts (
+                id SERIAL PRIMARY KEY,
+                workflow_id INTEGER REFERENCES workflow_configurations(id),
+                day_config_id INTEGER REFERENCES workflow_day_configs(id),
+                task_instance_id INTEGER REFERENCES workflow_task_instances(id),
+                alert_type VARCHAR(50),
+                alert_message TEXT,
+                severity VARCHAR(20) DEFAULT 'medium',
+                admin_task_id INTEGER REFERENCES tasks(id),
+                is_resolved BOOLEAN DEFAULT FALSE,
+                resolved_at TIMESTAMP,
+                resolved_by_id INTEGER REFERENCES users(id),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+
+        # Create indexes
+        db.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_workflow_day_configs_workflow_id ON workflow_day_configs(workflow_id);
+            CREATE INDEX IF NOT EXISTS idx_workflow_role_assignments_workflow_id ON workflow_role_assignments(workflow_id);
+            CREATE INDEX IF NOT EXISTS idx_workflow_task_instances_workflow_id ON workflow_task_instances(workflow_id);
+            CREATE INDEX IF NOT EXISTS idx_workflow_task_instances_lead_id ON workflow_task_instances(lead_id);
+            CREATE INDEX IF NOT EXISTS idx_workflow_task_instances_loan_id ON workflow_task_instances(loan_id);
+            CREATE INDEX IF NOT EXISTS idx_broken_task_alerts_resolved ON broken_task_alerts(is_resolved);
+        """))
+
+        db.commit()
+        logger.info("Workflow config tables migration completed successfully")
+
+        return {
+            "success": True,
+            "message": "Workflow configuration tables created successfully",
+            "tables_created": [
+                "workflow_configurations",
+                "workflow_day_configs",
+                "workflow_role_assignments",
+                "workflow_task_instances",
+                "broken_task_alerts"
+            ]
+        }
+
+    except Exception as e:
+        logger.error(f"Workflow config tables migration failed: {e}")
+        db.rollback()
         return {
             "success": False,
             "message": f"Migration failed: {str(e)}",

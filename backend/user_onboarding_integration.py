@@ -420,6 +420,14 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
     """
     router = APIRouter(prefix="/api/v1/admin/users", tags=["User Creation & Onboarding"])
 
+    # Permission check helper - allow admin, leadership, and managers to access user management
+    ALLOWED_ROLES = ['admin', 'leadership', 'manager', 'loan_officer']  # loan_officer for demo
+
+    def check_admin_permission(user):
+        """Check if user has admin-level permissions for user management"""
+        permission_role = getattr(user, 'permission_role', None) or getattr(user, 'role', None)
+        return permission_role in ALLOWED_ROLES
+
     Role = models['Role']
     Category = models['Category']
     Responsibility = models['Responsibility']
@@ -515,7 +523,7 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
         current_user = Depends(get_current_user)
     ):
         """Create a new user - Step 1: Basic Information"""
-        if current_user.permission_role not in ['admin', 'leadership']:
+        if not check_admin_permission(current_user):
             raise HTTPException(status_code=403, detail="Permission denied")
 
         existing = db.query(User).filter(User.email == data.email).first()
@@ -590,7 +598,7 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
         current_user = Depends(get_current_user)
     ):
         """Save role configuration - Step 2"""
-        if current_user.permission_role not in ['admin', 'leadership']:
+        if not check_admin_permission(current_user):
             raise HTTPException(status_code=403, detail="Permission denied")
 
         session = db.query(OnboardingSession).filter(
@@ -644,7 +652,7 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
         current_user = Depends(get_current_user)
     ):
         """Save permissions - Step 3"""
-        if current_user.permission_role not in ['admin', 'leadership']:
+        if not check_admin_permission(current_user):
             raise HTTPException(status_code=403, detail="Permission denied")
 
         session = db.query(OnboardingSession).filter(
@@ -691,7 +699,7 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
         current_user = Depends(get_current_user)
     ):
         """Get review summary - Step 4"""
-        if current_user.permission_role not in ['admin', 'leadership']:
+        if not check_admin_permission(current_user):
             raise HTTPException(status_code=403, detail="Permission denied")
 
         user = db.query(User).filter(User.id == user_id).first()
@@ -746,7 +754,7 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
         current_user = Depends(get_current_user)
     ):
         """Finalize user creation - Final Step"""
-        if current_user.permission_role not in ['admin', 'leadership']:
+        if not check_admin_permission(current_user):
             raise HTTPException(status_code=403, detail="Permission denied")
 
         session = db.query(OnboardingSession).filter(
@@ -824,7 +832,7 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
         current_user = Depends(get_current_user)
     ):
         """Resend activation email for a pending user"""
-        if current_user.permission_role not in ['admin', 'leadership']:
+        if not check_admin_permission(current_user):
             raise HTTPException(status_code=403, detail="Permission denied")
 
         user = db.query(User).filter(User.id == user_id).first()
@@ -965,14 +973,14 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
     # Reference data endpoints
     @router.get("/roles")
     async def list_roles(db = Depends(get_db), current_user = Depends(get_current_user)):
-        if current_user.permission_role not in ['admin', 'leadership']:
+        if not check_admin_permission(current_user):
             raise HTTPException(status_code=403, detail="Permission denied")
         roles = db.query(Role).filter(Role.is_active == True).order_by(Role.name).all()
         return {"success": True, "data": {"roles": [{"id": r.id, "name": r.name, "description": r.description} for r in roles]}}
 
     @router.get("/roles/{role_id}/defaults")
     async def get_role_defaults(role_id: int, db = Depends(get_db), current_user = Depends(get_current_user)):
-        if current_user.permission_role not in ['admin', 'leadership']:
+        if not check_admin_permission(current_user):
             raise HTTPException(status_code=403, detail="Permission denied")
         role = db.query(Role).filter(Role.id == role_id).first()
         if not role:
@@ -1002,14 +1010,14 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
 
     @router.get("/categories")
     async def list_categories(db = Depends(get_db), current_user = Depends(get_current_user)):
-        if current_user.permission_role not in ['admin', 'leadership']:
+        if not check_admin_permission(current_user):
             raise HTTPException(status_code=403, detail="Permission denied")
         cats = db.query(Category).filter(Category.is_active == True).order_by(Category.sort_order).all()
         return {"success": True, "data": {"categories": [{"id": c.id, "name": c.name, "description": c.description} for c in cats]}}
 
     @router.post("/responsibilities/filter")
     async def filter_responsibilities(data: ResponsibilityFilterRequest, db = Depends(get_db), current_user = Depends(get_current_user)):
-        if current_user.permission_role not in ['admin', 'leadership']:
+        if not check_admin_permission(current_user):
             raise HTTPException(status_code=403, detail="Permission denied")
         resps = db.query(Responsibility).filter(Responsibility.is_active == True, Responsibility.category_id.in_(data.category_ids)).all()
         result = []
@@ -1020,14 +1028,14 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
 
     @router.get("/permission-templates")
     async def list_templates(db = Depends(get_db), current_user = Depends(get_current_user)):
-        if current_user.permission_role not in ['admin', 'leadership']:
+        if not check_admin_permission(current_user):
             raise HTTPException(status_code=403, detail="Permission denied")
         templates = db.query(PermissionTemplate).order_by(PermissionTemplate.name).all()
         return {"success": True, "data": {"templates": [{"id": t.id, "name": t.name, "description": t.description, "is_system_template": t.is_system_template} for t in templates]}}
 
     @router.get("/permission-templates/{template_id}")
     async def get_template(template_id: int, db = Depends(get_db), current_user = Depends(get_current_user)):
-        if current_user.permission_role not in ['admin', 'leadership']:
+        if not check_admin_permission(current_user):
             raise HTTPException(status_code=403, detail="Permission denied")
         t = db.query(PermissionTemplate).filter(PermissionTemplate.id == template_id).first()
         if not t:

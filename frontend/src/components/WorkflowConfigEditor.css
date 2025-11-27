@@ -1,0 +1,580 @@
+/* WorkflowConfigEditor.css - Editable workflow configuration grid */
+
+.workflow-config-editor {
+  padding: 20px;
+  background: white;
+  border-radius: 12px;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* Header */
+.editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding-bottom: 16px;
+  margin-bottom: 20px;
+  border-bottom: 3px solid #667eea;
+}
+
+.editor-title h2 {
+  margin: 0 0 8px 0;
+  font-size: 24px;
+}
+
+.editor-objective {
+  margin: 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.saving-indicator {
+  color: #667eea;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.btn-close {
+  padding: 8px 16px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #374151;
+  transition: all 0.2s;
+}
+
+.btn-close:hover {
+  background: #e5e7eb;
+}
+
+/* Alerts Banner */
+.alerts-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.alert-icon {
+  width: 32px;
+  height: 32px;
+  background: #ef4444;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 18px;
+}
+
+.alert-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.alert-content strong {
+  color: #dc2626;
+  font-size: 14px;
+}
+
+.alert-content span {
+  color: #991b1b;
+  font-size: 12px;
+}
+
+/* Role Assignments Section */
+.role-assignments-section {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+}
+
+.role-assignments-section h3 {
+  margin: 0 0 4px 0;
+  font-size: 16px;
+  color: #1a1a2e;
+}
+
+.section-description {
+  margin: 0 0 16px 0;
+  font-size: 13px;
+  color: #666;
+}
+
+.role-assignments-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.role-assignment-card {
+  background: white;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  transition: all 0.2s;
+}
+
+.role-assignment-card:hover {
+  border-color: #667eea;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.15);
+}
+
+.role-header {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.role-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: #1a1a2e;
+}
+
+.role-abbr {
+  font-size: 12px;
+  color: #666;
+}
+
+.role-user {
+  cursor: pointer;
+}
+
+.role-user select {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #667eea;
+  border-radius: 4px;
+  font-size: 13px;
+  background: white;
+}
+
+.role-user .assigned {
+  color: #059669;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.role-user .unassigned {
+  color: #9ca3af;
+  font-size: 13px;
+  font-style: italic;
+}
+
+/* Workflow Grid Container */
+.workflow-grid-container {
+  overflow-x: auto;
+  margin-bottom: 20px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+/* Workflow Config Grid Table */
+.workflow-config-grid {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 900px;
+}
+
+.workflow-config-grid th,
+.workflow-config-grid td {
+  padding: 10px 12px;
+  text-align: center;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.workflow-config-grid thead tr:first-child th {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  font-weight: 600;
+  font-size: 13px;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.workflow-config-grid .sub-header th {
+  background: #f9fafb;
+  font-size: 12px;
+  font-weight: 500;
+  color: #666;
+  padding: 8px 12px;
+}
+
+.health-col {
+  width: 60px;
+}
+
+.day-col {
+  width: 150px;
+  text-align: left !important;
+}
+
+.comm-header {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%) !important;
+  color: #1d4ed8 !important;
+}
+
+.resp-header {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%) !important;
+  color: #16a34a !important;
+}
+
+.actions-col {
+  width: 60px;
+}
+
+/* Health Status Cell */
+.health-cell {
+  text-align: center;
+}
+
+.health-dot {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.health-dot:hover {
+  transform: scale(1.2);
+}
+
+.health-dot.healthy {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
+}
+
+.health-dot.broken {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+  animation: pulse-broken 2s infinite;
+}
+
+.health-dot.disabled {
+  background: #9ca3af;
+}
+
+@keyframes pulse-broken {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(239, 68, 68, 0.6);
+  }
+}
+
+/* Day Cell */
+.day-cell {
+  text-align: left !important;
+}
+
+.day-label {
+  font-weight: 600;
+  color: #1a1a2e;
+  font-size: 14px;
+}
+
+.day-value {
+  display: block;
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 2px;
+}
+
+/* Checkbox Cell */
+.checkbox-cell {
+  text-align: center;
+}
+
+.checkbox-wrapper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.checkbox-wrapper input {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+  height: 0;
+  width: 0;
+}
+
+.custom-checkbox {
+  width: 22px;
+  height: 22px;
+  border: 2px solid #d1d5db;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.custom-checkbox::after {
+  content: '';
+  display: none;
+  width: 6px;
+  height: 10px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  margin-bottom: 2px;
+}
+
+.checkbox-wrapper input:checked + .custom-checkbox::after {
+  display: block;
+}
+
+.checkbox-wrapper input:checked + .custom-checkbox {
+  background: #667eea;
+  border-color: #667eea;
+}
+
+.checkbox-wrapper input:checked + .custom-checkbox.checked {
+  background: #667eea;
+  border-color: #667eea;
+}
+
+/* Row States */
+.workflow-config-grid tbody tr:hover {
+  background: #f9fafb;
+}
+
+.workflow-config-grid tbody tr.row-broken {
+  background: linear-gradient(90deg, #fef2f2 0%, transparent 20%);
+}
+
+.workflow-config-grid tbody tr.row-broken:hover {
+  background: linear-gradient(90deg, #fee2e2 0%, #fef2f2 20%);
+}
+
+/* Actions Cell */
+.actions-cell {
+  text-align: center;
+}
+
+.btn-delete-day {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: #f3f4f6;
+  color: #9ca3af;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+  transition: all 0.2s;
+}
+
+.btn-delete-day:hover {
+  background: #fee2e2;
+  color: #ef4444;
+}
+
+.btn-delete-day:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Add Day Section */
+.add-day-section {
+  margin-bottom: 24px;
+}
+
+.btn-add-day {
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #5a67d8 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.btn-add-day:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.add-day-form {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.input-day-label,
+.input-day-value {
+  padding: 10px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.input-day-label {
+  width: 200px;
+}
+
+.input-day-value {
+  width: 120px;
+}
+
+.input-day-label:focus,
+.input-day-value:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.btn-save-day {
+  padding: 10px 20px;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.btn-save-day:hover:not(:disabled) {
+  background: #059669;
+}
+
+.btn-save-day:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-cancel {
+  padding: 10px 20px;
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.btn-cancel:hover {
+  background: #e5e7eb;
+}
+
+/* Legend Section */
+.legend-section {
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+}
+
+.legend-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: #666;
+  font-weight: 600;
+}
+
+.legend-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-bottom: 12px;
+}
+
+.legend-items:last-child {
+  margin-bottom: 0;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #374151;
+}
+
+.method-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+/* Loading and Error States */
+.editor-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 60px;
+  color: #666;
+  font-size: 16px;
+}
+
+.editor-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 40px;
+  color: #dc2626;
+  gap: 16px;
+}
+
+.btn-retry {
+  padding: 10px 20px;
+  background: #667eea;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .editor-header {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .role-assignments-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .add-day-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .input-day-label,
+  .input-day-value {
+    width: 100%;
+  }
+
+  .legend-items {
+    flex-direction: column;
+    gap: 8px;
+  }
+}

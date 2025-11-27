@@ -41,7 +41,7 @@ function ReconciliationCenter() {
   const [showCreateReferralDialog, setShowCreateReferralDialog] = useState(false);
   const [newReferralPartner, setNewReferralPartner] = useState({
     name: '',
-    company_name: '',
+    company: '',
     email: '',
     phone: '',
     type: 'realtor'
@@ -166,7 +166,7 @@ function ReconciliationCenter() {
     const searchLower = searchTerm.toLowerCase();
     const results = referralPartners.filter(partner => {
       const name = (partner.name || '').toLowerCase();
-      const company = (partner.company_name || '').toLowerCase();
+      const company = (partner.company || partner.company_name || '').toLowerCase();
       return name.includes(searchLower) || company.includes(searchLower);
     });
 
@@ -178,7 +178,7 @@ function ReconciliationCenter() {
   const selectReferralPartner = (partner) => {
     setSelectedReferralPartner(partner);
     setNewBorrowerForm(prev => ({ ...prev, referral_partner_id: partner.id }));
-    setReferralSearchTerm(partner.name || partner.company_name || '');
+    setReferralSearchTerm(partner.name || partner.company || '');
     setShowReferralDropdown(false);
   };
 
@@ -213,7 +213,7 @@ function ReconciliationCenter() {
         setReferralPartners(prev => [...prev, created]);
         selectReferralPartner(created);
         setShowCreateReferralDialog(false);
-        setNewReferralPartner({ name: '', company_name: '', email: '', phone: '', type: 'realtor' });
+        setNewReferralPartner({ name: '', company: '', email: '', phone: '', type: 'realtor' });
       } else {
         const error = await response.json();
         alert(`Failed to create referral partner: ${error.detail || 'Unknown error'}`);
@@ -2007,8 +2007,8 @@ function ReconciliationCenter() {
                             onMouseLeave={(e) => e.target.style.background = 'white'}
                           >
                             <div style={{ fontWeight: '500' }}>{partner.name}</div>
-                            {partner.company_name && (
-                              <div style={{ fontSize: '12px', color: '#6b7280' }}>{partner.company_name}</div>
+                            {(partner.company || partner.company_name) && (
+                              <div style={{ fontSize: '12px', color: '#6b7280' }}>{partner.company || partner.company_name}</div>
                             )}
                             {partner.type && (
                               <span style={{
@@ -2062,7 +2062,7 @@ function ReconciliationCenter() {
                       color: '#059669'
                     }}>
                       ✓ Selected: {selectedReferralPartner.name}
-                      {selectedReferralPartner.company_name && ` (${selectedReferralPartner.company_name})`}
+                      {(selectedReferralPartner.company || selectedReferralPartner.company_name) && ` (${selectedReferralPartner.company || selectedReferralPartner.company_name})`}
                     </div>
                   )}
                 </div>

@@ -92,10 +92,10 @@ function UserCreationWizard() {
     setLoading(true);
     try {
       const [rolesRes, categoriesRes, responsibilitiesRes, templatesRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/api/v1/onboarding/roles`, getAuthHeaders()),
-        axios.get(`${API_BASE_URL}/api/v1/onboarding/categories`, getAuthHeaders()),
-        axios.get(`${API_BASE_URL}/api/v1/onboarding/responsibilities`, getAuthHeaders()),
-        axios.get(`${API_BASE_URL}/api/v1/onboarding/permission-templates`, getAuthHeaders())
+        axios.get(`${API_BASE_URL}/api/v1/admin/users/roles`, getAuthHeaders()),
+        axios.get(`${API_BASE_URL}/api/v1/admin/users/categories`, getAuthHeaders()),
+        axios.get(`${API_BASE_URL}/api/v1/admin/users/responsibilities`, getAuthHeaders()),
+        axios.get(`${API_BASE_URL}/api/v1/admin/users/permission-templates`, getAuthHeaders())
       ]);
 
       setRoles(rolesRes.data || []);
@@ -142,7 +142,7 @@ function UserCreationWizard() {
     if (roleId) {
       try {
         const response = await axios.get(
-          `${API_BASE_URL}/api/v1/onboarding/roles/${roleId}/defaults`,
+          `${API_BASE_URL}/api/v1/admin/users/roles/${roleId}/defaults`,
           getAuthHeaders()
         );
         const defaults = response.data;
@@ -177,7 +177,7 @@ function UserCreationWizard() {
       };
 
       const response = await axios.post(
-        `${API_BASE_URL}/api/v1/onboarding/users/create`,
+        `${API_BASE_URL}/api/v1/admin/users/create`,
         payload,
         getAuthHeaders()
       );
@@ -205,7 +205,7 @@ function UserCreationWizard() {
 
     try {
       await axios.post(
-        `${API_BASE_URL}/api/v1/onboarding/users/${formData.created_user_id}/send-activation`,
+        `${API_BASE_URL}/api/v1/admin/users/${formData.created_user_id}/resend-activation`,
         {},
         getAuthHeaders()
       );

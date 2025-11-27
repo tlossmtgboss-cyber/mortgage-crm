@@ -1,0 +1,315 @@
+"""
+Workflow Configuration Models
+Defines the structure for editable workflow definitions with:
+- Days/timing configuration
+- Communication methods (Phone, Text, Email, Referral Partner)
+- Task responsibility (roles and user assignments)
+- Task health status tracking
+"""
+
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, JSON, Text, Enum as SQLEnum
+from sqlalchemy.orm import relationship
+from datetime import datetime
+import enum
+
+
+class CommunicationMethod(str, enum.Enum):
+    PHONE = "phone"
+    TEXT = "text"
+    EMAIL = "email"
+    REFERRAL_PARTNER = "referral_partner"
+
+
+class TaskResponsibility(str, enum.Enum):
+    LO = "loan_officer"
+    JR_LO = "junior_loan_officer"
+    PRODUCTION_ASSISTANT = "production_assistant"
+    AI = "ai"
+    PROCESSOR = "processor"
+    UNDERWRITER = "underwriter"
+    CLOSER = "closer"
+
+
+class TaskHealthStatus(str, enum.Enum):
+    HEALTHY = "healthy"  # Green dot - task is active and working
+    BROKEN = "broken"    # Red dot - task has issues
+    DISABLED = "disabled"  # Gray dot - task is turned off
+
+
+def create_workflow_config_models(Base):
+    """
+    Factory function to create workflow config models with the provided SQLAlchemy Base.
+    """
+
+    class WorkflowConfiguration(Base):
+        """
+        Master workflow configuration for each stage.
+        One record per workflow (Prospect, PreQual, etc.)
+        """
+        __tablename__ = "workflow_configurations"
+        __table_args__ = {'extend_existing': True}
+
+        id = Column(Integer, primary_key=True, index=True)
+        workflow_key = Column(String(50), unique=True, nullable=False, index=True)  # e.g., 'prospect', 'prequal'
+        workflow_name = Column(String(100), nullable=False)  # Display name
+        description = Column(Text)
+        objective = Column(Text)
+        statuses_impacted = Column(JSON)  # List of statuses this workflow applies to
+        color = Column(String(20))
+        is_active = Column(Boolean, default=True)
+        created_at = Column(DateTime, default=datetime.utcnow)
+        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+        # Relationships
+        days = relationship("WorkflowDayConfig", back_populates="workflow", cascade="all, delete-orphan", order_by="WorkflowDayConfig.day_order")
+        role_assignments = relationship("WorkflowRoleAssignment", back_populates="workflow", cascade="all, delete-orphan")
+
+
+    class WorkflowDayConfig(Base):
+        """
+        Configuration for each day/timing in a workflow.
+        E.g., "First 24 Hours", "Day 2", "Month 2", etc.
+        """
+        __tablename__ = "workflow_day_configs"
+        __table_args__ = {'extend_existing': True}
+
+        id = Column(Integer, primary_key=True, index=True)
+        workflow_id = Column(Integer, ForeignKey("workflow_configurations.id"), nullable=False)
+        day_label = Column(String(50), nullable=False)  # "First 24 Hours", "Day 2", "Month 3"
+        day_order = Column(Integer, nullable=False)  # Order for display/execution
+        day_value = Column(Integer)  # Numeric value in days (1, 2, 30, 60, etc.)
+
+        # Communication method flags
+        phone_enabled = Column(Boolean, default=False)
+        text_enabled = Column(Boolean, default=False)
+        email_enabled = Column(Boolean, default=False)
+        referral_partner_enabled = Column(Boolean, default=False)
+
+        # Task responsibility flags - which roles handle tasks on this day
+        lo_responsible = Column(Boolean, default=False)
+        jr_lo_responsible = Column(Boolean, default=False)
+        production_asst_responsible = Column(Boolean, default=False)
+        ai_responsible = Column(Boolean, default=False)
+
+        # Task health status
+        health_status = Column(SQLEnum(TaskHealthStatus), default=TaskHealthStatus.HEALTHY)
+        health_message = Column(String(255))  # Error message if broken
+        last_health_check = Column(DateTime)
+
+        # Additional config
+        is_active = Column(Boolean, default=True)
+        task_description = Column(Text)  # What should happen on this day
+        created_at = Column(DateTime, default=datetime.utcnow)
+        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+        # Relationships
+        workflow = relationship("WorkflowConfiguration", back_populates="days")
+
+
+    class WorkflowRoleAssignment(Base):
+        """
+        Assigns specific users to roles within a workflow.
+        E.g., "John Doe" is the LO for the Prospect workflow.
+        """
+        __tablename__ = "workflow_role_assignments"
+        __table_args__ = {'extend_existing': True}
+
+        id = Column(Integer, primary_key=True, index=True)
+        workflow_id = Column(Integer, ForeignKey("workflow_configurations.id"), nullable=False)
+        role = Column(SQLEnum(TaskResponsibility), nullable=False)
+        user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Assigned user
+        is_active = Column(Boolean, default=True)
+        created_at = Column(DateTime, default=datetime.utcnow)
+        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+        # Relationships
+        workflow = relationship("WorkflowConfiguration", back_populates="role_assignments")
+        user = relationship("User", backref="workflow_role_assignments")
+
+
+    class WorkflowTaskInstance(Base):
+        """
+        Individual task instances generated from workflow configurations.
+        Tracks actual tasks for leads/loans.
+        """
+        __tablename__ = "workflow_task_instances"
+        __table_args__ = {'extend_existing': True}
+
+        id = Column(Integer, primary_key=True, index=True)
+        workflow_id = Column(Integer, ForeignKey("workflow_configurations.id"), nullable=False)
+        day_config_id = Column(Integer, ForeignKey("workflow_day_configs.id"), nullable=False)
+        lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
+        loan_id = Column(Integer, ForeignKey("loans.id"), nullable=True)
+
+        # Task details
+        task_name = Column(String(255))
+        task_description = Column(Text)
+        communication_method = Column(SQLEnum(CommunicationMethod))
+        assigned_role = Column(SQLEnum(TaskResponsibility))
+        assigned_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+        # Scheduling
+        scheduled_date = Column(DateTime)
+        due_date = Column(DateTime)
+        completed_at = Column(DateTime)
+
+        # Status
+        status = Column(String(50), default="pending")  # pending, in_progress, completed, skipped, failed
+        health_status = Column(SQLEnum(TaskHealthStatus), default=TaskHealthStatus.HEALTHY)
+        error_message = Column(Text)
+
+        created_at = Column(DateTime, default=datetime.utcnow)
+        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+        # Relationships
+        workflow = relationship("WorkflowConfiguration")
+        day_config = relationship("WorkflowDayConfig")
+        assigned_user = relationship("User", foreign_keys=[assigned_user_id])
+
+
+    class BrokenTaskAlert(Base):
+        """
+        Alerts for broken workflow tasks that need admin attention.
+        """
+        __tablename__ = "broken_task_alerts"
+        __table_args__ = {'extend_existing': True}
+
+        id = Column(Integer, primary_key=True, index=True)
+        workflow_id = Column(Integer, ForeignKey("workflow_configurations.id"), nullable=False)
+        day_config_id = Column(Integer, ForeignKey("workflow_day_configs.id"), nullable=True)
+        task_instance_id = Column(Integer, ForeignKey("workflow_task_instances.id"), nullable=True)
+
+        # Alert details
+        alert_type = Column(String(50))  # 'missing_user', 'config_error', 'execution_failed', etc.
+        alert_message = Column(Text)
+        severity = Column(String(20), default="medium")  # low, medium, high, critical
+
+        # Admin task created for this alert
+        admin_task_id = Column(Integer, ForeignKey("tasks.id"), nullable=True)
+
+        # Status
+        is_resolved = Column(Boolean, default=False)
+        resolved_at = Column(DateTime)
+        resolved_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+        created_at = Column(DateTime, default=datetime.utcnow)
+        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+        # Relationships
+        workflow = relationship("WorkflowConfiguration")
+        day_config = relationship("WorkflowDayConfig")
+        task_instance = relationship("WorkflowTaskInstance")
+        resolved_by = relationship("User", foreign_keys=[resolved_by_id])
+
+
+    return {
+        'WorkflowConfiguration': WorkflowConfiguration,
+        'WorkflowDayConfig': WorkflowDayConfig,
+        'WorkflowRoleAssignment': WorkflowRoleAssignment,
+        'WorkflowTaskInstance': WorkflowTaskInstance,
+        'BrokenTaskAlert': BrokenTaskAlert
+    }
+
+
+# Default workflow configurations matching the spreadsheet
+DEFAULT_WORKFLOW_CONFIGS = {
+    'prospect': {
+        'name': 'Prospect Workflow',
+        'description': 'Initial lead engagement and qualification workflow',
+        'objective': 'Get the lead to complete the application for pre-approval',
+        'statuses_impacted': ['New', 'Attempted Contact', 'Prospect'],
+        'color': '#3b82f6',
+        'days': [
+            {'label': 'First 24 Hours', 'order': 1, 'value': 1, 'phone': True, 'text': True, 'email': False, 'partner': False, 'lo': True, 'jr_lo': False, 'pa': False, 'ai': False},
+            {'label': 'Day 2', 'order': 2, 'value': 2, 'phone': True, 'text': False, 'email': False, 'partner': False, 'lo': False, 'jr_lo': True, 'pa': False, 'ai': False},
+            {'label': 'Day 3', 'order': 3, 'value': 3, 'phone': True, 'text': True, 'email': False, 'partner': False, 'lo': False, 'jr_lo': True, 'pa': False, 'ai': False},
+            {'label': 'Day 5', 'order': 4, 'value': 5, 'phone': False, 'text': True, 'email': True, 'partner': True, 'lo': False, 'jr_lo': True, 'pa': False, 'ai': False},
+            {'label': 'Day 8', 'order': 5, 'value': 8, 'phone': True, 'text': False, 'email': False, 'partner': False, 'lo': False, 'jr_lo': False, 'pa': False, 'ai': True},
+            {'label': 'Day 12', 'order': 6, 'value': 12, 'phone': False, 'text': True, 'email': True, 'partner': True, 'lo': False, 'jr_lo': True, 'pa': False, 'ai': False},
+            {'label': 'Day 17', 'order': 7, 'value': 17, 'phone': True, 'text': False, 'email': False, 'partner': False, 'lo': False, 'jr_lo': False, 'pa': False, 'ai': True},
+            {'label': 'Day 22', 'order': 8, 'value': 22, 'phone': False, 'text': True, 'email': False, 'partner': False, 'lo': False, 'jr_lo': False, 'pa': False, 'ai': True},
+            {'label': 'Day 30', 'order': 9, 'value': 30, 'phone': True, 'text': True, 'email': False, 'partner': True, 'lo': False, 'jr_lo': False, 'pa': False, 'ai': True},
+            {'label': 'Month 2', 'order': 10, 'value': 60, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': False, 'jr_lo': False, 'pa': False, 'ai': True},
+            {'label': 'Month 3', 'order': 11, 'value': 90, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': False, 'jr_lo': False, 'pa': False, 'ai': True},
+            {'label': 'Month 4', 'order': 12, 'value': 120, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': False, 'jr_lo': False, 'pa': False, 'ai': True},
+            {'label': 'Month 5', 'order': 13, 'value': 150, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': False, 'jr_lo': False, 'pa': False, 'ai': True},
+            {'label': 'Month 6', 'order': 14, 'value': 180, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': False, 'jr_lo': False, 'pa': False, 'ai': True},
+            {'label': 'Month 7', 'order': 15, 'value': 210, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': False, 'jr_lo': False, 'pa': False, 'ai': True},
+            {'label': 'Month 8', 'order': 16, 'value': 240, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': False, 'jr_lo': False, 'pa': False, 'ai': True},
+            {'label': 'Month 9', 'order': 17, 'value': 270, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': False, 'jr_lo': False, 'pa': False, 'ai': True},
+            {'label': 'Month 10-24', 'order': 18, 'value': 300, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': False, 'jr_lo': False, 'pa': False, 'ai': True},
+        ]
+    },
+    'prequal': {
+        'name': 'PreQual Workflow',
+        'description': 'Pre-qualification process workflow',
+        'objective': 'Guide the lead through pre-qualification to pre-approval',
+        'statuses_impacted': ['Pre-Qualified'],
+        'color': '#8b5cf6',
+        'days': []  # Will be populated with similar structure
+    },
+    'pre_approved': {
+        'name': 'Pre-Approval Workflow',
+        'description': 'Pre-approval maintenance and house hunting support',
+        'objective': 'Support the borrower through house hunting to contract',
+        'statuses_impacted': ['Pre-Approved'],
+        'color': '#10b981',
+        'days': []
+    },
+    'under_contract': {
+        'name': 'Under Contract Workflow',
+        'description': 'Active loan processing workflow',
+        'objective': 'Guide the loan from contract to closing',
+        'statuses_impacted': ['Under Contract'],
+        'color': '#f59e0b',
+        'days': []
+    },
+    'lead_purchase': {
+        'name': 'Lead Purchase Workflow',
+        'description': 'Purchased lead engagement workflow',
+        'objective': 'Convert purchased leads to applications',
+        'statuses_impacted': ['New'],
+        'color': '#ec4899',
+        'days': []
+    },
+    'theme_day': {
+        'name': 'Theme Day Workflow',
+        'description': 'Daily themed outreach activities',
+        'objective': 'Maintain consistent touchpoints through themed campaigns',
+        'statuses_impacted': [],
+        'color': '#06b6d4',
+        'days': []
+    },
+    'last_mile': {
+        'name': 'Last Mile Workflow',
+        'description': 'Final steps to closing',
+        'objective': 'Ensure smooth closing process',
+        'statuses_impacted': ['CTC'],
+        'color': '#14b8a6',
+        'days': []
+    },
+    'post_close': {
+        'name': 'Post Close Workflow',
+        'description': 'Post-closing follow-up and referral generation',
+        'objective': 'Generate referrals and maintain client relationships',
+        'statuses_impacted': ['Funded'],
+        'color': '#22c55e',
+        'days': []
+    },
+    'credit_repair': {
+        'name': 'Credit Repair Workflow',
+        'description': 'Credit improvement tracking and support',
+        'objective': 'Help clients improve credit for future qualification',
+        'statuses_impacted': ['Does Not Qualify'],
+        'color': '#f97316',
+        'days': []
+    },
+    'nurture': {
+        'name': 'Nurture Workflow',
+        'description': 'Long-term relationship maintenance',
+        'objective': 'Keep leads warm until they are ready to buy',
+        'statuses_impacted': ['Long-Term Nurture'],
+        'color': '#6366f1',
+        'days': []
+    }
+}

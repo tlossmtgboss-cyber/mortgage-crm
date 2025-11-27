@@ -643,6 +643,74 @@
   margin-top: 4px;
 }
 
+/* Tab Config Button (gear icon) */
+.tab-config-btn {
+  margin-left: 8px;
+  opacity: 0.7;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tab-config-btn:hover {
+  opacity: 1;
+  transform: rotate(45deg);
+}
+
+/* Configure Workflow Button */
+.btn-configure-workflow {
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #5a67d8 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+  margin-left: auto;
+}
+
+.btn-configure-workflow:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+/* Config Editor Modal Overlay */
+.config-editor-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  z-index: 1000;
+  padding: 40px 20px;
+  overflow-y: auto;
+}
+
+.config-editor-modal {
+  width: 100%;
+  max-width: 1200px;
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* Workflow tabs scrollable on mobile */
 @media (max-width: 900px) {
   .workflow-tabs {
@@ -674,9 +742,23 @@
   .workflow-stats {
     width: 100%;
     justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .btn-configure-workflow {
+    width: 100%;
+    margin-top: 12px;
   }
 
   .task-templates-grid {
     grid-template-columns: 1fr;
+  }
+
+  .config-editor-overlay {
+    padding: 20px 10px;
+  }
+
+  .config-editor-modal {
+    max-height: calc(100vh - 40px);
   }
 }

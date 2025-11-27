@@ -43,7 +43,7 @@ function ActivateAccount() {
 
   const validateToken = async () => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/v1/onboarding/activate/validate`, {
+      const response = await axios.post(`${API_BASE_URL}/api/v1/admin/users/activate/validate`, {
         token
       });
 
@@ -109,7 +109,7 @@ function ActivateAccount() {
     setError(null);
 
     try {
-      const response = await axios.post(`${API_BASE_URL}/api/v1/onboarding/activate/complete`, {
+      const response = await axios.post(`${API_BASE_URL}/api/v1/admin/users/activate/complete`, {
         token,
         password
       });

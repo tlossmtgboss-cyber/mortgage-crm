@@ -94,7 +94,7 @@ function UserBulkUpload() {
       formData.append('file', selectedFile);
 
       const response = await axios.post(
-        `${API_BASE_URL}/api/v1/onboarding/bulk/parse`,
+        `${API_BASE_URL}/api/v1/admin/users/bulk/parse`,
         formData,
         {
           headers: {
@@ -129,7 +129,7 @@ function UserBulkUpload() {
 
       // Load roles for assignment
       const rolesRes = await axios.get(
-        `${API_BASE_URL}/api/v1/onboarding/roles`,
+        `${API_BASE_URL}/api/v1/admin/users/roles`,
         getAuthHeaders()
       );
       setRoles(rolesRes.data || []);
@@ -172,7 +172,7 @@ function UserBulkUpload() {
       formData.append('column_mapping', JSON.stringify(columnMapping));
 
       const response = await axios.post(
-        `${API_BASE_URL}/api/v1/onboarding/bulk/validate`,
+        `${API_BASE_URL}/api/v1/admin/users/bulk/validate`,
         formData,
         {
           headers: {
@@ -206,7 +206,7 @@ function UserBulkUpload() {
       }
 
       const response = await axios.post(
-        `${API_BASE_URL}/api/v1/onboarding/bulk/process`,
+        `${API_BASE_URL}/api/v1/admin/users/bulk/process`,
         formData,
         {
           headers: {
