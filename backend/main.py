@@ -14443,7 +14443,7 @@ async def approve_reconciliation(
                         phone=get_val("borrower_phone"),
                         stage=lead_stage,
                         source="reconciliation",
-                        loan_officer_id=current_user.id
+                        owner_id=current_user.id  # Lead model uses owner_id, not loan_officer_id
                     )
                     db.add(new_lead)
                     db.flush()
@@ -35165,6 +35165,61 @@ async def add_profitability_tables_migration(
 
     except Exception as e:
         logger.error(f"Profitability tables migration failed: {e}")
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e)
+        }
+
+
+@app.post("/api/v1/migrations/add-loanstage-docs", response_model=None)
+async def add_loanstage_docs_migration(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Add 'Docs Out' value to loanstage enum type.
+    Required for the DOCS stage feature in reconciliation.
+    """
+    try:
+        logger.info(f"Running migration: add loanstage DOCS enum value (user: {current_user.id})")
+
+        # PostgreSQL ALTER TYPE ... ADD VALUE cannot run inside a transaction
+        # We need to use autocommit mode for this
+        from sqlalchemy import event
+
+        # Get the raw connection and execute outside transaction
+        connection = engine.raw_connection()
+        try:
+            connection.set_isolation_level(0)  # AUTOCOMMIT
+            cursor = connection.cursor()
+
+            # Check if value exists first
+            cursor.execute("""
+                SELECT 1 FROM pg_enum WHERE enumlabel = 'Docs Out'
+                AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'loanstage')
+            """)
+            exists = cursor.fetchone()
+
+            if not exists:
+                cursor.execute("ALTER TYPE loanstage ADD VALUE 'Docs Out'")
+                logger.info("Added 'Docs Out' to loanstage enum")
+                message = "Successfully added 'Docs Out' to loanstage enum"
+            else:
+                logger.info("'Docs Out' already exists in loanstage enum")
+                message = "'Docs Out' already exists in loanstage enum"
+
+            cursor.close()
+        finally:
+            connection.close()
+
+        return {
+            "success": True,
+            "message": message
+        }
+
+    except Exception as e:
+        logger.error(f"Loanstage DOCS migration failed: {e}")
         return {
             "success": False,
             "message": f"Migration failed: {str(e)}",
