@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import ClipRecorder from './ClipRecorder';
 import ClipPlayer from './ClipPlayer';
+import ScheduleMeetingButton from './ScheduleMeetingButton';
 import { sanitizeText } from '../../utils/sanitize';
 import './ClipLibrary.css';
 
@@ -24,7 +25,8 @@ const ClipLibrary = () => {
     recipient_name: '',
     allow_download: false,
     require_email: false,
-    expires_in_days: null
+    expires_in_days: null,
+    include_scheduling: true  // Schedule Smart integration
   });
 
   // Load clips
@@ -93,7 +95,8 @@ const ClipLibrary = () => {
         recipient_name: '',
         allow_download: false,
         require_email: false,
-        expires_in_days: null
+        expires_in_days: null,
+        include_scheduling: true
       });
     } catch (err) {
       console.error('Error creating share:', err);
@@ -310,6 +313,15 @@ const ClipLibrary = () => {
                 >
                   Copy Link
                 </button>
+                <ScheduleMeetingButton
+                  buttonText="Schedule"
+                  buttonStyle="outline"
+                  buttonSize="small"
+                  showIcon={false}
+                  clipId={clip.id}
+                  leadId={clip.crm_entity_type === 'lead' ? clip.crm_entity_id : null}
+                  loanId={clip.crm_entity_type === 'loan' ? clip.crm_entity_id : null}
+                />
                 <button
                   className="action-btn delete"
                   onClick={() => handleDelete(clip.id)}
@@ -423,6 +435,18 @@ const ClipLibrary = () => {
                     }))}
                   />
                   Require email to view
+                </label>
+                <label className="checkbox-label schedule-option">
+                  <input
+                    type="checkbox"
+                    checked={shareSettings.include_scheduling}
+                    onChange={e => setShareSettings(prev => ({
+                      ...prev,
+                      include_scheduling: e.target.checked
+                    }))}
+                  />
+                  <span className="schedule-icon">📅</span>
+                  Include "Schedule a Meeting" button
                 </label>
               </div>
               <div className="form-group">

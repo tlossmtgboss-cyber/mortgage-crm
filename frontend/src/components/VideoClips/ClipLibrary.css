@@ -684,3 +684,31 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Schedule Smart Integration Styles */
+.schedule-option {
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  padding: 10px 12px !important;
+  border-radius: 8px;
+  border: 1px solid #bfdbfe;
+  margin-top: 8px;
+}
+
+.schedule-option .schedule-icon {
+  margin-right: 6px;
+}
+
+.clip-actions .schedule-meeting-btn {
+  font-size: 12px;
+  padding: 6px 12px;
+}
+
+.clip-actions .schedule-meeting-btn.style-outline {
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+.clip-actions .schedule-meeting-btn.style-outline:hover {
+  background: #3b82f6;
+  color: white;
+}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { sanitizeText, sanitizeHTML, SafeHTML } from '../../utils/sanitize';
+import ScheduleMeetingButton from './ScheduleMeetingButton';
 import './ClipPlayer.css';
 
 const ClipPlayer = ({ clip, onClose, isPublicView = false, shareToken = null }) => {
@@ -343,6 +344,24 @@ const ClipPlayer = ({ clip, onClose, isPublicView = false, shareToken = null }) 
           </div>
         )}
 
+        {/* Schedule Meeting CTA - shows after video ends */}
+        {currentTime >= duration - 0.5 && duration > 0 && (
+          <div className="end-cta-overlay">
+            <div className="end-cta-content">
+              <p>Ready to take the next step?</p>
+              <ScheduleMeetingButton
+                buttonText="Schedule a Call"
+                buttonStyle="primary"
+                buttonSize="large"
+                clipId={clip?.id}
+                leadId={clip?.crm_entity_type === 'lead' ? clip?.crm_entity_id : null}
+                loanId={clip?.crm_entity_type === 'loan' ? clip?.crm_entity_id : null}
+                isPublic={isPublicView}
+              />
+            </div>
+          </div>
+        )}
+
         {/* Controls */}
         <div className={`video-controls ${showControls ? 'visible' : ''}`}>
           {/* Progress Bar */}
@@ -476,6 +495,20 @@ const ClipPlayer = ({ clip, onClose, isPublicView = false, shareToken = null }) 
                     </span>
                   </div>
                 )}
+              </div>
+
+              {/* Schedule Meeting CTA */}
+              <div className="schedule-cta-section">
+                <p className="schedule-cta-text">Have questions? Let's talk!</p>
+                <ScheduleMeetingButton
+                  buttonText="Schedule a Meeting"
+                  buttonStyle="primary"
+                  buttonSize="medium"
+                  clipId={clip?.id}
+                  leadId={clip?.crm_entity_type === 'lead' ? clip?.crm_entity_id : null}
+                  loanId={clip?.crm_entity_type === 'loan' ? clip?.crm_entity_id : null}
+                  isPublic={isPublicView}
+                />
               </div>
 
               {/* Comments Section */}

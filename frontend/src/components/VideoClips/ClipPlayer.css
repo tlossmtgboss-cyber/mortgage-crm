@@ -632,3 +632,53 @@
 .clip-player.public-view .close-button {
   display: none;
 }
+
+/* Schedule Meeting CTA - End of Video Overlay */
+.end-cta-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  animation: fadeIn 0.5s ease;
+}
+
+.end-cta-content {
+  text-align: center;
+  padding: 40px;
+}
+
+.end-cta-content p {
+  color: white;
+  font-size: 20px;
+  margin: 0 0 20px;
+  font-weight: 500;
+}
+
+/* Schedule Meeting CTA - Info Panel */
+.schedule-cta-section {
+  margin-top: 20px;
+  padding: 20px;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border-radius: 12px;
+  text-align: center;
+  border: 1px solid #bfdbfe;
+}
+
+.schedule-cta-text {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 500;
+  color: #1e40af;
+}
+
+/* Animation */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
