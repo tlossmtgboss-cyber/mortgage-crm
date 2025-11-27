@@ -35868,8 +35868,8 @@ async def normalize_stage_enums_migration(
     """
     Migration: Normalize lead and loan stage enum values.
 
-    Converts values stored as Python enum VALUES (like 'Pre-Approved') to
-    the PostgreSQL enum NAMES (like 'PRE_APPROVED') that SQLAlchemy expects.
+    Converts all stage values to use Python enum VALUES (like 'New', 'Pre-Approved')
+    which are the canonical values that SQLAlchemy's str(enum.Enum) will match.
 
     This fixes the LookupError when SQLAlchemy tries to map database values
     back to Python enum members.
@@ -35879,63 +35879,83 @@ async def normalize_stage_enums_migration(
 
         results = {"leads": {}, "loans": {}}
 
-        # Map Python enum values to PostgreSQL enum names
-        # Format: "value_in_db": "correct_enum_name"
-        lead_stage_value_to_name = {
-            "New": "New",  # These are both valid if they're in the DB enum
-            "Attempted Contact": "Attempted Contact",
-            "Prospect": "Prospect",
-            "Application": "Application",
-            "Pre-Qualified": "Pre-Qualified",
-            "Pre-Approved": "Pre-Approved",
-            "Under Contract": "Under Contract",
-            "Long-Term Nurture": "Long-Term Nurture",
-            "Closed": "Closed",
-            "AMR": "AMR",
-            "Referral Source": "Referral Source",
-            "Withdrawn": "Withdrawn",
-            "Does Not Qualify": "Does Not Qualify",
-        }
+        # Get raw connection for direct SQL execution
+        connection = engine.raw_connection()
+        cursor = connection.cursor()
 
-        loan_stage_value_to_name = {
-            "Disclosed": "Disclosed",
-            "Processing": "Processing",
-            "Submitted": "Submitted",
-            "UW Received": "UW Received",
-            "Approved": "Approved",
-            "Suspended": "Suspended",
-            "CTC": "CTC",
-            "Docs Out": "Docs Out",
-            "Funded": "Funded",
-        }
+        try:
+            # LeadStage: Map enum NAMES to VALUES
+            lead_stage_mappings = [
+                ("NEW", "New"),
+                ("ATTEMPTED_CONTACT", "Attempted Contact"),
+                ("PROSPECT", "Prospect"),
+                ("APPLICATION", "Application"),
+                ("APPLICATION_STARTED", "Application"),  # Legacy - map to Application
+                ("APPLICATION_COMPLETE", "Application"),  # Legacy
+                ("PRE_QUALIFIED", "Pre-Qualified"),
+                ("PRE_APPROVED", "Pre-Approved"),
+                ("UNDER_CONTRACT", "Under Contract"),
+                ("LONG_TERM_NURTURE", "Long-Term Nurture"),
+                ("CLOSED", "Closed"),
+                ("REFERRAL_SOURCE", "Referral Source"),
+                ("WITHDRAWN", "Withdrawn"),
+                ("DOES_NOT_QUALIFY", "Does Not Qualify"),
+            ]
 
-        # First, check if there are ANY mismatched values by querying distinct stages
-        result = db.execute(text("SELECT DISTINCT stage::text FROM leads WHERE stage IS NOT NULL"))
-        current_lead_stages = [row[0] for row in result.fetchall()]
-        logger.info(f"Current lead stages in DB: {current_lead_stages}")
+            for old_value, new_value in lead_stage_mappings:
+                if old_value != new_value:
+                    cursor.execute(
+                        "UPDATE leads SET stage = %s WHERE stage = %s",
+                        (new_value, old_value)
+                    )
+                    if cursor.rowcount > 0:
+                        results["leads"][old_value] = cursor.rowcount
+                        logger.info(f"Normalized {cursor.rowcount} leads: '{old_value}' -> '{new_value}'")
 
-        result = db.execute(text("SELECT DISTINCT stage::text FROM loans WHERE stage IS NOT NULL"))
-        current_loan_stages = [row[0] for row in result.fetchall()]
-        logger.info(f"Current loan stages in DB: {current_loan_stages}")
+            # LoanStage: Map enum NAMES to VALUES
+            loan_stage_mappings = [
+                ("DISCLOSED", "Disclosed"),
+                ("PROCESSING", "Processing"),
+                ("SUBMITTED", "Submitted"),
+                ("UW_RECEIVED", "UW Received"),
+                ("APPROVED", "Approved"),
+                ("SUSPENDED", "Suspended"),
+                ("DOCS", "Docs Out"),
+                ("FUNDED", "Funded"),
+            ]
 
-        # The migration runs updates - but since the enum values ARE the display values,
-        # we shouldn't need to change anything if the data is already correct.
-        # The real issue might be that SQLAlchemy's enum mapping is broken.
+            for old_value, new_value in loan_stage_mappings:
+                if old_value != new_value:
+                    cursor.execute(
+                        "UPDATE loans SET stage = %s WHERE stage = %s",
+                        (new_value, old_value)
+                    )
+                    if cursor.rowcount > 0:
+                        results["loans"][old_value] = cursor.rowcount
+                        logger.info(f"Normalized {cursor.rowcount} loans: '{old_value}' -> '{new_value}'")
+
+            connection.commit()
+
+        finally:
+            cursor.close()
+            connection.close()
+
+        total_leads = sum(results["leads"].values())
+        total_loans = sum(results["loans"].values())
+
+        logger.info(f"Migration completed: {total_leads} leads, {total_loans} loans normalized")
 
         return {
             "success": True,
-            "message": "Enum check completed",
-            "current_lead_stages": current_lead_stages,
-            "current_loan_stages": current_loan_stages,
-            "note": "Data appears to be stored correctly. If errors persist, the issue is in SQLAlchemy enum configuration."
+            "message": f"Normalized {total_leads} leads and {total_loans} loans",
+            "details": results
         }
 
     except Exception as e:
-        logger.error(f"Stage enum check failed: {e}")
-        db.rollback()
+        logger.error(f"Stage enum normalization failed: {e}")
         return {
             "success": False,
-            "message": f"Check failed: {str(e)}",
+            "message": f"Migration failed: {str(e)}",
             "error": str(e)
         }
 
