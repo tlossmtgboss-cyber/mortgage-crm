@@ -36323,29 +36323,34 @@ async def update_dialer_settings(
     current_user: User = Depends(get_current_user_flexible)
 ):
     """Update agent telephony settings"""
-    settings = db.query(AgentTelephonySettings).filter(
-        AgentTelephonySettings.user_id == current_user.id
-    ).first()
+    try:
+        settings = db.query(AgentTelephonySettings).filter(
+            AgentTelephonySettings.user_id == current_user.id
+        ).first()
 
-    if not settings:
-        settings = AgentTelephonySettings(user_id=current_user.id)
-        db.add(settings)
+        if not settings:
+            settings = AgentTelephonySettings(user_id=current_user.id)
+            db.add(settings)
 
-    if data.cell_phone is not None:
-        settings.cell_phone = data.cell_phone
-    if data.business_caller_id is not None:
-        settings.business_caller_id = data.business_caller_id
-    if data.dialer_enabled is not None:
-        settings.dialer_enabled = data.dialer_enabled
-    if data.max_calls_per_day is not None:
-        settings.max_calls_per_day = data.max_calls_per_day
-    if data.auto_advance is not None:
-        settings.auto_advance = data.auto_advance
-    if data.pause_between_calls is not None:
-        settings.pause_between_calls = data.pause_between_calls
+        if data.cell_phone is not None:
+            settings.cell_phone = data.cell_phone
+        if data.business_caller_id is not None:
+            settings.business_caller_id = data.business_caller_id
+        if data.dialer_enabled is not None:
+            settings.dialer_enabled = data.dialer_enabled
+        if data.max_calls_per_day is not None:
+            settings.max_calls_per_day = data.max_calls_per_day
+        if data.auto_advance is not None:
+            settings.auto_advance = data.auto_advance
+        if data.pause_between_calls is not None:
+            settings.pause_between_calls = data.pause_between_calls
 
-    db.commit()
-    return {"success": True, "message": "Settings updated"}
+        db.commit()
+        return {"success": True, "message": "Settings updated"}
+    except Exception as e:
+        logger.error(f"Error updating dialer settings: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update settings: {str(e)}")
 
 
 @app.post("/api/v1/dialer/verify-caller-id")
