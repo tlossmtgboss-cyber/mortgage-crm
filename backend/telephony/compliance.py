@@ -28,6 +28,12 @@ class ComplianceError(Exception):
     pass
 
 
+# Test mode bypass - set to True to skip calling hours check for testing
+# WARNING: Set back to False before production use!
+import os
+BYPASS_CALLING_HOURS = os.getenv("BYPASS_CALLING_HOURS", "false").lower() == "true"
+
+
 class ComplianceChecker:
     """
     Handles compliance checks for outbound calling
@@ -190,6 +196,11 @@ class ComplianceChecker:
         Returns:
             Tuple of (is_allowed, reason_message)
         """
+        # Check for test bypass
+        if BYPASS_CALLING_HOURS:
+            logger.warning("BYPASS_CALLING_HOURS is enabled - skipping calling hours check")
+            return True, "Calling hours check bypassed for testing"
+
         contact_tz = self._get_timezone_for_phone(phone_number)
         now_utc = datetime.utcnow()
 
