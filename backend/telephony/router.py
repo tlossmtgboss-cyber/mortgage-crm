@@ -64,7 +64,7 @@ async def get_dialer_settings(
 ):
     """Get agent's telephony/dialer settings"""
     # Import models from main
-    from backend.main import AgentTelephonySettings, VerifiedCallerId
+    from main import AgentTelephonySettings, VerifiedCallerId
 
     settings = db.query(AgentTelephonySettings).filter(
         AgentTelephonySettings.user_id == current_user.id
@@ -111,7 +111,7 @@ async def update_dialer_settings(
     current_user = Depends(lambda: get_current_user())
 ):
     """Update agent's telephony/dialer settings"""
-    from backend.main import AgentTelephonySettings
+    from main import AgentTelephonySettings
 
     settings = db.query(AgentTelephonySettings).filter(
         AgentTelephonySettings.user_id == current_user.id
@@ -145,7 +145,7 @@ async def verify_caller_id(
     current_user = Depends(lambda: get_current_user())
 ):
     """Start caller ID verification process"""
-    from backend.main import VerifiedCallerId
+    from main import VerifiedCallerId
 
     provider = get_telephony_provider()
     result = provider.verify_caller_id(request.phone_number, request.friendly_name)
@@ -171,7 +171,7 @@ async def list_verified_caller_ids(
     current_user = Depends(lambda: get_current_user())
 ):
     """List all verified caller IDs for the agent"""
-    from backend.main import VerifiedCallerId
+    from main import VerifiedCallerId
 
     caller_ids = db.query(VerifiedCallerId).filter(
         VerifiedCallerId.user_id == current_user.id
@@ -246,7 +246,7 @@ async def get_active_session(
     current_user = Depends(lambda: get_current_user())
 ):
     """Get the agent's currently active dialer session"""
-    from backend.main import DialerSession, DialerSessionStatus
+    from main import DialerSession, DialerSessionStatus
 
     session = db.query(DialerSession).filter(
         DialerSession.agent_id == current_user.id,
@@ -470,7 +470,7 @@ async def get_call_logs(
     current_user = Depends(lambda: get_current_user())
 ):
     """Get call history for the agent"""
-    from backend.main import CallLog
+    from main import CallLog
 
     query = db.query(CallLog).filter(CallLog.agent_id == current_user.id)
 

@@ -89,7 +89,7 @@ class DialerEngine:
 
     def get_agent_settings(self) -> Optional[Dict[str, Any]]:
         """Get telephony settings for the current agent"""
-        from backend.main import AgentTelephonySettings
+        from main import AgentTelephonySettings
 
         settings = self.db.query(AgentTelephonySettings).filter(
             AgentTelephonySettings.user_id == self.agent_id
@@ -128,7 +128,7 @@ class DialerEngine:
         Returns:
             Dict with session info or error
         """
-        from backend.main import (
+        from main import (
             DialerSession, DialerSessionTask, Task, Lead, Loan,
             DialerSessionStatus, DialerTaskStatus
         )
@@ -225,7 +225,7 @@ class DialerEngine:
 
     def get_session_status(self, session_id: int) -> Optional[Dict[str, Any]]:
         """Get current status of a dialer session"""
-        from backend.main import DialerSession, DialerSessionTask
+        from main import DialerSession, DialerSessionTask
 
         session = self.db.query(DialerSession).filter(
             DialerSession.id == session_id
@@ -276,7 +276,7 @@ class DialerEngine:
         Returns:
             Task info dict or None if no more tasks
         """
-        from backend.main import DialerSessionTask, DialerTaskStatus
+        from main import DialerSessionTask, DialerTaskStatus
 
         task = self.db.query(DialerSessionTask).filter(
             DialerSessionTask.session_id == session_id,
@@ -314,7 +314,7 @@ class DialerEngine:
         Returns:
             Dict with call result
         """
-        from backend.main import (
+        from main import (
             DialerSession, DialerSessionTask, DialerSessionStatus, DialerTaskStatus
         )
 
@@ -478,7 +478,7 @@ class DialerEngine:
         Returns:
             Dict with next action
         """
-        from backend.main import (
+        from main import (
             DialerSession, DialerSessionTask, DialerSessionStatus, DialerTaskStatus, CallLog
         )
 
@@ -638,7 +638,7 @@ class DialerEngine:
         Returns:
             Dict with result
         """
-        from backend.main import DialerSessionTask, CallLog
+        from main import DialerSessionTask, CallLog
 
         task = self.db.query(DialerSessionTask).filter(
             DialerSessionTask.id == task_id,
@@ -663,7 +663,7 @@ class DialerEngine:
         # Handle callback scheduling
         if schedule_callback and disposition == "callback_scheduled":
             # Create a new task for the callback
-            from backend.main import Task
+            from main import Task
 
             original_task = self.db.query(Task).filter(Task.id == task.task_id).first()
             if original_task:
@@ -689,7 +689,7 @@ class DialerEngine:
 
     def pause_session(self, session_id: int) -> Dict[str, Any]:
         """Pause an active session"""
-        from backend.main import DialerSession, DialerSessionStatus
+        from main import DialerSession, DialerSessionStatus
 
         session = self.db.query(DialerSession).filter(
             DialerSession.id == session_id,
@@ -709,7 +709,7 @@ class DialerEngine:
 
     def resume_session(self, session_id: int) -> Dict[str, Any]:
         """Resume a paused session"""
-        from backend.main import DialerSession, DialerSessionStatus
+        from main import DialerSession, DialerSessionStatus
 
         session = self.db.query(DialerSession).filter(
             DialerSession.id == session_id,
@@ -729,7 +729,7 @@ class DialerEngine:
 
     def stop_session(self, session_id: int) -> Dict[str, Any]:
         """Stop a session completely"""
-        from backend.main import DialerSession, DialerSessionStatus, DialerSessionTask
+        from main import DialerSession, DialerSessionStatus, DialerSessionTask
 
         session = self.db.query(DialerSession).filter(
             DialerSession.id == session_id,
@@ -761,7 +761,7 @@ class DialerEngine:
 
     def skip_task(self, session_id: int, task_id: int, reason: str = "manual_skip") -> Dict[str, Any]:
         """Skip a task in the session"""
-        from backend.main import DialerSessionTask, DialerTaskStatus
+        from main import DialerSessionTask, DialerTaskStatus
 
         task = self.db.query(DialerSessionTask).filter(
             DialerSessionTask.id == task_id,
@@ -812,7 +812,7 @@ def click_to_dial(
     Returns:
         Dict with call result
     """
-    from backend.main import AgentTelephonySettings, CallLog
+    from main import AgentTelephonySettings, CallLog
 
     provider = get_telephony_provider()
     compliance = ComplianceChecker(db_session)

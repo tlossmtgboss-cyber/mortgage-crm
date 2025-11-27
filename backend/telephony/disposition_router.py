@@ -58,12 +58,12 @@ async def submit_task_disposition(
     - Auto-task creation for follow-ups and referrals
     - DNC flag handling
     """
-    from backend.main import (
+    from main import (
         DialerSessionTask, CallLog, DialerSession, DialerSessionStatus,
         Task, Contact
     )
-    from backend.telephony.websocket import ws_manager
-    from backend.telephony.dialer_engine import DialerEngine
+    from telephony.websocket import ws_manager
+    from telephony.dialer_engine import DialerEngine
 
     # Find the task
     task = db.query(DialerSessionTask).filter(
@@ -215,7 +215,7 @@ async def submit_call_log_disposition(
 
     Use this endpoint for standalone calls (not part of a dialer session)
     """
-    from backend.main import CallLog, Task, Contact
+    from main import CallLog, Task, Contact
 
     call_log = db.query(CallLog).filter(
         CallLog.id == call_log_id,

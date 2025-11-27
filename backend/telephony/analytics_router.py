@@ -51,7 +51,7 @@ def get_daily_summary(
     - Average call duration
     - Disposition breakdown
     """
-    from backend.main import CallLog
+    from main import CallLog
 
     # Use today if not specified
     if not target_date:
@@ -114,7 +114,7 @@ def get_disposition_breakdown(
 
     Returns disposition counts with percentages
     """
-    from backend.main import CallLog
+    from main import CallLog
 
     start_time = datetime.combine(start_date, datetime.min.time())
     end_time = datetime.combine(end_date, datetime.max.time())
@@ -172,7 +172,7 @@ def get_connect_rate_by_hour(
 
     Useful for optimizing call timing - find the best hours to make calls
     """
-    from backend.main import CallLog
+    from main import CallLog
 
     start_time = datetime.combine(start_date, datetime.min.time())
     end_time = datetime.combine(end_date, datetime.max.time())
@@ -238,7 +238,7 @@ def get_agent_performance(
 
     Preset ranges: today, last_7_days, last_30_days, this_month
     """
-    from backend.main import CallLog
+    from main import CallLog
 
     # Calculate date range
     today = date.today()
@@ -340,7 +340,7 @@ def get_session_analytics(
 
     Returns session-level metrics including completion rates
     """
-    from backend.main import DialerSession, DialerSessionTask
+    from main import DialerSession, DialerSessionTask
 
     # Default to last 30 days
     if not end_date:

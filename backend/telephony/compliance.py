@@ -71,7 +71,7 @@ class ComplianceChecker:
         """
         # Import here to avoid circular imports
         try:
-            from backend.main import ContactDNCStatus
+            from main import ContactDNCStatus
         except ImportError:
             # Fallback for different import paths
             logger.warning("Could not import ContactDNCStatus model")
@@ -101,7 +101,7 @@ class ComplianceChecker:
             True if on DNC list
         """
         try:
-            from backend.main import Lead
+            from main import Lead
             contact = self.db.query(Lead).filter(Lead.id == contact_id).first()
 
             if not contact:
@@ -126,7 +126,7 @@ class ComplianceChecker:
     def add_to_dnc(self, phone_number: str, reason: str, added_by_id: int) -> bool:
         """Add a phone number to the Do Not Call list"""
         try:
-            from backend.main import ContactDNCStatus
+            from main import ContactDNCStatus
         except ImportError:
             logger.error("Could not import ContactDNCStatus model")
             return False
@@ -161,7 +161,7 @@ class ComplianceChecker:
     def remove_from_dnc(self, phone_number: str) -> bool:
         """Remove a phone number from the Do Not Call list"""
         try:
-            from backend.main import ContactDNCStatus
+            from main import ContactDNCStatus
         except ImportError:
             return False
 
@@ -288,7 +288,7 @@ class ComplianceChecker:
             Tuple of (is_allowed, reason_if_blocked)
         """
         try:
-            from backend.main import AgentTelephonySettings, CallLog
+            from main import AgentTelephonySettings, CallLog
         except ImportError:
             return True, None
 
@@ -332,7 +332,7 @@ class ComplianceChecker:
             Tuple of (is_locked, lock_info)
         """
         try:
-            from backend.main import ActiveCall, User
+            from main import ActiveCall, User
         except ImportError:
             return False, None
 
@@ -378,7 +378,7 @@ class ComplianceChecker:
             True if lock acquired
         """
         try:
-            from backend.main import ActiveCall
+            from main import ActiveCall
         except ImportError:
             return False
 
@@ -418,7 +418,7 @@ class ComplianceChecker:
     def release_soft_lock(self, phone_number: str, agent_id: int) -> bool:
         """Release a soft lock for a phone number"""
         try:
-            from backend.main import ActiveCall
+            from main import ActiveCall
         except ImportError:
             return False
 
@@ -441,7 +441,7 @@ class ComplianceChecker:
     def release_lock_by_call_sid(self, call_sid: str):
         """Release lock by call SID (used in webhooks)"""
         try:
-            from backend.main import ActiveCall
+            from main import ActiveCall
         except ImportError:
             return
 
@@ -456,7 +456,7 @@ class ComplianceChecker:
     def cleanup_expired_locks(self):
         """Remove all expired locks"""
         try:
-            from backend.main import ActiveCall
+            from main import ActiveCall
         except ImportError:
             return
 

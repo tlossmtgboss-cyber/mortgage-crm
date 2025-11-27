@@ -47,7 +47,7 @@ def list_caller_ids(
     """List all verified caller IDs for the organization"""
     try:
         # Direct database session
-        from backend.main import SessionLocal, VerifiedCallerId
+        from main import SessionLocal, VerifiedCallerId
         db = SessionLocal()
         try:
             caller_ids = db.query(VerifiedCallerId).all()
@@ -81,9 +81,9 @@ def verify_caller_id(
 ):
     """Start verification process for a new caller ID"""
     try:
-        from backend.main import SessionLocal, VerifiedCallerId
-        from backend.telephony.provider import get_telephony_provider, TelephonyError
-        from backend.telephony.schemas import validate_phone_number
+        from main import SessionLocal, VerifiedCallerId
+        from telephony.provider import get_telephony_provider, TelephonyError
+        from telephony.schemas import validate_phone_number
 
         # Normalize phone number
         try:
@@ -154,7 +154,7 @@ def verify_caller_id(
 def delete_caller_id(caller_id_id: int):
     """Delete a caller ID"""
     try:
-        from backend.main import SessionLocal, VerifiedCallerId, AgentTelephonySettings
+        from main import SessionLocal, VerifiedCallerId, AgentTelephonySettings
 
         db = SessionLocal()
         try:
@@ -193,7 +193,7 @@ def delete_caller_id(caller_id_id: int):
 def set_default_caller_id(caller_id_id: int):
     """Set a verified caller ID as the default"""
     try:
-        from backend.main import SessionLocal, VerifiedCallerId, AgentTelephonySettings
+        from main import SessionLocal, VerifiedCallerId, AgentTelephonySettings
 
         db = SessionLocal()
         try:
@@ -231,7 +231,7 @@ def set_default_caller_id(caller_id_id: int):
 def get_telephony_status():
     """Get Twilio account status and configuration"""
     try:
-        from backend.telephony.provider import get_telephony_provider
+        from telephony.provider import get_telephony_provider
 
         # Get account info
         account_info = {
@@ -246,7 +246,7 @@ def get_telephony_status():
         today_calls = 0
 
         try:
-            from backend.main import SessionLocal, VerifiedCallerId, CallLog
+            from main import SessionLocal, VerifiedCallerId, CallLog
             db = SessionLocal()
             try:
                 verified_count = db.query(VerifiedCallerId).filter(
