@@ -36,25 +36,60 @@ router = APIRouter(prefix="/api/v1/dialer", tags=["dialer"])
 # Dependency to get database session (to be injected from main app)
 # =============================================================================
 
-# Dependency functions - these get replaced by main app via set_dependencies()
-def get_db():
-    """Database session dependency - replaced by main app"""
-    raise RuntimeError("get_db not initialized - call set_dependencies() first")
+# Dependency container - stores references to main app's dependencies
+class _Dependencies:
+    db_func = None
+    user_func = None
 
-
-def get_current_user():
-    """User dependency - replaced by main app"""
-    raise RuntimeError("get_current_user not initialized - call set_dependencies() first")
+_deps = _Dependencies()
 
 
 def set_dependencies(db_dependency, user_dependency):
     """
-    Replace the placeholder dependency functions with real ones from main app.
+    Store references to main app's dependency functions.
     This must be called during app initialization before any routes are accessed.
     """
-    global get_db, get_current_user
-    get_db = db_dependency
-    get_current_user = user_dependency
+    _deps.db_func = db_dependency
+    _deps.user_func = user_dependency
+
+
+def get_db():
+    """
+    Database session dependency.
+    Wraps the main app's get_db to yield a session.
+    """
+    if _deps.db_func is None:
+        raise RuntimeError("Dependencies not set - call set_dependencies() first")
+    # Call the main app's get_db generator
+    gen = _deps.db_func()
+    try:
+        yield next(gen)
+    finally:
+        try:
+            next(gen)
+        except StopIteration:
+            pass
+
+
+async def get_current_user(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Current user dependency.
+    Calls the main app's get_current_user with the required parameters.
+    """
+    if _deps.user_func is None:
+        raise RuntimeError("Dependencies not set - call set_dependencies() first")
+
+    # Extract token from Authorization header
+    auth_header = request.headers.get("Authorization", "")
+    token = ""
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+
+    # Call the main app's get_current_user
+    return await _deps.user_func(token=token, request=request, db=db)
 
 
 # =============================================================================

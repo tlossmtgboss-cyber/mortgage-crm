@@ -10665,6 +10665,25 @@ from telephony.router import router as dialer_main_router, set_dependencies as s
 set_dialer_deps(get_db, get_current_user)
 app.include_router(dialer_main_router, tags=["Dialer"])  # Router already has /api/v1/dialer prefix
 
+# Include User Onboarding System routes
+try:
+    from user_onboarding_integration import create_user_onboarding_models, seed_onboarding_data, create_onboarding_router
+    # Create models using our Base
+    user_onboarding_models = create_user_onboarding_models(Base)
+    # Create the router with dependencies
+    user_onboarding_router = create_onboarding_router(
+        get_db=get_db,
+        get_current_user=get_current_user,
+        User=User,
+        models=user_onboarding_models,
+        pwd_context=pwd_context,
+        create_access_token=create_access_token
+    )
+    app.include_router(user_onboarding_router, tags=["User Onboarding"])
+    logger.info("✅ User Onboarding System loaded")
+except Exception as e:
+    logger.warning(f"⚠️ User Onboarding System not loaded: {e}")
+
 # Email Monitor Migration Endpoint
 @app.post("/api/v1/migrations/add-email-monitor")
 async def add_email_monitor_migration(db: Session = Depends(get_db)):
