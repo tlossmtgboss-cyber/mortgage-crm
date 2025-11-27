@@ -36,18 +36,22 @@ router = APIRouter(prefix="/api/v1/dialer", tags=["dialer"])
 # Dependency to get database session (to be injected from main app)
 # =============================================================================
 
+# Dependency functions - these get replaced by main app via set_dependencies()
 def get_db():
-    """Database session dependency - must be overridden by main app"""
-    raise NotImplementedError("get_db must be overridden")
+    """Database session dependency - replaced by main app"""
+    raise RuntimeError("get_db not initialized - call set_dependencies() first")
 
 
 def get_current_user():
-    """Current user dependency - must be overridden by main app"""
-    raise NotImplementedError("get_current_user must be overridden")
+    """User dependency - replaced by main app"""
+    raise RuntimeError("get_current_user not initialized - call set_dependencies() first")
 
 
 def set_dependencies(db_dependency, user_dependency):
-    """Set the dependency functions from the main app"""
+    """
+    Replace the placeholder dependency functions with real ones from main app.
+    This must be called during app initialization before any routes are accessed.
+    """
     global get_db, get_current_user
     get_db = db_dependency
     get_current_user = user_dependency
@@ -59,8 +63,8 @@ def set_dependencies(db_dependency, user_dependency):
 
 @router.get("/settings")
 async def get_dialer_settings(
-    db: Session = Depends(lambda: get_db()),
-    current_user = Depends(lambda: get_current_user())
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """Get agent's telephony/dialer settings"""
     # Import models from main
@@ -107,8 +111,8 @@ async def get_dialer_settings(
 @router.put("/settings")
 async def update_dialer_settings(
     settings_update: AgentTelephonySettingsUpdate,
-    db: Session = Depends(lambda: get_db()),
-    current_user = Depends(lambda: get_current_user())
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """Update agent's telephony/dialer settings"""
     from main import AgentTelephonySettings
@@ -141,8 +145,8 @@ async def update_dialer_settings(
 @router.post("/verify-caller-id")
 async def verify_caller_id(
     request: VerifyCallerIdRequest,
-    db: Session = Depends(lambda: get_db()),
-    current_user = Depends(lambda: get_current_user())
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """Start caller ID verification process"""
     from main import VerifiedCallerId
@@ -167,8 +171,8 @@ async def verify_caller_id(
 
 @router.get("/verified-caller-ids")
 async def list_verified_caller_ids(
-    db: Session = Depends(lambda: get_db()),
-    current_user = Depends(lambda: get_current_user())
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """List all verified caller IDs for the agent"""
     from main import VerifiedCallerId
@@ -187,8 +191,8 @@ async def list_verified_caller_ids(
 @router.post("/click-to-dial", response_model=ClickToDialResponse)
 async def api_click_to_dial(
     request: ClickToDialRequest,
-    db: Session = Depends(lambda: get_db()),
-    current_user = Depends(lambda: get_current_user())
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """Initiate a single click-to-dial call"""
     import os
@@ -221,8 +225,8 @@ async def api_click_to_dial(
 @router.post("/sessions", response_model=StartSessionResponse)
 async def create_dialer_session(
     request: StartSessionRequest,
-    db: Session = Depends(lambda: get_db()),
-    current_user = Depends(lambda: get_current_user())
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """Create a new power dialer session"""
     import os
@@ -242,8 +246,8 @@ async def create_dialer_session(
 
 @router.get("/sessions/active")
 async def get_active_session(
-    db: Session = Depends(lambda: get_db()),
-    current_user = Depends(lambda: get_current_user())
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """Get the agent's currently active dialer session"""
     from main import DialerSession, DialerSessionStatus
@@ -263,8 +267,8 @@ async def get_active_session(
 @router.get("/sessions/{session_id}", response_model=SessionStatusResponse)
 async def get_session_status(
     session_id: int,
-    db: Session = Depends(lambda: get_db()),
-    current_user = Depends(lambda: get_current_user())
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """Get status of a specific dialer session"""
     engine = DialerEngine(db, current_user.id)
@@ -279,8 +283,8 @@ async def get_session_status(
 @router.get("/sessions/{session_id}/next-task")
 async def get_next_task(
     session_id: int,
-    db: Session = Depends(lambda: get_db()),
-    current_user = Depends(lambda: get_current_user())
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """Get the next pending task in a session"""
     engine = DialerEngine(db, current_user.id)
@@ -296,8 +300,8 @@ async def get_next_task(
 async def initiate_session_call(
     session_id: int,
     task_id: int,
-    db: Session = Depends(lambda: get_db()),
-    current_user = Depends(lambda: get_current_user())
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """Initiate a call for a specific task in the session"""
     import os
@@ -320,8 +324,8 @@ async def set_task_disposition(
     session_id: int,
     task_id: int,
     request: DispositionRequest,
-    db: Session = Depends(lambda: get_db()),
-    current_user = Depends(lambda: get_current_user())
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """Set disposition for a completed call"""
     engine = DialerEngine(db, current_user.id)
@@ -348,8 +352,8 @@ async def skip_session_task(
     session_id: int,
     task_id: int,
     reason: str = "manual_skip",
-    db: Session = Depends(lambda: get_db()),
-    current_user = Depends(lambda: get_current_user())
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """Skip a task in the session"""
     engine = DialerEngine(db, current_user.id)
@@ -364,8 +368,8 @@ async def skip_session_task(
 @router.post("/sessions/{session_id}/pause")
 async def pause_session(
     session_id: int,
-    db: Session = Depends(lambda: get_db()),
-    current_user = Depends(lambda: get_current_user())
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """Pause an active dialer session"""
     engine = DialerEngine(db, current_user.id)
@@ -380,8 +384,8 @@ async def pause_session(
 @router.post("/sessions/{session_id}/resume")
 async def resume_session(
     session_id: int,
-    db: Session = Depends(lambda: get_db()),
-    current_user = Depends(lambda: get_current_user())
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """Resume a paused dialer session"""
     engine = DialerEngine(db, current_user.id)
@@ -396,8 +400,8 @@ async def resume_session(
 @router.post("/sessions/{session_id}/stop")
 async def stop_session(
     session_id: int,
-    db: Session = Depends(lambda: get_db()),
-    current_user = Depends(lambda: get_current_user())
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """Stop a dialer session completely"""
     engine = DialerEngine(db, current_user.id)
@@ -416,8 +420,8 @@ async def stop_session(
 @router.get("/compliance/check", response_model=ComplianceCheckResponse)
 async def check_compliance(
     phone_number: str = Query(...),
-    db: Session = Depends(lambda: get_db()),
-    current_user = Depends(lambda: get_current_user())
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """Run compliance checks for a phone number"""
     compliance = ComplianceChecker(db)
@@ -430,8 +434,8 @@ async def check_compliance(
 async def add_to_dnc(
     phone_number: str,
     reason: str = "customer_request",
-    db: Session = Depends(lambda: get_db()),
-    current_user = Depends(lambda: get_current_user())
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """Add a phone number to the Do Not Call list"""
     compliance = ComplianceChecker(db)
@@ -446,8 +450,8 @@ async def add_to_dnc(
 @router.delete("/dnc/{phone_number}")
 async def remove_from_dnc(
     phone_number: str,
-    db: Session = Depends(lambda: get_db()),
-    current_user = Depends(lambda: get_current_user())
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """Remove a phone number from the Do Not Call list"""
     compliance = ComplianceChecker(db)
@@ -466,8 +470,8 @@ async def get_call_logs(
     limit: int = 50,
     lead_id: Optional[int] = None,
     loan_id: Optional[int] = None,
-    db: Session = Depends(lambda: get_db()),
-    current_user = Depends(lambda: get_current_user())
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """Get call history for the agent"""
     from main import CallLog
@@ -648,8 +652,8 @@ async def webhook_call_status(
     request: Request,
     session_id: Optional[int] = None,
     task_id: Optional[int] = None,
-    db: Session = Depends(lambda: get_db()),
-    current_user = Depends(lambda: get_current_user())
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """
     Status callback for power dialer session calls.

@@ -26,51 +26,66 @@ function EmailDropZone({ children }) {
 
   // Global document-level drag handlers for better capture
   useEffect(() => {
+    let dragCounter = 0;
+
     const handleWindowDragEnter = (e) => {
+      e.preventDefault();
+      dragCounter++;
+
       // Check if it's a valid drag (files, emails, etc.)
       const types = Array.from(e.dataTransfer?.types || []);
-      const isValid = types.includes('Files') ||
-                     types.includes('text/html') ||
-                     types.includes('text/plain') ||
-                     types.includes('text/uri-list');
+      console.log('Window DragEnter - types:', types, 'counter:', dragCounter);
 
-      if (isValid) {
-        console.log('Window DragEnter - types:', types);
+      // Files type is present when dragging files from desktop/finder
+      const hasFiles = types.includes('Files');
+      const hasText = types.includes('text/html') || types.includes('text/plain') || types.includes('text/uri-list');
+
+      if (hasFiles || hasText) {
         setIsDragging(true);
       }
     };
 
     const handleWindowDragLeave = (e) => {
-      // Only hide if leaving the window entirely
-      if (e.relatedTarget === null) {
-        console.log('Window DragLeave - left window');
+      e.preventDefault();
+      dragCounter--;
+      console.log('Window DragLeave - counter:', dragCounter);
+
+      // Only hide when all drag events have left
+      if (dragCounter <= 0) {
+        dragCounter = 0;
         setIsDragging(false);
-        dragCounterRef.current = 0;
       }
     };
 
     const handleWindowDragOver = (e) => {
-      // Prevent default to allow drop
+      // CRITICAL: Must prevent default to allow drop
       e.preventDefault();
+      e.stopPropagation();
+
+      // Set the drop effect to show it's droppable
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'copy';
+      }
     };
 
     const handleWindowDrop = (e) => {
-      // Reset state even if drop wasn't on our zone
+      // Don't prevent default here - let the component handler do it
+      console.log('Window Drop detected');
+      dragCounter = 0;
       setIsDragging(false);
-      dragCounterRef.current = 0;
     };
 
-    // Add document-level listeners
-    document.addEventListener('dragenter', handleWindowDragEnter);
-    document.addEventListener('dragleave', handleWindowDragLeave);
-    document.addEventListener('dragover', handleWindowDragOver);
-    document.addEventListener('drop', handleWindowDrop);
+    // Add document-level listeners with capture phase for priority
+    document.addEventListener('dragenter', handleWindowDragEnter, true);
+    document.addEventListener('dragleave', handleWindowDragLeave, true);
+    document.addEventListener('dragover', handleWindowDragOver, true);
+    document.addEventListener('drop', handleWindowDrop, true);
 
     return () => {
-      document.removeEventListener('dragenter', handleWindowDragEnter);
-      document.removeEventListener('dragleave', handleWindowDragLeave);
-      document.removeEventListener('dragover', handleWindowDragOver);
-      document.removeEventListener('drop', handleWindowDrop);
+      document.removeEventListener('dragenter', handleWindowDragEnter, true);
+      document.removeEventListener('dragleave', handleWindowDragLeave, true);
+      document.removeEventListener('dragover', handleWindowDragOver, true);
+      document.removeEventListener('drop', handleWindowDrop, true);
     };
   }, []);
 
