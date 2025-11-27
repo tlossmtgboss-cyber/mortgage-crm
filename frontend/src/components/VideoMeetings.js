@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './VideoMeetings.css';
+import RecordingPlayer from './VideoMeetings/RecordingPlayer';
 
 // Use HTTPS Railway URL in production, localhost for development
 const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
@@ -39,6 +40,8 @@ const VideoMeetings = ({ onClose, leadId, loanId, contactId }) => {
   // Modal states
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showMeetingDetail, setShowMeetingDetail] = useState(false);
+  const [showRecordingPlayer, setShowRecordingPlayer] = useState(false);
+  const [selectedRecording, setSelectedRecording] = useState(null);
 
   const getAuthHeaders = useCallback(() => {
     const token = localStorage.getItem('token');
@@ -207,6 +210,44 @@ const VideoMeetings = ({ onClose, leadId, loanId, contactId }) => {
       }
     } catch (err) {
       console.error('Cancel meeting error:', err);
+    }
+  };
+
+  const viewRecording = async (recordingId, meetingTitle) => {
+    try {
+      // Fetch transcript and analysis
+      const [transcriptRes, analysisRes] = await Promise.all([
+        fetch(`${API_BASE}/api/v1/meetings/recordings/${recordingId}/transcript`, {
+          headers: getAuthHeaders()
+        }),
+        fetch(`${API_BASE}/api/v1/meetings/recordings/${recordingId}/analysis`, {
+          headers: getAuthHeaders()
+        })
+      ]);
+
+      let transcript = {};
+      let analysis = {};
+
+      if (transcriptRes.ok) {
+        transcript = await transcriptRes.json();
+      }
+
+      if (analysisRes.ok) {
+        analysis = await analysisRes.json();
+      }
+
+      setSelectedRecording({
+        id: recordingId,
+        meeting_title: meetingTitle,
+        recording_url: `${API_BASE}/api/v1/meetings/recordings/${recordingId}/stream`,
+        transcript: transcript,
+        analysis: analysis.analysis || {},
+        created_at: new Date().toISOString()
+      });
+      setShowRecordingPlayer(true);
+    } catch (err) {
+      console.error('View recording error:', err);
+      setError('Failed to load recording');
     }
   };
 
@@ -688,7 +729,11 @@ const VideoMeetings = ({ onClose, leadId, loanId, contactId }) => {
               ) : (
                 <div className="recordings-list">
                   {recordings.map(r => (
-                    <div key={r.id} className="recording-item">
+                    <div
+                      key={r.id}
+                      className="recording-item clickable"
+                      onClick={() => viewRecording(r.id, meeting.room_name)}
+                    >
                       <span className="recording-icon">🔴</span>
                       <span className="recording-name">{r.recording_name}</span>
                       <span className="recording-status">{r.status}</span>
@@ -697,6 +742,7 @@ const VideoMeetings = ({ onClose, leadId, loanId, contactId }) => {
                           {Math.floor(r.duration_seconds / 60)}:{(r.duration_seconds % 60).toString().padStart(2, '0')}
                         </span>
                       )}
+                      <span className="recording-play-btn">▶ Play</span>
                     </div>
                   ))}
                 </div>
@@ -824,6 +870,17 @@ const VideoMeetings = ({ onClose, leadId, loanId, contactId }) => {
       {/* Modals */}
       {renderCreateModal()}
       {renderMeetingDetailModal()}
+
+      {/* Recording Player */}
+      {showRecordingPlayer && selectedRecording && (
+        <RecordingPlayer
+          recording={selectedRecording}
+          onClose={() => {
+            setShowRecordingPlayer(false);
+            setSelectedRecording(null);
+          }}
+        />
+      )}
     </div>
   );
 };
