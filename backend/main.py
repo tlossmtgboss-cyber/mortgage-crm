@@ -14456,7 +14456,7 @@ async def approve_reconciliation(
                     extracted.match_entity_type = "lead"
                     extracted.match_entity_id = new_lead.id
 
-                    logger.info(f"Created new lead {borrower_name} (ID: {new_lead.id}) in {lead_stage.value} stage")
+                    logger.info(f"Created new lead {borrower_name} (ID: {new_lead.id}) in {lead_stage_enum.value} stage")
 
                     # Commit and return early for leads
                     extracted.status = "approved"
@@ -35302,6 +35302,76 @@ async def add_leadstage_values_migration(
 
     except Exception as e:
         logger.error(f"Leadstage values migration failed: {e}")
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e)
+        }
+
+
+@app.post("/api/v1/migrations/add-loanstage-values", response_model=None)
+async def add_loanstage_values_migration(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Add missing values to loanstage enum type.
+    Required for all Loan stage features in reconciliation.
+    """
+    try:
+        logger.info(f"Running migration: add loanstage enum values (user: {current_user.id})")
+
+        # All LoanStage enum values that might be missing
+        values_to_add = [
+            "Disclosed",
+            "Processing",
+            "Submitted",
+            "UW Received",
+            "Approved",
+            "Suspended",
+            "CTC",
+            "Docs Out",
+            "Funded"
+        ]
+
+        # Get the raw connection and execute outside transaction
+        connection = engine.raw_connection()
+        added = []
+        existing = []
+        try:
+            connection.set_isolation_level(0)  # AUTOCOMMIT
+            cursor = connection.cursor()
+
+            for value in values_to_add:
+                cursor.execute("""
+                    SELECT 1 FROM pg_enum WHERE enumlabel = %s
+                    AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'loanstage')
+                """, (value,))
+                exists = cursor.fetchone()
+
+                if not exists:
+                    try:
+                        cursor.execute(f"ALTER TYPE loanstage ADD VALUE '{value}'")
+                        added.append(value)
+                        logger.info(f"Added '{value}' to loanstage enum")
+                    except Exception as e:
+                        logger.warning(f"Could not add '{value}': {e}")
+                else:
+                    existing.append(value)
+
+            cursor.close()
+        finally:
+            connection.close()
+
+        return {
+            "success": True,
+            "message": f"Added {len(added)} values to loanstage enum",
+            "added": added,
+            "already_existing": existing
+        }
+
+    except Exception as e:
+        logger.error(f"Loanstage values migration failed: {e}")
         return {
             "success": False,
             "message": f"Migration failed: {str(e)}",
