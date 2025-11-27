@@ -1368,11 +1368,12 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
                           rows={12}
                         />
                       ) : (
-                        <div className="message-preview">
-                          {draftMessage.split('\n').map((line, idx) => (
-                            <p key={idx}>{line || '\u00A0'}</p>
-                          ))}
-                        </div>
+                        <div
+                          className="message-preview"
+                          dangerouslySetInnerHTML={{
+                            __html: draftMessage.replace(/\n/g, '<br />')
+                          }}
+                        />
                       )}
                     </div>
                   </div>

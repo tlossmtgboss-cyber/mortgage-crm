@@ -411,9 +411,13 @@ Loan Officer`;
                     onChange={(e) => setEditedResponse(e.target.value)}
                   />
                 ) : (
-                  <div className="ai-message-content">
-                    {editedResponse || selectedTask.ai_suggested_response || 'No AI message generated yet.'}
-                  </div>
+                  <div
+                    className="ai-message-content"
+                    dangerouslySetInnerHTML={{
+                      __html: (editedResponse || selectedTask.ai_suggested_response || 'No AI message generated yet.')
+                        .replace(/\n/g, '<br />')
+                    }}
+                  />
                 )}
               </div>
 
