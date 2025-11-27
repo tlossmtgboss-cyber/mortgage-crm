@@ -25475,18 +25475,38 @@ def init_db():
                             contact_name VARCHAR,
                             lead_id INTEGER,
                             loan_id INTEGER,
-                            task_id INTEGER,
+                            referral_partner_id INTEGER,
+                            mum_client_id INTEGER,
+                            session_id INTEGER,
+                            session_task_id INTEGER,
                             call_sid VARCHAR,
-                            direction VARCHAR DEFAULT 'outbound',
-                            outcome VARCHAR,
-                            disposition VARCHAR,
+                            caller_id_used VARCHAR,
+                            start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            end_time TIMESTAMP,
                             duration_seconds INTEGER,
+                            outcome VARCHAR,
+                            failure_reason VARCHAR,
+                            disposition VARCHAR,
                             notes TEXT,
                             ai_note_summary TEXT,
-                            started_at TIMESTAMP,
-                            ended_at TIMESTAMP,
-                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                         );
+
+                        -- Add missing columns to existing call_logs table
+                        ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS referral_partner_id INTEGER;
+                        ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS mum_client_id INTEGER;
+                        ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS session_id INTEGER;
+                        ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS session_task_id INTEGER;
+                        ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS caller_id_used VARCHAR;
+                        ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS start_time TIMESTAMP;
+                        ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS end_time TIMESTAMP;
+                        ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS failure_reason VARCHAR;
+                        ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+
+                        -- Migrate old column data if they exist
+                        UPDATE call_logs SET start_time = started_at WHERE start_time IS NULL AND started_at IS NOT NULL;
+                        UPDATE call_logs SET end_time = ended_at WHERE end_time IS NULL AND ended_at IS NOT NULL;
                     """))
                     conn.commit()
                     logger.info("✅ Telephony tables created/verified")
@@ -36591,18 +36611,33 @@ async def update_dialer_settings(
                     contact_name VARCHAR,
                     lead_id INTEGER,
                     loan_id INTEGER,
-                    task_id INTEGER,
+                    referral_partner_id INTEGER,
+                    mum_client_id INTEGER,
+                    session_id INTEGER,
+                    session_task_id INTEGER,
                     call_sid VARCHAR,
-                    direction VARCHAR DEFAULT 'outbound',
-                    outcome VARCHAR,
-                    disposition VARCHAR,
+                    caller_id_used VARCHAR,
+                    start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    end_time TIMESTAMP,
                     duration_seconds INTEGER,
+                    outcome VARCHAR,
+                    failure_reason VARCHAR,
+                    disposition VARCHAR,
                     notes TEXT,
                     ai_note_summary TEXT,
-                    started_at TIMESTAMP,
-                    ended_at TIMESTAMP,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                -- Add missing columns to existing call_logs table
+                ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS referral_partner_id INTEGER;
+                ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS mum_client_id INTEGER;
+                ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS session_id INTEGER;
+                ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS session_task_id INTEGER;
+                ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS caller_id_used VARCHAR;
+                ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS start_time TIMESTAMP;
+                ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS end_time TIMESTAMP;
+                ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS failure_reason VARCHAR;
+                ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             """))
             db.commit()
         except Exception as table_err:
