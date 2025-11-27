@@ -4,6 +4,7 @@ Phase 3: Financial Intelligence API Routes
 Executive-level financial analysis endpoints answering the 20 key questions.
 """
 
+import logging
 from datetime import date, datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -11,6 +12,8 @@ from sqlalchemy.orm import Session
 from database import get_db
 
 from services.financial_intelligence_service import FinancialIntelligenceService
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(prefix="/api/v1/financial-intelligence", tags=["financial-intelligence"])
@@ -31,17 +34,26 @@ async def get_executive_dashboard(
     Get complete executive dashboard with all 20 key metrics.
     Answers all executive questions in one call.
     """
-    org_id = get_organization_id(db)
-    service = FinancialIntelligenceService(db, org_id)
+    try:
+        org_id = get_organization_id(db)
+        service = FinancialIntelligenceService(db, org_id)
 
-    month_date = None
-    if month:
-        try:
-            month_date = datetime.strptime(month, "%Y-%m").date()
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid month format")
+        month_date = None
+        if month:
+            try:
+                month_date = datetime.strptime(month, "%Y-%m").date()
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid month format")
 
-    return service.get_executive_dashboard(month_date)
+        return service.get_executive_dashboard(month_date)
+    except Exception as e:
+        logger.error(f"Executive dashboard error: {e}", exc_info=True)
+        # Return graceful default with error message
+        return {
+            "error": str(e),
+            "message": "Financial intelligence data unavailable",
+            "generated_at": datetime.utcnow().isoformat()
+        }
 
 
 # ============ Individual Question Endpoints ============
@@ -86,11 +98,21 @@ async def get_cost_per_loan(
     db: Session = Depends(get_db)
 ):
     """Q4: True cost per funded loan with full breakdown."""
-    org_id = get_organization_id(db)
-    service = FinancialIntelligenceService(db, org_id)
+    try:
+        org_id = get_organization_id(db)
+        service = FinancialIntelligenceService(db, org_id)
 
-    month_date = datetime.strptime(month, "%Y-%m").date() if month else None
-    return service.get_true_cost_per_loan(month_date)
+        month_date = datetime.strptime(month, "%Y-%m").date() if month else None
+        return service.get_true_cost_per_loan(month_date)
+    except Exception as e:
+        logger.error(f"Cost per loan error: {e}", exc_info=True)
+        return {
+            "error": str(e),
+            "total_cost_per_loan": 0,
+            "breakdown": {"labor": 0, "tech_stack": 0, "fulfillment": 0, "overhead": 0},
+            "loans_closed": 0,
+            "total_expenses": 0
+        }
 
 
 @router.get("/cash-runway")
