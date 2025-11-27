@@ -23276,13 +23276,18 @@ async def reject_unified_task(
 
 @app.post("/api/v1/referral-partners/", response_model=ReferralPartnerResponse, status_code=201)
 async def create_referral_partner(partner: ReferralPartnerCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    db_partner = ReferralPartner(**partner.model_dump())
-    db.add(db_partner)
-    db.commit()
-    db.refresh(db_partner)
+    try:
+        db_partner = ReferralPartner(**partner.model_dump())
+        db.add(db_partner)
+        db.commit()
+        db.refresh(db_partner)
 
-    logger.info(f"Referral partner created: {db_partner.name}")
-    return db_partner
+        logger.info(f"Referral partner created: {db_partner.name}")
+        return db_partner
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating referral partner: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create referral partner: {str(e)}")
 
 @app.get("/api/v1/referral-partners/", response_model=List[ReferralPartnerResponse])
 async def get_referral_partners(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

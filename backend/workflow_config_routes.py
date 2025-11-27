@@ -9,7 +9,8 @@ Provides endpoints for managing workflow configurations:
 - Broken task alert handling
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import Optional, List
@@ -105,10 +106,9 @@ def get_db():
     yield from _get_db()
 
 
-async def get_current_user(request, db: Session = Depends(get_db)):
+async def get_current_user(request: Request, db: Session = Depends(get_db)):
     if _get_current_user is None:
         raise RuntimeError("Dependencies not set")
-    from fastapi import Request
     auth_header = request.headers.get("Authorization", "")
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
     return await _get_current_user(token=token, request=request, db=db)

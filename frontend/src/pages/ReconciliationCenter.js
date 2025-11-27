@@ -2133,8 +2133,8 @@ function ReconciliationCenter() {
                     <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Company</label>
                     <input
                       type="text"
-                      value={newReferralPartner.company_name}
-                      onChange={(e) => setNewReferralPartner(prev => ({ ...prev, company_name: e.target.value }))}
+                      value={newReferralPartner.company}
+                      onChange={(e) => setNewReferralPartner(prev => ({ ...prev, company: e.target.value }))}
                       placeholder="Company name (optional)"
                       style={{ width: '100%', padding: '10px', border: '1px solid #d1d5db', borderRadius: '6px' }}
                     />
