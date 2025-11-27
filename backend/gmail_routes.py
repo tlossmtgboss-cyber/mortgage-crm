@@ -330,10 +330,11 @@ async def send_email(
     bcc: str = None,
     reply_to: str = None,
     thread_id: str = None,
+    include_signature: bool = True,
     current_user= Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Send an email through Gmail."""
+    """Send an email through Gmail with automatic signature."""
     try:
         settings = current_user.settings or {}
 
@@ -343,12 +344,55 @@ async def send_email(
         token_data = settings.get('gmail_tokens')
         credentials = gmail_service.get_credentials(token_data)
 
+        # Append email signature if enabled
+        final_body_html = body_html
+        final_body_text = body_text
+
+        if include_signature:
+            try:
+                # Get user's email signature from main app
+                from main import EmailSignature, generate_email_signature_html
+                signature = db.execute(
+                    text("SELECT * FROM email_signatures WHERE user_id = :user_id"),
+                    {"user_id": current_user._user_id}
+                ).fetchone()
+
+                if signature:
+                    # Convert row to dict-like object for generate_email_signature_html
+                    class SigProxy:
+                        def __init__(self, row):
+                            cols = ['id', 'user_id', 'full_name', 'title', 'team_name', 'headshot_url',
+                                   'company_logo_url', 'email', 'office_phone', 'cell_phone', 'fax',
+                                   'address', 'website_url', 'apply_now_url', 'doc_upload_url',
+                                   'schedule_url', 'linkedin_url', 'facebook_url', 'instagram_url',
+                                   'twitter_url', 'nmls_id', 'branch_nmls_id', 'corporate_nmls_id',
+                                   'primary_color', 'secondary_color', 'tagline', 'is_active',
+                                   'created_at', 'updated_at']
+                            for i, col in enumerate(cols):
+                                if i < len(row):
+                                    setattr(self, col, row[i])
+                                else:
+                                    setattr(self, col, None)
+
+                    sig_obj = SigProxy(signature)
+                    signature_html = generate_email_signature_html(sig_obj)
+
+                    if final_body_html:
+                        final_body_html = f"{final_body_html}<br><br>{signature_html}"
+                    elif final_body_text:
+                        # Wrap text in HTML and add signature
+                        final_body_html = f"<div>{final_body_text.replace(chr(10), '<br>')}</div><br><br>{signature_html}"
+                        final_body_text = None  # Use HTML version instead
+            except Exception as sig_error:
+                logger.warning(f"Could not append signature: {sig_error}")
+                # Continue without signature
+
         result = gmail_service.send_email(
             credentials,
             to=to,
             subject=subject,
-            body_text=body_text,
-            body_html=body_html,
+            body_text=final_body_text,
+            body_html=final_body_html,
             cc=cc,
             bcc=bcc,
             reply_to=reply_to,

@@ -6,6 +6,7 @@ import AIReceptionist from '../components/AIReceptionist';
 import TaskWorkflowManager from '../components/TaskWorkflowManager';
 import DocumentIntakeManager from '../components/DocumentIntakeManager';
 import EmailMonitorDashboard from './EmailMonitorDashboard';
+import EmailSignatureTab from '../components/EmailSignatureTab';
 import './Settings.css';
 
 function Settings() {
@@ -1478,6 +1479,13 @@ const API_BASE_URL = isProduction
             <span>Email Monitor</span>
           </button>
 
+          <button
+            className={`sidebar-btn ${activeSection === 'email-signature' ? 'active' : ''}`}
+            onClick={() => setActiveSection('email-signature')}
+          >
+            <span>Email Signature</span>
+          </button>
+
           {/* Marketing */}
           <button
             className={`sidebar-btn ${activeSection === 'marketing' ? 'active' : ''}`}
@@ -1644,6 +1652,10 @@ const API_BASE_URL = isProduction
 
           {activeSection === 'email-monitor' && (
             <EmailMonitorDashboard />
+          )}
+
+          {activeSection === 'email-signature' && (
+            <EmailSignatureTab />
           )}
 
           {activeSection === 'document-intake' && (

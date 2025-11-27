@@ -1307,4 +1307,33 @@ export const financialIntelligenceAPI = {
   },
 };
 
+// Email Signature API
+export const emailSignatureAPI = {
+  get: async () => {
+    const response = await api.get('/api/v1/email-signature');
+    return response.data;
+  },
+  save: async (data) => {
+    const response = await api.post('/api/v1/email-signature', data);
+    return response.data;
+  },
+  uploadImage: async (file, imageType) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('image_type', imageType);
+    const response = await api.post('/api/v1/email-signature/upload-image', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
+  },
+  getHtml: async () => {
+    const response = await api.get('/api/v1/email-signature/html');
+    return response.data;
+  },
+  getPreview: async () => {
+    const response = await api.get('/api/v1/email-signature/preview');
+    return response.data;
+  },
+};
+
 export default api;
