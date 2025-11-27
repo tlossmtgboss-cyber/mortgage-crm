@@ -3,6 +3,7 @@ from .provider import TelephonyProvider, TwilioProvider, get_telephony_provider,
 from .dialer_engine import DialerEngine, click_to_dial
 from .compliance import ComplianceChecker, ComplianceError
 from .websocket import ws_manager, WebSocketManager, DialerEvent
+from .router import router as dialer_router, set_dependencies
 
 # Schemas
 from .schemas import (
@@ -39,6 +40,9 @@ __all__ = [
     'ws_manager',
     'WebSocketManager',
     'DialerEvent',
+    # Router
+    'dialer_router',
+    'set_dependencies',
     # Schemas
     'AgentTelephonySettingsUpdate',
     'ClickToDialRequest',

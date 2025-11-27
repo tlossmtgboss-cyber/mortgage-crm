@@ -36485,6 +36485,45 @@ async def webhook_click_to_dial_status(
     return {"received": True}
 
 
+# =============================================================================
+# WebSocket Endpoint for Real-Time Dialer Updates
+# =============================================================================
+
+@app.websocket("/api/v1/dialer/ws/{agent_id}")
+async def websocket_dialer(websocket: WebSocket, agent_id: str):
+    """
+    WebSocket connection for real-time dialer updates
+
+    Clients should connect with their agent_id to receive:
+    - Call status updates (ringing, answered, completed)
+    - Session progress updates
+    - Disposition prompts
+    - Error notifications
+    """
+    await ws_manager.connect(websocket, agent_id)
+    try:
+        while True:
+            # Keep connection alive, handle incoming messages if needed
+            data = await websocket.receive_text()
+            # Echo back acknowledgment (can be extended for bi-directional communication)
+            await websocket.send_json({"type": "ack", "message": data})
+    except WebSocketDisconnect:
+        ws_manager.disconnect(websocket, agent_id)
+        logger.info(f"WebSocket disconnected for agent {agent_id}")
+    except Exception as e:
+        logger.error(f"WebSocket error for agent {agent_id}: {e}")
+        ws_manager.disconnect(websocket, agent_id)
+
+
+@app.get("/api/v1/dialer/ws/status")
+async def websocket_status():
+    """Get WebSocket connection status for monitoring"""
+    return {
+        "connected_agents": ws_manager.get_connected_agents(),
+        "total_connections": sum(len(conns) for conns in ws_manager.active_connections.values())
+    }
+
+
 @app.on_event("shutdown")
 async def shutdown_event():
     """Cleanup on shutdown"""
