@@ -25446,6 +25446,45 @@ def init_db():
                             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                         );
+
+                        CREATE TABLE IF NOT EXISTS contact_dnc_status (
+                            id SERIAL PRIMARY KEY,
+                            phone_number VARCHAR UNIQUE NOT NULL,
+                            reason VARCHAR,
+                            added_by_id INTEGER REFERENCES users(id),
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        );
+                        CREATE INDEX IF NOT EXISTS idx_dnc_phone ON contact_dnc_status(phone_number);
+
+                        CREATE TABLE IF NOT EXISTS active_calls (
+                            id SERIAL PRIMARY KEY,
+                            phone_number VARCHAR NOT NULL,
+                            agent_id INTEGER REFERENCES users(id),
+                            call_sid VARCHAR,
+                            locked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            expires_at TIMESTAMP NOT NULL
+                        );
+                        CREATE INDEX IF NOT EXISTS idx_active_calls_phone ON active_calls(phone_number);
+
+                        CREATE TABLE IF NOT EXISTS call_logs (
+                            id SERIAL PRIMARY KEY,
+                            agent_id INTEGER REFERENCES users(id),
+                            contact_phone VARCHAR NOT NULL,
+                            contact_name VARCHAR,
+                            lead_id INTEGER,
+                            loan_id INTEGER,
+                            task_id INTEGER,
+                            call_sid VARCHAR,
+                            direction VARCHAR DEFAULT 'outbound',
+                            outcome VARCHAR,
+                            disposition VARCHAR,
+                            duration_seconds INTEGER,
+                            notes TEXT,
+                            ai_note_summary TEXT,
+                            started_at TIMESTAMP,
+                            ended_at TIMESTAMP,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        );
                     """))
                     conn.commit()
                     logger.info("✅ Telephony tables created/verified")
@@ -36511,7 +36550,7 @@ async def update_dialer_settings(
 ):
     """Update agent telephony settings"""
     try:
-        # Ensure table exists (for fresh deployments)
+        # Ensure all telephony tables exist (for fresh deployments)
         try:
             db.execute(text("""
                 CREATE TABLE IF NOT EXISTS agent_telephony_settings (
@@ -36526,6 +36565,40 @@ async def update_dialer_settings(
                     pause_between_calls INTEGER DEFAULT 3,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE TABLE IF NOT EXISTS contact_dnc_status (
+                    id SERIAL PRIMARY KEY,
+                    phone_number VARCHAR UNIQUE NOT NULL,
+                    reason VARCHAR,
+                    added_by_id INTEGER REFERENCES users(id),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE TABLE IF NOT EXISTS active_calls (
+                    id SERIAL PRIMARY KEY,
+                    phone_number VARCHAR NOT NULL,
+                    agent_id INTEGER REFERENCES users(id),
+                    call_sid VARCHAR,
+                    locked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TIMESTAMP NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS call_logs (
+                    id SERIAL PRIMARY KEY,
+                    agent_id INTEGER REFERENCES users(id),
+                    contact_phone VARCHAR NOT NULL,
+                    contact_name VARCHAR,
+                    lead_id INTEGER,
+                    loan_id INTEGER,
+                    task_id INTEGER,
+                    call_sid VARCHAR,
+                    direction VARCHAR DEFAULT 'outbound',
+                    outcome VARCHAR,
+                    disposition VARCHAR,
+                    duration_seconds INTEGER,
+                    notes TEXT,
+                    ai_note_summary TEXT,
+                    started_at TIMESTAMP,
+                    ended_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """))
             db.commit()
