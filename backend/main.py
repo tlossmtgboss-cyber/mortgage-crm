@@ -25456,15 +25456,16 @@ def init_db():
                         );
                         CREATE INDEX IF NOT EXISTS idx_dnc_phone ON contact_dnc_status(phone_number);
 
+                        DROP TABLE IF EXISTS active_calls;
                         CREATE TABLE IF NOT EXISTS active_calls (
                             id SERIAL PRIMARY KEY,
-                            phone_number VARCHAR NOT NULL,
+                            contact_phone VARCHAR NOT NULL,
                             agent_id INTEGER REFERENCES users(id),
                             call_sid VARCHAR,
                             locked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                             expires_at TIMESTAMP NOT NULL
                         );
-                        CREATE INDEX IF NOT EXISTS idx_active_calls_phone ON active_calls(phone_number);
+                        CREATE INDEX IF NOT EXISTS idx_active_calls_phone ON active_calls(contact_phone);
 
                         CREATE TABLE IF NOT EXISTS call_logs (
                             id SERIAL PRIMARY KEY,
@@ -36573,9 +36574,10 @@ async def update_dialer_settings(
                     added_by_id INTEGER REFERENCES users(id),
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
-                CREATE TABLE IF NOT EXISTS active_calls (
+                DROP TABLE IF EXISTS active_calls;
+                CREATE TABLE active_calls (
                     id SERIAL PRIMARY KEY,
-                    phone_number VARCHAR NOT NULL,
+                    contact_phone VARCHAR NOT NULL,
                     agent_id INTEGER REFERENCES users(id),
                     call_sid VARCHAR,
                     locked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
