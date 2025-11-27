@@ -35899,8 +35899,8 @@ async def normalize_stage_enums_migration(
     """
     Migration: Normalize lead and loan stage enum values.
 
-    Converts all stage values to use Python enum VALUES (like 'New', 'Pre-Approved')
-    which are the canonical values that SQLAlchemy's str(enum.Enum) will match.
+    Converts all stage values to use Python enum NAMES (like 'NEW', 'PRE_APPROVED')
+    which is what SQLAlchemy's native PostgreSQL enum expects by default.
 
     This fixes the LookupError when SQLAlchemy tries to map database values
     back to Python enum members.
@@ -35915,22 +35915,23 @@ async def normalize_stage_enums_migration(
         cursor = connection.cursor()
 
         try:
-            # LeadStage: Map enum NAMES to VALUES
+            # LeadStage: Map enum VALUES to NAMES (SQLAlchemy expects names)
             lead_stage_mappings = [
-                ("NEW", "New"),
-                ("ATTEMPTED_CONTACT", "Attempted Contact"),
-                ("PROSPECT", "Prospect"),
-                ("APPLICATION", "Application"),
-                ("APPLICATION_STARTED", "Application"),  # Legacy - map to Application
-                ("APPLICATION_COMPLETE", "Application"),  # Legacy
-                ("PRE_QUALIFIED", "Pre-Qualified"),
-                ("PRE_APPROVED", "Pre-Approved"),
-                ("UNDER_CONTRACT", "Under Contract"),
-                ("LONG_TERM_NURTURE", "Long-Term Nurture"),
-                ("CLOSED", "Closed"),
-                ("REFERRAL_SOURCE", "Referral Source"),
-                ("WITHDRAWN", "Withdrawn"),
-                ("DOES_NOT_QUALIFY", "Does Not Qualify"),
+                ("New", "NEW"),
+                ("Attempted Contact", "ATTEMPTED_CONTACT"),
+                ("Prospect", "PROSPECT"),
+                ("Application", "APPLICATION"),
+                ("Pre-Qualified", "PRE_QUALIFIED"),
+                ("Pre-Approved", "PRE_APPROVED"),
+                ("Under Contract", "UNDER_CONTRACT"),
+                ("Long-Term Nurture", "LONG_TERM_NURTURE"),
+                ("Closed", "CLOSED"),
+                ("Referral Source", "REFERRAL_SOURCE"),
+                ("Withdrawn", "WITHDRAWN"),
+                ("Does Not Qualify", "DOES_NOT_QUALIFY"),
+                # Also handle legacy values
+                ("APPLICATION_STARTED", "APPLICATION"),
+                ("APPLICATION_COMPLETE", "APPLICATION"),
             ]
 
             for old_value, new_value in lead_stage_mappings:
@@ -35943,16 +35944,16 @@ async def normalize_stage_enums_migration(
                         results["leads"][old_value] = cursor.rowcount
                         logger.info(f"Normalized {cursor.rowcount} leads: '{old_value}' -> '{new_value}'")
 
-            # LoanStage: Map enum NAMES to VALUES
+            # LoanStage: Map enum VALUES to NAMES (SQLAlchemy expects names)
             loan_stage_mappings = [
-                ("DISCLOSED", "Disclosed"),
-                ("PROCESSING", "Processing"),
-                ("SUBMITTED", "Submitted"),
-                ("UW_RECEIVED", "UW Received"),
-                ("APPROVED", "Approved"),
-                ("SUSPENDED", "Suspended"),
-                ("DOCS", "Docs Out"),
-                ("FUNDED", "Funded"),
+                ("Disclosed", "DISCLOSED"),
+                ("Processing", "PROCESSING"),
+                ("Submitted", "SUBMITTED"),
+                ("UW Received", "UW_RECEIVED"),
+                ("Approved", "APPROVED"),
+                ("Suspended", "SUSPENDED"),
+                ("Docs Out", "DOCS"),
+                ("Funded", "FUNDED"),
             ]
 
             for old_value, new_value in loan_stage_mappings:
