@@ -1,6 +1,6 @@
 .tasks-page {
-  padding: var(--space-xl);
-  max-width: 1400px;
+  padding: var(--space-md) var(--space-xl);
+  max-width: 1600px;
   margin: 0 auto;
 }
 
@@ -8,7 +8,7 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: var(--space-xl);
+  margin-bottom: var(--space-md);
 }
 
 .page-header h1 {
@@ -474,12 +474,12 @@
 .task-tabs {
   display: flex;
   gap: 8px;
-  margin-bottom: 24px;
+  margin-bottom: 12px;
   border-bottom: 2px solid #e5e7eb;
 }
 
 .tab-button {
-  padding: 12px 24px;
+  padding: 10px 20px;
   background: transparent;
   border: none;
   border-bottom: 3px solid transparent;
@@ -905,13 +905,13 @@
   display: grid;
   grid-template-columns: 350px 1fr;
   gap: 0;
-  height: calc(100vh - 300px);
-  min-height: 600px;
+  height: calc(100vh - 180px);
+  min-height: 500px;
   background: white;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   overflow: hidden;
-  margin-bottom: 32px;
+  margin-bottom: 16px;
 }
 
 /* Task Inbox (Left Side) */
