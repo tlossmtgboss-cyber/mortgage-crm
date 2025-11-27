@@ -10660,6 +10660,11 @@ from telephony.admin_router import router as dialer_admin_router, set_dependenci
 set_admin_deps(get_db, get_current_user)
 app.include_router(dialer_admin_router, prefix="/api/v1/dialer", tags=["Dialer Admin"])
 
+# Include main Dialer router (TwiML webhooks, click-to-dial, sessions)
+from telephony.router import router as dialer_main_router, set_dependencies as set_dialer_deps
+set_dialer_deps(get_db, get_current_user)
+app.include_router(dialer_main_router, tags=["Dialer"])  # Router already has /api/v1/dialer prefix
+
 # Email Monitor Migration Endpoint
 @app.post("/api/v1/migrations/add-email-monitor")
 async def add_email_monitor_migration(db: Session = Depends(get_db)):
