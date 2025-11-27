@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import { aiAPI, leadsAPI, loansAPI } from '../services/api';
-import EmailDropZone from '../components/EmailDropZone';
 import './AILandingPage.css';
+// Note: EmailDropZone wrapper removed - App.js already wraps with EmailDropZone globally
 
 function AILandingPage() {
   const navigate = useNavigate();
@@ -1799,7 +1799,6 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
   };
 
   return (
-    <EmailDropZone>
     <div className="ai-landing-page-new">
       {/* Collapsible Left Sidebar */}
       <div className={`ai-sidebar-new ${sidebarCollapsed ? 'collapsed' : ''}`}>
@@ -2367,7 +2366,6 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
       )}
 
     </div>
-    </EmailDropZone>
   );
 }
 

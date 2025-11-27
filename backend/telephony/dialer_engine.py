@@ -479,7 +479,7 @@ class DialerEngine:
             Dict with next action
         """
         from main import (
-            DialerSession, DialerSessionTask, DialerSessionStatus, DialerTaskStatus, CallLog
+            DialerSession, DialerSessionTask, DialerSessionStatus, DialerTaskStatus, CallLog, CallOutcome
         )
 
         task = self.db.query(DialerSessionTask).filter(
@@ -537,7 +537,17 @@ class DialerEngine:
             )
         )
 
-        # Log the call
+        # Log the call - map status to CallOutcome
+        outcome_map = {
+            "completed": CallOutcome.COMPLETED,
+            "answered": CallOutcome.COMPLETED,
+            "busy": CallOutcome.BUSY,
+            "no-answer": CallOutcome.NO_ANSWER,
+            "failed": CallOutcome.FAILED,
+            "canceled": CallOutcome.FAILED,
+        }
+        call_outcome = outcome_map.get(status.lower() if isinstance(status, str) else status, CallOutcome.COMPLETED)
+
         call_log = CallLog(
             agent_id=self.agent_id,
             session_id=session_id,
@@ -547,12 +557,10 @@ class DialerEngine:
             lead_id=task.lead_id,
             loan_id=task.loan_id,
             call_sid=call_sid,
-            direction="outbound",
             duration_seconds=duration,
-            outcome=status,
-            answered_by=answered_by,
-            started_at=task.last_attempt_at,
-            ended_at=datetime.utcnow()
+            outcome=call_outcome,
+            start_time=task.last_attempt_at,
+            end_time=datetime.utcnow()
         )
         self.db.add(call_log)
 
@@ -812,7 +820,7 @@ def click_to_dial(
     Returns:
         Dict with call result
     """
-    from main import AgentTelephonySettings, CallLog
+    from main import AgentTelephonySettings, CallLog, CallOutcome
 
     provider = get_telephony_provider()
     compliance = ComplianceChecker(db_session)
@@ -871,9 +879,8 @@ def click_to_dial(
             loan_id=loan_id,
             session_task_id=task_id,
             call_sid=result.call_sid,
-            direction="outbound",
-            outcome="initiated",
-            started_at=datetime.utcnow()
+            outcome=CallOutcome.INITIATED,
+            start_time=datetime.utcnow()
         )
         db_session.add(call_log)
         db_session.commit()

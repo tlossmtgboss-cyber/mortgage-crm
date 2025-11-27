@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import EmailReconciliationModal from './EmailReconciliationModal';
 import DocumentDropModal from './DocumentDropModal';
 import { emailDropAPI, documentDropAPI } from '../services/api';
@@ -21,6 +21,58 @@ function EmailDropZone({ children }) {
   const [documentFile, setDocumentFile] = useState(null);
   const [parsing, setParsing] = useState(false);
   const [aiParseResult, setAiParseResult] = useState(null);
+  const dragCounterRef = useRef(0);
+  const dropZoneRef = useRef(null);
+
+  // Global document-level drag handlers for better capture
+  useEffect(() => {
+    const handleWindowDragEnter = (e) => {
+      // Check if it's a valid drag (files, emails, etc.)
+      const types = Array.from(e.dataTransfer?.types || []);
+      const isValid = types.includes('Files') ||
+                     types.includes('text/html') ||
+                     types.includes('text/plain') ||
+                     types.includes('text/uri-list');
+
+      if (isValid) {
+        console.log('Window DragEnter - types:', types);
+        setIsDragging(true);
+      }
+    };
+
+    const handleWindowDragLeave = (e) => {
+      // Only hide if leaving the window entirely
+      if (e.relatedTarget === null) {
+        console.log('Window DragLeave - left window');
+        setIsDragging(false);
+        dragCounterRef.current = 0;
+      }
+    };
+
+    const handleWindowDragOver = (e) => {
+      // Prevent default to allow drop
+      e.preventDefault();
+    };
+
+    const handleWindowDrop = (e) => {
+      // Reset state even if drop wasn't on our zone
+      setIsDragging(false);
+      dragCounterRef.current = 0;
+    };
+
+    // Add document-level listeners
+    document.addEventListener('dragenter', handleWindowDragEnter);
+    document.addEventListener('dragleave', handleWindowDragLeave);
+    document.addEventListener('dragover', handleWindowDragOver);
+    document.addEventListener('drop', handleWindowDrop);
+
+    return () => {
+      document.removeEventListener('dragenter', handleWindowDragEnter);
+      document.removeEventListener('dragleave', handleWindowDragLeave);
+      document.removeEventListener('dragover', handleWindowDragOver);
+      document.removeEventListener('drop', handleWindowDrop);
+    };
+  }, []);
 
   // Determine if file is an email or document
   const isEmailFile = (file) => {
@@ -208,28 +260,41 @@ function EmailDropZone({ children }) {
     };
   };
 
+  // Check if the drag contains valid droppable content
+  const isValidDrag = useCallback((e) => {
+    const types = Array.from(e.dataTransfer.types);
+    return types.includes('Files') ||
+           types.includes('text/html') ||
+           types.includes('text/plain') ||
+           types.includes('text/uri-list');
+  }, []);
+
   const handleDragEnter = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
 
+    // Increment counter for nested elements
+    dragCounterRef.current++;
+
     // Check if dragging files OR email content (text/html from email clients)
     const types = Array.from(e.dataTransfer.types);
-    console.log('DragEnter - types:', types);
+    console.log('DragEnter - types:', types, 'counter:', dragCounterRef.current);
 
-    if (types.includes('Files') ||
-        types.includes('text/html') ||
-        types.includes('text/plain') ||
-        types.includes('text/uri-list')) {
+    if (isValidDrag(e)) {
       setIsDragging(true);
     }
-  }, []);
+  }, [isValidDrag]);
 
   const handleDragLeave = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
 
-    // Only hide if leaving the drop zone entirely
-    if (e.currentTarget === e.target) {
+    // Decrement counter
+    dragCounterRef.current--;
+    console.log('DragLeave - counter:', dragCounterRef.current);
+
+    // Only hide when we've left all nested elements
+    if (dragCounterRef.current === 0) {
       setIsDragging(false);
     }
   }, []);
@@ -237,12 +302,15 @@ function EmailDropZone({ children }) {
   const handleDragOver = useCallback((e) => {
     e.preventDefault();
     e.stopPropagation();
+    // Set dropEffect to show it's droppable
+    e.dataTransfer.dropEffect = 'copy';
   }, []);
 
   const handleDrop = useCallback(async (e) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(false);
+    dragCounterRef.current = 0; // Reset counter
 
     // Log what we received for debugging
     console.log('Drop event - types:', e.dataTransfer.types);
@@ -443,9 +511,15 @@ function EmailDropZone({ children }) {
     >
       {children}
 
-      {/* Drag Overlay */}
+      {/* Drag Overlay - captures drop events when visible */}
       {isDragging && (
-        <div className="email-drop-overlay">
+        <div
+          className="email-drop-overlay"
+          onDragOver={handleDragOver}
+          onDragEnter={handleDragEnter}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
           <div className="email-drop-content">
             <div className="email-drop-icon">📧📄</div>
             <h2>Drop Here</h2>
