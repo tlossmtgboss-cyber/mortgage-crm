@@ -10,7 +10,7 @@ API endpoints for:
 - AI analysis requests
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Path, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Path, BackgroundTasks, Body
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func
 from datetime import datetime, timedelta, date, time
