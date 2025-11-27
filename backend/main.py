@@ -35237,6 +35237,77 @@ async def add_loanstage_docs_migration(
         }
 
 
+@app.post("/api/v1/migrations/add-leadstage-values", response_model=None)
+async def add_leadstage_values_migration(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Add missing values to leadstage enum type.
+    Required for all Lead stage features in reconciliation.
+    """
+    try:
+        logger.info(f"Running migration: add leadstage enum values (user: {current_user.id})")
+
+        # All LeadStage enum values that might be missing
+        values_to_add = [
+            "Application",
+            "Attempted Contact",
+            "Pre-Qualified",
+            "Under Contract",
+            "Long-Term Nurture",
+            "Closed",
+            "AMR",
+            "Referral Source",
+            "Withdrawn",
+            "Does Not Qualify"
+        ]
+
+        # Get the raw connection and execute outside transaction
+        connection = engine.raw_connection()
+        added = []
+        existing = []
+        try:
+            connection.set_isolation_level(0)  # AUTOCOMMIT
+            cursor = connection.cursor()
+
+            for value in values_to_add:
+                cursor.execute("""
+                    SELECT 1 FROM pg_enum WHERE enumlabel = %s
+                    AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'leadstage')
+                """, (value,))
+                exists = cursor.fetchone()
+
+                if not exists:
+                    try:
+                        cursor.execute(f"ALTER TYPE leadstage ADD VALUE '{value}'")
+                        added.append(value)
+                        logger.info(f"Added '{value}' to leadstage enum")
+                    except Exception as e:
+                        logger.warning(f"Could not add '{value}': {e}")
+                else:
+                    existing.append(value)
+
+            cursor.close()
+        finally:
+            connection.close()
+
+        return {
+            "success": True,
+            "message": f"Added {len(added)} values to leadstage enum",
+            "added": added,
+            "already_existing": existing
+        }
+
+    except Exception as e:
+        logger.error(f"Leadstage values migration failed: {e}")
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e)
+        }
+
+
 @app.post("/api/v1/migrations/add-workflow-config-tables", response_model=None)
 async def add_workflow_config_tables_migration(
     current_user: User = Depends(get_current_user),
