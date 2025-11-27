@@ -51,7 +51,7 @@ def set_dependencies(get_db_func, get_current_user_func, models_dict):
 def get_db():
     if _get_db is None:
         raise RuntimeError("Dependencies not set")
-    return _get_db()
+    yield from _get_db()
 
 
 async def get_current_user(request: Request, db: Session = Depends(get_db)):
