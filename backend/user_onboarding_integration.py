@@ -10,11 +10,14 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone, timedelta
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, UploadFile, File, Form
 from pydantic import BaseModel, EmailStr, validator
 from typing import List, Optional, Dict, Any
 import secrets
 import logging
+import csv
+import io
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -1245,5 +1248,248 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
         except Exception as e:
             db.rollback()
             raise HTTPException(status_code=500, detail=str(e))
+
+    # Bulk Upload Endpoints
+    @router.post("/bulk/parse")
+    async def bulk_parse(
+        file: UploadFile = File(...),
+        db = Depends(get_db),
+        current_user = Depends(get_current_user)
+    ):
+        """Parse uploaded CSV file and return headers and preview"""
+        if not check_admin_permission(current_user):
+            raise HTTPException(status_code=403, detail="Permission denied")
+
+        if not file.filename.endswith('.csv'):
+            raise HTTPException(status_code=400, detail="Only CSV files are supported")
+
+        try:
+            contents = await file.read()
+            decoded = contents.decode('utf-8')
+            reader = csv.DictReader(io.StringIO(decoded))
+
+            headers = reader.fieldnames or []
+            rows = list(reader)
+            preview = rows[:5]  # First 5 rows for preview
+
+            return {
+                "success": True,
+                "headers": headers,
+                "preview": preview,
+                "total_rows": len(rows)
+            }
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Error parsing file: {str(e)}")
+
+    @router.post("/bulk/validate")
+    async def bulk_validate(
+        file: UploadFile = File(...),
+        column_mapping: str = Form(...),
+        db = Depends(get_db),
+        current_user = Depends(get_current_user)
+    ):
+        """Validate mapped CSV data before processing"""
+        if not check_admin_permission(current_user):
+            raise HTTPException(status_code=403, detail="Permission denied")
+
+        import json
+        mapping = json.loads(column_mapping)
+
+        try:
+            contents = await file.read()
+            decoded = contents.decode('utf-8')
+            reader = csv.DictReader(io.StringIO(decoded))
+            rows = list(reader)
+
+            valid_rows = []
+            invalid_rows = []
+            existing_emails = set()
+
+            # Get existing emails from database
+            all_users = db.query(User).all()
+            db_emails = {u.email.lower() for u in all_users}
+
+            for idx, row in enumerate(rows):
+                errors = []
+
+                # Get mapped values
+                first_name = row.get(mapping.get('first_name', ''), '').strip()
+                last_name = row.get(mapping.get('last_name', ''), '').strip()
+                email = row.get(mapping.get('email', ''), '').strip().lower()
+
+                # Validate required fields
+                if not first_name:
+                    errors.append("Missing first name")
+                if not last_name:
+                    errors.append("Missing last name")
+                if not email:
+                    errors.append("Missing email")
+                elif not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
+                    errors.append("Invalid email format")
+                elif email in db_emails:
+                    errors.append("Email already exists in system")
+                elif email in existing_emails:
+                    errors.append("Duplicate email in file")
+
+                existing_emails.add(email)
+
+                row_data = {
+                    "row": idx + 1,
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "email": email,
+                    "phone": row.get(mapping.get('phone', ''), '').strip()
+                }
+
+                if errors:
+                    row_data["errors"] = errors
+                    invalid_rows.append(row_data)
+                else:
+                    valid_rows.append(row_data)
+
+            return {
+                "success": True,
+                "valid_count": len(valid_rows),
+                "invalid_count": len(invalid_rows),
+                "valid_rows": valid_rows,
+                "invalid_rows": invalid_rows,
+                "total_rows": len(rows)
+            }
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Error validating file: {str(e)}")
+
+    @router.post("/bulk/process")
+    async def bulk_process(
+        request: Request,
+        file: UploadFile = File(...),
+        column_mapping: str = Form(...),
+        default_role_id: Optional[int] = Form(None),
+        db = Depends(get_db),
+        current_user = Depends(get_current_user)
+    ):
+        """Process and create users from CSV"""
+        if not check_admin_permission(current_user):
+            raise HTTPException(status_code=403, detail="Permission denied")
+
+        import json
+        mapping = json.loads(column_mapping)
+
+        # Get default role
+        default_role = None
+        if default_role_id:
+            default_role = db.query(Role).filter(Role.id == default_role_id).first()
+        if not default_role:
+            default_role = db.query(Role).filter(Role.name == "Loan Officer").first()
+
+        try:
+            contents = await file.read()
+            decoded = contents.decode('utf-8')
+            reader = csv.DictReader(io.StringIO(decoded))
+            rows = list(reader)
+
+            results = []
+            created_count = 0
+            failed_count = 0
+
+            for idx, row in enumerate(rows):
+                first_name = row.get(mapping.get('first_name', ''), '').strip()
+                last_name = row.get(mapping.get('last_name', ''), '').strip()
+                email = row.get(mapping.get('email', ''), '').strip().lower()
+                phone = row.get(mapping.get('phone', ''), '').strip()
+
+                # Skip invalid rows
+                if not first_name or not last_name or not email:
+                    results.append({
+                        "row": idx + 1,
+                        "email": email,
+                        "status": "failed",
+                        "error": "Missing required fields"
+                    })
+                    failed_count += 1
+                    continue
+
+                # Check if email exists
+                existing = db.query(User).filter(User.email == email).first()
+                if existing:
+                    results.append({
+                        "row": idx + 1,
+                        "email": email,
+                        "status": "skipped",
+                        "error": "Email already exists"
+                    })
+                    failed_count += 1
+                    continue
+
+                try:
+                    # Create user
+                    new_user = User(
+                        email=email,
+                        hashed_password="",
+                        full_name=f"{first_name} {last_name}",
+                        phone=phone,
+                        role=default_role.name.lower().replace(" ", "_") if default_role else "loan_officer",
+                        permission_role="pending",
+                        is_active=False
+                    )
+                    db.add(new_user)
+                    db.flush()
+
+                    # Create profile
+                    activation_token = generate_activation_token()
+                    profile = UserProfile(
+                        user_id=new_user.id,
+                        first_name=first_name,
+                        last_name=last_name,
+                        role_id=default_role.id if default_role else None,
+                        status="pending_activation",
+                        activation_token=activation_token,
+                        activation_token_expires=datetime.now(timezone.utc) + timedelta(days=7),
+                        created_by=current_user.id
+                    )
+                    db.add(profile)
+                    db.flush()
+
+                    # Create audit log
+                    audit = AuditLog(
+                        user_id=new_user.id,
+                        action="user_created_bulk",
+                        performed_by=current_user.id,
+                        details={"email": email, "source": "bulk_upload"},
+                        ip_address=request.client.host if request.client else None
+                    )
+                    db.add(audit)
+
+                    results.append({
+                        "row": idx + 1,
+                        "email": email,
+                        "user_id": new_user.id,
+                        "status": "created",
+                        "activation_token": activation_token
+                    })
+                    created_count += 1
+
+                except Exception as e:
+                    results.append({
+                        "row": idx + 1,
+                        "email": email,
+                        "status": "failed",
+                        "error": str(e)
+                    })
+                    failed_count += 1
+
+            db.commit()
+
+            return {
+                "success": True,
+                "results": results,
+                "summary": {
+                    "total": len(rows),
+                    "created": created_count,
+                    "failed": failed_count
+                }
+            }
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
 
     return router
