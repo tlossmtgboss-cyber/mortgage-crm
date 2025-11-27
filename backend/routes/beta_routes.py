@@ -4,17 +4,56 @@ Handles beta program applications and tracking
 """
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
-from sqlalchemy import Column, Integer, String, Text, DateTime, Enum
+from sqlalchemy import Column, Integer, String, Text, DateTime, Enum, text
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 from datetime import datetime
 import logging
 import enum
 
-from database import get_db, Base
+from database import get_db, Base, engine
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/beta", tags=["beta"])
+
+
+def ensure_beta_tables_exist():
+    """Create beta tables if they don't exist - called on module load"""
+    try:
+        with engine.connect() as conn:
+            # Create beta_applications table
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS beta_applications (
+                    id SERIAL PRIMARY KEY,
+                    company_name VARCHAR(255) NOT NULL,
+                    contact_name VARCHAR(255) NOT NULL,
+                    email VARCHAR(255) NOT NULL,
+                    phone VARCHAR(50),
+                    team_size VARCHAR(50),
+                    current_crm VARCHAR(255),
+                    monthly_loans VARCHAR(50),
+                    pain_points TEXT,
+                    use_cases TEXT,
+                    referral_source VARCHAR(100),
+                    status VARCHAR(50) DEFAULT 'pending',
+                    notes TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    contacted_at TIMESTAMP,
+                    activated_at TIMESTAMP
+                )
+            """))
+            conn.commit()
+            logger.info("Beta tables ensured to exist")
+    except Exception as e:
+        logger.warning(f"Beta tables check warning (may be using SQLite): {e}")
+
+
+# Auto-create tables on module load
+try:
+    ensure_beta_tables_exist()
+except Exception as e:
+    logger.warning(f"Could not auto-create beta tables: {e}")
 
 
 # ============================================================================

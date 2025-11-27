@@ -166,6 +166,10 @@ export const tasksAPI = {
     const response = await api.get('/api/v1/tasks/', { params });
     return ensureArray(response.data, 'tasks');
   },
+  getUnified: async () => {
+    const response = await api.get('/api/v1/unified-tasks');
+    return response.data;
+  },
   getById: async (id) => {
     const response = await api.get(`/api/v1/tasks/${id}`);
     return response.data;

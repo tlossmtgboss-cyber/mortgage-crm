@@ -661,17 +661,67 @@ function Tasks() {
     try {
       setLoading(true);
 
-      // Load demo task data for all tabs
-      setPrioritizedTasks(mockPrioritizedTasks());
+      // Fetch real tasks from unified-tasks endpoint
+      const response = await tasksAPI.getUnified();
+      const unifiedTasks = response?.tasks || [];
+
+      // Transform unified tasks to match frontend format
+      const transformedTasks = unifiedTasks.map(task => ({
+        id: `${task.source}-${task.id}`,
+        title: task.title,
+        borrower: task.client_name || 'Client',
+        stage: task.stage || task.source,
+        urgency: task.priority === 'urgent' ? 'critical' : task.priority || 'medium',
+        ai_action: task.ai_suggested_response ? 'AI has a suggested action — approve?' : null,
+        owner: task.owner || 'Loan Officer',
+        date_created: task.created_at,
+        due_date: task.due_date,
+        preferred_contact_method: 'Email',
+        ai_message: task.ai_suggested_response || `Complete task: ${task.title}`,
+        ai_confidence: task.ai_confidence,
+        description: task.description,
+        source: task.source === 'reconciliation' ? 'AI Engine'
+              : task.source === 'workflow' ? 'Workflow'
+              : task.source === 'task' ? 'Manual'
+              : task.source,
+        entity_type: task.entity_type,
+        entity_id: task.entity_id,
+        email_from: task.email_from,
+        email_subject: task.email_subject,
+        communication_history: []
+      }));
+
+      // Categorize tasks by source/type
+      const priorityTasks = transformedTasks.filter(t =>
+        t.source === 'Workflow' || t.source === 'Manual'
+      );
+      const aiEngineTasks = transformedTasks.filter(t =>
+        t.source === 'AI Engine'
+      );
+      const messageTasks = transformedTasks.filter(t =>
+        t.email_from || t.email_subject
+      );
+
+      setPrioritizedTasks(priorityTasks.length > 0 ? priorityTasks : mockPrioritizedTasks());
       setLoanIssues(mockLoanIssues());
-      setAiTasks(mockAiTasks());
+      setAiTasks({
+        pending: aiEngineTasks,
+        waiting: []
+      });
       setMumAlerts(mockMumAlerts());
       setLeadMetrics(mockLeadMetrics());
-      setMessages(mockMessages());
+      setMessages(messageTasks.length > 0 ? messageTasks.map(t => ({
+        id: t.id,
+        from: t.email_from || 'Unknown',
+        subject: t.email_subject || t.title,
+        preview: t.description?.substring(0, 100) || '',
+        date: t.date_created,
+        read: false
+      })) : mockMessages());
 
     } catch (error) {
       console.error('Failed to load tasks:', error);
-      // Load demo data on error too
+      // Load demo data on error
       setPrioritizedTasks(mockPrioritizedTasks());
       setLoanIssues(mockLoanIssues());
       setAiTasks(mockAiTasks());
@@ -946,12 +996,13 @@ function Tasks() {
 
     // Add manual prioritized tasks
     prioritizedTasks.forEach((task, idx) => {
-      if (!completedTasks.has(`priority-${idx}`)) {
+      const taskId = task.id || `priority-${idx}`;
+      if (!completedTasks.has(taskId)) {
         tasks.push({
-          id: `priority-${idx}`,
           ...task,
-          source: 'Manual Priority',
-          sourceIcon: '🎯'
+          id: taskId,
+          source: task.source || 'Manual Priority',
+          sourceIcon: task.source === 'Workflow' ? '⚡' : '🎯'
         });
       }
     });
@@ -973,16 +1024,16 @@ function Tasks() {
 
     // Add AI pending tasks
     aiTasks.pending.forEach((task, idx) => {
-      const taskId = `ai-pending-${idx}`;
+      const taskId = task.id || `ai-pending-${idx}`;
       if (!completedTasks.has(taskId)) {
         const { id: _originalId, ...taskWithoutId } = task; // Exclude original id
         tasks.push({
           ...taskWithoutId,
           id: taskId,  // Set our id LAST to ensure it's not overwritten
-          title: task.task,
-          stage: 'AI Suggested',
+          title: task.title || task.task,
+          stage: task.stage || 'AI Suggested',
           urgency: task.urgency || 'medium',
-          ai_action: `AI confidence: ${task.confidence}%`,
+          ai_action: task.ai_confidence ? `AI confidence: ${task.ai_confidence}%` : (task.confidence ? `AI confidence: ${task.confidence}%` : null),
           source: 'AI Engine',
           sourceIcon: '🤖'
         });

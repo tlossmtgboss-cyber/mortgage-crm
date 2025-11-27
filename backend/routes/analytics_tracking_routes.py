@@ -4,16 +4,48 @@ Tracks user behavior and feature usage for beta metrics
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import Column, Integer, String, Text, DateTime, JSON, func
+from sqlalchemy import Column, Integer, String, Text, DateTime, JSON, func, text
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 import logging
 
-from database import get_db, Base
+from database import get_db, Base, engine
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/analytics", tags=["analytics-tracking"])
+
+
+def ensure_analytics_tables_exist():
+    """Create analytics tables if they don't exist - called on module load"""
+    try:
+        with engine.connect() as conn:
+            # Create analytics_events table
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS analytics_events (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER,
+                    user_email VARCHAR(255),
+                    event_name VARCHAR(100) NOT NULL,
+                    properties JSONB DEFAULT '{}',
+                    url VARCHAR(500),
+                    user_agent VARCHAR(500),
+                    screen_width INTEGER,
+                    screen_height INTEGER,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.commit()
+            logger.info("Analytics tables ensured to exist")
+    except Exception as e:
+        logger.warning(f"Analytics tables check warning (may be using SQLite): {e}")
+
+
+# Auto-create tables on module load
+try:
+    ensure_analytics_tables_exist()
+except Exception as e:
+    logger.warning(f"Could not auto-create analytics tables: {e}")
 
 
 # ============================================================================
