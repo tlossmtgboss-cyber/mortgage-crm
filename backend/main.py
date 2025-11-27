@@ -21597,6 +21597,13 @@ async def get_unified_tasks(
             elif task.lead_id:
                 entity_name = get_entity_name("lead", task.lead_id, db)
 
+            # Get loan stage if available
+            loan_stage = None
+            if task.loan_id:
+                loan = db.query(Loan).filter(Loan.id == task.loan_id).first()
+                if loan:
+                    loan_stage = loan.stage.value if loan.stage else None
+
             unified_tasks.append({
                 "id": task.id,
                 "source": "task",
@@ -21609,7 +21616,10 @@ async def get_unified_tasks(
                 "due_date": task.due_date.isoformat() if task.due_date else None,
                 "created_at": task.created_at.isoformat() if task.created_at else None,
                 "entity_type": "loan" if task.loan_id else "lead" if task.lead_id else None,
-                "entity_id": task.loan_id or task.lead_id
+                "entity_id": task.loan_id or task.lead_id,
+                "stage": loan_stage or "AI Suggested",
+                "owner": "Loan Officer",
+                "communication_count": 0
             })
 
         # 2. Get pending workflow tasks
@@ -21619,10 +21629,14 @@ async def get_unified_tasks(
         ).order_by(Task.due_date.asc()).limit(50).all()
 
         for task in workflow_tasks:
-            # Get entity name
+            # Get entity name and loan stage
             entity_name = None
+            loan_stage = None
             if task.loan_id:
                 entity_name = get_entity_name("loan", task.loan_id, db)
+                loan = db.query(Loan).filter(Loan.id == task.loan_id).first()
+                if loan:
+                    loan_stage = loan.stage.value if loan.stage else None
             elif task.lead_id:
                 entity_name = get_entity_name("lead", task.lead_id, db)
 
@@ -21642,7 +21656,10 @@ async def get_unified_tasks(
                 "due_date": task.due_date.isoformat() if task.due_date else None,
                 "created_at": task.created_at.isoformat() if task.created_at else None,
                 "entity_type": "loan" if task.loan_id else "lead" if task.lead_id else None,
-                "entity_id": task.loan_id or task.lead_id
+                "entity_id": task.loan_id or task.lead_id,
+                "stage": loan_stage or "Workflow",
+                "owner": "Loan Officer",
+                "communication_count": 0
             })
 
         # 3. Get pending reconciliation items
@@ -21696,6 +21713,13 @@ async def get_unified_tasks(
             elif email_intent.get("description"):
                 ai_response = email_intent.get("description")
 
+            # Get loan stage if matched to a loan
+            loan_stage = None
+            if item.match_entity_type == "loan" and item.match_entity_id:
+                loan = db.query(Loan).filter(Loan.id == item.match_entity_id).first()
+                if loan:
+                    loan_stage = loan.stage.value if loan.stage else None
+
             unified_tasks.append({
                 "id": item.id,
                 "source": "reconciliation",
@@ -21710,7 +21734,10 @@ async def get_unified_tasks(
                 "entity_type": item.match_entity_type,
                 "entity_id": item.match_entity_id,
                 "email_from": event.sender if event else None,
-                "email_subject": event.subject if event else None
+                "email_subject": event.subject if event else None,
+                "stage": loan_stage or "AI Engine",
+                "owner": "Loan Officer",
+                "communication_count": 0
             })
 
         # Sort by priority and due date
