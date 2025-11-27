@@ -91,15 +91,20 @@ function UserCreationWizard() {
   // Default roles for the mortgage industry
   const DEFAULT_ROLES = [
     { id: 1, display_name: 'Loan Officer', description: 'Originates loans, manages borrower relationships, handles rate locks and pre-approvals' },
-    { id: 2, display_name: 'Loan Officer Assistant', description: 'Supports Loan Officers with administrative tasks, document collection, and client communication' },
-    { id: 3, display_name: 'Processor', description: 'Manages complete loan processing, document verification, and underwriting submission' },
-    { id: 4, display_name: 'Processing Assistant', description: 'Assists processors with documentation, condition tracking, and file preparation' },
-    { id: 5, display_name: 'Production Assistant 1', description: 'Entry-level production support, handles initial document intake and data entry' },
-    { id: 6, display_name: 'Production Assistant 2', description: 'Mid-level production support, manages pipeline updates and borrower follow-ups' },
-    { id: 7, display_name: 'Closer', description: 'Manages closing coordination, final document preparation, and funding' },
-    { id: 8, display_name: 'Underwriter', description: 'Reviews loan applications, assesses risk, and issues approval decisions' },
-    { id: 9, display_name: 'Team Lead', description: 'Supervises team members, monitors performance metrics, and ensures quality standards' },
-    { id: 10, display_name: 'Branch Manager', description: 'Oversees branch operations, manages staff, and drives business development' }
+    { id: 2, display_name: 'Jr. Loan Officer', description: 'Entry-level loan originator, learning the sales process and building client relationships' },
+    { id: 3, display_name: 'Loan Officer Assistant', description: 'Supports Loan Officers with administrative tasks, document collection, and client communication' },
+    { id: 4, display_name: 'Application Analyst', description: 'Reviews and analyzes loan applications for completeness, accuracy, and initial qualification' },
+    { id: 5, display_name: 'Processor', description: 'Manages complete loan processing, document verification, and underwriting submission' },
+    { id: 6, display_name: 'Processing Assistant', description: 'Assists processors with documentation, condition tracking, and file preparation' },
+    { id: 7, display_name: 'Production Assistant 1', description: 'Entry-level production support, handles initial document intake and data entry' },
+    { id: 8, display_name: 'Production Assistant 2', description: 'Mid-level production support, manages pipeline updates and borrower follow-ups' },
+    { id: 9, display_name: 'Concierge', description: 'Provides white-glove client service, coordinates communications, and ensures exceptional borrower experience' },
+    { id: 10, display_name: 'Closer', description: 'Manages closing coordination, final document preparation, and funding' },
+    { id: 11, display_name: 'Underwriter', description: 'Reviews loan applications, assesses risk, and issues approval decisions' },
+    { id: 12, display_name: 'Team Lead', description: 'Supervises team members, monitors performance metrics, and ensures quality standards' },
+    { id: 13, display_name: 'Branch Manager', description: 'Oversees branch operations, manages staff, and drives business development' },
+    { id: 14, display_name: 'Area Manager', description: 'Manages multiple branches within a geographic area, drives regional performance' },
+    { id: 15, display_name: 'Regional Manager', description: 'Oversees multiple areas, sets regional strategy, and reports to executive leadership' }
   ];
 
   // Default categories
