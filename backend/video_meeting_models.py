@@ -507,6 +507,45 @@ def create_video_meeting_models(Base):
 
         created_at = Column(DateTime, default=datetime.utcnow)
 
+    class MortgageIntelligence(Base):
+        """
+        Mortgage-specific intelligence extracted from meeting recordings.
+        Detects borrower concerns, compliance risks, competitor mentions, and more.
+        """
+        __tablename__ = "mortgage_intelligence"
+        __table_args__ = {'extend_existing': True}
+
+        id = Column(Integer, primary_key=True, index=True)
+        recording_id = Column(Integer, ForeignKey("meeting_recordings.id"), nullable=False, index=True)
+
+        # Borrower concerns detected
+        borrower_concerns = Column(JSON)  # List of concerns with timestamps and severity
+
+        # Compliance risk flags
+        compliance_risks = Column(JSON)  # List of potential compliance issues
+
+        # Competitor mentions
+        competitor_mentions = Column(JSON)  # Competitors mentioned and context
+
+        # Objection tracking
+        objections = Column(JSON)  # Objections raised and how handled
+
+        # Explanation effectiveness
+        explanation_effectiveness = Column(JSON)  # Did borrower understand?
+
+        # Loan details extracted
+        loan_details = Column(JSON)  # Amount, type, rate mentioned, etc.
+
+        # Next steps clarity
+        next_steps_clarity = Column(JSON)  # Were next steps clearly communicated?
+
+        # Overall risk score
+        overall_risk_score = Column(Float)  # 0-1, higher = more risk
+        priority_flags = Column(JSON)  # High priority items for review
+
+        created_at = Column(DateTime, default=datetime.utcnow)
+        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
     # Return all models as a dictionary
     return {
         'VideoMeetingRoom': VideoMeetingRoom,
@@ -517,7 +556,8 @@ def create_video_meeting_models(Base):
         'MeetingChat': MeetingChat,
         'MeetingTemplate': MeetingTemplate,
         'ParticipantAnalytics': ParticipantAnalytics,
-        'CoachingRecommendation': CoachingRecommendation
+        'CoachingRecommendation': CoachingRecommendation,
+        'MortgageIntelligence': MortgageIntelligence
     }
 
 
