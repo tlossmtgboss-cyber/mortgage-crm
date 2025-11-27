@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import ClipRecorder from './ClipRecorder';
 import ClipPlayer from './ClipPlayer';
+import { sanitizeText } from '../../utils/sanitize';
 import './ClipLibrary.css';
 
 const ClipLibrary = () => {
@@ -271,7 +272,7 @@ const ClipLibrary = () => {
               </div>
               <div className="clip-info">
                 <h3 className="clip-title" onClick={() => setSelectedClip(clip)}>
-                  {clip.title}
+                  {sanitizeText(clip.title)}
                 </h3>
                 <div className="clip-meta">
                   <span className="clip-date">{formatDate(clip.created_at)}</span>
@@ -343,8 +344,8 @@ const ClipLibrary = () => {
                   >
                     {getTemplateIcon(template.icon)}
                   </div>
-                  <h3>{template.template_name}</h3>
-                  <p>{template.description}</p>
+                  <h3>{sanitizeText(template.template_name)}</h3>
+                  <p>{sanitizeText(template.description)}</p>
                   <div className="template-meta">
                     <span>{Math.ceil(template.default_duration_seconds / 60)} min</span>
                     <span>{template.usage_count || 0} uses</span>

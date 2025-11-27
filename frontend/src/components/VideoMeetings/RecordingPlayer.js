@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { sanitizeText, SafeHTML } from '../../utils/sanitize';
 import './RecordingPlayer.css';
 
 const RecordingPlayer = ({ recording, onClose }) => {
@@ -198,7 +199,7 @@ const RecordingPlayer = ({ recording, onClose }) => {
         {/* Header */}
         <div className="recording-player-header">
           <div className="recording-info">
-            <h2>{recording?.meeting_title || 'Meeting Recording'}</h2>
+            <h2>{sanitizeText(recording?.meeting_title) || 'Meeting Recording'}</h2>
             <span className="recording-date">
               {recording?.created_at
                 ? new Date(recording.created_at).toLocaleDateString('en-US', {
@@ -321,14 +322,14 @@ const RecordingPlayer = ({ recording, onClose }) => {
                       {formatTime(segment.start || 0)}
                     </span>
                     <span className="segment-speaker">
-                      {segment.speaker || 'Speaker'}:
+                      {sanitizeText(segment.speaker) || 'Speaker'}:
                     </span>
-                    <span className="segment-text">{segment.text}</span>
+                    <span className="segment-text">{sanitizeText(segment.text)}</span>
                   </div>
                 ))
               ) : transcript.transcript ? (
                 <div className="transcript-full">
-                  <p>{transcript.transcript}</p>
+                  <SafeHTML html={transcript.transcript} />
                 </div>
               ) : (
                 <div className="transcript-empty">
@@ -346,7 +347,7 @@ const RecordingPlayer = ({ recording, onClose }) => {
                 <>
                   <div className="summary-section">
                     <h3>Executive Summary</h3>
-                    <p>{analysis.summary}</p>
+                    <SafeHTML html={analysis.summary} />
                   </div>
 
                   {analysis.sentiment && (

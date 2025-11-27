@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './VideoMeetings.css';
 import RecordingPlayer from './VideoMeetings/RecordingPlayer';
+import { sanitizeText, SafeHTML } from '../utils/sanitize';
 
 // Use HTTPS Railway URL in production, localhost for development
 const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
@@ -419,7 +420,7 @@ const VideoMeetings = ({ onClose, leadId, loanId, contactId }) => {
             {filteredMeetings.map(meeting => (
               <div key={meeting.id} className="meeting-card" onClick={() => getMeetingDetails(meeting.id)}>
                 <div className="meeting-card-header">
-                  <h4>{meeting.room_name}</h4>
+                  <h4>{sanitizeText(meeting.room_name)}</h4>
                   {getStatusBadge(meeting.status)}
                 </div>
                 <div className="meeting-card-body">
@@ -503,8 +504,8 @@ const VideoMeetings = ({ onClose, leadId, loanId, contactId }) => {
                   {getTemplateIcon(template.icon)}
                 </div>
                 <div className="template-info">
-                  <h4>{template.template_name}</h4>
-                  <p>{template.description}</p>
+                  <h4>{sanitizeText(template.template_name)}</h4>
+                  <p>{sanitizeText(template.description)}</p>
                   <div className="template-meta">
                     <span>{template.default_duration_minutes} min</span>
                     {template.recording_enabled && <span>Recording</span>}
@@ -669,7 +670,7 @@ const VideoMeetings = ({ onClose, leadId, loanId, contactId }) => {
       <div className="modal-overlay" onClick={() => setShowMeetingDetail(false)}>
         <div className="modal-content large" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
-            <h3>{meeting.room_name}</h3>
+            <h3>{sanitizeText(meeting.room_name)}</h3>
             <button className="close-btn" onClick={() => setShowMeetingDetail(false)}>x</button>
           </div>
           <div className="modal-body">
@@ -698,7 +699,7 @@ const VideoMeetings = ({ onClose, leadId, loanId, contactId }) => {
               {meeting.room_description && (
                 <div className="detail-row">
                   <span className="detail-label">Description:</span>
-                  <span>{meeting.room_description}</span>
+                  <SafeHTML html={meeting.room_description} />
                 </div>
               )}
             </div>
@@ -712,7 +713,7 @@ const VideoMeetings = ({ onClose, leadId, loanId, contactId }) => {
                 <div className="participants-list">
                   {participants.map(p => (
                     <div key={p.id} className="participant-item">
-                      <span className="participant-name">{p.display_name || p.email}</span>
+                      <span className="participant-name">{sanitizeText(p.display_name || p.email)}</span>
                       <span className={`participant-role ${p.role}`}>{p.role}</span>
                       <span className={`participant-status ${p.status}`}>{p.status}</span>
                     </div>
@@ -735,7 +736,7 @@ const VideoMeetings = ({ onClose, leadId, loanId, contactId }) => {
                       onClick={() => viewRecording(r.id, meeting.room_name)}
                     >
                       <span className="recording-icon">🔴</span>
-                      <span className="recording-name">{r.recording_name}</span>
+                      <span className="recording-name">{sanitizeText(r.recording_name)}</span>
                       <span className="recording-status">{r.status}</span>
                       {r.duration_seconds && (
                         <span className="recording-duration">
@@ -753,7 +754,7 @@ const VideoMeetings = ({ onClose, leadId, loanId, contactId }) => {
             {meeting.ai_summary && (
               <div className="detail-section">
                 <h4>AI Summary</h4>
-                <p className="ai-summary">{meeting.ai_summary}</p>
+                <SafeHTML className="ai-summary" html={meeting.ai_summary} />
               </div>
             )}
 
@@ -763,7 +764,7 @@ const VideoMeetings = ({ onClose, leadId, loanId, contactId }) => {
                 <h4>Action Items</h4>
                 <ul className="action-items-list">
                   {meeting.ai_action_items.map((item, idx) => (
-                    <li key={idx}>{item}</li>
+                    <li key={idx}>{sanitizeText(item)}</li>
                   ))}
                 </ul>
               </div>

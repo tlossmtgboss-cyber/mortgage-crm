@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
+import { sanitizeText, sanitizeHTML, SafeHTML } from '../../utils/sanitize';
 import './ClipPlayer.css';
 
 const ClipPlayer = ({ clip, onClose, isPublicView = false, shareToken = null }) => {
@@ -304,9 +305,9 @@ const ClipPlayer = ({ clip, onClose, isPublicView = false, shareToken = null }) 
       {/* Header */}
       <div className="player-header">
         <div className="header-info">
-          <h2>{clip?.title || 'Video Clip'}</h2>
+          <h2>{sanitizeText(clip?.title) || 'Video Clip'}</h2>
           {clip?.description && (
-            <p className="clip-description">{clip.description}</p>
+            <SafeHTML className="clip-description" html={clip.description} />
           )}
         </div>
         {onClose && (
@@ -429,7 +430,7 @@ const ClipPlayer = ({ clip, onClose, isPublicView = false, shareToken = null }) 
         {showTranscript && transcript && (
           <div className="transcript-overlay">
             <div className="current-transcript">
-              {getCurrentTranscriptSegment()?.text || ''}
+              {sanitizeText(getCurrentTranscriptSegment()?.text) || ''}
             </div>
           </div>
         )}
@@ -530,7 +531,7 @@ const ClipPlayer = ({ clip, onClose, isPublicView = false, shareToken = null }) 
                         <div key={comment.id} className="comment-item">
                           <div className="comment-meta">
                             <span className="comment-author">
-                              {comment.user_name || 'User'}
+                              {sanitizeText(comment.user_name) || 'User'}
                             </span>
                             {comment.timestamp_seconds > 0 && (
                               <button
@@ -546,7 +547,7 @@ const ClipPlayer = ({ clip, onClose, isPublicView = false, shareToken = null }) 
                               </button>
                             )}
                           </div>
-                          <p className="comment-text">{comment.comment_text}</p>
+                          <p className="comment-text">{sanitizeText(comment.comment_text)}</p>
                         </div>
                       ))
                     )}
@@ -573,7 +574,7 @@ const ClipPlayer = ({ clip, onClose, isPublicView = false, shareToken = null }) 
                     <span className="segment-time">
                       {formatTime(segment.start)}
                     </span>
-                    <span className="segment-text">{segment.text}</span>
+                    <span className="segment-text">{sanitizeText(segment.text)}</span>
                   </div>
                 ))}
               </div>

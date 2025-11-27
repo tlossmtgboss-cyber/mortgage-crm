@@ -8,18 +8,30 @@ API endpoints for:
 - View tracking
 - Analytics
 - Template management
+
+Security features:
+- Input validation with sanitization
+- HTML/XSS prevention
+- File upload validation
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Body, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Body, BackgroundTasks, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, validator
 import logging
 import secrets
+import re
 
 from video_clip_models import DEFAULT_CLIP_TEMPLATES
+from input_validation import (
+    sanitize_text,
+    sanitize_html,
+    FileUploadValidator,
+    validate_email
+)
 
 logger = logging.getLogger(__name__)
 
@@ -57,72 +69,197 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
 
 
 # ============================================================================
-# PYDANTIC SCHEMAS
+# PYDANTIC SCHEMAS WITH VALIDATION
 # ============================================================================
 
 class ClipCreate(BaseModel):
-    title: str
-    description: Optional[str] = None
-    clip_type: str = "screen_camera"
+    title: str = Field(..., min_length=1, max_length=500)
+    description: Optional[str] = Field(None, max_length=5000)
+    clip_type: str = Field("screen_camera", regex=r'^(screen_camera|screen_only|camera_only)$')
     template_id: Optional[int] = None
-    crm_entity_type: Optional[str] = None
+    crm_entity_type: Optional[str] = Field(None, regex=r'^(loan|lead|contact)$')
     crm_entity_id: Optional[int] = None
-    tags: Optional[List[str]] = None
+    tags: Optional[List[str]] = Field(None, max_items=10)
+
+    @validator('title')
+    def sanitize_title(cls, v):
+        if not v or not v.strip():
+            raise ValueError("Title cannot be empty")
+        return sanitize_text(v, max_length=500)
+
+    @validator('description')
+    def sanitize_description(cls, v):
+        if v:
+            return sanitize_html(v, max_length=5000)
+        return v
+
+    @validator('tags')
+    def sanitize_tags(cls, v):
+        if not v:
+            return []
+        cleaned = []
+        for tag in v[:10]:
+            clean_tag = sanitize_text(tag, max_length=50)
+            if clean_tag:
+                cleaned.append(clean_tag)
+        return cleaned
 
 
 class ClipUpdate(BaseModel):
-    title: Optional[str] = None
-    description: Optional[str] = None
-    tags: Optional[List[str]] = None
-    access_level: Optional[str] = None
+    title: Optional[str] = Field(None, max_length=500)
+    description: Optional[str] = Field(None, max_length=5000)
+    tags: Optional[List[str]] = Field(None, max_items=10)
+    access_level: Optional[str] = Field(None, regex=r'^(private|team|public)$')
+
+    @validator('title')
+    def sanitize_title(cls, v):
+        if v:
+            return sanitize_text(v, max_length=500)
+        return v
+
+    @validator('description')
+    def sanitize_description(cls, v):
+        if v:
+            return sanitize_html(v, max_length=5000)
+        return v
 
 
 class ClipUploadComplete(BaseModel):
-    file_size_bytes: int
-    duration_seconds: int
-    video_width: Optional[int] = None
-    video_height: Optional[int] = None
+    file_size_bytes: int = Field(..., ge=0, le=500 * 1024 * 1024)  # Max 500MB
+    duration_seconds: int = Field(..., ge=0, le=3600)  # Max 1 hour
+    video_width: Optional[int] = Field(None, ge=0, le=7680)  # Max 8K
+    video_height: Optional[int] = Field(None, ge=0, le=4320)
 
 
 class ShareCreate(BaseModel):
     recipient_email: Optional[str] = None
-    recipient_name: Optional[str] = None
+    recipient_name: Optional[str] = Field(None, max_length=200)
     allow_download: bool = False
     allow_comments: bool = True
     require_email: bool = False
-    max_views: Optional[int] = None
-    expires_in_days: Optional[int] = None
+    max_views: Optional[int] = Field(None, ge=1, le=10000)
+    expires_in_days: Optional[int] = Field(None, ge=1, le=365)
+
+    @validator('recipient_email')
+    def validate_recipient_email(cls, v):
+        if v:
+            try:
+                return validate_email(v)
+            except ValueError as e:
+                raise ValueError(str(e))
+        return None
+
+    @validator('recipient_name')
+    def sanitize_recipient_name(cls, v):
+        if v:
+            return sanitize_text(v, max_length=200)
+        return None
 
 
 class ViewTrack(BaseModel):
-    share_token: Optional[str] = None
+    share_token: Optional[str] = Field(None, max_length=200)
     viewer_email: Optional[str] = None
-    viewer_name: Optional[str] = None
+    viewer_name: Optional[str] = Field(None, max_length=200)
+
+    @validator('viewer_email')
+    def validate_viewer_email(cls, v):
+        if v:
+            try:
+                return validate_email(v)
+            except ValueError:
+                return None  # Don't fail on bad email for tracking
+        return None
+
+    @validator('viewer_name')
+    def sanitize_viewer_name(cls, v):
+        if v:
+            return sanitize_text(v, max_length=200)
+        return None
 
 
 class ViewProgressUpdate(BaseModel):
-    watch_duration_seconds: int
-    completion_rate: float
-    play_events: Optional[List[Dict]] = None
+    watch_duration_seconds: int = Field(..., ge=0, le=86400)  # Max 24 hours
+    completion_rate: float = Field(..., ge=0.0, le=1.0)
+    play_events: Optional[List[Dict]] = Field(None, max_items=100)
+
+    @validator('play_events')
+    def validate_play_events(cls, v):
+        if not v:
+            return []
+        cleaned = []
+        for event in v[:100]:
+            if isinstance(event, dict):
+                cleaned.append({
+                    'type': str(event.get('type', ''))[:50],
+                    'timestamp': float(event.get('timestamp', 0)) if event.get('timestamp') else 0,
+                })
+        return cleaned
 
 
 class CommentCreate(BaseModel):
-    comment_text: str
-    timestamp_seconds: Optional[int] = None
+    comment_text: str = Field(..., min_length=1, max_length=1000)
+    timestamp_seconds: Optional[int] = Field(None, ge=0, le=86400)
     parent_comment_id: Optional[int] = None
-    commenter_name: Optional[str] = None
+    commenter_name: Optional[str] = Field(None, max_length=200)
     commenter_email: Optional[str] = None
+
+    @validator('comment_text')
+    def sanitize_comment(cls, v):
+        if not v or not v.strip():
+            raise ValueError("Comment cannot be empty")
+        # Strip ALL HTML for comments (plain text only)
+        cleaned = sanitize_text(v, max_length=1000)
+        if not cleaned:
+            raise ValueError("Comment cannot be empty after sanitization")
+        return cleaned
+
+    @validator('commenter_name')
+    def sanitize_commenter_name(cls, v):
+        if v:
+            return sanitize_text(v, max_length=200)
+        return None
+
+    @validator('commenter_email')
+    def validate_commenter_email(cls, v):
+        if v:
+            try:
+                return validate_email(v)
+            except ValueError:
+                return None
+        return None
 
 
 class TemplateCreate(BaseModel):
-    template_name: str
-    category: str
-    description: Optional[str] = None
-    suggested_title: Optional[str] = None
-    script_outline: Optional[List[str]] = None
-    default_duration_seconds: int = 120
-    color: str = "#3b82f6"
-    icon: str = "video"
+    template_name: str = Field(..., min_length=1, max_length=200)
+    category: str = Field(..., regex=r'^[a-z_]+$', max_length=50)
+    description: Optional[str] = Field(None, max_length=1000)
+    suggested_title: Optional[str] = Field(None, max_length=500)
+    script_outline: Optional[List[str]] = Field(None, max_items=20)
+    default_duration_seconds: int = Field(120, ge=10, le=3600)
+    color: str = Field("#3b82f6", regex=r'^#[0-9a-fA-F]{6}$')
+    icon: str = Field("video", regex=r'^[a-z_]+$', max_length=50)
+
+    @validator('template_name')
+    def sanitize_template_name(cls, v):
+        return sanitize_text(v, max_length=200)
+
+    @validator('description')
+    def sanitize_description(cls, v):
+        if v:
+            return sanitize_text(v, max_length=1000)
+        return v
+
+    @validator('suggested_title')
+    def sanitize_suggested_title(cls, v):
+        if v:
+            return sanitize_text(v, max_length=500)
+        return v
+
+    @validator('script_outline')
+    def sanitize_script_outline(cls, v):
+        if v:
+            return [sanitize_text(item, max_length=500) for item in v[:20]]
+        return []
 
 
 # ============================================================================
