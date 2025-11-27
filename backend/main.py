@@ -10631,6 +10631,23 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Could not load Smart Scheduler routes: {e}")
 
+# Include Video Meeting routes (UVIP - Ultimate Video Intelligence Platform)
+try:
+    from video_meeting_models import create_video_meeting_models
+    from video_meeting_routes import router as video_meeting_router, set_dependencies as set_video_meeting_deps
+
+    # Create video meeting models using our Base
+    video_meeting_models = create_video_meeting_models(Base)
+
+    # Set dependencies for the routes
+    set_video_meeting_deps(get_db, get_current_user, video_meeting_models)
+
+    # Include the router
+    app.include_router(video_meeting_router, tags=["Video Meetings"])
+    logger.info("✅ Video Meeting (UVIP) routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load Video Meeting routes: {e}")
+
 # Include Market Chat routes
 from market_chat_routes import router as market_chat_router
 app.include_router(market_chat_router, tags=["Market Chat"])
@@ -35249,8 +35266,10 @@ async def add_leadstage_values_migration(
     try:
         logger.info(f"Running migration: add leadstage enum values (user: {current_user.id})")
 
-        # All LeadStage enum values that might be missing
+        # All LeadStage enum values AND names that might be missing
+        # SQLAlchemy sends enum names, but we also support values
         values_to_add = [
+            # Enum values (display names)
             "Application",
             "Attempted Contact",
             "Pre-Qualified",
@@ -35261,7 +35280,22 @@ async def add_leadstage_values_migration(
             "AMR",
             "Referral Source",
             "Withdrawn",
-            "Does Not Qualify"
+            "Does Not Qualify",
+            # Enum names (SQLAlchemy sends these)
+            "NEW",
+            "ATTEMPTED_CONTACT",
+            "PROSPECT",
+            "APPLICATION",
+            "APPLICATION_STARTED",
+            "PRE_QUALIFIED",
+            "PRE_APPROVED",
+            "UNDER_CONTRACT",
+            "LONG_TERM_NURTURE",
+            "CLOSED",
+            "AMR",
+            "REFERRAL_SOURCE",
+            "WITHDRAWN",
+            "DOES_NOT_QUALIFY",
         ]
 
         # Get the raw connection and execute outside transaction
@@ -35321,8 +35355,10 @@ async def add_loanstage_values_migration(
     try:
         logger.info(f"Running migration: add loanstage enum values (user: {current_user.id})")
 
-        # All LoanStage enum values that might be missing
+        # All LoanStage enum values AND names that might be missing
+        # SQLAlchemy sends enum names, but we also support values
         values_to_add = [
+            # Enum values (display names)
             "Disclosed",
             "Processing",
             "Submitted",
@@ -35331,7 +35367,17 @@ async def add_loanstage_values_migration(
             "Suspended",
             "CTC",
             "Docs Out",
-            "Funded"
+            "Funded",
+            # Enum names (SQLAlchemy sends these)
+            "DISCLOSED",
+            "PROCESSING",
+            "SUBMITTED",
+            "UW_RECEIVED",
+            "APPROVED",
+            "SUSPENDED",
+            "CTC",
+            "DOCS",
+            "FUNDED",
         ]
 
         # Get the raw connection and execute outside transaction

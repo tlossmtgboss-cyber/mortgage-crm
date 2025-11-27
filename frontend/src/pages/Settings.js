@@ -8,6 +8,7 @@ import DocumentIntakeManager from '../components/DocumentIntakeManager';
 import EmailMonitorDashboard from './EmailMonitorDashboard';
 import EmailSignatureTab from '../components/EmailSignatureTab';
 import SmartScheduler from '../components/SmartScheduler';
+import VideoMeetings from '../components/VideoMeetings';
 import './Settings.css';
 
 // Use HTTPS Railway URL in production, localhost for development
@@ -1872,6 +1873,14 @@ const API_BASE_URL = isProduction
             onClick={() => setActiveSection('smart-scheduler')}
           >
             <span>Smart Scheduler</span>
+          </button>
+
+          {/* Video Meetings */}
+          <button
+            className={`sidebar-btn ${activeSection === 'video-meetings' ? 'active' : ''}`}
+            onClick={() => setActiveSection('video-meetings')}
+          >
+            <span>Video Meetings</span>
           </button>
 
           <button
@@ -3917,6 +3926,11 @@ const API_BASE_URL = isProduction
           {/* Smart Scheduler */}
           {activeSection === 'smart-scheduler' && (
             <SmartScheduler />
+          )}
+
+          {/* Video Meetings */}
+          {activeSection === 'video-meetings' && (
+            <VideoMeetings />
           )}
 
           {/* Master Administrator - User Management */}
