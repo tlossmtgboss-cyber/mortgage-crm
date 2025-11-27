@@ -10603,6 +10603,16 @@ app.include_router(market_data_router, tags=["Market Data"])
 from gmail_routes import router as gmail_router
 app.include_router(gmail_router, tags=["Gmail Integration"])
 
+# Include Email Drop routes (drag-and-drop email processing)
+from email_drop_routes import router as email_drop_router, set_dependencies as email_drop_set_deps
+email_drop_set_deps(get_db, get_current_user)
+app.include_router(email_drop_router, tags=["Email Drop"])
+
+# Include Document Drop routes (drag-and-drop document upload)
+from document_drop_routes import router as document_drop_router, set_dependencies as doc_drop_set_deps
+doc_drop_set_deps(get_db, get_current_user)
+app.include_router(document_drop_router, tags=["Document Drop"])
+
 # Include Morning Check-in routes
 from morning_checkin_routes import router as morning_checkin_router
 app.include_router(morning_checkin_router, tags=["Morning Check-in"])

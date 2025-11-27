@@ -257,6 +257,73 @@
   text-align: center;
 }
 
+/* AI Suggestion Styles */
+.email-preview-row.ai-summary {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px dashed #e5e7eb;
+}
+
+.email-preview-row.ai-summary .label {
+  color: #2196F3;
+  font-weight: 500;
+}
+
+.email-preview-row.ai-summary .value {
+  font-style: italic;
+  color: #374151;
+}
+
+.email-preview-row.ai-suggestion {
+  margin-top: 8px;
+}
+
+.email-preview-row.ai-suggestion .label {
+  color: #4CAF50;
+  font-weight: 500;
+}
+
+.email-preview-row .suggested-action {
+  text-transform: capitalize;
+  color: #4CAF50;
+  font-weight: 600;
+}
+
+/* AI Badge on choice buttons */
+.choice-btn.suggested {
+  border-color: #4CAF50;
+  background: #f0fdf4;
+  position: relative;
+}
+
+.choice-btn.suggested::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  border-radius: 14px;
+  border: 2px solid #4CAF50;
+  animation: pulse-border 2s infinite;
+}
+
+@keyframes pulse-border {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.ai-badge {
+  background: #4CAF50;
+  color: white;
+  font-size: 9px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
 /* Responsive */
 @media (max-width: 600px) {
   .email-choice-options {

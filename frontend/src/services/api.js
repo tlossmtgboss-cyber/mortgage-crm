@@ -1336,4 +1336,106 @@ export const emailSignatureAPI = {
   },
 };
 
+// Email Drop API (drag-and-drop email/document processing)
+export const emailDropAPI = {
+  // Parse email with AI to extract fields and suggest actions
+  parse: async (emailData) => {
+    const response = await api.post('/api/v1/email-drop/parse', {
+      email_data: {
+        filename: emailData.filename,
+        from: emailData.from,
+        to: emailData.to,
+        subject: emailData.subject,
+        date: emailData.date,
+        body: emailData.body,
+        raw_content: emailData.rawContent,
+        matched_borrower: emailData.matchedBorrower,
+        matched_loan_number: emailData.matchedLoanNumber,
+        confidence: emailData.confidence
+      },
+      parse_mode: 'smart'
+    });
+    return response.data;
+  },
+
+  // Process email based on user's chosen action
+  process: async (action, emailData, extractedFields, targetEntityId, targetEntityType, createNew, userAnswers) => {
+    const response = await api.post('/api/v1/email-drop/process', {
+      action,
+      email_data: {
+        filename: emailData.filename,
+        from: emailData.from,
+        to: emailData.to,
+        subject: emailData.subject,
+        date: emailData.date,
+        body: emailData.body,
+        raw_content: emailData.rawContent,
+        matched_borrower: emailData.matchedBorrower,
+        matched_loan_number: emailData.matchedLoanNumber,
+        confidence: emailData.confidence
+      },
+      extracted_fields: extractedFields || {},
+      target_entity_id: targetEntityId,
+      target_entity_type: targetEntityType,
+      create_new: createNew || false,
+      user_answers: userAnswers || {}
+    });
+    return response.data;
+  },
+
+  // Search for matching leads/loans
+  searchMatches: async (searchTerm, email, loanNumber) => {
+    const response = await api.post('/api/v1/email-drop/search-matches', {
+      search_term: searchTerm,
+      email: email,
+      loan_number: loanNumber
+    });
+    return response.data;
+  },
+
+  // Health check
+  health: async () => {
+    const response = await api.get('/api/v1/email-drop/health');
+    return response.data;
+  }
+};
+
+// Document Drop API (drag-and-drop document upload)
+export const documentDropAPI = {
+  // Upload a document file
+  upload: async (file, borrowerId, loanId, docType) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (borrowerId) formData.append('borrower_id', borrowerId);
+    if (loanId) formData.append('loan_id', loanId);
+    if (docType) formData.append('doc_type', docType);
+
+    const response = await api.post('/api/v1/documents/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
+  },
+
+  // Classify a document with AI
+  classify: async (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await api.post('/api/v1/documents/classify', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    });
+    return response.data;
+  },
+
+  // Get documents for a borrower or loan
+  getDocuments: async (borrowerId, loanId) => {
+    const params = {};
+    if (borrowerId) params.borrower_id = borrowerId;
+    if (loanId) params.loan_id = loanId;
+
+    const response = await api.get('/api/v1/documents/', { params });
+    return ensureArray(response.data, 'documents');
+  }
+};
+
 export default api;

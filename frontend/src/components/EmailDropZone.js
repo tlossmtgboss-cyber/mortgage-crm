@@ -1,20 +1,40 @@
 import React, { useState, useCallback } from 'react';
 import EmailReconciliationModal from './EmailReconciliationModal';
+import DocumentDropModal from './DocumentDropModal';
+import { emailDropAPI, documentDropAPI } from '../services/api';
 import './EmailDropZone.css';
 
 /**
- * EmailDropZone - Drag and drop component for email files
+ * EmailDropZone - Drag and drop component for email and document files
  * Wraps children and provides drag-drop overlay
  * When email is dropped, prompts user to:
  * 1. Add to borrower's document tab
  * 2. Add/reconcile data to CRM
+ * When document is dropped, classifies and uploads it
  */
 function EmailDropZone({ children }) {
   const [isDragging, setIsDragging] = useState(false);
   const [showChoiceModal, setShowChoiceModal] = useState(false);
   const [showReconciliationModal, setShowReconciliationModal] = useState(false);
+  const [showDocumentModal, setShowDocumentModal] = useState(false);
   const [emailData, setEmailData] = useState(null);
+  const [documentFile, setDocumentFile] = useState(null);
   const [parsing, setParsing] = useState(false);
+  const [aiParseResult, setAiParseResult] = useState(null);
+
+  // Determine if file is an email or document
+  const isEmailFile = (file) => {
+    return (
+      file.name.endsWith('.eml') ||
+      file.name.endsWith('.msg') ||
+      file.type === 'message/rfc822'
+    );
+  };
+
+  const isDocumentFile = (file) => {
+    const docExtensions = ['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.png', '.jpg', '.jpeg', '.gif', '.tiff'];
+    return docExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
+  };
 
   // Parse email file content
   const parseEmailFile = async (file) => {
@@ -122,67 +142,131 @@ function EmailDropZone({ children }) {
     setIsDragging(false);
 
     const files = Array.from(e.dataTransfer.files);
+    if (files.length === 0) return;
 
-    // Filter for email files (.eml, .msg, .txt)
-    const emailFiles = files.filter(file =>
-      file.name.endsWith('.eml') ||
-      file.name.endsWith('.msg') ||
-      file.name.endsWith('.txt') ||
-      file.type === 'message/rfc822'
-    );
+    const file = files[0];
 
-    if (emailFiles.length === 0) {
-      // Check if it's any file - could still be an email export
-      if (files.length > 0) {
-        // Try to parse anyway
-        setParsing(true);
+    // Check if it's an email file
+    if (isEmailFile(file)) {
+      setParsing(true);
+      try {
+        const parsed = await parseEmailFile(file);
+        setEmailData(parsed);
+
+        // Try to get AI parsing in background
         try {
-          const parsed = await parseEmailFile(files[0]);
-          setEmailData(parsed);
-          setShowChoiceModal(true);
-        } catch (error) {
-          console.error('Failed to parse file:', error);
-          alert('Could not parse this file as an email. Please use .eml, .msg, or .txt format.');
+          const aiResult = await emailDropAPI.parse(parsed);
+          setAiParseResult(aiResult);
+          // Update confidence based on AI result
+          if (aiResult.success) {
+            parsed.aiExtractedFields = aiResult.extracted_fields;
+            parsed.aiConfidenceScores = aiResult.confidence_scores;
+            parsed.aiSuggestedAction = aiResult.suggested_action;
+            parsed.aiQuestions = aiResult.questions;
+            parsed.aiSummary = aiResult.ai_summary;
+            parsed.matchedEntities = aiResult.matched_entities;
+          }
+        } catch (aiError) {
+          console.warn('AI parsing failed, using basic parsing:', aiError);
         }
-        setParsing(false);
+
+        setShowChoiceModal(true);
+      } catch (error) {
+        console.error('Failed to parse email:', error);
+        alert('Failed to parse email file. Please try again.');
       }
+      setParsing(false);
       return;
     }
 
-    // Parse the first email file
+    // Check if it's a document file
+    if (isDocumentFile(file)) {
+      setDocumentFile(file);
+      setShowDocumentModal(true);
+      return;
+    }
+
+    // Try to parse as text email anyway
     setParsing(true);
     try {
-      const parsed = await parseEmailFile(emailFiles[0]);
+      const parsed = await parseEmailFile(file);
       setEmailData(parsed);
       setShowChoiceModal(true);
     } catch (error) {
-      console.error('Failed to parse email:', error);
-      alert('Failed to parse email file. Please try again.');
+      console.error('Failed to parse file:', error);
+      alert('Could not parse this file. Supported formats: .eml, .msg, .pdf, .doc, .docx, .xls, .xlsx, images');
     }
     setParsing(false);
   }, []);
 
   const handleChoiceDocument = () => {
     setShowChoiceModal(false);
-    // TODO: Open borrower search/select modal to add to documents
-    alert('Document upload feature coming soon. Select a borrower to attach this email to their documents.');
+    setShowReconciliationModal(true);
   };
 
-  const handleChoiceCRM = () => {
+  const handleChoiceLead = () => {
     setShowChoiceModal(false);
+    // Set the action type for the reconciliation modal
+    if (emailData) {
+      emailData.preferredAction = 'lead';
+    }
+    setShowReconciliationModal(true);
+  };
+
+  const handleChoiceLoan = () => {
+    setShowChoiceModal(false);
+    if (emailData) {
+      emailData.preferredAction = 'loan';
+    }
     setShowReconciliationModal(true);
   };
 
   const handleReconciliationClose = () => {
     setShowReconciliationModal(false);
     setEmailData(null);
+    setAiParseResult(null);
   };
 
-  const handleReconciliationComplete = (action, data) => {
+  const handleReconciliationComplete = async (action, data) => {
     console.log('Reconciliation complete:', action, data);
+
+    try {
+      // Call the backend API to process the email
+      const result = await emailDropAPI.process(
+        action,
+        emailData,
+        data.extractedFields || emailData.aiExtractedFields || {},
+        data.matchedEntity?.data?.id?.toString(),
+        data.matchedEntity?.type,
+        !data.matchedEntity, // create_new if no matched entity
+        data.userAnswers || {}
+      );
+
+      if (result.success) {
+        alert(`Success! ${result.message}`);
+      } else {
+        alert(`Warning: ${result.message}`);
+      }
+    } catch (error) {
+      console.error('Failed to process email:', error);
+      alert('Failed to process email. Please try again.');
+    }
+
     setShowReconciliationModal(false);
     setEmailData(null);
-    // TODO: Call API to save the data
+    setAiParseResult(null);
+  };
+
+  const handleDocumentModalClose = () => {
+    setShowDocumentModal(false);
+    setDocumentFile(null);
+  };
+
+  const handleDocumentUploadComplete = (result) => {
+    console.log('Document upload complete:', result);
+    setShowDocumentModal(false);
+    setDocumentFile(null);
+    alert(`Document uploaded successfully!`);
   };
 
   return (
@@ -199,9 +283,9 @@ function EmailDropZone({ children }) {
       {isDragging && (
         <div className="email-drop-overlay">
           <div className="email-drop-content">
-            <div className="email-drop-icon">📧</div>
-            <h2>Drop Email Here</h2>
-            <p>Release to import email into CRM</p>
+            <div className="email-drop-icon">📧📄</div>
+            <h2>Drop File Here</h2>
+            <p>Drop emails (.eml, .msg) or documents (.pdf, .doc, images) to import</p>
           </div>
         </div>
       )}
@@ -211,7 +295,7 @@ function EmailDropZone({ children }) {
         <div className="email-parsing-overlay">
           <div className="email-parsing-content">
             <div className="parsing-spinner"></div>
-            <p>Parsing email...</p>
+            <p>Analyzing file with AI...</p>
           </div>
         </div>
       )}
@@ -238,6 +322,18 @@ function EmailDropZone({ children }) {
                 <span className="label">Date:</span>
                 <span className="value">{emailData.date}</span>
               </div>
+              {emailData.aiSummary && (
+                <div className="email-preview-row ai-summary">
+                  <span className="label">AI Summary:</span>
+                  <span className="value">{emailData.aiSummary}</span>
+                </div>
+              )}
+              {emailData.aiSuggestedAction && (
+                <div className="email-preview-row ai-suggestion">
+                  <span className="label">AI Suggests:</span>
+                  <span className="value suggested-action">{emailData.aiSuggestedAction.replace(/_/g, ' ')}</span>
+                </div>
+              )}
             </div>
 
             <div className="email-choice-question">
@@ -251,16 +347,28 @@ function EmailDropZone({ children }) {
                 <span className="choice-desc">Add to borrower's document tab</span>
               </button>
 
-              <button className="choice-btn lead" onClick={handleChoiceCRM}>
+              <button
+                className={`choice-btn lead ${emailData.aiSuggestedAction === 'create_lead' || emailData.aiSuggestedAction === 'update_lead' ? 'suggested' : ''}`}
+                onClick={handleChoiceLead}
+              >
                 <span className="choice-icon">👤</span>
                 <span className="choice-title">Lead</span>
                 <span className="choice-desc">Create or update a lead</span>
+                {(emailData.aiSuggestedAction === 'create_lead' || emailData.aiSuggestedAction === 'update_lead') && (
+                  <span className="ai-badge">AI Suggested</span>
+                )}
               </button>
 
-              <button className="choice-btn crm" onClick={handleChoiceCRM}>
+              <button
+                className={`choice-btn crm ${emailData.aiSuggestedAction === 'create_loan' || emailData.aiSuggestedAction === 'update_loan' ? 'suggested' : ''}`}
+                onClick={handleChoiceLoan}
+              >
                 <span className="choice-icon">➕</span>
                 <span className="choice-title">Create/Open Loan</span>
                 <span className="choice-desc">Add data to the CRM</span>
+                {(emailData.aiSuggestedAction === 'create_loan' || emailData.aiSuggestedAction === 'update_loan') && (
+                  <span className="ai-badge">AI Suggested</span>
+                )}
               </button>
             </div>
           </div>
@@ -271,8 +379,18 @@ function EmailDropZone({ children }) {
       {showReconciliationModal && emailData && (
         <EmailReconciliationModal
           emailData={emailData}
+          aiParseResult={aiParseResult}
           onClose={handleReconciliationClose}
           onComplete={handleReconciliationComplete}
+        />
+      )}
+
+      {/* Document Upload Modal */}
+      {showDocumentModal && documentFile && (
+        <DocumentDropModal
+          file={documentFile}
+          onClose={handleDocumentModalClose}
+          onComplete={handleDocumentUploadComplete}
         />
       )}
     </div>
