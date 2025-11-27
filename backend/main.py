@@ -917,9 +917,10 @@ class MUMClient(Base):
     days_since_funding = Column(Integer)
     original_rate = Column(Float)
     current_rate = Column(Float)
-    # Map loan_balance to original_loan_amount column in the database (has NOT NULL constraint)
-    original_loan_amount = Column("original_loan_amount", Float, nullable=False)
-    current_loan_amount = Column("current_loan_amount", Float, nullable=False)  # Also NOT NULL in DB
+    # Database has several NOT NULL columns that we need to map to
+    interest_rate = Column("interest_rate", Float, nullable=False)  # NOT NULL in DB
+    original_loan_amount = Column("original_loan_amount", Float, nullable=False)  # NOT NULL in DB
+    current_loan_amount = Column("current_loan_amount", Float, nullable=False)  # NOT NULL in DB
     loan_balance = Column(Float)  # Keep as separate column for compatibility
     refinance_opportunity = Column(Boolean, default=False)
     estimated_savings = Column(Float)
@@ -23571,15 +23572,15 @@ async def create_mum_client(client: MUMClientCreate, db: Session = Depends(get_d
         days_since = (datetime.now(timezone.utc) - original_close_dt).days
 
         # Create MUM client with explicit field assignment
-        # Use client_name to match the actual database column name
-        # Use original_loan_amount and current_loan_amount to match NOT NULL columns in PostgreSQL
+        # Map to actual database column names (several have NOT NULL constraints)
         db_client = MUMClient(
-            client_name=client.name,  # Map to 'client_name' column in PostgreSQL
+            client_name=client.name,  # Map to 'client_name' column (NOT NULL)
             email=client.email,
             phone=client.phone,
             loan_number=client.loan_number,
             original_close_date=client.original_close_date,
             original_rate=client.original_rate,
+            interest_rate=client.original_rate,        # Map to 'interest_rate' column (NOT NULL)
             original_loan_amount=client.loan_balance,  # Map to 'original_loan_amount' column (NOT NULL)
             current_loan_amount=client.loan_balance,   # Map to 'current_loan_amount' column (NOT NULL)
             loan_balance=client.loan_balance,
