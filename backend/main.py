@@ -23548,29 +23548,44 @@ async def delete_referral_partner(partner_id: int, db: Session = Depends(get_db)
 
 @app.post("/api/v1/mum-clients/", response_model=MUMClientResponse, status_code=201)
 async def create_mum_client(client: MUMClientCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    existing = db.query(MUMClient).filter(MUMClient.loan_number == client.loan_number).first()
-    if existing:
-        raise HTTPException(status_code=400, detail="Loan number already exists in MUM clients")
+    try:
+        existing = db.query(MUMClient).filter(MUMClient.loan_number == client.loan_number).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Loan number already exists in MUM clients")
 
-    # Calculate days since funding - make timezone-aware if needed
-    original_close_dt = client.original_close_date if client.original_close_date.tzinfo else client.original_close_date.replace(tzinfo=timezone.utc)
-    days_since = (datetime.now(timezone.utc) - original_close_dt).days
+        # Calculate days since funding - make timezone-aware if needed
+        original_close_dt = client.original_close_date if client.original_close_date.tzinfo else client.original_close_date.replace(tzinfo=timezone.utc)
+        days_since = (datetime.now(timezone.utc) - original_close_dt).days
 
-    # Get only the fields that exist in the MUMClient model
-    client_data = client.model_dump(exclude={'original_loan_number'})
+        # Create MUM client with explicit field assignment to avoid issues
+        db_client = MUMClient(
+            name=client.name,
+            email=client.email,
+            phone=client.phone,
+            loan_number=client.loan_number,
+            original_close_date=client.original_close_date,
+            original_rate=client.original_rate,
+            loan_balance=client.loan_balance,
+            status=client.status or "Active",
+            notes=client.notes,
+            days_since_funding=days_since,
+            user_id=current_user.id
+        )
 
-    db_client = MUMClient(
-        **client_data,
-        days_since_funding=days_since,
-        user_id=current_user.id
-    )
+        db.add(db_client)
+        db.commit()
+        db.refresh(db_client)
 
-    db.add(db_client)
-    db.commit()
-    db.refresh(db_client)
-
-    logger.info(f"MUM client created: {db_client.name}")
-    return db_client
+        logger.info(f"MUM client created: {db_client.name}")
+        return db_client
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating MUM client: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Error creating MUM client: {str(e)}")
 
 @app.get("/api/v1/mum-clients/")
 async def get_mum_clients(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
