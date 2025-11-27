@@ -23379,10 +23379,8 @@ async def get_unified_tasks(
                 "has_calendly_slots": has_calendly
             })
 
-        # 3. Get pending reconciliation items with joined event data (avoid N+1)
-        pending_reconciliation = db.query(ExtractedData).options(
-            joinedload(ExtractedData.event)
-        ).join(
+        # 3. Get pending reconciliation items (batch fetch events separately to avoid N+1)
+        pending_reconciliation = db.query(ExtractedData).join(
             IncomingDataEvent,
             ExtractedData.event_id == IncomingDataEvent.id
         ).filter(
@@ -23392,6 +23390,13 @@ async def get_unified_tasks(
             ),
             ExtractedData.status.in_(["pending_review", "needs_review"])
         ).order_by(ExtractedData.created_at.desc()).limit(50).all()
+
+        # Batch fetch all events for reconciliation items
+        event_ids = [item.event_id for item in pending_reconciliation if item.event_id]
+        events_map = {}
+        if event_ids:
+            events = db.query(IncomingDataEvent).filter(IncomingDataEvent.id.in_(event_ids)).all()
+            events_map = {e.id: e for e in events}
 
         # Collect loan IDs from reconciliation items
         recon_loan_ids = set()
@@ -23407,7 +23412,7 @@ async def get_unified_tasks(
                 loans_map[l.id] = l
 
         for item in pending_reconciliation:
-            event = item.event  # Pre-loaded via joinedload
+            event = events_map.get(item.event_id)  # Get from pre-fetched map
 
             entity_name = None
             if item.match_entity_type == "loan" and item.match_entity_id in loans_map:
