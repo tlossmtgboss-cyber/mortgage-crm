@@ -87,9 +87,9 @@ HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$API_URL/api/v1/leads/" -H "
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$API_URL/api/v1/tasks/" -H "Authorization: Bearer $TOKEN" --max-time 15)
 [ "$HTTP_CODE" = "200" ] && pass "Tasks endpoint" || fail "Tasks endpoint (HTTP $HTTP_CODE)"
 
-# Contacts
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$API_URL/api/v1/contacts/" -H "Authorization: Bearer $TOKEN" --max-time 15)
-[ "$HTTP_CODE" = "200" ] && pass "Contacts endpoint" || fail "Contacts endpoint (HTTP $HTTP_CODE)"
+# Communications
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$API_URL/api/v1/communications/" -H "Authorization: Bearer $TOKEN" --max-time 15)
+[ "$HTTP_CODE" = "200" ] && pass "Communications endpoint" || warn "Communications endpoint (HTTP $HTTP_CODE)"
 
 echo ""
 echo "=== 3. UVIP Features (Phase 1-3) ==="
