@@ -919,6 +919,7 @@ class MUMClient(Base):
     current_rate = Column(Float)
     # Map loan_balance to original_loan_amount column in the database (has NOT NULL constraint)
     original_loan_amount = Column("original_loan_amount", Float, nullable=False)
+    current_loan_amount = Column("current_loan_amount", Float, nullable=False)  # Also NOT NULL in DB
     loan_balance = Column(Float)  # Keep as separate column for compatibility
     refinance_opportunity = Column(Boolean, default=False)
     estimated_savings = Column(Float)
@@ -23571,7 +23572,7 @@ async def create_mum_client(client: MUMClientCreate, db: Session = Depends(get_d
 
         # Create MUM client with explicit field assignment
         # Use client_name to match the actual database column name
-        # Use original_loan_amount to match the NOT NULL column in PostgreSQL
+        # Use original_loan_amount and current_loan_amount to match NOT NULL columns in PostgreSQL
         db_client = MUMClient(
             client_name=client.name,  # Map to 'client_name' column in PostgreSQL
             email=client.email,
@@ -23579,7 +23580,8 @@ async def create_mum_client(client: MUMClientCreate, db: Session = Depends(get_d
             loan_number=client.loan_number,
             original_close_date=client.original_close_date,
             original_rate=client.original_rate,
-            original_loan_amount=client.loan_balance,  # Map to 'original_loan_amount' column in PostgreSQL (NOT NULL)
+            original_loan_amount=client.loan_balance,  # Map to 'original_loan_amount' column (NOT NULL)
+            current_loan_amount=client.loan_balance,   # Map to 'current_loan_amount' column (NOT NULL)
             loan_balance=client.loan_balance,
             status=client.status or "Active",
             notes=client.notes,
