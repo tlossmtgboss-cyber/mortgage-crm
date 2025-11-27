@@ -2250,3 +2250,143 @@ async def process_mortgage_intelligence(recording_id: int):
         logger.error(f"Error processing mortgage intelligence for recording {recording_id}: {e}")
     finally:
         db.close()
+
+
+# ============================================================================
+# MANAGER DASHBOARD ENDPOINTS
+# ============================================================================
+
+@router.get("/analytics/manager/dashboard")
+async def get_manager_dashboard(
+    days: int = Query(30, le=365),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Get comprehensive manager dashboard with team performance metrics"""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Models not initialized")
+
+    try:
+        from uvip.manager_dashboard_service import get_manager_dashboard_service
+
+        # Get team member IDs - for now, get all users in the org
+        # In production, this would filter by manager's direct reports
+        User = _models.get('User')
+        organization_id = getattr(current_user, 'organization_id', None)
+
+        team_member_ids = []
+        if User and organization_id:
+            team_members = db.query(User).filter(
+                User.organization_id == organization_id
+            ).all()
+            team_member_ids = [m.id for m in team_members]
+        else:
+            # Fallback: just use current user
+            team_member_ids = [current_user.id]
+
+        dashboard_service = get_manager_dashboard_service(db, _models)
+
+        result = await dashboard_service.get_team_overview(
+            team_member_ids=team_member_ids,
+            days=days
+        )
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Error getting manager dashboard: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/analytics/manager/compare/{user_id}")
+async def compare_user_to_team(
+    user_id: int,
+    days: int = Query(30, le=365),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Compare individual user performance against team averages"""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Models not initialized")
+
+    try:
+        from uvip.manager_dashboard_service import get_manager_dashboard_service
+
+        # Get team member IDs
+        User = _models.get('User')
+        organization_id = getattr(current_user, 'organization_id', None)
+
+        team_member_ids = []
+        if User and organization_id:
+            team_members = db.query(User).filter(
+                User.organization_id == organization_id
+            ).all()
+            team_member_ids = [m.id for m in team_members]
+        else:
+            team_member_ids = [current_user.id]
+
+        # Verify user is in team
+        if user_id not in team_member_ids:
+            raise HTTPException(status_code=403, detail="User not in your team")
+
+        dashboard_service = get_manager_dashboard_service(db, _models)
+
+        result = await dashboard_service.get_individual_comparison(
+            user_id=user_id,
+            team_member_ids=team_member_ids,
+            days=days
+        )
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error comparing user to team: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/analytics/manager/leaderboard")
+async def get_team_leaderboard(
+    metric: str = Query("engagement_score", regex="^(engagement_score|question_count|positive_sentiment|talk_listen_ratio)$"),
+    days: int = Query(30, le=365),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Get team leaderboard for specific metrics"""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Models not initialized")
+
+    try:
+        from uvip.manager_dashboard_service import get_manager_dashboard_service
+
+        # Get team member IDs
+        User = _models.get('User')
+        organization_id = getattr(current_user, 'organization_id', None)
+
+        team_member_ids = []
+        if User and organization_id:
+            team_members = db.query(User).filter(
+                User.organization_id == organization_id
+            ).all()
+            team_member_ids = [m.id for m in team_members]
+        else:
+            team_member_ids = [current_user.id]
+
+        dashboard_service = get_manager_dashboard_service(db, _models)
+
+        leaderboard = await dashboard_service.get_leaderboard(
+            team_member_ids=team_member_ids,
+            days=days,
+            metric=metric
+        )
+
+        return {
+            "metric": metric,
+            "period_days": days,
+            "leaderboard": leaderboard
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting leaderboard: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
