@@ -35815,6 +35815,102 @@ async def fix_demo_user_ownership_migration(
         }
 
 
+@app.post("/api/v1/migrations/normalize-stage-enums", response_model=None)
+async def normalize_stage_enums_migration(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Normalize lead and loan stage enum values.
+
+    Fixes the mismatch between SQLAlchemy enum names (like 'PRE_APPROVED') and
+    the values stored in the database (like 'Pre-Approved').
+
+    SQLAlchemy with native PostgreSQL enums expects to read back the same values
+    it would write. This migration standardizes all stage values to use the
+    enum VALUE format (like 'Pre-Approved') which matches our Python enum definitions.
+    """
+    try:
+        logger.info(f"Running migration: normalize stage enums (user: {current_user.id})")
+
+        results = {"leads": {}, "loans": {}}
+
+        # LeadStage enum value mappings - map names to values
+        lead_stage_mappings = {
+            "NEW": "New",
+            "ATTEMPTED_CONTACT": "Attempted Contact",
+            "PROSPECT": "Prospect",
+            "APPLICATION": "Application",
+            "APPLICATION_STARTED": "Application",  # Legacy - map to Application
+            "PRE_QUALIFIED": "Pre-Qualified",
+            "PRE_APPROVED": "Pre-Approved",
+            "UNDER_CONTRACT": "Under Contract",
+            "LONG_TERM_NURTURE": "Long-Term Nurture",
+            "CLOSED": "Closed",
+            "AMR": "AMR",
+            "REFERRAL_SOURCE": "Referral Source",
+            "WITHDRAWN": "Withdrawn",
+            "DOES_NOT_QUALIFY": "Does Not Qualify",
+        }
+
+        # LoanStage enum value mappings - map names to values
+        loan_stage_mappings = {
+            "DISCLOSED": "Disclosed",
+            "PROCESSING": "Processing",
+            "SUBMITTED": "Submitted",
+            "UW_RECEIVED": "UW Received",
+            "APPROVED": "Approved",
+            "SUSPENDED": "Suspended",
+            "CTC": "CTC",
+            "DOCS": "Docs Out",
+            "FUNDED": "Funded",
+        }
+
+        # Normalize lead stages
+        for enum_name, enum_value in lead_stage_mappings.items():
+            result = db.execute(text("""
+                UPDATE leads
+                SET stage = :value
+                WHERE stage = :name AND stage != :value
+            """), {"name": enum_name, "value": enum_value})
+            if result.rowcount > 0:
+                results["leads"][enum_name] = result.rowcount
+                logger.info(f"Normalized {result.rowcount} leads from '{enum_name}' to '{enum_value}'")
+
+        # Normalize loan stages
+        for enum_name, enum_value in loan_stage_mappings.items():
+            result = db.execute(text("""
+                UPDATE loans
+                SET stage = :value
+                WHERE stage = :name AND stage != :value
+            """), {"name": enum_name, "value": enum_value})
+            if result.rowcount > 0:
+                results["loans"][enum_name] = result.rowcount
+                logger.info(f"Normalized {result.rowcount} loans from '{enum_name}' to '{enum_value}'")
+
+        db.commit()
+
+        total_leads = sum(results["leads"].values())
+        total_loans = sum(results["loans"].values())
+
+        logger.info(f"Migration completed: {total_leads} leads, {total_loans} loans normalized")
+
+        return {
+            "success": True,
+            "message": f"Normalized {total_leads} leads and {total_loans} loans",
+            "details": results
+        }
+
+    except Exception as e:
+        logger.error(f"Stage enum normalization failed: {e}")
+        db.rollback()
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e)
+        }
+
+
 # ============================================================================
 # MUM (MORTGAGES UNDER MANAGEMENT) API
 # ============================================================================
