@@ -62,6 +62,9 @@ pytest==7.4.3
 pytest-asyncio==0.21.1
 httpx==0.25.2
 
+# Production Monitoring
+sentry-sdk[fastapi]==1.38.0
+
 # Google Auth
 google-auth
 google-auth-oauthlib
