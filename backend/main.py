@@ -14464,16 +14464,16 @@ async def approve_reconciliation(
                     db.add(new_lead)
                     db.flush()
 
-                    # Update stage using raw SQL to ensure correct enum value is used
-                    # SQLAlchemy's SQLEnum uses names but PostgreSQL expects values
+                    # Update stage using raw SQL with enum NAME (not value)
+                    # SQLAlchemy's SQLEnum maps Python enum names to PostgreSQL
                     db.execute(text(f"UPDATE leads SET stage = :stage WHERE id = :id"),
-                               {"stage": lead_stage_enum.value, "id": new_lead.id})
+                               {"stage": lead_stage_enum.name, "id": new_lead.id})
                     db.flush()
 
                     extracted.match_entity_type = "lead"
                     extracted.match_entity_id = new_lead.id
 
-                    logger.info(f"Created new lead {borrower_name} (ID: {new_lead.id}) in {lead_stage_enum.value} stage")
+                    logger.info(f"Created new lead {borrower_name} (ID: {new_lead.id}) in {lead_stage_enum.name} stage")
 
                     # Commit and return early for leads
                     extracted.status = "approved"
@@ -14484,7 +14484,7 @@ async def approve_reconciliation(
                         "status": "approved",
                         "entity_type": "lead",
                         "entity_id": new_lead.id,
-                        "message": f"Created new lead {borrower_name} in {lead_stage_enum.value} stage"
+                        "message": f"Created new lead {borrower_name} in {lead_stage_enum.name} stage"
                     }
 
                 stage = loan_stage_map.get(stage_upper, LoanStage.PROCESSING)
