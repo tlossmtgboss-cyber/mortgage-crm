@@ -1,0 +1,837 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import './SmartScheduler.css';
+
+const API_BASE = process.env.REACT_APP_API_URL || '';
+
+const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType }) => {
+  const [view, setView] = useState('calendar'); // calendar, types, booking-links, settings
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Data states
+  const [appointments, setAppointments] = useState([]);
+  const [appointmentTypes, setAppointmentTypes] = useState([]);
+  const [availableSlots, setAvailableSlots] = useState([]);
+  const [bookingLinks, setBookingLinks] = useState([]);
+  const [config, setConfig] = useState(null);
+
+  // Selection states
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [selectedType, setSelectedType] = useState(preselectedType || null);
+  const [selectedSlot, setSelectedSlot] = useState(null);
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+
+  // Booking form
+  const [bookingForm, setBookingForm] = useState({
+    title: '',
+    attendee_name: '',
+    attendee_email: '',
+    attendee_phone: '',
+    duration_minutes: 30,
+    meeting_mode: 'video',
+    notes: ''
+  });
+
+  // Modal states
+  const [showBookingModal, setShowBookingModal] = useState(false);
+  const [showNewTypeModal, setShowNewTypeModal] = useState(false);
+  const [showNewLinkModal, setShowNewLinkModal] = useState(false);
+
+  const getAuthHeaders = useCallback(() => {
+    const token = localStorage.getItem('token');
+    return {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    };
+  }, []);
+
+  // Fetch initial data
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [configRes, typesRes, appointmentsRes, linksRes] = await Promise.all([
+        fetch(`${API_BASE}/api/v1/scheduler/config`, { headers: getAuthHeaders() }),
+        fetch(`${API_BASE}/api/v1/scheduler/appointment-types`, { headers: getAuthHeaders() }),
+        fetch(`${API_BASE}/api/v1/scheduler/appointments?limit=100`, { headers: getAuthHeaders() }),
+        fetch(`${API_BASE}/api/v1/scheduler/booking-links`, { headers: getAuthHeaders() })
+      ]);
+
+      if (configRes.ok) {
+        const configData = await configRes.json();
+        setConfig(configData.config || configData.defaults);
+      }
+
+      if (typesRes.ok) {
+        const typesData = await typesRes.json();
+        setAppointmentTypes(typesData.appointment_types || []);
+      }
+
+      if (appointmentsRes.ok) {
+        const appointmentsData = await appointmentsRes.json();
+        setAppointments(appointmentsData.appointments || []);
+      }
+
+      if (linksRes.ok) {
+        const linksData = await linksRes.json();
+        setBookingLinks(linksData.booking_links || []);
+      }
+    } catch (err) {
+      setError('Failed to load scheduler data');
+      console.error('Scheduler fetch error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch available slots for selected date range
+  const fetchAvailableSlots = async (startDate, endDate, typeId = null) => {
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/scheduler/available-slots`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          start_date: startDate.toISOString().split('T')[0],
+          end_date: endDate.toISOString().split('T')[0],
+          duration_minutes: bookingForm.duration_minutes,
+          appointment_type_id: typeId,
+          lead_id: leadId,
+          loan_id: loanId
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setAvailableSlots(data.available_slots || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch available slots:', err);
+    }
+  };
+
+  // Book appointment
+  const handleBookAppointment = async () => {
+    if (!selectedSlot) return;
+
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/scheduler/appointments`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          appointment_type_id: selectedType?.id,
+          title: bookingForm.title || `${selectedType?.type_name || 'Meeting'} with ${bookingForm.attendee_name}`,
+          scheduled_start: selectedSlot.start,
+          duration_minutes: bookingForm.duration_minutes,
+          meeting_mode: bookingForm.meeting_mode,
+          attendee_name: bookingForm.attendee_name,
+          attendee_email: bookingForm.attendee_email,
+          attendee_phone: bookingForm.attendee_phone,
+          attendee_notes: bookingForm.notes,
+          lead_id: leadId,
+          loan_id: loanId,
+          contact_id: contactId
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setShowBookingModal(false);
+        setSelectedSlot(null);
+        resetBookingForm();
+        fetchData(); // Refresh appointments
+        alert(`Appointment booked successfully!`);
+      } else {
+        const err = await response.json();
+        alert(`Failed to book: ${err.detail}`);
+      }
+    } catch (err) {
+      console.error('Booking error:', err);
+      alert('Failed to book appointment');
+    }
+  };
+
+  // Cancel appointment
+  const handleCancelAppointment = async (appointmentId, reason = '') => {
+    if (!window.confirm('Are you sure you want to cancel this appointment?')) return;
+
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/scheduler/appointments/${appointmentId}/cancel?reason=${encodeURIComponent(reason)}`, {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
+
+      if (response.ok) {
+        fetchData();
+      } else {
+        alert('Failed to cancel appointment');
+      }
+    } catch (err) {
+      console.error('Cancel error:', err);
+    }
+  };
+
+  // Seed default appointment types
+  const handleSeedDefaults = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/scheduler/seed-defaults`, {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
+
+      if (response.ok) {
+        fetchData();
+        alert('Default appointment types created!');
+      }
+    } catch (err) {
+      console.error('Seed error:', err);
+    }
+  };
+
+  // Create booking link
+  const handleCreateBookingLink = async (linkData) => {
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/scheduler/booking-links`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(linkData)
+      });
+
+      if (response.ok) {
+        setShowNewLinkModal(false);
+        fetchData();
+      } else {
+        const err = await response.json();
+        alert(`Failed to create link: ${err.detail}`);
+      }
+    } catch (err) {
+      console.error('Create link error:', err);
+    }
+  };
+
+  const resetBookingForm = () => {
+    setBookingForm({
+      title: '',
+      attendee_name: '',
+      attendee_email: '',
+      attendee_phone: '',
+      duration_minutes: 30,
+      meeting_mode: 'video',
+      notes: ''
+    });
+  };
+
+  // Calendar helpers
+  const getDaysInMonth = (date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const days = [];
+
+    // Add empty days for alignment
+    for (let i = 0; i < firstDay.getDay(); i++) {
+      days.push(null);
+    }
+
+    for (let i = 1; i <= lastDay.getDate(); i++) {
+      days.push(new Date(year, month, i));
+    }
+
+    return days;
+  };
+
+  const getAppointmentsForDate = (date) => {
+    if (!date) return [];
+    const dateStr = date.toISOString().split('T')[0];
+    return appointments.filter(a => a.scheduled_start.startsWith(dateStr));
+  };
+
+  const formatTime = (isoString) => {
+    const date = new Date(isoString);
+    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  };
+
+  const formatDate = (isoString) => {
+    const date = new Date(isoString);
+    return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  };
+
+  // Render calendar view
+  const renderCalendarView = () => (
+    <div className="scheduler-calendar-view">
+      <div className="calendar-header">
+        <button
+          className="calendar-nav-btn"
+          onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}
+        >
+          &lt;
+        </button>
+        <h3>{currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h3>
+        <button
+          className="calendar-nav-btn"
+          onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))}
+        >
+          &gt;
+        </button>
+      </div>
+
+      <div className="calendar-weekdays">
+        {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+          <div key={day} className="weekday">{day}</div>
+        ))}
+      </div>
+
+      <div className="calendar-days">
+        {getDaysInMonth(currentMonth).map((day, idx) => (
+          <div
+            key={idx}
+            className={`calendar-day ${day ? '' : 'empty'} ${day && day.toDateString() === selectedDate?.toDateString() ? 'selected' : ''} ${day && day.toDateString() === new Date().toDateString() ? 'today' : ''}`}
+            onClick={() => day && setSelectedDate(day)}
+          >
+            {day && (
+              <>
+                <span className="day-number">{day.getDate()}</span>
+                {getAppointmentsForDate(day).length > 0 && (
+                  <div className="appointment-dots">
+                    {getAppointmentsForDate(day).slice(0, 3).map((_, i) => (
+                      <span key={i} className="dot"></span>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {selectedDate && (
+        <div className="day-appointments">
+          <h4>{selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}</h4>
+
+          {getAppointmentsForDate(selectedDate).length === 0 ? (
+            <p className="no-appointments">No appointments scheduled</p>
+          ) : (
+            <div className="appointments-list">
+              {getAppointmentsForDate(selectedDate).map(appt => (
+                <div key={appt.id} className={`appointment-card status-${appt.status}`}>
+                  <div className="appointment-time">{formatTime(appt.scheduled_start)}</div>
+                  <div className="appointment-details">
+                    <div className="appointment-title">{appt.title}</div>
+                    <div className="appointment-meta">
+                      <span className="meeting-mode">{appt.meeting_mode}</span>
+                      <span className="duration">{appt.duration_minutes}min</span>
+                      {appt.attendee_name && <span className="attendee">{appt.attendee_name}</span>}
+                    </div>
+                  </div>
+                  <div className="appointment-actions">
+                    {appt.video_link && (
+                      <a href={appt.video_link} target="_blank" rel="noopener noreferrer" className="join-btn">Join</a>
+                    )}
+                    {appt.status === 'booked' && (
+                      <button
+                        className="cancel-btn"
+                        onClick={() => handleCancelAppointment(appt.id)}
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <button
+            className="new-appointment-btn"
+            onClick={() => {
+              fetchAvailableSlots(selectedDate, selectedDate);
+              setShowBookingModal(true);
+            }}
+          >
+            + New Appointment
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  // Render appointment types view
+  const renderTypesView = () => (
+    <div className="scheduler-types-view">
+      <div className="types-header">
+        <h3>Appointment Types</h3>
+        <div className="types-actions">
+          <button className="seed-btn" onClick={handleSeedDefaults}>
+            Seed Defaults
+          </button>
+          <button className="add-type-btn" onClick={() => setShowNewTypeModal(true)}>
+            + New Type
+          </button>
+        </div>
+      </div>
+
+      {appointmentTypes.length === 0 ? (
+        <div className="empty-state">
+          <p>No appointment types configured</p>
+          <button onClick={handleSeedDefaults}>Create Default Types</button>
+        </div>
+      ) : (
+        <div className="types-grid">
+          {appointmentTypes.map(type => (
+            <div
+              key={type.id || type.type_key}
+              className="type-card"
+              style={{ borderLeftColor: type.color }}
+            >
+              <div className="type-header">
+                <span className="type-icon">{type.icon === 'phone' ? '
+' : type.icon === 'document' ? '
+' : type.icon === 'clipboard' ? '
+' : type.icon === 'folder' ? '
+' : type.icon === 'lock' ? '
+' : type.icon === 'home' ? '
+' : type.icon === 'users' ? '
+' : '
+'}</span>
+                <h4>{type.type_name}</h4>
+              </div>
+              <p className="type-description">{type.description}</p>
+              <div className="type-meta">
+                <span>{type.default_duration_minutes} min</span>
+                <span className={`public-badge ${type.is_public ? 'public' : 'private'}`}>
+                  {type.is_public ? 'Public' : 'Private'}
+                </span>
+              </div>
+              <div className="type-durations">
+                {type.allowed_durations?.map(d => (
+                  <span key={d} className="duration-chip">{d}m</span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  // Render booking links view
+  const renderBookingLinksView = () => (
+    <div className="scheduler-links-view">
+      <div className="links-header">
+        <h3>Booking Links</h3>
+        <button className="add-link-btn" onClick={() => setShowNewLinkModal(true)}>
+          + New Link
+        </button>
+      </div>
+
+      {bookingLinks.length === 0 ? (
+        <div className="empty-state">
+          <p>No booking links created</p>
+          <p className="hint">Create shareable links for clients to book appointments</p>
+        </div>
+      ) : (
+        <div className="links-list">
+          {bookingLinks.map(link => (
+            <div key={link.id} className="link-card">
+              <div className="link-info">
+                <h4>{link.link_name}</h4>
+                <p className="link-url">/book/{link.slug}</p>
+                {link.description && <p className="link-description">{link.description}</p>}
+              </div>
+              <div className="link-stats">
+                <span className="stat">
+                  <span className="stat-value">{link.view_count}</span>
+                  <span className="stat-label">Views</span>
+                </span>
+                <span className="stat">
+                  <span className="stat-value">{link.booking_count}</span>
+                  <span className="stat-label">Bookings</span>
+                </span>
+              </div>
+              <div className="link-actions">
+                <button
+                  className="copy-btn"
+                  onClick={() => {
+                    navigator.clipboard.writeText(`${window.location.origin}/book/${link.slug}`);
+                    alert('Link copied!');
+                  }}
+                >
+                  Copy Link
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  // Render settings view
+  const renderSettingsView = () => (
+    <div className="scheduler-settings-view">
+      <h3>Scheduler Settings</h3>
+
+      {config ? (
+        <div className="settings-form">
+          <div className="setting-group">
+            <h4>Working Hours</h4>
+            <div className="working-hours-grid">
+              {Object.entries(config.working_hours || {}).map(([day, hours]) => (
+                <div key={day} className={`day-hours ${hours.enabled ? 'enabled' : 'disabled'}`}>
+                  <span className="day-name">{day.charAt(0).toUpperCase() + day.slice(1)}</span>
+                  <span className="hours">
+                    {hours.enabled ? `${hours.start} - ${hours.end}` : 'Off'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="setting-group">
+            <h4>Booking Settings</h4>
+            <div className="settings-grid">
+              <div className="setting-item">
+                <label>Default Duration</label>
+                <span>{config.default_duration_minutes} minutes</span>
+              </div>
+              <div className="setting-item">
+                <label>Buffer Before</label>
+                <span>{config.buffer_before_minutes} minutes</span>
+              </div>
+              <div className="setting-item">
+                <label>Buffer After</label>
+                <span>{config.buffer_after_minutes} minutes</span>
+              </div>
+              <div className="setting-item">
+                <label>Min Notice</label>
+                <span>{config.min_notice_hours} hours</span>
+              </div>
+              <div className="setting-item">
+                <label>Max Advance</label>
+                <span>{config.max_advance_days} days</span>
+              </div>
+              <div className="setting-item">
+                <label>Max Per Day</label>
+                <span>{config.max_meetings_per_day} meetings</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="setting-group">
+            <h4>AI Settings</h4>
+            <div className="ai-setting">
+              <span>AI Scheduling</span>
+              <span className={`status ${config.ai_scheduling_enabled ? 'enabled' : 'disabled'}`}>
+                {config.ai_scheduling_enabled ? 'Enabled' : 'Disabled'}
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="empty-state">
+          <p>No configuration found</p>
+          <button onClick={handleSeedDefaults}>Initialize Scheduler</button>
+        </div>
+      )}
+    </div>
+  );
+
+  // Render booking modal
+  const renderBookingModal = () => (
+    <div className="scheduler-modal-overlay" onClick={() => setShowBookingModal(false)}>
+      <div className="scheduler-modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>Book Appointment</h3>
+          <button className="close-btn" onClick={() => setShowBookingModal(false)}>&times;</button>
+        </div>
+
+        <div className="modal-content">
+          {/* Appointment Type Selection */}
+          {!selectedType && (
+            <div className="type-selection">
+              <h4>Select Appointment Type</h4>
+              <div className="type-options">
+                {appointmentTypes.map(type => (
+                  <button
+                    key={type.id || type.type_key}
+                    className="type-option"
+                    style={{ borderColor: type.color }}
+                    onClick={() => setSelectedType(type)}
+                  >
+                    <span className="type-name">{type.type_name}</span>
+                    <span className="type-duration">{type.default_duration_minutes}min</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Slot Selection */}
+          {selectedType && !selectedSlot && (
+            <div className="slot-selection">
+              <h4>Select Time Slot</h4>
+              <div className="selected-type-info">
+                <span>{selectedType.type_name}</span>
+                <button className="change-type" onClick={() => setSelectedType(null)}>Change</button>
+              </div>
+
+              {availableSlots.length === 0 ? (
+                <p className="no-slots">No available slots for this date</p>
+              ) : (
+                <div className="slots-grid">
+                  {availableSlots.filter(s => s.date === selectedDate?.toISOString().split('T')[0]).map((slot, idx) => (
+                    <button
+                      key={idx}
+                      className="slot-btn"
+                      onClick={() => setSelectedSlot(slot)}
+                    >
+                      {formatTime(slot.start)}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Booking Form */}
+          {selectedSlot && (
+            <div className="booking-form">
+              <h4>Appointment Details</h4>
+              <div className="slot-summary">
+                <span className="slot-date">{formatDate(selectedSlot.start)}</span>
+                <span className="slot-time">{formatTime(selectedSlot.start)}</span>
+                <span className="slot-type">{selectedType?.type_name}</span>
+                <button className="change-slot" onClick={() => setSelectedSlot(null)}>Change</button>
+              </div>
+
+              <div className="form-group">
+                <label>Attendee Name *</label>
+                <input
+                  type="text"
+                  value={bookingForm.attendee_name}
+                  onChange={e => setBookingForm({ ...bookingForm, attendee_name: e.target.value })}
+                  placeholder="Enter name"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Email *</label>
+                <input
+                  type="email"
+                  value={bookingForm.attendee_email}
+                  onChange={e => setBookingForm({ ...bookingForm, attendee_email: e.target.value })}
+                  placeholder="email@example.com"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Phone</label>
+                <input
+                  type="tel"
+                  value={bookingForm.attendee_phone}
+                  onChange={e => setBookingForm({ ...bookingForm, attendee_phone: e.target.value })}
+                  placeholder="(555) 123-4567"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Meeting Mode</label>
+                <select
+                  value={bookingForm.meeting_mode}
+                  onChange={e => setBookingForm({ ...bookingForm, meeting_mode: e.target.value })}
+                >
+                  <option value="video">Video Call</option>
+                  <option value="phone">Phone Call</option>
+                  <option value="in_person">In Person</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Notes</label>
+                <textarea
+                  value={bookingForm.notes}
+                  onChange={e => setBookingForm({ ...bookingForm, notes: e.target.value })}
+                  placeholder="Any additional information..."
+                  rows={3}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {selectedSlot && (
+          <div className="modal-footer">
+            <button className="cancel-btn" onClick={() => setShowBookingModal(false)}>Cancel</button>
+            <button
+              className="confirm-btn"
+              onClick={handleBookAppointment}
+              disabled={!bookingForm.attendee_name || !bookingForm.attendee_email}
+            >
+              Book Appointment
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // Render new booking link modal
+  const renderNewLinkModal = () => {
+    const [linkForm, setLinkForm] = useState({
+      slug: '',
+      link_name: '',
+      description: '',
+      appointment_type_ids: []
+    });
+
+    return (
+      <div className="scheduler-modal-overlay" onClick={() => setShowNewLinkModal(false)}>
+        <div className="scheduler-modal" onClick={e => e.stopPropagation()}>
+          <div className="modal-header">
+            <h3>Create Booking Link</h3>
+            <button className="close-btn" onClick={() => setShowNewLinkModal(false)}>&times;</button>
+          </div>
+
+          <div className="modal-content">
+            <div className="form-group">
+              <label>Link Name *</label>
+              <input
+                type="text"
+                value={linkForm.link_name}
+                onChange={e => setLinkForm({ ...linkForm, link_name: e.target.value })}
+                placeholder="My Booking Link"
+              />
+            </div>
+
+            <div className="form-group">
+              <label>URL Slug *</label>
+              <div className="slug-input">
+                <span className="slug-prefix">/book/</span>
+                <input
+                  type="text"
+                  value={linkForm.slug}
+                  onChange={e => setLinkForm({ ...linkForm, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })}
+                  placeholder="my-link"
+                />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label>Description</label>
+              <textarea
+                value={linkForm.description}
+                onChange={e => setLinkForm({ ...linkForm, description: e.target.value })}
+                placeholder="Optional description..."
+                rows={2}
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Appointment Types</label>
+              <div className="type-checkboxes">
+                {appointmentTypes.map(type => (
+                  <label key={type.id || type.type_key} className="checkbox-label">
+                    <input
+                      type="checkbox"
+                      checked={linkForm.appointment_type_ids.includes(type.id)}
+                      onChange={e => {
+                        if (e.target.checked) {
+                          setLinkForm({ ...linkForm, appointment_type_ids: [...linkForm.appointment_type_ids, type.id] });
+                        } else {
+                          setLinkForm({ ...linkForm, appointment_type_ids: linkForm.appointment_type_ids.filter(id => id !== type.id) });
+                        }
+                      }}
+                    />
+                    {type.type_name}
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="modal-footer">
+            <button className="cancel-btn" onClick={() => setShowNewLinkModal(false)}>Cancel</button>
+            <button
+              className="confirm-btn"
+              onClick={() => handleCreateBookingLink(linkForm)}
+              disabled={!linkForm.slug || !linkForm.link_name}
+            >
+              Create Link
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  if (loading) {
+    return (
+      <div className="smart-scheduler loading">
+        <div className="loader"></div>
+        <p>Loading scheduler...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="smart-scheduler">
+      <div className="scheduler-header">
+        <h2>Smart Scheduler</h2>
+        <div className="scheduler-tabs">
+          <button
+            className={`tab ${view === 'calendar' ? 'active' : ''}`}
+            onClick={() => setView('calendar')}
+          >
+            Calendar
+          </button>
+          <button
+            className={`tab ${view === 'types' ? 'active' : ''}`}
+            onClick={() => setView('types')}
+          >
+            Appointment Types
+          </button>
+          <button
+            className={`tab ${view === 'booking-links' ? 'active' : ''}`}
+            onClick={() => setView('booking-links')}
+          >
+            Booking Links
+          </button>
+          <button
+            className={`tab ${view === 'settings' ? 'active' : ''}`}
+            onClick={() => setView('settings')}
+          >
+            Settings
+          </button>
+        </div>
+        {onClose && (
+          <button className="close-scheduler" onClick={onClose}>&times;</button>
+        )}
+      </div>
+
+      {error && (
+        <div className="scheduler-error">
+          <p>{error}</p>
+          <button onClick={fetchData}>Retry</button>
+        </div>
+      )}
+
+      <div className="scheduler-content">
+        {view === 'calendar' && renderCalendarView()}
+        {view === 'types' && renderTypesView()}
+        {view === 'booking-links' && renderBookingLinksView()}
+        {view === 'settings' && renderSettingsView()}
+      </div>
+
+      {showBookingModal && renderBookingModal()}
+      {showNewLinkModal && renderNewLinkModal()}
+    </div>
+  );
+};
+
+export default SmartScheduler;

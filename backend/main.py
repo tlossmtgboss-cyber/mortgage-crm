@@ -10614,6 +10614,23 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Could not load Workflow Configuration routes: {e}")
 
+# Include Smart Scheduler routes (AI-native appointment scheduling)
+try:
+    from smart_scheduler_models import create_smart_scheduler_models
+    from smart_scheduler_routes import router as smart_scheduler_router, set_dependencies as set_scheduler_deps
+
+    # Create smart scheduler models using our Base
+    smart_scheduler_models = create_smart_scheduler_models(Base)
+
+    # Set dependencies for the routes
+    set_scheduler_deps(get_db, get_current_user, smart_scheduler_models)
+
+    # Include the router
+    app.include_router(smart_scheduler_router, tags=["Smart Scheduler"])
+    logger.info("✅ Smart Scheduler routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Could not load Smart Scheduler routes: {e}")
+
 # Include Market Chat routes
 from market_chat_routes import router as market_chat_router
 app.include_router(market_chat_router, tags=["Market Chat"])
@@ -25522,6 +25539,22 @@ def init_db():
                         );
                         CREATE INDEX IF NOT EXISTS idx_user_permissions_user ON user_permissions(user_id);
                         CREATE INDEX IF NOT EXISTS idx_user_permissions_composite ON user_permissions(user_id, permission_key, granted);
+                    """))
+
+                    # Add missing enum values to loanstage type
+                    conn.execute(text("""
+                        DO $$
+                        BEGIN
+                            -- Add DOCS to loanstage enum if it doesn't exist
+                            IF NOT EXISTS (
+                                SELECT 1 FROM pg_enum WHERE enumlabel = 'Docs Out'
+                                AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'loanstage')
+                            ) THEN
+                                ALTER TYPE loanstage ADD VALUE IF NOT EXISTS 'Docs Out';
+                            END IF;
+                        EXCEPTION
+                            WHEN duplicate_object THEN NULL;
+                        END $$;
                     """))
 
                     conn.commit()
