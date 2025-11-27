@@ -35254,6 +35254,7 @@ async def add_leadstage_values_migration(
             "Application",
             "Attempted Contact",
             "Pre-Qualified",
+            "Pre-Approved",
             "Under Contract",
             "Long-Term Nurture",
             "Closed",
