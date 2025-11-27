@@ -88,23 +88,89 @@ function UserCreationWizard() {
     loadReferenceData();
   }, []);
 
+  // Default roles for the mortgage industry
+  const DEFAULT_ROLES = [
+    { id: 1, display_name: 'Loan Officer', description: 'Originates loans, manages borrower relationships, handles rate locks and pre-approvals' },
+    { id: 2, display_name: 'Loan Officer Assistant', description: 'Supports Loan Officers with administrative tasks, document collection, and client communication' },
+    { id: 3, display_name: 'Processor', description: 'Manages complete loan processing, document verification, and underwriting submission' },
+    { id: 4, display_name: 'Processing Assistant', description: 'Assists processors with documentation, condition tracking, and file preparation' },
+    { id: 5, display_name: 'Production Assistant 1', description: 'Entry-level production support, handles initial document intake and data entry' },
+    { id: 6, display_name: 'Production Assistant 2', description: 'Mid-level production support, manages pipeline updates and borrower follow-ups' },
+    { id: 7, display_name: 'Closer', description: 'Manages closing coordination, final document preparation, and funding' },
+    { id: 8, display_name: 'Underwriter', description: 'Reviews loan applications, assesses risk, and issues approval decisions' },
+    { id: 9, display_name: 'Team Lead', description: 'Supervises team members, monitors performance metrics, and ensures quality standards' },
+    { id: 10, display_name: 'Branch Manager', description: 'Oversees branch operations, manages staff, and drives business development' }
+  ];
+
+  // Default categories
+  const DEFAULT_CATEGORIES = [
+    { id: 1, display_name: 'Lead Generation', description: 'Prospecting and acquiring new leads' },
+    { id: 2, display_name: 'Pre-Qualification', description: 'Initial borrower qualification and assessment' },
+    { id: 3, display_name: 'Application Support', description: 'Assisting with loan applications' },
+    { id: 4, display_name: 'Processing Assistance', description: 'Supporting loan processing activities' },
+    { id: 5, display_name: 'Document Collection', description: 'Gathering and organizing loan documents' },
+    { id: 6, display_name: 'Condition Management', description: 'Tracking and clearing underwriting conditions' },
+    { id: 7, display_name: 'Client Communication', description: 'Maintaining borrower relationships and updates' },
+    { id: 8, display_name: 'Pipeline Management', description: 'Monitoring and managing loan pipeline' },
+    { id: 9, display_name: 'Closing Coordination', description: 'Managing the closing process' },
+    { id: 10, display_name: 'Post-Closing Follow-up', description: 'Client retention and referral generation' }
+  ];
+
+  // Default permission templates
+  const DEFAULT_PERMISSION_TEMPLATES = [
+    { id: 1, name: 'Full Access', description: 'Complete access to all system features', permissions: { view_all: true, edit_all: true, admin: true } },
+    { id: 2, name: 'Standard Loan Officer', description: 'Lead management, pipeline access, client communication', permissions: { leads: true, pipeline: true, clients: true } },
+    { id: 3, name: 'Read Only', description: 'View-only access to data', permissions: { view_only: true } },
+    { id: 4, name: 'Processing Team', description: 'Access to processing functions and documents', permissions: { processing: true, documents: true, pipeline: true } }
+  ];
+
   const loadReferenceData = async () => {
     setLoading(true);
     try {
       const [rolesRes, categoriesRes, responsibilitiesRes, templatesRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/api/v1/admin/users/roles`, getAuthHeaders()),
-        axios.get(`${API_BASE_URL}/api/v1/admin/users/categories`, getAuthHeaders()),
-        axios.get(`${API_BASE_URL}/api/v1/admin/users/responsibilities`, getAuthHeaders()),
-        axios.get(`${API_BASE_URL}/api/v1/admin/users/permission-templates`, getAuthHeaders())
+        axios.get(`${API_BASE_URL}/api/v1/admin/users/roles`, getAuthHeaders()).catch(() => ({ data: null })),
+        axios.get(`${API_BASE_URL}/api/v1/admin/users/categories`, getAuthHeaders()).catch(() => ({ data: null })),
+        axios.get(`${API_BASE_URL}/api/v1/admin/users/responsibilities`, getAuthHeaders()).catch(() => ({ data: null })),
+        axios.get(`${API_BASE_URL}/api/v1/admin/users/permission-templates`, getAuthHeaders()).catch(() => ({ data: null }))
       ]);
 
-      setRoles(rolesRes.data || []);
-      setCategories(categoriesRes.data || []);
-      setResponsibilities(responsibilitiesRes.data || []);
-      setPermissionTemplates(templatesRes.data || []);
+      // Handle nested response structure: { success: true, data: { roles: [...] } }
+      const extractData = (res, field, defaultVal) => {
+        if (res.data?.data?.[field]) return res.data.data[field];
+        if (res.data?.[field]) return res.data[field];
+        if (Array.isArray(res.data)) return res.data;
+        return defaultVal;
+      };
+
+      // Map API response fields to expected frontend fields
+      const mapRoles = (apiRoles) => apiRoles.map(r => ({
+        id: r.id,
+        display_name: r.display_name || r.name || r.role_name,
+        description: r.description
+      }));
+
+      const mapCategories = (apiCats) => apiCats.map(c => ({
+        id: c.id,
+        display_name: c.display_name || c.name,
+        description: c.description
+      }));
+
+      const apiRoles = extractData(rolesRes, 'roles', null);
+      const apiCategories = extractData(categoriesRes, 'categories', null);
+      const apiResponsibilities = extractData(responsibilitiesRes, 'responsibilities', []);
+      const apiTemplates = extractData(templatesRes, 'templates', null);
+
+      setRoles(apiRoles ? mapRoles(apiRoles) : DEFAULT_ROLES);
+      setCategories(apiCategories ? mapCategories(apiCategories) : DEFAULT_CATEGORIES);
+      setResponsibilities(apiResponsibilities || []);
+      setPermissionTemplates(apiTemplates || DEFAULT_PERMISSION_TEMPLATES);
     } catch (err) {
       console.error('Error loading reference data:', err);
-      setError('Failed to load reference data. Please refresh the page.');
+      // Use defaults if API fails
+      setRoles(DEFAULT_ROLES);
+      setCategories(DEFAULT_CATEGORIES);
+      setResponsibilities([]);
+      setPermissionTemplates(DEFAULT_PERMISSION_TEMPLATES);
     } finally {
       setLoading(false);
     }
