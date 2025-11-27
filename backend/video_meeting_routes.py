@@ -1138,3 +1138,537 @@ async def get_meeting_stats(
             "total_meeting_hours": round(total_duration / 60, 1)
         }
     }
+
+
+# ============================================================================
+# TWILIO CONFERENCE & RECORDING CALLBACKS
+# ============================================================================
+
+@router.post("/twilio/connect/{room_code}")
+async def twilio_connect_to_meeting(
+    room_code: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """TwiML endpoint for connecting participant to meeting conference."""
+    from fastapi.responses import Response
+
+    try:
+        from uvip.recording_service import get_recording_service
+        recording_service = get_recording_service()
+
+        # Get caller info from Twilio request
+        form_data = await request.form()
+        caller = form_data.get("Caller", "Unknown")
+        caller_name = form_data.get("CallerName", caller)
+
+        # Generate conference TwiML
+        twiml = recording_service.get_conference_twiml(
+            meeting_room_id=room_code,
+            participant_name=caller_name,
+            is_host=False  # First caller or determined by other logic
+        )
+
+        return Response(content=twiml, media_type="application/xml")
+
+    except Exception as e:
+        logger.error(f"Twilio connect error: {e}")
+        from twilio.twiml.voice_response import VoiceResponse
+        response = VoiceResponse()
+        response.say("Sorry, there was an error connecting to the meeting. Please try again.")
+        return Response(content=str(response), media_type="application/xml")
+
+
+@router.post("/twilio/recording-callback/{room_code}")
+async def twilio_recording_callback(
+    room_code: str,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """Handle Twilio recording completion callback."""
+    if _models is None:
+        return {"error": "Models not initialized"}
+
+    VideoMeetingRoom = _models.get('VideoMeetingRoom')
+    MeetingRecording = _models.get('MeetingRecording')
+
+    try:
+        form_data = await request.form()
+
+        recording_sid = form_data.get("RecordingSid")
+        recording_url = form_data.get("RecordingUrl")
+        recording_duration = int(form_data.get("RecordingDuration", 0))
+        recording_status = form_data.get("RecordingStatus")
+
+        logger.info(f"Recording callback for {room_code}: SID={recording_sid}, Status={recording_status}")
+
+        if recording_status != "completed":
+            return {"status": "acknowledged", "recording_status": recording_status}
+
+        # Find the meeting room
+        room = db.query(VideoMeetingRoom).filter(
+            VideoMeetingRoom.room_code == room_code
+        ).first()
+
+        if not room:
+            logger.error(f"Meeting room {room_code} not found for recording callback")
+            return {"error": "Meeting not found"}
+
+        # Create recording record
+        recording = MeetingRecording(
+            meeting_id=room.id,
+            recording_uuid=recording_sid,
+            recording_name=f"{room.room_name} - Recording",
+            storage_provider="twilio",
+            storage_path=recording_url,
+            duration_seconds=recording_duration,
+            audio_format="mp3",
+            status="processing",
+            recording_started_at=room.actual_start,
+            recording_ended_at=datetime.utcnow(),
+            transcription_requested=room.transcription_enabled,
+            created_by=room.host_user_id
+        )
+
+        db.add(recording)
+        db.commit()
+        db.refresh(recording)
+
+        # Trigger AI processing in background
+        background_tasks.add_task(
+            process_recording_ai,
+            recording.id,
+            room.id,
+            room.transcription_enabled
+        )
+
+        return {
+            "success": True,
+            "recording_id": recording.id,
+            "status": "processing"
+        }
+
+    except Exception as e:
+        logger.error(f"Recording callback error: {e}")
+        return {"error": str(e)}
+
+
+@router.post("/twilio/call-status/{room_code}")
+async def twilio_call_status_callback(
+    room_code: str,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Handle Twilio call status updates."""
+    try:
+        form_data = await request.form()
+
+        call_sid = form_data.get("CallSid")
+        call_status = form_data.get("CallStatus")
+
+        logger.info(f"Call status update for {room_code}: SID={call_sid}, Status={call_status}")
+
+        # Update participant status based on call status
+        if _models:
+            MeetingParticipant = _models.get('MeetingParticipant')
+            VideoMeetingRoom = _models.get('VideoMeetingRoom')
+
+            room = db.query(VideoMeetingRoom).filter(
+                VideoMeetingRoom.room_code == room_code
+            ).first()
+
+            if room and MeetingParticipant:
+                # Find participant by call SID (stored in settings)
+                # Update their status accordingly
+                pass
+
+        return {"status": "acknowledged"}
+
+    except Exception as e:
+        logger.error(f"Call status callback error: {e}")
+        return {"error": str(e)}
+
+
+async def process_recording_ai(recording_id: int, meeting_id: int, transcription_enabled: bool):
+    """Background task to process recording with AI."""
+    from database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        from uvip.recording_service import get_recording_service
+        from uvip.ai_processing_service import get_ai_processing_service
+
+        recording_service = get_recording_service()
+        ai_service = get_ai_processing_service()
+
+        MeetingRecording = _models.get('MeetingRecording')
+        RecordingTranscript = _models.get('RecordingTranscript')
+        MeetingAIAnalysis = _models.get('MeetingAIAnalysis')
+        VideoMeetingRoom = _models.get('VideoMeetingRoom')
+
+        recording = db.query(MeetingRecording).filter(MeetingRecording.id == recording_id).first()
+        if not recording:
+            return
+
+        room = db.query(VideoMeetingRoom).filter(VideoMeetingRoom.id == meeting_id).first()
+        if not room:
+            return
+
+        # Step 1: Download recording from Twilio
+        audio_content = await recording_service.download_recording(recording.recording_uuid)
+        if not audio_content:
+            recording.status = "failed"
+            recording.error_message = "Failed to download recording"
+            db.commit()
+            return
+
+        recording.file_size_bytes = len(audio_content)
+
+        # Step 2: Transcribe if enabled
+        transcript_text = ""
+        if transcription_enabled and RecordingTranscript:
+            transcription_result = await ai_service.transcribe_audio(audio_content)
+
+            if transcription_result.get("transcript"):
+                transcript = RecordingTranscript(
+                    recording_id=recording.id,
+                    meeting_id=meeting_id,
+                    status="completed",
+                    full_transcript=transcription_result["transcript"],
+                    transcript_json=transcription_result.get("segments", []),
+                    transcription_provider="whisper",
+                    language=transcription_result.get("language", "en"),
+                    word_count=len(transcription_result["transcript"].split()),
+                    processing_completed_at=datetime.utcnow()
+                )
+                db.add(transcript)
+                db.commit()
+
+                transcript_text = transcription_result["transcript"]
+
+        # Step 3: AI Analysis
+        if transcript_text and MeetingAIAnalysis:
+            meeting_context = {
+                "title": room.room_name,
+                "meeting_type": room.meeting_type,
+                "participants": [],
+                "duration_minutes": recording.duration_seconds // 60 if recording.duration_seconds else 0
+            }
+
+            analysis_result = await ai_service.analyze_meeting(transcript_text, meeting_context)
+
+            if not analysis_result.get("error"):
+                # Save structured analysis
+                analysis = MeetingAIAnalysis(
+                    meeting_id=meeting_id,
+                    recording_id=recording.id,
+                    analysis_type="full_analysis",
+                    status="completed",
+                    content=analysis_result.get("summary"),
+                    structured_content=analysis_result,
+                    model_provider="anthropic",
+                    model_name="claude-sonnet-4"
+                )
+                db.add(analysis)
+
+                # Update room with AI summary
+                room.ai_summary = analysis_result.get("summary")
+                room.ai_action_items = analysis_result.get("action_items")
+                room.ai_key_topics = analysis_result.get("key_topics")
+
+        # Mark recording as ready
+        recording.status = "ready"
+        recording.processing_completed_at = datetime.utcnow()
+        db.commit()
+
+        logger.info(f"Recording {recording_id} processed successfully")
+
+    except Exception as e:
+        logger.error(f"Error processing recording {recording_id}: {e}")
+        if db:
+            recording = db.query(MeetingRecording).filter(MeetingRecording.id == recording_id).first()
+            if recording:
+                recording.status = "failed"
+                recording.error_message = str(e)
+                db.commit()
+    finally:
+        db.close()
+
+
+# ============================================================================
+# CRM INTEGRATION ENDPOINTS
+# ============================================================================
+
+@router.post("/rooms/{room_id}/link-crm")
+async def link_meeting_to_crm(
+    room_id: int,
+    entity_type: str = Body(...),  # loan, lead, contact
+    entity_id: int = Body(...),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Link meeting to a CRM entity (loan, lead, or contact)."""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Models not initialized")
+
+    VideoMeetingRoom = _models.get('VideoMeetingRoom')
+
+    room = db.query(VideoMeetingRoom).filter(VideoMeetingRoom.id == room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+
+    # Update the appropriate foreign key
+    if entity_type == "loan":
+        room.loan_id = entity_id
+    elif entity_type == "lead":
+        room.lead_id = entity_id
+    elif entity_type == "contact":
+        room.contact_id = entity_id
+    else:
+        raise HTTPException(status_code=400, detail="Invalid entity type. Use: loan, lead, or contact")
+
+    # Store additional metadata
+    if not room.settings:
+        room.settings = {}
+    room.settings["crm_entity_type"] = entity_type
+    room.settings["crm_entity_id"] = entity_id
+
+    room.updated_at = datetime.utcnow()
+    db.commit()
+
+    return {
+        "success": True,
+        "linked_to": f"{entity_type}:{entity_id}"
+    }
+
+
+@router.get("/crm/{entity_type}/{entity_id}/meetings")
+async def get_entity_meetings(
+    entity_type: str,
+    entity_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Get all meetings linked to a CRM entity."""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Models not initialized")
+
+    VideoMeetingRoom = _models.get('VideoMeetingRoom')
+
+    # Build query based on entity type
+    if entity_type == "loan":
+        meetings = db.query(VideoMeetingRoom).filter(
+            VideoMeetingRoom.loan_id == entity_id
+        ).order_by(VideoMeetingRoom.scheduled_start.desc()).all()
+    elif entity_type == "lead":
+        meetings = db.query(VideoMeetingRoom).filter(
+            VideoMeetingRoom.lead_id == entity_id
+        ).order_by(VideoMeetingRoom.scheduled_start.desc()).all()
+    elif entity_type == "contact":
+        meetings = db.query(VideoMeetingRoom).filter(
+            VideoMeetingRoom.contact_id == entity_id
+        ).order_by(VideoMeetingRoom.scheduled_start.desc()).all()
+    else:
+        raise HTTPException(status_code=400, detail="Invalid entity type")
+
+    return {
+        "meetings": [
+            {
+                "id": m.id,
+                "room_code": m.room_code,
+                "room_name": m.room_name,
+                "meeting_type": m.meeting_type,
+                "scheduled_start": m.scheduled_start.isoformat() if m.scheduled_start else None,
+                "status": m.status,
+                "duration_minutes": m.duration_minutes,
+                "has_recording": False,  # Would need to check recordings table
+                "ai_summary": m.ai_summary[:200] + "..." if m.ai_summary and len(m.ai_summary) > 200 else m.ai_summary
+            }
+            for m in meetings
+        ],
+        "total": len(meetings)
+    }
+
+
+# ============================================================================
+# RECORDING TRANSCRIPT & ANALYSIS ENDPOINTS
+# ============================================================================
+
+@router.get("/recordings/{recording_id}/transcript")
+async def get_recording_transcript(
+    recording_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Get transcript for a recording."""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Models not initialized")
+
+    RecordingTranscript = _models.get('RecordingTranscript')
+    if RecordingTranscript is None:
+        return {"error": "Transcripts not available"}
+
+    transcript = db.query(RecordingTranscript).filter(
+        RecordingTranscript.recording_id == recording_id
+    ).first()
+
+    if not transcript:
+        raise HTTPException(status_code=404, detail="Transcript not found")
+
+    return {
+        "transcript_id": transcript.id,
+        "recording_id": transcript.recording_id,
+        "status": transcript.status,
+        "full_transcript": transcript.full_transcript,
+        "segments": transcript.transcript_json or [],
+        "language": transcript.language,
+        "word_count": transcript.word_count,
+        "speakers_detected": transcript.speakers_detected,
+        "speaker_mapping": transcript.speaker_mapping
+    }
+
+
+@router.get("/recordings/{recording_id}/analysis")
+async def get_recording_analysis(
+    recording_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Get AI analysis for a recording."""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Models not initialized")
+
+    MeetingAIAnalysis = _models.get('MeetingAIAnalysis')
+    if MeetingAIAnalysis is None:
+        return {"error": "Analysis not available"}
+
+    analysis = db.query(MeetingAIAnalysis).filter(
+        MeetingAIAnalysis.recording_id == recording_id
+    ).first()
+
+    if not analysis:
+        raise HTTPException(status_code=404, detail="Analysis not found")
+
+    structured = analysis.structured_content or {}
+
+    return {
+        "analysis_id": analysis.id,
+        "recording_id": analysis.recording_id,
+        "status": analysis.status,
+        "summary": analysis.content or structured.get("summary"),
+        "key_topics": structured.get("key_topics", []),
+        "action_items": structured.get("action_items", []),
+        "decisions_made": structured.get("decisions_made", []),
+        "questions_discussed": structured.get("questions_discussed", []),
+        "sentiment": structured.get("sentiment", {}),
+        "engagement_metrics": structured.get("engagement_metrics", {}),
+        "mortgage_insights": structured.get("mortgage_insights", {}),
+        "compliance_notes": structured.get("compliance_notes", []),
+        "follow_up_recommendations": structured.get("follow_up_recommendations", [])
+    }
+
+
+@router.post("/recordings/{recording_id}/reprocess")
+async def reprocess_recording(
+    recording_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Reprocess a recording for AI analysis."""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Models not initialized")
+
+    MeetingRecording = _models.get('MeetingRecording')
+
+    recording = db.query(MeetingRecording).filter(MeetingRecording.id == recording_id).first()
+    if not recording:
+        raise HTTPException(status_code=404, detail="Recording not found")
+
+    # Reset status and trigger reprocessing
+    recording.status = "processing"
+    db.commit()
+
+    background_tasks.add_task(
+        process_recording_ai,
+        recording.id,
+        recording.meeting_id,
+        True  # Enable transcription
+    )
+
+    return {"success": True, "status": "reprocessing"}
+
+
+# ============================================================================
+# PHONE DIAL-OUT FOR MEETINGS
+# ============================================================================
+
+@router.post("/rooms/{room_code}/dial-participant")
+async def dial_participant(
+    room_code: str,
+    phone_number: str = Body(...),
+    participant_name: str = Body(default="Participant"),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Dial out to a participant and connect them to the meeting."""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Models not initialized")
+
+    VideoMeetingRoom = _models.get('VideoMeetingRoom')
+    MeetingParticipant = _models.get('MeetingParticipant')
+
+    room = db.query(VideoMeetingRoom).filter(VideoMeetingRoom.room_code == room_code).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+
+    if room.status not in ["scheduled", "active", "waiting"]:
+        raise HTTPException(status_code=400, detail="Meeting is not active")
+
+    try:
+        from uvip.recording_service import get_recording_service
+        recording_service = get_recording_service()
+
+        if not recording_service.enabled:
+            raise HTTPException(status_code=503, detail="Telephony service not available")
+
+        # Get user's caller ID
+        from_phone = recording_service.from_number
+
+        # Start the call
+        call_sid = await recording_service.start_recorded_call(
+            meeting_room_id=room_code,
+            participant_phone=phone_number,
+            from_phone=from_phone,
+            participant_name=participant_name
+        )
+
+        if not call_sid:
+            raise HTTPException(status_code=500, detail="Failed to initiate call")
+
+        # Create participant record
+        if MeetingParticipant:
+            participant = MeetingParticipant(
+                meeting_id=room.id,
+                display_name=participant_name,
+                role="participant",
+                status="invited",
+                device_type="phone"
+            )
+            # Store call SID for tracking
+            participant.connection_quality = call_sid  # Temporary storage
+
+            db.add(participant)
+            db.commit()
+
+        return {
+            "success": True,
+            "call_sid": call_sid,
+            "phone_number": phone_number,
+            "participant_name": participant_name
+        }
+
+    except Exception as e:
+        logger.error(f"Dial participant error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

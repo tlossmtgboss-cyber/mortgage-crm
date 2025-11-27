@@ -3003,6 +3003,11 @@ class MUMClientCreate(BaseModel):
     original_close_date: datetime
     original_rate: float
     loan_balance: float
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    original_loan_number: Optional[str] = None
+    status: Optional[str] = "Active"
+    notes: Optional[str] = None
 
 class MUMClientUpdate(BaseModel):
     name: Optional[str] = None
@@ -23446,9 +23451,13 @@ async def create_mum_client(client: MUMClientCreate, db: Session = Depends(get_d
     original_close_dt = client.original_close_date if client.original_close_date.tzinfo else client.original_close_date.replace(tzinfo=timezone.utc)
     days_since = (datetime.now(timezone.utc) - original_close_dt).days
 
+    # Get only the fields that exist in the MUMClient model
+    client_data = client.model_dump(exclude={'original_loan_number'})
+
     db_client = MUMClient(
-        **client.model_dump(),
-        days_since_funding=days_since
+        **client_data,
+        days_since_funding=days_since,
+        user_id=current_user.id
     )
 
     db.add(db_client)
