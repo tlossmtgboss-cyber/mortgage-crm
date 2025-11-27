@@ -10776,6 +10776,35 @@ async def debug_video_meetings_status():
         return {"status": "failed", "error": _video_meeting_error}
     return {"status": "loaded"}
 
+# Include Video Clip routes (UVIP - Async Video Messages)
+_video_clip_error = None
+try:
+    from video_clip_models import create_video_clip_models
+    from video_clip_routes import router as video_clip_router, set_dependencies as set_video_clip_deps
+
+    # Create video clip models using our Base
+    video_clip_models = create_video_clip_models(Base)
+
+    # Set dependencies for the routes
+    set_video_clip_deps(get_db, get_current_user, video_clip_models)
+
+    # Include the router
+    app.include_router(video_clip_router, tags=["Video Clips"])
+    logger.info("✅ Video Clip (UVIP Async) routes loaded")
+except Exception as e:
+    import traceback
+    _video_clip_error = f"{e}\n{traceback.format_exc()}"
+    logger.error(f"⚠️ Could not load Video Clip routes: {e}")
+    logger.error(f"Traceback: {traceback.format_exc()}")
+
+# Debug endpoint to check video clip loading status
+@app.get("/api/v1/debug/video-clips-status", tags=["Debug"])
+async def debug_video_clips_status():
+    """Check if video clip routes loaded successfully"""
+    if _video_clip_error:
+        return {"status": "failed", "error": _video_clip_error}
+    return {"status": "loaded"}
+
 # Include Market Chat routes
 from market_chat_routes import router as market_chat_router
 app.include_router(market_chat_router, tags=["Market Chat"])
