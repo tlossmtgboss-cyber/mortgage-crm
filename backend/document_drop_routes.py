@@ -196,34 +196,58 @@ async def upload_document(
         # Determine storage path (in production, upload to S3/GCS)
         storage_path = f"documents/{datetime.now().strftime('%Y/%m/%d')}/{unique_filename}"
 
-        # Map string doc_type to enum
+        # Map incoming doc_type to DocumentType enum
+        doc_type_mapping = {
+            'PAY_STUB': 'PAYSTUB',
+            'PAYSTUB': 'PAYSTUB',
+            'W2': 'W2',
+            'TAX_RETURN': 'TAX_RETURN_1040',
+            'BANK_STATEMENT': 'BANK_STATEMENT',
+            'INVESTMENT_STATEMENT': 'INVESTMENT_STATEMENT',
+            'DRIVERS_LICENSE': 'DRIVERS_LICENSE',
+            'PASSPORT': 'PASSPORT',
+            'PURCHASE_CONTRACT': 'PURCHASE_CONTRACT',
+            'APPRAISAL': 'APPRAISAL',
+            'TITLE_REPORT': 'TITLE_COMMITMENT',
+            'INSURANCE_DECLARATION': 'HOMEOWNERS_INSURANCE',
+            'CREDIT_REPORT': 'CREDIT_REPORT',
+            'LOAN_ESTIMATE': 'LOAN_ESTIMATE',
+            'CLOSING_DISCLOSURE': 'CLOSING_DISCLOSURE',
+            'OTHER': 'MISC',
+        }
+
+        mapped_type = doc_type_mapping.get(doc_type, 'MISC')
         try:
-            doc_type_enum = DocumentType(doc_type)
-        except ValueError:
-            doc_type_enum = DocumentType.OTHER
+            doc_type_enum = DocumentType[mapped_type]
+        except (KeyError, ValueError):
+            doc_type_enum = DocumentType.MISC
 
         # Determine category based on doc type
         category_mapping = {
-            'PAY_STUB': 'INCOME',
+            'PAYSTUB': 'INCOME',
             'W2': 'INCOME',
-            'TAX_RETURN': 'INCOME',
+            'TAX_RETURN_1040': 'INCOME',
+            'TAX_RETURN_1099': 'INCOME',
             'BANK_STATEMENT': 'ASSETS',
             'INVESTMENT_STATEMENT': 'ASSETS',
+            'RETIREMENT_STATEMENT': 'ASSETS',
             'DRIVERS_LICENSE': 'IDENTITY',
             'PASSPORT': 'IDENTITY',
             'PURCHASE_CONTRACT': 'PROPERTY',
             'APPRAISAL': 'PROPERTY',
-            'TITLE_REPORT': 'PROPERTY',
-            'INSURANCE_DECLARATION': 'PROPERTY',
+            'TITLE_COMMITMENT': 'PROPERTY',
+            'HOMEOWNERS_INSURANCE': 'PROPERTY',
             'CREDIT_REPORT': 'CREDIT',
             'LOAN_ESTIMATE': 'DISCLOSURES',
             'CLOSING_DISCLOSURE': 'DISCLOSURES',
         }
 
+        category_name = category_mapping.get(mapped_type, 'MISC')
         try:
-            doc_category = DocumentCategory(category_mapping.get(doc_type, 'OTHER'))
-        except ValueError:
-            doc_category = DocumentCategory.OTHER
+            doc_category = DocumentCategory[category_name]
+        except (KeyError, ValueError):
+            # Default to INCOME if not found
+            doc_category = DocumentCategory.INCOME
 
         # Create document record
         doc = Document(
