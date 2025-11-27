@@ -2564,6 +2564,7 @@ class DialerTaskStatus(str, enum.Enum):
     SKIPPED = "skipped"
 
 class CallOutcome(str, enum.Enum):
+    INITIATED = "initiated"  # Call just started, outcome TBD
     COMPLETED = "completed"
     NO_ANSWER = "no_answer"
     BUSY = "busy"
