@@ -166,8 +166,18 @@ function Users() {
         <div className="section-header">
           <h2>Team Members ({teamMembers.length})</h2>
           <div className="header-actions">
-            <button className="btn-add-member" onClick={() => setShowAddMemberModal(true)}>
-              + Add Team Member
+            <button
+              className="btn-bulk-upload"
+              onClick={() => window.location.href = '/users/bulk-upload'}
+              style={{ marginRight: '8px', background: '#f3f4f6', color: '#374151', border: '1px solid #d1d5db' }}
+            >
+              Bulk Upload
+            </button>
+            <button
+              className="btn-add-member"
+              onClick={() => window.location.href = '/users/create'}
+            >
+              + Create User
             </button>
           </div>
         </div>

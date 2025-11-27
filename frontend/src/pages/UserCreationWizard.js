@@ -1,0 +1,870 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import axios from 'axios';
+import './UserCreationWizard.css';
+
+// Use HTTPS Railway URL in production, localhost for development
+const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+const API_BASE_URL = isProduction
+  ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+  : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
+
+// Wizard Steps
+const STEPS = {
+  BASIC_INFO: 'basic_info',
+  ROLE_BUILDER: 'role_builder',
+  PERMISSIONS: 'permissions',
+  REVIEW: 'review',
+  SCORECARD: 'scorecard',
+  ACTIVATION: 'activation'
+};
+
+const STEP_ORDER = [
+  STEPS.BASIC_INFO,
+  STEPS.ROLE_BUILDER,
+  STEPS.PERMISSIONS,
+  STEPS.REVIEW,
+  STEPS.SCORECARD,
+  STEPS.ACTIVATION
+];
+
+const STEP_LABELS = {
+  [STEPS.BASIC_INFO]: 'Basic Info',
+  [STEPS.ROLE_BUILDER]: 'Role Builder',
+  [STEPS.PERMISSIONS]: 'Permissions',
+  [STEPS.REVIEW]: 'Review',
+  [STEPS.SCORECARD]: 'Scorecard',
+  [STEPS.ACTIVATION]: 'Activation'
+};
+
+function UserCreationWizard() {
+  const [currentStep, setCurrentStep] = useState(STEPS.BASIC_INFO);
+  const [sessionId, setSessionId] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Reference data from API
+  const [roles, setRoles] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [responsibilities, setResponsibilities] = useState([]);
+  const [permissionTemplates, setPermissionTemplates] = useState([]);
+
+  // Form data
+  const [formData, setFormData] = useState({
+    // Basic Info
+    first_name: '',
+    last_name: '',
+    email: '',
+    phone: '',
+    department: '',
+    job_title: '',
+    // Role Builder
+    role_id: null,
+    selected_categories: [],
+    selected_responsibilities: [],
+    // Permissions
+    permission_template_id: null,
+    custom_permissions: {},
+    // Generated data
+    scorecard: null,
+    created_user_id: null,
+    activation_token: null
+  });
+
+  const getAuthHeaders = useCallback(() => {
+    const token = localStorage.getItem('token');
+    return {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    };
+  }, []);
+
+  // Load reference data on mount
+  useEffect(() => {
+    loadReferenceData();
+  }, []);
+
+  const loadReferenceData = async () => {
+    setLoading(true);
+    try {
+      const [rolesRes, categoriesRes, responsibilitiesRes, templatesRes] = await Promise.all([
+        axios.get(`${API_BASE_URL}/api/v1/onboarding/roles`, getAuthHeaders()),
+        axios.get(`${API_BASE_URL}/api/v1/onboarding/categories`, getAuthHeaders()),
+        axios.get(`${API_BASE_URL}/api/v1/onboarding/responsibilities`, getAuthHeaders()),
+        axios.get(`${API_BASE_URL}/api/v1/onboarding/permission-templates`, getAuthHeaders())
+      ]);
+
+      setRoles(rolesRes.data || []);
+      setCategories(categoriesRes.data || []);
+      setResponsibilities(responsibilitiesRes.data || []);
+      setPermissionTemplates(templatesRes.data || []);
+    } catch (err) {
+      console.error('Error loading reference data:', err);
+      setError('Failed to load reference data. Please refresh the page.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const goToStep = (step) => {
+    setCurrentStep(step);
+    setError(null);
+  };
+
+  const nextStep = () => {
+    const currentIndex = STEP_ORDER.indexOf(currentStep);
+    if (currentIndex < STEP_ORDER.length - 1) {
+      setCurrentStep(STEP_ORDER[currentIndex + 1]);
+      setError(null);
+    }
+  };
+
+  const prevStep = () => {
+    const currentIndex = STEP_ORDER.indexOf(currentStep);
+    if (currentIndex > 0) {
+      setCurrentStep(STEP_ORDER[currentIndex - 1]);
+      setError(null);
+    }
+  };
+
+  const updateFormData = (updates) => {
+    setFormData(prev => ({ ...prev, ...updates }));
+  };
+
+  // When role is selected, auto-populate categories and responsibilities
+  const handleRoleSelect = async (roleId) => {
+    updateFormData({ role_id: roleId });
+
+    if (roleId) {
+      try {
+        const response = await axios.get(
+          `${API_BASE_URL}/api/v1/onboarding/roles/${roleId}/defaults`,
+          getAuthHeaders()
+        );
+        const defaults = response.data;
+        updateFormData({
+          selected_categories: defaults.category_ids || [],
+          selected_responsibilities: defaults.responsibility_ids || []
+        });
+      } catch (err) {
+        console.error('Error loading role defaults:', err);
+      }
+    }
+  };
+
+  // Create user and generate scorecard
+  const handleCreateUser = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const payload = {
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        email: formData.email,
+        phone: formData.phone || null,
+        department: formData.department || null,
+        job_title: formData.job_title || null,
+        role_id: formData.role_id,
+        category_ids: formData.selected_categories,
+        responsibility_ids: formData.selected_responsibilities,
+        permission_template_id: formData.permission_template_id,
+        custom_permissions: formData.custom_permissions
+      };
+
+      const response = await axios.post(
+        `${API_BASE_URL}/api/v1/onboarding/users/create`,
+        payload,
+        getAuthHeaders()
+      );
+
+      const result = response.data;
+      updateFormData({
+        created_user_id: result.user_id,
+        scorecard: result.scorecard,
+        activation_token: result.activation_token
+      });
+
+      nextStep(); // Move to scorecard step
+    } catch (err) {
+      console.error('Error creating user:', err);
+      setError(err.response?.data?.detail || 'Failed to create user. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Send activation email
+  const handleSendActivation = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      await axios.post(
+        `${API_BASE_URL}/api/v1/onboarding/users/${formData.created_user_id}/send-activation`,
+        {},
+        getAuthHeaders()
+      );
+
+      nextStep(); // Move to activation confirmation
+    } catch (err) {
+      console.error('Error sending activation:', err);
+      setError(err.response?.data?.detail || 'Failed to send activation email.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const renderStepIndicator = () => (
+    <div className="wizard-steps">
+      {STEP_ORDER.map((step, index) => {
+        const isActive = step === currentStep;
+        const isPast = STEP_ORDER.indexOf(currentStep) > index;
+        return (
+          <div
+            key={step}
+            className={`wizard-step ${isActive ? 'active' : ''} ${isPast ? 'completed' : ''}`}
+            onClick={() => isPast && goToStep(step)}
+          >
+            <div className="step-number">{isPast ? '✓' : index + 1}</div>
+            <div className="step-label">{STEP_LABELS[step]}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  const renderBasicInfo = () => (
+    <div className="wizard-content">
+      <h2>Basic Information</h2>
+      <p className="step-description">Enter the new team member's basic information.</p>
+
+      <div className="form-grid">
+        <div className="form-group">
+          <label>First Name *</label>
+          <input
+            type="text"
+            value={formData.first_name}
+            onChange={(e) => updateFormData({ first_name: e.target.value })}
+            placeholder="Enter first name"
+            required
+          />
+        </div>
+
+        <div className="form-group">
+          <label>Last Name *</label>
+          <input
+            type="text"
+            value={formData.last_name}
+            onChange={(e) => updateFormData({ last_name: e.target.value })}
+            placeholder="Enter last name"
+            required
+          />
+        </div>
+
+        <div className="form-group full-width">
+          <label>Email Address *</label>
+          <input
+            type="email"
+            value={formData.email}
+            onChange={(e) => updateFormData({ email: e.target.value })}
+            placeholder="Enter email address"
+            required
+          />
+        </div>
+
+        <div className="form-group">
+          <label>Phone Number</label>
+          <input
+            type="tel"
+            value={formData.phone}
+            onChange={(e) => updateFormData({ phone: e.target.value })}
+            placeholder="(555) 555-5555"
+          />
+        </div>
+
+        <div className="form-group">
+          <label>Department</label>
+          <input
+            type="text"
+            value={formData.department}
+            onChange={(e) => updateFormData({ department: e.target.value })}
+            placeholder="e.g., Operations, Sales"
+          />
+        </div>
+
+        <div className="form-group full-width">
+          <label>Job Title</label>
+          <input
+            type="text"
+            value={formData.job_title}
+            onChange={(e) => updateFormData({ job_title: e.target.value })}
+            placeholder="e.g., Senior Loan Officer"
+          />
+        </div>
+      </div>
+
+      <div className="wizard-actions">
+        <button className="btn-secondary" disabled>Back</button>
+        <button
+          className="btn-primary"
+          onClick={nextStep}
+          disabled={!formData.first_name || !formData.last_name || !formData.email}
+        >
+          Continue to Role Builder
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderRoleBuilder = () => {
+    const selectedRole = roles.find(r => r.id === formData.role_id);
+
+    // Group responsibilities by category
+    const responsibilitiesByCategory = {};
+    formData.selected_categories.forEach(catId => {
+      const cat = categories.find(c => c.id === catId);
+      if (cat) {
+        responsibilitiesByCategory[catId] = {
+          category: cat,
+          responsibilities: responsibilities.filter(r => r.category_id === catId)
+        };
+      }
+    });
+
+    return (
+      <div className="wizard-content">
+        <h2>Role Builder</h2>
+        <p className="step-description">Select a role template, then customize categories and responsibilities.</p>
+
+        {/* Role Selection */}
+        <div className="section">
+          <h3>Select Role Template</h3>
+          <div className="role-grid">
+            {roles.map(role => (
+              <div
+                key={role.id}
+                className={`role-card ${formData.role_id === role.id ? 'selected' : ''}`}
+                onClick={() => handleRoleSelect(role.id)}
+              >
+                <h4>{role.display_name}</h4>
+                <p>{role.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Categories Selection */}
+        {selectedRole && (
+          <div className="section">
+            <h3>Assign Categories</h3>
+            <p className="section-hint">Select the functional areas this user will work in.</p>
+            <div className="checkbox-grid">
+              {categories.map(category => (
+                <label key={category.id} className="checkbox-card">
+                  <input
+                    type="checkbox"
+                    checked={formData.selected_categories.includes(category.id)}
+                    onChange={(e) => {
+                      const updated = e.target.checked
+                        ? [...formData.selected_categories, category.id]
+                        : formData.selected_categories.filter(id => id !== category.id);
+                      updateFormData({ selected_categories: updated });
+                    }}
+                  />
+                  <div className="checkbox-content">
+                    <span className="checkbox-title">{category.display_name}</span>
+                    <span className="checkbox-desc">{category.description}</span>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Responsibilities Selection */}
+        {Object.keys(responsibilitiesByCategory).length > 0 && (
+          <div className="section">
+            <h3>Assign Responsibilities</h3>
+            <p className="section-hint">Select specific tasks and duties within each category.</p>
+
+            {Object.entries(responsibilitiesByCategory).map(([catId, data]) => (
+              <div key={catId} className="responsibility-group">
+                <h4>{data.category.display_name}</h4>
+                <div className="checkbox-list">
+                  {data.responsibilities.map(resp => (
+                    <label key={resp.id} className="checkbox-item">
+                      <input
+                        type="checkbox"
+                        checked={formData.selected_responsibilities.includes(resp.id)}
+                        onChange={(e) => {
+                          const updated = e.target.checked
+                            ? [...formData.selected_responsibilities, resp.id]
+                            : formData.selected_responsibilities.filter(id => id !== resp.id);
+                          updateFormData({ selected_responsibilities: updated });
+                        }}
+                      />
+                      <span>{resp.display_name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="wizard-actions">
+          <button className="btn-secondary" onClick={prevStep}>Back</button>
+          <button
+            className="btn-primary"
+            onClick={nextStep}
+            disabled={!formData.role_id || formData.selected_categories.length === 0}
+          >
+            Continue to Permissions
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderPermissions = () => {
+    const [permissionMode, setPermissionMode] = useState('template');
+
+    return (
+      <div className="wizard-content">
+        <h2>Permissions</h2>
+        <p className="step-description">Configure system access permissions for this user.</p>
+
+        {/* Permission Mode Toggle */}
+        <div className="permission-mode-toggle">
+          <button
+            className={permissionMode === 'template' ? 'active' : ''}
+            onClick={() => setPermissionMode('template')}
+          >
+            Use Template
+          </button>
+          <button
+            className={permissionMode === 'custom' ? 'active' : ''}
+            onClick={() => setPermissionMode('custom')}
+          >
+            Custom Permissions
+          </button>
+        </div>
+
+        {permissionMode === 'template' ? (
+          <div className="section">
+            <h3>Select Permission Template</h3>
+            <div className="template-grid">
+              {permissionTemplates.map(template => (
+                <div
+                  key={template.id}
+                  className={`template-card ${formData.permission_template_id === template.id ? 'selected' : ''}`}
+                  onClick={() => updateFormData({ permission_template_id: template.id })}
+                >
+                  <h4>{template.name}</h4>
+                  <p>{template.description}</p>
+                  <div className="template-permissions">
+                    {template.permissions && Object.entries(template.permissions).slice(0, 4).map(([key, value]) => (
+                      <span key={key} className={`permission-badge ${value ? 'granted' : 'denied'}`}>
+                        {key.replace(/_/g, ' ')}
+                      </span>
+                    ))}
+                    {template.permissions && Object.keys(template.permissions).length > 4 && (
+                      <span className="permission-more">+{Object.keys(template.permissions).length - 4} more</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="section">
+            <h3>Custom Permissions</h3>
+            <div className="permissions-editor">
+              <div className="permission-group">
+                <h4>Pipeline Access</h4>
+                <label className="permission-toggle">
+                  <span>View Pipeline</span>
+                  <input
+                    type="checkbox"
+                    checked={formData.custom_permissions.view_pipeline ?? true}
+                    onChange={(e) => updateFormData({
+                      custom_permissions: { ...formData.custom_permissions, view_pipeline: e.target.checked }
+                    })}
+                  />
+                </label>
+                <label className="permission-toggle">
+                  <span>Edit Loans</span>
+                  <input
+                    type="checkbox"
+                    checked={formData.custom_permissions.edit_loans ?? false}
+                    onChange={(e) => updateFormData({
+                      custom_permissions: { ...formData.custom_permissions, edit_loans: e.target.checked }
+                    })}
+                  />
+                </label>
+                <label className="permission-toggle">
+                  <span>Delete Loans</span>
+                  <input
+                    type="checkbox"
+                    checked={formData.custom_permissions.delete_loans ?? false}
+                    onChange={(e) => updateFormData({
+                      custom_permissions: { ...formData.custom_permissions, delete_loans: e.target.checked }
+                    })}
+                  />
+                </label>
+              </div>
+
+              <div className="permission-group">
+                <h4>Contact Management</h4>
+                <label className="permission-toggle">
+                  <span>View Contacts</span>
+                  <input
+                    type="checkbox"
+                    checked={formData.custom_permissions.view_contacts ?? true}
+                    onChange={(e) => updateFormData({
+                      custom_permissions: { ...formData.custom_permissions, view_contacts: e.target.checked }
+                    })}
+                  />
+                </label>
+                <label className="permission-toggle">
+                  <span>Edit Contacts</span>
+                  <input
+                    type="checkbox"
+                    checked={formData.custom_permissions.edit_contacts ?? false}
+                    onChange={(e) => updateFormData({
+                      custom_permissions: { ...formData.custom_permissions, edit_contacts: e.target.checked }
+                    })}
+                  />
+                </label>
+              </div>
+
+              <div className="permission-group">
+                <h4>Reports & Analytics</h4>
+                <label className="permission-toggle">
+                  <span>View Reports</span>
+                  <input
+                    type="checkbox"
+                    checked={formData.custom_permissions.view_reports ?? true}
+                    onChange={(e) => updateFormData({
+                      custom_permissions: { ...formData.custom_permissions, view_reports: e.target.checked }
+                    })}
+                  />
+                </label>
+                <label className="permission-toggle">
+                  <span>Export Data</span>
+                  <input
+                    type="checkbox"
+                    checked={formData.custom_permissions.export_data ?? false}
+                    onChange={(e) => updateFormData({
+                      custom_permissions: { ...formData.custom_permissions, export_data: e.target.checked }
+                    })}
+                  />
+                </label>
+              </div>
+
+              <div className="permission-group">
+                <h4>Administration</h4>
+                <label className="permission-toggle">
+                  <span>Manage Users</span>
+                  <input
+                    type="checkbox"
+                    checked={formData.custom_permissions.manage_users ?? false}
+                    onChange={(e) => updateFormData({
+                      custom_permissions: { ...formData.custom_permissions, manage_users: e.target.checked }
+                    })}
+                  />
+                </label>
+                <label className="permission-toggle">
+                  <span>System Settings</span>
+                  <input
+                    type="checkbox"
+                    checked={formData.custom_permissions.system_settings ?? false}
+                    onChange={(e) => updateFormData({
+                      custom_permissions: { ...formData.custom_permissions, system_settings: e.target.checked }
+                    })}
+                  />
+                </label>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="wizard-actions">
+          <button className="btn-secondary" onClick={prevStep}>Back</button>
+          <button
+            className="btn-primary"
+            onClick={nextStep}
+            disabled={permissionMode === 'template' && !formData.permission_template_id}
+          >
+            Continue to Review
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderReview = () => {
+    const selectedRole = roles.find(r => r.id === formData.role_id);
+    const selectedTemplate = permissionTemplates.find(t => t.id === formData.permission_template_id);
+    const selectedCats = categories.filter(c => formData.selected_categories.includes(c.id));
+    const selectedResps = responsibilities.filter(r => formData.selected_responsibilities.includes(r.id));
+
+    return (
+      <div className="wizard-content">
+        <h2>Review & Confirm</h2>
+        <p className="step-description">Review all information before creating the user account.</p>
+
+        <div className="review-sections">
+          <div className="review-section">
+            <h3>Basic Information</h3>
+            <div className="review-grid">
+              <div className="review-item">
+                <span className="review-label">Name</span>
+                <span className="review-value">{formData.first_name} {formData.last_name}</span>
+              </div>
+              <div className="review-item">
+                <span className="review-label">Email</span>
+                <span className="review-value">{formData.email}</span>
+              </div>
+              {formData.phone && (
+                <div className="review-item">
+                  <span className="review-label">Phone</span>
+                  <span className="review-value">{formData.phone}</span>
+                </div>
+              )}
+              {formData.department && (
+                <div className="review-item">
+                  <span className="review-label">Department</span>
+                  <span className="review-value">{formData.department}</span>
+                </div>
+              )}
+              {formData.job_title && (
+                <div className="review-item">
+                  <span className="review-label">Job Title</span>
+                  <span className="review-value">{formData.job_title}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="review-section">
+            <h3>Role & Responsibilities</h3>
+            <div className="review-item">
+              <span className="review-label">Role</span>
+              <span className="review-value">{selectedRole?.display_name || 'None selected'}</span>
+            </div>
+            <div className="review-item">
+              <span className="review-label">Categories</span>
+              <div className="review-tags">
+                {selectedCats.map(cat => (
+                  <span key={cat.id} className="review-tag">{cat.display_name}</span>
+                ))}
+              </div>
+            </div>
+            <div className="review-item">
+              <span className="review-label">Responsibilities</span>
+              <div className="review-tags">
+                {selectedResps.map(resp => (
+                  <span key={resp.id} className="review-tag small">{resp.display_name}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="review-section">
+            <h3>Permissions</h3>
+            <div className="review-item">
+              <span className="review-label">Permission Template</span>
+              <span className="review-value">
+                {selectedTemplate?.name || 'Custom Permissions'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {error && <div className="error-message">{error}</div>}
+
+        <div className="wizard-actions">
+          <button className="btn-secondary" onClick={prevStep}>Back</button>
+          <button
+            className="btn-primary"
+            onClick={handleCreateUser}
+            disabled={loading}
+          >
+            {loading ? 'Creating User...' : 'Create User & Generate Scorecard'}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderScorecard = () => {
+    const scorecard = formData.scorecard;
+
+    return (
+      <div className="wizard-content">
+        <h2>KPI Scorecard Generated</h2>
+        <p className="step-description">
+          Based on the assigned responsibilities, we've generated a personalized KPI scorecard for this user.
+        </p>
+
+        <div className="scorecard-preview">
+          <div className="scorecard-header">
+            <h3>{formData.first_name} {formData.last_name}'s Scorecard</h3>
+            <span className="scorecard-badge">{scorecard?.kpis?.length || 0} KPIs</span>
+          </div>
+
+          <div className="kpi-list">
+            {scorecard?.kpis?.map((kpi, index) => (
+              <div key={index} className="kpi-item">
+                <div className="kpi-header">
+                  <h4>{kpi.name}</h4>
+                  <span className={`kpi-weight weight-${kpi.weight > 20 ? 'high' : kpi.weight > 10 ? 'medium' : 'low'}`}>
+                    {kpi.weight}% weight
+                  </span>
+                </div>
+                <p className="kpi-description">{kpi.description}</p>
+                <div className="kpi-targets">
+                  <span className="target">
+                    <span className="target-label">Target:</span> {kpi.target} {kpi.unit}
+                  </span>
+                  {kpi.frequency && (
+                    <span className="frequency">{kpi.frequency}</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {(!scorecard?.kpis || scorecard.kpis.length === 0) && (
+            <div className="empty-scorecard">
+              <p>No KPIs were generated. The user's responsibilities may not have associated KPI definitions yet.</p>
+            </div>
+          )}
+        </div>
+
+        <div className="wizard-actions">
+          <button className="btn-secondary" onClick={() => goToStep(STEPS.REVIEW)}>
+            Back to Review
+          </button>
+          <button className="btn-primary" onClick={handleSendActivation} disabled={loading}>
+            {loading ? 'Sending...' : 'Send Activation Email'}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderActivation = () => (
+    <div className="wizard-content activation-complete">
+      <div className="success-icon">✓</div>
+      <h2>User Created Successfully!</h2>
+      <p className="step-description">
+        An activation email has been sent to <strong>{formData.email}</strong>.
+      </p>
+
+      <div className="activation-details">
+        <div className="detail-item">
+          <span className="detail-label">User ID</span>
+          <span className="detail-value">{formData.created_user_id}</span>
+        </div>
+        <div className="detail-item">
+          <span className="detail-label">Status</span>
+          <span className="detail-value status-pending">Pending Activation</span>
+        </div>
+        <div className="detail-item">
+          <span className="detail-label">Activation Link Expires</span>
+          <span className="detail-value">7 days from now</span>
+        </div>
+      </div>
+
+      <div className="next-steps">
+        <h3>Next Steps</h3>
+        <ul>
+          <li>The user will receive an email with instructions to set their password</li>
+          <li>Once activated, they can log in and access their dashboard</li>
+          <li>Their KPI scorecard will be available immediately upon login</li>
+        </ul>
+      </div>
+
+      <div className="wizard-actions centered">
+        <button className="btn-secondary" onClick={() => window.location.href = '/users'}>
+          Back to Users
+        </button>
+        <button
+          className="btn-primary"
+          onClick={() => {
+            setCurrentStep(STEPS.BASIC_INFO);
+            setFormData({
+              first_name: '',
+              last_name: '',
+              email: '',
+              phone: '',
+              department: '',
+              job_title: '',
+              role_id: null,
+              selected_categories: [],
+              selected_responsibilities: [],
+              permission_template_id: null,
+              custom_permissions: {},
+              scorecard: null,
+              created_user_id: null,
+              activation_token: null
+            });
+          }}
+        >
+          Create Another User
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderCurrentStep = () => {
+    switch (currentStep) {
+      case STEPS.BASIC_INFO:
+        return renderBasicInfo();
+      case STEPS.ROLE_BUILDER:
+        return renderRoleBuilder();
+      case STEPS.PERMISSIONS:
+        return renderPermissions();
+      case STEPS.REVIEW:
+        return renderReview();
+      case STEPS.SCORECARD:
+        return renderScorecard();
+      case STEPS.ACTIVATION:
+        return renderActivation();
+      default:
+        return renderBasicInfo();
+    }
+  };
+
+  if (loading && roles.length === 0) {
+    return (
+      <div className="user-creation-wizard">
+        <div className="loading-state">
+          <div className="spinner"></div>
+          <p>Loading wizard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="user-creation-wizard">
+      <div className="wizard-header">
+        <h1>Create New User</h1>
+        <p>Add a new team member to Pipeline 360</p>
+      </div>
+
+      {renderStepIndicator()}
+
+      <div className="wizard-body">
+        {renderCurrentStep()}
+      </div>
+    </div>
+  );
+}
+
+export default UserCreationWizard;

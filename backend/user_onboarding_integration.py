@@ -787,6 +787,20 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
             db.add(audit)
             db.commit()
 
+            # Send activation email
+            email_sent = False
+            try:
+                from email_service import email_service
+                user_full_name = f"{profile.first_name} {profile.last_name}"
+                email_sent = email_service.send_activation_email(
+                    to_email=user.email,
+                    user_name=user_full_name,
+                    activation_token=token
+                )
+            except Exception as email_err:
+                import logging
+                logging.warning(f"Failed to send activation email: {email_err}")
+
             return {
                 "success": True,
                 "data": {
@@ -794,8 +808,154 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
                     "email": user.email,
                     "status": "active_awaiting_setup",
                     "scorecard_id": scorecard.id,
-                    "activation_email_sent": True,
+                    "activation_email_sent": email_sent,
+                    "activation_token": token if not email_sent else None,  # Return token if email failed
                     "activation_token_expires_at": profile.activation_token_expires_at.isoformat()
+                }
+            }
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=str(e))
+
+    @router.post("/users/{user_id}/resend-activation")
+    async def resend_activation_email(
+        user_id: int,
+        db = Depends(get_db),
+        current_user = Depends(get_current_user)
+    ):
+        """Resend activation email for a pending user"""
+        if current_user.permission_role not in ['admin', 'leadership']:
+            raise HTTPException(status_code=403, detail="Permission denied")
+
+        user = db.query(User).filter(User.id == user_id).first()
+        profile = db.query(UserProfile).filter(UserProfile.user_id == user_id).first()
+
+        if not user or not profile:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        if profile.status not in ['pending_setup', 'active_awaiting_setup']:
+            raise HTTPException(status_code=400, detail="User has already activated their account")
+
+        # Generate new token
+        token = generate_activation_token()
+        profile.activation_token = token
+        profile.activation_token_expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+        db.commit()
+
+        # Send activation email
+        email_sent = False
+        try:
+            from email_service import email_service
+            user_full_name = f"{profile.first_name} {profile.last_name}"
+            email_sent = email_service.send_activation_email(
+                to_email=user.email,
+                user_name=user_full_name,
+                activation_token=token
+            )
+        except Exception as email_err:
+            import logging
+            logging.warning(f"Failed to send activation email: {email_err}")
+
+        return {
+            "success": True,
+            "data": {
+                "user_id": user.id,
+                "email": user.email,
+                "activation_email_sent": email_sent,
+                "activation_token": token if not email_sent else None,
+                "activation_token_expires_at": profile.activation_token_expires_at.isoformat()
+            }
+        }
+
+    # Public activation endpoints (no auth required)
+    @router.post("/activate/validate")
+    async def validate_activation_token(
+        data: dict,
+        db = Depends(get_db)
+    ):
+        """Validate an activation token and return user info"""
+        token = data.get('token')
+        if not token:
+            raise HTTPException(status_code=400, detail="Token is required")
+
+        profile = db.query(UserProfile).filter(UserProfile.activation_token == token).first()
+        if not profile:
+            raise HTTPException(status_code=404, detail="Invalid activation token")
+
+        if profile.activation_token_expires_at and profile.activation_token_expires_at < datetime.now(timezone.utc):
+            raise HTTPException(status_code=400, detail="Activation token has expired. Please contact your administrator for a new link.")
+
+        if profile.status == 'active':
+            raise HTTPException(status_code=400, detail="Account has already been activated")
+
+        user = db.query(User).filter(User.id == profile.user_id).first()
+
+        return {
+            "success": True,
+            "data": {
+                "user_id": user.id,
+                "email": user.email,
+                "first_name": profile.first_name,
+                "last_name": profile.last_name
+            }
+        }
+
+    @router.post("/activate/complete")
+    async def complete_activation(
+        data: dict,
+        db = Depends(get_db)
+    ):
+        """Complete activation by setting password"""
+        token = data.get('token')
+        password = data.get('password')
+
+        if not token or not password:
+            raise HTTPException(status_code=400, detail="Token and password are required")
+
+        if len(password) < 8:
+            raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+
+        profile = db.query(UserProfile).filter(UserProfile.activation_token == token).first()
+        if not profile:
+            raise HTTPException(status_code=404, detail="Invalid activation token")
+
+        if profile.activation_token_expires_at and profile.activation_token_expires_at < datetime.now(timezone.utc):
+            raise HTTPException(status_code=400, detail="Activation token has expired")
+
+        if profile.status == 'active':
+            raise HTTPException(status_code=400, detail="Account has already been activated")
+
+        user = db.query(User).filter(User.id == profile.user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        try:
+            # Update user password
+            user.hashed_password = pwd_context.hash(password)
+
+            # Update profile status
+            profile.status = 'active'
+            profile.activation_token = None
+            profile.activation_token_expires_at = None
+            profile.activated_at = datetime.now(timezone.utc)
+
+            # Create audit log
+            audit = AuditLog(
+                user_id=user.id,
+                action="account_activated",
+                performed_by=user.id,
+                details={"activated_via": "email_token"}
+            )
+            db.add(audit)
+            db.commit()
+
+            return {
+                "success": True,
+                "data": {
+                    "user_id": user.id,
+                    "email": user.email,
+                    "status": "active",
+                    "message": "Account activated successfully. You can now log in."
                 }
             }
         except Exception as e:

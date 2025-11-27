@@ -32683,6 +32683,14 @@ async def startup_event():
                 create_sample_data(db)
                 # Seed permission system (CRM pages, roles, AI quick actions)
                 seed_permission_system(db)
+                # Seed User Onboarding System data (roles, categories, responsibilities)
+                try:
+                    from user_onboarding_integration import seed_onboarding_data, create_user_onboarding_models
+                    onboarding_models = create_user_onboarding_models(Base)
+                    seed_onboarding_data(db, onboarding_models)
+                    logger.info("✅ User Onboarding seed data loaded")
+                except Exception as onboard_e:
+                    logger.warning(f"⚠️ User Onboarding seed skipped: {onboard_e}")
             except Exception as e:
                 logger.warning(f"⚠️ Sample data/permission seeding skipped: {e}")
             finally:

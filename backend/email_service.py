@@ -299,5 +299,179 @@ SUMMARY:
         return self.send_html_email(to_email, subject, html_body, plain_text)
 
 
+    def format_activation_email(
+        self,
+        user_name: str,
+        activation_url: str,
+        expires_days: int = 7
+    ) -> str:
+        """Format user activation email as HTML"""
+        html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }}
+        .container {{
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }}
+        .logo {{
+            text-align: center;
+            margin-bottom: 30px;
+        }}
+        .logo h1 {{
+            color: #3b82f6;
+            font-size: 28px;
+            margin: 0;
+        }}
+        h2 {{
+            color: #1a1a2e;
+            margin-top: 0;
+        }}
+        p {{
+            color: #4b5563;
+            font-size: 16px;
+        }}
+        .btn-activate {{
+            display: inline-block;
+            background: #3b82f6;
+            color: white !important;
+            padding: 14px 32px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 16px;
+            margin: 24px 0;
+        }}
+        .btn-activate:hover {{
+            background: #2563eb;
+        }}
+        .info-box {{
+            background: #f0f9ff;
+            border-left: 4px solid #3b82f6;
+            padding: 16px;
+            margin: 24px 0;
+            border-radius: 4px;
+        }}
+        .info-box h4 {{
+            margin: 0 0 8px 0;
+            color: #1e40af;
+        }}
+        .info-box ul {{
+            margin: 0;
+            padding-left: 20px;
+        }}
+        .info-box li {{
+            margin: 8px 0;
+            color: #4b5563;
+        }}
+        .expires {{
+            font-size: 14px;
+            color: #6b7280;
+            background: #fef3c7;
+            padding: 12px 16px;
+            border-radius: 8px;
+            text-align: center;
+        }}
+        .footer {{
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid #e5e7eb;
+            text-align: center;
+            color: #9ca3af;
+            font-size: 13px;
+        }}
+        .footer a {{
+            color: #3b82f6;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <h1>Pipeline 360</h1>
+        </div>
+
+        <h2>Welcome to the Team, {user_name}!</h2>
+
+        <p>Your Pipeline 360 account has been created. Click the button below to set your password and activate your account.</p>
+
+        <div style="text-align: center;">
+            <a href="{activation_url}" class="btn-activate">Activate Your Account</a>
+        </div>
+
+        <div class="info-box">
+            <h4>What's Next?</h4>
+            <ul>
+                <li>Set your secure password</li>
+                <li>Review your assigned responsibilities</li>
+                <li>Access your personalized KPI scorecard</li>
+                <li>Start managing your pipeline</li>
+            </ul>
+        </div>
+
+        <div class="expires">
+            ⏰ This activation link expires in <strong>{expires_days} days</strong>
+        </div>
+
+        <div class="footer">
+            <p>If you didn't expect this email, please ignore it or contact your administrator.</p>
+            <p>This email was sent by Pipeline 360 CRM</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+        return html
+
+    def send_activation_email(
+        self,
+        to_email: str,
+        user_name: str,
+        activation_token: str,
+        base_url: str = None
+    ) -> bool:
+        """Send user activation email"""
+        if not base_url:
+            base_url = os.getenv('FRONTEND_URL', 'https://pipeline360.vercel.app')
+
+        activation_url = f"{base_url}/activate?token={activation_token}"
+        subject = "🔐 Activate Your Pipeline 360 Account"
+        html_body = self.format_activation_email(user_name, activation_url)
+
+        plain_text = f"""
+Welcome to Pipeline 360, {user_name}!
+
+Your account has been created. To activate your account and set your password, visit:
+
+{activation_url}
+
+This link will expire in 7 days.
+
+What's Next?
+- Set your secure password
+- Review your assigned responsibilities
+- Access your personalized KPI scorecard
+- Start managing your pipeline
+
+If you didn't expect this email, please ignore it or contact your administrator.
+
+This email was sent by Pipeline 360 CRM
+"""
+
+        return self.send_html_email(to_email, subject, html_body, plain_text)
+
+
 # Global instance
 email_service = EmailService()

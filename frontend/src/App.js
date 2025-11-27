@@ -77,6 +77,9 @@ const AcceptInvite = lazy(() => import('./pages/AcceptInvite'));
 const MortgagePlannerQuestionnaire = lazy(() => import('./pages/MortgagePlannerQuestionnaire'));
 const KnowledgeBase = lazy(() => import('./pages/KnowledgeBase'));
 const PowerDialer = lazy(() => import('./pages/PowerDialer'));
+const UserCreationWizard = lazy(() => import('./pages/UserCreationWizard'));
+const UserBulkUpload = lazy(() => import('./pages/UserBulkUpload'));
+const ActivateAccount = lazy(() => import('./pages/ActivateAccount'));
 
 // Simple loading component
 const PageLoader = () => (
@@ -262,6 +265,9 @@ function App() {
           {/* Employee Invite Accept (public) */}
           <Route path="/invite/accept/:token" element={<LazyPage><AcceptInvite /></LazyPage>} />
           <Route path="/accept-invite" element={<LazyPage><AcceptInvite /></LazyPage>} />
+
+          {/* User Activation (public) */}
+          <Route path="/activate" element={<LazyPage><ActivateAccount /></LazyPage>} />
 
           {/* Onboarding Page (old) */}
           <Route
@@ -1430,6 +1436,50 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <Users />
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/users/create"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><UserCreationWizard /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/users/bulk-upload"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><UserBulkUpload /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
