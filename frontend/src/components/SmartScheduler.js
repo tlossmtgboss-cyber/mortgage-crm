@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './SmartScheduler.css';
 
-const API_BASE = process.env.REACT_APP_API_URL || '';
+// Use HTTPS Railway URL in production, localhost for development
+const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+const API_BASE = isProduction
+  ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+  : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
 const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType }) => {
   const [view, setView] = useState('calendar'); // calendar, types, booking-links, settings
@@ -36,6 +40,14 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [showNewTypeModal, setShowNewTypeModal] = useState(false);
   const [showNewLinkModal, setShowNewLinkModal] = useState(false);
+
+  // New link form state
+  const [linkForm, setLinkForm] = useState({
+    slug: '',
+    link_name: '',
+    description: '',
+    appointment_type_ids: []
+  });
 
   const getAuthHeaders = useCallback(() => {
     const token = localStorage.getItem('token');
@@ -388,15 +400,15 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
               style={{ borderLeftColor: type.color }}
             >
               <div className="type-header">
-                <span className="type-icon">{type.icon === 'phone' ? '
-' : type.icon === 'document' ? '
-' : type.icon === 'clipboard' ? '
-' : type.icon === 'folder' ? '
-' : type.icon === 'lock' ? '
-' : type.icon === 'home' ? '
-' : type.icon === 'users' ? '
-' : '
-'}</span>
+                <span className="type-icon">{
+                  type.icon === 'phone' ? '📞' :
+                  type.icon === 'document' ? '📄' :
+                  type.icon === 'clipboard' ? '📋' :
+                  type.icon === 'folder' ? '📁' :
+                  type.icon === 'lock' ? '🔒' :
+                  type.icon === 'home' ? '🏠' :
+                  type.icon === 'users' ? '👥' : '📅'
+                }</span>
                 <h4>{type.type_name}</h4>
               </div>
               <p className="type-description">{type.description}</p>
@@ -683,13 +695,6 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
 
   // Render new booking link modal
   const renderNewLinkModal = () => {
-    const [linkForm, setLinkForm] = useState({
-      slug: '',
-      link_name: '',
-      description: '',
-      appointment_type_ids: []
-    });
-
     return (
       <div className="scheduler-modal-overlay" onClick={() => setShowNewLinkModal(false)}>
         <div className="scheduler-modal" onClick={e => e.stopPropagation()}>
