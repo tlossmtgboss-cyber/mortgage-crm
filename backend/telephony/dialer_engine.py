@@ -869,7 +869,7 @@ def click_to_dial(
             contact_name=contact_name,
             lead_id=lead_id,
             loan_id=loan_id,
-            task_id=task_id,
+            session_task_id=task_id,
             call_sid=result.call_sid,
             direction="outbound",
             outcome="initiated",
