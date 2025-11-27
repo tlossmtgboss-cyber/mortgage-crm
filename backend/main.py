@@ -18597,6 +18597,317 @@ async def update_user_goals(
     return {"success": True, "goals": goals}
 
 # ============================================================================
+# EMAIL SIGNATURE MANAGEMENT
+# ============================================================================
+
+class EmailSignatureCreate(BaseModel):
+    """Schema for creating/updating email signature"""
+    full_name: Optional[str] = None
+    title: Optional[str] = None
+    team_name: Optional[str] = None
+    headshot_url: Optional[str] = None
+    company_logo_url: Optional[str] = None
+    email: Optional[str] = None
+    office_phone: Optional[str] = None
+    cell_phone: Optional[str] = None
+    fax: Optional[str] = None
+    address: Optional[str] = None
+    website_url: Optional[str] = None
+    apply_now_url: Optional[str] = None
+    doc_upload_url: Optional[str] = None
+    schedule_url: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    facebook_url: Optional[str] = None
+    instagram_url: Optional[str] = None
+    twitter_url: Optional[str] = None
+    nmls_id: Optional[str] = None
+    branch_nmls_id: Optional[str] = None
+    corporate_nmls_id: Optional[str] = None
+    primary_color: Optional[str] = "#006B6B"
+    secondary_color: Optional[str] = "#1B3A4B"
+    tagline: Optional[str] = None
+
+class EmailSignatureResponse(BaseModel):
+    id: int
+    user_id: int
+    full_name: Optional[str]
+    title: Optional[str]
+    team_name: Optional[str]
+    headshot_url: Optional[str]
+    company_logo_url: Optional[str]
+    email: Optional[str]
+    office_phone: Optional[str]
+    cell_phone: Optional[str]
+    fax: Optional[str]
+    address: Optional[str]
+    website_url: Optional[str]
+    apply_now_url: Optional[str]
+    doc_upload_url: Optional[str]
+    schedule_url: Optional[str]
+    linkedin_url: Optional[str]
+    facebook_url: Optional[str]
+    instagram_url: Optional[str]
+    twitter_url: Optional[str]
+    nmls_id: Optional[str]
+    branch_nmls_id: Optional[str]
+    corporate_nmls_id: Optional[str]
+    primary_color: Optional[str]
+    secondary_color: Optional[str]
+    tagline: Optional[str]
+    is_active: bool
+    created_at: Optional[datetime]
+    updated_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+@app.get("/api/v1/email-signature", response_model=EmailSignatureResponse)
+async def get_email_signature(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get current user's email signature"""
+    signature = db.query(EmailSignature).filter(
+        EmailSignature.user_id == current_user.id
+    ).first()
+
+    if not signature:
+        return EmailSignatureResponse(
+            id=0,
+            user_id=current_user.id,
+            full_name=current_user.full_name,
+            email=current_user.email,
+            title=None,
+            team_name=None,
+            headshot_url=None,
+            company_logo_url=None,
+            office_phone=current_user.phone if hasattr(current_user, 'phone') else None,
+            cell_phone=None,
+            fax=None,
+            address=current_user.business_address if hasattr(current_user, 'business_address') else None,
+            website_url=None,
+            apply_now_url=None,
+            doc_upload_url=None,
+            schedule_url=None,
+            linkedin_url=None,
+            facebook_url=None,
+            instagram_url=None,
+            twitter_url=None,
+            nmls_id=current_user.nmls_number if hasattr(current_user, 'nmls_number') else None,
+            branch_nmls_id=None,
+            corporate_nmls_id=None,
+            primary_color="#006B6B",
+            secondary_color="#1B3A4B",
+            tagline=None,
+            is_active=True,
+            created_at=None,
+            updated_at=None
+        )
+
+    return signature
+
+@app.post("/api/v1/email-signature", response_model=EmailSignatureResponse)
+async def create_or_update_email_signature(
+    signature_data: EmailSignatureCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Create or update current user's email signature"""
+    try:
+        existing = db.query(EmailSignature).filter(
+            EmailSignature.user_id == current_user.id
+        ).first()
+
+        if existing:
+            for key, value in signature_data.model_dump(exclude_unset=True).items():
+                setattr(existing, key, value)
+            existing.updated_at = datetime.now(timezone.utc)
+            db.commit()
+            db.refresh(existing)
+            logger.info(f"Email signature updated for user {current_user.email}")
+            return existing
+        else:
+            new_signature = EmailSignature(
+                user_id=current_user.id,
+                **signature_data.model_dump(exclude_unset=True)
+            )
+            db.add(new_signature)
+            db.commit()
+            db.refresh(new_signature)
+            logger.info(f"Email signature created for user {current_user.email}")
+            return new_signature
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error saving email signature: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/email-signature/upload-image")
+async def upload_signature_image(
+    file: UploadFile = File(...),
+    image_type: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Upload headshot or company logo for email signature"""
+    import base64
+
+    try:
+        allowed_types = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+        if file.content_type not in allowed_types:
+            raise HTTPException(status_code=400, detail=f"Invalid file type. Allowed: {', '.join(allowed_types)}")
+
+        contents = await file.read()
+        base64_data = base64.b64encode(contents).decode('utf-8')
+        data_url = f"data:{file.content_type};base64,{base64_data}"
+
+        signature = db.query(EmailSignature).filter(EmailSignature.user_id == current_user.id).first()
+
+        if not signature:
+            signature = EmailSignature(user_id=current_user.id)
+            db.add(signature)
+
+        if image_type == "headshot":
+            signature.headshot_url = data_url
+        elif image_type == "logo":
+            signature.company_logo_url = data_url
+        else:
+            raise HTTPException(status_code=400, detail="image_type must be 'headshot' or 'logo'")
+
+        signature.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(signature)
+
+        logger.info(f"Uploaded {image_type} for user {current_user.email}")
+        return {"success": True, "image_type": image_type, "url": data_url[:100] + "..."}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error uploading signature image: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/email-signature/html")
+async def get_email_signature_html(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get the HTML version of the email signature for embedding in emails"""
+    signature = db.query(EmailSignature).filter(EmailSignature.user_id == current_user.id).first()
+
+    if not signature:
+        return {"html": "", "configured": False}
+
+    html = generate_email_signature_html(signature)
+    return {"html": html, "configured": True}
+
+def generate_email_signature_html(sig: EmailSignature) -> str:
+    """Generate HTML email signature matching the CMG template style"""
+    phones = []
+    if sig.office_phone:
+        phones.append(f'<span style="color: #333;">&#9742; {sig.office_phone}</span>')
+    if sig.cell_phone:
+        phones.append(f'<span style="color: #333;">&#9990; {sig.cell_phone}</span>')
+    if sig.fax:
+        phones.append(f'<span style="color: #333;">&#128224; {sig.fax}</span>')
+    phone_html = ' | '.join(phones) if phones else ''
+
+    links = []
+    if sig.apply_now_url:
+        links.append(f'<a href="{sig.apply_now_url}" style="color: {sig.primary_color}; text-decoration: none; font-weight: bold;">APPLY NOW</a>')
+    if sig.website_url:
+        links.append(f'<a href="{sig.website_url}" style="color: {sig.primary_color}; text-decoration: none; font-weight: bold;">MYSITE</a>')
+    if sig.doc_upload_url:
+        links.append(f'<a href="{sig.doc_upload_url}" style="color: {sig.primary_color}; text-decoration: none; font-weight: bold;">DOC UPLOAD</a>')
+    if sig.schedule_url:
+        links.append(f'<a href="{sig.schedule_url}" style="color: {sig.primary_color}; text-decoration: none; font-weight: bold;">SCHEDULE</a>')
+    links_html = ' | '.join(links) if links else ''
+
+    social_icons = []
+    if sig.linkedin_url:
+        social_icons.append(f'<a href="{sig.linkedin_url}" style="margin: 0 4px;"><img src="https://cdn-icons-png.flaticon.com/24/174/174857.png" alt="LinkedIn" width="20" height="20"></a>')
+    if sig.facebook_url:
+        social_icons.append(f'<a href="{sig.facebook_url}" style="margin: 0 4px;"><img src="https://cdn-icons-png.flaticon.com/24/733/733547.png" alt="Facebook" width="20" height="20"></a>')
+    if sig.instagram_url:
+        social_icons.append(f'<a href="{sig.instagram_url}" style="margin: 0 4px;"><img src="https://cdn-icons-png.flaticon.com/24/2111/2111463.png" alt="Instagram" width="20" height="20"></a>')
+    if sig.twitter_url:
+        social_icons.append(f'<a href="{sig.twitter_url}" style="margin: 0 4px;"><img src="https://cdn-icons-png.flaticon.com/24/733/733579.png" alt="Twitter" width="20" height="20"></a>')
+    social_html = ''.join(social_icons) if social_icons else ''
+
+    nmls_parts = []
+    if sig.nmls_id:
+        nmls_parts.append(f'NMLS# {sig.nmls_id}')
+    if sig.branch_nmls_id:
+        nmls_parts.append(f'BRANCH NMLS# {sig.branch_nmls_id}')
+    if sig.corporate_nmls_id:
+        nmls_parts.append(f'CORPORATE NMLS# {sig.corporate_nmls_id}')
+    nmls_html = ' | '.join(nmls_parts) if nmls_parts else ''
+
+    headshot_html = ''
+    if sig.headshot_url:
+        headshot_html = f'<td style="vertical-align: top; padding-right: 15px;"><img src="{sig.headshot_url}" alt="{sig.full_name or "Photo"}" style="width: 100px; height: 100px; border-radius: 50%; object-fit: cover; border: 2px solid {sig.primary_color};"></td>'
+
+    logo_html = ''
+    if sig.company_logo_url:
+        tagline_span = f'<span style="background: {sig.secondary_color}; color: white; padding: 5px 15px; font-size: 11px; font-weight: bold; margin-left: 10px;">{sig.tagline}</span>' if sig.tagline else ''
+        logo_html = f'<tr><td colspan="2" style="padding-top: 10px;"><img src="{sig.company_logo_url}" alt="Company Logo" style="max-height: 50px; max-width: 200px;">{tagline_span}</td></tr>'
+
+    html = f'''<table cellpadding="0" cellspacing="0" border="0" style="font-family: Arial, sans-serif; font-size: 13px; color: #333; max-width: 500px;">
+    <tr>
+        {headshot_html}
+        <td style="vertical-align: top;">
+            <table cellpadding="0" cellspacing="0" border="0">
+                <tr><td style="font-size: 18px; font-weight: bold; color: {sig.primary_color};">{sig.full_name or ''}</td></tr>
+                {f'<tr><td style="font-size: 13px; color: #666;">{sig.team_name}</td></tr>' if sig.team_name else ''}
+                {f'<tr><td style="font-size: 13px; color: #666;">{sig.title}</td></tr>' if sig.title else ''}
+                <tr><td style="height: 8px;"></td></tr>
+                {f'<tr><td><a href="mailto:{sig.email}" style="color: {sig.primary_color}; text-decoration: none;">&#9993; {sig.email}</a></td></tr>' if sig.email else ''}
+                {f'<tr><td>{phone_html}</td></tr>' if phone_html else ''}
+                {f'<tr><td style="padding-top: 5px;">&#128205; {sig.address}</td></tr>' if sig.address else ''}
+                <tr><td style="height: 10px;"></td></tr>
+                {f'<tr><td>{links_html}</td></tr>' if links_html else ''}
+                {f'<tr><td style="padding-top: 8px;">{social_html}</td></tr>' if social_html else ''}
+                <tr><td style="height: 10px;"></td></tr>
+                {f'<tr><td style="font-size: 10px; color: #888;">{nmls_html}</td></tr>' if nmls_html else ''}
+            </table>
+        </td>
+    </tr>
+    {logo_html}
+</table>'''
+    return html
+
+@app.get("/api/v1/email-signature/preview")
+async def preview_email_signature(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get a preview of the email signature with all data"""
+    signature = db.query(EmailSignature).filter(EmailSignature.user_id == current_user.id).first()
+
+    if not signature:
+        return {"configured": False, "html": "", "data": None}
+
+    html = generate_email_signature_html(signature)
+
+    return {
+        "configured": True,
+        "html": html,
+        "data": {
+            "full_name": signature.full_name,
+            "title": signature.title,
+            "team_name": signature.team_name,
+            "email": signature.email,
+            "office_phone": signature.office_phone,
+            "cell_phone": signature.cell_phone,
+            "address": signature.address,
+            "has_headshot": bool(signature.headshot_url),
+            "has_logo": bool(signature.company_logo_url),
+            "links_count": sum([bool(signature.apply_now_url), bool(signature.website_url), bool(signature.doc_upload_url), bool(signature.schedule_url)]),
+            "social_count": sum([bool(signature.linkedin_url), bool(signature.facebook_url), bool(signature.instagram_url), bool(signature.twitter_url)])
+        }
+    }
+
+# ============================================================================
 # API KEY MANAGEMENT
 # ============================================================================
 
