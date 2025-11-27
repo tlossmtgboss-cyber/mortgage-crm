@@ -1672,3 +1672,289 @@ async def dial_participant(
     except Exception as e:
         logger.error(f"Dial participant error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# CONVERSATION ANALYTICS ENDPOINTS
+# ============================================================================
+
+@router.get("/recordings/{recording_id}/analytics")
+async def get_recording_analytics(
+    recording_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Get analytics for all participants in a recording"""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Models not initialized")
+
+    ParticipantAnalytics = _models.get('ParticipantAnalytics')
+    MeetingParticipant = _models.get('MeetingParticipant')
+    CoachingRecommendation = _models.get('CoachingRecommendation')
+
+    if not ParticipantAnalytics:
+        raise HTTPException(status_code=500, detail="ParticipantAnalytics model not found")
+
+    analytics_records = db.query(ParticipantAnalytics).filter(
+        ParticipantAnalytics.recording_id == recording_id
+    ).all()
+
+    result = []
+    for a in analytics_records:
+        # Get participant info
+        participant = None
+        if MeetingParticipant:
+            participant = db.query(MeetingParticipant).filter(
+                MeetingParticipant.id == a.participant_id
+            ).first()
+
+        # Get coaching recommendations
+        recommendations = []
+        if CoachingRecommendation:
+            recs = db.query(CoachingRecommendation).filter(
+                CoachingRecommendation.analytics_id == a.id
+            ).all()
+            recommendations = [
+                {
+                    "category": rec.category,
+                    "recommendation": rec.recommendation,
+                    "priority": rec.priority,
+                    "evidence": rec.evidence
+                }
+                for rec in recs
+            ]
+
+        result.append({
+            "id": a.id,
+            "participant_id": a.participant_id,
+            "participant_name": participant.display_name if participant else None,
+            "talk_time_seconds": a.talk_time_seconds,
+            "listen_time_seconds": a.listen_time_seconds,
+            "talk_listen_ratio": a.talk_listen_ratio,
+            "longest_monologue_seconds": a.longest_monologue_seconds,
+            "interruption_count": a.interruption_count,
+            "question_count": a.question_count,
+            "filler_word_count": a.filler_word_count,
+            "speaking_pace_wpm": a.speaking_pace_wpm,
+            "sentiment_positive_pct": a.sentiment_positive_pct,
+            "sentiment_negative_pct": a.sentiment_negative_pct,
+            "sentiment_neutral_pct": a.sentiment_neutral_pct,
+            "engagement_score": a.engagement_score,
+            "coaching_recommendations": recommendations
+        })
+
+    return {"analytics": result}
+
+
+@router.post("/recordings/{recording_id}/analyze")
+async def analyze_recording(
+    recording_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Trigger analytics processing for a recording"""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Models not initialized")
+
+    MeetingRecording = _models.get('MeetingRecording')
+    RecordingTranscript = _models.get('RecordingTranscript')
+
+    recording = db.query(MeetingRecording).filter(MeetingRecording.id == recording_id).first()
+    if not recording:
+        raise HTTPException(status_code=404, detail="Recording not found")
+
+    # Check if transcript exists
+    transcript = db.query(RecordingTranscript).filter(
+        RecordingTranscript.recording_id == recording_id,
+        RecordingTranscript.status == "completed"
+    ).first()
+
+    if not transcript:
+        raise HTTPException(status_code=400, detail="Transcript not ready. Please wait for transcription to complete.")
+
+    # Trigger analysis in background
+    background_tasks.add_task(
+        process_recording_analytics,
+        recording_id,
+        recording.meeting_id
+    )
+
+    return {"success": True, "message": "Analytics processing started", "recording_id": recording_id}
+
+
+@router.get("/analytics/user/{user_id}")
+async def get_user_analytics(
+    user_id: int,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    days: int = Query(30, le=365),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Get aggregate analytics for a user across all meetings"""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Models not initialized")
+
+    try:
+        from uvip.coaching_service import get_coaching_service
+        coaching_service = get_coaching_service()
+
+        result = await coaching_service.get_user_coaching_summary(
+            user_id=user_id,
+            db=db,
+            models=_models,
+            days=days
+        )
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Error getting user analytics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/analytics/me")
+async def get_my_analytics(
+    days: int = Query(30, le=365),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Get aggregate analytics for the current user"""
+    return await get_user_analytics(
+        user_id=current_user.id,
+        days=days,
+        db=db,
+        current_user=current_user
+    )
+
+
+@router.get("/analytics/team")
+async def get_team_analytics(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Get team-wide analytics for managers"""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Models not initialized")
+
+    ParticipantAnalytics = _models.get('ParticipantAnalytics')
+    MeetingParticipant = _models.get('MeetingParticipant')
+
+    if not all([ParticipantAnalytics, MeetingParticipant]):
+        raise HTTPException(status_code=500, detail="Required models not available")
+
+    # Get team_id from current user (if available)
+    team_id = getattr(current_user, 'team_id', None)
+    organization_id = getattr(current_user, 'organization_id', None)
+
+    # For now, get all analytics (in production, filter by team)
+    from datetime import timedelta
+    cutoff_date = datetime.utcnow() - timedelta(days=30)
+
+    analytics_records = db.query(ParticipantAnalytics).filter(
+        ParticipantAnalytics.created_at >= cutoff_date
+    ).all()
+
+    if not analytics_records:
+        return {
+            "total_meetings": 0,
+            "team_size": 0,
+            "avg_engagement_score": 0,
+            "top_performers": [],
+            "coaching_priorities": []
+        }
+
+    # Group by participant/user
+    user_analytics = {}
+    for a in analytics_records:
+        participant = db.query(MeetingParticipant).filter(
+            MeetingParticipant.id == a.participant_id
+        ).first()
+
+        if participant and participant.user_id:
+            if participant.user_id not in user_analytics:
+                user_analytics[participant.user_id] = {
+                    "name": participant.display_name,
+                    "meetings": [],
+                    "total_engagement": 0
+                }
+            user_analytics[participant.user_id]["meetings"].append(a)
+            user_analytics[participant.user_id]["total_engagement"] += (a.engagement_score or 0)
+
+    # Calculate per-user metrics
+    user_metrics = []
+    for user_id, data in user_analytics.items():
+        meeting_count = len(data["meetings"])
+        if meeting_count > 0:
+            avg_engagement = data["total_engagement"] / meeting_count
+            avg_talk_ratio = sum(m.talk_listen_ratio or 0 for m in data["meetings"]) / meeting_count
+            avg_questions = sum(m.question_count or 0 for m in data["meetings"]) / meeting_count
+
+            user_metrics.append({
+                "user_id": user_id,
+                "name": data["name"],
+                "meetings": meeting_count,
+                "avg_engagement": round(avg_engagement, 2),
+                "avg_talk_ratio": round(avg_talk_ratio, 2),
+                "avg_questions": round(avg_questions, 1)
+            })
+
+    # Sort by engagement
+    top_performers = sorted(user_metrics, key=lambda x: x["avg_engagement"], reverse=True)[:5]
+
+    return {
+        "total_meetings": len(set(a.recording_id for a in analytics_records)),
+        "team_size": len(user_analytics),
+        "avg_engagement_score": round(
+            sum(a.engagement_score or 0 for a in analytics_records) / len(analytics_records), 2
+        ) if analytics_records else 0,
+        "top_performers": top_performers,
+        "period_days": 30
+    }
+
+
+async def process_recording_analytics(recording_id: int, meeting_id: int):
+    """Background task to process analytics for a recording"""
+    from database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        from uvip.analytics_service import get_analytics_service
+        from uvip.coaching_service import get_coaching_service
+
+        analytics_service = get_analytics_service()
+        coaching_service = get_coaching_service()
+
+        # Analyze all participants
+        analytics_results = await analytics_service.analyze_all_participants(
+            recording_id=recording_id,
+            db=db,
+            models=_models
+        )
+
+        # Generate coaching for each participant
+        RecordingTranscript = _models.get('RecordingTranscript')
+        transcript = db.query(RecordingTranscript).filter(
+            RecordingTranscript.recording_id == recording_id
+        ).first()
+
+        transcript_segments = transcript.transcript_json if transcript else []
+
+        for analytics in analytics_results:
+            try:
+                await coaching_service.generate_coaching(
+                    analytics=analytics,
+                    transcript_segments=transcript_segments,
+                    db=db,
+                    models=_models
+                )
+            except Exception as e:
+                logger.error(f"Error generating coaching for analytics {analytics.get('id')}: {e}")
+
+        logger.info(f"Analytics processing completed for recording {recording_id}")
+
+    except Exception as e:
+        logger.error(f"Error processing analytics for recording {recording_id}: {e}")
+    finally:
+        db.close()

@@ -449,6 +449,64 @@ def create_video_meeting_models(Base):
         updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
         created_by = Column(Integer, ForeignKey("users.id"))
 
+    class ParticipantAnalytics(Base):
+        """
+        Detailed analytics for meeting participants.
+        Tracks conversation metrics, engagement, and coaching opportunities.
+        """
+        __tablename__ = "participant_analytics"
+        __table_args__ = {'extend_existing': True}
+
+        id = Column(Integer, primary_key=True, index=True)
+        recording_id = Column(Integer, ForeignKey("meeting_recordings.id"), nullable=False, index=True)
+        participant_id = Column(Integer, ForeignKey("meeting_participants.id"), nullable=False, index=True)
+
+        # Talk metrics
+        talk_time_seconds = Column(Integer, default=0)
+        listen_time_seconds = Column(Integer, default=0)
+        talk_listen_ratio = Column(Float)
+        longest_monologue_seconds = Column(Integer, default=0)
+
+        # Engagement metrics
+        interruption_count = Column(Integer, default=0)
+        question_count = Column(Integer, default=0)
+        filler_word_count = Column(Integer, default=0)
+        speaking_pace_wpm = Column(Integer)  # Words per minute
+
+        # Sentiment analysis
+        sentiment_positive_pct = Column(Float, default=0.0)
+        sentiment_negative_pct = Column(Float, default=0.0)
+        sentiment_neutral_pct = Column(Float, default=0.0)
+
+        # Overall score (0-1)
+        engagement_score = Column(Float)
+
+        created_at = Column(DateTime, default=datetime.utcnow)
+        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    class CoachingRecommendation(Base):
+        """
+        AI-generated coaching recommendations based on analytics.
+        Provides actionable feedback for mortgage professionals.
+        """
+        __tablename__ = "coaching_recommendations"
+        __table_args__ = {'extend_existing': True}
+
+        id = Column(Integer, primary_key=True, index=True)
+        analytics_id = Column(Integer, ForeignKey("participant_analytics.id"), nullable=False, index=True)
+
+        # Recommendation details
+        category = Column(String(100), nullable=False)  # listening, questioning, pacing, clarity, mortgage_knowledge
+        recommendation = Column(Text, nullable=False)
+        priority = Column(String(20), default="medium")  # low, medium, high
+        evidence = Column(JSON)  # Specific examples and metrics
+
+        # Tracking
+        is_acknowledged = Column(Boolean, default=False)
+        acknowledged_at = Column(DateTime)
+
+        created_at = Column(DateTime, default=datetime.utcnow)
+
     # Return all models as a dictionary
     return {
         'VideoMeetingRoom': VideoMeetingRoom,
@@ -457,7 +515,9 @@ def create_video_meeting_models(Base):
         'RecordingTranscript': RecordingTranscript,
         'MeetingAIAnalysis': MeetingAIAnalysis,
         'MeetingChat': MeetingChat,
-        'MeetingTemplate': MeetingTemplate
+        'MeetingTemplate': MeetingTemplate,
+        'ParticipantAnalytics': ParticipantAnalytics,
+        'CoachingRecommendation': CoachingRecommendation
     }
 
 
