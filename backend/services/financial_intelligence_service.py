@@ -184,6 +184,8 @@ class FinancialIntelligenceService:
 
     def get_true_cost_per_loan(self, month: Optional[date] = None) -> Dict[str, Any]:
         """Get fully loaded cost per funded loan."""
+        if not month:
+            month = date.today().replace(day=1)
         metrics = self.profitability_service.get_dashboard_metrics(month)
 
         return {
@@ -239,6 +241,8 @@ class FinancialIntelligenceService:
 
     def get_break_even_analysis(self, month: Optional[date] = None) -> Dict[str, Any]:
         """Calculate break-even production volume."""
+        if not month:
+            month = date.today().replace(day=1)
         return self.profitability_service.get_break_even_analysis(month)
 
     # ============ Question 7: Warehouse Optimization ============
@@ -324,6 +328,8 @@ class FinancialIntelligenceService:
 
     def get_branch_profitability(self, month: Optional[date] = None) -> Dict[str, Any]:
         """Get profitability by branch/team/region."""
+        if not month:
+            month = date.today().replace(day=1)
         return {
             "role_profitability": self.profitability_service.get_role_profitability(month),
             "employee_performance": self.profitability_service.get_employee_performance(month)
@@ -541,6 +547,8 @@ class FinancialIntelligenceService:
 
     def get_tech_roi(self, month: Optional[date] = None) -> Dict[str, Any]:
         """Calculate ROI on technology investments."""
+        if not month:
+            month = date.today().replace(day=1)
         metrics = self.profitability_service.get_dashboard_metrics(month)
 
         # This would need tech expense tracking
