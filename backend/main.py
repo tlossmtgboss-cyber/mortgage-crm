@@ -172,6 +172,7 @@ class LoanStage(str, enum.Enum):
     APPROVED = "Approved"
     SUSPENDED = "Suspended"
     CTC = "CTC"
+    DOCS = "Docs Out"  # Closing documents sent out
     FUNDED = "Funded"
 
 
@@ -14385,17 +14386,69 @@ async def approve_reconciliation(
             else:
                 # Determine stage
                 stage_str = approval.loan_stage or "PROCESSING"
-                stage_map = {
+                loan_stage_map = {
                     "DISCLOSED": LoanStage.DISCLOSED,
                     "PROCESSING": LoanStage.PROCESSING,
                     "SUBMITTED": LoanStage.SUBMITTED,
                     "UW_RECEIVED": LoanStage.UW_RECEIVED,
                     "APPROVED": LoanStage.APPROVED,
+                    "SUSPENDED": LoanStage.SUSPENDED,
                     "CTC": LoanStage.CTC,
                     "DOCS": LoanStage.DOCS,
                     "FUNDED": LoanStage.FUNDED,
                 }
-                stage = stage_map.get(stage_str.upper(), LoanStage.PROCESSING)
+
+                # Check if this is a Lead stage instead of Loan stage
+                lead_stage_map = {
+                    "NEW": LeadStage.NEW,
+                    "ATTEMPTED_CONTACT": LeadStage.ATTEMPTED_CONTACT,
+                    "PROSPECT": LeadStage.PROSPECT,
+                    "APPLICATION": LeadStage.APPLICATION,
+                    "APPLICATION_STARTED": LeadStage.APPLICATION_STARTED,
+                    "PRE_QUALIFIED": LeadStage.PRE_QUALIFIED,
+                    "PRE_APPROVED": LeadStage.PRE_APPROVED,
+                    "UNDER_CONTRACT": LeadStage.UNDER_CONTRACT,
+                    "LONG_TERM_NURTURE": LeadStage.LONG_TERM_NURTURE,
+                    "CLOSED": LeadStage.CLOSED,
+                    "AMR": LeadStage.AMR,
+                    "REFERRAL_SOURCE": LeadStage.REFERRAL_SOURCE,
+                    "WITHDRAWN": LeadStage.WITHDRAWN,
+                    "DOES_NOT_QUALIFY": LeadStage.DOES_NOT_QUALIFY,
+                }
+
+                stage_upper = stage_str.upper()
+                if stage_upper in lead_stage_map:
+                    # This is a Lead stage - create a Lead instead
+                    lead_stage = lead_stage_map[stage_upper]
+                    new_lead = Lead(
+                        name=borrower_name,
+                        email=get_val("borrower_email"),
+                        phone=get_val("borrower_phone"),
+                        stage=lead_stage,
+                        source="reconciliation",
+                        loan_officer_id=current_user.id
+                    )
+                    db.add(new_lead)
+                    db.flush()
+
+                    extracted.match_entity_type = "lead"
+                    extracted.match_entity_id = new_lead.id
+
+                    logger.info(f"Created new lead {borrower_name} (ID: {new_lead.id}) in {lead_stage.value} stage")
+
+                    # Commit and return early for leads
+                    extracted.status = "approved"
+                    extracted.reviewed_by = current_user.id
+                    extracted.reviewed_at = datetime.now(timezone.utc)
+                    db.commit()
+                    return {
+                        "status": "approved",
+                        "entity_type": "lead",
+                        "entity_id": new_lead.id,
+                        "message": f"Created new lead {borrower_name} in {lead_stage.value} stage"
+                    }
+
+                stage = loan_stage_map.get(stage_upper, LoanStage.PROCESSING)
 
                 # Create new loan
                 new_loan = Loan(

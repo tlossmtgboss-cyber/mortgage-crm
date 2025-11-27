@@ -1443,7 +1443,7 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
                         role_id=default_role.id if default_role else None,
                         status="pending_activation",
                         activation_token=activation_token,
-                        activation_token_expires=datetime.now(timezone.utc) + timedelta(days=7),
+                        activation_token_expires_at=datetime.now(timezone.utc) + timedelta(days=7),
                         created_by=current_user.id
                     )
                     db.add(profile)
