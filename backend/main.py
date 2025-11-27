@@ -6205,10 +6205,17 @@ The Team menu item appears for managers and management roles.
             return metrics
 
         async def execute_get_market_intelligence(args):
-            """Fetch real-time market data for rate lock guidance"""
+            """Fetch real-time market data for rate lock guidance (cached for 5 minutes)"""
             import httpx
+            from performance_cache import get_cached, set_cached, cache_key
 
             lock_days = args.get("lock_days", 30)
+
+            # Check cache first (market data cached for 5 minutes)
+            cache_k = cache_key("market_intelligence", lock_days)
+            cached_result = get_cached(cache_k)
+            if cached_result:
+                return cached_result
 
             # Default market data (will be updated with real data if available)
             treasury_10yr = 4.067
@@ -6333,7 +6340,7 @@ The Team menu item appears for managers and management roles.
                 action_reason = "Conditions suggest potential rate improvements - float with daily monitoring"
                 urgency = "low"
 
-            return {
+            result = {
                 "success": True,
                 "lock_days": lock_days,
                 "current_rates": {
@@ -6371,6 +6378,10 @@ The Team menu item appears for managers and management roles.
                            f"• Market Volatility: {volatility.title()} ({vol_score}/10)\n\n"
                            f"**Analysis:** {action_reason}"
             }
+
+            # Cache market data for 5 minutes (rates don't change that frequently)
+            set_cached(cache_k, result, 300)
+            return result
 
         tool_functions = {
             "send_email": execute_send_email,
