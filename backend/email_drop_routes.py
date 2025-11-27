@@ -359,8 +359,7 @@ async def search_matches(
             lead_query = lead_query.filter(Lead.email.ilike(f"%{request.email}%"))
         elif request.search_term:
             lead_query = lead_query.filter(
-                (Lead.first_name.ilike(f"%{request.search_term}%")) |
-                (Lead.last_name.ilike(f"%{request.search_term}%")) |
+                (Lead.name.ilike(f"%{request.search_term}%")) |
                 (Lead.email.ilike(f"%{request.search_term}%"))
             )
 
@@ -368,12 +367,11 @@ async def search_matches(
             leads.append({
                 "id": lead.id,
                 "type": "lead",
-                "first_name": lead.first_name,
-                "last_name": lead.last_name,
+                "name": lead.name,
                 "email": lead.email,
                 "phone": lead.phone,
-                "stage": lead.stage,
-                "display_name": f"{lead.first_name or ''} {lead.last_name or ''}".strip() or lead.email
+                "stage": str(lead.stage.value) if lead.stage else None,
+                "display_name": lead.name or lead.email
             })
 
         # Search loans
@@ -392,7 +390,7 @@ async def search_matches(
                 "type": "loan",
                 "loan_number": loan.loan_number,
                 "borrower_name": loan.borrower_name,
-                "stage": loan.stage,
+                "stage": str(loan.stage) if loan.stage else None,
                 "property_address": loan.property_address,
                 "display_name": f"{loan.borrower_name} - {loan.loan_number}"
             })
@@ -443,8 +441,7 @@ async def search_for_matches(
         if lead:
             matches["leads"].append({
                 "id": lead.id,
-                "first_name": lead.first_name,
-                "last_name": lead.last_name,
+                "name": lead.name,
                 "email": lead.email,
                 "match_reason": "email_exact"
             })
@@ -466,19 +463,19 @@ async def search_for_matches(
                 matches["best_match"] = {"type": "loan", "id": loan.id, "reason": "loan_number"}
                 matches["match_confidence"] = 100
 
-    # Search by name
+    # Search by name (combine first_name + last_name from extracted fields)
     first_name = extracted_fields.get("first_name")
     last_name = extracted_fields.get("last_name")
-    if first_name and last_name:
+    full_name = f"{first_name} {last_name}".strip() if first_name or last_name else None
+
+    if full_name:
         lead = db.query(Lead).filter(
-            Lead.first_name.ilike(first_name),
-            Lead.last_name.ilike(last_name)
+            Lead.name.ilike(f"%{full_name}%")
         ).first()
         if lead and lead.id not in [m["id"] for m in matches["leads"]]:
             matches["leads"].append({
                 "id": lead.id,
-                "first_name": lead.first_name,
-                "last_name": lead.last_name,
+                "name": lead.name,
                 "email": lead.email,
                 "match_reason": "name_match"
             })
@@ -543,7 +540,7 @@ async def process_as_lead(
             "action_taken": "update_lead",
             "entity_id": str(lead.id),
             "entity_type": "lead",
-            "message": f"Updated lead: {lead.first_name} {lead.last_name}",
+            "message": f"Updated lead: {lead.name}",
             "conflicts": conflicts
         }
     else:
@@ -559,13 +556,16 @@ async def process_as_lead(
                 "message": f"Lead with email {fields.get('email')} already exists"
             }
 
+        # Build name from first_name + last_name
+        name = f"{fields.get('first_name', '')} {fields.get('last_name', '')}".strip()
+        if not name:
+            name = email_data.matched_borrower or "Unknown"
+
         lead = Lead(
-            first_name=fields.get("first_name"),
-            last_name=fields.get("last_name"),
+            name=name,
             email=fields.get("email"),
             phone=fields.get("phone"),
             source="email_drop",
-            stage="new",
             notes=f"Created from email drop: {email_data.subject}\nFrom: {email_data.from_address}"
         )
 
@@ -585,7 +585,7 @@ async def process_as_lead(
             "action_taken": "create_lead",
             "entity_id": str(lead.id),
             "entity_type": "lead",
-            "message": f"Created new lead: {lead.first_name} {lead.last_name}",
+            "message": f"Created new lead: {lead.name}",
             "conflicts": []
         }
 
