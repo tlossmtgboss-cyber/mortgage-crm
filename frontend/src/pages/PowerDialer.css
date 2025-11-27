@@ -1,0 +1,707 @@
+/* Power Dialer Styles */
+
+.power-dialer {
+  padding: 24px;
+  min-height: 100vh;
+  background: #f5f7fa;
+}
+
+/* Header */
+.dialer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.dialer-header h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 600;
+  color: #1a1a2e;
+}
+
+.session-badge {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.session-badge.active {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.session-badge.paused {
+  background: #fff3e0;
+  color: #ef6c00;
+}
+
+.session-badge.completed {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.settings-btn {
+  padding: 10px 20px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.settings-btn:hover {
+  background: #f5f5f5;
+  border-color: #ccc;
+}
+
+/* Banners */
+.error-banner,
+.warning-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.error-banner {
+  background: #ffebee;
+  border: 1px solid #ffcdd2;
+  color: #c62828;
+}
+
+.warning-banner {
+  background: #fff8e1;
+  border: 1px solid #ffe082;
+  color: #f57c00;
+}
+
+.error-banner button,
+.warning-banner button {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.error-banner button {
+  background: #ef5350;
+  color: white;
+}
+
+.warning-banner button {
+  background: #ff9800;
+  color: white;
+}
+
+/* Content Layout */
+.dialer-content {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr 1fr;
+  gap: 24px;
+}
+
+/* Panel Styles */
+.dialer-left-panel,
+.dialer-center-panel,
+.dialer-right-panel {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #eee;
+}
+
+.panel-header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.select-all-btn {
+  padding: 6px 12px;
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.select-all-btn:hover {
+  background: #eee;
+}
+
+/* Task List */
+.task-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.task-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 20px;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.task-item:hover {
+  background: #f9f9f9;
+}
+
+.task-item.selected {
+  background: #e3f2fd;
+}
+
+.task-item input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin-right: 12px;
+  cursor: pointer;
+}
+
+.task-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.task-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+}
+
+.task-contact {
+  font-size: 13px;
+  color: #666;
+}
+
+.task-phone {
+  font-size: 12px;
+  color: #999;
+}
+
+.panel-footer {
+  padding: 16px 20px;
+  border-top: 1px solid #eee;
+}
+
+.start-session-btn {
+  width: 100%;
+  padding: 14px;
+  background: #2196f3;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.start-session-btn:hover:not(:disabled) {
+  background: #1976d2;
+}
+
+.start-session-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+/* Session Stats */
+.session-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  padding: 20px;
+}
+
+.stat {
+  text-align: center;
+  padding: 16px;
+  background: #f9f9f9;
+  border-radius: 8px;
+}
+
+.stat-value {
+  display: block;
+  font-size: 28px;
+  font-weight: 600;
+  color: #333;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: #666;
+  text-transform: uppercase;
+}
+
+.progress-bar {
+  height: 8px;
+  background: #e0e0e0;
+  border-radius: 4px;
+  margin: 0 20px 20px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4caf50, #8bc34a);
+  transition: width 0.3s ease;
+}
+
+.session-controls {
+  display: flex;
+  gap: 12px;
+  padding: 0 20px 20px;
+}
+
+.pause-btn,
+.resume-btn,
+.stop-btn {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.pause-btn {
+  background: #fff3e0;
+  color: #ef6c00;
+}
+
+.resume-btn {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.stop-btn {
+  background: #ffebee;
+  color: #c62828;
+}
+
+/* Active Call Card */
+.dialer-center-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.active-call-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 32px;
+}
+
+.call-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.call-status {
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.call-status.idle {
+  background: #f5f5f5;
+  color: #666;
+}
+
+.call-status.dialing,
+.call-status.ringing {
+  background: #fff3e0;
+  color: #ef6c00;
+  animation: pulse 1.5s infinite;
+}
+
+.call-status.in-progress {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.call-status.disposition {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.call-timer {
+  font-size: 24px;
+  font-weight: 600;
+  font-family: 'SF Mono', monospace;
+  color: #333;
+}
+
+.contact-info {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.contact-avatar {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  font-weight: 600;
+  margin: 0 auto 16px;
+}
+
+.contact-info h3 {
+  margin: 0 0 8px;
+  font-size: 24px;
+  color: #333;
+}
+
+.phone-number {
+  font-size: 18px;
+  color: #666;
+  font-family: 'SF Mono', monospace;
+  margin: 0 0 12px;
+}
+
+.contact-type {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.contact-type.lead {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.contact-type.loan {
+  background: #f3e5f5;
+  color: #7b1fa2;
+}
+
+.call-actions {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: auto;
+}
+
+.dial-btn,
+.hangup-btn,
+.skip-btn {
+  padding: 16px 32px;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+
+.dial-btn {
+  background: #4caf50;
+  color: white;
+}
+
+.dial-btn:hover {
+  background: #43a047;
+  transform: scale(1.02);
+}
+
+.hangup-btn {
+  background: #f44336;
+  color: white;
+}
+
+.hangup-btn:hover {
+  background: #e53935;
+}
+
+.skip-btn {
+  background: #f5f5f5;
+  color: #666;
+}
+
+.skip-btn:hover {
+  background: #eee;
+}
+
+.icon {
+  font-size: 20px;
+}
+
+/* Disposition Form */
+.disposition-form {
+  margin-top: auto;
+}
+
+.disposition-form h4 {
+  margin: 0 0 16px;
+  font-size: 16px;
+  color: #333;
+}
+
+.disposition-form select,
+.disposition-form input,
+.disposition-form textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+.disposition-form select:focus,
+.disposition-form input:focus,
+.disposition-form textarea:focus {
+  outline: none;
+  border-color: #2196f3;
+}
+
+.disposition-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.save-btn {
+  padding: 12px 24px;
+  background: #2196f3;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.save-btn:hover:not(:disabled) {
+  background: #1976d2;
+}
+
+.save-btn:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+/* Empty/No Session States */
+.no-session-state,
+.no-tasks-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+  text-align: center;
+}
+
+.dialer-illustration .big-icon {
+  font-size: 64px;
+  opacity: 0.5;
+}
+
+.no-session-state h3,
+.no-tasks-state h3 {
+  margin: 24px 0 8px;
+  font-size: 20px;
+  color: #333;
+}
+
+.no-session-state p,
+.no-tasks-state p {
+  color: #666;
+  margin: 0 0 24px;
+}
+
+.no-tasks-state button {
+  padding: 12px 24px;
+  background: #2196f3;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+/* Call Logs */
+.call-logs {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.call-log-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 20px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.log-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  margin-right: 12px;
+}
+
+.log-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.log-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+}
+
+.log-phone {
+  font-size: 12px;
+  color: #666;
+}
+
+.log-time {
+  font-size: 11px;
+  color: #999;
+}
+
+.log-duration {
+  font-size: 14px;
+  font-weight: 500;
+  font-family: 'SF Mono', monospace;
+  color: #666;
+}
+
+/* Empty States */
+.empty-state {
+  padding: 48px 24px;
+  text-align: center;
+  color: #666;
+}
+
+.empty-state p {
+  margin: 0 0 16px;
+}
+
+.empty-state button {
+  padding: 8px 16px;
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* Loading State */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  gap: 16px;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #f0f0f0;
+  border-top-color: #2196f3;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+  .dialer-content {
+    grid-template-columns: 1fr;
+  }
+
+  .dialer-right-panel {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .power-dialer {
+    padding: 16px;
+  }
+
+  .dialer-header {
+    flex-direction: column;
+    gap: 16px;
+    align-items: flex-start;
+  }
+
+  .active-call-card {
+    padding: 24px 16px;
+  }
+
+  .contact-avatar {
+    width: 60px;
+    height: 60px;
+    font-size: 24px;
+  }
+
+  .contact-info h3 {
+    font-size: 20px;
+  }
+
+  .dial-btn,
+  .hangup-btn {
+    padding: 14px 24px;
+    font-size: 14px;
+  }
+}

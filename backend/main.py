@@ -2546,6 +2546,163 @@ class AccessCertification(Base):
 
 
 # ============================================================================
+# POWER DIALER / TELEPHONY MODELS
+# ============================================================================
+
+class DialerSessionStatus(str, enum.Enum):
+    ACTIVE = "active"
+    PAUSED = "paused"
+    STOPPED = "stopped"
+    COMPLETED = "completed"
+
+class DialerTaskStatus(str, enum.Enum):
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    NO_ANSWER = "no_answer"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+
+class CallOutcome(str, enum.Enum):
+    COMPLETED = "completed"
+    NO_ANSWER = "no_answer"
+    BUSY = "busy"
+    FAILED = "failed"
+    SKIPPED = "skipped"
+
+class AgentTelephonySettings(Base):
+    """Telephony settings for each agent/user"""
+    __tablename__ = "agent_telephony_settings"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    cell_phone = Column(String, nullable=False)
+    business_caller_id = Column(String, nullable=False)
+    dialer_enabled = Column(Boolean, default=True)
+    max_calls_per_day = Column(Integer, default=200)
+    max_concurrent_sessions = Column(Integer, default=1)
+    pause_timeout_seconds = Column(Integer, default=90)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    user = relationship("User", backref="telephony_settings")
+
+class VerifiedCallerId(Base):
+    """Verified caller IDs for the organization"""
+    __tablename__ = "verified_caller_ids"
+    id = Column(Integer, primary_key=True, index=True)
+    phone_number = Column(String, unique=True, nullable=False)
+    friendly_name = Column(String)
+    verification_status = Column(String, default="pending")  # pending, verified, failed
+    twilio_sid = Column(String)
+    user_id = Column(Integer, ForeignKey("users.id"))  # Owner
+    verified_at = Column(DateTime)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+class DialerSession(Base):
+    """Power dialer session tracking"""
+    __tablename__ = "dialer_sessions"
+    __table_args__ = (
+        Index('ix_dialer_sessions_agent_status', 'agent_id', 'status'),
+    )
+    id = Column(Integer, primary_key=True, index=True)
+    agent_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    status = Column(SQLEnum(DialerSessionStatus), default=DialerSessionStatus.ACTIVE)
+    current_task_id = Column(Integer, nullable=True)  # FK added after DialerSessionTask
+    caller_id_used = Column(String)
+    total_tasks = Column(Integer, default=0)
+    completed_tasks = Column(Integer, default=0)
+    failed_tasks = Column(Integer, default=0)
+    skipped_tasks = Column(Integer, default=0)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    completed_at = Column(DateTime)
+    agent = relationship("User", backref="dialer_sessions")
+    tasks = relationship("DialerSessionTask", back_populates="session", order_by="DialerSessionTask.task_order")
+
+class DialerSessionTask(Base):
+    """Individual task/contact in a dialer session queue"""
+    __tablename__ = "dialer_session_tasks"
+    __table_args__ = (
+        Index('ix_dialer_session_tasks_session', 'session_id', 'status'),
+        Index('ix_dialer_session_tasks_order', 'session_id', 'task_order'),
+    )
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("dialer_sessions.id"), nullable=False)
+    contact_phone = Column(String, nullable=False)
+    contact_name = Column(String)
+    contact_context = Column(String)  # e.g., "Loan #12345" or "Lead - Pre-Qualified"
+    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
+    loan_id = Column(Integer, ForeignKey("loans.id"), nullable=True)
+    referral_partner_id = Column(Integer, ForeignKey("referral_partners.id"), nullable=True)
+    mum_client_id = Column(Integer, ForeignKey("mum_clients.id"), nullable=True)
+    original_task_id = Column(Integer, ForeignKey("ai_tasks.id"), nullable=True)  # Link to CRM task
+    status = Column(SQLEnum(DialerTaskStatus), default=DialerTaskStatus.PENDING)
+    call_sid = Column(String)  # Twilio call SID
+    disposition = Column(String)
+    notes = Column(Text)
+    ai_note_summary = Column(Text)
+    follow_up_date = Column(DateTime)
+    task_order = Column(Integer, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    completed_at = Column(DateTime)
+    session = relationship("DialerSession", back_populates="tasks")
+
+class CallLog(Base):
+    """Log of all calls made through the system"""
+    __tablename__ = "call_logs"
+    __table_args__ = (
+        Index('ix_call_logs_agent', 'agent_id', 'created_at'),
+        Index('ix_call_logs_call_sid', 'call_sid'),
+    )
+    id = Column(Integer, primary_key=True, index=True)
+    agent_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    contact_phone = Column(String, nullable=False)
+    contact_name = Column(String)
+    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
+    loan_id = Column(Integer, ForeignKey("loans.id"), nullable=True)
+    referral_partner_id = Column(Integer, ForeignKey("referral_partners.id"), nullable=True)
+    mum_client_id = Column(Integer, ForeignKey("mum_clients.id"), nullable=True)
+    session_id = Column(Integer, ForeignKey("dialer_sessions.id"), nullable=True)
+    session_task_id = Column(Integer, ForeignKey("dialer_session_tasks.id"), nullable=True)
+    call_sid = Column(String, index=True)  # Twilio call SID
+    caller_id_used = Column(String)
+    start_time = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    end_time = Column(DateTime)
+    duration_seconds = Column(Integer)
+    outcome = Column(SQLEnum(CallOutcome))
+    failure_reason = Column(String)  # agent_unavailable, client_unreachable, service_error
+    disposition = Column(String)
+    notes = Column(Text)
+    ai_note_summary = Column(Text)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    agent = relationship("User", backref="call_logs")
+
+class ActiveCall(Base):
+    """Soft lock for preventing multi-agent collision on same contact"""
+    __tablename__ = "active_calls"
+    __table_args__ = (
+        Index('ix_active_calls_contact', 'contact_phone', 'expires_at'),
+    )
+    id = Column(Integer, primary_key=True, index=True)
+    contact_phone = Column(String, nullable=False)
+    agent_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    call_sid = Column(String)
+    locked_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    expires_at = Column(DateTime, nullable=False)  # locked_at + 5 minutes
+
+class ContactDNCStatus(Base):
+    """Do Not Call list for contacts"""
+    __tablename__ = "contact_dnc_status"
+    id = Column(Integer, primary_key=True, index=True)
+    phone_number = Column(String, unique=True, nullable=False, index=True)
+    reason = Column(String)  # user_request, wrong_number, legal, etc.
+    added_by_id = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+# ============================================================================
 # PYDANTIC SCHEMAS
 # ============================================================================
 
@@ -35784,6 +35941,547 @@ async def get_ai_quick_actions(
             "requires_chat": a.requires_chat
         } for a in actions]
     }
+
+
+# ============================================================================
+# POWER DIALER API ENDPOINTS
+# ============================================================================
+
+from telephony.provider import get_telephony_provider
+from telephony.dialer_engine import DialerEngine, click_to_dial
+from telephony.compliance import ComplianceChecker
+
+
+class DialerSessionCreate(BaseModel):
+    """Request to create a new dialer session"""
+    task_ids: List[int]
+
+
+class ClickToDialRequest(BaseModel):
+    """Request for single click-to-dial call"""
+    phone_number: str
+    contact_name: str
+    lead_id: Optional[int] = None
+    loan_id: Optional[int] = None
+    task_id: Optional[int] = None
+
+
+class DispositionRequest(BaseModel):
+    """Request to set call disposition"""
+    disposition: str
+    notes: Optional[str] = None
+    schedule_callback: Optional[datetime] = None
+
+
+class TelephonySettingsUpdate(BaseModel):
+    """Update agent telephony settings"""
+    cell_phone: Optional[str] = None
+    business_caller_id: Optional[str] = None
+    dialer_enabled: Optional[bool] = None
+    max_calls_per_day: Optional[int] = None
+    auto_advance: Optional[bool] = None
+    pause_between_calls: Optional[int] = None
+
+
+class VerifyCallerIdRequest(BaseModel):
+    """Request to verify a caller ID"""
+    phone_number: str
+    friendly_name: str
+
+
+@app.get("/api/v1/dialer/settings")
+async def get_dialer_settings(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Get agent telephony settings"""
+    settings = db.query(AgentTelephonySettings).filter(
+        AgentTelephonySettings.user_id == current_user.id
+    ).first()
+
+    if not settings:
+        # Return defaults
+        return {
+            "cell_phone": None,
+            "business_caller_id": None,
+            "dialer_enabled": False,
+            "max_calls_per_day": 100,
+            "auto_advance": True,
+            "pause_between_calls": 3
+        }
+
+    return {
+        "cell_phone": settings.cell_phone,
+        "business_caller_id": settings.business_caller_id,
+        "dialer_enabled": settings.dialer_enabled,
+        "max_calls_per_day": settings.max_calls_per_day,
+        "auto_advance": settings.auto_advance,
+        "pause_between_calls": settings.pause_between_calls
+    }
+
+
+@app.put("/api/v1/dialer/settings")
+async def update_dialer_settings(
+    data: TelephonySettingsUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Update agent telephony settings"""
+    settings = db.query(AgentTelephonySettings).filter(
+        AgentTelephonySettings.user_id == current_user.id
+    ).first()
+
+    if not settings:
+        settings = AgentTelephonySettings(user_id=current_user.id)
+        db.add(settings)
+
+    if data.cell_phone is not None:
+        settings.cell_phone = data.cell_phone
+    if data.business_caller_id is not None:
+        settings.business_caller_id = data.business_caller_id
+    if data.dialer_enabled is not None:
+        settings.dialer_enabled = data.dialer_enabled
+    if data.max_calls_per_day is not None:
+        settings.max_calls_per_day = data.max_calls_per_day
+    if data.auto_advance is not None:
+        settings.auto_advance = data.auto_advance
+    if data.pause_between_calls is not None:
+        settings.pause_between_calls = data.pause_between_calls
+
+    db.commit()
+    return {"success": True, "message": "Settings updated"}
+
+
+@app.post("/api/v1/dialer/verify-caller-id")
+async def verify_caller_id(
+    data: VerifyCallerIdRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Start caller ID verification process"""
+    provider = get_telephony_provider()
+    result = provider.verify_caller_id(data.phone_number, data.friendly_name)
+
+    if result.get("success"):
+        # Store verification attempt
+        verified = VerifiedCallerId(
+            user_id=current_user.id,
+            phone_number=data.phone_number,
+            friendly_name=data.friendly_name,
+            verification_status="pending"
+        )
+        db.add(verified)
+        db.commit()
+
+    return result
+
+
+@app.get("/api/v1/dialer/verified-caller-ids")
+async def list_verified_caller_ids(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """List all verified caller IDs"""
+    provider = get_telephony_provider()
+    return provider.list_verified_caller_ids()
+
+
+@app.post("/api/v1/dialer/click-to-dial")
+async def api_click_to_dial(
+    data: ClickToDialRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Single click-to-dial call"""
+    base_url = str(request.base_url).rstrip("/")
+
+    result = click_to_dial(
+        db_session=db,
+        agent_id=current_user.id,
+        phone_number=data.phone_number,
+        contact_name=data.contact_name,
+        base_url=base_url,
+        lead_id=data.lead_id,
+        loan_id=data.loan_id,
+        task_id=data.task_id
+    )
+
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error"))
+
+    return result
+
+
+@app.post("/api/v1/dialer/sessions")
+async def create_dialer_session(
+    data: DialerSessionCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Create a new power dialer session"""
+    base_url = str(request.base_url).rstrip("/")
+
+    engine = DialerEngine(db, current_user.id)
+    result = engine.create_session(data.task_ids, base_url)
+
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error"))
+
+    return result
+
+
+@app.get("/api/v1/dialer/sessions/active")
+async def get_active_session(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Get agent's active dialer session if any"""
+    session = db.query(DialerSession).filter(
+        DialerSession.agent_id == current_user.id,
+        DialerSession.status.in_([DialerSessionStatus.ACTIVE, DialerSessionStatus.PAUSED])
+    ).first()
+
+    if not session:
+        return {"active_session": None}
+
+    engine = DialerEngine(db, current_user.id)
+    return {"active_session": engine.get_session_status(session.id)}
+
+
+@app.get("/api/v1/dialer/sessions/{session_id}")
+async def get_session_status(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Get status of a specific session"""
+    engine = DialerEngine(db, current_user.id)
+    status = engine.get_session_status(session_id)
+
+    if not status:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    return status
+
+
+@app.get("/api/v1/dialer/sessions/{session_id}/next-task")
+async def get_next_dialer_task(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Get the next task in the session queue"""
+    engine = DialerEngine(db, current_user.id)
+    task = engine.get_next_task(session_id)
+
+    if not task:
+        return {"next_task": None, "message": "No more tasks in queue"}
+
+    return {"next_task": task}
+
+
+@app.post("/api/v1/dialer/sessions/{session_id}/call/{task_id}")
+async def initiate_session_call(
+    session_id: int,
+    task_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Initiate call for a specific task in the session"""
+    base_url = str(request.base_url).rstrip("/")
+
+    engine = DialerEngine(db, current_user.id)
+    result = engine.initiate_call(session_id, task_id, base_url)
+
+    if not result.get("success"):
+        if result.get("skipped"):
+            return result  # Compliance skip is not an error
+        raise HTTPException(status_code=400, detail=result.get("error"))
+
+    return result
+
+
+@app.post("/api/v1/dialer/sessions/{session_id}/tasks/{task_id}/disposition")
+async def set_task_disposition(
+    session_id: int,
+    task_id: int,
+    data: DispositionRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Set disposition for a completed call"""
+    engine = DialerEngine(db, current_user.id)
+    result = engine.set_disposition(
+        session_id=session_id,
+        task_id=task_id,
+        disposition=data.disposition,
+        notes=data.notes,
+        schedule_callback=data.schedule_callback
+    )
+
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error"))
+
+    return result
+
+
+@app.post("/api/v1/dialer/sessions/{session_id}/tasks/{task_id}/skip")
+async def skip_session_task(
+    session_id: int,
+    task_id: int,
+    reason: str = "manual_skip",
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Skip a task in the session"""
+    engine = DialerEngine(db, current_user.id)
+    result = engine.skip_task(session_id, task_id, reason)
+
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error"))
+
+    return result
+
+
+@app.post("/api/v1/dialer/sessions/{session_id}/pause")
+async def pause_session(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Pause the dialer session"""
+    engine = DialerEngine(db, current_user.id)
+    result = engine.pause_session(session_id)
+
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error"))
+
+    return result
+
+
+@app.post("/api/v1/dialer/sessions/{session_id}/resume")
+async def resume_session(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Resume a paused session"""
+    engine = DialerEngine(db, current_user.id)
+    result = engine.resume_session(session_id)
+
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error"))
+
+    return result
+
+
+@app.post("/api/v1/dialer/sessions/{session_id}/stop")
+async def stop_session(
+    session_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Stop the dialer session"""
+    engine = DialerEngine(db, current_user.id)
+    result = engine.stop_session(session_id)
+
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error"))
+
+    return result
+
+
+@app.get("/api/v1/dialer/compliance/check")
+async def check_compliance(
+    phone_number: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Check compliance status for a phone number"""
+    compliance = ComplianceChecker(db)
+    result = compliance.full_compliance_check(phone_number, current_user.id)
+    return result
+
+
+@app.post("/api/v1/dialer/dnc/add")
+async def add_to_dnc(
+    phone_number: str,
+    reason: str = "customer_request",
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Add a phone number to the Do Not Call list"""
+    compliance = ComplianceChecker(db)
+    success = compliance.add_to_dnc(phone_number, reason, current_user.id)
+
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to add to DNC list")
+
+    return {"success": True, "message": f"{phone_number} added to DNC list"}
+
+
+@app.delete("/api/v1/dialer/dnc/{phone_number}")
+async def remove_from_dnc(
+    phone_number: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Remove a phone number from the Do Not Call list"""
+    compliance = ComplianceChecker(db)
+    success = compliance.remove_from_dnc(phone_number)
+
+    return {"success": success, "message": f"{phone_number} removed from DNC list" if success else "Number not found in DNC list"}
+
+
+@app.get("/api/v1/dialer/call-logs")
+async def get_call_logs(
+    limit: int = 50,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """Get call history for the agent"""
+    logs = db.query(CallLog).filter(
+        CallLog.agent_id == current_user.id
+    ).order_by(CallLog.created_at.desc()).offset(offset).limit(limit).all()
+
+    return {
+        "call_logs": [{
+            "id": log.id,
+            "contact_phone": log.contact_phone,
+            "contact_name": log.contact_name,
+            "direction": log.direction,
+            "duration_seconds": log.duration_seconds,
+            "outcome": log.outcome,
+            "disposition": log.disposition,
+            "notes": log.notes,
+            "started_at": log.started_at.isoformat() if log.started_at else None,
+            "ended_at": log.ended_at.isoformat() if log.ended_at else None,
+            "lead_id": log.lead_id,
+            "loan_id": log.loan_id
+        } for log in logs]
+    }
+
+
+# ============================================================================
+# TWILIO WEBHOOKS (TwiML and Status Callbacks)
+# ============================================================================
+
+@app.post("/api/v1/dialer/twiml/outbound")
+async def twiml_outbound(
+    request: Request,
+    session_id: int = Query(...),
+    task_id: int = Query(...),
+    db: Session = Depends(get_db)
+):
+    """
+    TwiML endpoint for outbound calls in power dialer sessions.
+    Returns TwiML to connect to the agent's browser/softphone.
+    """
+    # For now, return a simple greeting with dial instruction
+    # In production, this would connect to a WebRTC client or softphone
+    twiml = """<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say voice="alice">Connecting your call. Please wait.</Say>
+    <Dial timeout="30">
+        <Client>agent</Client>
+    </Dial>
+</Response>"""
+
+    return Response(content=twiml, media_type="application/xml")
+
+
+@app.post("/api/v1/dialer/twiml/click-to-dial")
+async def twiml_click_to_dial(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """TwiML endpoint for click-to-dial calls"""
+    twiml = """<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say voice="alice">Connecting your call.</Say>
+    <Dial timeout="30">
+        <Client>agent</Client>
+    </Dial>
+</Response>"""
+
+    return Response(content=twiml, media_type="application/xml")
+
+
+@app.post("/api/v1/dialer/webhook/status")
+async def webhook_call_status(
+    request: Request,
+    session_id: int = Query(...),
+    task_id: int = Query(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Twilio status callback webhook for power dialer calls.
+    Updates call status and triggers next-call logic.
+    """
+    form_data = await request.form()
+
+    call_sid = form_data.get("CallSid")
+    call_status = form_data.get("CallStatus")
+    duration = form_data.get("CallDuration")
+    answered_by = form_data.get("AnsweredBy")
+
+    logger.info(f"Call status update: session={session_id}, task={task_id}, status={call_status}")
+
+    # Get the session to find agent
+    session = db.query(DialerSession).filter(DialerSession.id == session_id).first()
+    if not session:
+        logger.error(f"Session {session_id} not found for status webhook")
+        return {"received": True}
+
+    engine = DialerEngine(db, session.agent_id)
+    result = engine.handle_call_status_update(
+        session_id=session_id,
+        task_id=task_id,
+        call_sid=call_sid,
+        status=call_status,
+        duration=int(duration) if duration else None,
+        answered_by=answered_by
+    )
+
+    # TODO: Emit WebSocket event for real-time UI update
+
+    return {"received": True, "result": result}
+
+
+@app.post("/api/v1/dialer/webhook/click-to-dial-status")
+async def webhook_click_to_dial_status(
+    request: Request,
+    agent_id: int = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Twilio status callback for click-to-dial calls"""
+    form_data = await request.form()
+
+    call_sid = form_data.get("CallSid")
+    call_status = form_data.get("CallStatus")
+    duration = form_data.get("CallDuration")
+    to_number = form_data.get("To")
+
+    logger.info(f"Click-to-dial status: agent={agent_id}, to={to_number}, status={call_status}")
+
+    # Update call log
+    call_log = db.query(CallLog).filter(CallLog.call_sid == call_sid).first()
+    if call_log:
+        call_log.outcome = call_status
+        call_log.duration_seconds = int(duration) if duration else None
+        call_log.ended_at = datetime.utcnow()
+        db.commit()
+
+    # Release soft lock
+    compliance = ComplianceChecker(db)
+    if to_number:
+        compliance.release_soft_lock(to_number, agent_id)
+
+    return {"received": True}
 
 
 @app.on_event("shutdown")

@@ -65,6 +65,12 @@ function Navigation({ onToggleAssistant, onToggleCoach, onToggleTaskSidebar, ass
             Tasks {taskCounts.urgentTasks > 0 && <span className="nav-badge urgent">({taskCounts.urgentTasks})</span>}
           </Link>
           <Link
+            to="/dialer"
+            className={`nav-link ${isActive('/dialer') ? 'active' : ''}`}
+          >
+            Dialer
+          </Link>
+          <Link
             to="/reconciliation"
             className={`nav-link ${isActive('/reconciliation') ? 'active' : ''}`}
           >
