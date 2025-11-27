@@ -1958,3 +1958,295 @@ async def process_recording_analytics(recording_id: int, meeting_id: int):
         logger.error(f"Error processing analytics for recording {recording_id}: {e}")
     finally:
         db.close()
+
+
+# ============================================================================
+# MORTGAGE INTELLIGENCE ENDPOINTS
+# ============================================================================
+
+@router.get("/recordings/{recording_id}/intelligence")
+async def get_mortgage_intelligence(
+    recording_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Get mortgage-specific intelligence from a recording"""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Models not initialized")
+
+    MortgageIntelligence = _models.get('MortgageIntelligence')
+    if not MortgageIntelligence:
+        raise HTTPException(status_code=500, detail="MortgageIntelligence model not found")
+
+    intelligence = db.query(MortgageIntelligence).filter(
+        MortgageIntelligence.recording_id == recording_id
+    ).first()
+
+    if not intelligence:
+        raise HTTPException(status_code=404, detail="Intelligence not available for this recording")
+
+    return {
+        "id": intelligence.id,
+        "recording_id": intelligence.recording_id,
+        "borrower_concerns": intelligence.borrower_concerns or [],
+        "compliance_risks": intelligence.compliance_risks or [],
+        "competitor_mentions": intelligence.competitor_mentions or {},
+        "objections": intelligence.objections or [],
+        "explanation_effectiveness": intelligence.explanation_effectiveness or {},
+        "loan_details": intelligence.loan_details or {},
+        "next_steps_clarity": intelligence.next_steps_clarity or {},
+        "overall_risk_score": intelligence.overall_risk_score,
+        "priority_flags": intelligence.priority_flags or [],
+        "created_at": intelligence.created_at.isoformat() if intelligence.created_at else None
+    }
+
+
+@router.post("/recordings/{recording_id}/intelligence/analyze")
+async def analyze_mortgage_intelligence(
+    recording_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Trigger mortgage intelligence analysis for a recording"""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Models not initialized")
+
+    MeetingRecording = _models.get('MeetingRecording')
+    RecordingTranscript = _models.get('RecordingTranscript')
+
+    recording = db.query(MeetingRecording).filter(MeetingRecording.id == recording_id).first()
+    if not recording:
+        raise HTTPException(status_code=404, detail="Recording not found")
+
+    # Check if transcript exists
+    transcript = db.query(RecordingTranscript).filter(
+        RecordingTranscript.recording_id == recording_id,
+        RecordingTranscript.status == "completed"
+    ).first()
+
+    if not transcript:
+        raise HTTPException(status_code=400, detail="Transcript not ready. Please wait for transcription to complete.")
+
+    # Trigger analysis in background
+    background_tasks.add_task(
+        process_mortgage_intelligence,
+        recording_id
+    )
+
+    return {"success": True, "message": "Mortgage intelligence analysis started", "recording_id": recording_id}
+
+
+@router.get("/intelligence/summary")
+async def get_intelligence_summary(
+    days: int = Query(30, le=365),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Get summary of mortgage intelligence across all recordings for a user"""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Models not initialized")
+
+    MortgageIntelligence = _models.get('MortgageIntelligence')
+    MeetingRecording = _models.get('MeetingRecording')
+    VideoMeetingRoom = _models.get('VideoMeetingRoom')
+
+    if not all([MortgageIntelligence, MeetingRecording, VideoMeetingRoom]):
+        raise HTTPException(status_code=500, detail="Required models not available")
+
+    from datetime import timedelta
+    cutoff_date = datetime.utcnow() - timedelta(days=days)
+
+    # Get recordings for this user
+    recordings = db.query(MeetingRecording).join(
+        VideoMeetingRoom,
+        MeetingRecording.meeting_id == VideoMeetingRoom.id
+    ).filter(
+        VideoMeetingRoom.host_user_id == current_user.id,
+        MeetingRecording.created_at >= cutoff_date
+    ).all()
+
+    recording_ids = [r.id for r in recordings]
+
+    if not recording_ids:
+        return {
+            "meetings_analyzed": 0,
+            "period_days": days,
+            "message": "No recordings found for this period"
+        }
+
+    # Get intelligence records
+    intel_records = db.query(MortgageIntelligence).filter(
+        MortgageIntelligence.recording_id.in_(recording_ids)
+    ).all()
+
+    if not intel_records:
+        return {
+            "meetings_analyzed": len(recordings),
+            "intelligence_processed": 0,
+            "period_days": days,
+            "message": "No intelligence analysis available yet"
+        }
+
+    # Aggregate statistics
+    total_concerns = 0
+    concern_types = {}
+    total_compliance_risks = 0
+    compliance_types = {}
+    total_competitor_mentions = 0
+    competitors_mentioned = {}
+    avg_risk_score = 0
+    total_objections = 0
+    objections_handled_well = 0
+
+    for intel in intel_records:
+        # Concerns
+        concerns = intel.borrower_concerns or []
+        total_concerns += len(concerns)
+        for concern in concerns:
+            ctype = concern.get("concern_type", "unknown")
+            concern_types[ctype] = concern_types.get(ctype, 0) + 1
+
+        # Compliance
+        risks = intel.compliance_risks or []
+        total_compliance_risks += len(risks)
+        for risk in risks:
+            rtype = risk.get("risk_type", "unknown")
+            compliance_types[rtype] = compliance_types.get(rtype, 0) + 1
+
+        # Competitors
+        comp_data = intel.competitor_mentions or {}
+        summary = comp_data.get("summary", {})
+        for comp, data in summary.items():
+            total_competitor_mentions += data.get("count", 0)
+            competitors_mentioned[comp] = competitors_mentioned.get(comp, 0) + data.get("count", 0)
+
+        # Risk score
+        avg_risk_score += (intel.overall_risk_score or 0)
+
+        # Objections
+        objections = intel.objections or []
+        total_objections += len(objections)
+        objections_handled_well += sum(1 for o in objections if o.get("handled_well"))
+
+    num_records = len(intel_records)
+    avg_risk_score = avg_risk_score / num_records if num_records > 0 else 0
+
+    return {
+        "meetings_analyzed": len(recordings),
+        "intelligence_processed": num_records,
+        "period_days": days,
+        "summary": {
+            "total_borrower_concerns": total_concerns,
+            "concern_breakdown": concern_types,
+            "total_compliance_flags": total_compliance_risks,
+            "compliance_breakdown": compliance_types,
+            "total_competitor_mentions": total_competitor_mentions,
+            "competitors_mentioned": competitors_mentioned,
+            "avg_risk_score": round(avg_risk_score, 2),
+            "total_objections": total_objections,
+            "objections_handled_well_pct": round(
+                (objections_handled_well / total_objections * 100) if total_objections > 0 else 100, 1
+            )
+        },
+        "recommendations": _generate_summary_recommendations(
+            concern_types, compliance_types, avg_risk_score, total_objections, objections_handled_well
+        )
+    }
+
+
+def _generate_summary_recommendations(
+    concern_types: Dict,
+    compliance_types: Dict,
+    avg_risk_score: float,
+    total_objections: int,
+    objections_handled_well: int
+) -> List[Dict]:
+    """Generate recommendations based on aggregated intelligence"""
+
+    recommendations = []
+
+    # High rate anxiety across calls
+    if concern_types.get("rate_anxiety", 0) > 3:
+        recommendations.append({
+            "category": "rate_discussion",
+            "priority": "high",
+            "recommendation": "Rate anxiety is common in your calls. Proactively explain rate lock options and market context early in conversations."
+        })
+
+    # Competition concerns
+    if concern_types.get("competing_offers", 0) > 2:
+        recommendations.append({
+            "category": "competitive",
+            "priority": "high",
+            "recommendation": "Borrowers frequently mention other lenders. Focus on relationship value and service quality, not just rates."
+        })
+
+    # Compliance issues
+    if len(compliance_types) > 0:
+        recommendations.append({
+            "category": "compliance",
+            "priority": "critical",
+            "recommendation": f"Compliance flags detected. Review recordings for potential steering or pressure issues."
+        })
+
+    # Objection handling
+    if total_objections > 0:
+        handling_rate = objections_handled_well / total_objections
+        if handling_rate < 0.7:
+            recommendations.append({
+                "category": "objection_handling",
+                "priority": "medium",
+                "recommendation": "Objection handling could improve. Practice empathetic listening and the 'Feel, Felt, Found' technique."
+            })
+
+    # Overall risk
+    if avg_risk_score > 0.3:
+        recommendations.append({
+            "category": "general",
+            "priority": "high",
+            "recommendation": "Your average call risk score is elevated. Review recent recordings and focus on clear communication and compliance."
+        })
+
+    return recommendations
+
+
+async def process_mortgage_intelligence(recording_id: int):
+    """Background task to process mortgage intelligence for a recording"""
+    from database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        from uvip.mortgage_intelligence_service import get_mortgage_intelligence_service
+
+        intel_service = get_mortgage_intelligence_service()
+
+        RecordingTranscript = _models.get('RecordingTranscript')
+
+        # Get transcript
+        transcript = db.query(RecordingTranscript).filter(
+            RecordingTranscript.recording_id == recording_id
+        ).first()
+
+        if not transcript:
+            logger.error(f"No transcript found for recording {recording_id}")
+            return
+
+        full_transcript = transcript.full_transcript or ""
+        transcript_segments = transcript.transcript_json or []
+
+        # Run intelligence analysis
+        intelligence = await intel_service.analyze_mortgage_intelligence(
+            recording_id=recording_id,
+            transcript_text=full_transcript,
+            transcript_segments=transcript_segments,
+            db=db,
+            models=_models
+        )
+
+        logger.info(f"Mortgage intelligence processing completed for recording {recording_id}")
+
+    except Exception as e:
+        logger.error(f"Error processing mortgage intelligence for recording {recording_id}: {e}")
+    finally:
+        db.close()
