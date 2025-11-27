@@ -486,6 +486,20 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
         password: str
         password_confirmation: str
 
+    class UnifiedCreateUserRequest(BaseModel):
+        """Unified request for creating a user in one step"""
+        first_name: str
+        last_name: str
+        email: EmailStr
+        phone: Optional[str] = None
+        internal_title: Optional[str] = None
+        role_id: int
+        category_ids: List[int] = []
+        responsibility_ids: List[int] = []
+        permission_template_id: Optional[int] = None
+        custom_permissions: Optional[Dict[str, Any]] = None
+        send_activation_email: bool = True
+
     # Helper functions
     def generate_activation_token():
         return secrets.token_urlsafe(32)
@@ -524,6 +538,133 @@ def create_onboarding_router(get_db, get_current_user, User, models, pwd_context
         return config
 
     # Endpoints
+    @router.post("/create")
+    async def create_user_unified(
+        data: UnifiedCreateUserRequest,
+        request: Request,
+        db = Depends(get_db),
+        current_user = Depends(get_current_user)
+    ):
+        """Create a new user with all settings in one request"""
+        if not check_admin_permission(current_user):
+            raise HTTPException(status_code=403, detail="Permission denied")
+
+        # Check if email already exists
+        existing = db.query(User).filter(User.email == data.email).first()
+        if existing:
+            raise HTTPException(status_code=400, detail="Email already exists")
+
+        # Get role info
+        role = db.query(Role).filter(Role.id == data.role_id).first()
+        if not role:
+            raise HTTPException(status_code=400, detail="Invalid role_id")
+
+        try:
+            # Create user
+            new_user = User(
+                email=data.email,
+                hashed_password="",  # Will be set during activation
+                full_name=f"{data.first_name} {data.last_name}",
+                phone=data.phone,
+                role=role.name.lower().replace(" ", "_"),
+                permission_role="pending",
+                is_active=False
+            )
+            db.add(new_user)
+            db.flush()
+
+            # Create user profile
+            profile = UserProfile(
+                user_id=new_user.id,
+                first_name=data.first_name,
+                last_name=data.last_name,
+                internal_title=data.internal_title or role.name,
+                role_id=data.role_id,
+                status="pending_activation",
+                created_by=current_user.id
+            )
+            db.add(profile)
+            db.flush()
+
+            # Add categories
+            for cat_id in data.category_ids:
+                db.add(UserCategory(user_profile_id=profile.id, category_id=cat_id))
+
+            # Add responsibilities
+            for resp_id in data.responsibility_ids:
+                db.add(UserResponsibility(user_profile_id=profile.id, responsibility_id=resp_id))
+
+            # Handle permissions
+            permissions_data = {}
+            if data.permission_template_id:
+                template = db.query(PermissionTemplate).filter(PermissionTemplate.id == data.permission_template_id).first()
+                if template:
+                    permissions_data = template.permissions or {}
+            elif data.custom_permissions:
+                permissions_data = data.custom_permissions
+
+            user_perms = UserPermissions(
+                user_id=new_user.id,
+                permission_template_id=data.permission_template_id,
+                custom_permissions=data.custom_permissions,
+                effective_permissions=permissions_data
+            )
+            db.add(user_perms)
+
+            # Create KPI scorecard
+            scorecard_config = generate_kpi_scorecard_config(data.responsibility_ids, db)
+            scorecard = KPIScorecard(
+                user_profile_id=profile.id,
+                kpi_config=scorecard_config,
+                created_by=current_user.id
+            )
+            db.add(scorecard)
+
+            # Generate activation token
+            activation_token = generate_activation_token()
+            profile.activation_token = activation_token
+            profile.activation_token_expires = datetime.now(timezone.utc) + timedelta(days=7)
+
+            # Create audit log
+            audit = AuditLog(
+                user_id=new_user.id,
+                action="user_created_unified",
+                performed_by=current_user.id,
+                details={
+                    "email": data.email,
+                    "role_id": data.role_id,
+                    "category_ids": data.category_ids,
+                    "responsibility_ids": data.responsibility_ids
+                },
+                ip_address=request.client.host if request.client else None
+            )
+            db.add(audit)
+
+            db.commit()
+
+            # Build scorecard response
+            scorecard_response = {
+                "id": scorecard.id,
+                "kpi_config": scorecard_config,
+                "summary": f"Scorecard configured with {len(data.responsibility_ids)} responsibilities"
+            }
+
+            return {
+                "success": True,
+                "user_id": new_user.id,
+                "user_profile_id": profile.id,
+                "email": data.email,
+                "full_name": f"{data.first_name} {data.last_name}",
+                "role": role.name,
+                "scorecard": scorecard_response,
+                "activation_token": activation_token,
+                "message": f"User created successfully. Activation email {'will be sent' if data.send_activation_email else 'not sent'}."
+            }
+
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=f"Error creating user: {str(e)}")
+
     @router.post("/create/single")
     async def create_single_user(
         data: BasicInfoRequest,
