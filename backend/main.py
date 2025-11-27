@@ -64,6 +64,14 @@ from workflows.workflow_actions import WorkflowActionExecutor
 # Import profitability models for AI financial context
 from models.profitability import ProfitabilitySnapshot, ProfitabilityLoan, Expense, EmployeeCost
 
+# Import financial intelligence models for table creation
+from models.financial_intelligence import (
+    LoanSale, HedgePosition, SecondaryMetrics, MSRPortfolio,
+    WarehouseLine, WarehouseUsage, ProductProfitability,
+    CashPosition, CashForecast, BurnRate, CompetitorRate,
+    LostDeal, CapitalRequirement, ComplianceRisk
+)
+
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -78,7 +86,21 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./mortgage_crm.db")
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-SECRET_KEY = os.getenv("SECRET_KEY", "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7")
+# SECRET_KEY configuration - must be set in production
+_SECRET_KEY = os.getenv("SECRET_KEY")
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+
+if ENVIRONMENT == "production" and not _SECRET_KEY:
+    raise ValueError(
+        "SECRET_KEY environment variable is required in production. "
+        "Generate with: python -c \"import secrets; print(secrets.token_hex(32))\""
+    )
+
+# Use secure default only in development
+SECRET_KEY = _SECRET_KEY or "dev-only-09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7"
+if not _SECRET_KEY and ENVIRONMENT != "development":
+    logger.warning("⚠️ Using fallback SECRET_KEY - set SECRET_KEY env var for security!")
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
@@ -3707,6 +3729,38 @@ app.add_middleware(RateLimitMiddleware, requests_per_minute=100, requests_per_ho
 app.add_middleware(SecurityLoggingMiddleware)
 
 logger.info("✅ Security middleware enabled: Rate limiting, IP blocking, security headers, request validation, and logging")
+
+# ============================================================================
+# PRODUCTION HARDENING - Sentry, structured logging, request tracing
+# ============================================================================
+try:
+    from production_hardening import (
+        setup_production_hardening,
+        structured_logger,
+        health_checker,
+        get_request_id,
+        monitor_performance
+    )
+
+    # Initialize production hardening
+    hardening_result = setup_production_hardening(app, engine)
+    logger.info(f"✅ Production hardening initialized: {hardening_result}")
+
+    # Register database health check
+    async def check_database():
+        try:
+            with SessionLocal() as db:
+                db.execute(text("SELECT 1"))
+                return True
+        except Exception:
+            return False
+
+    health_checker.register_check("database", check_database)
+
+except Exception as e:
+    logger.warning(f"⚠️ Production hardening not fully initialized: {e}")
+    structured_logger = None
+    health_checker = None
 
 # Mount static files directory for voicemail audio files
 import os as os_module
@@ -15450,9 +15504,13 @@ def generate_ai_merge_suggestion(lead1: Lead, lead2: Lead, training_history: lis
 
         # If only one has value, choose that one
         if val1 is None:
-            suggestions[field] = {'record': 2, 'value': val2, 'confidence': 0.95}
+            # Convert datetime to ISO string for JSON serialization
+            val2_serializable = val2.isoformat() if isinstance(val2, datetime) else val2
+            suggestions[field] = {'record': 2, 'value': val2_serializable, 'confidence': 0.95}
         elif val2 is None:
-            suggestions[field] = {'record': 1, 'value': val1, 'confidence': 0.95}
+            # Convert datetime to ISO string for JSON serialization
+            val1_serializable = val1.isoformat() if isinstance(val1, datetime) else val1
+            suggestions[field] = {'record': 1, 'value': val1_serializable, 'confidence': 0.95}
         else:
             # Both have values - use AI logic
             confidence = 0.6  # Default moderate confidence
@@ -15502,6 +15560,9 @@ def generate_ai_merge_suggestion(lead1: Lead, lead2: Lead, training_history: lis
                 confidence = 0.8
 
             chosen_val = val1 if chosen_record == 1 else val2
+            # Convert datetime objects to ISO string for JSON serialization
+            if isinstance(chosen_val, datetime):
+                chosen_val = chosen_val.isoformat()
             suggestions[field] = {'record': chosen_record, 'value': chosen_val, 'confidence': confidence}
 
     return suggestions
@@ -19137,6 +19198,7 @@ async def debug_test_task_creation(
 
 @app.get("/health")
 async def health_check(db: Session = Depends(get_db)):
+    """Basic health check - database connectivity"""
     try:
         db.execute(text("SELECT 1"))
         return {"status": "healthy", "database": "connected", "timestamp": datetime.now(timezone.utc)}
@@ -19146,6 +19208,31 @@ async def health_check(db: Session = Depends(get_db)):
             status_code=503,
             content={"status": "unhealthy", "error": str(e)}
         )
+
+@app.get("/health/detailed")
+async def health_check_detailed():
+    """Comprehensive health check with all dependencies"""
+    if health_checker:
+        results = await health_checker.check_all()
+        status_code = 200 if results["status"] == "healthy" else 503
+        return JSONResponse(status_code=status_code, content=results)
+    else:
+        return {"status": "healthy", "message": "Basic health check (detailed checks not configured)"}
+
+@app.get("/health/ready")
+async def readiness_check():
+    """Kubernetes readiness probe - can accept traffic?"""
+    if health_checker:
+        is_ready = await health_checker.check_readiness()
+        if is_ready:
+            return {"status": "ready"}
+        return JSONResponse(status_code=503, content={"status": "not_ready"})
+    return {"status": "ready"}
+
+@app.get("/health/live")
+async def liveness_check():
+    """Kubernetes liveness probe - is process alive?"""
+    return {"status": "alive"}
 
 @app.post("/authentication/test")
 async def authentication_test_post(current_user: User = Depends(get_current_user_flexible)):
@@ -35989,6 +36076,92 @@ async def normalize_stage_enums_migration(
             "success": False,
             "message": f"Migration failed: {str(e)}",
             "error": str(e)
+        }
+
+
+@app.post("/api/v1/migrations/create-financial-intelligence-tables", response_model=None)
+async def create_financial_intelligence_tables_migration(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Create financial intelligence tables.
+
+    Creates all tables required for the Financial Intelligence module:
+    - loan_sales: Individual loan sales to secondary market
+    - hedge_positions: Hedge positions for rate risk management
+    - secondary_metrics: Daily/monthly secondary marketing metrics
+    - msr_portfolio: MSR portfolio valuation and tracking
+    - warehouse_lines: Warehouse line configurations
+    - warehouse_usage: Daily warehouse line usage metrics
+    - product_profitability: Profitability by loan product type
+    - cash_positions: Daily cash position tracking
+    - cash_forecasts: Cash flow forecasting
+    - burn_rates: Monthly burn rate tracking
+    - competitor_rates: Competitor rate tracking
+    - lost_deals: Deals lost to competitors
+    - capital_requirements: Capital adequacy tracking
+    - compliance_risks: Compliance and regulatory risks
+    """
+    try:
+        logger.info(f"Running migration: create financial intelligence tables (user: {current_user.id})")
+
+        # Import the models to ensure they're registered with Base.metadata
+        from models.financial_intelligence import (
+            LoanSale, HedgePosition, SecondaryMetrics, MSRPortfolio,
+            WarehouseLine, WarehouseUsage, ProductProfitability,
+            CashPosition, CashForecast, BurnRate, CompetitorRate,
+            LostDeal, CapitalRequirement, ComplianceRisk
+        )
+
+        tables_to_create = [
+            LoanSale.__table__,
+            HedgePosition.__table__,
+            SecondaryMetrics.__table__,
+            MSRPortfolio.__table__,
+            WarehouseLine.__table__,
+            WarehouseUsage.__table__,
+            ProductProfitability.__table__,
+            CashPosition.__table__,
+            CashForecast.__table__,
+            BurnRate.__table__,
+            CompetitorRate.__table__,
+            LostDeal.__table__,
+            CapitalRequirement.__table__,
+            ComplianceRisk.__table__,
+        ]
+
+        created_tables = []
+        existing_tables = []
+
+        for table in tables_to_create:
+            try:
+                # checkfirst=True means it won't error if table exists
+                table.create(bind=engine, checkfirst=True)
+                # Check if table was newly created by seeing if it exists now
+                if engine.dialect.has_table(engine.connect(), table.name):
+                    created_tables.append(table.name)
+            except Exception as table_error:
+                logger.warning(f"Table {table.name} may already exist: {table_error}")
+                existing_tables.append(table.name)
+
+        logger.info(f"Financial intelligence tables migration completed. Created: {len(created_tables)}")
+
+        return {
+            "success": True,
+            "message": f"Financial intelligence tables migration completed",
+            "created_tables": created_tables,
+            "tables_checked": [t.name for t in tables_to_create]
+        }
+
+    except Exception as e:
+        logger.error(f"Financial intelligence tables migration failed: {e}")
+        import traceback
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e),
+            "traceback": traceback.format_exc()
         }
 
 
