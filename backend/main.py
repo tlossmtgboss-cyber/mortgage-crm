@@ -36334,6 +36334,28 @@ async def update_dialer_settings(
 ):
     """Update agent telephony settings"""
     try:
+        # Ensure table exists (for fresh deployments)
+        try:
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS agent_telephony_settings (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER UNIQUE NOT NULL REFERENCES users(id),
+                    cell_phone VARCHAR,
+                    business_caller_id VARCHAR,
+                    dialer_enabled BOOLEAN DEFAULT TRUE,
+                    max_calls_per_day INTEGER DEFAULT 200,
+                    max_concurrent_sessions INTEGER DEFAULT 1,
+                    auto_advance BOOLEAN DEFAULT TRUE,
+                    pause_between_calls INTEGER DEFAULT 3,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            db.commit()
+        except Exception as table_err:
+            logger.debug(f"Table creation note: {table_err}")
+            db.rollback()
+
         settings = db.query(AgentTelephonySettings).filter(
             AgentTelephonySettings.user_id == current_user.id
         ).first()
