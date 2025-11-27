@@ -2767,6 +2767,7 @@ def get_daily_summary(db: Session, user_id: int) -> Dict[str, Any]:
     Task = main.Task
     Lead = main.Lead
     Loan = main.Loan
+    AITask = main.AITask
 
     today = datetime.now().date()
 
@@ -2776,8 +2777,27 @@ def get_daily_summary(db: Session, user_id: int) -> Dict[str, Any]:
         Task.status != 'completed'
     ).order_by(Task.priority.desc(), Task.due_date.asc()).limit(20).all()
 
+    # Also get AI tasks which have borrower_name field
+    ai_tasks = []
+    try:
+        ai_tasks = db.query(AITask).filter(
+            AITask.assigned_to_id == user_id,
+            AITask.type != 'completed'
+        ).order_by(AITask.due_date.asc()).limit(20).all()
+    except Exception as e:
+        logger.debug(f"AITask query failed: {e}")
+        db.rollback()
+
+    # Build loan_id -> borrower_name map for AI tasks
+    loan_ids = [t.loan_id for t in ai_tasks if t.loan_id]
+    loan_map = {}
+    if loan_ids:
+        loans_for_tasks = db.query(Loan).filter(Loan.id.in_(loan_ids)).all()
+        loan_map = {l.id: l.borrower_name for l in loans_for_tasks}
+
     # Build a map of lead_id -> lead_name for enriching task display
     lead_ids = [t.lead_id for t in all_tasks if t.lead_id]
+    lead_ids.extend([t.lead_id for t in ai_tasks if t.lead_id])
     lead_map = {}
     if lead_ids:
         leads_for_tasks = db.query(Lead).filter(Lead.id.in_(lead_ids)).all()
@@ -2836,15 +2856,26 @@ def get_daily_summary(db: Session, user_id: int) -> Dict[str, Any]:
     # Build follow-ups from leads needing attention
     follow_ups = []
 
-    # Helper function to enrich task title with lead name
-    def get_enriched_task_title(task):
+    # Helper function to enrich task title with lead/borrower name
+    def get_enriched_task_title(task, is_ai_task=False):
         title = task.title
-        lead_name = lead_map.get(task.lead_id) if task.lead_id else None
-        # If task title is generic and we have a lead name, add context
-        if lead_name and ('lead' in title.lower() or 'follow' in title.lower() or 'meeting' in title.lower()):
-            return f"{title} - {lead_name}"
-        elif lead_name:
-            return f"{title} ({lead_name})"
+        borrower_name = None
+
+        # For AI tasks, use borrower_name field directly or look up from loan
+        if is_ai_task:
+            borrower_name = getattr(task, 'borrower_name', None)
+            if not borrower_name and task.loan_id:
+                borrower_name = loan_map.get(task.loan_id)
+
+        # For regular tasks, use lead_name from lead_map
+        if not borrower_name:
+            borrower_name = lead_map.get(task.lead_id) if hasattr(task, 'lead_id') and task.lead_id else None
+
+        # Add borrower/lead name to title
+        if borrower_name:
+            # Check if name already in title to avoid duplication
+            if borrower_name.lower() not in title.lower():
+                return f"{title} - {borrower_name}"
         return title
 
     # Overdue tasks need immediate attention
@@ -2914,22 +2945,50 @@ def get_daily_summary(db: Session, user_id: int) -> Dict[str, Any]:
             "items": [f"{c.borrower_name} ({c.loan_type or 'N/A'})" for c in mum_clients[:3]]
         })
 
+    # Combine regular tasks and AI tasks, sorted by due date
+    combined_tasks = []
+
+    # Add regular tasks
+    for t in all_tasks[:10]:
+        combined_tasks.append({
+            "id": t.id,
+            "title": get_enriched_task_title(t, is_ai_task=False),
+            "description": t.description,
+            "priority": t.priority,
+            "due_date": t.due_date.isoformat() if t.due_date else None,
+            "lead_id": t.lead_id,
+            "lead_name": lead_map.get(t.lead_id) if t.lead_id else None,
+            "borrower_name": None,
+            "source": "task"
+        })
+
+    # Add AI tasks with borrower names
+    for t in ai_tasks[:10]:
+        borrower = t.borrower_name
+        if not borrower and t.loan_id:
+            borrower = loan_map.get(t.loan_id)
+        combined_tasks.append({
+            "id": f"ai-{t.id}",
+            "title": get_enriched_task_title(t, is_ai_task=True),
+            "description": t.description,
+            "priority": t.priority,
+            "due_date": t.due_date.isoformat() if t.due_date else None,
+            "lead_id": t.lead_id,
+            "lead_name": lead_map.get(t.lead_id) if t.lead_id else None,
+            "borrower_name": borrower,
+            "loan_id": t.loan_id,
+            "source": "ai_task"
+        })
+
+    # Sort combined tasks by due date (None values at end)
+    combined_tasks.sort(key=lambda x: (x["due_date"] is None, x["due_date"] or ""))
+
     return {
-        "tasks": [
-            {
-                "id": t.id,
-                "title": get_enriched_task_title(t),
-                "description": t.description,
-                "priority": t.priority,
-                "due_date": t.due_date.isoformat() if t.due_date else None,
-                "lead_id": t.lead_id,
-                "lead_name": lead_map.get(t.lead_id) if t.lead_id else None
-            } for t in all_tasks[:10]
-        ],
+        "tasks": combined_tasks[:15],
         "follow_ups": follow_ups,
         "reconciliations": reconciliations,
         "summary": {
-            "total_tasks": len(all_tasks),
+            "total_tasks": len(all_tasks) + len(ai_tasks),
             "overdue_tasks": len(overdue_tasks),
             "active_leads": total_leads,
             "hot_prospects": len([l for l in all_leads if l.stage and l.stage.value in ['Prospect', 'Pre-Approved']]),
@@ -3235,9 +3294,13 @@ TASK PRESENTATION RULES:
 === COACHING MODE: DAILY BRIEFING ===
 The user wants their TOP 3 PRIORITIES for today. Structure your response as:
 1. Identify the 3 most critical items from tasks and follow-ups
-2. For each priority, explain WHY it's urgent
-3. Provide specific action steps
-4. Keep it focused and actionable - no fluff
+2. ALWAYS include the BORROWER/CLIENT NAME for each task (from the title which includes "- Borrower Name")
+3. For each priority, explain WHY it's urgent
+4. Provide specific action steps
+5. Keep it focused and actionable - no fluff
+
+IMPORTANT: Each priority MUST include the borrower/client name. Never say just "Review Loan Documents" -
+say "Review Loan Documents - John Smith" or "Review Loan Documents for John Smith".
 === END COACHING MODE ===
 """
         elif is_pipeline_audit:
