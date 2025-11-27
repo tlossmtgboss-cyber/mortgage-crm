@@ -48,6 +48,9 @@ function UserCreationWizard() {
   const [responsibilities, setResponsibilities] = useState([]);
   const [permissionTemplates, setPermissionTemplates] = useState([]);
 
+  // Permission mode state (template vs custom)
+  const [permissionMode, setPermissionMode] = useState('template');
+
   // Form data
   const [formData, setFormData] = useState({
     // Basic Info
@@ -429,8 +432,6 @@ function UserCreationWizard() {
   };
 
   const renderPermissions = () => {
-    const [permissionMode, setPermissionMode] = useState('template');
-
     return (
       <div className="wizard-content">
         <h2>Permissions</h2>
