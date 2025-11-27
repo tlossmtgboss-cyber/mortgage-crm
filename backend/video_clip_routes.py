@@ -75,9 +75,9 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
 class ClipCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=500)
     description: Optional[str] = Field(None, max_length=5000)
-    clip_type: str = Field("screen_camera", regex=r'^(screen_camera|screen_only|camera_only)$')
+    clip_type: str = Field("screen_camera", pattern=r'^(screen_camera|screen_only|camera_only)$')
     template_id: Optional[int] = None
-    crm_entity_type: Optional[str] = Field(None, regex=r'^(loan|lead|contact)$')
+    crm_entity_type: Optional[str] = Field(None, pattern=r'^(loan|lead|contact)$')
     crm_entity_id: Optional[int] = None
     tags: Optional[List[str]] = Field(None, max_items=10)
 
@@ -109,7 +109,7 @@ class ClipUpdate(BaseModel):
     title: Optional[str] = Field(None, max_length=500)
     description: Optional[str] = Field(None, max_length=5000)
     tags: Optional[List[str]] = Field(None, max_items=10)
-    access_level: Optional[str] = Field(None, regex=r'^(private|team|public)$')
+    access_level: Optional[str] = Field(None, pattern=r'^(private|team|public)$')
 
     @validator('title')
     def sanitize_title(cls, v):
@@ -231,13 +231,13 @@ class CommentCreate(BaseModel):
 
 class TemplateCreate(BaseModel):
     template_name: str = Field(..., min_length=1, max_length=200)
-    category: str = Field(..., regex=r'^[a-z_]+$', max_length=50)
+    category: str = Field(..., pattern=r'^[a-z_]+$', max_length=50)
     description: Optional[str] = Field(None, max_length=1000)
     suggested_title: Optional[str] = Field(None, max_length=500)
     script_outline: Optional[List[str]] = Field(None, max_items=20)
     default_duration_seconds: int = Field(120, ge=10, le=3600)
-    color: str = Field("#3b82f6", regex=r'^#[0-9a-fA-F]{6}$')
-    icon: str = Field("video", regex=r'^[a-z_]+$', max_length=50)
+    color: str = Field("#3b82f6", pattern=r'^#[0-9a-fA-F]{6}$')
+    icon: str = Field("video", pattern=r'^[a-z_]+$', max_length=50)
 
     @validator('template_name')
     def sanitize_template_name(cls, v):

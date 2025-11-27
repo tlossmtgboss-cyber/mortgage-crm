@@ -401,9 +401,9 @@ class ClipCreateSchema(BaseModel):
     """Schema for creating a video clip"""
     title: str = Field(..., min_length=1, max_length=500)
     description: Optional[str] = Field(None, max_length=5000)
-    clip_type: str = Field("screen_camera", regex=r'^(screen_camera|screen_only|camera_only)$')
+    clip_type: str = Field("screen_camera", pattern=r'^(screen_camera|screen_only|camera_only)$')
     template_id: Optional[int] = None
-    crm_entity_type: Optional[str] = Field(None, regex=r'^(loan|lead|contact)$')
+    crm_entity_type: Optional[str] = Field(None, pattern=r'^(loan|lead|contact)$')
     crm_entity_id: Optional[int] = None
     tags: Optional[List[str]] = Field(None, max_items=10)
 
@@ -430,7 +430,7 @@ class ClipCommentSchema(BaseModel):
     """Schema for clip comments"""
     comment_text: str = Field(..., min_length=1, max_length=1000)
     timestamp_seconds: Optional[int] = Field(None, ge=0, le=86400)
-    emoji_reaction: Optional[str] = Field(None, regex=r'^(thumbs_up|heart|question|confused|celebrate)$')
+    emoji_reaction: Optional[str] = Field(None, pattern=r'^(thumbs_up|heart|question|confused|celebrate)$')
 
     @validator('comment_text')
     def sanitize_comment(cls, v):
@@ -474,7 +474,7 @@ class MeetingRoomCreateSchema(BaseModel):
     """Schema for creating meeting rooms"""
     room_name: str = Field(..., min_length=1, max_length=500)
     room_description: Optional[str] = Field(None, max_length=2000)
-    provider: str = Field("internal", regex=r'^(internal|zoom|teams|google_meet)$')
+    provider: str = Field("internal", pattern=r'^(internal|zoom|teams|google_meet)$')
     scheduled_start: Optional[datetime] = None
     scheduled_end: Optional[datetime] = None
     max_participants: Optional[int] = Field(None, ge=2, le=100)
@@ -501,7 +501,7 @@ class ParticipantAddSchema(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     display_name: str = Field(..., min_length=1, max_length=100)
-    role: str = Field("participant", regex=r'^(host|co-host|participant|guest)$')
+    role: str = Field("participant", pattern=r'^(host|co-host|participant|guest)$')
 
     @validator('email')
     def validate_email_field(cls, v):
