@@ -13,7 +13,7 @@
 # ✅ Zapier Integration via API Keys
 # ============================================================================
 
-from fastapi import FastAPI, Depends, HTTPException, status, Request, Query, UploadFile, File, Form
+from fastapi import FastAPI, Depends, HTTPException, status, Request, Query, UploadFile, File, Form, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
@@ -35950,6 +35950,7 @@ async def get_ai_quick_actions(
 from telephony.provider import get_telephony_provider
 from telephony.dialer_engine import DialerEngine, click_to_dial
 from telephony.compliance import ComplianceChecker
+from telephony.websocket import ws_manager
 
 
 class DialerSessionCreate(BaseModel):

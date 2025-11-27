@@ -1,6 +1,12 @@
 """
 Dialer Engine - Power Dialer Session Management
 Handles session state machine, next-call logic, and call flow
+
+Features:
+- Automatic call progression with configurable delays
+- Real-time WebSocket updates to connected clients
+- Compliance checking before each call
+- Multi-agent collision prevention via soft locks
 """
 
 import logging
@@ -11,6 +17,7 @@ from enum import Enum
 
 from .provider import get_telephony_provider, CallResult, CallStatus
 from .compliance import ComplianceChecker
+from .websocket import ws_manager, DialerEvent
 
 logger = logging.getLogger(__name__)
 
@@ -401,6 +408,18 @@ class DialerEngine:
 
             logger.info(f"Call initiated: {result.call_sid} for task {task_id}")
 
+            # Send WebSocket event
+            ws_manager.send_to_agent_sync(
+                str(self.agent_id),
+                DialerEvent.call_initiated(
+                    session_id=session_id,
+                    task_id=task_id,
+                    call_sid=result.call_sid,
+                    contact_name=task.contact_name,
+                    contact_phone=task.contact_phone
+                )
+            )
+
             return {
                 "success": True,
                 "call_sid": result.call_sid,
@@ -418,6 +437,17 @@ class DialerEngine:
             task.notes = result.error_message
             task.attempts += 1
             self.db.commit()
+
+            # Send failure event via WebSocket
+            ws_manager.send_to_agent_sync(
+                str(self.agent_id),
+                DialerEvent.call_failed(
+                    session_id=session_id,
+                    task_id=task_id,
+                    error=result.error_message or "Call failed",
+                    error_code=result.error_code
+                )
+            )
 
             return {
                 "success": False,
@@ -465,8 +495,22 @@ class DialerEngine:
             DialerSession.id == session_id
         ).first()
 
-        # Map Twilio status to our status
-        if status in ["completed"]:
+        # Map Twilio status to our status and send WebSocket events
+        if status == "ringing":
+            ws_manager.send_to_agent_sync(
+                str(session.agent_id),
+                DialerEvent.call_ringing(session_id, task_id, call_sid)
+            )
+            return {"task_id": task_id, "status": "ringing"}
+
+        elif status in ["in-progress", "answered"]:
+            ws_manager.send_to_agent_sync(
+                str(session.agent_id),
+                DialerEvent.call_answered(session_id, task_id, call_sid, answered_by)
+            )
+            return {"task_id": task_id, "status": "answered"}
+
+        elif status in ["completed"]:
             task.status = DialerTaskStatus.COMPLETED
             task.duration_seconds = duration
             session.completed_tasks += 1
@@ -480,6 +524,18 @@ class DialerEngine:
 
         # Release soft lock
         self.compliance.release_soft_lock(task.contact_phone, self.agent_id)
+
+        # Send call completed event
+        ws_manager.send_to_agent_sync(
+            str(session.agent_id),
+            DialerEvent.call_completed(
+                session_id=session_id,
+                task_id=task_id,
+                call_sid=call_sid,
+                duration=duration,
+                status=status
+            )
+        )
 
         # Log the call
         call_log = CallLog(
@@ -512,6 +568,44 @@ class DialerEngine:
         if pending == 0:
             session.status = DialerSessionStatus.COMPLETED
             session.ended_at = datetime.utcnow()
+
+            # Send session completed event
+            completed_count = self.db.query(DialerSessionTask).filter(
+                DialerSessionTask.session_id == session_id,
+                DialerSessionTask.status == DialerTaskStatus.COMPLETED
+            ).count()
+
+            ws_manager.send_to_agent_sync(
+                str(session.agent_id),
+                DialerEvent.session_completed(
+                    session_id=session_id,
+                    total_calls=session.total_tasks,
+                    connected_calls=completed_count
+                )
+            )
+        else:
+            # Send session updated event
+            ws_manager.send_to_agent_sync(
+                str(session.agent_id),
+                DialerEvent.session_updated(
+                    session_id=session_id,
+                    status=session.status,
+                    total_tasks=session.total_tasks,
+                    completed_tasks=session.completed_tasks,
+                    pending_tasks=pending
+                )
+            )
+
+            # If call completed and needs disposition, notify
+            if task.status == DialerTaskStatus.COMPLETED:
+                ws_manager.send_to_agent_sync(
+                    str(session.agent_id),
+                    DialerEvent.disposition_required(
+                        session_id=session_id,
+                        task_id=task_id,
+                        contact_name=task.contact_name
+                    )
+                )
 
         self.db.commit()
 

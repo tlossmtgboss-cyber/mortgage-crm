@@ -413,6 +413,7 @@ function Settings() {
     { value: 'approved_with_conditions', label: 'Approved with Conditions' },
     { value: 'suspended', label: 'Suspended' },
     // Last Mile - Clear to Close & Closing
+    { value: 'last_mile', label: 'Last Mile' },
     { value: 'ctc', label: 'Clear to Close (CTC)' },
     { value: 'closing_scheduled', label: 'Closing Scheduled' },
     { value: 'closing_docs_sent', label: 'Closing Docs Sent' },
