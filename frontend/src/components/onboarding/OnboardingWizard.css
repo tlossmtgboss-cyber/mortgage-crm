@@ -227,3 +227,528 @@
     padding: 0.4rem 0.8rem;
   }
 }
+
+/* =====================================================
+   ONBOARDING MODAL STYLES (First-time user wizard)
+   ===================================================== */
+
+.onboarding-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 20px;
+}
+
+.onboarding-modal {
+  background: white;
+  border-radius: 12px;
+  max-width: 800px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  position: relative;
+}
+
+.skip-button {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 8px 16px;
+  border-radius: 4px;
+  transition: background 0.2s, color 0.2s;
+}
+
+.skip-button:hover {
+  color: #333;
+  background: #f0f0f0;
+}
+
+.onboarding-header {
+  text-align: center;
+  padding: 40px 40px 20px;
+  border-bottom: 1px solid #eee;
+}
+
+.step-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+}
+
+.onboarding-header h1 {
+  font-size: 28px;
+  margin: 0 0 24px;
+  color: #333;
+}
+
+.progress-bar {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.progress-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ddd;
+  transition: background 0.3s;
+}
+
+.progress-dot.active {
+  background: #3498db;
+}
+
+.onboarding-content {
+  padding: 40px;
+}
+
+/* Welcome Step */
+.welcome-step h2,
+.call-step h2,
+.clip-step h2,
+.analytics-step h2,
+.complete-step h2 {
+  text-align: center;
+  margin-bottom: 8px;
+  color: #333;
+}
+
+.welcome-step > p,
+.call-step > p,
+.clip-step > p,
+.analytics-step > p,
+.complete-step > p {
+  text-align: center;
+  color: #666;
+  margin-bottom: 24px;
+}
+
+.feature-list {
+  list-style: none;
+  padding: 0;
+  margin: 24px 0;
+}
+
+.feature-list li {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.feature-list li:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.feature-list .icon {
+  font-size: 32px;
+  flex-shrink: 0;
+}
+
+.feature-list strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #333;
+}
+
+.feature-list p {
+  margin: 0;
+  color: #666;
+  font-size: 14px;
+}
+
+/* Demo Placeholder */
+.demo-placeholder {
+  margin: 24px auto;
+  text-align: center;
+  padding: 60px 40px;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
+  border-radius: 12px;
+  max-width: 500px;
+}
+
+.demo-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.demo-placeholder p {
+  color: #888;
+  margin: 0;
+}
+
+/* Instructions */
+.instructions {
+  margin: 24px 0;
+  padding-left: 24px;
+}
+
+.instructions li {
+  margin-bottom: 12px;
+  line-height: 1.6;
+  color: #444;
+}
+
+.instructions strong {
+  color: #3498db;
+}
+
+/* Tip Box */
+.tip {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  background: #e3f2fd;
+  border-left: 4px solid #2196f3;
+  border-radius: 4px;
+  margin-top: 24px;
+}
+
+.tip-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.tip p {
+  margin: 0;
+  color: #1565c0;
+}
+
+/* Templates */
+.templates {
+  margin: 24px 0;
+}
+
+.templates h3 {
+  text-align: center;
+  color: #333;
+  margin-bottom: 16px;
+}
+
+.template-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.template-card {
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  text-align: center;
+  transition: transform 0.2s, box-shadow 0.2s;
+  cursor: pointer;
+}
+
+.template-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.template-icon {
+  font-size: 32px;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.template-card strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #333;
+  font-size: 14px;
+}
+
+.template-card p {
+  margin: 0;
+  font-size: 13px;
+  color: #666;
+}
+
+.action-prompt {
+  text-align: center;
+  color: #666;
+  margin-top: 24px;
+  padding: 16px;
+  background: #fff3e0;
+  border-radius: 8px;
+}
+
+.action-prompt strong {
+  color: #e65100;
+}
+
+/* Metrics Preview */
+.metrics-preview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin: 24px 0;
+}
+
+.metric {
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  transition: transform 0.2s;
+}
+
+.metric:hover {
+  transform: translateY(-2px);
+}
+
+.metric-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.metric strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #333;
+}
+
+.metric p {
+  margin: 0;
+  font-size: 13px;
+  color: #666;
+}
+
+/* Coaching Preview */
+.coaching-preview {
+  margin-top: 32px;
+}
+
+.coaching-preview h3 {
+  color: #333;
+  margin-bottom: 12px;
+}
+
+.coaching-card {
+  padding: 16px;
+  background: #fff3e0;
+  border-left: 4px solid #ff9800;
+  border-radius: 4px;
+}
+
+.coaching-card p {
+  margin: 8px 0 0;
+  color: #444;
+}
+
+.priority {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.priority.high {
+  background: #ffebee;
+  color: #c62828;
+}
+
+/* Next Steps */
+.next-steps {
+  margin: 24px 0;
+}
+
+.next-step {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.step-number {
+  width: 32px;
+  height: 32px;
+  background: #3498db;
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.next-step strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #333;
+}
+
+.next-step p {
+  margin: 0;
+  color: #666;
+  font-size: 14px;
+}
+
+/* Help Section */
+.help-section {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid #eee;
+}
+
+.help-section h3 {
+  text-align: center;
+  color: #333;
+  margin-bottom: 16px;
+}
+
+.help-links {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.help-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  text-decoration: none;
+  color: #333;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.help-link:hover {
+  background: #e9ecef;
+  transform: translateY(-2px);
+}
+
+.help-link span:first-child {
+  font-size: 32px;
+}
+
+/* Modal Footer */
+.onboarding-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 40px;
+  border-top: 1px solid #eee;
+}
+
+.onboarding-footer .footer-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.step-counter {
+  color: #666;
+  font-size: 14px;
+}
+
+.back-button {
+  background: none;
+  border: 1px solid #ddd;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.back-button:hover {
+  background: #f0f0f0;
+}
+
+.next-button {
+  background: #3498db;
+  color: white;
+  border: none;
+  padding: 12px 32px;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s;
+}
+
+.next-button:hover {
+  background: #2980b9;
+  transform: translateY(-1px);
+}
+
+/* Modal Responsive */
+@media (max-width: 768px) {
+  .onboarding-modal {
+    margin: 10px;
+    max-height: calc(100vh - 20px);
+  }
+
+  .onboarding-header {
+    padding: 30px 20px 15px;
+  }
+
+  .step-icon {
+    font-size: 48px;
+  }
+
+  .onboarding-header h1 {
+    font-size: 22px;
+  }
+
+  .onboarding-content {
+    padding: 20px;
+  }
+
+  .onboarding-footer {
+    padding: 15px 20px;
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .onboarding-footer .footer-left {
+    order: 2;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .next-button {
+    order: 1;
+    width: 100%;
+  }
+
+  .template-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .metrics-preview {
+    grid-template-columns: 1fr;
+  }
+
+  .help-links {
+    grid-template-columns: 1fr;
+  }
+}
