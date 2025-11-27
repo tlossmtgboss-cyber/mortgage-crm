@@ -314,7 +314,7 @@ def create_smart_scheduler_models(Base):
         # Related entities
         lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
         loan_id = Column(Integer, ForeignKey("loans.id"), nullable=True)
-        contact_id = Column(Integer, ForeignKey("contacts.id"), nullable=True)
+        contact_id = Column(Integer, nullable=True)  # Reference to contact (no FK)
 
         # External reference (for linking to other systems)
         external_id = Column(String(100), nullable=True)
