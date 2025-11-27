@@ -36604,23 +36604,32 @@ async def api_click_to_dial(
     current_user: User = Depends(get_current_user_flexible)
 ):
     """Single click-to-dial call"""
-    base_url = str(request.base_url).rstrip("/")
+    try:
+        base_url = str(request.base_url).rstrip("/")
+        logger.info(f"Click-to-dial: {data.phone_number} for user {current_user.id}, base_url={base_url}")
 
-    result = click_to_dial(
-        db_session=db,
-        agent_id=current_user.id,
-        phone_number=data.phone_number,
-        contact_name=data.contact_name,
-        base_url=base_url,
-        lead_id=data.lead_id,
-        loan_id=data.loan_id,
-        task_id=data.task_id
-    )
+        result = click_to_dial(
+            db_session=db,
+            agent_id=current_user.id,
+            phone_number=data.phone_number,
+            contact_name=data.contact_name,
+            base_url=base_url,
+            lead_id=data.lead_id,
+            loan_id=data.loan_id,
+            task_id=data.task_id
+        )
 
-    if not result.get("success"):
-        raise HTTPException(status_code=400, detail=result.get("error"))
+        if not result.get("success"):
+            logger.warning(f"Click-to-dial failed: {result}")
+            raise HTTPException(status_code=400, detail=result.get("error"))
 
-    return result
+        logger.info(f"Click-to-dial success: {result}")
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Click-to-dial error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Click-to-dial failed: {str(e)}")
 
 
 @app.post("/api/v1/dialer/sessions")
