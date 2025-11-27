@@ -10605,13 +10605,11 @@ from gmail_routes import router as gmail_router
 app.include_router(gmail_router, tags=["Gmail Integration"])
 
 # Include Email Drop routes (drag-and-drop email processing)
-from email_drop_routes import router as email_drop_router, set_dependencies as email_drop_set_deps
-email_drop_set_deps(get_db, get_current_user)
+from email_drop_routes import router as email_drop_router
 app.include_router(email_drop_router, tags=["Email Drop"])
 
 # Include Document Drop routes (drag-and-drop document upload)
-from document_drop_routes import router as document_drop_router, set_dependencies as doc_drop_set_deps
-doc_drop_set_deps(get_db, get_current_user)
+from document_drop_routes import router as document_drop_router
 app.include_router(document_drop_router, tags=["Document Drop"])
 
 # Include Morning Check-in routes
@@ -11006,6 +11004,8 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
     - Loan number exact and partial matching
     - Borrower name matching (primary and co-borrower)
     - Last name matching for spouse/family identification
+    - Email and phone matching for leads
+    - Combined first_name + last_name support
     """
 
     match_results = {
@@ -11039,6 +11039,39 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
         if ln1 and ln2 and ln1 == ln2:
             return True, 0.75
         return False, 0.0
+
+    def normalize_phone(phone: str) -> str:
+        """Normalize phone number for comparison"""
+        if not phone:
+            return ""
+        return ''.join(c for c in phone if c.isdigit())[-10:]  # Last 10 digits
+
+    def normalize_email(email: str) -> str:
+        """Normalize email for comparison"""
+        if not email:
+            return ""
+        return email.lower().strip()
+
+    # Build combined borrower name from first_name + last_name if not already present
+    borrower_name = None
+    if "borrower_name" in fields and fields["borrower_name"].get("value"):
+        borrower_name = fields["borrower_name"]["value"]
+    elif "first_name" in fields or "last_name" in fields:
+        first = fields.get("first_name", {}).get("value", "") or ""
+        last = fields.get("last_name", {}).get("value", "") or ""
+        if first or last:
+            borrower_name = f"{first} {last}".strip()
+            logger.info(f"Built borrower_name from first_name + last_name: '{borrower_name}'")
+
+    # Extract email and phone from fields
+    extracted_email = None
+    extracted_phone = None
+    if "borrower_email" in fields and fields["borrower_email"].get("value"):
+        extracted_email = normalize_email(fields["borrower_email"]["value"])
+    if "borrower_phone" in fields and fields["borrower_phone"].get("value"):
+        extracted_phone = normalize_phone(fields["borrower_phone"]["value"])
+
+    logger.info(f"Matching with: name='{borrower_name}', email='{extracted_email}', phone='{extracted_phone}'")
 
     # Try to match by loan number first (highest confidence)
     if "loan_number" in fields and fields["loan_number"].get("value"):
@@ -11087,31 +11120,79 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
             match_results["confidence"] = 0.85
             return match_results
 
-    # Extract borrower name from fields
-    borrower_name = None
-    if "borrower_name" in fields and fields["borrower_name"].get("value"):
-        borrower_name = fields["borrower_name"]["value"]
+    # ========== LEAD MATCHING (Email, Phone, Name) ==========
+    # Try email matching first (highest confidence for leads)
+    if extracted_email:
+        logger.info(f"Trying email match: '{extracted_email}'")
+        # Search ALL leads by email (not just user-owned)
+        email_leads = db.query(Lead).filter(
+            Lead.email.ilike(extracted_email)
+        ).all()
+        for lead in email_leads:
+            conf = 0.98 if lead.owner_id == user_id else 0.92
+            match_results["candidates"].append({
+                "type": "lead",
+                "id": lead.id,
+                "name": lead.name,
+                "confidence": conf,
+                "match_type": "email_exact"
+            })
+            logger.info(f"Email match found: Lead {lead.id} - {lead.name}")
 
-    # Try to match by borrower name + co-borrower name + last name matching
+    # Try phone matching (high confidence)
+    if extracted_phone and len(extracted_phone) >= 10:
+        logger.info(f"Trying phone match: '{extracted_phone}'")
+        # Search ALL leads by phone
+        all_leads = db.query(Lead).all()
+        for lead in all_leads:
+            if lead.phone:
+                lead_phone = normalize_phone(lead.phone)
+                if lead_phone and lead_phone == extracted_phone:
+                    # Avoid duplicates
+                    existing = next((c for c in match_results["candidates"]
+                                   if c["type"] == "lead" and c["id"] == lead.id), None)
+                    if not existing:
+                        conf = 0.95 if lead.owner_id == user_id else 0.88
+                        match_results["candidates"].append({
+                            "type": "lead",
+                            "id": lead.id,
+                            "name": lead.name,
+                            "confidence": conf,
+                            "match_type": "phone_exact"
+                        })
+                        logger.info(f"Phone match found: Lead {lead.id} - {lead.name}")
+
+    # Try to match by borrower name - NOW SEARCH ALL LEADS GLOBALLY
     if borrower_name:
-        borrower = borrower_name.lower().strip()
         borrower_last_name = get_last_name(borrower_name)
-        logger.info(f"Attempting to match borrower name: '{borrower}' (last name: '{borrower_last_name}')")
+        logger.info(f"Attempting to match borrower name: '{borrower_name}' (last name: '{borrower_last_name}')")
 
-        # Try leads first - user's leads
-        leads = db.query(Lead).filter(Lead.owner_id == user_id).all()
-        for lead in leads:
+        # Search ALL leads by name (not just user-owned)
+        all_leads = db.query(Lead).all()
+        for lead in all_leads:
             if lead.name:
                 is_match, conf = names_match(borrower_name, lead.name)
                 if is_match:
-                    match_results["candidates"].append({
-                        "type": "lead",
-                        "id": lead.id,
-                        "name": lead.name,
-                        "confidence": conf,
-                        "match_type": "lead_name"
-                    })
+                    # Avoid duplicates (might already have email/phone match)
+                    existing = next((c for c in match_results["candidates"]
+                                   if c["type"] == "lead" and c["id"] == lead.id), None)
+                    if existing:
+                        # Boost confidence if we have multiple match types
+                        existing["confidence"] = min(0.99, existing["confidence"] + 0.1)
+                        existing["match_type"] += "+name"
+                    else:
+                        # Adjust confidence based on ownership
+                        final_conf = conf if lead.owner_id == user_id else conf * 0.90
+                        match_results["candidates"].append({
+                            "type": "lead",
+                            "id": lead.id,
+                            "name": lead.name,
+                            "confidence": final_conf,
+                            "match_type": "lead_name"
+                        })
+                        logger.info(f"Name match found: Lead {lead.id} - {lead.name} (conf: {final_conf:.2f})")
 
+        # ========== LOAN MATCHING ==========
         # Try loans - check borrower_name AND coborrower_name
         loans = db.query(Loan).filter(Loan.loan_officer_id == user_id).all()
         for loan in loans:
@@ -11158,9 +11239,9 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
                             "match_type": "last_name_family"
                         })
 
-        # If no matches found with user filter, try broader search
-        if not match_results["candidates"]:
-            logger.info("No matches with user filter, trying all loans...")
+        # If no matches found with user filter, try broader search for loans
+        if not any(c["type"] == "loan" for c in match_results["candidates"]):
+            logger.info("No loan matches with user filter, trying all loans...")
             all_loans = db.query(Loan).all()
             for loan in all_loans:
                 # Check borrower name
@@ -14247,6 +14328,137 @@ async def reject_reconciliation(
         logger.error(f"Rejection error: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/reconciliation/{extracted_data_id}/rematch")
+async def rematch_single_item(
+    extracted_data_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Re-run entity matching for a single reconciliation item"""
+    try:
+        extracted = db.query(ExtractedData).filter(
+            ExtractedData.id == extracted_data_id
+        ).first()
+
+        if not extracted:
+            raise HTTPException(status_code=404, detail="Extracted data not found")
+
+        fields = extracted.fields or {}
+        if not fields:
+            return {
+                "status": "error",
+                "message": "No fields to match",
+                "match_confidence": 0
+            }
+
+        # Re-run matching with improved logic
+        entity_match = match_entity(fields, db, current_user.id)
+
+        if entity_match["entity_type"] and entity_match["confidence"] > 0:
+            extracted.match_entity_type = entity_match["entity_type"]
+            extracted.match_entity_id = entity_match["entity_id"]
+            extracted.match_confidence = entity_match["confidence"]
+            db.commit()
+
+            # Get the matched entity name
+            entity_name = get_entity_name(entity_match["entity_type"], entity_match["entity_id"], db)
+
+            logger.info(f"Rematched extracted_data {extracted.id}: {entity_match['entity_type']} {entity_match['entity_id']} ({entity_match['confidence']:.2f})")
+
+            return {
+                "status": "success",
+                "message": f"Matched to {entity_match['entity_type']}",
+                "match_entity_type": entity_match["entity_type"],
+                "match_entity_id": entity_match["entity_id"],
+                "match_entity_name": entity_name,
+                "match_confidence": entity_match["confidence"],
+                "candidates": entity_match.get("candidates", [])
+            }
+        else:
+            return {
+                "status": "no_match",
+                "message": "No matching entity found",
+                "match_confidence": 0,
+                "candidates": entity_match.get("candidates", [])
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Rematch error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/reconciliation/rematch-all")
+async def rematch_all_pending(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Re-run entity matching for all pending reconciliation items for current user"""
+    try:
+        # Get all pending items
+        pending = db.query(ExtractedData).join(
+            IncomingDataEvent,
+            ExtractedData.event_id == IncomingDataEvent.id
+        ).filter(
+            or_(
+                IncomingDataEvent.user_id == current_user.id,
+                IncomingDataEvent.user_id == None
+            ),
+            ExtractedData.status.in_(["pending_review", "needs_review"])
+        ).all()
+
+        logger.info(f"Re-matching {len(pending)} pending items for user {current_user.id}")
+
+        matched_count = 0
+        improved_count = 0
+        results = []
+
+        for extracted in pending:
+            fields = extracted.fields or {}
+            if not fields:
+                continue
+
+            old_confidence = extracted.match_confidence or 0
+            entity_match = match_entity(fields, db, current_user.id)
+
+            if entity_match["entity_type"] and entity_match["confidence"] > old_confidence:
+                extracted.match_entity_type = entity_match["entity_type"]
+                extracted.match_entity_id = entity_match["entity_id"]
+                extracted.match_confidence = entity_match["confidence"]
+
+                if old_confidence == 0:
+                    matched_count += 1
+                else:
+                    improved_count += 1
+
+                results.append({
+                    "id": extracted.id,
+                    "match_type": entity_match["entity_type"],
+                    "match_id": entity_match["entity_id"],
+                    "old_confidence": old_confidence,
+                    "new_confidence": entity_match["confidence"]
+                })
+
+        db.commit()
+        logger.info(f"Re-matched: {matched_count} new matches, {improved_count} improved matches")
+
+        return {
+            "status": "success",
+            "total_pending": len(pending),
+            "newly_matched": matched_count,
+            "improved": improved_count,
+            "results": results
+        }
+
+    except Exception as e:
+        logger.error(f"Rematch all error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.delete("/api/v1/reconciliation/items/bulk")
 async def bulk_delete_reconciliation_items(
@@ -25029,6 +25241,27 @@ def init_db():
 
                     conn.commit()
                     logger.info("✅ Schema migrations applied (PostgreSQL)")
+
+                    # Add telephony table columns if they don't exist
+                    conn.execute(text("""
+                        DO $$
+                        BEGIN
+                            -- Add auto_advance column if it doesn't exist
+                            IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='agent_telephony_settings') THEN
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='agent_telephony_settings' AND column_name='auto_advance') THEN
+                                    ALTER TABLE agent_telephony_settings ADD COLUMN auto_advance BOOLEAN DEFAULT TRUE;
+                                END IF;
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='agent_telephony_settings' AND column_name='pause_between_calls') THEN
+                                    ALTER TABLE agent_telephony_settings ADD COLUMN pause_between_calls INTEGER DEFAULT 3;
+                                END IF;
+                                -- Make cell_phone and business_caller_id nullable
+                                ALTER TABLE agent_telephony_settings ALTER COLUMN cell_phone DROP NOT NULL;
+                                ALTER TABLE agent_telephony_settings ALTER COLUMN business_caller_id DROP NOT NULL;
+                            END IF;
+                        END $$;
+                    """))
+                    conn.commit()
+                    logger.info("✅ Telephony migrations applied")
 
                     # Fix invalid Application stage values
                     result = conn.execute(text("""

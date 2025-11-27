@@ -94,27 +94,15 @@ class SearchMatchResponse(BaseModel):
 # Dependency Injection Setup
 # =============================================================================
 
-# These will be set from main.py
-_get_db = None
-_get_current_user = None
-
-def set_dependencies(db_dep, user_dep):
-    """Set dependency functions from main app"""
-    global _get_db, _get_current_user
-    _get_db = db_dep
-    _get_current_user = user_dep
-
+# Import database from main module
 def get_db():
-    """Get database session"""
-    if _get_db is None:
-        raise HTTPException(status_code=500, detail="Database dependency not configured")
-    return _get_db()
-
-def get_current_user():
-    """Get current user"""
-    if _get_current_user is None:
-        raise HTTPException(status_code=500, detail="User dependency not configured")
-    return _get_current_user()
+    """Get database session - imported from main"""
+    from database import SessionLocal
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 # =============================================================================

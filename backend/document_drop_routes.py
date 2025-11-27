@@ -43,20 +43,14 @@ class DocumentClassifyResponse(BaseModel):
 # Dependency Injection Setup
 # =============================================================================
 
-_get_db = None
-_get_current_user = None
-
-def set_dependencies(db_dep, user_dep):
-    """Set dependency functions from main app"""
-    global _get_db, _get_current_user
-    _get_db = db_dep
-    _get_current_user = user_dep
-
 def get_db():
     """Get database session"""
-    if _get_db is None:
-        raise HTTPException(status_code=500, detail="Database dependency not configured")
-    return _get_db()
+    from database import SessionLocal
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 # =============================================================================
