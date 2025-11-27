@@ -25242,26 +25242,36 @@ def init_db():
                     conn.commit()
                     logger.info("✅ Schema migrations applied (PostgreSQL)")
 
-                    # Add telephony table columns if they don't exist
+                    # Create telephony tables if they don't exist
                     conn.execute(text("""
-                        DO $$
-                        BEGIN
-                            -- Add auto_advance column if it doesn't exist
-                            IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='agent_telephony_settings') THEN
-                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='agent_telephony_settings' AND column_name='auto_advance') THEN
-                                    ALTER TABLE agent_telephony_settings ADD COLUMN auto_advance BOOLEAN DEFAULT TRUE;
-                                END IF;
-                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='agent_telephony_settings' AND column_name='pause_between_calls') THEN
-                                    ALTER TABLE agent_telephony_settings ADD COLUMN pause_between_calls INTEGER DEFAULT 3;
-                                END IF;
-                                -- Make cell_phone and business_caller_id nullable
-                                ALTER TABLE agent_telephony_settings ALTER COLUMN cell_phone DROP NOT NULL;
-                                ALTER TABLE agent_telephony_settings ALTER COLUMN business_caller_id DROP NOT NULL;
-                            END IF;
-                        END $$;
+                        CREATE TABLE IF NOT EXISTS agent_telephony_settings (
+                            id SERIAL PRIMARY KEY,
+                            user_id INTEGER UNIQUE NOT NULL REFERENCES users(id),
+                            cell_phone VARCHAR,
+                            business_caller_id VARCHAR,
+                            dialer_enabled BOOLEAN DEFAULT TRUE,
+                            max_calls_per_day INTEGER DEFAULT 200,
+                            max_concurrent_sessions INTEGER DEFAULT 1,
+                            auto_advance BOOLEAN DEFAULT TRUE,
+                            pause_between_calls INTEGER DEFAULT 3,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        );
+
+                        CREATE TABLE IF NOT EXISTS verified_caller_ids (
+                            id SERIAL PRIMARY KEY,
+                            phone_number VARCHAR UNIQUE NOT NULL,
+                            friendly_name VARCHAR,
+                            verification_status VARCHAR DEFAULT 'pending',
+                            twilio_sid VARCHAR,
+                            user_id INTEGER REFERENCES users(id),
+                            verified_at TIMESTAMP,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        );
                     """))
                     conn.commit()
-                    logger.info("✅ Telephony migrations applied")
+                    logger.info("✅ Telephony tables created/verified")
 
                     # Fix invalid Application stage values
                     result = conn.execute(text("""
