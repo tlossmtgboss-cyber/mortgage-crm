@@ -10651,7 +10651,9 @@ try:
     app.include_router(video_meeting_router, tags=["Video Meetings"])
     logger.info("✅ Video Meeting (UVIP) routes loaded")
 except Exception as e:
-    logger.warning(f"⚠️ Could not load Video Meeting routes: {e}")
+    import traceback
+    logger.error(f"⚠️ Could not load Video Meeting routes: {e}")
+    logger.error(f"Traceback: {traceback.format_exc()}")
 
 # Include Market Chat routes
 from market_chat_routes import router as market_chat_router
