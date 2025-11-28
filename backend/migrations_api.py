@@ -495,3 +495,59 @@ async def add_concierge_responsible_column(
     except Exception as e:
         logger.error(f"Migration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/update-user-email")
+async def update_user_email(
+    admin: Any = Depends(get_admin_user)
+):
+    """
+    Update demo user email from demo@example.com to admin@perenniaai.com
+    """
+    try:
+        from database import engine
+        from sqlalchemy import text
+
+        old_email = "demo@example.com"
+        new_email = "admin@perenniaai.com"
+
+        logger.info(f"Updating user email from {old_email} to {new_email}...")
+
+        with engine.connect() as conn:
+            # Check if old user exists
+            result = conn.execute(text("SELECT id, email FROM users WHERE email = :email"), {"email": old_email})
+            user = result.fetchone()
+
+            if not user:
+                # Check if already updated
+                result = conn.execute(text("SELECT id, email FROM users WHERE email = :email"), {"email": new_email})
+                existing = result.fetchone()
+                if existing:
+                    return {
+                        "status": "success",
+                        "message": f"User already updated to {new_email}"
+                    }
+                raise HTTPException(status_code=404, detail=f"User with email {old_email} not found")
+
+            # Update the email
+            conn.execute(text("""
+                UPDATE users SET email = :new_email WHERE email = :old_email
+            """), {"old_email": old_email, "new_email": new_email})
+            conn.commit()
+
+            logger.info(f"Successfully updated user email to {new_email}")
+
+        return {
+            "status": "success",
+            "message": f"User email updated from {old_email} to {new_email}",
+            "new_credentials": {
+                "email": new_email,
+                "password": "demo123 (unchanged)"
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
