@@ -163,6 +163,7 @@
 }
 
 .calendar-weekdays {
+  grid-column: 1 / -1;
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 4px;
@@ -178,6 +179,7 @@
 }
 
 .calendar-days {
+  grid-column: 1 / -1;
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 4px;
@@ -1003,6 +1005,115 @@
 
 .checkbox-label input {
   width: auto;
+}
+
+/* Type Card Clickable */
+.type-card.clickable {
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.type-card.clickable:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+  transform: translateY(-2px);
+}
+
+/* Type Modal */
+.scheduler-modal.type-modal {
+  max-width: 550px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.form-row .form-group {
+  margin-bottom: 0;
+}
+
+.duration-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.duration-toggle {
+  padding: 8px 14px;
+  background: #f3f4f6;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.duration-toggle:hover {
+  background: #e5e7eb;
+}
+
+.duration-toggle.active {
+  background: #eff6ff;
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+.color-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.color-option {
+  width: 32px;
+  height: 32px;
+  border: 3px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.color-option:hover {
+  transform: scale(1.1);
+}
+
+.color-option.selected {
+  border-color: #111827;
+  box-shadow: 0 0 0 2px white, 0 0 0 4px #111827;
+}
+
+.checkbox-group {
+  padding: 12px;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+
+.checkbox-group .checkbox-label {
+  margin: 0;
+}
+
+.modal-footer .delete-btn {
+  padding: 10px 20px;
+  background: #fee2e2;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #dc2626;
+  cursor: pointer;
+  margin-right: auto;
+}
+
+.modal-footer .delete-btn:hover {
+  background: #fecaca;
+}
+
+.modal-footer .footer-right {
+  display: flex;
+  gap: 12px;
 }
 
 /* Responsive */

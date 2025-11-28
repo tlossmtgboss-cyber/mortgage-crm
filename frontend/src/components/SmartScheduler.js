@@ -40,6 +40,7 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [showNewTypeModal, setShowNewTypeModal] = useState(false);
   const [showNewLinkModal, setShowNewLinkModal] = useState(false);
+  const [editingType, setEditingType] = useState(null);
 
   // New link form state
   const [linkForm, setLinkForm] = useState({
@@ -47,6 +48,21 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
     link_name: '',
     description: '',
     appointment_type_ids: []
+  });
+
+  // Appointment type form state
+  const [typeForm, setTypeForm] = useState({
+    type_name: '',
+    type_key: '',
+    description: '',
+    default_duration_minutes: 30,
+    allowed_durations: [15, 30, 45, 60],
+    color: '#10b981',
+    icon: 'calendar',
+    is_public: true,
+    requires_confirmation: false,
+    buffer_before_minutes: 5,
+    buffer_after_minutes: 5
   });
 
   const getAuthHeaders = useCallback(() => {
@@ -201,6 +217,97 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
     } catch (err) {
       console.error('Seed error:', err);
     }
+  };
+
+  // Create or update appointment type
+  const handleSaveAppointmentType = async () => {
+    try {
+      const isEditing = editingType !== null;
+      const url = isEditing
+        ? `${API_BASE}/api/v1/scheduler/appointment-types/${editingType.id}`
+        : `${API_BASE}/api/v1/scheduler/appointment-types`;
+
+      const response = await fetch(url, {
+        method: isEditing ? 'PUT' : 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          ...typeForm,
+          type_key: typeForm.type_key || typeForm.type_name.toLowerCase().replace(/\s+/g, '_')
+        })
+      });
+
+      if (response.ok) {
+        setShowNewTypeModal(false);
+        setEditingType(null);
+        resetTypeForm();
+        fetchData();
+        alert(isEditing ? 'Appointment type updated!' : 'Appointment type created!');
+      } else {
+        const err = await response.json();
+        alert(`Failed to save: ${err.detail}`);
+      }
+    } catch (err) {
+      console.error('Save type error:', err);
+      alert('Failed to save appointment type');
+    }
+  };
+
+  // Delete appointment type
+  const handleDeleteAppointmentType = async (typeId) => {
+    if (!window.confirm('Are you sure you want to delete this appointment type?')) return;
+
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/scheduler/appointment-types/${typeId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+
+      if (response.ok) {
+        fetchData();
+        alert('Appointment type deleted!');
+      } else {
+        const err = await response.json();
+        alert(`Failed to delete: ${err.detail}`);
+      }
+    } catch (err) {
+      console.error('Delete type error:', err);
+    }
+  };
+
+  // Open edit modal for appointment type
+  const handleEditType = (type) => {
+    setEditingType(type);
+    setTypeForm({
+      type_name: type.type_name || '',
+      type_key: type.type_key || '',
+      description: type.description || '',
+      default_duration_minutes: type.default_duration_minutes || 30,
+      allowed_durations: type.allowed_durations || [15, 30, 45, 60],
+      color: type.color || '#10b981',
+      icon: type.icon || 'calendar',
+      is_public: type.is_public !== false,
+      requires_confirmation: type.requires_confirmation || false,
+      buffer_before_minutes: type.buffer_before_minutes || 5,
+      buffer_after_minutes: type.buffer_after_minutes || 5
+    });
+    setShowNewTypeModal(true);
+  };
+
+  // Reset type form
+  const resetTypeForm = () => {
+    setTypeForm({
+      type_name: '',
+      type_key: '',
+      description: '',
+      default_duration_minutes: 30,
+      allowed_durations: [15, 30, 45, 60],
+      color: '#10b981',
+      icon: 'calendar',
+      is_public: true,
+      requires_confirmation: false,
+      buffer_before_minutes: 5,
+      buffer_after_minutes: 5
+    });
   };
 
   // Create booking link
@@ -380,7 +487,11 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
           <button className="seed-btn" onClick={handleSeedDefaults}>
             Seed Defaults
           </button>
-          <button className="add-type-btn" onClick={() => setShowNewTypeModal(true)}>
+          <button className="add-type-btn" onClick={() => {
+            setEditingType(null);
+            resetTypeForm();
+            setShowNewTypeModal(true);
+          }}>
             + New Type
           </button>
         </div>
@@ -396,19 +507,11 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
           {appointmentTypes.map(type => (
             <div
               key={type.id || type.type_key}
-              className="type-card"
+              className="type-card clickable"
               style={{ borderLeftColor: type.color }}
+              onClick={() => handleEditType(type)}
             >
               <div className="type-header">
-                <span className="type-icon">{
-                  type.icon === 'phone' ? '📞' :
-                  type.icon === 'document' ? '📄' :
-                  type.icon === 'clipboard' ? '📋' :
-                  type.icon === 'folder' ? '📁' :
-                  type.icon === 'lock' ? '🔒' :
-                  type.icon === 'home' ? '🏠' :
-                  type.icon === 'users' ? '👥' : '📅'
-                }</span>
                 <h4>{type.type_name}</h4>
               </div>
               <p className="type-description">{type.description}</p>
@@ -775,6 +878,206 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
     );
   };
 
+  // Render appointment type modal
+  const renderTypeModal = () => {
+    const iconOptions = [
+      { value: 'phone', label: 'Phone' },
+      { value: 'document', label: 'Document' },
+      { value: 'clipboard', label: 'Clipboard' },
+      { value: 'folder', label: 'Folder' },
+      { value: 'lock', label: 'Lock' },
+      { value: 'home', label: 'Home' },
+      { value: 'users', label: 'Users' },
+      { value: 'calendar', label: 'Calendar' }
+    ];
+
+    const colorOptions = [
+      '#10b981', '#3b82f6', '#8b5cf6', '#f59e0b',
+      '#ef4444', '#ec4899', '#06b6d4', '#84cc16'
+    ];
+
+    const durationOptions = [15, 20, 30, 45, 60, 90, 120];
+
+    const toggleDuration = (duration) => {
+      const current = typeForm.allowed_durations || [];
+      if (current.includes(duration)) {
+        setTypeForm({ ...typeForm, allowed_durations: current.filter(d => d !== duration) });
+      } else {
+        setTypeForm({ ...typeForm, allowed_durations: [...current, duration].sort((a, b) => a - b) });
+      }
+    };
+
+    return (
+      <div className="scheduler-modal-overlay" onClick={() => {
+        setShowNewTypeModal(false);
+        setEditingType(null);
+      }}>
+        <div className="scheduler-modal type-modal" onClick={e => e.stopPropagation()}>
+          <div className="modal-header">
+            <h3>{editingType ? 'Edit Appointment Type' : 'New Appointment Type'}</h3>
+            <button className="close-btn" onClick={() => {
+              setShowNewTypeModal(false);
+              setEditingType(null);
+            }}>&times;</button>
+          </div>
+
+          <div className="modal-content">
+            <div className="form-group">
+              <label>Type Name *</label>
+              <input
+                type="text"
+                value={typeForm.type_name}
+                onChange={e => setTypeForm({ ...typeForm, type_name: e.target.value })}
+                placeholder="e.g., Discovery Call"
+              />
+            </div>
+
+            <div className="form-group">
+              <label>Description</label>
+              <textarea
+                value={typeForm.description}
+                onChange={e => setTypeForm({ ...typeForm, description: e.target.value })}
+                placeholder="Brief description of this appointment type..."
+                rows={2}
+              />
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label>Default Duration</label>
+                <select
+                  value={typeForm.default_duration_minutes}
+                  onChange={e => setTypeForm({ ...typeForm, default_duration_minutes: parseInt(e.target.value) })}
+                >
+                  {durationOptions.map(d => (
+                    <option key={d} value={d}>{d} minutes</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label>Icon</label>
+                <select
+                  value={typeForm.icon}
+                  onChange={e => setTypeForm({ ...typeForm, icon: e.target.value })}
+                >
+                  {iconOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label>Allowed Durations</label>
+              <div className="duration-toggles">
+                {durationOptions.map(d => (
+                  <button
+                    key={d}
+                    type="button"
+                    className={`duration-toggle ${(typeForm.allowed_durations || []).includes(d) ? 'active' : ''}`}
+                    onClick={() => toggleDuration(d)}
+                  >
+                    {d}m
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label>Color</label>
+              <div className="color-options">
+                {colorOptions.map(color => (
+                  <button
+                    key={color}
+                    type="button"
+                    className={`color-option ${typeForm.color === color ? 'selected' : ''}`}
+                    style={{ backgroundColor: color }}
+                    onClick={() => setTypeForm({ ...typeForm, color })}
+                  />
+                ))}
+              </div>
+            </div>
+
+            <div className="form-row">
+              <div className="form-group">
+                <label>Buffer Before (min)</label>
+                <input
+                  type="number"
+                  value={typeForm.buffer_before_minutes}
+                  onChange={e => setTypeForm({ ...typeForm, buffer_before_minutes: parseInt(e.target.value) || 0 })}
+                  min="0"
+                  max="60"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Buffer After (min)</label>
+                <input
+                  type="number"
+                  value={typeForm.buffer_after_minutes}
+                  onChange={e => setTypeForm({ ...typeForm, buffer_after_minutes: parseInt(e.target.value) || 0 })}
+                  min="0"
+                  max="60"
+                />
+              </div>
+            </div>
+
+            <div className="form-group checkbox-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={typeForm.is_public}
+                  onChange={e => setTypeForm({ ...typeForm, is_public: e.target.checked })}
+                />
+                Public (visible on booking links)
+              </label>
+            </div>
+
+            <div className="form-group checkbox-group">
+              <label className="checkbox-label">
+                <input
+                  type="checkbox"
+                  checked={typeForm.requires_confirmation}
+                  onChange={e => setTypeForm({ ...typeForm, requires_confirmation: e.target.checked })}
+                />
+                Requires confirmation before booking
+              </label>
+            </div>
+          </div>
+
+          <div className="modal-footer">
+            {editingType && (
+              <button
+                className="delete-btn"
+                onClick={() => {
+                  handleDeleteAppointmentType(editingType.id);
+                  setShowNewTypeModal(false);
+                  setEditingType(null);
+                }}
+              >
+                Delete
+              </button>
+            )}
+            <div className="footer-right">
+              <button className="cancel-btn" onClick={() => {
+                setShowNewTypeModal(false);
+                setEditingType(null);
+              }}>Cancel</button>
+              <button
+                className="confirm-btn"
+                onClick={handleSaveAppointmentType}
+                disabled={!typeForm.type_name}
+              >
+                {editingType ? 'Save Changes' : 'Create Type'}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="smart-scheduler loading">
@@ -835,6 +1138,7 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
 
       {showBookingModal && renderBookingModal()}
       {showNewLinkModal && renderNewLinkModal()}
+      {showNewTypeModal && renderTypeModal()}
     </div>
   );
 };
