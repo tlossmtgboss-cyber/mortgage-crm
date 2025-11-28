@@ -1103,6 +1103,18 @@
   font-weight: 500;
 }
 
+.detail-value.clickable-link {
+  color: #218D8D;
+  text-decoration: underline;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.detail-value.clickable-link:hover {
+  color: #1a7070;
+  text-decoration-thickness: 2px;
+}
+
 .detail-urgency-badge {
   display: inline-block;
   padding: 6px 12px;

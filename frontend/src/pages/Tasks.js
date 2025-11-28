@@ -1339,7 +1339,24 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
                 )}
                 <div className="detail-info-item">
                   <span className="detail-label">Stage</span>
-                  <span className="detail-value">{selectedTask.stage}</span>
+                  <span
+                    className="detail-value clickable-link"
+                    onClick={() => {
+                      const loanId = selectedTask.loan_id || selectedTask.loanId || selectedTask.entity_id;
+                      const leadId = selectedTask.lead_id || selectedTask.leadId;
+                      if (selectedTask.source === 'Workflow' || selectedTask.stage === 'Workflow') {
+                        navigate('/workflow-dashboard');
+                      } else if (loanId && selectedTask.entity_type === 'loan') {
+                        navigate(`/loans/${loanId}`);
+                      } else if (leadId || selectedTask.entity_type === 'lead') {
+                        navigate(`/leads/${leadId || selectedTask.entity_id}`);
+                      } else if (loanId) {
+                        navigate(`/loans/${loanId}`);
+                      }
+                    }}
+                  >
+                    {selectedTask.stage}
+                  </span>
                 </div>
                 <div className="detail-info-item">
                   <span className="detail-label">Priority</span>
@@ -1352,7 +1369,25 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
                 </div>
                 <div className="detail-info-item">
                   <span className="detail-label">Source</span>
-                  <span className="detail-value">{selectedTask.source}</span>
+                  <span
+                    className="detail-value clickable-link"
+                    onClick={() => {
+                      if (selectedTask.source === 'Workflow') {
+                        navigate('/workflow-dashboard');
+                      } else if (selectedTask.source === 'AI Engine') {
+                        navigate('/ai-landing');
+                      } else if (selectedTask.source === 'Messages') {
+                        navigate('/messages');
+                      } else if (selectedTask.source === 'Client for Life' || selectedTask.source === 'MUM') {
+                        navigate('/mum');
+                      } else if (selectedTask.source === 'Milestone Risk') {
+                        const loanId = selectedTask.loan_id || selectedTask.loanId || selectedTask.entity_id;
+                        if (loanId) navigate(`/loans/${loanId}`);
+                      }
+                    }}
+                  >
+                    {selectedTask.source}
+                  </span>
                 </div>
                 <div className="detail-info-item">
                   <span className="detail-label">Owner</span>
