@@ -26051,6 +26051,26 @@ def init_db():
                     conn.commit()
                     logger.info("✅ Workflow concierge_responsible column added")
 
+                    # Add concierge to TaskResponsibility enum type
+                    conn.execute(text("""
+                        DO $$
+                        BEGIN
+                            -- Check if taskresponsibility enum type exists and add concierge value
+                            IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'taskresponsibility') THEN
+                                IF NOT EXISTS (
+                                    SELECT 1 FROM pg_enum WHERE enumlabel = 'concierge'
+                                    AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'taskresponsibility')
+                                ) THEN
+                                    ALTER TYPE taskresponsibility ADD VALUE IF NOT EXISTS 'concierge';
+                                END IF;
+                            END IF;
+                        EXCEPTION
+                            WHEN duplicate_object THEN NULL;
+                        END $$;
+                    """))
+                    conn.commit()
+                    logger.info("✅ TaskResponsibility enum updated with concierge")
+
                     # Fix invalid Application stage values
                     result = conn.execute(text("""
                         UPDATE leads
