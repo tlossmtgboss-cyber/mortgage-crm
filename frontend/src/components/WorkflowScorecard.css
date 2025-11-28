@@ -1,0 +1,593 @@
+/* WorkflowScorecard.css */
+
+.workflow-scorecard {
+  padding: 20px;
+  background: white;
+  border-radius: 12px;
+}
+
+.scorecard-loading {
+  padding: 40px;
+  text-align: center;
+  color: #666;
+}
+
+/* Breadcrumb */
+.scorecard-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.scorecard-breadcrumb button {
+  background: none;
+  border: none;
+  color: #3b82f6;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.scorecard-breadcrumb button:hover {
+  background: #eff6ff;
+}
+
+.scorecard-breadcrumb button.active,
+.scorecard-breadcrumb span.active {
+  color: #1f2937;
+  font-weight: 600;
+}
+
+.breadcrumb-separator {
+  color: #9ca3af;
+}
+
+/* Header */
+.scorecard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.scorecard-header h3 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.btn-back {
+  padding: 8px 16px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #374151;
+  transition: all 0.2s;
+}
+
+.btn-back:hover {
+  background: #e5e7eb;
+}
+
+.time-filter select {
+  padding: 8px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+  cursor: pointer;
+}
+
+/* Overall KPIs */
+.overall-kpis {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 32px;
+  padding: 24px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 12px;
+}
+
+.overall-score-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 32px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.score-circle,
+.grade-circle {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  border: 4px solid;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: white;
+}
+
+.grade-circle.large {
+  width: 120px;
+  height: 120px;
+}
+
+.score-circle .grade,
+.grade-circle .grade {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.score-circle .score,
+.grade-circle .score {
+  font-size: 14px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+.score-label,
+.grade-label {
+  margin-top: 12px;
+  font-size: 12px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.kpi-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  flex: 1;
+}
+
+.kpi-item {
+  flex: 1;
+  min-width: 120px;
+  padding: 16px;
+  background: white;
+  border-radius: 10px;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.kpi-item .kpi-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.kpi-item.success .kpi-value { color: #10b981; }
+.kpi-item.warning .kpi-value { color: #f59e0b; }
+.kpi-item.danger .kpi-value { color: #ef4444; }
+
+.kpi-item .kpi-label {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+.kpi-item .kpi-percent {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 2px;
+}
+
+/* Section Title */
+.section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 24px 0 16px;
+}
+
+/* Role Performance Cards Grid */
+.role-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.role-performance-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.role-performance-card:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+  transform: translateY(-2px);
+}
+
+.role-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.role-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.role-abbr {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.role-name {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.role-grade {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.role-score-bar {
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 3px;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.score-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+.role-metrics {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.role-metrics .metric {
+  text-align: center;
+}
+
+.role-metrics .metric .value {
+  display: block;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.role-metrics .metric.success .value { color: #10b981; }
+.role-metrics .metric.warning .value { color: #f59e0b; }
+.role-metrics .metric.danger .value { color: #ef4444; }
+
+.role-metrics .metric .label {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.role-footer {
+  display: flex;
+  justify-content: space-between;
+  padding-top: 12px;
+  border-top: 1px solid #f3f4f6;
+  font-size: 12px;
+}
+
+.completion-rate {
+  color: #6b7280;
+}
+
+.team-count {
+  color: #3b82f6;
+  font-weight: 500;
+}
+
+/* Role Team View */
+.role-team-view {
+  padding: 0;
+}
+
+.role-summary-card {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  padding: 24px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 12px;
+  margin-bottom: 24px;
+}
+
+.role-stats {
+  display: flex;
+  gap: 32px;
+}
+
+.role-stats .stat {
+  text-align: center;
+}
+
+.role-stats .stat-value {
+  display: block;
+  font-size: 28px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.role-stats .stat-value.success { color: #10b981; }
+.role-stats .stat-value.warning { color: #f59e0b; }
+.role-stats .stat-value.danger { color: #ef4444; }
+
+.role-stats .stat-label {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+/* Employee Grid */
+.employee-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.employee-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.employee-card:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+}
+
+.employee-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.employee-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.employee-avatar.small {
+  width: 36px;
+  height: 36px;
+  font-size: 12px;
+}
+
+.employee-name {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.employee-card-score {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.score-value {
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.score-number {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.employee-card-stats {
+  display: flex;
+  justify-content: space-between;
+}
+
+.mini-stat {
+  text-align: center;
+}
+
+.mini-stat .value {
+  display: block;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.mini-stat.success .value { color: #10b981; }
+.mini-stat.danger .value { color: #ef4444; }
+
+.mini-stat .label {
+  font-size: 10px;
+  color: #6b7280;
+}
+
+/* Employee Detail View */
+.employee-detail-view {
+  padding: 0;
+}
+
+.employee-score-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 12px;
+  margin-bottom: 24px;
+}
+
+.employee-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.employee-details h4 {
+  margin: 0 0 4px;
+  font-size: 20px;
+}
+
+.employee-details p {
+  margin: 0;
+  color: #6b7280;
+}
+
+.employee-grade-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Employee KPIs */
+.employee-kpis {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.employee-kpis .kpi-card {
+  flex: 1;
+  padding: 16px;
+  background: #f9fafb;
+  border-radius: 10px;
+  text-align: center;
+}
+
+.employee-kpis .kpi-card .kpi-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.employee-kpis .kpi-card.success .kpi-value { color: #10b981; }
+.employee-kpis .kpi-card.warning .kpi-value { color: #f59e0b; }
+.employee-kpis .kpi-card.danger .kpi-value { color: #ef4444; }
+
+.employee-kpis .kpi-card .kpi-label {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+/* Recent Tasks */
+.recent-tasks-section {
+  padding: 20px;
+  background: #f9fafb;
+  border-radius: 12px;
+}
+
+.recent-tasks-section h4 {
+  margin: 0 0 16px;
+  font-size: 16px;
+}
+
+.tasks-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tasks-table th,
+.tasks-table td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.tasks-table th {
+  font-size: 12px;
+  text-transform: uppercase;
+  color: #6b7280;
+  font-weight: 600;
+}
+
+.tasks-table td {
+  font-size: 14px;
+  color: #1f2937;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-badge.completed {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.status-badge.late {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.status-badge.overdue {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .overall-kpis {
+    flex-direction: column;
+  }
+
+  .kpi-grid {
+    flex-direction: column;
+  }
+
+  .role-cards-grid,
+  .employee-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .employee-kpis {
+    flex-wrap: wrap;
+  }
+
+  .employee-kpis .kpi-card {
+    min-width: calc(50% - 8px);
+  }
+}

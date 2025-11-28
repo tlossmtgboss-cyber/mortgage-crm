@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import WorkflowConfigEditor from '../components/WorkflowConfigEditor';
+import WorkflowScorecard from '../components/WorkflowScorecard';
 import './WorkflowDashboard.css';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://mortgage-crm-production-7a9a.up.railway.app';
@@ -18,10 +19,17 @@ const WORKFLOW_TABS = [
   { key: 'nurture', name: 'Nurture', color: '#6366f1' }
 ];
 
+// View mode tabs
+const VIEW_MODES = [
+  { key: 'configuration', name: 'Configuration', icon: '⚙️' },
+  { key: 'scorecard', name: 'Scorecard', icon: '📊' }
+];
+
 function WorkflowDashboard() {
   const [dashboard, setDashboard] = useState(null);
   const [workflows, setWorkflows] = useState([]);
   const [activeTab, setActiveTab] = useState('prospect');
+  const [viewMode, setViewMode] = useState('configuration');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -121,15 +129,38 @@ function WorkflowDashboard() {
         ))}
       </div>
 
-      {/* Embedded Workflow Configuration - replaces Active Tasks */}
+      {/* View Mode Toggle - Configuration / Scorecard */}
+      <div className="view-mode-tabs">
+        {VIEW_MODES.map(mode => (
+          <button
+            key={mode.key}
+            className={`view-mode-tab ${viewMode === mode.key ? 'active' : ''}`}
+            onClick={() => setViewMode(mode.key)}
+          >
+            <span className="mode-icon">{mode.icon}</span>
+            {mode.name}
+          </button>
+        ))}
+      </div>
+
+      {/* Content Area - Configuration or Scorecard */}
       <div className="workflow-content embedded-config">
-        <WorkflowConfigEditor
-          key={activeTab} // Force re-mount when tab changes
-          workflowKey={activeWorkflow.key}
-          workflowName={activeWorkflow.name}
-          workflowColor={activeWorkflow.color}
-          embedded={true}
-        />
+        {viewMode === 'configuration' ? (
+          <WorkflowConfigEditor
+            key={activeTab}
+            workflowKey={activeWorkflow.key}
+            workflowName={activeWorkflow.name}
+            workflowColor={activeWorkflow.color}
+            embedded={true}
+          />
+        ) : (
+          <WorkflowScorecard
+            key={`${activeTab}-scorecard`}
+            workflowKey={activeWorkflow.key}
+            workflowName={activeWorkflow.name}
+            workflowColor={activeWorkflow.color}
+          />
+        )}
       </div>
     </div>
   );
