@@ -28,6 +28,17 @@ class ErrorBoundary extends React.Component {
   componentDidCatch(error, errorInfo) {
     console.error('Error caught by boundary:', error, errorInfo);
 
+    // Auto-reload on ChunkLoadError (stale chunks after deployment)
+    const errorMessage = error?.message || error?.toString() || '';
+    if (error?.name === 'ChunkLoadError' ||
+        errorMessage.includes('Loading chunk') ||
+        errorMessage.includes('Loading CSS chunk') ||
+        errorMessage.includes('ChunkLoadError')) {
+      console.log('ChunkLoadError detected, auto-reloading...');
+      window.location.reload();
+      return;
+    }
+
     // Check if there's a pre-captured screenshot
     const preErrorScreenshot = window.__preErrorScreenshot;
     if (preErrorScreenshot) {
