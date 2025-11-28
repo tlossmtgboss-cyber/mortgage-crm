@@ -401,6 +401,7 @@ EXTRACTION RULES:
 4. BE HELPFUL - Suggest actions, flag issues, detect milestones
 5. BE CONSISTENT - Use standard formats (dates as YYYY-MM-DD, currencies as numbers, percentages as decimals)
 6. HANDLE AMBIGUITY - If uncertain, lower the confidence score and note in conflicts
+7. SINGLE NAME RULE - IMPORTANT: If you see only a SINGLE name/word (especially in email signatures or sign-offs), treat it as the LAST NAME, not the first name. Mortgage professionals commonly sign emails with just their last name. Example: "Michael" at the end of an email = last_name: "Michael", NOT first_name: "Michael"
 
 CONFIDENCE GUIDELINES:
 - 95-100%: Explicit, unambiguous ("My loan number is 12345")
