@@ -263,6 +263,40 @@
   color: #6b7280;
 }
 
+/* Clickable Category Card */
+.checkbox-card.clickable {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.checkbox-card.clickable:hover {
+  border-color: #93c5fd;
+  background: #f8fafc;
+}
+
+.checkbox-card.clickable.selected {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.checkbox-card.clickable.selected:hover {
+  background: #dbeafe;
+}
+
+.view-tasks-hint {
+  font-size: 11px;
+  color: #3b82f6;
+  font-weight: 500;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.view-tasks-hint::before {
+  content: '→';
+}
+
 /* Responsibility Group */
 .responsibility-group {
   margin-bottom: 20px;

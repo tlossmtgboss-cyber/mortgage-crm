@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import CategoryTasksModal from '../components/CategoryTasksModal';
 import './UserCreationWizard.css';
 
 // Use HTTPS Railway URL in production, localhost for development
@@ -50,6 +51,10 @@ function UserCreationWizard() {
 
   // Permission mode state (template vs custom)
   const [permissionMode, setPermissionMode] = useState('template');
+
+  // Category tasks modal state
+  const [selectedCategoryForTasks, setSelectedCategoryForTasks] = useState(null);
+  const [showCategoryTasksModal, setShowCategoryTasksModal] = useState(false);
 
   // Form data
   const [formData, setFormData] = useState({
@@ -109,16 +114,17 @@ function UserCreationWizard() {
 
   // Default categories
   const DEFAULT_CATEGORIES = [
-    { id: 1, display_name: 'Lead Generation', description: 'Prospecting and acquiring new leads' },
-    { id: 2, display_name: 'Pre-Qualification', description: 'Initial borrower qualification and assessment' },
-    { id: 3, display_name: 'Application Support', description: 'Assisting with loan applications' },
-    { id: 4, display_name: 'Processing Assistance', description: 'Supporting loan processing activities' },
-    { id: 5, display_name: 'Document Collection', description: 'Gathering and organizing loan documents' },
-    { id: 6, display_name: 'Condition Management', description: 'Tracking and clearing underwriting conditions' },
-    { id: 7, display_name: 'Client Communication', description: 'Maintaining borrower relationships and updates' },
-    { id: 8, display_name: 'Pipeline Management', description: 'Monitoring and managing loan pipeline' },
-    { id: 9, display_name: 'Closing Coordination', description: 'Managing the closing process' },
-    { id: 10, display_name: 'Post-Closing Follow-up', description: 'Client retention and referral generation' }
+    { id: 1, display_name: 'Lead Generation', description: 'Prospecting and acquiring new leads', workflow_key: 'prospect' },
+    { id: 2, display_name: 'Pre-Qualification', description: 'Initial borrower qualification and assessment', workflow_key: 'pre_qualification' },
+    { id: 3, display_name: 'Pre-Approval', description: 'Full credit analysis and conditional approval', workflow_key: 'pre_approval' },
+    { id: 4, display_name: 'Application Support', description: 'Assisting with loan applications', workflow_key: 'application' },
+    { id: 5, display_name: 'Processing Assistance', description: 'Supporting loan processing activities', workflow_key: 'processing' },
+    { id: 6, display_name: 'Document Collection', description: 'Gathering and organizing loan documents', workflow_key: 'document_collection' },
+    { id: 7, display_name: 'Condition Management', description: 'Tracking and clearing underwriting conditions', workflow_key: 'condition_management' },
+    { id: 8, display_name: 'Client Communication', description: 'Maintaining borrower relationships and updates', workflow_key: 'client_communication' },
+    { id: 9, display_name: 'Pipeline Management', description: 'Monitoring and managing loan pipeline', workflow_key: 'pipeline_management' },
+    { id: 10, display_name: 'Closing Coordination', description: 'Managing the closing process', workflow_key: 'closing' },
+    { id: 11, display_name: 'Post-Closing Follow-up', description: 'Client retention and referral generation', workflow_key: 'post_closing' }
   ];
 
   // Default permission templates
@@ -433,26 +439,48 @@ function UserCreationWizard() {
         {selectedRole && (
           <div className="section">
             <h3>Assign Categories</h3>
-            <p className="section-hint">Select the functional areas this user will work in.</p>
+            <p className="section-hint">Select the functional areas this user will work in. Click on a selected category to view and manage tasks.</p>
             <div className="checkbox-grid">
-              {categories.map(category => (
-                <label key={category.id} className="checkbox-card">
-                  <input
-                    type="checkbox"
-                    checked={formData.selected_categories.includes(category.id)}
-                    onChange={(e) => {
-                      const updated = e.target.checked
-                        ? [...formData.selected_categories, category.id]
-                        : formData.selected_categories.filter(id => id !== category.id);
-                      updateFormData({ selected_categories: updated });
+              {categories.map(category => {
+                const isSelected = formData.selected_categories.includes(category.id);
+                return (
+                  <div
+                    key={category.id}
+                    className={`checkbox-card clickable ${isSelected ? 'selected' : ''}`}
+                    onClick={() => {
+                      if (isSelected) {
+                        // If already selected, open tasks modal
+                        setSelectedCategoryForTasks(category);
+                        setShowCategoryTasksModal(true);
+                      } else {
+                        // If not selected, select it
+                        const updated = [...formData.selected_categories, category.id];
+                        updateFormData({ selected_categories: updated });
+                      }
                     }}
-                  />
-                  <div className="checkbox-content">
-                    <span className="checkbox-title">{category.display_name}</span>
-                    <span className="checkbox-desc">{category.description}</span>
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        const updated = e.target.checked
+                          ? [...formData.selected_categories, category.id]
+                          : formData.selected_categories.filter(id => id !== category.id);
+                        updateFormData({ selected_categories: updated });
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    <div className="checkbox-content">
+                      <span className="checkbox-title">{category.display_name}</span>
+                      <span className="checkbox-desc">{category.description}</span>
+                      {isSelected && (
+                        <span className="view-tasks-hint">Click to view tasks</span>
+                      )}
+                    </div>
                   </div>
-                </label>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -935,6 +963,20 @@ function UserCreationWizard() {
       <div className="wizard-body">
         {renderCurrentStep()}
       </div>
+
+      {/* Category Tasks Modal */}
+      <CategoryTasksModal
+        isOpen={showCategoryTasksModal}
+        onClose={() => {
+          setShowCategoryTasksModal(false);
+          setSelectedCategoryForTasks(null);
+        }}
+        category={selectedCategoryForTasks}
+        selectedRoleId={formData.role_id}
+        onTasksChange={() => {
+          // Optional: refresh data if needed
+        }}
+      />
     </div>
   );
 }
