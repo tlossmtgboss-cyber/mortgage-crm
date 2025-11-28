@@ -145,8 +145,9 @@ def create_workflow_config_models(Base):
         # Relationships
         workflow = relationship("WorkflowConfiguration", back_populates="role_assignments")
         user = relationship("User", backref="workflow_role_assignments")
-        # Dynamic role relationship - links to Role table
-        dynamic_role = relationship("Role", foreign_keys=[role_id])
+        # Note: For dynamic roles, use role_id to query the Role table directly
+        # We don't define a relationship here because Role is in a different module
+        # and would cause mapper initialization issues. Query Role explicitly when needed.
 
 
     class WorkflowTaskInstance(Base):
