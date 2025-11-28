@@ -422,7 +422,7 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
     setEditDayForm({
       label: day.day_label,
       value: day.day_value?.toString() || '',
-      repeat_weekly: day.repeat_weekly !== false // Default to true if not set
+      repeat_weekly: day.repeat_weekly === true // Default to false (unchecked) if not set
     });
   };
 
