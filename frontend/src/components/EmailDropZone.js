@@ -38,10 +38,16 @@ function EmailDropZone({ children }) {
       const types = Array.from(e.dataTransfer?.types || []);
       console.log('[Global DragEnter] types:', types, 'counter:', dragCounter);
 
+      // Be permissive - show overlay for ANY drag event
+      // Some email clients (Outlook) don't expose types until drop
+      // We'll filter out invalid content at drop time
       const hasFiles = types.includes('Files');
       const hasText = types.includes('text/html') || types.includes('text/plain') || types.includes('text/uri-list');
+      const hasAnyTypes = types.length > 0;
 
-      if (hasFiles || hasText) {
+      // Show overlay if we detect any drag content, or if types are empty (Outlook sometimes doesn't expose)
+      if (hasFiles || hasText || hasAnyTypes || dragCounter === 1) {
+        console.log('[Global DragEnter] Showing overlay');
         setIsDragging(true);
         dropProcessedRef.current = false;
       }
@@ -69,6 +75,11 @@ function EmailDropZone({ children }) {
       if (e.dataTransfer) {
         e.dataTransfer.dropEffect = 'copy';
       }
+      // Also show overlay on dragover in case dragenter was missed
+      // This helps with cross-window drags from Outlook/Gmail
+      if (!dropProcessedRef.current && dragCounter > 0) {
+        setIsDragging(true);
+      }
     };
 
     const handleDropBubble = (e) => {
@@ -86,6 +97,18 @@ function EmailDropZone({ children }) {
       e.preventDefault();
     };
 
+    // Window-level handler for drags from outside (Outlook desktop, etc.)
+    const handleWindowDragOver = (e) => {
+      e.preventDefault();
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'copy';
+      }
+      // Show overlay if something is being dragged over the window
+      if (!dropProcessedRef.current) {
+        setIsDragging(true);
+      }
+    };
+
     // Capture phase listeners (run first)
     document.addEventListener('dragenter', handleDragEnterCapture, true);
     document.addEventListener('dragleave', handleDragLeaveCapture, true);
@@ -94,11 +117,17 @@ function EmailDropZone({ children }) {
     document.addEventListener('dragover', handleDragOverBubble, false);
     document.addEventListener('drop', handleDropBubble, false);
 
+    // Window level - catches drags from outside
+    window.addEventListener('dragover', handleWindowDragOver, false);
+    window.addEventListener('drop', handleDropBubble, false);
+
     return () => {
       document.removeEventListener('dragenter', handleDragEnterCapture, true);
       document.removeEventListener('dragleave', handleDragLeaveCapture, true);
       document.removeEventListener('dragover', handleDragOverBubble, false);
       document.removeEventListener('drop', handleDropBubble, false);
+      window.removeEventListener('dragover', handleWindowDragOver, false);
+      window.removeEventListener('drop', handleDropBubble, false);
     };
   }, []);
 
