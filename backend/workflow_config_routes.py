@@ -229,7 +229,11 @@ async def get_workflow_config(
             'health_status': day.health_status.value if day.health_status else 'healthy',
             'health_message': day.health_message,
             'is_active': day.is_active,
-            'task_description': day.task_description
+            'task_description': day.task_description,
+            # Weekly recurring task settings
+            'repeat_weekly': getattr(day, 'repeat_weekly', False),
+            'repeat_day_of_week': getattr(day, 'repeat_day_of_week', None),
+            'repeat_until_status': getattr(day, 'repeat_until_status', None) or []
         })
 
     # Build role assignments list
@@ -1282,3 +1286,195 @@ async def update_day_role_responsibility(
         'role_id': body.role_id,
         'is_responsible': body.responsible
     }
+
+
+# =============================================================================
+# Weekly Task Scheduler Endpoints
+# =============================================================================
+
+@router.post("/weekly-tasks/process")
+async def process_weekly_tasks(
+    workflow_key: str = Query(default='under_contract', description="Workflow key to process"),
+    dry_run: bool = Query(default=False, description="If true, only simulate without creating tasks"),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Process weekly recurring tasks for a workflow.
+
+    This endpoint should be called by an external scheduler (cron job, Railway scheduled task, etc.)
+    to trigger weekly tasks like Monday Updates.
+
+    Business Rules:
+    - Monday Weekly Update: First update goes out on the Monday FOLLOWING the LE Pending date entry
+    - Tasks repeat every week until loan is closed, canceled, withdrawn, or denied
+    - Stakeholder emails exclude underwriter and closer
+
+    Args:
+        workflow_key: Which workflow to process (default: under_contract)
+        dry_run: If true, only simulate and report what would be done
+
+    Returns:
+        Summary of tasks processed, created, and any errors
+    """
+    try:
+        from weekly_task_scheduler import get_weekly_task_scheduler
+
+        scheduler = get_weekly_task_scheduler(db, _models)
+        results = scheduler.process_weekly_tasks(workflow_key=workflow_key, dry_run=dry_run)
+
+        return results
+
+    except ImportError as e:
+        logger.error(f"Failed to import weekly_task_scheduler: {e}")
+        raise HTTPException(status_code=500, detail="Weekly task scheduler not available")
+    except Exception as e:
+        logger.error(f"Error processing weekly tasks: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/weekly-tasks/status")
+async def get_weekly_task_status(
+    workflow_key: str = Query(default='under_contract', description="Workflow key to check"),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Get status of weekly recurring task configurations for a workflow.
+
+    Returns information about configured weekly tasks and recent execution.
+    """
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Models not initialized")
+
+    WorkflowConfiguration = _models['WorkflowConfiguration']
+    WorkflowDayConfig = _models['WorkflowDayConfig']
+    WorkflowTaskInstance = _models['WorkflowTaskInstance']
+
+    workflow = db.query(WorkflowConfiguration).filter(
+        WorkflowConfiguration.workflow_key == workflow_key
+    ).first()
+
+    if not workflow:
+        raise HTTPException(status_code=404, detail=f"Workflow '{workflow_key}' not found")
+
+    # Get weekly task configurations
+    weekly_configs = db.query(WorkflowDayConfig).filter(
+        WorkflowDayConfig.workflow_id == workflow.id,
+        WorkflowDayConfig.repeat_weekly == True
+    ).all()
+
+    # Get recent task instances
+    from datetime import timedelta
+    week_ago = datetime.utcnow() - timedelta(days=7)
+
+    recent_tasks = []
+    for config in weekly_configs:
+        tasks = db.query(WorkflowTaskInstance).filter(
+            WorkflowTaskInstance.day_config_id == config.id,
+            WorkflowTaskInstance.scheduled_date >= week_ago
+        ).order_by(WorkflowTaskInstance.scheduled_date.desc()).limit(10).all()
+
+        recent_tasks.extend([{
+            'id': t.id,
+            'loan_id': t.loan_id,
+            'task_name': t.task_name,
+            'scheduled_date': t.scheduled_date.isoformat() if t.scheduled_date else None,
+            'status': t.status
+        } for t in tasks])
+
+    day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+    return {
+        'workflow_key': workflow_key,
+        'workflow_name': workflow.workflow_name,
+        'weekly_task_configs': [{
+            'id': c.id,
+            'day_label': c.day_label,
+            'repeat_day_of_week': c.repeat_day_of_week,
+            'repeat_day_name': day_names[c.repeat_day_of_week] if c.repeat_day_of_week is not None else None,
+            'repeat_until_status': c.repeat_until_status or [],
+            'is_active': c.is_active,
+            'email_enabled': c.email_enabled,
+            'stakeholders_enabled': c.referral_partner_enabled
+        } for c in weekly_configs],
+        'recent_tasks': recent_tasks,
+        'total_weekly_configs': len(weekly_configs)
+    }
+
+
+@router.post("/weekly-tasks/test/{loan_id}")
+async def test_weekly_task_for_loan(
+    loan_id: int,
+    day_config_id: int = Query(..., description="Day config ID to test"),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Test weekly task generation for a specific loan (dry run).
+
+    This is useful for debugging and verifying the scheduling logic
+    before running the full weekly process.
+    """
+    try:
+        from weekly_task_scheduler import get_weekly_task_scheduler
+
+        if _models is None:
+            raise HTTPException(status_code=500, detail="Models not initialized")
+
+        Loan = _models['Loan']
+        WorkflowDayConfig = _models['WorkflowDayConfig']
+
+        # Get the loan
+        loan = db.query(Loan).filter(Loan.id == loan_id).first()
+        if not loan:
+            raise HTTPException(status_code=404, detail=f"Loan {loan_id} not found")
+
+        # Get the day config
+        day_config = db.query(WorkflowDayConfig).filter(
+            WorkflowDayConfig.id == day_config_id
+        ).first()
+        if not day_config:
+            raise HTTPException(status_code=404, detail=f"Day config {day_config_id} not found")
+
+        scheduler = get_weekly_task_scheduler(db, _models)
+
+        # Check if task should be sent today
+        should_send = scheduler.should_send_weekly_task(loan, day_config)
+
+        # Get stakeholders
+        stakeholders = scheduler.get_loan_stakeholders(loan_id)
+
+        # Calculate next occurrence
+        today = datetime.utcnow()
+        target_day = getattr(day_config, 'repeat_day_of_week', 0)  # Default Monday
+        trigger_date = getattr(loan, 'loan_estimate_sent_date', None) or loan.created_at
+
+        next_send = scheduler.get_next_occurrence(target_day, trigger_date)
+
+        day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+        return {
+            'loan_id': loan_id,
+            'loan_borrower': loan.borrower_name,
+            'loan_stage': loan.stage.value if hasattr(loan.stage, 'value') else str(loan.stage),
+            'day_config_id': day_config_id,
+            'day_label': day_config.day_label,
+            'repeat_weekly': getattr(day_config, 'repeat_weekly', False),
+            'repeat_day_of_week': target_day,
+            'repeat_day_name': day_names[target_day],
+            'trigger_date': trigger_date.isoformat() if trigger_date else None,
+            'first_send_date': next_send.isoformat() if next_send else None,
+            'today': today.isoformat(),
+            'today_day_name': day_names[today.weekday()],
+            'should_send_today': should_send,
+            'stakeholders_count': len(stakeholders),
+            'stakeholders': stakeholders
+        }
+
+    except ImportError as e:
+        logger.error(f"Failed to import weekly_task_scheduler: {e}")
+        raise HTTPException(status_code=500, detail="Weekly task scheduler not available")
+    except Exception as e:
+        logger.error(f"Error testing weekly task: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

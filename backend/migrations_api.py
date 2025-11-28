@@ -551,3 +551,57 @@ async def update_user_email(
     except Exception as e:
         logger.error(f"Migration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/add-weekly-task-columns")
+async def run_weekly_task_columns_migration(
+    admin: Any = Depends(get_admin_user)
+):
+    """
+    Add weekly task scheduling columns to workflow_day_configs table.
+
+    Adds columns for:
+    - repeat_weekly: Boolean flag to mark tasks as weekly recurring
+    - repeat_day_of_week: Integer (0=Monday, 6=Sunday) for which day to send
+    - repeat_until_status: JSON array of statuses that stop the recurrence
+
+    Business Rules:
+    - Monday Weekly Update: First update goes out on the Monday FOLLOWING the
+      LE Pending date entry (not same day if added on Monday)
+    - Tasks repeat until loan is closed, canceled, withdrawn, or denied
+    """
+    try:
+        from database import SessionLocal
+        from migrations.add_weekly_task_columns import run_migration, update_existing_monday_tasks
+
+        logger.info("Starting weekly task columns migration...")
+        db = SessionLocal()
+
+        # Run the column migration
+        migration_results = run_migration(db)
+
+        # Update existing Monday tasks if columns were added
+        update_results = {}
+        if migration_results.get('success'):
+            update_results = update_existing_monday_tasks(db)
+
+        db.close()
+
+        if migration_results.get('success'):
+            return {
+                "status": "success",
+                "message": "Weekly task columns migration completed",
+                "columns_added": migration_results.get('columns_added', []),
+                "existing_tasks_updated": update_results.get('tasks_updated', 0),
+                "errors": migration_results.get('errors', []) + update_results.get('errors', [])
+            }
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Migration failed: {migration_results.get('errors', ['Unknown error'])}"
+            )
+
+    except Exception as e:
+        logger.error(f"Migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
