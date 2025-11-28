@@ -56,6 +56,8 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
   const [newRole, setNewRole] = useState({ label: '', fullName: '' });
   const [deleteRoleModal, setDeleteRoleModal] = useState(null);
   const [reassignToRole, setReassignToRole] = useState('');
+  const [lastSaved, setLastSaved] = useState(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
 
   const fetchWorkflowConfig = useCallback(async () => {
     try {
@@ -280,6 +282,52 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
       }
     } catch (err) {
       console.error('Error updating responsibility:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Save all workflow changes (explicit save button)
+  const handleSaveAll = async () => {
+    try {
+      setSaving(true);
+      setSaveSuccess(false);
+      const token = localStorage.getItem('token');
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      };
+
+      // Save each day's configuration
+      const savePromises = days.map(day =>
+        fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}/days/${day.id}`, {
+          method: 'PUT',
+          headers,
+          body: JSON.stringify({
+            phone_enabled: day.phone_enabled,
+            text_enabled: day.text_enabled,
+            email_enabled: day.email_enabled,
+            referral_partner_enabled: day.referral_partner_enabled,
+            lo_responsible: day.lo_responsible,
+            jr_lo_responsible: day.jr_lo_responsible,
+            production_asst_responsible: day.production_asst_responsible,
+            concierge_responsible: day.concierge_responsible,
+            ai_responsible: day.ai_responsible,
+            role_responsibilities: day.role_responsibilities || {}
+          })
+        })
+      );
+
+      await Promise.all(savePromises);
+
+      setLastSaved(new Date());
+      setSaveSuccess(true);
+
+      // Hide success message after 3 seconds
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err) {
+      console.error('Error saving workflow:', err);
+      alert('Failed to save workflow. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -609,6 +657,17 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
         </div>
         <div className="editor-actions">
           {saving && <span className="saving-indicator">Saving...</span>}
+          {saveSuccess && <span className="save-success">Saved successfully!</span>}
+          {lastSaved && !saving && !saveSuccess && (
+            <span className="last-saved">Last saved: {lastSaved.toLocaleTimeString()}</span>
+          )}
+          <button
+            onClick={handleSaveAll}
+            className="btn-save"
+            disabled={saving || days.length === 0}
+          >
+            {saving ? 'Saving...' : 'Save Workflow'}
+          </button>
           <button onClick={onClose} className="btn-close">Close</button>
         </div>
       </div>
