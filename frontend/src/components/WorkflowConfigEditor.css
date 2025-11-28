@@ -343,7 +343,7 @@
 }
 
 .actions-col {
-  width: 60px;
+  width: 80px;
 }
 
 /* Health Status Cell */
@@ -478,9 +478,10 @@
 /* Actions Cell */
 .actions-cell {
   text-align: center;
+  white-space: nowrap;
 }
 
-.btn-delete-day {
+.actions-cell button {
   width: 28px;
   height: 28px;
   border: none;
@@ -488,9 +489,23 @@
   color: #9ca3af;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 18px;
+  font-size: 14px;
   line-height: 1;
   transition: all 0.2s;
+  margin: 0 2px;
+}
+
+.btn-edit-day {
+  font-size: 14px;
+}
+
+.btn-edit-day:hover {
+  background: #e0e7ff;
+  color: #4f46e5;
+}
+
+.btn-delete-day {
+  font-size: 18px;
 }
 
 .btn-delete-day:hover {
@@ -498,7 +513,7 @@
   color: #ef4444;
 }
 
-.btn-delete-day:disabled {
+.actions-cell button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }

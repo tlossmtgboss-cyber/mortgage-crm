@@ -58,6 +58,8 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
   const [reassignToRole, setReassignToRole] = useState('');
   const [lastSaved, setLastSaved] = useState(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [editingDay, setEditingDay] = useState(null);
+  const [editDayForm, setEditDayForm] = useState({ label: '', value: '' });
 
   const fetchWorkflowConfig = useCallback(async () => {
     try {
@@ -385,6 +387,47 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
       }
     } catch (err) {
       console.error('Error deleting day:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Open edit modal for a day
+  const handleEditDay = (day) => {
+    setEditingDay(day);
+    setEditDayForm({ label: day.day_label, value: day.day_value?.toString() || '' });
+  };
+
+  // Save edited day
+  const handleSaveEditDay = async () => {
+    if (!editingDay || !editDayForm.label) return;
+
+    try {
+      setSaving(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}/days/${editingDay.id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          day_label: editDayForm.label,
+          day_value: editDayForm.value ? parseInt(editDayForm.value) : null
+        })
+      });
+
+      if (response.ok) {
+        setDays(prev => prev.map(d =>
+          d.id === editingDay.id
+            ? { ...d, day_label: editDayForm.label, day_value: editDayForm.value ? parseInt(editDayForm.value) : null }
+            : d
+        ));
+        setEditingDay(null);
+        setEditDayForm({ label: '', value: '' });
+      }
+    } catch (err) {
+      console.error('Error updating day:', err);
     } finally {
       setSaving(false);
     }
@@ -820,6 +863,45 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
             </div>
           </div>
         )}
+
+        {/* Edit Day Modal */}
+        {editingDay && (
+          <div className="modal-overlay">
+            <div className="modal-content">
+              <h4>Edit Task</h4>
+              <div className="form-group">
+                <label>Task Label</label>
+                <input
+                  type="text"
+                  value={editDayForm.label}
+                  onChange={(e) => setEditDayForm(prev => ({ ...prev, label: e.target.value }))}
+                  placeholder="e.g., 7 Day Call - Thank You"
+                />
+              </div>
+              <div className="form-group">
+                <label>Day Value (number of days from closing)</label>
+                <input
+                  type="number"
+                  value={editDayForm.value}
+                  onChange={(e) => setEditDayForm(prev => ({ ...prev, value: e.target.value }))}
+                  placeholder="e.g., 7"
+                />
+              </div>
+              <div className="modal-actions">
+                <button className="btn-cancel" onClick={() => { setEditingDay(null); setEditDayForm({ label: '', value: '' }); }}>
+                  Cancel
+                </button>
+                <button
+                  className="btn-save"
+                  onClick={handleSaveEditDay}
+                  disabled={!editDayForm.label || saving}
+                >
+                  {saving ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Workflow Grid */}
@@ -937,9 +1019,17 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
                 {/* Actions */}
                 <td className="actions-cell">
                   <button
+                    className="btn-edit-day"
+                    onClick={() => handleEditDay(day)}
+                    title="Edit this task"
+                    disabled={saving}
+                  >
+                    ✎
+                  </button>
+                  <button
                     className="btn-delete-day"
                     onClick={() => handleDeleteDay(day.id)}
-                    title="Delete this day"
+                    title="Delete this task"
                     disabled={saving}
                   >
                     &times;
