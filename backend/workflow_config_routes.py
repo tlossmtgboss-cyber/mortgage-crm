@@ -12,7 +12,7 @@ Provides endpoints for managing workflow configurations:
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, text
 from typing import Optional, List, Dict
 from datetime import datetime
 from pydantic import BaseModel
@@ -519,12 +519,16 @@ async def add_role_assignment(
 
     # Handle dynamic role (new approach)
     if assignment.role_id:
-        from models.user_onboarding import Role
+        # Verify role exists using raw SQL
+        role_result = db.execute(text("""
+            SELECT id, name FROM onboarding_roles
+            WHERE id = :role_id AND is_active = true
+        """), {'role_id': assignment.role_id}).first()
 
-        # Verify role exists
-        role = db.query(Role).filter(Role.id == assignment.role_id, Role.is_active == True).first()
-        if not role:
+        if not role_result:
             raise HTTPException(status_code=404, detail=f"Role with ID {assignment.role_id} not found")
+
+        role_name = role_result.name
 
         # Check if role already exists for this workflow
         existing = db.query(WorkflowRoleAssignment).filter(
@@ -533,7 +537,7 @@ async def add_role_assignment(
         ).first()
 
         if existing:
-            raise HTTPException(status_code=400, detail=f"Role '{role.name}' already exists for this workflow")
+            raise HTTPException(status_code=400, detail=f"Role '{role_name}' already exists for this workflow")
 
         new_assignment = WorkflowRoleAssignment(
             workflow_id=workflow.id,
@@ -1045,25 +1049,28 @@ async def get_available_roles(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    """Get all available roles from the Role table for workflow configuration.
+    """Get all available roles from the roles table for workflow configuration.
 
     These are the admin-created roles that can be assigned to workflows.
     Returns roles with their IDs and names.
     """
-    from models.user_onboarding import Role
+    # Use raw SQL to query onboarding_roles table to avoid model import issues
+    result = db.execute(text("""
+        SELECT id, name, description
+        FROM onboarding_roles
+        WHERE is_active = true
+        ORDER BY name
+    """))
 
-    roles = db.query(Role).filter(Role.is_active == True).order_by(Role.name).all()
+    roles = []
+    for row in result:
+        roles.append({
+            'id': row.id,
+            'name': row.name,
+            'description': row.description
+        })
 
-    return {
-        'roles': [
-            {
-                'id': r.id,
-                'name': r.name,
-                'description': r.description
-            }
-            for r in roles
-        ]
-    }
+    return {'roles': roles}
 
 
 @router.post("/workflows/{workflow_key}/sync-roles")
@@ -1072,15 +1079,13 @@ async def sync_workflow_roles(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    """Sync workflow role assignments with available roles from Role table.
+    """Sync workflow role assignments with available roles from onboarding_roles table.
 
     For each role in the Role table, creates a workflow role assignment if it doesn't exist.
     This allows admin-created roles to automatically appear in workflow configurations.
     """
     if _models is None:
         raise HTTPException(status_code=500, detail="Models not initialized")
-
-    from models.user_onboarding import Role
 
     WorkflowConfiguration = _models['WorkflowConfiguration']
     WorkflowRoleAssignment = _models['WorkflowRoleAssignment']
@@ -1092,8 +1097,11 @@ async def sync_workflow_roles(
     if not workflow:
         raise HTTPException(status_code=404, detail=f"Workflow '{workflow_key}' not found")
 
-    # Get all active roles
-    roles = db.query(Role).filter(Role.is_active == True).all()
+    # Get all active roles using raw SQL
+    role_result = db.execute(text("""
+        SELECT id FROM onboarding_roles WHERE is_active = true
+    """))
+    role_ids = [row.id for row in role_result]
 
     # Get existing role assignments for this workflow
     existing_role_ids = set()
@@ -1103,11 +1111,11 @@ async def sync_workflow_roles(
 
     # Create assignments for any missing roles
     created = 0
-    for role in roles:
-        if role.id not in existing_role_ids:
+    for role_id in role_ids:
+        if role_id not in existing_role_ids:
             new_assignment = WorkflowRoleAssignment(
                 workflow_id=workflow.id,
-                role_id=role.id,
+                role_id=role_id,
                 user_id=None  # No user assigned yet
             )
             db.add(new_assignment)
@@ -1127,7 +1135,7 @@ async def sync_all_workflow_roles(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    """Sync all workflows with available roles from Role table.
+    """Sync all workflows with available roles from onboarding_roles table.
 
     Iterates through all workflows and ensures each has role assignments for all
     admin-created roles. This is useful after creating new roles to populate them
@@ -1136,13 +1144,14 @@ async def sync_all_workflow_roles(
     if _models is None:
         raise HTTPException(status_code=500, detail="Models not initialized")
 
-    from models.user_onboarding import Role
-
     WorkflowConfiguration = _models['WorkflowConfiguration']
     WorkflowRoleAssignment = _models['WorkflowRoleAssignment']
 
-    # Get all active roles
-    roles = db.query(Role).filter(Role.is_active == True).all()
+    # Get all active role IDs using raw SQL
+    role_result = db.execute(text("""
+        SELECT id FROM onboarding_roles WHERE is_active = true
+    """))
+    role_ids = [row.id for row in role_result]
 
     # Get all workflows
     workflows = db.query(WorkflowConfiguration).all()
@@ -1157,11 +1166,11 @@ async def sync_all_workflow_roles(
                 existing_role_ids.add(ra.role_id)
 
         # Create assignments for any missing roles
-        for role in roles:
-            if role.id not in existing_role_ids:
+        for role_id in role_ids:
+            if role_id not in existing_role_ids:
                 new_assignment = WorkflowRoleAssignment(
                     workflow_id=workflow.id,
-                    role_id=role.id,
+                    role_id=role_id,
                     user_id=None  # No user assigned yet
                 )
                 db.add(new_assignment)
