@@ -7,10 +7,6 @@ import './EmailDropZone.css';
 /**
  * EmailDropZone - Drag and drop component for email and document files
  * Wraps children and provides drag-drop overlay
- * When email is dropped, prompts user to:
- * 1. Add to borrower's document tab
- * 2. Add/reconcile data to CRM
- * When document is dropped, classifies and uploads it
  */
 function EmailDropZone({ children }) {
   const [isDragging, setIsDragging] = useState(false);
@@ -21,115 +17,144 @@ function EmailDropZone({ children }) {
   const [documentFile, setDocumentFile] = useState(null);
   const [parsing, setParsing] = useState(false);
   const [aiParseResult, setAiParseResult] = useState(null);
+
+  // Simple counter to track drag enter/leave
   const dragCounterRef = useRef(0);
 
-  // Reference to track if we've processed a drop (prevents double-processing)
-  const dropProcessedRef = useRef(false);
-
-  // Global document-level drag handlers
-  // Uses a combination of capture phase for detection and bubble phase for handling
+  // Set up global drag listeners on mount
   useEffect(() => {
+    // Counter to track nested drag enter/leave events
     let dragCounter = 0;
 
-    // CAPTURE PHASE - Detect drag entering/leaving the window
-    const handleDragEnterCapture = (e) => {
+    const handleDragEnter = (e) => {
+      e.preventDefault();
       dragCounter++;
 
-      const types = Array.from(e.dataTransfer?.types || []);
-      console.log('[Global DragEnter] types:', types, 'counter:', dragCounter);
+      const types = e.dataTransfer?.types ? Array.from(e.dataTransfer.types) : [];
+      console.log('[EmailDropZone] DragEnter - counter:', dragCounter, 'types:', types);
 
-      // Be permissive - show overlay for ANY drag event
-      // Some email clients (Outlook) don't expose types until drop
-      // We'll filter out invalid content at drop time
-      const hasFiles = types.includes('Files');
-      const hasText = types.includes('text/html') || types.includes('text/plain') || types.includes('text/uri-list');
-      const hasAnyTypes = types.length > 0;
-
-      // Show overlay if we detect any drag content, or if types are empty (Outlook sometimes doesn't expose)
-      if (hasFiles || hasText || hasAnyTypes || dragCounter === 1) {
-        console.log('[Global DragEnter] Showing overlay');
+      // Show overlay on ANY drag enter
+      if (dragCounter === 1) {
+        console.log('[EmailDropZone] Showing overlay');
         setIsDragging(true);
-        dropProcessedRef.current = false;
       }
     };
 
-    const handleDragLeaveCapture = (e) => {
+    const handleDragLeave = (e) => {
+      e.preventDefault();
       dragCounter--;
 
-      // relatedTarget is null when leaving the browser window
-      if (e.relatedTarget === null) {
-        console.log('[Global DragLeave] Left window, resetting');
+      console.log('[EmailDropZone] DragLeave - counter:', dragCounter);
+
+      // Hide when fully left
+      if (dragCounter <= 0) {
         dragCounter = 0;
-        setIsDragging(false);
-      } else if (dragCounter <= 0) {
-        console.log('[Global DragLeave] Counter zero, resetting');
-        dragCounter = 0;
+        console.log('[EmailDropZone] Hiding overlay');
         setIsDragging(false);
       }
     };
 
-    // BUBBLE PHASE - Handle dragover and drop as fallback
-    const handleDragOverBubble = (e) => {
-      // Always prevent default on dragover to allow drop
+    const handleDragOver = (e) => {
+      // MUST prevent default to allow drop
       e.preventDefault();
+
+      // Set drop effect
       if (e.dataTransfer) {
         e.dataTransfer.dropEffect = 'copy';
       }
-      // Also show overlay on dragover in case dragenter was missed
-      // This helps with cross-window drags from Outlook/Gmail
-      if (!dropProcessedRef.current && dragCounter > 0) {
+
+      // Safety: ensure overlay is shown during dragover
+      if (dragCounter > 0 && !isDragging) {
         setIsDragging(true);
       }
     };
 
-    const handleDropBubble = (e) => {
-      // Fallback drop handler - only processes if component didn't
-      console.log('[Global Drop] Bubble phase - processed:', dropProcessedRef.current);
+    const handleDrop = (e) => {
+      e.preventDefault();
+
+      const files = e.dataTransfer?.files;
+      const types = e.dataTransfer?.types ? Array.from(e.dataTransfer.types) : [];
+      console.log('[EmailDropZone] Drop - files:', files?.length, 'types:', types);
+
+      // Reset state
       dragCounter = 0;
       setIsDragging(false);
 
-      // If component already processed, skip
-      if (dropProcessedRef.current) {
+      // Process the drop
+      processDropEvent(e);
+    };
+
+    // Add listeners to document (bubbling phase)
+    document.addEventListener('dragenter', handleDragEnter, false);
+    document.addEventListener('dragleave', handleDragLeave, false);
+    document.addEventListener('dragover', handleDragOver, false);
+    document.addEventListener('drop', handleDrop, false);
+
+    // Also add to window for extra coverage
+    window.addEventListener('dragover', handleDragOver, false);
+    window.addEventListener('drop', handleDrop, false);
+
+    console.log('[EmailDropZone] *** Drag listeners ATTACHED ***');
+
+    return () => {
+      document.removeEventListener('dragenter', handleDragEnter, false);
+      document.removeEventListener('dragleave', handleDragLeave, false);
+      document.removeEventListener('dragover', handleDragOver, false);
+      document.removeEventListener('drop', handleDrop, false);
+      window.removeEventListener('dragover', handleDragOver, false);
+      window.removeEventListener('drop', handleDrop, false);
+      console.log('[EmailDropZone] Drag listeners removed');
+    };
+  }, [isDragging]);
+
+  // Process the drop event
+  const processDropEvent = async (e) => {
+    const files = Array.from(e.dataTransfer?.files || []);
+
+    // First check for files
+    if (files.length > 0) {
+      const file = files[0];
+      console.log('[Drop] Processing file:', file.name, file.type, file.size);
+
+      // Check if it's an email file
+      if (isEmailFile(file)) {
+        await handleEmailFile(file);
         return;
       }
 
-      // Prevent browser from opening the file
-      e.preventDefault();
-    };
-
-    // Window-level handler for drags from outside (Outlook desktop, etc.)
-    const handleWindowDragOver = (e) => {
-      e.preventDefault();
-      if (e.dataTransfer) {
-        e.dataTransfer.dropEffect = 'copy';
+      // Check if it's a document file
+      if (isDocumentFile(file)) {
+        setDocumentFile(file);
+        setShowDocumentModal(true);
+        return;
       }
-      // Show overlay if something is being dragged over the window
-      if (!dropProcessedRef.current) {
-        setIsDragging(true);
-      }
-    };
 
-    // Capture phase listeners (run first)
-    document.addEventListener('dragenter', handleDragEnterCapture, true);
-    document.addEventListener('dragleave', handleDragLeaveCapture, true);
+      // Try to parse as text anyway
+      await handleEmailFile(file);
+      return;
+    }
 
-    // Bubble phase listeners (run after component handlers)
-    document.addEventListener('dragover', handleDragOverBubble, false);
-    document.addEventListener('drop', handleDropBubble, false);
+    // No files - check for dragged text/html content
+    const types = Array.from(e.dataTransfer?.types || []);
+    let content = '';
+    let contentType = '';
 
-    // Window level - catches drags from outside
-    window.addEventListener('dragover', handleWindowDragOver, false);
-    window.addEventListener('drop', handleDropBubble, false);
+    if (types.includes('text/html')) {
+      content = e.dataTransfer.getData('text/html');
+      contentType = 'html';
+    } else if (types.includes('text/plain')) {
+      content = e.dataTransfer.getData('text/plain');
+      contentType = 'text';
+    }
 
-    return () => {
-      document.removeEventListener('dragenter', handleDragEnterCapture, true);
-      document.removeEventListener('dragleave', handleDragLeaveCapture, true);
-      document.removeEventListener('dragover', handleDragOverBubble, false);
-      document.removeEventListener('drop', handleDropBubble, false);
-      window.removeEventListener('dragover', handleWindowDragOver, false);
-      window.removeEventListener('drop', handleDropBubble, false);
-    };
-  }, []);
+    console.log('[Drop] Content type:', contentType, 'length:', content?.length);
+
+    if (content && content.length > 20) {
+      await handleDraggedContent(content, contentType);
+    } else {
+      alert('No valid file or email content detected. Try:\n1. Save the email as .eml file and drag that\n2. Or copy/paste the email content');
+    }
+  };
 
   // Determine if file is an email or document
   const isEmailFile = (file) => {
@@ -145,7 +170,131 @@ function EmailDropZone({ children }) {
     return docExtensions.some(ext => file.name.toLowerCase().endsWith(ext));
   };
 
-  // Parse email content from dragged HTML/text (from Outlook, Gmail, etc.)
+  // Handle email file
+  const handleEmailFile = async (file) => {
+    setParsing(true);
+    try {
+      const content = await readFileAsText(file);
+      const parsed = parseEmailContent(content, file.name);
+      setEmailData(parsed);
+
+      // Try AI parsing
+      try {
+        const aiResult = await emailDropAPI.parse(parsed);
+        setAiParseResult(aiResult);
+        if (aiResult.success) {
+          parsed.aiExtractedFields = aiResult.extracted_fields;
+          parsed.aiConfidenceScores = aiResult.confidence_scores;
+          parsed.aiSuggestedAction = aiResult.suggested_action;
+          parsed.aiQuestions = aiResult.questions;
+          parsed.aiSummary = aiResult.ai_summary;
+          parsed.matchedEntities = aiResult.matched_entities;
+        }
+      } catch (aiError) {
+        console.warn('AI parsing failed:', aiError);
+      }
+
+      setShowChoiceModal(true);
+    } catch (error) {
+      console.error('Failed to parse email:', error);
+      alert('Failed to parse email file. Please try again.');
+    }
+    setParsing(false);
+  };
+
+  // Handle dragged content (from Outlook/Gmail)
+  const handleDraggedContent = async (content, contentType) => {
+    setParsing(true);
+    try {
+      const parsed = parseEmailFromDragContent(content, contentType);
+      setEmailData(parsed);
+
+      // Try AI parsing
+      try {
+        const aiResult = await emailDropAPI.parse(parsed);
+        setAiParseResult(aiResult);
+        if (aiResult.success) {
+          parsed.aiExtractedFields = aiResult.extracted_fields;
+          parsed.aiConfidenceScores = aiResult.confidence_scores;
+          parsed.aiSuggestedAction = aiResult.suggested_action;
+          parsed.aiQuestions = aiResult.questions;
+          parsed.aiSummary = aiResult.ai_summary;
+          parsed.matchedEntities = aiResult.matched_entities;
+        }
+      } catch (aiError) {
+        console.warn('AI parsing failed:', aiError);
+      }
+
+      setShowChoiceModal(true);
+    } catch (error) {
+      console.error('Failed to parse dragged content:', error);
+      alert('Could not parse this email. Try saving it as a .eml file first.');
+    }
+    setParsing(false);
+  };
+
+  // Read file as text
+  const readFileAsText = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.onerror = reject;
+      reader.readAsText(file);
+    });
+  };
+
+  // Parse email content from raw text
+  const parseEmailContent = (content, filename) => {
+    const fromMatch = content.match(/^From:\s*(.+)$/mi);
+    const toMatch = content.match(/^To:\s*(.+)$/mi);
+    const subjectMatch = content.match(/^Subject:\s*(.+)$/mi);
+    const dateMatch = content.match(/^Date:\s*(.+)$/mi);
+
+    const bodyStart = content.indexOf('\n\n');
+    let body = bodyStart > -1 ? content.substring(bodyStart + 2) : content;
+
+    if (body.includes('<html') || body.includes('<HTML')) {
+      body = body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+
+    const borrowerPatterns = [
+      /(?:borrower|client|customer):\s*([A-Z][a-z]+\s+[A-Z][a-z]+)/i,
+      /(?:Dear|Hi|Hello)\s+([A-Z][a-z]+)/i,
+    ];
+
+    let matchedBorrower = null;
+    for (const pattern of borrowerPatterns) {
+      const match = content.match(pattern);
+      if (match) {
+        matchedBorrower = match[1];
+        break;
+      }
+    }
+
+    const loanMatch = content.match(/(?:loan\s*#?|loan\s*number)[\s:]*([A-Z0-9-]+)/i);
+
+    let confidence = 45;
+    if (fromMatch) confidence += 10;
+    if (subjectMatch) confidence += 10;
+    if (matchedBorrower) confidence += 15;
+    if (loanMatch) confidence += 20;
+
+    return {
+      id: Date.now(),
+      filename,
+      from: fromMatch ? fromMatch[1].trim() : 'Unknown Sender',
+      to: toMatch ? toMatch[1].trim() : '',
+      subject: subjectMatch ? subjectMatch[1].trim() : 'No Subject',
+      date: dateMatch ? dateMatch[1].trim() : new Date().toLocaleString(),
+      body: body.substring(0, 2000),
+      rawContent: content,
+      matchedBorrower,
+      matchedLoanNumber: loanMatch ? loanMatch[1] : null,
+      confidence: Math.min(confidence, 95),
+    };
+  };
+
+  // Parse email from dragged HTML/text content
   const parseEmailFromDragContent = (content, contentType) => {
     let textContent = content;
     let fromAddress = '';
@@ -155,22 +304,15 @@ function EmailDropZone({ children }) {
     let body = '';
 
     if (contentType === 'html') {
-      // Extract text from HTML
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = content;
-
-      // Try to find email headers in the HTML
       const allText = tempDiv.textContent || tempDiv.innerText;
       textContent = allText;
 
-      // Look for common email header patterns in HTML
-      const fromMatch = content.match(/From:?\s*<?([^<>\n\r]+@[^<>\n\r]+)>?/i) ||
-                       content.match(/from[:\s]+([^\n<]+)/i);
+      const fromMatch = content.match(/From:?\s*<?([^<>\n\r]+@[^<>\n\r]+)>?/i);
       const toMatch = content.match(/To:?\s*<?([^<>\n\r]+@[^<>\n\r]+)>?/i);
-      const subjectMatch = content.match(/Subject:?\s*([^\n\r<]+)/i) ||
-                          content.match(/<title>([^<]+)<\/title>/i);
-      const dateMatch = content.match(/Date:?\s*([^\n\r<]+)/i) ||
-                       content.match(/Sent:?\s*([^\n\r<]+)/i);
+      const subjectMatch = content.match(/Subject:?\s*([^\n\r<]+)/i);
+      const dateMatch = content.match(/Date:?\s*([^\n\r<]+)/i);
 
       fromAddress = fromMatch ? fromMatch[1].trim() : '';
       toAddress = toMatch ? toMatch[1].trim() : '';
@@ -178,34 +320,28 @@ function EmailDropZone({ children }) {
       dateStr = dateMatch ? dateMatch[1].trim() : '';
       body = allText.substring(0, 3000);
     } else {
-      // Plain text - parse as standard email format
       const fromMatch = textContent.match(/From:\s*(.+)/i);
       const toMatch = textContent.match(/To:\s*(.+)/i);
       const subjectMatch = textContent.match(/Subject:\s*(.+)/i);
-      const dateMatch = textContent.match(/Date:\s*(.+)/i) ||
-                       textContent.match(/Sent:\s*(.+)/i);
+      const dateMatch = textContent.match(/Date:\s*(.+)/i);
 
       fromAddress = fromMatch ? fromMatch[1].trim() : '';
       toAddress = toMatch ? toMatch[1].trim() : '';
       subject = subjectMatch ? subjectMatch[1].trim() : '';
       dateStr = dateMatch ? dateMatch[1].trim() : '';
 
-      // Body is everything after headers
       const bodyStart = textContent.search(/\n\n|\r\n\r\n/);
       body = bodyStart > -1 ? textContent.substring(bodyStart + 2, bodyStart + 3000) : textContent.substring(0, 3000);
     }
 
-    // Try to extract email from the from field if it contains a name
     const emailMatch = fromAddress.match(/[\w\.-]+@[\w\.-]+\.\w+/);
     if (emailMatch) {
       fromAddress = emailMatch[0];
     }
 
-    // Try to extract borrower name from content
     const borrowerPatterns = [
       /(?:borrower|client|customer):\s*([A-Z][a-z]+\s+[A-Z][a-z]+)/i,
       /(?:Dear|Hi|Hello)\s+([A-Z][a-z]+)/i,
-      /(?:my name is|I am|I'm)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i,
     ];
 
     let matchedBorrower = null;
@@ -217,10 +353,8 @@ function EmailDropZone({ children }) {
       }
     }
 
-    // Try to extract loan number
-    const loanMatch = textContent.match(/(?:loan\s*#?|loan\s*number|file\s*#?)[\s:]*([A-Z0-9-]+)/i);
+    const loanMatch = textContent.match(/(?:loan\s*#?|loan\s*number)[\s:]*([A-Z0-9-]+)/i);
 
-    // Calculate confidence
     let confidence = 40;
     if (fromAddress) confidence += 15;
     if (subject) confidence += 10;
@@ -242,253 +376,7 @@ function EmailDropZone({ children }) {
     };
   };
 
-  // Parse email file content
-  const parseEmailFile = async (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const content = e.target.result;
-
-        // Parse .eml or .msg file format
-        const emailData = parseEmailContent(content, file.name);
-        resolve(emailData);
-      };
-      reader.onerror = reject;
-      reader.readAsText(file);
-    });
-  };
-
-  // Parse email content from raw text
-  const parseEmailContent = (content, filename) => {
-    // Extract headers
-    const fromMatch = content.match(/^From:\s*(.+)$/mi);
-    const toMatch = content.match(/^To:\s*(.+)$/mi);
-    const subjectMatch = content.match(/^Subject:\s*(.+)$/mi);
-    const dateMatch = content.match(/^Date:\s*(.+)$/mi);
-
-    // Find email body (after headers)
-    const bodyStart = content.indexOf('\n\n');
-    let body = bodyStart > -1 ? content.substring(bodyStart + 2) : content;
-
-    // Clean up body - remove HTML if present
-    if (body.includes('<html') || body.includes('<HTML')) {
-      // Extract text from HTML
-      body = body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-    }
-
-    // Try to extract borrower name from content
-    const borrowerPatterns = [
-      /(?:borrower|client|customer):\s*([A-Z][a-z]+\s+[A-Z][a-z]+)/i,
-      /(?:Dear|Hi|Hello)\s+([A-Z][a-z]+)/i,
-      /(?:regarding|re:)\s+([A-Z][a-z]+\s+[A-Z][a-z]+)/i,
-    ];
-
-    let matchedBorrower = null;
-    for (const pattern of borrowerPatterns) {
-      const match = content.match(pattern);
-      if (match) {
-        matchedBorrower = match[1];
-        break;
-      }
-    }
-
-    // Try to extract loan number
-    const loanMatch = content.match(/(?:loan\s*#?|loan\s*number|file\s*#?)[\s:]*([A-Z0-9-]+)/i);
-
-    // Determine confidence based on what we found
-    let confidence = 45; // Base confidence
-    if (fromMatch) confidence += 10;
-    if (subjectMatch) confidence += 10;
-    if (matchedBorrower) confidence += 15;
-    if (loanMatch) confidence += 20;
-
-    return {
-      id: Date.now(),
-      filename,
-      from: fromMatch ? fromMatch[1].trim() : 'Unknown Sender',
-      to: toMatch ? toMatch[1].trim() : '',
-      subject: subjectMatch ? subjectMatch[1].trim() : 'No Subject',
-      date: dateMatch ? dateMatch[1].trim() : new Date().toLocaleString(),
-      body: body.substring(0, 2000), // Limit body size
-      rawContent: content,
-      matchedBorrower,
-      matchedLoanNumber: loanMatch ? loanMatch[1] : null,
-      confidence: Math.min(confidence, 95),
-    };
-  };
-
-  // Check if the drag contains valid droppable content
-  const isValidDrag = useCallback((e) => {
-    const types = Array.from(e.dataTransfer.types);
-    return types.includes('Files') ||
-           types.includes('text/html') ||
-           types.includes('text/plain') ||
-           types.includes('text/uri-list');
-  }, []);
-
-  const handleDragEnter = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    // Increment counter for nested elements
-    dragCounterRef.current++;
-
-    // Check if dragging files OR email content (text/html from email clients)
-    const types = Array.from(e.dataTransfer.types);
-    console.log('DragEnter - types:', types, 'counter:', dragCounterRef.current);
-
-    if (isValidDrag(e)) {
-      setIsDragging(true);
-    }
-  }, [isValidDrag]);
-
-  const handleDragLeave = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    // Decrement counter
-    dragCounterRef.current--;
-    console.log('DragLeave - counter:', dragCounterRef.current);
-
-    // Only hide when we've left all nested elements
-    if (dragCounterRef.current === 0) {
-      setIsDragging(false);
-    }
-  }, []);
-
-  const handleDragOver = useCallback((e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    // Set dropEffect to show it's droppable
-    e.dataTransfer.dropEffect = 'copy';
-  }, []);
-
-  const handleDrop = useCallback(async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-    dragCounterRef.current = 0; // Reset counter
-    dropProcessedRef.current = true; // Mark that we've processed this drop
-
-    // Log what we received for debugging
-    console.log('[Component Drop] types:', Array.from(e.dataTransfer.types));
-    console.log('[Component Drop] files:', e.dataTransfer.files.length);
-
-    const files = Array.from(e.dataTransfer.files);
-
-    // First, check for dragged email content (from Outlook, Gmail, etc.)
-    // This happens when dragging directly from email client
-    if (files.length === 0) {
-      // Try to get text/html or text/plain content
-      let content = '';
-      let contentType = '';
-
-      if (e.dataTransfer.types.includes('text/html')) {
-        content = e.dataTransfer.getData('text/html');
-        contentType = 'html';
-      } else if (e.dataTransfer.types.includes('text/plain')) {
-        content = e.dataTransfer.getData('text/plain');
-        contentType = 'text';
-      } else if (e.dataTransfer.types.includes('text/uri-list')) {
-        content = e.dataTransfer.getData('text/uri-list');
-        contentType = 'uri';
-      }
-
-      console.log('Drag content type:', contentType, 'Content length:', content?.length);
-
-      if (content && content.length > 20) {
-        setParsing(true);
-        try {
-          // Parse the dragged content as email
-          const parsed = parseEmailFromDragContent(content, contentType);
-          setEmailData(parsed);
-
-          // Try AI parsing
-          try {
-            const aiResult = await emailDropAPI.parse(parsed);
-            setAiParseResult(aiResult);
-            if (aiResult.success) {
-              parsed.aiExtractedFields = aiResult.extracted_fields;
-              parsed.aiConfidenceScores = aiResult.confidence_scores;
-              parsed.aiSuggestedAction = aiResult.suggested_action;
-              parsed.aiQuestions = aiResult.questions;
-              parsed.aiSummary = aiResult.ai_summary;
-              parsed.matchedEntities = aiResult.matched_entities;
-            }
-          } catch (aiError) {
-            console.warn('AI parsing failed:', aiError);
-          }
-
-          setShowChoiceModal(true);
-        } catch (error) {
-          console.error('Failed to parse dragged content:', error);
-          alert('Could not parse this email. Try saving it as a .eml file first and then drag that file.');
-        }
-        setParsing(false);
-        return;
-      }
-
-      // No valid content found
-      alert('No valid file or email content detected. Try:\n1. Save the email as .eml file and drag that\n2. Or copy/paste the email content');
-      return;
-    }
-
-    const file = files[0];
-    console.log('File dropped:', file.name, file.type, file.size);
-
-    // Check if it's an email file
-    if (isEmailFile(file)) {
-      setParsing(true);
-      try {
-        const parsed = await parseEmailFile(file);
-        setEmailData(parsed);
-
-        // Try to get AI parsing in background
-        try {
-          const aiResult = await emailDropAPI.parse(parsed);
-          setAiParseResult(aiResult);
-          // Update confidence based on AI result
-          if (aiResult.success) {
-            parsed.aiExtractedFields = aiResult.extracted_fields;
-            parsed.aiConfidenceScores = aiResult.confidence_scores;
-            parsed.aiSuggestedAction = aiResult.suggested_action;
-            parsed.aiQuestions = aiResult.questions;
-            parsed.aiSummary = aiResult.ai_summary;
-            parsed.matchedEntities = aiResult.matched_entities;
-          }
-        } catch (aiError) {
-          console.warn('AI parsing failed, using basic parsing:', aiError);
-        }
-
-        setShowChoiceModal(true);
-      } catch (error) {
-        console.error('Failed to parse email:', error);
-        alert('Failed to parse email file. Please try again.');
-      }
-      setParsing(false);
-      return;
-    }
-
-    // Check if it's a document file
-    if (isDocumentFile(file)) {
-      setDocumentFile(file);
-      setShowDocumentModal(true);
-      return;
-    }
-
-    // Try to parse as text email anyway (for .txt or unknown files)
-    setParsing(true);
-    try {
-      const parsed = await parseEmailFile(file);
-      setEmailData(parsed);
-      setShowChoiceModal(true);
-    } catch (error) {
-      console.error('Failed to parse file:', error);
-      alert('Could not parse this file. Supported formats: .eml, .msg, .pdf, .doc, .docx, .xls, .xlsx, images');
-    }
-    setParsing(false);
-  }, []);
-
+  // Choice handlers
   const handleChoiceDocument = () => {
     setShowChoiceModal(false);
     setShowReconciliationModal(true);
@@ -496,7 +384,6 @@ function EmailDropZone({ children }) {
 
   const handleChoiceLead = () => {
     setShowChoiceModal(false);
-    // Set the action type for the reconciliation modal
     if (emailData) {
       emailData.preferredAction = 'lead';
     }
@@ -519,19 +406,16 @@ function EmailDropZone({ children }) {
 
   const handleReconciliationComplete = async (action, data) => {
     console.log('Reconciliation complete:', action, data);
-
     try {
-      // Call the backend API to process the email
       const result = await emailDropAPI.process(
         action,
         emailData,
         data.extractedFields || emailData.aiExtractedFields || {},
         data.matchedEntity?.data?.id?.toString(),
         data.matchedEntity?.type,
-        !data.matchedEntity, // create_new if no matched entity
+        !data.matchedEntity,
         data.userAnswers || {}
       );
-
       if (result.success) {
         alert(`Success! ${result.message}`);
       } else {
@@ -541,7 +425,6 @@ function EmailDropZone({ children }) {
       console.error('Failed to process email:', error);
       alert('Failed to process email. Please try again.');
     }
-
     setShowReconciliationModal(false);
     setEmailData(null);
     setAiParseResult(null);
@@ -560,24 +443,12 @@ function EmailDropZone({ children }) {
   };
 
   return (
-    <div
-      className="email-drop-zone-wrapper"
-      onDragEnter={handleDragEnter}
-      onDragLeave={handleDragLeave}
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
-    >
+    <div className="email-drop-zone-wrapper">
       {children}
 
-      {/* Drag Overlay - captures drop events when visible */}
+      {/* Drag Overlay */}
       {isDragging && (
-        <div
-          className="email-drop-overlay"
-          onDragOver={handleDragOver}
-          onDragEnter={handleDragEnter}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-        >
+        <div className="email-drop-overlay">
           <div className="email-drop-content">
             <div className="email-drop-icon">📧📄</div>
             <h2>Drop Here</h2>

@@ -106,11 +106,6 @@
   gap: 16px;
 }
 
-.stage-icon {
-  font-size: 32px;
-  flex-shrink: 0;
-}
-
 .stage-info {
   flex: 1;
 }
@@ -436,10 +431,6 @@
   border-bottom: 1px solid #E5E7EB;
 }
 
-.category-icon {
-  font-size: 20px;
-}
-
 .category-name {
   font-size: 15px;
   font-weight: 600;
@@ -494,11 +485,6 @@
   height: 18px;
   cursor: pointer;
   accent-color: #10B981;
-}
-
-.feature-icon {
-  font-size: 24px;
-  flex-shrink: 0;
 }
 
 .feature-info {

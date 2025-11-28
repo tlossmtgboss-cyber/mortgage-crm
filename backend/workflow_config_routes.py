@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from typing import Optional, List
+from typing import Optional, List, Dict
 from datetime import datetime
 from pydantic import BaseModel
 import logging
@@ -35,11 +35,14 @@ class DayConfigCreate(BaseModel):
     text_enabled: bool = False
     email_enabled: bool = False
     referral_partner_enabled: bool = False
+    # Legacy fields - kept for backwards compatibility
     lo_responsible: bool = False
     jr_lo_responsible: bool = False
     production_asst_responsible: bool = False
     concierge_responsible: bool = False
     ai_responsible: bool = False
+    # Dynamic role responsibilities - format: {role_id: true/false}
+    role_responsibilities: Optional[Dict[str, bool]] = None
     task_description: Optional[str] = None
 
 
@@ -50,17 +53,23 @@ class DayConfigUpdate(BaseModel):
     text_enabled: Optional[bool] = None
     email_enabled: Optional[bool] = None
     referral_partner_enabled: Optional[bool] = None
+    # Legacy fields - kept for backwards compatibility
     lo_responsible: Optional[bool] = None
     jr_lo_responsible: Optional[bool] = None
     production_asst_responsible: Optional[bool] = None
     concierge_responsible: Optional[bool] = None
     ai_responsible: Optional[bool] = None
+    # Dynamic role responsibilities - format: {role_id: true/false}
+    role_responsibilities: Optional[Dict[str, bool]] = None
     is_active: Optional[bool] = None
     task_description: Optional[str] = None
 
 
 class RoleAssignmentCreate(BaseModel):
-    role: str  # loan_officer, junior_loan_officer, production_assistant, ai
+    # Legacy: use 'role' for enum-based role (backwards compat)
+    role: Optional[str] = None  # loan_officer, junior_loan_officer, production_assistant, ai
+    # New: use 'role_id' for dynamic role from Role table
+    role_id: Optional[int] = None
     user_id: Optional[int] = None
 
 
@@ -189,11 +198,14 @@ async def get_workflow_config(
             'text_enabled': day.text_enabled,
             'email_enabled': day.email_enabled,
             'referral_partner_enabled': day.referral_partner_enabled,
+            # Legacy fields
             'lo_responsible': day.lo_responsible,
             'jr_lo_responsible': day.jr_lo_responsible,
             'production_asst_responsible': day.production_asst_responsible,
             'concierge_responsible': getattr(day, 'concierge_responsible', False),
             'ai_responsible': day.ai_responsible,
+            # Dynamic role responsibilities
+            'role_responsibilities': getattr(day, 'role_responsibilities', {}) or {},
             'health_status': day.health_status.value if day.health_status else 'healthy',
             'health_message': day.health_message,
             'is_active': day.is_active,
@@ -206,9 +218,24 @@ async def get_workflow_config(
         user_name = None
         if ra.user_id and ra.user:
             user_name = ra.user.full_name or ra.user.email
+
+        # Handle both legacy enum roles and new dynamic roles
+        role_name = None
+        role_id = None
+        if hasattr(ra, 'role_id') and ra.role_id:
+            role_id = ra.role_id
+            # Get role name from dynamic_role relationship
+            if hasattr(ra, 'dynamic_role') and ra.dynamic_role:
+                role_name = ra.dynamic_role.name
+        elif ra.role:
+            # Legacy enum-based role
+            role_name = ra.role.value if hasattr(ra.role, 'value') else str(ra.role)
+
         role_assignments.append({
             'id': ra.id,
-            'role': ra.role.value if hasattr(ra.role, 'value') else ra.role,
+            'role': role_name,  # Legacy field for backwards compatibility
+            'role_id': role_id,  # New dynamic role ID
+            'role_name': role_name,  # Display name
             'user_id': ra.user_id,
             'user_name': user_name,
             'is_active': ra.is_active
@@ -270,11 +297,14 @@ async def add_day_config(
         text_enabled=day_config.text_enabled,
         email_enabled=day_config.email_enabled,
         referral_partner_enabled=day_config.referral_partner_enabled,
+        # Legacy fields
         lo_responsible=day_config.lo_responsible,
         jr_lo_responsible=day_config.jr_lo_responsible,
         production_asst_responsible=day_config.production_asst_responsible,
         concierge_responsible=day_config.concierge_responsible,
         ai_responsible=day_config.ai_responsible,
+        # Dynamic role responsibilities
+        role_responsibilities=day_config.role_responsibilities or {},
         task_description=day_config.task_description
     )
 
@@ -468,7 +498,12 @@ async def add_role_assignment(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    """Add a new role assignment to a workflow"""
+    """Add a new role assignment to a workflow.
+
+    Supports both legacy enum roles (via 'role' field) and dynamic roles (via 'role_id').
+    When role_id is provided, it uses the dynamic Role table.
+    When role is provided (without role_id), it falls back to the legacy enum.
+    """
     if _models is None:
         raise HTTPException(status_code=500, detail="Models not initialized")
 
@@ -482,28 +517,54 @@ async def add_role_assignment(
     if not workflow:
         raise HTTPException(status_code=404, detail=f"Workflow '{workflow_key}' not found")
 
-    # Import TaskResponsibility enum
-    from workflow_config_models import TaskResponsibility
+    # Handle dynamic role (new approach)
+    if assignment.role_id:
+        from models.user_onboarding import Role
 
-    try:
-        role_enum = TaskResponsibility(assignment.role)
-    except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid role: {assignment.role}")
+        # Verify role exists
+        role = db.query(Role).filter(Role.id == assignment.role_id, Role.is_active == True).first()
+        if not role:
+            raise HTTPException(status_code=404, detail=f"Role with ID {assignment.role_id} not found")
 
-    # Check if role already exists
-    existing = db.query(WorkflowRoleAssignment).filter(
-        WorkflowRoleAssignment.workflow_id == workflow.id,
-        WorkflowRoleAssignment.role == role_enum
-    ).first()
+        # Check if role already exists for this workflow
+        existing = db.query(WorkflowRoleAssignment).filter(
+            WorkflowRoleAssignment.workflow_id == workflow.id,
+            WorkflowRoleAssignment.role_id == assignment.role_id
+        ).first()
 
-    if existing:
-        raise HTTPException(status_code=400, detail=f"Role {assignment.role} already exists for this workflow")
+        if existing:
+            raise HTTPException(status_code=400, detail=f"Role '{role.name}' already exists for this workflow")
 
-    new_assignment = WorkflowRoleAssignment(
-        workflow_id=workflow.id,
-        role=role_enum,
-        user_id=assignment.user_id
-    )
+        new_assignment = WorkflowRoleAssignment(
+            workflow_id=workflow.id,
+            role_id=assignment.role_id,
+            user_id=assignment.user_id
+        )
+    # Handle legacy enum role
+    elif assignment.role:
+        from workflow_config_models import TaskResponsibility
+
+        try:
+            role_enum = TaskResponsibility(assignment.role)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid role: {assignment.role}")
+
+        # Check if role already exists
+        existing = db.query(WorkflowRoleAssignment).filter(
+            WorkflowRoleAssignment.workflow_id == workflow.id,
+            WorkflowRoleAssignment.role == role_enum
+        ).first()
+
+        if existing:
+            raise HTTPException(status_code=400, detail=f"Role {assignment.role} already exists for this workflow")
+
+        new_assignment = WorkflowRoleAssignment(
+            workflow_id=workflow.id,
+            role=role_enum,
+            user_id=assignment.user_id
+        )
+    else:
+        raise HTTPException(status_code=400, detail="Either 'role' or 'role_id' must be provided")
 
     db.add(new_assignment)
     db.commit()
@@ -847,6 +908,7 @@ async def seed_default_workflows(
                 lo_responsible=day_data.get('lo', False),
                 jr_lo_responsible=day_data.get('jr_lo', False),
                 production_asst_responsible=day_data.get('pa', False),
+                concierge_responsible=day_data.get('concierge', False),
                 ai_responsible=day_data.get('ai', False),
                 health_status=TaskHealthStatus.HEALTHY
             )
@@ -857,6 +919,87 @@ async def seed_default_workflows(
     db.commit()
 
     return {'success': True, 'workflows_created': created}
+
+
+@router.post("/reseed/{workflow_key}")
+async def reseed_workflow(
+    workflow_key: str,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Delete and recreate a specific workflow from DEFAULT_WORKFLOW_CONFIGS.
+    Useful for updating workflow configurations.
+    """
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Models not initialized")
+
+    from workflow_config_models import DEFAULT_WORKFLOW_CONFIGS, TaskHealthStatus
+
+    if workflow_key not in DEFAULT_WORKFLOW_CONFIGS:
+        raise HTTPException(status_code=404, detail=f"Workflow '{workflow_key}' not found in defaults")
+
+    WorkflowConfiguration = _models['WorkflowConfiguration']
+    WorkflowDayConfig = _models['WorkflowDayConfig']
+
+    # Delete existing workflow and its days (cascade delete should handle days)
+    existing = db.query(WorkflowConfiguration).filter(
+        WorkflowConfiguration.workflow_key == workflow_key
+    ).first()
+
+    if existing:
+        # Delete day configs first
+        db.query(WorkflowDayConfig).filter(
+            WorkflowDayConfig.workflow_id == existing.id
+        ).delete()
+        # Delete workflow
+        db.delete(existing)
+        db.flush()
+
+    # Create fresh workflow from defaults
+    config = DEFAULT_WORKFLOW_CONFIGS[workflow_key]
+    workflow = WorkflowConfiguration(
+        workflow_key=workflow_key,
+        workflow_name=config['name'],
+        description=config['description'],
+        objective=config['objective'],
+        statuses_impacted=config['statuses_impacted'],
+        color=config['color']
+    )
+    db.add(workflow)
+    db.flush()
+
+    # Create day configs
+    days_created = 0
+    for day_data in config.get('days', []):
+        day = WorkflowDayConfig(
+            workflow_id=workflow.id,
+            day_label=day_data['label'],
+            day_order=day_data['order'],
+            day_value=day_data['value'],
+            phone_enabled=day_data.get('phone', False),
+            text_enabled=day_data.get('text', False),
+            email_enabled=day_data.get('email', False),
+            referral_partner_enabled=day_data.get('partner', False),
+            lo_responsible=day_data.get('lo', False),
+            jr_lo_responsible=day_data.get('jr_lo', False),
+            production_asst_responsible=day_data.get('pa', False),
+            concierge_responsible=day_data.get('concierge', False),
+            ai_responsible=day_data.get('ai', False),
+            health_status=TaskHealthStatus.HEALTHY
+        )
+        db.add(day)
+        days_created += 1
+
+    db.commit()
+
+    return {
+        'success': True,
+        'workflow_key': workflow_key,
+        'workflow_id': workflow.id,
+        'days_created': days_created,
+        'message': f"Workflow '{workflow_key}' reseeded with {days_created} days"
+    }
 
 
 # =============================================================================
@@ -890,4 +1033,199 @@ async def get_users_for_assignment(
             }
             for u in users
         ]
+    }
+
+
+# =============================================================================
+# Dynamic Roles Endpoints
+# =============================================================================
+
+@router.get("/available-roles")
+async def get_available_roles(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Get all available roles from the Role table for workflow configuration.
+
+    These are the admin-created roles that can be assigned to workflows.
+    Returns roles with their IDs and names.
+    """
+    from models.user_onboarding import Role
+
+    roles = db.query(Role).filter(Role.is_active == True).order_by(Role.name).all()
+
+    return {
+        'roles': [
+            {
+                'id': r.id,
+                'name': r.name,
+                'description': r.description
+            }
+            for r in roles
+        ]
+    }
+
+
+@router.post("/workflows/{workflow_key}/sync-roles")
+async def sync_workflow_roles(
+    workflow_key: str,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Sync workflow role assignments with available roles from Role table.
+
+    For each role in the Role table, creates a workflow role assignment if it doesn't exist.
+    This allows admin-created roles to automatically appear in workflow configurations.
+    """
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Models not initialized")
+
+    from models.user_onboarding import Role
+
+    WorkflowConfiguration = _models['WorkflowConfiguration']
+    WorkflowRoleAssignment = _models['WorkflowRoleAssignment']
+
+    workflow = db.query(WorkflowConfiguration).filter(
+        WorkflowConfiguration.workflow_key == workflow_key
+    ).first()
+
+    if not workflow:
+        raise HTTPException(status_code=404, detail=f"Workflow '{workflow_key}' not found")
+
+    # Get all active roles
+    roles = db.query(Role).filter(Role.is_active == True).all()
+
+    # Get existing role assignments for this workflow
+    existing_role_ids = set()
+    for ra in workflow.role_assignments or []:
+        if hasattr(ra, 'role_id') and ra.role_id:
+            existing_role_ids.add(ra.role_id)
+
+    # Create assignments for any missing roles
+    created = 0
+    for role in roles:
+        if role.id not in existing_role_ids:
+            new_assignment = WorkflowRoleAssignment(
+                workflow_id=workflow.id,
+                role_id=role.id,
+                user_id=None  # No user assigned yet
+            )
+            db.add(new_assignment)
+            created += 1
+
+    db.commit()
+
+    return {
+        'success': True,
+        'message': f'Synced {created} new role assignments for workflow {workflow_key}',
+        'created_count': created
+    }
+
+
+@router.post("/sync-all-workflow-roles")
+async def sync_all_workflow_roles(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Sync all workflows with available roles from Role table.
+
+    Iterates through all workflows and ensures each has role assignments for all
+    admin-created roles. This is useful after creating new roles to populate them
+    across all workflows.
+    """
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Models not initialized")
+
+    from models.user_onboarding import Role
+
+    WorkflowConfiguration = _models['WorkflowConfiguration']
+    WorkflowRoleAssignment = _models['WorkflowRoleAssignment']
+
+    # Get all active roles
+    roles = db.query(Role).filter(Role.is_active == True).all()
+
+    # Get all workflows
+    workflows = db.query(WorkflowConfiguration).all()
+
+    total_created = 0
+
+    for workflow in workflows:
+        # Get existing role assignments for this workflow
+        existing_role_ids = set()
+        for ra in workflow.role_assignments or []:
+            if hasattr(ra, 'role_id') and ra.role_id:
+                existing_role_ids.add(ra.role_id)
+
+        # Create assignments for any missing roles
+        for role in roles:
+            if role.id not in existing_role_ids:
+                new_assignment = WorkflowRoleAssignment(
+                    workflow_id=workflow.id,
+                    role_id=role.id,
+                    user_id=None  # No user assigned yet
+                )
+                db.add(new_assignment)
+                total_created += 1
+
+    db.commit()
+
+    return {
+        'success': True,
+        'message': f'Synced {total_created} role assignments across {len(workflows)} workflows',
+        'created_count': total_created,
+        'workflow_count': len(workflows)
+    }
+
+
+@router.put("/workflows/{workflow_key}/days/{day_id}/role-responsibility")
+async def update_day_role_responsibility(
+    workflow_key: str,
+    day_id: int,
+    role_id: int,
+    is_responsible: bool,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Update a specific role's responsibility for a day.
+
+    This is a convenience endpoint to toggle a single role's responsibility
+    without having to update the entire day config.
+    """
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Models not initialized")
+
+    WorkflowConfiguration = _models['WorkflowConfiguration']
+    WorkflowDayConfig = _models['WorkflowDayConfig']
+
+    workflow = db.query(WorkflowConfiguration).filter(
+        WorkflowConfiguration.workflow_key == workflow_key
+    ).first()
+
+    if not workflow:
+        raise HTTPException(status_code=404, detail=f"Workflow '{workflow_key}' not found")
+
+    day = db.query(WorkflowDayConfig).filter(
+        WorkflowDayConfig.id == day_id,
+        WorkflowDayConfig.workflow_id == workflow.id
+    ).first()
+
+    if not day:
+        raise HTTPException(status_code=404, detail=f"Day config {day_id} not found")
+
+    # Get current responsibilities or initialize empty dict
+    responsibilities = day.role_responsibilities or {}
+
+    # Update the specific role
+    responsibilities[str(role_id)] = is_responsible
+
+    # Save back
+    day.role_responsibilities = responsibilities
+    day.updated_at = datetime.utcnow()
+    db.commit()
+
+    return {
+        'success': True,
+        'day_id': day_id,
+        'role_id': role_id,
+        'is_responsible': is_responsible
     }

@@ -3,8 +3,11 @@ Workflow Configuration Models
 Defines the structure for editable workflow definitions with:
 - Days/timing configuration
 - Communication methods (Phone, Text, Email, Referral Partner)
-- Task responsibility (roles and user assignments)
+- Task responsibility (dynamic roles from Role table and user assignments)
 - Task health status tracking
+
+Updated: Now uses dynamic roles from the Role table instead of hardcoded enum.
+Role responsibilities are stored as JSON: {"role_id": true/false, ...}
 """
 
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, JSON, Text, Enum as SQLEnum
@@ -86,12 +89,18 @@ def create_workflow_config_models(Base):
         email_enabled = Column(Boolean, default=False)
         referral_partner_enabled = Column(Boolean, default=False)
 
-        # Task responsibility flags - which roles handle tasks on this day
+        # Task responsibility flags - LEGACY: kept for backwards compatibility
+        # For new implementations, use role_responsibilities JSON column instead
         lo_responsible = Column(Boolean, default=False)
         jr_lo_responsible = Column(Boolean, default=False)
         production_asst_responsible = Column(Boolean, default=False)
         concierge_responsible = Column(Boolean, default=False)
         ai_responsible = Column(Boolean, default=False)
+
+        # Dynamic role responsibilities - stores role_id -> boolean mapping
+        # Format: {"1": true, "2": false, "3": true} where keys are role IDs
+        # This allows any admin-created role to be assigned as responsible
+        role_responsibilities = Column(JSON, default=dict)
 
         # Task health status
         health_status = Column(SQLEnum(TaskHealthStatus), default=TaskHealthStatus.HEALTHY)
@@ -112,13 +121,22 @@ def create_workflow_config_models(Base):
         """
         Assigns specific users to roles within a workflow.
         E.g., "John Doe" is the LO for the Prospect workflow.
+
+        Updated: Now uses role_id from the Role table for dynamic roles.
+        The legacy 'role' column is kept for backwards compatibility.
         """
         __tablename__ = "workflow_role_assignments"
         __table_args__ = {'extend_existing': True}
 
         id = Column(Integer, primary_key=True, index=True)
         workflow_id = Column(Integer, ForeignKey("workflow_configurations.id"), nullable=False)
-        role = Column(SQLEnum(TaskResponsibility), nullable=False)
+
+        # LEGACY: Keep old enum column for backwards compatibility
+        role = Column(SQLEnum(TaskResponsibility), nullable=True)
+
+        # NEW: Dynamic role from Role table
+        role_id = Column(Integer, ForeignKey("roles.id"), nullable=True)
+
         user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Assigned user
         is_active = Column(Boolean, default=True)
         created_at = Column(DateTime, default=datetime.utcnow)
@@ -127,6 +145,8 @@ def create_workflow_config_models(Base):
         # Relationships
         workflow = relationship("WorkflowConfiguration", back_populates="role_assignments")
         user = relationship("User", backref="workflow_role_assignments")
+        # Dynamic role relationship - links to Role table
+        dynamic_role = relationship("Role", foreign_keys=[role_id])
 
 
     class WorkflowTaskInstance(Base):
@@ -244,11 +264,30 @@ DEFAULT_WORKFLOW_CONFIGS = {
     },
     'prequal': {
         'name': 'PreQual Workflow',
-        'description': 'Pre-qualification process workflow',
-        'objective': 'Guide the lead through pre-qualification to pre-approval',
-        'statuses_impacted': ['Pre-Qualified'],
+        'description': 'Pre-qualification process workflow - Application and Prequal statuses',
+        'objective': 'The objective is to have clients return supporting documents',
+        'statuses_impacted': ['Application', 'Pre-Qualified'],
         'color': '#8b5cf6',
-        'days': []  # Will be populated with similar structure
+        'days': [
+            {'label': 'Day 1', 'order': 1, 'value': 1, 'phone': True, 'text': True, 'email': True, 'partner': False, 'lo': True, 'jr_lo': False, 'pa': False, 'concierge': True, 'ai': False},
+            {'label': 'Day 3', 'order': 2, 'value': 3, 'phone': True, 'text': False, 'email': True, 'partner': False, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': True, 'ai': False},
+            {'label': 'Day 4', 'order': 3, 'value': 4, 'phone': False, 'text': True, 'email': False, 'partner': True, 'lo': False, 'jr_lo': True, 'pa': False, 'concierge': False, 'ai': False},
+            {'label': 'Day 6', 'order': 4, 'value': 6, 'phone': True, 'text': False, 'email': True, 'partner': False, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': True, 'ai': False},
+            {'label': 'Day 8', 'order': 5, 'value': 8, 'phone': False, 'text': True, 'email': True, 'partner': False, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': True, 'ai': False},
+            {'label': 'Day 12', 'order': 6, 'value': 12, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': False, 'jr_lo': True, 'pa': False, 'concierge': False, 'ai': False},
+            {'label': 'Day 16', 'order': 7, 'value': 16, 'phone': False, 'text': True, 'email': True, 'partner': False, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': True, 'ai': False},
+            {'label': 'Day 22', 'order': 8, 'value': 22, 'phone': True, 'text': False, 'email': True, 'partner': False, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': True, 'ai': False},
+            {'label': 'Day 30', 'order': 9, 'value': 30, 'phone': True, 'text': True, 'email': False, 'partner': True, 'lo': False, 'jr_lo': True, 'pa': False, 'concierge': True, 'ai': False},
+            {'label': 'Month 2', 'order': 10, 'value': 60, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': True, 'ai': False},
+            {'label': 'Month 3', 'order': 11, 'value': 90, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': True, 'ai': False},
+            {'label': 'Month 4', 'order': 12, 'value': 120, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': True, 'ai': False},
+            {'label': 'Month 5', 'order': 13, 'value': 150, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': True, 'ai': False},
+            {'label': 'Month 6', 'order': 14, 'value': 180, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': True, 'ai': False},
+            {'label': 'Month 7', 'order': 15, 'value': 210, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': True, 'ai': False},
+            {'label': 'Month 8', 'order': 16, 'value': 240, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': True, 'ai': False},
+            {'label': 'Month 9', 'order': 17, 'value': 270, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': True, 'ai': False},
+            {'label': 'Month 10-24', 'order': 18, 'value': 300, 'phone': True, 'text': False, 'email': True, 'partner': True, 'lo': False, 'jr_lo': False, 'pa': False, 'concierge': False, 'ai': False},
+        ]
     },
     'pre_approved': {
         'name': 'Pre-Approval Workflow',

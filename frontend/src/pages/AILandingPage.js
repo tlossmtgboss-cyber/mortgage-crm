@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
-import { aiAPI, leadsAPI, loansAPI } from '../services/api';
+import { aiAPI, leadsAPI, loansAPI, tasksAPI, reconciliationAPI } from '../services/api';
 import './AILandingPage.css';
 // Note: EmailDropZone wrapper removed - App.js already wraps with EmailDropZone globally
 
@@ -1226,83 +1226,94 @@ function AILandingPage() {
 
   const showDailyView = async () => {
     try {
-      // Query real tasks from the AI orchestrator
-      const response = await aiAPI.processCommand("What are my priorities and tasks for today?", {
-        session_id: sessionId,
-        conversation_context: conversationHistory.slice(-5)
-      });
+      const allTasks = [];
 
-      // If we got a response from the orchestrator, display it
-      if (response.explanation || response.response) {
-        addMessage(response.explanation || response.response, 'assistant');
+      // Fetch unified tasks from the API (same source as Tasks page)
+      try {
+        const unifiedTasks = await tasksAPI.getUnified();
+        if (unifiedTasks && Array.isArray(unifiedTasks)) {
+          unifiedTasks.forEach(task => {
+            // Convert priority string to uppercase format
+            const priority = task.priority?.toUpperCase() || 'MEDIUM';
+            allTasks.push({
+              id: task.id, // Keep real task ID for API calls
+              backendId: task.id, // Store original ID
+              taskType: 'task', // Mark as regular task
+              title: task.title || task.description || 'Untitled Task',
+              client: task.borrower_name || task.client_name || task.contact_name || 'Unknown',
+              stage: task.loan_stage || task.stage || 'In Progress',
+              priority: priority,
+              type: task.task_type || 'Task',
+              source: task.source || 'Workflow',
+              owner: task.assigned_to_name || 'Loan Officer',
+              dateCreated: task.created_at ? new Date(task.created_at).toLocaleString() : new Date().toLocaleString(),
+              details: task.description || '',
+              dueTime: task.due_date ? new Date(task.due_date).toLocaleDateString() : 'Today',
+              loanId: task.loan_id,
+              leadId: task.lead_id,
+              status: task.status
+            });
+          });
+        }
+      } catch (taskError) {
+        console.error('Error fetching unified tasks:', taskError);
+      }
+
+      // Fetch reconciliation items
+      try {
+        const reconData = await reconciliationAPI.getPending();
+        const reconItems = reconData?.items || reconData || [];
+        if (Array.isArray(reconItems)) {
+          reconItems.forEach(item => {
+            allTasks.push({
+              id: `reconciliation-${item.id}`, // Prefix to identify reconciliation items
+              backendId: item.id,
+              taskType: 'reconciliation', // Mark as reconciliation item
+              title: item.change_type || 'Data Reconciliation',
+              client: item.borrower_name || item.contact_name || 'Unknown',
+              stage: 'Pipeline Reconciliation',
+              priority: 'HIGH',
+              type: 'Reconciliation',
+              source: 'System Alert',
+              owner: 'Loan Officer',
+              dateCreated: item.detected_at ? new Date(item.detected_at).toLocaleString() : new Date().toLocaleString(),
+              details: `${item.field_name || 'Field'}: ${item.old_value || 'N/A'} → ${item.new_value || 'N/A'}`,
+              dueTime: 'Today',
+              reconItem: item // Store full reconciliation item for approval/rejection
+            });
+          });
+        }
+      } catch (reconError) {
+        console.error('Error fetching reconciliation items:', reconError);
+      }
+
+      // If we have tasks, show the sidebar
+      if (allTasks.length > 0) {
+        // Sort by priority (URGENT > HIGH > MEDIUM > LOW)
+        const priorityOrder = { 'URGENT': 0, 'HIGH': 1, 'MEDIUM': 2, 'LOW': 3 };
+        allTasks.sort((a, b) => (priorityOrder[a.priority] || 2) - (priorityOrder[b.priority] || 2));
+
+        setStructuredContent({ tasks: allTasks });
+        setSelectedTask(allTasks[0]);
+        setShowRightSidebar(true);
+
+        const taskCount = allTasks.filter(t => t.taskType === 'task').length;
+        const reconCount = allTasks.filter(t => t.taskType === 'reconciliation').length;
+
+        let message = `Found ${allTasks.length} items requiring attention`;
+        if (taskCount > 0 && reconCount > 0) {
+          message += ` (${taskCount} tasks, ${reconCount} reconciliation items)`;
+        } else if (reconCount > 0) {
+          message += ` (${reconCount} reconciliation items)`;
+        }
+        message += `. Review and complete these from the panel on the right.`;
+
+        addMessage(message, 'assistant');
         return;
       }
 
-      // Fallback: fetch tasks from dashboard API
-      const API_URL = process.env.REACT_APP_API_URL || '';
-      const dashboardResponse = await fetch(`${API_URL}/api/v1/dashboard`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (dashboardResponse.ok) {
-        const dashboardData = await dashboardResponse.json();
-        const realTasks = [];
-        let taskId = 1;
-
-        // Convert prioritized tasks to task format
-        if (dashboardData.prioritized_tasks) {
-          dashboardData.prioritized_tasks.forEach(task => {
-            realTasks.push({
-              id: taskId++,
-              title: task.title,
-              client: task.borrower || 'Unknown',
-              stage: task.stage || 'In Progress',
-              priority: task.urgency === 'critical' ? 'HIGH' : task.urgency === 'high' ? 'HIGH' : 'MEDIUM',
-              type: 'Priority Task',
-              source: 'Dashboard',
-              owner: 'Loan Officer',
-              dateCreated: new Date().toLocaleString(),
-              details: task.ai_action || task.description || '',
-              dueTime: 'Today',
-              aiDraftedMessage: task.ai_action ? `Hi ${task.borrower?.split(' ')[0] || 'there'},\n\nI wanted to reach out regarding ${task.title.toLowerCase()}...` : null
-            });
-          });
-        }
-
-        // Add AI tasks
-        if (dashboardData.ai_tasks?.pending) {
-          dashboardData.ai_tasks.pending.forEach(task => {
-            realTasks.push({
-              id: taskId++,
-              title: task.title || task.description,
-              client: task.client_name || 'System Task',
-              stage: task.status || 'Pending',
-              priority: task.priority || 'MEDIUM',
-              type: 'AI Task',
-              source: 'AI System',
-              owner: 'Loan Officer',
-              dateCreated: task.created_at || new Date().toLocaleString(),
-              details: task.description || '',
-              dueTime: task.due_date || 'Today'
-            });
-          });
-        }
-
-        if (realTasks.length > 0) {
-          setTaskListData(realTasks);
-          setSelectedTask(realTasks[0]);
-          setTimeout(() => {
-            addMessage(`Found ${realTasks.length} tasks for today. Complete these items and come back to let me know when you're done - I'll help you with the next steps!`, 'assistant');
-          }, 500);
-          return;
-        }
-      }
-
-      // If no real tasks found, show message
-      addMessage("No tasks found for today. Great job staying on top of things! Ask me 'what's next?' to find new opportunities.", 'assistant');
+      // If no tasks found, show message
+      addMessage("No tasks or reconciliation items found. Great job staying on top of things! Ask me 'what's next?' to find new opportunities.", 'assistant');
 
     } catch (error) {
       console.error('Error fetching daily tasks:', error);
@@ -2239,128 +2250,268 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
           </div>
 
           <div className="task-sidebar-content">
-            {/* Task List */}
-            <div className="task-list-section">
-              {structuredContent.tasks.map((task, idx) => {
-                const isSelected = selectedTask?.id === task.id || (!selectedTask && idx === 0);
+            {/* Task List - Email Style Layout */}
+            <div className="task-email-layout">
+              {/* Left: Task Inbox List */}
+              <div className="task-inbox-panel">
+                <div className="inbox-panel-header">
+                  <h3>Tasks</h3>
+                  <span className="task-count-pill">{structuredContent.tasks.length}</span>
+                </div>
+                <div className="inbox-task-list">
+                  {structuredContent.tasks.map((task, idx) => {
+                    const isSelected = selectedTask?.id === task.id || (!selectedTask && idx === 0);
+                    const getUrgencyColor = (priority) => {
+                      const colors = { 'URGENT': '#ef4444', 'HIGH': '#f97316', 'MEDIUM': '#eab308', 'LOW': '#22c55e' };
+                      return colors[priority?.toUpperCase()] || '#9ca3af';
+                    };
+                    return (
+                      <div
+                        key={task.id || idx}
+                        className={`inbox-task-item ${isSelected ? 'selected' : ''}`}
+                        onClick={() => setSelectedTask(task)}
+                      >
+                        <div className="inbox-task-header">
+                          <span className="task-source-icon">⚡</span>
+                          <span className="inbox-task-title">{task.title}</span>
+                        </div>
+                        <div className="inbox-task-meta">
+                          <span className="inbox-task-client">{task.client || 'Client'}</span>
+                          <span
+                            className="urgency-indicator-dot"
+                            style={{ backgroundColor: getUrgencyColor(task.priority) }}
+                            title={task.priority}
+                          ></span>
+                        </div>
+                        <div className="inbox-task-stage">{task.stage || 'Workflow'}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Right: Task Detail Panel */}
+              {(selectedTask || structuredContent.tasks[0]) && (() => {
+                const task = selectedTask || structuredContent.tasks[0];
+                const getPriorityStyle = (priority) => {
+                  const styles = {
+                    'URGENT': { bg: '#fef2f2', text: '#dc2626' },
+                    'HIGH': { bg: '#fff7ed', text: '#ea580c' },
+                    'MEDIUM': { bg: '#fefce8', text: '#ca8a04' },
+                    'LOW': { bg: '#f0fdf4', text: '#16a34a' }
+                  };
+                  return styles[priority?.toUpperCase()] || { bg: '#f3f4f6', text: '#6b7280' };
+                };
+                const priorityStyle = getPriorityStyle(task.priority);
+
                 return (
-                  <div
-                    key={task.id || idx}
-                    className={`task-list-item ${isSelected ? 'selected' : ''}`}
-                    onClick={() => setSelectedTask(task)}
-                  >
-                    <div className={`task-priority-indicator ${(task.priority || 'medium').toLowerCase()}`}></div>
-                    <div className="task-item-content">
-                      <div className="task-item-title">{task.title}</div>
-                      <div className="task-item-meta">
-                        <span className="task-client">{task.client || 'Unknown'}</span>
-                        {task.stage && <span className="task-stage">{task.stage}</span>}
+                  <div className="task-detail-panel">
+                    {/* Source Badge */}
+                    <div className="detail-source-badge">
+                      <span className="source-badge-icon">⚡</span>
+                      <span className="source-badge-text">WORKFLOW</span>
+                    </div>
+
+                    {/* Task Title */}
+                    <h2 className="detail-task-title">{task.title}</h2>
+
+                    {/* Info Grid */}
+                    <div className="detail-info-grid">
+                      <div className="detail-info-item">
+                        <span className="detail-label">CLIENT</span>
+                        <span className="detail-value">{task.client || 'Client'}</span>
+                      </div>
+                      <div className="detail-info-item">
+                        <span className="detail-label">STAGE</span>
+                        <span className="detail-value">{task.stage || 'Workflow'}</span>
+                      </div>
+                      <div className="detail-info-item">
+                        <span className="detail-label">PRIORITY</span>
+                        <span
+                          className="priority-badge-inline"
+                          style={{ backgroundColor: priorityStyle.bg, color: priorityStyle.text }}
+                        >
+                          {task.priority || 'HIGH'}
+                        </span>
+                      </div>
+                      <div className="detail-info-item">
+                        <span className="detail-label">SOURCE</span>
+                        <span className="detail-value">{task.source || 'Workflow'}</span>
+                      </div>
+                      <div className="detail-info-item">
+                        <span className="detail-label">OWNER</span>
+                        <span className="detail-value">{task.owner || 'Loan Officer'}</span>
+                      </div>
+                      <div className="detail-info-item">
+                        <span className="detail-label">DATE CREATED</span>
+                        <span className="detail-value">{task.dateCreated || new Date().toLocaleString()}</span>
                       </div>
                     </div>
-                    <span className={`task-priority-badge ${(task.priority || 'medium').toLowerCase()}`}>
-                      {task.priority || 'MEDIUM'}
-                    </span>
+
+                    {/* Send Via Options */}
+                    <div className="detail-send-via">
+                      <span className="send-via-label">SEND VIA</span>
+                      <div className="send-via-buttons">
+                        <button
+                          className={`send-via-btn ${selectedSendMethod === 'email' ? 'active' : ''}`}
+                          onClick={() => setSelectedSendMethod('email')}
+                        >
+                          📧 Email
+                        </button>
+                        <button
+                          className={`send-via-btn ${selectedSendMethod === 'text' ? 'active' : ''}`}
+                          onClick={() => setSelectedSendMethod('text')}
+                        >
+                          💬 Text
+                        </button>
+                        <button
+                          className={`send-via-btn ${selectedSendMethod === 'phone' ? 'active' : ''}`}
+                          onClick={() => setSelectedSendMethod('phone')}
+                        >
+                          📞 Phone
+                        </button>
+                        <button
+                          className={`send-via-btn ${selectedSendMethod === 'voicemail' ? 'active' : ''}`}
+                          onClick={() => setSelectedSendMethod('voicemail')}
+                        >
+                          📱 Voicemail
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Train AI Section */}
+                    <div className="train-ai-section">
+                      <div className="train-ai-header">
+                        <span className="train-ai-icon">🤖</span>
+                        <span className="train-ai-title">Train AI (Optional)</span>
+                      </div>
+                      <textarea
+                        className="train-ai-input"
+                        placeholder="Type instructions to teach AI how to handle similar tasks in the future... (e.g., 'Always mention our competitive rates when following up on pre-approvals')"
+                        rows={3}
+                      />
+                    </div>
+
+                    {/* AI Drafted Message */}
+                    <div className="ai-drafted-section">
+                      <div className="ai-drafted-header">
+                        <span className="ai-drafted-icon">🤖</span>
+                        <span className="ai-drafted-title">AI-Drafted Message</span>
+                        <button className="edit-message-btn">
+                          ✏️ Edit Message
+                        </button>
+                      </div>
+                      <div className="ai-drafted-content">
+                        Complete task: {task.title}
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="detail-actions">
+                      <button
+                        className="detail-action-btn send"
+                        onClick={() => {
+                          addMessage(`Sending ${selectedSendMethod} to ${task.client}...`, 'assistant');
+                          // TODO: Implement actual send functionality
+                        }}
+                      >
+                        🚀 Send via {selectedSendMethod.charAt(0).toUpperCase() + selectedSendMethod.slice(1)}
+                      </button>
+                      <button
+                        className="detail-action-btn approve"
+                        onClick={async () => {
+                          try {
+                            // Call backend to complete/approve the task
+                            if (task.taskType === 'reconciliation') {
+                              // Approve reconciliation item
+                              await reconciliationAPI.approve({ item_id: task.backendId, action: 'approve' });
+                              addMessage(`✅ Approved reconciliation: "${task.title}" for ${task.client}`, 'assistant');
+                            } else if (task.backendId && typeof task.backendId === 'number') {
+                              // Complete regular task via API
+                              await tasksAPI.update(task.backendId, { status: 'completed' });
+                              addMessage(`✅ Completed task: "${task.title}"`, 'assistant');
+                            }
+                          } catch (error) {
+                            console.error('Error completing task:', error);
+                            addMessage(`Marked complete: "${task.title}" (sync pending)`, 'assistant');
+                          }
+
+                          // Remove from local state
+                          const newTasks = structuredContent.tasks.filter(t => t.id !== task.id);
+                          if (newTasks.length > 0) {
+                            setStructuredContent({ ...structuredContent, tasks: newTasks });
+                            setSelectedTask(newTasks[0]);
+                          } else {
+                            setShowRightSidebar(false);
+                            setStructuredContent(null);
+                            setSelectedTask(null);
+                          }
+                        }}
+                      >
+                        ✅ {task.taskType === 'reconciliation' ? 'Approve' : 'Complete'}
+                      </button>
+                      <button
+                        className="detail-action-btn snooze"
+                        onClick={() => {
+                          addMessage(`⏰ Snoozed "${task.title}" - I'll remind you in 3 hours.`, 'assistant');
+                          // Remove from current view
+                          const newTasks = structuredContent.tasks.filter(t => t.id !== task.id);
+                          if (newTasks.length > 0) {
+                            setStructuredContent({ ...structuredContent, tasks: newTasks });
+                            setSelectedTask(newTasks[0]);
+                          } else {
+                            setShowRightSidebar(false);
+                            setStructuredContent(null);
+                            setSelectedTask(null);
+                          }
+                        }}
+                      >
+                        ⏰ Snooze
+                      </button>
+                      <button
+                        className="detail-action-btn delegate"
+                        onClick={() => {
+                          addMessage(`👥 Who would you like to delegate "${task.title}" to? Type a team member's name.`, 'assistant');
+                        }}
+                      >
+                        👥 Delegate
+                      </button>
+                      <button
+                        className="detail-action-btn delete"
+                        onClick={async () => {
+                          try {
+                            // Call backend to delete/reject
+                            if (task.taskType === 'reconciliation') {
+                              await reconciliationAPI.delete(task.backendId);
+                              addMessage(`🗑️ Dismissed reconciliation item: "${task.title}"`, 'assistant');
+                            } else if (task.backendId && typeof task.backendId === 'number') {
+                              await tasksAPI.delete(task.backendId);
+                              addMessage(`🗑️ Deleted task: "${task.title}"`, 'assistant');
+                            }
+                          } catch (error) {
+                            console.error('Error deleting task:', error);
+                            addMessage(`Removed: "${task.title}" (sync pending)`, 'assistant');
+                          }
+
+                          // Remove from local state
+                          const newTasks = structuredContent.tasks.filter(t => t.id !== task.id);
+                          if (newTasks.length > 0) {
+                            setStructuredContent({ ...structuredContent, tasks: newTasks });
+                            setSelectedTask(newTasks[0]);
+                          } else {
+                            setShowRightSidebar(false);
+                            setStructuredContent(null);
+                            setSelectedTask(null);
+                          }
+                        }}
+                      >
+                        🗑️ Delete
+                      </button>
+                    </div>
                   </div>
                 );
-              })}
+              })()}
             </div>
-
-            {/* Selected Task Detail */}
-            {(selectedTask || structuredContent.tasks[0]) && (() => {
-              const task = selectedTask || structuredContent.tasks[0];
-              return (
-                <div className="task-detail-section">
-                  <div className="task-detail-header">
-                    <h3>{task.title}</h3>
-                    <span className={`task-priority-badge large ${(task.priority || 'medium').toLowerCase()}`}>
-                      {task.priority || 'MEDIUM'}
-                    </span>
-                  </div>
-
-                  <div className="task-detail-info">
-                    <div className="task-info-row">
-                      <span className="task-info-label">Client</span>
-                      <span className="task-info-value">{task.client || 'Unknown'}</span>
-                    </div>
-                    <div className="task-info-row">
-                      <span className="task-info-label">Stage</span>
-                      <span className="task-info-value">{task.stage || 'Pending'}</span>
-                    </div>
-                    {task.loanAmount && (
-                      <div className="task-info-row">
-                        <span className="task-info-label">Loan Amount</span>
-                        <span className="task-info-value">${task.loanAmount.toLocaleString()}</span>
-                      </div>
-                    )}
-                    {task.details && (
-                      <div className="task-info-row">
-                        <span className="task-info-label">Details</span>
-                        <span className="task-info-value">{task.details}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Communication Options */}
-                  <div className="task-communication">
-                    <span className="task-section-label">Send Via</span>
-                    <div className="task-send-options">
-                      <button
-                        className={`task-send-btn ${selectedSendMethod === 'email' ? 'active' : ''}`}
-                        onClick={() => setSelectedSendMethod('email')}
-                      >
-                        Email
-                      </button>
-                      <button
-                        className={`task-send-btn ${selectedSendMethod === 'text' ? 'active' : ''}`}
-                        onClick={() => setSelectedSendMethod('text')}
-                      >
-                        Text
-                      </button>
-                      <button
-                        className={`task-send-btn ${selectedSendMethod === 'phone' ? 'active' : ''}`}
-                        onClick={() => setSelectedSendMethod('phone')}
-                      >
-                        Phone
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="task-actions">
-                    <button
-                      className="task-action-btn primary"
-                      onClick={() => {
-                        alert(`Sending via ${selectedSendMethod} to ${task.client}`);
-                      }}
-                    >
-                      Send {selectedSendMethod.charAt(0).toUpperCase() + selectedSendMethod.slice(1)}
-                    </button>
-                    <button
-                      className="task-action-btn success"
-                      onClick={() => {
-                        const newTasks = structuredContent.tasks.filter(t => t.id !== task.id);
-                        if (newTasks.length > 0) {
-                          setStructuredContent({ ...structuredContent, tasks: newTasks });
-                          setSelectedTask(newTasks[0]);
-                        } else {
-                          setShowRightSidebar(false);
-                          setStructuredContent(null);
-                          setSelectedTask(null);
-                        }
-                      }}
-                    >
-                      Complete Task
-                    </button>
-                    <button
-                      className="task-action-btn secondary"
-                      onClick={() => alert('Task snoozed for later')}
-                    >
-                      Snooze
-                    </button>
-                  </div>
-                </div>
-              );
-            })()}
           </div>
         </div>
       )}

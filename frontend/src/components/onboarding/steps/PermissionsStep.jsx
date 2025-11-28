@@ -1,26 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import './PermissionsStep.css';
 
-// Loan lifecycle stages
+// Loan lifecycle stages - NO ICONS
 const LOAN_STAGES = [
   {
     code: 'lead',
     name: 'Lead Management',
-    icon: '👥',
     description: 'Lead intake, qualification, pre-approval, and nurturing',
     color: '#3B82F6'
   },
   {
     code: 'active_loan',
     name: 'Active Loan',
-    icon: '📄',
     description: 'Processing, underwriting, closing, and rate locks',
     color: '#10B981'
   },
   {
     code: 'portfolio',
     name: 'Portfolio',
-    icon: '💼',
     description: 'Client retention, MUM, referrals, and anniversaries',
     color: '#8B5CF6'
   }
@@ -49,31 +46,32 @@ const TEMPLATES = {
   ]
 };
 
-// Feature toggles - ALL disabled by default
+// Feature toggles - ALL disabled by default - NO ICONS
 const FEATURES = [
-  { code: 'ai_receptionist', name: 'AI Receptionist', description: 'AI-powered call handling and routing', icon: '🤖', category: 'ai' },
-  { code: 'power_dialer', name: 'Power Dialer', description: 'Automated outbound calling system', icon: '📞', category: 'communication' },
-  { code: 'ai_underwriting', name: 'AI Underwriting', description: 'AI-assisted loan underwriting', icon: '🧠', category: 'ai' },
-  { code: 'partners', name: 'Partners', description: 'Partner network management', icon: '🤝', category: 'business' },
-  { code: 'market', name: 'Market', description: 'Market data and analytics', icon: '📊', category: 'business' },
-  { code: 'profitability', name: 'Profitability', description: 'Financial analytics and reporting', icon: '💰', category: 'business' },
-  { code: 'voice_os', name: 'Voice OS', description: 'Voice-enabled operations', icon: '🎙️', category: 'ai' },
-  { code: 'marketing', name: 'Marketing', description: 'Marketing automation tools', icon: '📣', category: 'communication' },
-  { code: 'integrations', name: 'Integrations', description: 'Third-party integrations', icon: '🔗', category: 'automation' },
-  { code: 'api_keys', name: 'API Keys', description: 'API access management', icon: '🔑', category: 'admin' },
-  { code: 'it_help_desk', name: 'IT Help Desk', description: 'Technical support access', icon: '🛠️', category: 'business' },
-  { code: 'smart_scheduler', name: 'Smart Scheduler', description: 'AI-powered appointment scheduling', icon: '📅', category: 'automation' },
-  { code: 'video_meetings', name: 'Video Meetings', description: 'Video conferencing tools', icon: '🎥', category: 'communication' },
-  { code: 'data_management', name: 'Data Management', description: 'Data import/export tools', icon: '💾', category: 'automation' },
-  { code: 'master_admin', name: 'Master Administrator', description: 'Full system administration', icon: '👑', category: 'admin' }
+  { code: 'ai_receptionist', name: 'AI Receptionist', description: 'AI-powered call handling and routing', category: 'ai' },
+  { code: 'power_dialer', name: 'Power Dialer', description: 'Automated outbound calling system', category: 'communication' },
+  { code: 'ai_underwriting', name: 'AI Underwriting', description: 'AI-assisted loan underwriting', category: 'ai' },
+  { code: 'partners', name: 'Partners', description: 'Partner network management', category: 'business' },
+  { code: 'market', name: 'Market', description: 'Market data and analytics', category: 'business' },
+  { code: 'profitability', name: 'Profitability', description: 'Financial analytics and reporting', category: 'business' },
+  { code: 'voice_os', name: 'Voice OS', description: 'Voice-enabled operations', category: 'ai' },
+  { code: 'marketing', name: 'Marketing', description: 'Marketing automation tools', category: 'communication' },
+  { code: 'integrations', name: 'Integrations', description: 'Third-party integrations', category: 'automation' },
+  { code: 'api_keys', name: 'API Keys', description: 'API access management', category: 'admin' },
+  { code: 'it_help_desk', name: 'IT Help Desk', description: 'Technical support access', category: 'business' },
+  { code: 'smart_scheduler', name: 'Smart Scheduler', description: 'AI-powered appointment scheduling', category: 'automation' },
+  { code: 'video_meetings', name: 'Video Meetings', description: 'Video conferencing tools', category: 'communication' },
+  { code: 'data_management', name: 'Data Management', description: 'Data import/export tools', category: 'automation' },
+  { code: 'master_admin', name: 'Master Administrator', description: 'Full system administration', category: 'admin' }
 ];
 
+// Feature categories - NO ICONS
 const FEATURE_CATEGORIES = [
-  { code: 'ai', name: 'AI Capabilities', icon: '🤖' },
-  { code: 'communication', name: 'Communication', icon: '📱' },
-  { code: 'business', name: 'Business Tools', icon: '💼' },
-  { code: 'automation', name: 'Automation', icon: '⚡' },
-  { code: 'admin', name: 'Administration', icon: '🔐' }
+  { code: 'ai', name: 'AI Capabilities' },
+  { code: 'communication', name: 'Communication' },
+  { code: 'business', name: 'Business Tools' },
+  { code: 'automation', name: 'Automation' },
+  { code: 'admin', name: 'Administration' }
 ];
 
 function PermissionsStep({
@@ -113,11 +111,19 @@ function PermissionsStep({
   };
 
   const handleTemplateSelect = (stageCode, templateCode) => {
-    setSelectedStages(prev =>
-      prev.map(s =>
-        s.stageCode === stageCode ? { ...s, templateCode } : s
-      )
-    );
+    setSelectedStages(prev => {
+      // Check if stage exists in selection
+      const existing = prev.find(s => s.stageCode === stageCode);
+      if (existing) {
+        // Update existing stage with template
+        return prev.map(s =>
+          s.stageCode === stageCode ? { ...s, templateCode } : s
+        );
+      } else {
+        // Add stage with template if not already selected
+        return [...prev, { stageCode, templateCode, dataScope: 'assigned' }];
+      }
+    });
   };
 
   const handleFeatureToggle = (featureCode) => {
@@ -210,7 +216,6 @@ function PermissionsStep({
                   className="stage-card-header"
                   onClick={() => handleStageToggle(stage.code)}
                 >
-                  <span className="stage-icon">{stage.icon}</span>
                   <div className="stage-info">
                     <h3>{stage.name}</h3>
                     <p>{stage.description}</p>
@@ -228,7 +233,10 @@ function PermissionsStep({
                         <div
                           key={template.code}
                           className={`template-card ${selection?.templateCode === template.code ? 'selected' : ''}`}
-                          onClick={() => handleTemplateSelect(stage.code, template.code)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleTemplateSelect(stage.code, template.code);
+                          }}
                         >
                           <div className="template-name">{template.name}</div>
                           <div className="template-description">{template.description}</div>
@@ -268,7 +276,6 @@ function PermissionsStep({
             return (
               <div key={category.code} className="feature-category">
                 <div className="category-header">
-                  <span className="category-icon">{category.icon}</span>
                   <span className="category-name">{category.name}</span>
                   <span className="category-count">{enabledCount}/{categoryFeatures.length}</span>
                 </div>
@@ -287,7 +294,6 @@ function PermissionsStep({
                           onClick={(e) => e.stopPropagation()}
                         />
                       </div>
-                      <span className="feature-icon">{feature.icon}</span>
                       <div className="feature-info">
                         <div className="feature-name">{feature.name}</div>
                         <div className="feature-description">{feature.description}</div>
@@ -304,7 +310,7 @@ function PermissionsStep({
       {/* Summary */}
       {selectedStages.length > 0 && selectedStages.every(s => s.templateCode) && (
         <div className="permissions-summary">
-          <h3>✓ Permission Summary</h3>
+          <h3>Permission Summary</h3>
           <div className="summary-items">
             {selectedStages.map(s => {
               const stage = LOAN_STAGES.find(st => st.code === s.stageCode);
@@ -312,7 +318,7 @@ function PermissionsStep({
               return (
                 <div key={s.stageCode} className="summary-item">
                   <span className="summary-stage">{stage?.name}</span>
-                  <span className="summary-arrow">→</span>
+                  <span className="summary-arrow">-</span>
                   <span className="summary-template">{template?.name}</span>
                 </div>
               );
@@ -325,7 +331,7 @@ function PermissionsStep({
       <div className="permissions-navigation">
         {onBack && (
           <button className="nav-btn back-btn" onClick={onBack}>
-            ← Back
+            Back
           </button>
         )}
         <button
@@ -333,7 +339,7 @@ function PermissionsStep({
           onClick={handleContinue}
           disabled={!canContinue}
         >
-          Continue →
+          Continue
         </button>
       </div>
     </div>

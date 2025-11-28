@@ -90,7 +90,11 @@ const VideoMeetings = ({ onClose, leadId, loanId, contactId }) => {
   };
 
   const createInstantMeeting = async () => {
+    // Open a blank window immediately (before async call) to avoid popup blockers
+    const newWindow = window.open('about:blank', '_blank');
+
     try {
+      setLoading(true);
       const response = await fetch(`${API_BASE}/api/v1/meetings/instant`, {
         method: 'POST',
         headers: getAuthHeaders()
@@ -98,15 +102,25 @@ const VideoMeetings = ({ onClose, leadId, loanId, contactId }) => {
 
       if (response.ok) {
         const data = await response.json();
-        // Open meeting in new tab
-        window.open(data.meeting.join_url, '_blank');
+        // Navigate the pre-opened window to the meeting URL
+        if (newWindow) {
+          newWindow.location.href = data.meeting.join_url;
+        } else {
+          // Fallback: if popup was blocked, show alert with link
+          alert(`Meeting created! Open this link: ${window.location.origin}${data.meeting.join_url}`);
+        }
         fetchData(); // Refresh list
       } else {
-        setError('Failed to create instant meeting');
+        if (newWindow) newWindow.close();
+        const errorData = await response.json().catch(() => ({}));
+        setError(errorData.detail || 'Failed to create instant meeting');
       }
     } catch (err) {
-      setError('Failed to create instant meeting');
+      if (newWindow) newWindow.close();
+      setError('Failed to create instant meeting. Please check your connection.');
       console.error('Instant meeting error:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -826,10 +840,10 @@ const VideoMeetings = ({ onClose, leadId, loanId, contactId }) => {
           <p className="subtitle">AI-powered video conferencing for mortgage professionals</p>
         </div>
         <div className="header-actions">
-          <button className="secondary-btn" onClick={createInstantMeeting}>
-            <span className="btn-icon">🚀</span> Start Instant
+          <button className="secondary-btn" onClick={createInstantMeeting} disabled={loading}>
+            <span className="btn-icon">{loading ? '⏳' : '🚀'}</span> {loading ? 'Starting...' : 'Start Instant'}
           </button>
-          <button className="primary-btn" onClick={() => setShowCreateModal(true)}>
+          <button className="primary-btn" onClick={() => setShowCreateModal(true)} disabled={loading}>
             <span className="btn-icon">+</span> Schedule Meeting
           </button>
         </div>

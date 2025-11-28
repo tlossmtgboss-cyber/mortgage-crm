@@ -1131,7 +1131,7 @@ function App() {
                     taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <MergeCenter />
+                    <LazyPage><MergeCenter /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
@@ -1175,7 +1175,7 @@ function App() {
                     taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <TeamMembers />
+                    <LazyPage><TeamMembers /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
@@ -1197,7 +1197,7 @@ function App() {
                     taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <TeamMemberProfile />
+                    <LazyPage><TeamMemberProfile /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
@@ -1373,7 +1373,7 @@ function App() {
                     taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <DataUpload />
+                    <LazyPage><DataUpload /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
@@ -1395,7 +1395,7 @@ function App() {
                     taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <VerizonTest />
+                    <LazyPage><VerizonTest /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
@@ -1417,7 +1417,7 @@ function App() {
                     taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <UserProfile />
+                    <LazyPage><UserProfile /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
@@ -1439,7 +1439,7 @@ function App() {
                     taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <Users />
+                    <LazyPage><Users /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
@@ -1505,7 +1505,7 @@ function App() {
                     taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <UserProfile />
+                    <LazyPage><UserProfile /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
@@ -1527,7 +1527,7 @@ function App() {
                     taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <ProcessTemplates />
+                    <LazyPage><ProcessTemplates /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>
