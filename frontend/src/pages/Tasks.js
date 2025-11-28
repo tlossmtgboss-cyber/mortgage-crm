@@ -638,12 +638,16 @@ function Tasks() {
     if (!loading) {
       const tasksForTab = getTasksForTab();
       if (tasksForTab.length > 0) {
-        setSelectedTask(tasksForTab[0]);
+        // Only auto-select if no task is currently selected or if switching tabs
+        if (!selectedTask || !tasksForTab.find(t => t.id === selectedTask.id)) {
+          setSelectedTask(tasksForTab[0]);
+        }
       } else {
         setSelectedTask(null);
       }
     }
-  }, [loading, activeTab]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, activeTab, prioritizedTasks, aiTasks, loanIssues]);
 
   // Update draft message and owner when task changes
   useEffect(() => {
@@ -1312,7 +1316,25 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
                 {selectedTask.borrower && (
                   <div className="detail-info-item">
                     <span className="detail-label">Client</span>
-                    <span className="detail-value">{selectedTask.borrower}</span>
+                    <span
+                      className="detail-value client-link"
+                      onClick={() => {
+                        const loanId = selectedTask.loan_id || selectedTask.loanId;
+                        const leadId = selectedTask.lead_id || selectedTask.leadId;
+                        if (loanId) {
+                          navigate(`/loans/${loanId}`);
+                        } else if (leadId) {
+                          navigate(`/leads/${leadId}`);
+                        }
+                      }}
+                      style={{
+                        cursor: (selectedTask.loan_id || selectedTask.loanId || selectedTask.lead_id || selectedTask.leadId) ? 'pointer' : 'default',
+                        color: (selectedTask.loan_id || selectedTask.loanId || selectedTask.lead_id || selectedTask.leadId) ? '#218D8D' : 'inherit',
+                        textDecoration: (selectedTask.loan_id || selectedTask.loanId || selectedTask.lead_id || selectedTask.leadId) ? 'underline' : 'none'
+                      }}
+                    >
+                      {selectedTask.borrower}
+                    </span>
                   </div>
                 )}
                 <div className="detail-info-item">
@@ -1519,6 +1541,12 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
                 onClick={() => setShowDelegateModal(true)}
               >
                 👥 Delegate
+              </button>
+              <button
+                className="btn-detail-complete"
+                onClick={() => handleComplete(selectedTask.id)}
+              >
+                ✓ Completed
               </button>
               <button
                 className="btn-detail-danger"
