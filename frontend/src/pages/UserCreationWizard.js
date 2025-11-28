@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import CategoryTasksModal from '../components/CategoryTasksModal';
+import PermissionsStep from '../components/onboarding/steps/PermissionsStep';
 import './UserCreationWizard.css';
 
 // Use HTTPS Railway URL in production, localhost for development
@@ -72,6 +73,9 @@ function UserCreationWizard() {
     // Permissions
     permission_template_id: null,
     custom_permissions: {},
+    // Stage-based permissions
+    stages: [],
+    features: {},
     // Generated data
     scorecard: null,
     created_user_id: null,
@@ -531,177 +535,23 @@ function UserCreationWizard() {
   };
 
   const renderPermissions = () => {
+    const handlePermissionsComplete = (data) => {
+      updateFormData({
+        stages: data.stages,
+        features: data.features,
+        custom_permissions: data.customPermissions || {}
+      });
+      nextStep();
+    };
+
     return (
-      <div className="wizard-content">
-        <h2>Permissions</h2>
-        <p className="step-description">Configure system access permissions for this user.</p>
-
-        {/* Permission Mode Toggle */}
-        <div className="permission-mode-toggle">
-          <button
-            className={permissionMode === 'template' ? 'active' : ''}
-            onClick={() => setPermissionMode('template')}
-          >
-            Use Template
-          </button>
-          <button
-            className={permissionMode === 'custom' ? 'active' : ''}
-            onClick={() => setPermissionMode('custom')}
-          >
-            Custom Permissions
-          </button>
-        </div>
-
-        {permissionMode === 'template' ? (
-          <div className="section">
-            <h3>Select Permission Template</h3>
-            <div className="template-grid">
-              {permissionTemplates.map(template => (
-                <div
-                  key={template.id}
-                  className={`template-card ${formData.permission_template_id === template.id ? 'selected' : ''}`}
-                  onClick={() => updateFormData({ permission_template_id: template.id })}
-                >
-                  <h4>{template.name}</h4>
-                  <p>{template.description}</p>
-                  <div className="template-permissions">
-                    {template.permissions && Object.entries(template.permissions).slice(0, 4).map(([key, value]) => (
-                      <span key={key} className={`permission-badge ${value ? 'granted' : 'denied'}`}>
-                        {key.replace(/_/g, ' ')}
-                      </span>
-                    ))}
-                    {template.permissions && Object.keys(template.permissions).length > 4 && (
-                      <span className="permission-more">+{Object.keys(template.permissions).length - 4} more</span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div className="section">
-            <h3>Custom Permissions</h3>
-            <div className="permissions-editor">
-              <div className="permission-group">
-                <h4>Pipeline Access</h4>
-                <label className="permission-toggle">
-                  <span>View Pipeline</span>
-                  <input
-                    type="checkbox"
-                    checked={formData.custom_permissions.view_pipeline ?? true}
-                    onChange={(e) => updateFormData({
-                      custom_permissions: { ...formData.custom_permissions, view_pipeline: e.target.checked }
-                    })}
-                  />
-                </label>
-                <label className="permission-toggle">
-                  <span>Edit Loans</span>
-                  <input
-                    type="checkbox"
-                    checked={formData.custom_permissions.edit_loans ?? false}
-                    onChange={(e) => updateFormData({
-                      custom_permissions: { ...formData.custom_permissions, edit_loans: e.target.checked }
-                    })}
-                  />
-                </label>
-                <label className="permission-toggle">
-                  <span>Delete Loans</span>
-                  <input
-                    type="checkbox"
-                    checked={formData.custom_permissions.delete_loans ?? false}
-                    onChange={(e) => updateFormData({
-                      custom_permissions: { ...formData.custom_permissions, delete_loans: e.target.checked }
-                    })}
-                  />
-                </label>
-              </div>
-
-              <div className="permission-group">
-                <h4>Contact Management</h4>
-                <label className="permission-toggle">
-                  <span>View Contacts</span>
-                  <input
-                    type="checkbox"
-                    checked={formData.custom_permissions.view_contacts ?? true}
-                    onChange={(e) => updateFormData({
-                      custom_permissions: { ...formData.custom_permissions, view_contacts: e.target.checked }
-                    })}
-                  />
-                </label>
-                <label className="permission-toggle">
-                  <span>Edit Contacts</span>
-                  <input
-                    type="checkbox"
-                    checked={formData.custom_permissions.edit_contacts ?? false}
-                    onChange={(e) => updateFormData({
-                      custom_permissions: { ...formData.custom_permissions, edit_contacts: e.target.checked }
-                    })}
-                  />
-                </label>
-              </div>
-
-              <div className="permission-group">
-                <h4>Reports & Analytics</h4>
-                <label className="permission-toggle">
-                  <span>View Reports</span>
-                  <input
-                    type="checkbox"
-                    checked={formData.custom_permissions.view_reports ?? true}
-                    onChange={(e) => updateFormData({
-                      custom_permissions: { ...formData.custom_permissions, view_reports: e.target.checked }
-                    })}
-                  />
-                </label>
-                <label className="permission-toggle">
-                  <span>Export Data</span>
-                  <input
-                    type="checkbox"
-                    checked={formData.custom_permissions.export_data ?? false}
-                    onChange={(e) => updateFormData({
-                      custom_permissions: { ...formData.custom_permissions, export_data: e.target.checked }
-                    })}
-                  />
-                </label>
-              </div>
-
-              <div className="permission-group">
-                <h4>Administration</h4>
-                <label className="permission-toggle">
-                  <span>Manage Users</span>
-                  <input
-                    type="checkbox"
-                    checked={formData.custom_permissions.manage_users ?? false}
-                    onChange={(e) => updateFormData({
-                      custom_permissions: { ...formData.custom_permissions, manage_users: e.target.checked }
-                    })}
-                  />
-                </label>
-                <label className="permission-toggle">
-                  <span>System Settings</span>
-                  <input
-                    type="checkbox"
-                    checked={formData.custom_permissions.system_settings ?? false}
-                    onChange={(e) => updateFormData({
-                      custom_permissions: { ...formData.custom_permissions, system_settings: e.target.checked }
-                    })}
-                  />
-                </label>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="wizard-actions">
-          <button className="btn-secondary" onClick={prevStep}>Back</button>
-          <button
-            className="btn-primary"
-            onClick={nextStep}
-            disabled={permissionMode === 'template' && !formData.permission_template_id}
-          >
-            Continue to Review
-          </button>
-        </div>
-      </div>
+      <PermissionsStep
+        isAdminMode={true}
+        initialStages={formData.stages}
+        initialFeatures={formData.features}
+        onComplete={handlePermissionsComplete}
+        onBack={prevStep}
+      />
     );
   };
 
@@ -774,12 +624,43 @@ function UserCreationWizard() {
           </div>
 
           <div className="review-section">
-            <h3>Permissions</h3>
+            <h3>Loan Stage Access</h3>
             <div className="review-item">
-              <span className="review-label">Permission Template</span>
-              <span className="review-value">
-                {selectedTemplate?.name || 'Custom Permissions'}
-              </span>
+              <span className="review-label">Enabled Stages</span>
+              <div className="review-tags">
+                {formData.stages?.filter(s => s.enabled).map(stage => (
+                  <span key={stage.stageCode} className="review-tag">
+                    {stage.stageCode === 'lead' ? 'Lead Management' :
+                     stage.stageCode === 'active_loan' ? 'Active Loan' :
+                     stage.stageCode === 'portfolio' ? 'Portfolio' : stage.stageCode}
+                    {stage.templateCode && ` (${stage.templateCode.replace(/_/g, ' ')})`}
+                  </span>
+                ))}
+                {(!formData.stages || formData.stages.filter(s => s.enabled).length === 0) && (
+                  <span className="review-value">No stages selected</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="review-section">
+            <h3>Feature Access</h3>
+            <div className="review-item">
+              <span className="review-label">Enabled Features</span>
+              <div className="review-tags">
+                {formData.features && Object.entries(formData.features)
+                  .filter(([_, enabled]) => enabled)
+                  .map(([featureCode]) => (
+                    <span key={featureCode} className="review-tag small">
+                      {featureCode.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                    </span>
+                  ))}
+                {(!formData.features || Object.values(formData.features).filter(Boolean).length === 0) && (
+                  <span className="review-value" style={{ color: '#6B7280', fontStyle: 'italic' }}>
+                    No additional features enabled (standard access)
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </div>
