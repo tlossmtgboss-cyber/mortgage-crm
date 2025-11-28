@@ -192,7 +192,175 @@ def get_user_creation_routes(
     """
 
     # ========================================================================
-    # SINGLE USER CREATION ENDPOINTS
+    # UNIFIED USER CREATION ENDPOINT (All-in-one)
+    # ========================================================================
+
+    @router.post("/create")
+    async def create_user_unified(
+        request: Request,
+        db: Session = Depends(get_db),
+        current_user = Depends(get_current_user)
+    ):
+        """
+        Unified endpoint that creates a user with all configuration in one call.
+        Used by the UserCreationWizard frontend component.
+        """
+        # Check permission
+        if current_user.permission_role not in ['admin', 'leadership']:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You don't have permission to create users"
+            )
+
+        try:
+            data = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+        email = data.get('email')
+        full_name = data.get('full_name', '')
+        phone = data.get('phone')
+        role_id = data.get('role_id')
+        category_ids = data.get('category_ids', [])
+        responsibility_ids = data.get('responsibility_ids', [])
+        permission_template_id = data.get('permission_template_id')
+        custom_permissions = data.get('custom_permissions')
+
+        if not email:
+            raise HTTPException(status_code=400, detail="Email is required")
+
+        # Check email uniqueness
+        existing_user = db.query(User).filter(User.email == email).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already exists in the system"
+            )
+
+        try:
+            # Parse full_name into first_name and last_name
+            name_parts = full_name.strip().split(' ', 1) if full_name else ['', '']
+            first_name = name_parts[0] if name_parts else ''
+            last_name = name_parts[1] if len(name_parts) > 1 else ''
+
+            # Create the base User record
+            new_user = User(
+                email=email,
+                hashed_password="",  # Will be set during activation
+                full_name=full_name,
+                phone=phone,
+                role="pending",
+                permission_role="pending",
+                is_active=False
+            )
+            db.add(new_user)
+            db.flush()
+
+            # Create UserProfile record
+            user_profile = UserProfile(
+                user_id=new_user.id,
+                first_name=first_name,
+                last_name=last_name,
+                role_id=role_id,
+                status="pending_setup",
+                created_by=current_user.id
+            )
+            db.add(user_profile)
+            db.flush()
+
+            # Add categories
+            for cat_id in category_ids:
+                user_cat = UserCategory(
+                    user_profile_id=user_profile.id,
+                    category_id=cat_id
+                )
+                db.add(user_cat)
+
+            # Add responsibilities
+            for resp_id in responsibility_ids:
+                user_resp = UserResponsibility(
+                    user_profile_id=user_profile.id,
+                    responsibility_id=resp_id
+                )
+                db.add(user_resp)
+
+            # Handle permissions
+            permissions_data = {}
+            if permission_template_id:
+                template = db.query(PermissionTemplate).filter(
+                    PermissionTemplate.id == permission_template_id
+                ).first()
+                if template:
+                    user_profile.permission_template_id = permission_template_id
+                    permissions_data = template.permissions or {}
+            elif custom_permissions:
+                permissions_data = custom_permissions
+
+            if permissions_data:
+                user_perms = UserPermissions(
+                    user_profile_id=user_profile.id,
+                    permissions=permissions_data,
+                    source="template" if permission_template_id else "custom"
+                )
+                db.add(user_perms)
+
+            # Generate KPI Scorecard
+            scorecard_config = generate_kpi_scorecard_config(responsibility_ids, db, Responsibility)
+            scorecard = KPIScorecard(
+                user_profile_id=user_profile.id,
+                scorecard_config=scorecard_config
+            )
+            db.add(scorecard)
+
+            # Generate activation token
+            activation_token = generate_activation_token()
+            user_profile.activation_token = activation_token
+            user_profile.activation_token_expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+            user_profile.status = "active_awaiting_setup"
+
+            # Audit log
+            audit_log = UserAuditLog(
+                user_id=new_user.id,
+                action="user_created",
+                performed_by=current_user.id,
+                details={"email": email, "role_id": role_id},
+                ip_address=request.client.host if request.client else None
+            )
+            db.add(audit_log)
+
+            db.commit()
+
+            # Get role name for response
+            role = db.query(Role).filter(Role.id == role_id).first()
+
+            return {
+                "success": True,
+                "user_id": new_user.id,
+                "email": email,
+                "full_name": full_name,
+                "role": role.name if role else "Unknown",
+                "scorecard": {
+                    "id": scorecard.id,
+                    "kpi_count": len(scorecard_config.get('daily_kpis', [])) +
+                                 len(scorecard_config.get('weekly_kpis', [])) +
+                                 len(scorecard_config.get('monthly_kpis', []))
+                },
+                "activation_token": activation_token,
+                "activation_expires_at": user_profile.activation_token_expires_at.isoformat()
+            }
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Error creating user: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to create user: {str(e)}"
+            )
+
+    # ========================================================================
+    # SINGLE USER CREATION ENDPOINTS (Step-by-step)
     # ========================================================================
 
     @router.post("/create/single")
