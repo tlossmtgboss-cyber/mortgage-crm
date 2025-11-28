@@ -82,6 +82,7 @@ const UserBulkUpload = lazy(() => import('./pages/UserBulkUpload'));
 const ActivateAccount = lazy(() => import('./pages/ActivateAccount'));
 const MeetingRoom = lazy(() => import('./pages/MeetingRoom'));
 const OAuthCallback = lazy(() => import('./pages/OAuthCallback'));
+const WorkflowStatusDetail = lazy(() => import('./pages/WorkflowStatusDetail'));
 
 // Simple loading component
 const PageLoader = () => (
@@ -350,6 +351,30 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><WorkflowStagePage /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+
+          {/* Workflow Status Detail (drill-down from dashboard) */}
+          <Route
+            path="/workflow/status/:statusId"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><WorkflowStatusDetail /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>

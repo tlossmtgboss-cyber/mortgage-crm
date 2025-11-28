@@ -42,11 +42,13 @@ function Dashboard() {
     'production-tracker',
     'profitability',
     'efficiency',
+    'workflow-scorecards',
     'ai-tasks',
     'pipeline',
     'referrals',
     'team'
   ]);
+  const [workflowScores, setWorkflowScores] = useState({});
 
   useEffect(() => {
     loadDashboard();
@@ -61,6 +63,7 @@ function Dashboard() {
         'production-tracker',
         'profitability',
         'efficiency',
+        'workflow-scorecards',
         'ai-tasks',
         'pipeline',
         'referrals',
@@ -146,6 +149,7 @@ function Dashboard() {
         setTeamStats(data.team_stats || {});
         setMessages(data.messages || []);
         setEfficiency(data.efficiency || {});
+        setWorkflowScores(data.workflow_scores || mockWorkflowScores());
         setLoading(false);
         return;
       }
@@ -180,6 +184,7 @@ function Dashboard() {
       setTeamStats(data.team_stats || {});
       setMessages(data.messages || []);
       setEfficiency(data.efficiency || {});
+      setWorkflowScores(data.workflow_scores || mockWorkflowScores());
 
     } catch (error) {
       console.error('Failed to load dashboard:', error);
@@ -195,6 +200,7 @@ function Dashboard() {
       setTeamStats(mockTeamStats());
       setMessages(mockMessages());
       setEfficiency(mockEfficiency());
+      setWorkflowScores(mockWorkflowScores());
     } finally {
       setLoading(false);
     }
@@ -630,6 +636,76 @@ function Dashboard() {
           >
             View Full Efficiency Report →
           </button>
+        </div>
+      );
+    }
+
+    if (containerId === 'workflow-scorecards') {
+      const statuses = workflowScores.statuses || [];
+      const overallScore = workflowScores.overallScore || 0;
+
+      return (
+        <div
+          key={containerId}
+          className={`dashboard-block workflow-scorecards-block draggable-container ${isDragging ? 'dragging' : ''}`}
+          onDragOver={(e) => handleDragOver(e, index)}
+          onDragEnd={handleDragEnd}
+        >
+          <div
+            className="drag-handle"
+            title="Drag to reorder"
+            draggable="true"
+            onDragStart={() => handleDragStart(index)}
+          >⋮⋮</div>
+          <div className="block-header">
+            <h2>📋 Workflow Scorecards</h2>
+            <div className="workflow-overall-score">
+              <span className="score-label">Overall:</span>
+              <span className={`score-value ${overallScore >= 80 ? 'good' : overallScore >= 60 ? 'warning' : 'critical'}`}>
+                {overallScore}%
+              </span>
+            </div>
+          </div>
+
+          <div className="workflow-status-grid">
+            {/* Top Row - First 5 statuses */}
+            <div className="workflow-status-row">
+              {statuses.slice(0, 5).map((status, idx) => (
+                <div
+                  key={idx}
+                  className={`workflow-status-card ${status.health}`}
+                  onClick={() => navigate(`/workflow/status/${status.id}`)}
+                >
+                  <div className="status-name">{status.name}</div>
+                  <div className="status-score">{status.score}%</div>
+                  <div className="status-metrics">
+                    <span className="metric">{status.activeLoans} loans</span>
+                    <span className="metric">{status.tasksCompleted}/{status.tasksDue} tasks</span>
+                  </div>
+                  <div className={`status-health-indicator ${status.health}`}></div>
+                </div>
+              ))}
+            </div>
+
+            {/* Bottom Row - Last 5 statuses */}
+            <div className="workflow-status-row">
+              {statuses.slice(5, 10).map((status, idx) => (
+                <div
+                  key={idx}
+                  className={`workflow-status-card ${status.health}`}
+                  onClick={() => navigate(`/workflow/status/${status.id}`)}
+                >
+                  <div className="status-name">{status.name}</div>
+                  <div className="status-score">{status.score}%</div>
+                  <div className="status-metrics">
+                    <span className="metric">{status.activeLoans} loans</span>
+                    <span className="metric">{status.tasksCompleted}/{status.tasksDue} tasks</span>
+                  </div>
+                  <div className={`status-health-indicator ${status.health}`}></div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       );
     }
@@ -1183,6 +1259,24 @@ const mockEfficiency = () => ({
       affectedLoans: 4,
       avgDelay: '5.1 days'
     }
+  ]
+});
+
+const mockWorkflowScores = () => ({
+  overallScore: 74,
+  statuses: [
+    // Top Row - 5 statuses
+    { id: 'new', name: 'New', score: 82, health: 'healthy', activeLoans: 15, tasksCompleted: 28, tasksDue: 32 },
+    { id: 'attempted_contact', name: 'Attempted Contact', score: 68, health: 'warning', activeLoans: 8, tasksCompleted: 12, tasksDue: 20 },
+    { id: 'prospect', name: 'Prospect', score: 75, health: 'healthy', activeLoans: 22, tasksCompleted: 45, tasksDue: 56 },
+    { id: 'application', name: 'Application', score: 71, health: 'warning', activeLoans: 18, tasksCompleted: 36, tasksDue: 48 },
+    { id: 'pre_qualified', name: 'Pre-Qualified', score: 88, health: 'healthy', activeLoans: 12, tasksCompleted: 24, tasksDue: 26 },
+    // Bottom Row - 5 statuses
+    { id: 'pre_approved', name: 'Pre-Approved', score: 79, health: 'healthy', activeLoans: 14, tasksCompleted: 32, tasksDue: 38 },
+    { id: 'under_contract', name: 'Under Contract', score: 65, health: 'critical', activeLoans: 9, tasksCompleted: 18, tasksDue: 30 },
+    { id: 'long_term_nurture', name: 'Long-Term Nurture', score: 72, health: 'warning', activeLoans: 45, tasksCompleted: 68, tasksDue: 90 },
+    { id: 'withdrawn', name: 'Withdrawn', score: 90, health: 'healthy', activeLoans: 3, tasksCompleted: 6, tasksDue: 6 },
+    { id: 'does_not_qualify', name: 'Does Not Qualify', score: 58, health: 'critical', activeLoans: 7, tasksCompleted: 8, tasksDue: 18 }
   ]
 });
 

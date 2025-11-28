@@ -2052,3 +2052,193 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Workflow Scorecards Section */
+.workflow-scorecards-block {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.workflow-scorecards-block .block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.workflow-overall-score {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.workflow-overall-score .score-label {
+  font-size: 14px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.workflow-overall-score .score-value {
+  font-size: 20px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 8px;
+}
+
+.workflow-overall-score .score-value.good {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.workflow-overall-score .score-value.warning {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.workflow-overall-score .score-value.critical {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.workflow-status-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.workflow-status-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+
+.workflow-status-card {
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border-radius: 10px;
+  padding: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid #e2e8f0;
+  position: relative;
+  overflow: hidden;
+}
+
+.workflow-status-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.workflow-status-card.healthy {
+  border-left: 4px solid #10b981;
+}
+
+.workflow-status-card.warning {
+  border-left: 4px solid #f59e0b;
+}
+
+.workflow-status-card.critical {
+  border-left: 4px solid #ef4444;
+}
+
+.workflow-status-card .status-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.workflow-status-card .status-score {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 8px;
+}
+
+.workflow-status-card.healthy .status-score {
+  color: #059669;
+}
+
+.workflow-status-card.warning .status-score {
+  color: #d97706;
+}
+
+.workflow-status-card.critical .status-score {
+  color: #dc2626;
+}
+
+.workflow-status-card .status-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.workflow-status-card .status-metrics .metric {
+  font-size: 10px;
+  color: #64748b;
+}
+
+.status-health-indicator {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.status-health-indicator.healthy {
+  background: #10b981;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.5);
+}
+
+.status-health-indicator.warning {
+  background: #f59e0b;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.5);
+}
+
+.status-health-indicator.critical {
+  background: #ef4444;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.5);
+  animation: pulse-critical 1.5s infinite;
+}
+
+@keyframes pulse-critical {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Responsive adjustments for workflow scorecards */
+@media (max-width: 1200px) {
+  .workflow-status-row {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .workflow-status-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .workflow-status-card .status-score {
+    font-size: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .workflow-status-row {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-scorecards-block .block-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+}
