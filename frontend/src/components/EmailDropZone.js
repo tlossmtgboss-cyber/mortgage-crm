@@ -23,68 +23,82 @@ function EmailDropZone({ children }) {
   const [aiParseResult, setAiParseResult] = useState(null);
   const dragCounterRef = useRef(0);
 
-  // Global document-level drag handlers - BUBBLE phase (not capture)
-  // This ensures the component handlers run first, then these as fallback
+  // Reference to track if we've processed a drop (prevents double-processing)
+  const dropProcessedRef = useRef(false);
+
+  // Global document-level drag handlers
+  // Uses a combination of capture phase for detection and bubble phase for handling
   useEffect(() => {
     let dragCounter = 0;
 
-    const handleWindowDragEnter = (e) => {
-      // Don't prevent default here - let component handler do it
+    // CAPTURE PHASE - Detect drag entering/leaving the window
+    const handleDragEnterCapture = (e) => {
       dragCounter++;
 
-      // Check if it's a valid drag (files, emails, etc.)
       const types = Array.from(e.dataTransfer?.types || []);
-      console.log('[Global] DragEnter - types:', types, 'counter:', dragCounter);
+      console.log('[Global DragEnter] types:', types, 'counter:', dragCounter);
 
-      // Files type is present when dragging files from desktop/finder
       const hasFiles = types.includes('Files');
       const hasText = types.includes('text/html') || types.includes('text/plain') || types.includes('text/uri-list');
 
       if (hasFiles || hasText) {
         setIsDragging(true);
+        dropProcessedRef.current = false;
       }
     };
 
-    const handleWindowDragLeave = (e) => {
+    const handleDragLeaveCapture = (e) => {
       dragCounter--;
-      console.log('[Global] DragLeave - counter:', dragCounter);
 
-      // Only hide when all drag events have left
-      if (dragCounter <= 0) {
+      // relatedTarget is null when leaving the browser window
+      if (e.relatedTarget === null) {
+        console.log('[Global DragLeave] Left window, resetting');
+        dragCounter = 0;
+        setIsDragging(false);
+      } else if (dragCounter <= 0) {
+        console.log('[Global DragLeave] Counter zero, resetting');
         dragCounter = 0;
         setIsDragging(false);
       }
     };
 
-    const handleWindowDragOver = (e) => {
-      // CRITICAL: Must prevent default to allow drop
+    // BUBBLE PHASE - Handle dragover and drop as fallback
+    const handleDragOverBubble = (e) => {
+      // Always prevent default on dragover to allow drop
       e.preventDefault();
-      // Set the drop effect to show it's droppable
       if (e.dataTransfer) {
         e.dataTransfer.dropEffect = 'copy';
       }
     };
 
-    const handleWindowDrop = (e) => {
-      // Prevent default to stop browser from opening file
-      e.preventDefault();
-      console.log('[Global] Drop detected - resetting state');
+    const handleDropBubble = (e) => {
+      // Fallback drop handler - only processes if component didn't
+      console.log('[Global Drop] Bubble phase - processed:', dropProcessedRef.current);
       dragCounter = 0;
-      // Just reset the drag state - the component handler will process the drop
       setIsDragging(false);
+
+      // If component already processed, skip
+      if (dropProcessedRef.current) {
+        return;
+      }
+
+      // Prevent browser from opening the file
+      e.preventDefault();
     };
 
-    // Add document-level listeners in BUBBLE phase (false) - so component handlers run first
-    document.addEventListener('dragenter', handleWindowDragEnter, false);
-    document.addEventListener('dragleave', handleWindowDragLeave, false);
-    document.addEventListener('dragover', handleWindowDragOver, false);
-    document.addEventListener('drop', handleWindowDrop, false);
+    // Capture phase listeners (run first)
+    document.addEventListener('dragenter', handleDragEnterCapture, true);
+    document.addEventListener('dragleave', handleDragLeaveCapture, true);
+
+    // Bubble phase listeners (run after component handlers)
+    document.addEventListener('dragover', handleDragOverBubble, false);
+    document.addEventListener('drop', handleDropBubble, false);
 
     return () => {
-      document.removeEventListener('dragenter', handleWindowDragEnter, false);
-      document.removeEventListener('dragleave', handleWindowDragLeave, false);
-      document.removeEventListener('dragover', handleWindowDragOver, false);
-      document.removeEventListener('drop', handleWindowDrop, false);
+      document.removeEventListener('dragenter', handleDragEnterCapture, true);
+      document.removeEventListener('dragleave', handleDragLeaveCapture, true);
+      document.removeEventListener('dragover', handleDragOverBubble, false);
+      document.removeEventListener('drop', handleDropBubble, false);
     };
   }, []);
 
@@ -325,10 +339,11 @@ function EmailDropZone({ children }) {
     e.stopPropagation();
     setIsDragging(false);
     dragCounterRef.current = 0; // Reset counter
+    dropProcessedRef.current = true; // Mark that we've processed this drop
 
     // Log what we received for debugging
-    console.log('Drop event - types:', e.dataTransfer.types);
-    console.log('Drop event - files:', e.dataTransfer.files.length);
+    console.log('[Component Drop] types:', Array.from(e.dataTransfer.types));
+    console.log('[Component Drop] files:', e.dataTransfer.files.length);
 
     const files = Array.from(e.dataTransfer.files);
 
