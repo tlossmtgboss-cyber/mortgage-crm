@@ -25951,6 +25951,32 @@ def init_db():
                         END $$;
                     """))
 
+                    # Add role_responsibilities column for dynamic workflow roles
+                    conn.execute(text("""
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (
+                                SELECT 1 FROM information_schema.columns
+                                WHERE table_name='workflow_day_configs' AND column_name='role_responsibilities'
+                            ) THEN
+                                ALTER TABLE workflow_day_configs ADD COLUMN role_responsibilities JSONB DEFAULT '{}'::jsonb;
+                            END IF;
+                        END $$;
+                    """))
+
+                    # Add role_id column to workflow_role_assignments for dynamic roles
+                    conn.execute(text("""
+                        DO $$
+                        BEGIN
+                            IF NOT EXISTS (
+                                SELECT 1 FROM information_schema.columns
+                                WHERE table_name='workflow_role_assignments' AND column_name='role_id'
+                            ) THEN
+                                ALTER TABLE workflow_role_assignments ADD COLUMN role_id INTEGER REFERENCES onboarding_roles(id);
+                            END IF;
+                        END $$;
+                    """))
+
                     conn.commit()
                     logger.info("✅ Schema migrations applied (PostgreSQL)")
 
