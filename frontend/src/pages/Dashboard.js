@@ -267,7 +267,6 @@ function Dashboard() {
             onDragStart={() => handleDragStart(index)}
           >⋮⋮</div>
           <div className="ai-alerts-header">
-            <span className="alerts-icon">🚨</span>
             <h3>AI Alerts</h3>
           </div>
           <div className="ai-alerts-list">
@@ -303,7 +302,7 @@ function Dashboard() {
             onDragStart={() => handleDragStart(index)}
           >⋮⋮</div>
           <div className="block-header clickable-block" onClick={() => navigate('/goal-tracker')}>
-            <h2>💰 Monthly Production Tracker</h2>
+            <h2>Monthly Production Tracker</h2>
           </div>
           <div className="production-kpis">
             <div className="kpi-card">
@@ -379,13 +378,11 @@ function Dashboard() {
           {/* AI Coaching Insights */}
           <div className="ai-insights-section">
             <div className="ai-insights-header">
-              <span className="insights-icon">💡</span>
               <h3>AI Coaching Insights</h3>
             </div>
             <div className="insights-list">
               {production.annualProgress < 75 && (
                 <div className="insight-item warning">
-                  <span className="insight-icon">⚠️</span>
                   <span className="insight-text">
                     You're at {production.annualProgress}% of your annual goal. Consider increasing your lead generation activities to stay on track.
                   </span>
@@ -393,7 +390,6 @@ function Dashboard() {
               )}
               {production.monthlyProgress > 100 && (
                 <div className="insight-item success">
-                  <span className="insight-icon">🎉</span>
                   <span className="insight-text">
                     Excellent! You've exceeded your monthly goal by {(production.monthlyProgress - 100).toFixed(0)}%. Keep up the great work!
                   </span>
@@ -401,7 +397,6 @@ function Dashboard() {
               )}
               {production.monthlyProgress < 50 && (
                 <div className="insight-item warning">
-                  <span className="insight-icon">📈</span>
                   <span className="insight-text">
                     You're only at {production.monthlyProgress}% of your monthly goal. Focus on converting your pipeline to close more deals this month.
                   </span>
@@ -409,7 +404,6 @@ function Dashboard() {
               )}
               {production.weeklyProgress < 80 && production.weeklyProgress > 0 && (
                 <div className="insight-item info">
-                  <span className="insight-icon">📊</span>
                   <span className="insight-text">
                     Weekly progress is at {production.weeklyProgress}%. Review your pipeline and prioritize hot leads to finish strong.
                   </span>
@@ -417,7 +411,6 @@ function Dashboard() {
               )}
               {production.dailyActual === 0 && (
                 <div className="insight-item info">
-                  <span className="insight-icon">🎯</span>
                   <span className="insight-text">
                     No units closed today yet. Connect with your active deals to move them towards closing.
                   </span>
@@ -425,7 +418,6 @@ function Dashboard() {
               )}
               {production.annualProgress >= 75 && production.annualProgress < 90 && (
                 <div className="insight-item success">
-                  <span className="insight-icon">✨</span>
                   <span className="insight-text">
                     You're {(100 - production.annualProgress).toFixed(0)}% away from your annual goal. Maintain your current pace to finish strong!
                   </span>
@@ -452,7 +444,7 @@ function Dashboard() {
             onDragStart={() => handleDragStart(index)}
           >⋮⋮</div>
           <div className="block-header clickable-block" onClick={() => navigate('/profitability')}>
-            <h2>📊 Profitability Intelligence</h2>
+            <h2>Profitability Intelligence</h2>
           </div>
           <div className="profitability-preview">
             <div className="profitability-metrics-grid">
@@ -479,11 +471,9 @@ function Dashboard() {
             </div>
             <div className="profitability-insights">
               <div className="insight-item">
-                <span className="insight-icon">💡</span>
                 <span>FHA loans showing 15% higher margins than conventional this month</span>
               </div>
               <div className="insight-item">
-                <span className="insight-icon">⚠️</span>
                 <span>Warehouse utilization at 78% - consider additional capacity</span>
               </div>
             </div>
@@ -519,7 +509,7 @@ function Dashboard() {
             onDragStart={() => handleDragStart(index)}
           >⋮⋮</div>
           <div className="block-header clickable-block" onClick={() => navigate('/dashboard/efficiency')}>
-            <h2>📊 Pipeline Efficiency Monitor</h2>
+            <h2>Pipeline Efficiency Monitor</h2>
           </div>
 
           {/* Overall Score & Key Metrics Row */}
@@ -619,7 +609,6 @@ function Dashboard() {
             <div className="bottleneck-list">
               {(efficiency.bottlenecks || []).slice(0, 4).map((bottleneck, idx) => (
                 <div key={idx} className="bottleneck-item">
-                  <span className="bottleneck-icon">⚠️</span>
                   <div className="bottleneck-content">
                     <div className="bottleneck-text">{bottleneck.issue}</div>
                     <div className="bottleneck-meta">{bottleneck.stage} • {bottleneck.affectedLoans} loans • {bottleneck.avgDelay}</div>
@@ -658,7 +647,7 @@ function Dashboard() {
             onDragStart={() => handleDragStart(index)}
           >⋮⋮</div>
           <div className="block-header">
-            <h2>📋 Workflow Scorecards</h2>
+            <h2>Workflow Scorecards</h2>
             <div className="workflow-overall-score">
               <span className="score-label">Overall:</span>
               <span className={`score-value ${overallScore >= 80 ? 'good' : overallScore >= 60 ? 'warning' : 'critical'}`}>
@@ -725,7 +714,7 @@ function Dashboard() {
             onDragStart={() => handleDragStart(index)}
           >⋮⋮</div>
           <div className="block-header clickable-block" onClick={() => navigate('/tasks')}>
-            <h2>🎯 AI Prioritized Tasks (Today)</h2>
+            <h2>AI Prioritized Tasks (Today)</h2>
             <span className="task-count">{getAggregatedTasksCount()} tasks</span>
           </div>
           <div className="task-summary-view">
@@ -756,7 +745,7 @@ function Dashboard() {
             onDragStart={() => handleDragStart(index)}
           >⋮⋮</div>
           <div className="block-header">
-            <h2>💼 Live Loan Pipeline</h2>
+            <h2>Live Loan Pipeline</h2>
           </div>
           <div className="pipeline-table">
             <table>
@@ -818,7 +807,7 @@ function Dashboard() {
             onDragStart={() => handleDragStart(index)}
           >⋮⋮</div>
           <div className="block-header">
-            <h2>🤝 Referral Scoreboard</h2>
+            <h2>Referral Scoreboard</h2>
           </div>
           <div className="referrals-content">
             <div className="referral-scoreboard-grid">
@@ -889,7 +878,7 @@ function Dashboard() {
             onDragStart={() => handleDragStart(index)}
           >⋮⋮</div>
           <div className="block-header">
-            <h2>👥 Team Performance</h2>
+            <h2>Team Performance</h2>
           </div>
           <div className="team-content">
             <div className="team-metrics">
@@ -907,10 +896,9 @@ function Dashboard() {
               </div>
             </div>
             <div className="ai-coaching">
-              <div className="coaching-title">🎓 AI Coaching Insights</div>
+              <div className="coaching-title">AI Coaching Insights</div>
               {teamStats.insights && teamStats.insights.filter(i => i).map((insight, idx) => (
                 <div key={idx} className="coaching-insight">
-                  <span className="insight-icon">💡</span>
                   {insight}
                 </div>
               ))}
@@ -1138,7 +1126,7 @@ const mockMessages = () => [
   {
     id: 1,
     type: 'email',
-    type_icon: '📧',
+    type_icon: '',
     from: 'Sarah Johnson',
     client_type: 'Active Loan',
     source: 'Outlook',
@@ -1154,7 +1142,7 @@ const mockMessages = () => [
   {
     id: 2,
     type: 'text',
-    type_icon: '💬',
+    type_icon: '',
     from: 'Mike Chen',
     client_type: 'Lead',
     source: 'Teams',
@@ -1170,7 +1158,7 @@ const mockMessages = () => [
   {
     id: 3,
     type: 'voicemail',
-    type_icon: '🎤',
+    type_icon: '',
     from: 'Lisa Brown',
     client_type: 'Portfolio Client',
     source: 'Phone',
@@ -1187,7 +1175,7 @@ const mockMessages = () => [
   {
     id: 4,
     type: 'email',
-    type_icon: '📧',
+    type_icon: '',
     from: 'Tom Wilson',
     client_type: 'Portfolio Client',
     source: 'Outlook',
@@ -1202,7 +1190,7 @@ const mockMessages = () => [
   {
     id: 5,
     type: 'text',
-    type_icon: '💬',
+    type_icon: '',
     from: 'Jennifer Davis',
     client_type: 'Active Loan',
     source: 'Teams',
@@ -1218,7 +1206,7 @@ const mockMessages = () => [
   {
     id: 6,
     type: 'voicemail',
-    type_icon: '🎤',
+    type_icon: '',
     from: 'Robert Kim',
     client_type: 'Lead',
     source: 'Phone',
