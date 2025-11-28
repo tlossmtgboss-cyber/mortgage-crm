@@ -1049,15 +1049,17 @@ async def get_available_roles(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    """Get all available roles from the roles table for workflow configuration.
+    """Get all available roles from the onboarding_roles table for workflow configuration.
 
     These are the admin-created roles that can be assigned to workflows.
     Returns roles with their IDs and names.
     """
-    # Use raw SQL to query roles table to avoid model import issues
-    result = db.execute(text("""
+    # Use raw SQL to query onboarding_roles table to avoid model import issues
+    # Note: Table is onboarding_roles (not roles) - do not change this
+    table_name = "onboarding_roles"
+    result = db.execute(text(f"""
         SELECT id, name, description
-        FROM roles
+        FROM {table_name}
         WHERE is_active = true
         ORDER BY name
     """))
