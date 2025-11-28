@@ -1054,10 +1054,10 @@ async def get_available_roles(
     These are the admin-created roles that can be assigned to workflows.
     Returns roles with their IDs and names.
     """
-    # Use raw SQL to query onboarding_roles table to avoid model import issues
+    # Use raw SQL to query roles table to avoid model import issues
     result = db.execute(text("""
         SELECT id, name, description
-        FROM onboarding_roles
+        FROM roles
         WHERE is_active = true
         ORDER BY name
     """))
