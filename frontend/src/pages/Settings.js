@@ -1870,6 +1870,12 @@ const API_BASE_URL = isProduction
               >
                 <span>Security</span>
               </button>
+              <button
+                className={`sidebar-btn child ${activeSection === 'email-signature' ? 'active' : ''}`}
+                onClick={() => setActiveSection('email-signature')}
+              >
+                <span>Email Signature</span>
+              </button>
             </div>
           )}
 
@@ -1949,13 +1955,6 @@ const API_BASE_URL = isProduction
             onClick={() => setActiveSection('email-monitor')}
           >
             <span>Email Monitor</span>
-          </button>
-
-          <button
-            className={`sidebar-btn ${activeSection === 'email-signature' ? 'active' : ''}`}
-            onClick={() => setActiveSection('email-signature')}
-          >
-            <span>Email Signature</span>
           </button>
 
           {/* Marketing */}
