@@ -25977,6 +25977,16 @@ def init_db():
                         END $$;
                     """))
 
+                    # Make the legacy 'role' column nullable for dynamic role support
+                    conn.execute(text("""
+                        DO $$
+                        BEGIN
+                            ALTER TABLE workflow_role_assignments ALTER COLUMN role DROP NOT NULL;
+                        EXCEPTION
+                            WHEN others THEN NULL;
+                        END $$;
+                    """))
+
                     conn.commit()
                     logger.info("✅ Schema migrations applied (PostgreSQL)")
 
