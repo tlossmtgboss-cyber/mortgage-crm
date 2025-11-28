@@ -713,9 +713,6 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
                 <div className="role-header">
                   <span className="role-name">{role.fullName}</span>
                   <span className="role-abbr">({role.label})</span>
-                  {role.isDynamic && (
-                    <span className="role-badge dynamic">Dynamic</span>
-                  )}
                 </div>
                 <div className="role-user" onClick={() => setEditingRole(role.key)}>
                   {editingRole === role.key ? (

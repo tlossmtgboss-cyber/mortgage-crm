@@ -81,6 +81,7 @@ const UserCreationWizard = lazy(() => import('./pages/UserCreationWizard'));
 const UserBulkUpload = lazy(() => import('./pages/UserBulkUpload'));
 const ActivateAccount = lazy(() => import('./pages/ActivateAccount'));
 const MeetingRoom = lazy(() => import('./pages/MeetingRoom'));
+const OAuthCallback = lazy(() => import('./pages/OAuthCallback'));
 
 // Simple loading component
 const PageLoader = () => (
@@ -272,6 +273,9 @@ function App() {
 
           {/* Video Meeting Room (public/private) */}
           <Route path="/meeting/:roomCode" element={<LazyPage><MeetingRoom /></LazyPage>} />
+
+          {/* OAuth Callback (public) */}
+          <Route path="/oauth/callback" element={<LazyPage><OAuthCallback /></LazyPage>} />
 
           {/* Onboarding Page (old) */}
           <Route

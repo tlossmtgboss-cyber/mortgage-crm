@@ -824,7 +824,7 @@ const API_BASE_URL = isProduction
   ? 'https://mortgage-crm-production-7a9a.up.railway.app'
   : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
   const MICROSOFT_CLIENT_ID = process.env.REACT_APP_MICROSOFT_CLIENT_ID || 'YOUR_MICROSOFT_CLIENT_ID'; // Replace with actual client ID
-  const MICROSOFT_REDIRECT_URI = `${window.location.origin}/settings`; // OAuth callback
+  const MICROSOFT_REDIRECT_URI = `${window.location.origin}/oauth/callback`; // OAuth callback
 
   const checkMicrosoftStatus = async () => {
     try {
