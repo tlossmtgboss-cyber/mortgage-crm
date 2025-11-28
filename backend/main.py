@@ -19910,6 +19910,45 @@ async def get_email_signature(
 
     return signature
 
+class UserEmailUpdate(BaseModel):
+    """Request body for updating user email"""
+    new_email: EmailStr
+
+
+@app.put("/api/v1/account/email")
+async def update_current_user_email(
+    email_update: UserEmailUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update current user's email address"""
+    try:
+        # Check if new email is already in use
+        existing = db.query(User).filter(User.email == email_update.new_email).first()
+        if existing and existing.id != current_user.id:
+            raise HTTPException(status_code=400, detail="Email already in use by another account")
+
+        old_email = current_user.email
+        current_user.email = email_update.new_email
+        db.commit()
+        db.refresh(current_user)
+
+        logger.info(f"User email updated from {old_email} to {email_update.new_email}")
+
+        return {
+            "status": "success",
+            "message": f"Email updated from {old_email} to {email_update.new_email}",
+            "old_email": old_email,
+            "new_email": email_update.new_email
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating user email: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/v1/email-signature", response_model=EmailSignatureResponse)
 async def create_or_update_email_signature(
     signature_data: EmailSignatureCreate,
