@@ -532,10 +532,31 @@ const MeetingRoom = () => {
     if (localStream) {
       localStream.getTracks().forEach(track => track.stop());
     }
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach(track => track.stop());
+    }
     if (recordingTimerRef.current) {
       clearInterval(recordingTimerRef.current);
     }
-    navigate('/video-meetings');
+    if (screenRecordingTimerRef.current) {
+      clearInterval(screenRecordingTimerRef.current);
+    }
+
+    // Try to close the browser tab/window
+    // window.close() only works if the window was opened by JavaScript
+    // For tabs opened directly, we'll fallback to navigation
+    try {
+      window.close();
+      // If window.close() didn't work (tab wasn't opened by script),
+      // fallback to navigation after a brief delay
+      setTimeout(() => {
+        if (!window.closed) {
+          navigate('/video-meetings');
+        }
+      }, 100);
+    } catch (e) {
+      navigate('/video-meetings');
+    }
   };
 
   // Format recording time
