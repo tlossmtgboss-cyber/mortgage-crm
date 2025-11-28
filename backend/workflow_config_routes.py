@@ -32,7 +32,11 @@ class DayConfigCreate(BaseModel):
     day_value: int
     day_order: Optional[int] = None  # If not provided, will be auto-calculated
     phone_enabled: bool = False
+    phone_am_enabled: bool = False  # AM Phone (Lead Purchase workflow)
+    phone_pm_enabled: bool = False  # PM Phone (Lead Purchase workflow)
     text_enabled: bool = False
+    text_am_enabled: bool = False   # AM Text (Lead Purchase workflow)
+    text_pm_enabled: bool = False   # PM Text (Lead Purchase workflow)
     email_enabled: bool = False
     referral_partner_enabled: bool = False
     # Legacy fields - kept for backwards compatibility
@@ -50,7 +54,11 @@ class DayConfigUpdate(BaseModel):
     day_label: Optional[str] = None
     day_value: Optional[int] = None
     phone_enabled: Optional[bool] = None
+    phone_am_enabled: Optional[bool] = None  # AM Phone (Lead Purchase workflow)
+    phone_pm_enabled: Optional[bool] = None  # PM Phone (Lead Purchase workflow)
     text_enabled: Optional[bool] = None
+    text_am_enabled: Optional[bool] = None   # AM Text (Lead Purchase workflow)
+    text_pm_enabled: Optional[bool] = None   # PM Text (Lead Purchase workflow)
     email_enabled: Optional[bool] = None
     referral_partner_enabled: Optional[bool] = None
     # Legacy fields - kept for backwards compatibility
@@ -195,7 +203,11 @@ async def get_workflow_config(
             'day_order': day.day_order,
             'day_value': day.day_value,
             'phone_enabled': day.phone_enabled,
+            'phone_am_enabled': getattr(day, 'phone_am_enabled', False),
+            'phone_pm_enabled': getattr(day, 'phone_pm_enabled', False),
             'text_enabled': day.text_enabled,
+            'text_am_enabled': getattr(day, 'text_am_enabled', False),
+            'text_pm_enabled': getattr(day, 'text_pm_enabled', False),
             'email_enabled': day.email_enabled,
             'referral_partner_enabled': day.referral_partner_enabled,
             # Legacy fields
