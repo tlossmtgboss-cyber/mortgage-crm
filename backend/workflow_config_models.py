@@ -85,7 +85,11 @@ def create_workflow_config_models(Base):
 
         # Communication method flags
         phone_enabled = Column(Boolean, default=False)
+        phone_am_enabled = Column(Boolean, default=False)  # AM Phone call (Lead Purchase workflow)
+        phone_pm_enabled = Column(Boolean, default=False)  # PM Phone call (Lead Purchase workflow)
         text_enabled = Column(Boolean, default=False)
+        text_am_enabled = Column(Boolean, default=False)   # AM Text message (Lead Purchase workflow)
+        text_pm_enabled = Column(Boolean, default=False)   # PM Text message (Lead Purchase workflow)
         email_enabled = Column(Boolean, default=False)
         referral_partner_enabled = Column(Boolean, default=False)
 

@@ -3,13 +3,30 @@ import './WorkflowConfigEditor.css';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://mortgage-crm-production-7a9a.up.railway.app';
 
-// Communication method columns
-const COMMUNICATION_METHODS = [
+// Communication method columns - default for most workflows
+const DEFAULT_COMMUNICATION_METHODS = [
   { key: 'phone', label: 'Phone', color: '#3b82f6' },
   { key: 'text', label: 'Text', color: '#10b981' },
   { key: 'email', label: 'Email', color: '#f59e0b' },
   { key: 'referral_partner', label: 'Referral Partner', color: '#ec4899' }
 ];
+
+// Lead Purchase workflow has AM/PM phone and text columns
+const LEAD_PURCHASE_COMMUNICATION_METHODS = [
+  { key: 'phone_am', label: 'AM Phone', color: '#3b82f6' },
+  { key: 'phone_pm', label: 'PM Phone', color: '#2563eb' },
+  { key: 'text_am', label: 'AM Text', color: '#10b981' },
+  { key: 'text_pm', label: 'PM Text', color: '#059669' },
+  { key: 'email', label: 'Email', color: '#f59e0b' }
+];
+
+// Get communication methods based on workflow key
+const getCommunicationMethods = (workflowKey) => {
+  if (workflowKey === 'lead_purchase') {
+    return LEAD_PURCHASE_COMMUNICATION_METHODS;
+  }
+  return DEFAULT_COMMUNICATION_METHODS;
+};
 
 // Legacy field mapping for backwards compatibility
 const LEGACY_RESPONSIBILITY_FIELDS = {
@@ -38,6 +55,9 @@ const DEFAULT_RESPONSIBILITY_ROLES = [
 ];
 
 function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClose, embedded = false }) {
+  // Get workflow-specific communication methods
+  const COMMUNICATION_METHODS = getCommunicationMethods(workflowKey);
+
   const [workflowConfig, setWorkflowConfig] = useState(null);
   const [days, setDays] = useState([]);
   const [roleAssignments, setRoleAssignments] = useState([]);
@@ -181,7 +201,11 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
 
     const fieldMap = {
       phone: 'phone_enabled',
+      phone_am: 'phone_am_enabled',
+      phone_pm: 'phone_pm_enabled',
       text: 'text_enabled',
+      text_am: 'text_am_enabled',
+      text_pm: 'text_pm_enabled',
       email: 'email_enabled',
       referral_partner: 'referral_partner_enabled'
     };
@@ -957,7 +981,11 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
                 {COMMUNICATION_METHODS.map(method => {
                   const fieldMap = {
                     phone: 'phone_enabled',
+                    phone_am: 'phone_am_enabled',
+                    phone_pm: 'phone_pm_enabled',
                     text: 'text_enabled',
+                    text_am: 'text_am_enabled',
+                    text_pm: 'text_pm_enabled',
                     email: 'email_enabled',
                     referral_partner: 'referral_partner_enabled'
                   };

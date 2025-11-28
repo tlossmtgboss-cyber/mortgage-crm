@@ -26397,6 +26397,41 @@ def init_db():
                         END $$;
                     """))
 
+                    # Add AM/PM communication method columns for Lead Purchase workflow
+                    conn.execute(text("""
+                        DO $$
+                        BEGIN
+                            -- Add phone_am_enabled column
+                            IF NOT EXISTS (
+                                SELECT 1 FROM information_schema.columns
+                                WHERE table_name='workflow_day_configs' AND column_name='phone_am_enabled'
+                            ) THEN
+                                ALTER TABLE workflow_day_configs ADD COLUMN phone_am_enabled BOOLEAN DEFAULT FALSE;
+                            END IF;
+                            -- Add phone_pm_enabled column
+                            IF NOT EXISTS (
+                                SELECT 1 FROM information_schema.columns
+                                WHERE table_name='workflow_day_configs' AND column_name='phone_pm_enabled'
+                            ) THEN
+                                ALTER TABLE workflow_day_configs ADD COLUMN phone_pm_enabled BOOLEAN DEFAULT FALSE;
+                            END IF;
+                            -- Add text_am_enabled column
+                            IF NOT EXISTS (
+                                SELECT 1 FROM information_schema.columns
+                                WHERE table_name='workflow_day_configs' AND column_name='text_am_enabled'
+                            ) THEN
+                                ALTER TABLE workflow_day_configs ADD COLUMN text_am_enabled BOOLEAN DEFAULT FALSE;
+                            END IF;
+                            -- Add text_pm_enabled column
+                            IF NOT EXISTS (
+                                SELECT 1 FROM information_schema.columns
+                                WHERE table_name='workflow_day_configs' AND column_name='text_pm_enabled'
+                            ) THEN
+                                ALTER TABLE workflow_day_configs ADD COLUMN text_pm_enabled BOOLEAN DEFAULT FALSE;
+                            END IF;
+                        END $$;
+                    """))
+
                     conn.commit()
                     logger.info("✅ Schema migrations applied (PostgreSQL)")
 
