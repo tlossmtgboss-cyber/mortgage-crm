@@ -80,6 +80,7 @@ const PowerDialer = lazy(() => import('./pages/PowerDialer'));
 const UserCreationWizard = lazy(() => import('./pages/UserCreationWizard'));
 const UserBulkUpload = lazy(() => import('./pages/UserBulkUpload'));
 const ActivateAccount = lazy(() => import('./pages/ActivateAccount'));
+const MeetingRoom = lazy(() => import('./pages/MeetingRoom'));
 
 // Simple loading component
 const PageLoader = () => (
@@ -268,6 +269,9 @@ function App() {
 
           {/* User Activation (public) */}
           <Route path="/activate" element={<LazyPage><ActivateAccount /></LazyPage>} />
+
+          {/* Video Meeting Room (public/private) */}
+          <Route path="/meeting/:roomCode" element={<LazyPage><MeetingRoom /></LazyPage>} />
 
           {/* Onboarding Page (old) */}
           <Route
