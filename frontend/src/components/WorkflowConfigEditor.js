@@ -8,7 +8,7 @@ const DEFAULT_COMMUNICATION_METHODS = [
   { key: 'phone', label: 'Phone', color: '#3b82f6' },
   { key: 'text', label: 'Text', color: '#10b981' },
   { key: 'email', label: 'Email', color: '#f59e0b' },
-  { key: 'referral_partner', label: 'Referral Partner', color: '#ec4899' }
+  { key: 'referral_partner', label: 'Stakeholders', color: '#ec4899' }
 ];
 
 // Lead Purchase workflow has AM/PM phone and text columns
