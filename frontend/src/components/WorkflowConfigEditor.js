@@ -79,7 +79,7 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
   const [lastSaved, setLastSaved] = useState(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [editingDay, setEditingDay] = useState(null);
-  const [editDayForm, setEditDayForm] = useState({ label: '', value: '' });
+  const [editDayForm, setEditDayForm] = useState({ label: '', value: '', repeat_weekly: false });
 
   const fetchWorkflowConfig = useCallback(async () => {
     try {
@@ -419,7 +419,11 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
   // Open edit modal for a day
   const handleEditDay = (day) => {
     setEditingDay(day);
-    setEditDayForm({ label: day.day_label, value: day.day_value?.toString() || '' });
+    setEditDayForm({
+      label: day.day_label,
+      value: day.day_value?.toString() || '',
+      repeat_weekly: day.repeat_weekly !== false // Default to true if not set
+    });
   };
 
   // Save edited day
@@ -437,18 +441,19 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
         },
         body: JSON.stringify({
           day_label: editDayForm.label,
-          day_value: editDayForm.value ? parseInt(editDayForm.value) : null
+          day_value: editDayForm.value ? parseInt(editDayForm.value) : null,
+          repeat_weekly: editDayForm.repeat_weekly
         })
       });
 
       if (response.ok) {
         setDays(prev => prev.map(d =>
           d.id === editingDay.id
-            ? { ...d, day_label: editDayForm.label, day_value: editDayForm.value ? parseInt(editDayForm.value) : null }
+            ? { ...d, day_label: editDayForm.label, day_value: editDayForm.value ? parseInt(editDayForm.value) : null, repeat_weekly: editDayForm.repeat_weekly }
             : d
         ));
         setEditingDay(null);
-        setEditDayForm({ label: '', value: '' });
+        setEditDayForm({ label: '', value: '', repeat_weekly: false });
       }
     } catch (err) {
       console.error('Error updating day:', err);
@@ -911,8 +916,19 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
                   placeholder="e.g., 7"
                 />
               </div>
+              <div className="form-group checkbox-group">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={editDayForm.repeat_weekly}
+                    onChange={(e) => setEditDayForm(prev => ({ ...prev, repeat_weekly: e.target.checked }))}
+                  />
+                  <span className="checkbox-text">Repeat weekly until closed</span>
+                </label>
+                <p className="field-hint">Task repeats every week until loan is closed, canceled, withdrawn, or denied</p>
+              </div>
               <div className="modal-actions">
-                <button className="btn-cancel" onClick={() => { setEditingDay(null); setEditDayForm({ label: '', value: '' }); }}>
+                <button className="btn-cancel" onClick={() => { setEditingDay(null); setEditDayForm({ label: '', value: '', repeat_weekly: false }); }}>
                   Cancel
                 </button>
                 <button
