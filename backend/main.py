@@ -26950,6 +26950,30 @@ def init_db():
                     conn.commit()
                     logger.info("✅ Workflow concierge_responsible column added")
 
+                    # Add weekly task scheduling columns to workflow_day_configs
+                    # These support recurring tasks like Monday Weekly Updates
+                    conn.execute(text("""
+                        DO $$
+                        BEGIN
+                            IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='workflow_day_configs') THEN
+                                -- repeat_weekly: Flag to mark task as weekly recurring
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='workflow_day_configs' AND column_name='repeat_weekly') THEN
+                                    ALTER TABLE workflow_day_configs ADD COLUMN repeat_weekly BOOLEAN DEFAULT FALSE;
+                                END IF;
+                                -- repeat_day_of_week: Which day to repeat (0=Monday, 6=Sunday)
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='workflow_day_configs' AND column_name='repeat_day_of_week') THEN
+                                    ALTER TABLE workflow_day_configs ADD COLUMN repeat_day_of_week INTEGER;
+                                END IF;
+                                -- repeat_until_status: JSON array of statuses that stop the recurrence
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='workflow_day_configs' AND column_name='repeat_until_status') THEN
+                                    ALTER TABLE workflow_day_configs ADD COLUMN repeat_until_status JSONB DEFAULT '[]'::jsonb;
+                                END IF;
+                            END IF;
+                        END $$;
+                    """))
+                    conn.commit()
+                    logger.info("✅ Weekly task scheduling columns added to workflow_day_configs")
+
                     # Add concierge to TaskResponsibility enum type
                     conn.execute(text("""
                         DO $$
