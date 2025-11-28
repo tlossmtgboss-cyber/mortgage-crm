@@ -700,44 +700,39 @@ function Tasks() {
       }));
 
       // Filter tasks by type:
-      // - Workflow and Manual tasks go to the Tasks page
-      // - Reconciliation items (AI Engine from email parsing) stay on Reconciliation page only
+      // - ONLY Workflow and Manual tasks go to the Tasks page
+      // - Reconciliation items (AI Engine from email parsing) go ONLY to Reconciliation page
+      // - NO emails should appear on the Tasks page at all
       const workflowAndManualTasks = transformedTasks.filter(t =>
-        t.source === 'Workflow' || t.source === 'Manual'
-      );
-      const messageTasks = transformedTasks.filter(t =>
-        t.email_from || t.email_subject
+        (t.source === 'Workflow' || t.source === 'Manual') &&
+        t.source !== 'AI Engine' &&
+        !t.email_from &&
+        !t.email_subject
       );
 
-      // Tasks page shows ONLY workflow and manual tasks (NOT reconciliation items)
-      // Reconciliation items are reviewed on the Reconciliation page
-      setPrioritizedTasks(workflowAndManualTasks.length > 0 ? workflowAndManualTasks : mockPrioritizedTasks());
+      // Tasks page shows ONLY workflow and manual tasks (NO reconciliation items, NO emails)
+      // If no real tasks exist, show empty list - NOT mock data with emails
+      setPrioritizedTasks(workflowAndManualTasks);
       setLoanIssues(mockLoanIssues());
-      // AI tasks from workflows (not reconciliation) - these are AI-suggested actions
+      // AI tasks are EMPTY - reconciliation items handled on Reconciliation page only
       setAiTasks({
-        pending: [],  // AI Engine reconciliation items handled on Reconciliation page
+        pending: [],
         waiting: []
       });
       setMumAlerts(mockMumAlerts());
       setLeadMetrics(mockLeadMetrics());
-      setMessages(messageTasks.length > 0 ? messageTasks.map(t => ({
-        id: t.id,
-        from: t.email_from || 'Unknown',
-        subject: t.email_subject || t.title,
-        preview: t.description?.substring(0, 100) || '',
-        date: t.date_created,
-        read: false
-      })) : mockMessages());
+      // Messages tab is empty - emails only on Reconciliation page
+      setMessages([]);
 
     } catch (error) {
       console.error('Failed to load tasks:', error);
-      // Load demo data on error
+      // Load demo data on error - but NO emails (emails only on Reconciliation page)
       setPrioritizedTasks(mockPrioritizedTasks());
       setLoanIssues(mockLoanIssues());
-      setAiTasks(mockAiTasks());
+      setAiTasks({ pending: [], waiting: [] });  // No AI Engine tasks - they go to Reconciliation
       setMumAlerts(mockMumAlerts());
       setLeadMetrics(mockLeadMetrics());
-      setMessages(mockMessages());
+      setMessages([]);  // No emails - they go to Reconciliation page only
     } finally {
       setLoading(false);
     }
@@ -883,8 +878,6 @@ function Tasks() {
     switch (activeTab) {
       case 'outstanding':
         return allTasks.filter(task => !snoozedTasks.has(task.id));
-      case 'messages':
-        return allTasks.filter(task => task.source === 'Messages' && !snoozedTasks.has(task.id));
       case 'mum':
         return allTasks.filter(task => task.source === 'Client for Life' && !snoozedTasks.has(task.id));
       default:
@@ -1013,22 +1006,24 @@ function Tasks() {
     return tasks;
   };
 
-  // Aggregate all tasks from different containers (same logic as dashboard)
+  // Aggregate all tasks from different containers
+  // IMPORTANT: NO emails or AI Engine/reconciliation tasks - those go to Reconciliation page ONLY
   const getAggregatedTasks = () => {
     const tasks = [];
-
-    // Add ALL prioritized tasks (includes workflow, manual, AND AI Engine/reconciliation)
-    // Track added task IDs to avoid duplicates
     const addedTaskIds = new Set();
 
+    // Add prioritized tasks - EXCLUDE any AI Engine or email-related tasks
     prioritizedTasks.forEach((task, idx) => {
       const taskId = task.id || `priority-${idx}`;
+      // Skip AI Engine tasks and any tasks with email data
+      if (task.source === 'AI Engine' || task.email_from || task.email_subject) {
+        return;
+      }
       if (!completedTasks.has(taskId) && !addedTaskIds.has(taskId)) {
         addedTaskIds.add(taskId);
         // Set sourceIcon based on source
         let sourceIcon = '🎯';
         if (task.source === 'Workflow') sourceIcon = '⚡';
-        else if (task.source === 'AI Engine') sourceIcon = '🤖';
         else if (task.source === 'Manual') sourceIcon = '🎯';
 
         tasks.push({
@@ -1057,24 +1052,8 @@ function Tasks() {
       }
     });
 
-    // Note: AI pending tasks are now included in prioritizedTasks, so we skip adding them separately
-    // to avoid duplicates. Only add AI waiting tasks that aren't already in prioritizedTasks.
-    aiTasks.waiting.forEach((task, idx) => {
-      const taskId = `ai-waiting-${idx}`;
-      if (!completedTasks.has(taskId) && !addedTaskIds.has(taskId)) {
-        addedTaskIds.add(taskId);
-        const { id: _originalId, ...taskWithoutId } = task;
-        tasks.push({
-          ...taskWithoutId,
-          id: taskId,
-          title: task.task,
-          stage: 'Needs Approval',
-          urgency: task.urgency || 'low',
-          source: 'AI Engine',
-          sourceIcon: '🤖'
-        });
-      }
-    });
+    // AI Engine tasks (emails/reconciliation) are NOT added here
+    // They belong ONLY on the Reconciliation page
 
     // Add MUM alerts
     mumAlerts.forEach((alert, idx) => {
@@ -1659,12 +1638,6 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
           Outstanding Tasks ({allTasks.filter(t => !snoozedTasks.has(t.id)).length})
         </button>
         <button
-          className={`tab-button ${activeTab === 'messages' ? 'active' : ''}`}
-          onClick={() => setActiveTab('messages')}
-        >
-          📬 Unified Messages ({allTasks.filter(t => t.source === 'Messages' && !snoozedTasks.has(t.id)).length})
-        </button>
-        <button
           className={`tab-button ${activeTab === 'mum' ? 'active' : ''}`}
           onClick={() => setActiveTab('mum')}
         >
@@ -1682,13 +1655,6 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
       {activeTab === 'outstanding' && (
         <div className="tab-content">
           <TaskEmailLayout tasks={tabTasks} emptyMessage="No outstanding tasks" />
-        </div>
-      )}
-
-      {/* Unified Messages Tab */}
-      {activeTab === 'messages' && (
-        <div className="tab-content">
-          <TaskEmailLayout tasks={tabTasks} emptyMessage="No unread messages" />
         </div>
       )}
 
