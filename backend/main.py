@@ -26037,6 +26037,20 @@ def init_db():
                     conn.commit()
                     logger.info("✅ Telephony tables created/verified")
 
+                    # Add concierge_responsible column to workflow_day_configs
+                    conn.execute(text("""
+                        DO $$
+                        BEGIN
+                            IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='workflow_day_configs') THEN
+                                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='workflow_day_configs' AND column_name='concierge_responsible') THEN
+                                    ALTER TABLE workflow_day_configs ADD COLUMN concierge_responsible BOOLEAN DEFAULT FALSE;
+                                END IF;
+                            END IF;
+                        END $$;
+                    """))
+                    conn.commit()
+                    logger.info("✅ Workflow concierge_responsible column added")
+
                     # Fix invalid Application stage values
                     result = conn.execute(text("""
                         UPDATE leads
