@@ -1,32 +1,340 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import './PermissionsStep.css';
 
-/**
- * PermissionsStep - Placeholder component for user permissions configuration
- * TODO: Implement full permissions UI
- */
+// Loan lifecycle stages
+const LOAN_STAGES = [
+  {
+    code: 'lead',
+    name: 'Lead Management',
+    icon: '👥',
+    description: 'Lead intake, qualification, pre-approval, and nurturing',
+    color: '#3B82F6'
+  },
+  {
+    code: 'active_loan',
+    name: 'Active Loan',
+    icon: '📄',
+    description: 'Processing, underwriting, closing, and rate locks',
+    color: '#10B981'
+  },
+  {
+    code: 'portfolio',
+    name: 'Portfolio',
+    icon: '💼',
+    description: 'Client retention, MUM, referrals, and anniversaries',
+    color: '#8B5CF6'
+  }
+];
+
+// Permission templates per stage
+const TEMPLATES = {
+  lead: [
+    { code: 'full_access', name: 'Full Access', description: 'Complete admin control over leads', permissions: ['all'] },
+    { code: 'lead_officer', name: 'Standard Loan Officer', description: 'Lead management, pipeline, clients', permissions: ['view', 'edit', 'create'] },
+    { code: 'sdr', name: 'SDR / Inside Sales', description: 'Lead intake and qualification only', permissions: ['view', 'create'] },
+    { code: 'read_only', name: 'Read Only', description: 'View-only access to leads', permissions: ['view'] }
+  ],
+  active_loan: [
+    { code: 'full_access', name: 'Full Access', description: 'Complete admin control over loans', permissions: ['all'] },
+    { code: 'loan_officer', name: 'Standard Loan Officer', description: 'Origination, rate locks, documents', permissions: ['view', 'edit', 'create'] },
+    { code: 'processor', name: 'Processing Team', description: 'Document processing and verification', permissions: ['view', 'edit'] },
+    { code: 'underwriter', name: 'Underwriter', description: 'Underwriting decisions and conditions', permissions: ['view', 'edit'] },
+    { code: 'read_only', name: 'Read Only', description: 'View-only access to loans', permissions: ['view'] }
+  ],
+  portfolio: [
+    { code: 'full_access', name: 'Full Access', description: 'Complete admin control over portfolio', permissions: ['all'] },
+    { code: 'loan_officer', name: 'Standard Loan Officer', description: 'Client relationships, MUM, referrals', permissions: ['view', 'edit', 'create'] },
+    { code: 'analyst', name: 'Analyst', description: 'Portfolio analytics and reporting', permissions: ['view'] },
+    { code: 'read_only', name: 'Read Only', description: 'View-only access to portfolio', permissions: ['view'] }
+  ]
+};
+
+// Feature toggles - ALL disabled by default
+const FEATURES = [
+  { code: 'ai_receptionist', name: 'AI Receptionist', description: 'AI-powered call handling and routing', icon: '🤖', category: 'ai' },
+  { code: 'power_dialer', name: 'Power Dialer', description: 'Automated outbound calling system', icon: '📞', category: 'communication' },
+  { code: 'ai_underwriting', name: 'AI Underwriting', description: 'AI-assisted loan underwriting', icon: '🧠', category: 'ai' },
+  { code: 'partners', name: 'Partners', description: 'Partner network management', icon: '🤝', category: 'business' },
+  { code: 'market', name: 'Market', description: 'Market data and analytics', icon: '📊', category: 'business' },
+  { code: 'profitability', name: 'Profitability', description: 'Financial analytics and reporting', icon: '💰', category: 'business' },
+  { code: 'voice_os', name: 'Voice OS', description: 'Voice-enabled operations', icon: '🎙️', category: 'ai' },
+  { code: 'marketing', name: 'Marketing', description: 'Marketing automation tools', icon: '📣', category: 'communication' },
+  { code: 'integrations', name: 'Integrations', description: 'Third-party integrations', icon: '🔗', category: 'automation' },
+  { code: 'api_keys', name: 'API Keys', description: 'API access management', icon: '🔑', category: 'admin' },
+  { code: 'it_help_desk', name: 'IT Help Desk', description: 'Technical support access', icon: '🛠️', category: 'business' },
+  { code: 'smart_scheduler', name: 'Smart Scheduler', description: 'AI-powered appointment scheduling', icon: '📅', category: 'automation' },
+  { code: 'video_meetings', name: 'Video Meetings', description: 'Video conferencing tools', icon: '🎥', category: 'communication' },
+  { code: 'data_management', name: 'Data Management', description: 'Data import/export tools', icon: '💾', category: 'automation' },
+  { code: 'master_admin', name: 'Master Administrator', description: 'Full system administration', icon: '👑', category: 'admin' }
+];
+
+const FEATURE_CATEGORIES = [
+  { code: 'ai', name: 'AI Capabilities', icon: '🤖' },
+  { code: 'communication', name: 'Communication', icon: '📱' },
+  { code: 'business', name: 'Business Tools', icon: '💼' },
+  { code: 'automation', name: 'Automation', icon: '⚡' },
+  { code: 'admin', name: 'Administration', icon: '🔐' }
+];
+
 function PermissionsStep({
-  selectedResponsibilities = [],
-  onResponsibilitiesChange = () => {},
-  selectedStages = [],
-  onStagesChange = () => {},
-  enabledFeatures = {},
-  onFeaturesChange = () => {}
+  userId,
+  isAdminMode = true,
+  initialStages,
+  initialFeatures,
+  onComplete,
+  onBack
 }) {
+  const [mode, setMode] = useState('simple');
+  const [selectedStages, setSelectedStages] = useState(initialStages || []);
+  const [enabledFeatures, setEnabledFeatures] = useState(new Set(initialFeatures ? Object.keys(initialFeatures).filter(k => initialFeatures[k]) : []));
+  const [expandedStages, setExpandedStages] = useState(new Set());
+
+  useEffect(() => {
+    if (initialStages) {
+      setSelectedStages(initialStages);
+    }
+  }, [initialStages]);
+
+  useEffect(() => {
+    if (initialFeatures) {
+      setEnabledFeatures(new Set(Object.keys(initialFeatures).filter(k => initialFeatures[k])));
+    }
+  }, [initialFeatures]);
+
+  const handleStageToggle = (stageCode) => {
+    setSelectedStages(prev => {
+      const existing = prev.find(s => s.stageCode === stageCode);
+      if (existing) {
+        return prev.filter(s => s.stageCode !== stageCode);
+      } else {
+        return [...prev, { stageCode, templateCode: null, dataScope: 'assigned' }];
+      }
+    });
+  };
+
+  const handleTemplateSelect = (stageCode, templateCode) => {
+    setSelectedStages(prev =>
+      prev.map(s =>
+        s.stageCode === stageCode ? { ...s, templateCode } : s
+      )
+    );
+  };
+
+  const handleFeatureToggle = (featureCode) => {
+    setEnabledFeatures(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(featureCode)) {
+        newSet.delete(featureCode);
+      } else {
+        newSet.add(featureCode);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleStageExpand = (stageCode) => {
+    setExpandedStages(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(stageCode)) {
+        newSet.delete(stageCode);
+      } else {
+        newSet.add(stageCode);
+      }
+      return newSet;
+    });
+  };
+
+  const isStageSelected = (stageCode) => selectedStages.some(s => s.stageCode === stageCode);
+  const getStageSelection = (stageCode) => selectedStages.find(s => s.stageCode === stageCode);
+
+  const handleContinue = () => {
+    const featuresObj = {};
+    FEATURES.forEach(f => {
+      featuresObj[f.code] = enabledFeatures.has(f.code);
+    });
+
+    onComplete({
+      stages: selectedStages,
+      features: featuresObj,
+      customPermissions: {}
+    });
+  };
+
+  const canContinue = selectedStages.length > 0 && selectedStages.every(s => s.templateCode);
+
   return (
     <div className="permissions-step">
       <div className="permissions-header">
-        <h2>Configure Permissions</h2>
-        <p>Set up user responsibilities and access levels</p>
+        <h1>Configure Permissions</h1>
+        <p className="permissions-subtitle">
+          Select loan stages and permission templates for this user
+        </p>
       </div>
 
-      <div className="permissions-content">
-        <div className="permissions-section">
-          <h3>Responsibilities</h3>
-          <p className="section-description">
-            Permissions will be configured based on the user's role and team assignment.
-          </p>
+      {/* Mode Toggle */}
+      <div className="permissions-mode-toggle">
+        <button
+          className={`mode-btn ${mode === 'simple' ? 'active' : ''}`}
+          onClick={() => setMode('simple')}
+        >
+          Simple
+        </button>
+        <button
+          className={`mode-btn ${mode === 'custom' ? 'active' : ''}`}
+          onClick={() => setMode('custom')}
+        >
+          Custom
+        </button>
+      </div>
+
+      {/* Stages Section */}
+      <div className="stages-section">
+        <h2 className="section-title">Loan Stages</h2>
+        <p className="section-description">
+          Select which loan lifecycle stages this user can access
+        </p>
+
+        <div className="stages-grid">
+          {LOAN_STAGES.map(stage => {
+            const isSelected = isStageSelected(stage.code);
+            const selection = getStageSelection(stage.code);
+            const templates = TEMPLATES[stage.code] || [];
+
+            return (
+              <div
+                key={stage.code}
+                className={`stage-card ${isSelected ? 'selected' : ''}`}
+                style={{ '--stage-color': stage.color }}
+              >
+                <div
+                  className="stage-card-header"
+                  onClick={() => handleStageToggle(stage.code)}
+                >
+                  <span className="stage-icon">{stage.icon}</span>
+                  <div className="stage-info">
+                    <h3>{stage.name}</h3>
+                    <p>{stage.description}</p>
+                  </div>
+                  <div className={`stage-checkbox ${isSelected ? 'checked' : ''}`}>
+                    {isSelected && <span>✓</span>}
+                  </div>
+                </div>
+
+                {isSelected && (
+                  <div className="stage-templates">
+                    <div className="templates-label">Select Permission Template</div>
+                    <div className="templates-grid">
+                      {templates.map(template => (
+                        <div
+                          key={template.code}
+                          className={`template-card ${selection?.templateCode === template.code ? 'selected' : ''}`}
+                          onClick={() => handleTemplateSelect(stage.code, template.code)}
+                        >
+                          <div className="template-name">{template.name}</div>
+                          <div className="template-description">{template.description}</div>
+                          <div className="template-tags">
+                            {template.permissions.map(p => (
+                              <span key={p} className="template-tag">{p}</span>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
+      </div>
+
+      {/* Features Section */}
+      <div className="features-section">
+        <div className="features-header">
+          <h2 className="section-title">Feature Access</h2>
+          <p className="section-description">
+            Enable specific features for this user. Disabled features will be completely hidden.
+          </p>
+          <div className="features-badge">
+            {enabledFeatures.size} of {FEATURES.length} features enabled
+          </div>
+        </div>
+
+        <div className="features-categories">
+          {FEATURE_CATEGORIES.map(category => {
+            const categoryFeatures = FEATURES.filter(f => f.category === category.code);
+            const enabledCount = categoryFeatures.filter(f => enabledFeatures.has(f.code)).length;
+
+            return (
+              <div key={category.code} className="feature-category">
+                <div className="category-header">
+                  <span className="category-icon">{category.icon}</span>
+                  <span className="category-name">{category.name}</span>
+                  <span className="category-count">{enabledCount}/{categoryFeatures.length}</span>
+                </div>
+                <div className="features-grid">
+                  {categoryFeatures.map(feature => (
+                    <div
+                      key={feature.code}
+                      className={`feature-card ${enabledFeatures.has(feature.code) ? 'enabled' : ''}`}
+                      onClick={() => handleFeatureToggle(feature.code)}
+                    >
+                      <div className="feature-checkbox">
+                        <input
+                          type="checkbox"
+                          checked={enabledFeatures.has(feature.code)}
+                          onChange={() => handleFeatureToggle(feature.code)}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                      <span className="feature-icon">{feature.icon}</span>
+                      <div className="feature-info">
+                        <div className="feature-name">{feature.name}</div>
+                        <div className="feature-description">{feature.description}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Summary */}
+      {selectedStages.length > 0 && selectedStages.every(s => s.templateCode) && (
+        <div className="permissions-summary">
+          <h3>✓ Permission Summary</h3>
+          <div className="summary-items">
+            {selectedStages.map(s => {
+              const stage = LOAN_STAGES.find(st => st.code === s.stageCode);
+              const template = TEMPLATES[s.stageCode]?.find(t => t.code === s.templateCode);
+              return (
+                <div key={s.stageCode} className="summary-item">
+                  <span className="summary-stage">{stage?.name}</span>
+                  <span className="summary-arrow">→</span>
+                  <span className="summary-template">{template?.name}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Navigation */}
+      <div className="permissions-navigation">
+        {onBack && (
+          <button className="nav-btn back-btn" onClick={onBack}>
+            ← Back
+          </button>
+        )}
+        <button
+          className="nav-btn continue-btn"
+          onClick={handleContinue}
+          disabled={!canContinue}
+        >
+          Continue →
+        </button>
       </div>
     </div>
   );
