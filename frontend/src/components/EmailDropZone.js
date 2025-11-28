@@ -24,6 +24,9 @@ function EmailDropZone({ children }) {
   const dragCounterRef = useRef(0);
   const dropZoneRef = useRef(null);
 
+  // Reference to the main handleDrop callback for use in global handler
+  const handleDropRef = useRef(null);
+
   // Global document-level drag handlers for better capture
   useEffect(() => {
     let dragCounter = 0;
@@ -60,8 +63,6 @@ function EmailDropZone({ children }) {
     const handleWindowDragOver = (e) => {
       // CRITICAL: Must prevent default to allow drop
       e.preventDefault();
-      e.stopPropagation();
-
       // Set the drop effect to show it's droppable
       if (e.dataTransfer) {
         e.dataTransfer.dropEffect = 'copy';
@@ -69,10 +70,17 @@ function EmailDropZone({ children }) {
     };
 
     const handleWindowDrop = (e) => {
-      // Don't prevent default here - let the component handler do it
-      console.log('Window Drop detected');
+      // MUST prevent default to stop browser from opening file
+      e.preventDefault();
+      console.log('Window Drop detected - types:', Array.from(e.dataTransfer?.types || []), 'files:', e.dataTransfer?.files?.length);
       dragCounter = 0;
-      setIsDragging(false);
+
+      // Directly call the drop handler
+      if (handleDropRef.current) {
+        handleDropRef.current(e);
+      } else {
+        setIsDragging(false);
+      }
     };
 
     // Add document-level listeners with capture phase for priority
@@ -445,6 +453,11 @@ function EmailDropZone({ children }) {
     }
     setParsing(false);
   }, []);
+
+  // Keep the ref updated for the global drop handler
+  useEffect(() => {
+    handleDropRef.current = handleDrop;
+  }, [handleDrop]);
 
   const handleChoiceDocument = () => {
     setShowChoiceModal(false);
