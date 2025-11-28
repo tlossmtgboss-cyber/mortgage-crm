@@ -82,9 +82,6 @@ function WorkflowDashboard() {
     <div className="workflow-dashboard">
       <div className="workflow-header">
         <h1>Active Loan Workflow</h1>
-        <div className="theme-day-badge">
-          {dashboard?.theme_day?.name || 'Today'}
-        </div>
       </div>
 
       {/* Workflow Tab Navigation - 10 Tabs */}
