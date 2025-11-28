@@ -1177,12 +1177,17 @@ async def sync_all_workflow_roles(
     }
 
 
+class RoleResponsibilityUpdate(BaseModel):
+    """Request body for updating role responsibility"""
+    role_id: int
+    responsible: bool
+
+
 @router.put("/workflows/{workflow_key}/days/{day_id}/role-responsibility")
 async def update_day_role_responsibility(
     workflow_key: str,
     day_id: int,
-    role_id: int,
-    is_responsible: bool,
+    body: RoleResponsibilityUpdate,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
@@ -1190,6 +1195,10 @@ async def update_day_role_responsibility(
 
     This is a convenience endpoint to toggle a single role's responsibility
     without having to update the entire day config.
+
+    Request body:
+    - role_id: The ID of the role from the Role table
+    - responsible: Boolean indicating if this role is responsible for the day
     """
     if _models is None:
         raise HTTPException(status_code=500, detail="Models not initialized")
@@ -1216,7 +1225,7 @@ async def update_day_role_responsibility(
     responsibilities = day.role_responsibilities or {}
 
     # Update the specific role
-    responsibilities[str(role_id)] = is_responsible
+    responsibilities[str(body.role_id)] = body.responsible
 
     # Save back
     day.role_responsibilities = responsibilities
@@ -1226,6 +1235,6 @@ async def update_day_role_responsibility(
     return {
         'success': True,
         'day_id': day_id,
-        'role_id': role_id,
-        'is_responsible': is_responsible
+        'role_id': body.role_id,
+        'is_responsible': body.responsible
     }
