@@ -3,12 +3,20 @@ import './WorkflowConfigEditor.css';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://mortgage-crm-production-7a9a.up.railway.app';
 
-// Communication method columns - default for most workflows
+// Communication method columns - default for most workflows (uses "Realtor")
 const DEFAULT_COMMUNICATION_METHODS = [
   { key: 'phone', label: 'Phone', color: '#3b82f6' },
   { key: 'text', label: 'Text', color: '#10b981' },
   { key: 'email', label: 'Email', color: '#f59e0b' },
-  { key: 'referral_partner', label: 'Stakeholders', color: '#ec4899' }
+  { key: 'referral_partner', label: 'Realtor', color: '#ec4899' }
+];
+
+// Theme Day workflow uses "Stakeholder" instead of "Realtor"
+const THEME_DAY_COMMUNICATION_METHODS = [
+  { key: 'phone', label: 'Phone', color: '#3b82f6' },
+  { key: 'text', label: 'Text', color: '#10b981' },
+  { key: 'email', label: 'Email', color: '#f59e0b' },
+  { key: 'referral_partner', label: 'Stakeholder', color: '#ec4899' }
 ];
 
 // Lead Purchase workflow has AM/PM phone and text columns
@@ -24,6 +32,9 @@ const LEAD_PURCHASE_COMMUNICATION_METHODS = [
 const getCommunicationMethods = (workflowKey) => {
   if (workflowKey === 'lead_purchase') {
     return LEAD_PURCHASE_COMMUNICATION_METHODS;
+  }
+  if (workflowKey === 'theme_day') {
+    return THEME_DAY_COMMUNICATION_METHODS;
   }
   return DEFAULT_COMMUNICATION_METHODS;
 };

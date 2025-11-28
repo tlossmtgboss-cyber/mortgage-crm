@@ -111,6 +111,16 @@ def create_workflow_config_models(Base):
         health_message = Column(String(255))  # Error message if broken
         last_health_check = Column(DateTime)
 
+        # Weekly recurring task settings
+        # When repeat_weekly=True, task repeats every week until loan closes
+        # repeat_day_of_week: 0=Monday, 1=Tuesday, ..., 6=Sunday
+        # First task goes out on the NEXT occurrence of that day after trigger date
+        # (e.g., if LE Pending added on Monday, first Monday update is NEXT Monday)
+        repeat_weekly = Column(Boolean, default=False)
+        repeat_day_of_week = Column(Integer, nullable=True)  # 0=Monday, 6=Sunday
+        repeat_until_status = Column(JSON, default=list)  # List of statuses that stop the repeat
+        # e.g., ['closed', 'canceled', 'withdrawn', 'denied']
+
         # Additional config
         is_active = Column(Boolean, default=True)
         task_description = Column(Text)  # What should happen on this day

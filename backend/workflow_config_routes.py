@@ -48,6 +48,10 @@ class DayConfigCreate(BaseModel):
     # Dynamic role responsibilities - format: {role_id: true/false}
     role_responsibilities: Optional[Dict[str, bool]] = None
     task_description: Optional[str] = None
+    # Weekly recurring task settings
+    repeat_weekly: bool = False
+    repeat_day_of_week: Optional[int] = None  # 0=Monday, 6=Sunday
+    repeat_until_status: Optional[List[str]] = None  # e.g., ['closed', 'canceled', 'withdrawn', 'denied']
 
 
 class DayConfigUpdate(BaseModel):
@@ -71,6 +75,10 @@ class DayConfigUpdate(BaseModel):
     role_responsibilities: Optional[Dict[str, bool]] = None
     is_active: Optional[bool] = None
     task_description: Optional[str] = None
+    # Weekly recurring task settings
+    repeat_weekly: Optional[bool] = None
+    repeat_day_of_week: Optional[int] = None  # 0=Monday, 6=Sunday
+    repeat_until_status: Optional[List[str]] = None  # e.g., ['closed', 'canceled', 'withdrawn', 'denied']
 
 
 class RoleAssignmentCreate(BaseModel):
