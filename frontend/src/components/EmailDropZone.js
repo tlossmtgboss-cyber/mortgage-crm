@@ -22,22 +22,19 @@ function EmailDropZone({ children }) {
   const [parsing, setParsing] = useState(false);
   const [aiParseResult, setAiParseResult] = useState(null);
   const dragCounterRef = useRef(0);
-  const dropZoneRef = useRef(null);
 
-  // Reference to the main handleDrop callback for use in global handler
-  const handleDropRef = useRef(null);
-
-  // Global document-level drag handlers for better capture
+  // Global document-level drag handlers - BUBBLE phase (not capture)
+  // This ensures the component handlers run first, then these as fallback
   useEffect(() => {
     let dragCounter = 0;
 
     const handleWindowDragEnter = (e) => {
-      e.preventDefault();
+      // Don't prevent default here - let component handler do it
       dragCounter++;
 
       // Check if it's a valid drag (files, emails, etc.)
       const types = Array.from(e.dataTransfer?.types || []);
-      console.log('Window DragEnter - types:', types, 'counter:', dragCounter);
+      console.log('[Global] DragEnter - types:', types, 'counter:', dragCounter);
 
       // Files type is present when dragging files from desktop/finder
       const hasFiles = types.includes('Files');
@@ -49,9 +46,8 @@ function EmailDropZone({ children }) {
     };
 
     const handleWindowDragLeave = (e) => {
-      e.preventDefault();
       dragCounter--;
-      console.log('Window DragLeave - counter:', dragCounter);
+      console.log('[Global] DragLeave - counter:', dragCounter);
 
       // Only hide when all drag events have left
       if (dragCounter <= 0) {
@@ -70,30 +66,25 @@ function EmailDropZone({ children }) {
     };
 
     const handleWindowDrop = (e) => {
-      // MUST prevent default to stop browser from opening file
+      // Prevent default to stop browser from opening file
       e.preventDefault();
-      console.log('Window Drop detected - types:', Array.from(e.dataTransfer?.types || []), 'files:', e.dataTransfer?.files?.length);
+      console.log('[Global] Drop detected - resetting state');
       dragCounter = 0;
-
-      // Directly call the drop handler
-      if (handleDropRef.current) {
-        handleDropRef.current(e);
-      } else {
-        setIsDragging(false);
-      }
+      // Just reset the drag state - the component handler will process the drop
+      setIsDragging(false);
     };
 
-    // Add document-level listeners with capture phase for priority
-    document.addEventListener('dragenter', handleWindowDragEnter, true);
-    document.addEventListener('dragleave', handleWindowDragLeave, true);
-    document.addEventListener('dragover', handleWindowDragOver, true);
-    document.addEventListener('drop', handleWindowDrop, true);
+    // Add document-level listeners in BUBBLE phase (false) - so component handlers run first
+    document.addEventListener('dragenter', handleWindowDragEnter, false);
+    document.addEventListener('dragleave', handleWindowDragLeave, false);
+    document.addEventListener('dragover', handleWindowDragOver, false);
+    document.addEventListener('drop', handleWindowDrop, false);
 
     return () => {
-      document.removeEventListener('dragenter', handleWindowDragEnter, true);
-      document.removeEventListener('dragleave', handleWindowDragLeave, true);
-      document.removeEventListener('dragover', handleWindowDragOver, true);
-      document.removeEventListener('drop', handleWindowDrop, true);
+      document.removeEventListener('dragenter', handleWindowDragEnter, false);
+      document.removeEventListener('dragleave', handleWindowDragLeave, false);
+      document.removeEventListener('dragover', handleWindowDragOver, false);
+      document.removeEventListener('drop', handleWindowDrop, false);
     };
   }, []);
 
@@ -453,11 +444,6 @@ function EmailDropZone({ children }) {
     }
     setParsing(false);
   }, []);
-
-  // Keep the ref updated for the global drop handler
-  useEffect(() => {
-    handleDropRef.current = handleDrop;
-  }, [handleDrop]);
 
   const handleChoiceDocument = () => {
     setShowChoiceModal(false);

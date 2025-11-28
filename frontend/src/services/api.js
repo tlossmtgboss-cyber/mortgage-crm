@@ -1404,6 +1404,32 @@ export const emailDropAPI = {
   }
 };
 
+// Reconciliation API (AI Engine tasks)
+export const reconciliationAPI = {
+  // Get pending reconciliation items
+  getPending: async () => {
+    const response = await api.get('/api/v1/reconciliation/pending');
+    return response.data;
+  },
+
+  // Delete a reconciliation item
+  delete: async (id) => {
+    await api.delete(`/api/v1/reconciliation/items/${id}`);
+  },
+
+  // Approve a reconciliation item
+  approve: async (data) => {
+    const response = await api.post('/api/v1/reconciliation/approve', data);
+    return response.data;
+  },
+
+  // Reject a reconciliation item
+  reject: async (data) => {
+    const response = await api.post('/api/v1/reconciliation/reject', data);
+    return response.data;
+  },
+};
+
 // Document Drop API (drag-and-drop document upload)
 export const documentDropAPI = {
   // Upload a document file

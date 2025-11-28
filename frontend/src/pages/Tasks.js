@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { teamAPI, tasksAPI } from '../services/api';
+import { teamAPI, tasksAPI, reconciliationAPI } from '../services/api';
 import MergeCenter from './MergeCenter';
 import './Tasks.css';
 
@@ -759,8 +759,23 @@ function Tasks() {
       const mockIdPatterns = ['priority-', 'issue-', 'ai-pending-', 'ai-waiting-', 'mum-', 'lead-', 'message-'];
       const isMockTask = typeof taskId === 'string' && mockIdPatterns.some(pattern => taskId.startsWith(pattern));
 
-      if (!isMockTask) {
-        // Call API to delete real task from database
+      if (!isMockTask && typeof taskId === 'string') {
+        // Check if it's a reconciliation task (AI Engine)
+        if (taskId.startsWith('reconciliation-')) {
+          const numericId = taskId.replace('reconciliation-', '');
+          await reconciliationAPI.delete(numericId);
+        } else if (taskId.startsWith('task-')) {
+          // Regular task from unified-tasks
+          const numericId = taskId.replace('task-', '');
+          await tasksAPI.delete(numericId);
+        } else if (taskId.startsWith('workflow-')) {
+          // Workflow task - these may not be deletable, just remove from UI
+          console.log('Workflow task dismissed from UI:', taskId);
+        } else {
+          // Try as-is for numeric IDs
+          await tasksAPI.delete(taskId);
+        }
+      } else if (!isMockTask && typeof taskId === 'number') {
         await tasksAPI.delete(taskId);
       }
 
