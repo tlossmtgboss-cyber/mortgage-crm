@@ -904,6 +904,7 @@
 .email-layout {
   display: grid;
   grid-template-columns: 350px 1fr;
+  grid-template-rows: 1fr; /* Explicit row sizing */
   gap: 0;
   height: calc(100vh - 180px);
   min-height: 500px;
@@ -912,6 +913,11 @@
   border-radius: 12px;
   overflow: hidden;
   margin-bottom: 16px;
+}
+
+/* Ensure grid children take full height */
+.email-layout > * {
+  min-height: 0;
 }
 
 /* Task Inbox (Left Side) */
@@ -1019,6 +1025,8 @@
   flex-direction: column;
   background: white;
   overflow-y: auto;
+  height: 100%;
+  min-height: 0; /* Important for flexbox scrolling */
 }
 
 .detail-header {
@@ -1063,6 +1071,7 @@
   flex: 1;
   padding: 32px;
   overflow-y: auto;
+  min-height: 0; /* Important for flexbox scrolling */
 }
 
 .detail-info-grid {
