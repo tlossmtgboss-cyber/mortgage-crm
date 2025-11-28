@@ -135,7 +135,10 @@ def create_workflow_config_models(Base):
         role = Column(SQLEnum(TaskResponsibility), nullable=True)
 
         # NEW: Dynamic role from Role table
-        role_id = Column(Integer, ForeignKey("roles.id"), nullable=True)
+        # Note: Not using ForeignKey constraint because 'roles' table is created by
+        # a different module and may not exist when this table is created.
+        # Referential integrity is enforced at the application level.
+        role_id = Column(Integer, nullable=True, index=True)
 
         user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Assigned user
         is_active = Column(Boolean, default=True)
