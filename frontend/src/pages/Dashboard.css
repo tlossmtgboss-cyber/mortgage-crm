@@ -978,6 +978,73 @@
   font-style: italic;
 }
 
+/* Referral Scoreboard - Top 25 */
+.referral-scoreboard-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.scoreboard-column {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.scoreboard-row {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.scoreboard-row.clickable {
+  cursor: pointer;
+}
+
+.scoreboard-row.clickable:hover {
+  background: #e8f4f4;
+  transform: translateX(4px);
+}
+
+.scoreboard-row .rank {
+  font-size: 14px;
+  font-weight: 700;
+  color: #218D8D;
+  width: 28px;
+  flex-shrink: 0;
+}
+
+.scoreboard-row .partner-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1a1a1a;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.scoreboard-row .partner-score {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.scoreboard-row .partner-score .received {
+  color: #10b981;
+  font-weight: 500;
+}
+
+.scoreboard-row .partner-score .sent {
+  color: #3b82f6;
+  font-weight: 500;
+}
+
 /* BLOCK 8: MUM */
 .mum-block {
   grid-column: 7 / 13;

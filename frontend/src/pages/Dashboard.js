@@ -821,34 +821,47 @@ function Dashboard() {
             <h2>🤝 Referral Scoreboard</h2>
           </div>
           <div className="referrals-content">
-            <div className="referral-stats-grid">
-              {referralStats.top_partners && referralStats.top_partners.filter(p => p && p.name).map((partner, idx) => (
-                <div key={idx} className="partner-card">
-                  <div className="partner-name">{partner.name}</div>
-                  <div className="partner-stats">
-                    <span className="received">↓ {partner.received} received</span>
-                    <span className="sent">↑ {partner.sent} sent</span>
-                  </div>
-                  {partner.balance !== 0 && (
-                    <div className="balance-alert">
-                      {partner.balance > 0
-                        ? `You owe ${partner.balance} referral${partner.balance > 1 ? 's' : ''}`
-                        : `Owes you ${Math.abs(partner.balance)} referral${Math.abs(partner.balance) > 1 ? 's' : ''}`
-                      }
+            <div className="referral-scoreboard-grid">
+              {/* Left column: Top 1-10 */}
+              <div className="scoreboard-column">
+                {referralStats.top_partners && referralStats.top_partners
+                  .filter(p => p && p.name)
+                  .slice(0, 10)
+                  .map((partner, idx) => (
+                    <div
+                      key={idx}
+                      className="scoreboard-row clickable"
+                      onClick={() => navigate(`/referral-partners/${partner.id || idx + 1}`)}
+                    >
+                      <span className="rank">{idx + 1}</span>
+                      <span className="partner-name">{partner.name}</span>
+                      <span className="partner-score">
+                        <span className="received">↓{partner.received}</span>
+                        <span className="sent">↑{partner.sent}</span>
+                      </span>
                     </div>
-                  )}
-                </div>
-              ))}
-            </div>
-            <div className="engagement-heatmap">
-              <h4>Partner Engagement</h4>
-              {referralStats.engagement && referralStats.engagement.filter(i => i && i.partner).map((item, idx) => (
-                <div key={idx} className="engagement-item">
-                  <span className="partner">{item.partner}</span>
-                  <span className="last-contact">{item.last_contact}</span>
-                  <span className="ai-suggestion">{item.suggestion}</span>
-                </div>
-              ))}
+                  ))}
+              </div>
+              {/* Right column: 11-25 */}
+              <div className="scoreboard-column">
+                {referralStats.top_partners && referralStats.top_partners
+                  .filter(p => p && p.name)
+                  .slice(10, 25)
+                  .map((partner, idx) => (
+                    <div
+                      key={idx}
+                      className="scoreboard-row clickable"
+                      onClick={() => navigate(`/referral-partners/${partner.id || idx + 11}`)}
+                    >
+                      <span className="rank">{idx + 11}</span>
+                      <span className="partner-name">{partner.name}</span>
+                      <span className="partner-score">
+                        <span className="received">↓{partner.received}</span>
+                        <span className="sent">↑{partner.sent}</span>
+                      </span>
+                    </div>
+                  ))}
+              </div>
             </div>
           </div>
         </div>
@@ -1079,8 +1092,31 @@ const mockAiTasks = () => ({
 
 const mockReferralStats = () => ({
   top_partners: [
-    { name: 'Amy Smith (Realtor)', received: 8, sent: 7, balance: 1 },
-    { name: 'Bob Johnson (Builder)', received: 5, sent: 6, balance: -1 }
+    { id: 1, name: 'Amy Smith (Realtor)', received: 12, sent: 10, balance: 2 },
+    { id: 2, name: 'Bob Johnson (Builder)', received: 9, sent: 11, balance: -2 },
+    { id: 3, name: 'Carol Davis (Realtor)', received: 8, sent: 8, balance: 0 },
+    { id: 4, name: 'David Lee (Financial Advisor)', received: 7, sent: 6, balance: 1 },
+    { id: 5, name: 'Emily Wilson (Realtor)', received: 6, sent: 7, balance: -1 },
+    { id: 6, name: 'Frank Miller (Attorney)', received: 5, sent: 5, balance: 0 },
+    { id: 7, name: 'Grace Chen (Realtor)', received: 5, sent: 4, balance: 1 },
+    { id: 8, name: 'Henry Taylor (Builder)', received: 4, sent: 5, balance: -1 },
+    { id: 9, name: 'Irene Martinez (Realtor)', received: 4, sent: 3, balance: 1 },
+    { id: 10, name: 'Jack Brown (Insurance)', received: 3, sent: 4, balance: -1 },
+    { id: 11, name: 'Karen White (Realtor)', received: 3, sent: 3, balance: 0 },
+    { id: 12, name: 'Leo Garcia (CPA)', received: 3, sent: 2, balance: 1 },
+    { id: 13, name: 'Maria Rodriguez (Realtor)', received: 2, sent: 3, balance: -1 },
+    { id: 14, name: 'Nick Thompson (Builder)', received: 2, sent: 2, balance: 0 },
+    { id: 15, name: 'Olivia Harris (Realtor)', received: 2, sent: 2, balance: 0 },
+    { id: 16, name: 'Paul Anderson (Financial Advisor)', received: 2, sent: 1, balance: 1 },
+    { id: 17, name: 'Quinn Moore (Realtor)', received: 1, sent: 2, balance: -1 },
+    { id: 18, name: 'Rachel Clark (Attorney)', received: 1, sent: 1, balance: 0 },
+    { id: 19, name: 'Steve Lewis (Builder)', received: 1, sent: 1, balance: 0 },
+    { id: 20, name: 'Tina Walker (Realtor)', received: 1, sent: 1, balance: 0 },
+    { id: 21, name: 'Ulysses Hall (Insurance)', received: 1, sent: 0, balance: 1 },
+    { id: 22, name: 'Victoria King (Realtor)', received: 0, sent: 1, balance: -1 },
+    { id: 23, name: 'Walter Scott (CPA)', received: 0, sent: 1, balance: -1 },
+    { id: 24, name: 'Xena Young (Realtor)', received: 0, sent: 0, balance: 0 },
+    { id: 25, name: 'Yolanda Adams (Builder)', received: 0, sent: 0, balance: 0 }
   ],
   engagement: [
     { partner: 'Amy Smith', last_contact: '3 days ago', suggestion: 'Send update on Jane Doe\'s file' }
