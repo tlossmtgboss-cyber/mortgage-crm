@@ -3574,6 +3574,7 @@ class ReconciliationApproval(BaseModel):
     target_entity_id: Optional[int] = None  # Specific entity to apply to (override match)
     create_new_loan: Optional[bool] = False  # Create a new loan from this data
     loan_stage: Optional[str] = None  # Stage for new loan (e.g., "PROCESSING", "UW_RECEIVED")
+    update_status_to: Optional[str] = None  # Update entity status during approval (e.g., "PROCESSING")
 
 class ReconciliationRejection(BaseModel):
     extracted_data_id: int
@@ -14546,6 +14547,173 @@ async def get_completed_reconciliation(
         logger.error(f"Get completed error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/v1/reconciliation/pre-approval-check/{item_id}")
+async def pre_approval_check(
+    item_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Check if reconciliation data suggests a status mismatch before approval.
+    Returns suggested status if the extracted data indicates the borrower
+    should be in a different stage than their current stage.
+    """
+    try:
+        # Get extracted data
+        extracted = db.query(ExtractedData).filter(ExtractedData.id == item_id).first()
+        if not extracted:
+            raise HTTPException(status_code=404, detail="Extracted data not found")
+
+        fields = extracted.fields or {}
+        current_entity_type = extracted.match_entity_type
+        current_entity_id = extracted.match_entity_id
+
+        result = {
+            "needs_status_update": False,
+            "current_status": None,
+            "current_status_label": None,
+            "suggested_status": None,
+            "suggested_status_label": None,
+            "reason": None,
+            "entity_type": current_entity_type,
+            "entity_name": None,
+            "fields_to_apply": []
+        }
+
+        # Helper to get field value
+        def get_val(field_name):
+            if field_name in fields and isinstance(fields[field_name], dict):
+                return fields[field_name].get("value")
+            return None
+
+        # Build list of fields that will be applied
+        for field_name, field_data in fields.items():
+            if isinstance(field_data, dict) and field_data.get("value"):
+                result["fields_to_apply"].append({
+                    "field": field_name,
+                    "value": field_data.get("value"),
+                    "confidence": field_data.get("confidence", 0)
+                })
+
+        # Check Lead status
+        if current_entity_type == "lead" and current_entity_id:
+            lead = db.query(Lead).filter(Lead.id == current_entity_id).first()
+            if lead:
+                result["entity_name"] = lead.name
+                current_stage = lead.stage.name if lead.stage else "NEW"
+                result["current_status"] = current_stage
+
+                # Map stage names to labels
+                stage_labels = {
+                    "NEW": "New Lead",
+                    "ATTEMPTED_CONTACT": "Attempted Contact",
+                    "PROSPECT": "Prospect",
+                    "APPLICATION": "Application",
+                    "APPLICATION_STARTED": "Application Started",
+                    "PRE_QUALIFIED": "Pre-Qualified",
+                    "PRE_APPROVED": "Pre-Approved",
+                    "UNDER_CONTRACT": "Under Contract",
+                    "LONG_TERM_NURTURE": "Long-Term Nurture",
+                    "DISCLOSED": "Disclosed",
+                    "PROCESSING": "Processing",
+                    "SUBMITTED": "Submitted",
+                    "UW_RECEIVED": "Underwriting Received",
+                    "APPROVED": "Approved",
+                    "SUSPENDED": "Suspended",
+                    "CTC": "Clear to Close",
+                    "DOCS": "Docs Out",
+                    "FUNDED": "Funded",
+                }
+                result["current_status_label"] = stage_labels.get(current_stage, current_stage)
+
+                # Determine if status mismatch exists based on extracted data
+                has_appraisal_ordered = get_val("appraisal_ordered_date")
+                has_appraisal_received = get_val("appraisal_received_date") or get_val("appraisal_completed_date")
+                has_appraisal_value = get_val("appraisal_value")
+                has_disclosure_sent = get_val("initial_disclosures_sent_date")
+                has_disclosure_signed = get_val("initial_disclosures_signed_date")
+                has_submitted_to_uw = get_val("submitted_to_underwriting_date")
+                has_uw_approval = get_val("underwriting_approval_date")
+                has_ctc = get_val("clear_to_close_date") or get_val("ctc_date")
+                has_closing_docs = get_val("closing_docs_sent_date") or get_val("final_closing_package_sent_date")
+                has_property_address = get_val("property_address")
+
+                # Logic for suggesting status updates
+                early_stages = ["NEW", "ATTEMPTED_CONTACT", "PROSPECT"]
+
+                if current_stage in early_stages:
+                    # If lead is in early stage but has appraisal data, they should be further along
+                    if has_appraisal_received or has_appraisal_value:
+                        result["needs_status_update"] = True
+                        result["suggested_status"] = "PROCESSING"
+                        result["suggested_status_label"] = "Processing"
+                        result["reason"] = "Appraisal has been completed. This borrower should be in Processing or later stage."
+                    elif has_appraisal_ordered:
+                        result["needs_status_update"] = True
+                        result["suggested_status"] = "PROCESSING"
+                        result["suggested_status_label"] = "Processing"
+                        result["reason"] = "Appraisal has been ordered. This borrower should be in Processing stage."
+                    elif has_disclosure_signed:
+                        result["needs_status_update"] = True
+                        result["suggested_status"] = "PROCESSING"
+                        result["suggested_status_label"] = "Processing"
+                        result["reason"] = "Disclosures have been signed. This borrower should be in Processing stage."
+                    elif has_disclosure_sent:
+                        result["needs_status_update"] = True
+                        result["suggested_status"] = "DISCLOSED"
+                        result["suggested_status_label"] = "Disclosed"
+                        result["reason"] = "Initial disclosures have been sent. This borrower should be in Disclosed stage."
+                    elif has_property_address:
+                        result["needs_status_update"] = True
+                        result["suggested_status"] = "UNDER_CONTRACT"
+                        result["suggested_status_label"] = "Under Contract"
+                        result["reason"] = "Property address found. This borrower may be under contract."
+
+        # Check Loan status
+        elif current_entity_type == "loan" and current_entity_id:
+            loan = db.query(Loan).filter(Loan.id == current_entity_id).first()
+            if loan:
+                result["entity_name"] = loan.borrower_name
+                current_stage = loan.stage.value if loan.stage else "Processing"
+                result["current_status"] = loan.stage.name if loan.stage else "PROCESSING"
+                result["current_status_label"] = current_stage
+
+                # Check for status mismatches in loans
+                has_ctc = get_val("clear_to_close_date") or get_val("ctc_date")
+                has_closing_docs = get_val("closing_docs_sent_date") or get_val("final_closing_package_sent_date")
+                has_funded = get_val("funded_date")
+                has_uw_approval = get_val("underwriting_approval_date")
+
+                if has_funded and loan.stage != LoanStage.FUNDED:
+                    result["needs_status_update"] = True
+                    result["suggested_status"] = "FUNDED"
+                    result["suggested_status_label"] = "Funded"
+                    result["reason"] = "Loan has been funded. Status should be updated to Funded."
+                elif has_closing_docs and loan.stage not in [LoanStage.DOCS, LoanStage.FUNDED]:
+                    result["needs_status_update"] = True
+                    result["suggested_status"] = "DOCS"
+                    result["suggested_status_label"] = "Docs Out"
+                    result["reason"] = "Closing docs have been sent. Status should be Docs Out."
+                elif has_ctc and loan.stage not in [LoanStage.CTC, LoanStage.DOCS, LoanStage.FUNDED]:
+                    result["needs_status_update"] = True
+                    result["suggested_status"] = "CTC"
+                    result["suggested_status_label"] = "Clear to Close"
+                    result["reason"] = "Loan is clear to close. Status should be CTC."
+                elif has_uw_approval and loan.stage not in [LoanStage.APPROVED, LoanStage.CTC, LoanStage.DOCS, LoanStage.FUNDED]:
+                    result["needs_status_update"] = True
+                    result["suggested_status"] = "APPROVED"
+                    result["suggested_status_label"] = "Approved"
+                    result["reason"] = "Underwriting approval received. Status should be Approved."
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Pre-approval check error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/v1/reconciliation/approve")
 async def approve_reconciliation(
     approval: ReconciliationApproval,
@@ -14769,7 +14937,71 @@ async def approve_reconciliation(
 
                 logger.info(f"Created new loan {loan_number} (ID: {new_loan.id}) in {stage.value} stage")
 
+        # Handle status update if requested
+        status_updated = False
+        old_status = None
+        new_status = None
+
+        if approval.update_status_to and extracted.match_entity_id:
+            if extracted.match_entity_type == "lead":
+                lead = db.query(Lead).filter(Lead.id == extracted.match_entity_id).first()
+                if lead:
+                    old_status = lead.stage.name if lead.stage else "NEW"
+                    # Map string to LeadStage enum
+                    lead_stage_map = {
+                        "NEW": LeadStage.NEW,
+                        "ATTEMPTED_CONTACT": LeadStage.ATTEMPTED_CONTACT,
+                        "PROSPECT": LeadStage.PROSPECT,
+                        "APPLICATION": LeadStage.APPLICATION,
+                        "APPLICATION_STARTED": LeadStage.APPLICATION_STARTED,
+                        "PRE_QUALIFIED": LeadStage.PRE_QUALIFIED,
+                        "PRE_APPROVED": LeadStage.PRE_APPROVED,
+                        "UNDER_CONTRACT": LeadStage.UNDER_CONTRACT,
+                        "LONG_TERM_NURTURE": LeadStage.LONG_TERM_NURTURE,
+                        "DISCLOSED": LeadStage.DISCLOSED,
+                        "PROCESSING": LeadStage.PROCESSING,
+                        "SUBMITTED": LeadStage.SUBMITTED,
+                        "UW_RECEIVED": LeadStage.UW_RECEIVED,
+                        "APPROVED": LeadStage.APPROVED,
+                        "SUSPENDED": LeadStage.SUSPENDED,
+                        "CTC": LeadStage.CTC,
+                        "DOCS": LeadStage.DOCS,
+                        "FUNDED": LeadStage.FUNDED,
+                    }
+                    if approval.update_status_to.upper() in lead_stage_map:
+                        new_stage = lead_stage_map[approval.update_status_to.upper()]
+                        # Use raw SQL to update stage
+                        db.execute(text("UPDATE leads SET stage = :stage WHERE id = :id"),
+                                   {"stage": new_stage.name, "id": lead.id})
+                        new_status = new_stage.name
+                        status_updated = True
+                        logger.info(f"Updated lead {lead.id} stage from {old_status} to {new_status}")
+
+            elif extracted.match_entity_type == "loan":
+                loan = db.query(Loan).filter(Loan.id == extracted.match_entity_id).first()
+                if loan:
+                    old_status = loan.stage.name if loan.stage else "PROCESSING"
+                    loan_stage_map = {
+                        "DISCLOSED": LoanStage.DISCLOSED,
+                        "PROCESSING": LoanStage.PROCESSING,
+                        "SUBMITTED": LoanStage.SUBMITTED,
+                        "UW_RECEIVED": LoanStage.UW_RECEIVED,
+                        "APPROVED": LoanStage.APPROVED,
+                        "SUSPENDED": LoanStage.SUSPENDED,
+                        "CTC": LoanStage.CTC,
+                        "DOCS": LoanStage.DOCS,
+                        "FUNDED": LoanStage.FUNDED,
+                    }
+                    if approval.update_status_to.upper() in loan_stage_map:
+                        new_stage = loan_stage_map[approval.update_status_to.upper()]
+                        db.execute(text("UPDATE loans SET stage = :stage WHERE id = :id"),
+                                   {"stage": new_stage.value, "id": loan.id})
+                        new_status = new_stage.name
+                        status_updated = True
+                        logger.info(f"Updated loan {loan.id} stage from {old_status} to {new_status}")
+
         # Apply to CRM - skip if we just created a new loan (data already applied during creation)
+        applied_fields = []
         if approval.create_new_loan:
             # For new loans, we already set all data during creation
             # Just mark as applied and continue
@@ -14777,6 +15009,17 @@ async def approve_reconciliation(
             logger.info(f"Skipping apply_extracted_data for new loan - data already set during creation")
         else:
             applied = apply_extracted_data(extracted, db)
+            # Get list of fields that were applied
+            fields = extracted.fields or {}
+            for field_name, field_data in fields.items():
+                if isinstance(field_data, dict) and field_data.get("value"):
+                    conf = field_data.get("confidence", 0)
+                    if conf >= 0.70:  # Match the min_confidence in apply_extracted_data
+                        applied_fields.append({
+                            "field": field_name,
+                            "value": field_data.get("value"),
+                            "confidence": conf
+                        })
 
         if applied:
             extracted.status = "approved"
@@ -14821,7 +15064,11 @@ async def approve_reconciliation(
                 "status": "success",
                 "message": "Data approved and applied to CRM",
                 "extracted_data_id": extracted.id,
-                "ai_delegation_enabled": approval.delegate_to_ai if approval.delegate_to_ai else False
+                "ai_delegation_enabled": approval.delegate_to_ai if approval.delegate_to_ai else False,
+                "applied_fields": applied_fields,
+                "status_updated": status_updated,
+                "old_status": old_status,
+                "new_status": new_status
             }
         else:
             raise HTTPException(status_code=500, detail="Failed to apply data to CRM")

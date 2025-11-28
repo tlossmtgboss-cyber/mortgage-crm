@@ -52,6 +52,16 @@ function ReconciliationCenter() {
   const [selectedLoanStage, setSelectedLoanStage] = useState('UW_RECEIVED');
   const [createNewLoan, setCreateNewLoan] = useState(false);
 
+  // Status correction modal state
+  const [showStatusCorrectionModal, setShowStatusCorrectionModal] = useState(false);
+  const [statusCorrectionData, setStatusCorrectionData] = useState(null);
+  const [pendingApprovalItemId, setPendingApprovalItemId] = useState(null);
+  const [selectedNewStatus, setSelectedNewStatus] = useState(null);
+
+  // Applied data summary modal state
+  const [showAppliedDataModal, setShowAppliedDataModal] = useState(false);
+  const [appliedDataSummary, setAppliedDataSummary] = useState(null);
+
   // All stages for dropdown - Lead stages, Active Loan stages, and MUM/Portfolio stages
   const allStages = [
     // Lead Stages
@@ -443,6 +453,36 @@ function ReconciliationCenter() {
   const proceedWithApproval = async (itemId, options = {}) => {
     try {
       setProcessingAction(true);
+
+      // First, check for status mismatch (unless skipStatusCheck is true)
+      if (!options.skipStatusCheck) {
+        try {
+          const checkResponse = await fetch(`${API_BASE_URL}/api/v1/reconciliation/pre-approval-check/${itemId}`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('token')}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (checkResponse.ok) {
+            const checkData = await checkResponse.json();
+            if (checkData.needs_status_update) {
+              // Show status correction modal
+              setStatusCorrectionData(checkData);
+              setPendingApprovalItemId(itemId);
+              setSelectedNewStatus(checkData.suggested_status);
+              setShowStatusCorrectionModal(true);
+              setProcessingAction(false);
+              return; // Wait for user to confirm status change
+            }
+          }
+        } catch (checkError) {
+          console.log('Pre-approval check failed, proceeding with approval:', checkError);
+          // Continue with approval even if check fails
+        }
+      }
+
       const corrections = Object.keys(editedFields).length > 0 ? editedFields : null;
 
       // Build request body with entity type options
@@ -465,6 +505,11 @@ function ReconciliationCenter() {
         requestBody.loan_stage = options.loanStage || selectedLoanStage;
       }
 
+      // Add status update if provided
+      if (options.updateStatusTo) {
+        requestBody.update_status_to = options.updateStatusTo;
+      }
+
       const response = await fetch(`${API_BASE_URL}/api/v1/reconciliation/approve`, {
         method: 'POST',
         headers: {
@@ -475,6 +520,18 @@ function ReconciliationCenter() {
       });
 
       if (response.ok) {
+        const responseData = await response.json();
+
+        // Show applied data summary modal
+        setAppliedDataSummary({
+          entityName: statusCorrectionData?.entity_name || selectedItem?.match_name || 'Borrower',
+          appliedFields: responseData.applied_fields || [],
+          statusUpdated: responseData.status_updated,
+          oldStatus: responseData.old_status,
+          newStatus: responseData.new_status
+        });
+        setShowAppliedDataModal(true);
+
         // Remove from list and reset
         setPendingItems(prev => prev.filter(item => item.id !== itemId));
         setPendingReviewItems(prev => prev.filter(item => item.id !== itemId));
@@ -483,6 +540,8 @@ function ReconciliationCenter() {
         setDelegateToAI(false);
         setSelectedEntityType(null);
         setCreateNewLoan(false);
+        setStatusCorrectionData(null);
+        setPendingApprovalItemId(null);
         // Refresh completed items to show the newly approved item
         fetchCompletedItems();
       } else {
@@ -495,6 +554,34 @@ function ReconciliationCenter() {
     } finally {
       setProcessingAction(false);
     }
+  };
+
+  // Handle status correction modal actions
+  const handleStatusCorrectionConfirm = async () => {
+    setShowStatusCorrectionModal(false);
+    if (pendingApprovalItemId) {
+      await proceedWithApproval(pendingApprovalItemId, {
+        skipStatusCheck: true,
+        updateStatusTo: selectedNewStatus
+      });
+    }
+  };
+
+  const handleStatusCorrectionSkip = async () => {
+    setShowStatusCorrectionModal(false);
+    if (pendingApprovalItemId) {
+      await proceedWithApproval(pendingApprovalItemId, {
+        skipStatusCheck: true
+      });
+    }
+  };
+
+  const handleStatusCorrectionCancel = () => {
+    setShowStatusCorrectionModal(false);
+    setStatusCorrectionData(null);
+    setPendingApprovalItemId(null);
+    setSelectedNewStatus(null);
+    setProcessingAction(false);
   };
 
   const handleCreateBorrower = async () => {
@@ -2214,6 +2301,268 @@ function ReconciliationCenter() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Status Correction Modal */}
+      {showStatusCorrectionModal && statusCorrectionData && (
+        <div className="dialog-overlay" style={{ zIndex: 2100 }}>
+          <div className="dialog-content" style={{ maxWidth: '550px' }}>
+            <div className="dialog-header" style={{ background: '#fef3c7', borderBottom: '2px solid #f59e0b' }}>
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
+                <span style={{ fontSize: '24px' }}>⚠️</span>
+                Status Mismatch Detected
+              </h3>
+              <button className="dialog-close" onClick={handleStatusCorrectionCancel}>&times;</button>
+            </div>
+            <div className="dialog-body" style={{ padding: '24px' }}>
+              <p style={{ fontSize: '15px', color: '#374151', marginBottom: '20px' }}>
+                <strong>{statusCorrectionData.entity_name}</strong> is currently in{' '}
+                <span style={{
+                  background: '#e5e7eb',
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                  fontWeight: '600'
+                }}>
+                  {statusCorrectionData.current_status_label}
+                </span>{' '}
+                status, but the data suggests they should be further along in the process.
+              </p>
+
+              <div style={{
+                background: '#fef9c3',
+                border: '1px solid #facc15',
+                borderRadius: '8px',
+                padding: '16px',
+                marginBottom: '20px'
+              }}>
+                <p style={{ margin: 0, fontWeight: '500', color: '#854d0e' }}>
+                  {statusCorrectionData.reason}
+                </p>
+              </div>
+
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', fontWeight: '600', marginBottom: '8px' }}>
+                  Update status to:
+                </label>
+                <select
+                  value={selectedNewStatus || ''}
+                  onChange={(e) => setSelectedNewStatus(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '12px',
+                    border: '2px solid #3b82f6',
+                    borderRadius: '8px',
+                    fontSize: '15px',
+                    background: '#eff6ff'
+                  }}
+                >
+                  <optgroup label="Lead Stages">
+                    {allStages.filter(s => s.category === 'Lead').map(stage => (
+                      <option key={stage.value} value={stage.value}>{stage.label}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Active Loan Stages">
+                    {allStages.filter(s => s.category === 'Active Loan').map(stage => (
+                      <option key={stage.value} value={stage.value}>{stage.label}</option>
+                    ))}
+                  </optgroup>
+                </select>
+              </div>
+
+              {statusCorrectionData.fields_to_apply && statusCorrectionData.fields_to_apply.length > 0 && (
+                <div style={{
+                  background: '#f0fdf4',
+                  border: '1px solid #86efac',
+                  borderRadius: '8px',
+                  padding: '16px',
+                  marginBottom: '20px'
+                }}>
+                  <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', color: '#166534' }}>
+                    Data to be applied ({statusCorrectionData.fields_to_apply.length} fields):
+                  </h4>
+                  <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '13px', color: '#15803d' }}>
+                    {statusCorrectionData.fields_to_apply.slice(0, 8).map((field, idx) => (
+                      <li key={idx} style={{ marginBottom: '4px' }}>
+                        <strong>{formatFieldName(field.field)}:</strong> {String(field.value).substring(0, 50)}
+                      </li>
+                    ))}
+                    {statusCorrectionData.fields_to_apply.length > 8 && (
+                      <li style={{ fontStyle: 'italic' }}>
+                        ...and {statusCorrectionData.fields_to_apply.length - 8} more fields
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              )}
+            </div>
+            <div className="dialog-footer" style={{
+              padding: '16px 24px',
+              borderTop: '1px solid #e5e7eb',
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: '12px',
+              background: '#f9fafb'
+            }}>
+              <button
+                onClick={handleStatusCorrectionCancel}
+                style={{
+                  padding: '10px 20px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  background: 'white',
+                  color: '#374151',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button
+                  onClick={handleStatusCorrectionSkip}
+                  style={{
+                    padding: '10px 20px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px',
+                    background: 'white',
+                    color: '#6b7280',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Keep Current Status
+                </button>
+                <button
+                  onClick={handleStatusCorrectionConfirm}
+                  style={{
+                    padding: '10px 24px',
+                    border: 'none',
+                    borderRadius: '6px',
+                    background: '#10b981',
+                    color: 'white',
+                    cursor: 'pointer',
+                    fontWeight: '600'
+                  }}
+                >
+                  Update Status & Apply Data
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Applied Data Summary Modal */}
+      {showAppliedDataModal && appliedDataSummary && (
+        <div className="dialog-overlay" style={{ zIndex: 2100 }}>
+          <div className="dialog-content" style={{ maxWidth: '500px' }}>
+            <div className="dialog-header" style={{ background: '#d1fae5', borderBottom: '2px solid #10b981' }}>
+              <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: 0, color: '#065f46' }}>
+                <span style={{ fontSize: '24px' }}>✅</span>
+                Data Applied Successfully
+              </h3>
+              <button
+                className="dialog-close"
+                onClick={() => setShowAppliedDataModal(false)}
+                style={{ color: '#065f46' }}
+              >
+                &times;
+              </button>
+            </div>
+            <div className="dialog-body" style={{ padding: '24px' }}>
+              <p style={{ fontSize: '15px', color: '#374151', marginBottom: '20px' }}>
+                The following data has been added to <strong>{appliedDataSummary.entityName}</strong>'s profile:
+              </p>
+
+              {appliedDataSummary.statusUpdated && (
+                <div style={{
+                  background: '#fef3c7',
+                  border: '1px solid #f59e0b',
+                  borderRadius: '8px',
+                  padding: '12px 16px',
+                  marginBottom: '20px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px'
+                }}>
+                  <span style={{ fontSize: '20px' }}>📊</span>
+                  <div>
+                    <strong style={{ color: '#92400e' }}>Status Updated:</strong>
+                    <span style={{ marginLeft: '8px', color: '#78350f' }}>
+                      {appliedDataSummary.oldStatus} → {appliedDataSummary.newStatus}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {appliedDataSummary.appliedFields && appliedDataSummary.appliedFields.length > 0 ? (
+                <div style={{
+                  background: '#f0fdf4',
+                  border: '1px solid #86efac',
+                  borderRadius: '8px',
+                  padding: '16px'
+                }}>
+                  <h4 style={{ margin: '0 0 12px 0', fontSize: '14px', color: '#166534' }}>
+                    Fields Updated ({appliedDataSummary.appliedFields.length}):
+                  </h4>
+                  <div style={{
+                    maxHeight: '250px',
+                    overflowY: 'auto',
+                    fontSize: '13px'
+                  }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <tbody>
+                        {appliedDataSummary.appliedFields.map((field, idx) => (
+                          <tr key={idx} style={{ borderBottom: '1px solid #dcfce7' }}>
+                            <td style={{
+                              padding: '8px 12px',
+                              fontWeight: '500',
+                              color: '#166534',
+                              width: '40%'
+                            }}>
+                              {formatFieldName(field.field)}
+                            </td>
+                            <td style={{
+                              padding: '8px 12px',
+                              color: '#15803d'
+                            }}>
+                              {String(field.value).substring(0, 60)}
+                              {String(field.value).length > 60 && '...'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                <p style={{ color: '#6b7280', fontStyle: 'italic' }}>
+                  No additional fields were applied.
+                </p>
+              )}
+            </div>
+            <div className="dialog-footer" style={{
+              padding: '16px 24px',
+              borderTop: '1px solid #e5e7eb',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              background: '#f9fafb'
+            }}>
+              <button
+                onClick={() => setShowAppliedDataModal(false)}
+                style={{
+                  padding: '10px 24px',
+                  border: 'none',
+                  borderRadius: '6px',
+                  background: '#10b981',
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontWeight: '600'
+                }}
+              >
+                Done
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
