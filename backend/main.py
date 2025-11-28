@@ -927,6 +927,28 @@ class ReferralPartner(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     leads = relationship("Lead", back_populates="referral_partner")
 
+
+class LoanTeamMember(Base):
+    """Team members assigned to a loan transaction (employees and external partners)"""
+    __tablename__ = "loan_team_members"
+    id = Column(Integer, primary_key=True, index=True)
+    loan_id = Column(Integer, ForeignKey("loans.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    role = Column(String, nullable=False)  # e.g., 'Realtor', 'Title Agent', 'Insurance Agent', 'Attorney', etc.
+    email = Column(String)
+    phone = Column(String)
+    company = Column(String)
+    license_number = Column(String)
+    notes = Column(Text)
+    is_employee = Column(Boolean, default=False)  # True if internal employee, False if external partner
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Link to user if employee
+    referral_partner_id = Column(Integer, ForeignKey("referral_partners.id"), nullable=True)  # Link to partner if external
+    is_new = Column(Boolean, default=True)  # NEW badge - set to False after first view
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_by = Column(Integer, ForeignKey("users.id"))
+
+
 class MUMClient(Base):
     __tablename__ = "mum_clients"
     id = Column(Integer, primary_key=True, index=True)
@@ -3037,6 +3059,57 @@ class ReferralPartnerResponse(BaseModel):
     created_at: datetime
     class Config:
         from_attributes = True
+
+
+# ==================== LOAN TEAM MEMBER SCHEMAS ====================
+class LoanTeamMemberCreate(BaseModel):
+    """Create a new team member for a loan"""
+    loan_id: int
+    name: str
+    role: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    company: Optional[str] = None
+    license_number: Optional[str] = None
+    notes: Optional[str] = None
+    is_employee: bool = False
+    user_id: Optional[int] = None  # If linking to internal user
+    create_as_partner: bool = True  # Auto-create as referral partner if non-employee
+
+
+class LoanTeamMemberUpdate(BaseModel):
+    """Update an existing team member"""
+    name: Optional[str] = None
+    role: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    company: Optional[str] = None
+    license_number: Optional[str] = None
+    notes: Optional[str] = None
+    is_employee: Optional[bool] = None
+
+
+class LoanTeamMemberResponse(BaseModel):
+    """Response model for team member"""
+    id: int
+    loan_id: int
+    name: str
+    role: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    company: Optional[str] = None
+    license_number: Optional[str] = None
+    notes: Optional[str] = None
+    is_employee: bool
+    user_id: Optional[int] = None
+    referral_partner_id: Optional[int] = None
+    is_new: bool = True
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
 
 class MUMClientCreate(BaseModel):
     name: str
@@ -19919,6 +19992,43 @@ async def create_microsoft_oauth_table(db: Session = Depends(get_db)):
             content={"status": "error", "message": str(e)}
         )
 
+@app.post("/api/v1/migrations/create-loan-team-members-table")
+async def create_loan_team_members_table(db: Session = Depends(get_db)):
+    """Create the loan_team_members table for custom team member assignments"""
+    try:
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS loan_team_members (
+                id SERIAL PRIMARY KEY,
+                loan_id INTEGER NOT NULL REFERENCES loans(id) ON DELETE CASCADE,
+                name VARCHAR(255) NOT NULL,
+                role VARCHAR(100) NOT NULL,
+                email VARCHAR(255),
+                phone VARCHAR(50),
+                company VARCHAR(255),
+                license_number VARCHAR(100),
+                notes TEXT,
+                is_employee BOOLEAN DEFAULT FALSE,
+                user_id INTEGER REFERENCES users(id),
+                referral_partner_id INTEGER REFERENCES referral_partners(id),
+                is_new BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_by INTEGER REFERENCES users(id)
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_loan_team_members_loan_id ON loan_team_members(loan_id);
+            CREATE INDEX IF NOT EXISTS idx_loan_team_members_referral_partner ON loan_team_members(referral_partner_id);
+            CREATE INDEX IF NOT EXISTS idx_loan_team_members_user ON loan_team_members(user_id);
+        """))
+        db.commit()
+        logger.info("✅ loan_team_members table created successfully")
+        return {"success": True, "message": "loan_team_members table created"}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"❌ Failed to create loan_team_members table: {e}")
+        return {"success": False, "error": str(e)}
+
+
 @app.post("/admin/populate-loan-team-members")
 async def populate_loan_team_members(db: Session = Depends(get_db)):
     """Admin endpoint to populate team members for all active loans"""
@@ -24180,6 +24290,306 @@ async def delete_referral_partner(partner_id: int, db: Session = Depends(get_db)
     db.commit()
     logger.info(f"Referral partner deleted: {partner.name}")
     return None
+
+
+# ============================================================================
+# LOAN TEAM MEMBERS CRUD
+# ============================================================================
+
+@app.get("/api/v1/loans/{loan_id}/team-members")
+async def get_loan_team_members(
+    loan_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get all team members for a loan"""
+    try:
+        # Get custom team members from the table
+        result = db.execute(text("""
+            SELECT ltm.*,
+                   rp.business_name as partner_business_name,
+                   rp.category as partner_category,
+                   u.email as user_email,
+                   u.first_name || ' ' || u.last_name as user_full_name
+            FROM loan_team_members ltm
+            LEFT JOIN referral_partners rp ON ltm.referral_partner_id = rp.id
+            LEFT JOIN users u ON ltm.user_id = u.id
+            WHERE ltm.loan_id = :loan_id
+            ORDER BY ltm.created_at DESC
+        """), {"loan_id": loan_id})
+
+        team_members = [dict(row._mapping) for row in result.fetchall()]
+
+        # Also get standard loan team members from loan record
+        loan = db.query(Loan).filter(Loan.id == loan_id).first()
+        if not loan:
+            raise HTTPException(status_code=404, detail="Loan not found")
+
+        standard_members = []
+        if loan.loan_officer_name or loan.loan_officer_email:
+            standard_members.append({
+                "id": f"lo-{loan_id}",
+                "name": loan.loan_officer_name or "Loan Officer",
+                "role": "Loan Officer",
+                "email": loan.loan_officer_email,
+                "is_employee": True,
+                "is_standard": True
+            })
+        if loan.processor or loan.processor_email:
+            standard_members.append({
+                "id": f"proc-{loan_id}",
+                "name": loan.processor or "Processor",
+                "role": "Processor",
+                "email": loan.processor_email,
+                "is_employee": True,
+                "is_standard": True
+            })
+        if loan.underwriter or loan.underwriter_email:
+            standard_members.append({
+                "id": f"uw-{loan_id}",
+                "name": loan.underwriter or "Underwriter",
+                "role": "Underwriter",
+                "email": loan.underwriter_email,
+                "is_employee": True,
+                "is_standard": True
+            })
+        if loan.closer or loan.closer_email:
+            standard_members.append({
+                "id": f"closer-{loan_id}",
+                "name": loan.closer or "Closer",
+                "role": "Closer",
+                "email": loan.closer_email,
+                "is_employee": True,
+                "is_standard": True
+            })
+
+        return {
+            "team_members": team_members,
+            "standard_members": standard_members,
+            "total": len(team_members) + len(standard_members)
+        }
+    except Exception as e:
+        logger.error(f"Error fetching loan team members: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/loans/{loan_id}/team-members")
+async def create_loan_team_member(
+    loan_id: int,
+    member: LoanTeamMemberCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Add a new team member to a loan"""
+    try:
+        # Verify loan exists
+        loan = db.query(Loan).filter(Loan.id == loan_id).first()
+        if not loan:
+            raise HTTPException(status_code=404, detail="Loan not found")
+
+        referral_partner_id = None
+
+        # If non-employee, create/link as referral partner
+        if not member.is_employee and member.create_as_partner:
+            # Check if partner already exists by email
+            existing_partner = None
+            if member.email:
+                existing_partner = db.query(ReferralPartner).filter(
+                    ReferralPartner.email == member.email
+                ).first()
+
+            if existing_partner:
+                referral_partner_id = existing_partner.id
+                logger.info(f"Linked existing referral partner: {existing_partner.name}")
+            else:
+                # Create new referral partner
+                new_partner = ReferralPartner(
+                    name=member.name,
+                    business_name=member.company or member.name,
+                    contact_name=member.name,
+                    category=member.role.lower().replace(' ', '_'),
+                    company=member.company,
+                    type=member.role,
+                    phone=member.phone,
+                    email=member.email,
+                    status="active"
+                )
+                db.add(new_partner)
+                db.flush()  # Get the ID
+                referral_partner_id = new_partner.id
+                logger.info(f"Created new referral partner: {member.name} ({member.role})")
+
+        # Create the team member
+        db_member = LoanTeamMember(
+            loan_id=loan_id,
+            name=member.name,
+            role=member.role,
+            email=member.email,
+            phone=member.phone,
+            company=member.company,
+            license_number=member.license_number,
+            notes=member.notes,
+            is_employee=member.is_employee,
+            user_id=member.user_id,
+            referral_partner_id=referral_partner_id,
+            is_new=True,
+            created_by=current_user.id
+        )
+
+        db.add(db_member)
+        db.commit()
+        db.refresh(db_member)
+
+        logger.info(f"Team member added to loan {loan_id}: {member.name} ({member.role})")
+
+        return {
+            "success": True,
+            "team_member": {
+                "id": db_member.id,
+                "loan_id": db_member.loan_id,
+                "name": db_member.name,
+                "role": db_member.role,
+                "email": db_member.email,
+                "phone": db_member.phone,
+                "company": db_member.company,
+                "is_employee": db_member.is_employee,
+                "referral_partner_id": db_member.referral_partner_id,
+                "is_new": db_member.is_new,
+                "created_at": db_member.created_at.isoformat() if db_member.created_at else None
+            },
+            "referral_partner_created": referral_partner_id is not None and not member.is_employee
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating loan team member: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.patch("/api/v1/loans/{loan_id}/team-members/{member_id}")
+async def update_loan_team_member(
+    loan_id: int,
+    member_id: int,
+    member_update: LoanTeamMemberUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update a team member"""
+    try:
+        member = db.query(LoanTeamMember).filter(
+            LoanTeamMember.id == member_id,
+            LoanTeamMember.loan_id == loan_id
+        ).first()
+
+        if not member:
+            raise HTTPException(status_code=404, detail="Team member not found")
+
+        # Update fields
+        update_data = member_update.dict(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(member, key, value)
+
+        # Also update linked referral partner if exists
+        if member.referral_partner_id and not member.is_employee:
+            partner = db.query(ReferralPartner).filter(
+                ReferralPartner.id == member.referral_partner_id
+            ).first()
+            if partner:
+                if 'name' in update_data:
+                    partner.name = update_data['name']
+                    partner.contact_name = update_data['name']
+                if 'email' in update_data:
+                    partner.email = update_data['email']
+                if 'phone' in update_data:
+                    partner.phone = update_data['phone']
+                if 'company' in update_data:
+                    partner.company = update_data['company']
+                    partner.business_name = update_data['company'] or partner.name
+
+        db.commit()
+        db.refresh(member)
+
+        logger.info(f"Team member updated: {member.name}")
+
+        return {
+            "success": True,
+            "team_member": {
+                "id": member.id,
+                "loan_id": member.loan_id,
+                "name": member.name,
+                "role": member.role,
+                "email": member.email,
+                "phone": member.phone,
+                "company": member.company,
+                "is_employee": member.is_employee,
+                "referral_partner_id": member.referral_partner_id,
+                "is_new": member.is_new
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating team member: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.delete("/api/v1/loans/{loan_id}/team-members/{member_id}")
+async def delete_loan_team_member(
+    loan_id: int,
+    member_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete a team member (does not delete linked referral partner)"""
+    try:
+        member = db.query(LoanTeamMember).filter(
+            LoanTeamMember.id == member_id,
+            LoanTeamMember.loan_id == loan_id
+        ).first()
+
+        if not member:
+            raise HTTPException(status_code=404, detail="Team member not found")
+
+        member_name = member.name
+        db.delete(member)
+        db.commit()
+
+        logger.info(f"Team member deleted: {member_name}")
+
+        return {"success": True, "message": f"Team member '{member_name}' removed"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deleting team member: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/loans/{loan_id}/team-members/{member_id}/mark-viewed")
+async def mark_team_member_viewed(
+    loan_id: int,
+    member_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Mark a team member as viewed (removes NEW badge)"""
+    try:
+        member = db.query(LoanTeamMember).filter(
+            LoanTeamMember.id == member_id,
+            LoanTeamMember.loan_id == loan_id
+        ).first()
+
+        if member:
+            member.is_new = False
+            db.commit()
+
+        return {"success": True}
+    except Exception as e:
+        logger.error(f"Error marking team member viewed: {e}")
+        return {"success": False}
+
 
 # ============================================================================
 # MUM CLIENTS CRUD
