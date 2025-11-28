@@ -283,6 +283,7 @@ function Settings() {
   const [activeSection, setActiveSection] = useState('integration-marketplace');
   const [marketingTab, setMarketingTab] = useState('landing-pages');
   const [expandedSections, setExpandedSections] = useState({
+    userProfile: false,
     integrations: false,
     organizational: false,
     scheduling: false,
@@ -334,6 +335,24 @@ function Settings() {
   const [availableRoles, setAvailableRoles] = useState([]);
   const [loadingTeam, setLoadingTeam] = useState(false);
 
+  // User Profile state
+  const [userProfile, setUserProfile] = useState({
+    full_name: '',
+    email: '',
+    phone: '',
+    nmls_number: '',
+    job_title: ''
+  });
+  const [passwordData, setPasswordData] = useState({
+    current_password: '',
+    new_password: '',
+    confirm_password: ''
+  });
+  const [loadingProfile, setLoadingProfile] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [profileMessage, setProfileMessage] = useState({ type: '', text: '' });
+
   // Calendly integration state
   const [calendlyApiKey, setCalendlyApiKey] = useState('');
   const [showCalendlyModal, setShowCalendlyModal] = useState(false);
@@ -377,6 +396,114 @@ function Settings() {
       [section]: !expandedSections[section]
     });
   };
+
+  // Load user profile
+  const loadUserProfile = async () => {
+    setLoadingProfile(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'https://mortgage-crm-production-7a9a.up.railway.app'}/api/v1/users/me`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setUserProfile({
+          full_name: data.full_name || '',
+          email: data.email || '',
+          phone: data.phone || '',
+          nmls_number: data.nmls_number || '',
+          job_title: data.job_title || ''
+        });
+      }
+    } catch (error) {
+      console.error('Error loading profile:', error);
+    } finally {
+      setLoadingProfile(false);
+    }
+  };
+
+  // Save user profile
+  const saveUserProfile = async () => {
+    setSavingProfile(true);
+    setProfileMessage({ type: '', text: '' });
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'https://mortgage-crm-production-7a9a.up.railway.app'}/api/v1/users/me`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          full_name: userProfile.full_name,
+          phone: userProfile.phone,
+          nmls_number: userProfile.nmls_number,
+          job_title: userProfile.job_title
+        })
+      });
+      if (response.ok) {
+        setProfileMessage({ type: 'success', text: 'Profile updated successfully!' });
+        // Update localStorage user data
+        const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
+        localStorage.setItem('user', JSON.stringify({ ...storedUser, full_name: userProfile.full_name }));
+      } else {
+        const error = await response.json();
+        setProfileMessage({ type: 'error', text: error.detail || 'Failed to update profile' });
+      }
+    } catch (error) {
+      console.error('Error saving profile:', error);
+      setProfileMessage({ type: 'error', text: 'Failed to update profile' });
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  // Change password
+  const changePassword = async () => {
+    if (passwordData.new_password !== passwordData.confirm_password) {
+      setProfileMessage({ type: 'error', text: 'New passwords do not match' });
+      return;
+    }
+    if (passwordData.new_password.length < 6) {
+      setProfileMessage({ type: 'error', text: 'Password must be at least 6 characters' });
+      return;
+    }
+    setChangingPassword(true);
+    setProfileMessage({ type: '', text: '' });
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'https://mortgage-crm-production-7a9a.up.railway.app'}/api/v1/users/me/password`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          current_password: passwordData.current_password,
+          new_password: passwordData.new_password
+        })
+      });
+      if (response.ok) {
+        setProfileMessage({ type: 'success', text: 'Password changed successfully!' });
+        setPasswordData({ current_password: '', new_password: '', confirm_password: '' });
+      } else {
+        const error = await response.json();
+        setProfileMessage({ type: 'error', text: error.detail || 'Failed to change password' });
+      }
+    } catch (error) {
+      console.error('Error changing password:', error);
+      setProfileMessage({ type: 'error', text: 'Failed to change password' });
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  // Load profile when profile section is active
+  useEffect(() => {
+    if (activeSection === 'profile-info' || activeSection === 'account-settings' || activeSection === 'security') {
+      loadUserProfile();
+    }
+  }, [activeSection]);
 
   const loadTeamMembers = async () => {
     setLoadingTeam(true);
@@ -1715,7 +1842,38 @@ const API_BASE_URL = isProduction
       <div className="settings-content">
         {/* Sidebar */}
         <div className="settings-sidebar">
-          {/* Organizational Settings - Expandable (MOVED TO TOP) */}
+          {/* User Profile - Expandable (TOP) */}
+          <button
+            className={`sidebar-btn parent ${expandedSections.userProfile ? 'expanded' : ''}`}
+            onClick={() => toggleSection('userProfile')}
+          >
+            <span>User Profile</span>
+            <span className="expand-icon">{expandedSections.userProfile ? '▼' : '▶'}</span>
+          </button>
+          {expandedSections.userProfile && (
+            <div className="sidebar-children">
+              <button
+                className={`sidebar-btn child ${activeSection === 'profile-info' ? 'active' : ''}`}
+                onClick={() => setActiveSection('profile-info')}
+              >
+                <span>Profile Info</span>
+              </button>
+              <button
+                className={`sidebar-btn child ${activeSection === 'account-settings' ? 'active' : ''}`}
+                onClick={() => setActiveSection('account-settings')}
+              >
+                <span>Account Settings</span>
+              </button>
+              <button
+                className={`sidebar-btn child ${activeSection === 'security' ? 'active' : ''}`}
+                onClick={() => setActiveSection('security')}
+              >
+                <span>Security</span>
+              </button>
+            </div>
+          )}
+
+          {/* Organizational Settings - Expandable */}
           <button
             className={`sidebar-btn parent ${expandedSections.organizational ? 'expanded' : ''}`}
             onClick={() => toggleSection('organizational')}
@@ -3817,6 +3975,172 @@ const API_BASE_URL = isProduction
 
           {activeSection === 'dialer-settings' && (
             <DialerSettingsSection />
+          )}
+
+          {/* User Profile Sections */}
+          {activeSection === 'profile-info' && (
+            <div className="profile-section">
+              <h2>Profile Information</h2>
+              <p className="section-description">
+                Manage your personal information and contact details
+              </p>
+
+              {profileMessage.text && (
+                <div className={`profile-message ${profileMessage.type}`}>
+                  {profileMessage.text}
+                </div>
+              )}
+
+              {loadingProfile ? (
+                <div className="loading-state">Loading profile...</div>
+              ) : (
+                <div className="profile-form">
+                  <div className="form-group">
+                    <label>Full Name</label>
+                    <input
+                      type="text"
+                      value={userProfile.full_name}
+                      onChange={(e) => setUserProfile({ ...userProfile, full_name: e.target.value })}
+                      placeholder="Enter your full name"
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Email</label>
+                    <input
+                      type="email"
+                      value={userProfile.email}
+                      disabled
+                      className="disabled-input"
+                    />
+                    <small className="form-hint">Email cannot be changed here. Contact administrator.</small>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Phone</label>
+                    <input
+                      type="tel"
+                      value={userProfile.phone}
+                      onChange={(e) => setUserProfile({ ...userProfile, phone: e.target.value })}
+                      placeholder="Enter your phone number"
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Job Title</label>
+                    <input
+                      type="text"
+                      value={userProfile.job_title}
+                      onChange={(e) => setUserProfile({ ...userProfile, job_title: e.target.value })}
+                      placeholder="Enter your job title"
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>NMLS Number</label>
+                    <input
+                      type="text"
+                      value={userProfile.nmls_number}
+                      onChange={(e) => setUserProfile({ ...userProfile, nmls_number: e.target.value })}
+                      placeholder="Enter your NMLS number"
+                    />
+                  </div>
+
+                  <button
+                    className="btn-primary"
+                    onClick={saveUserProfile}
+                    disabled={savingProfile}
+                  >
+                    {savingProfile ? 'Saving...' : 'Save Profile'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeSection === 'account-settings' && (
+            <div className="profile-section">
+              <h2>Account Settings</h2>
+              <p className="section-description">
+                Manage your account preferences and settings
+              </p>
+
+              <div className="account-info-card">
+                <h3>Account Information</h3>
+                <div className="info-row">
+                  <span className="info-label">Email:</span>
+                  <span className="info-value">{userProfile.email}</span>
+                </div>
+                <div className="info-row">
+                  <span className="info-label">Account Status:</span>
+                  <span className="info-value status-active">Active</span>
+                </div>
+              </div>
+
+              <div className="account-actions">
+                <h3>Account Actions</h3>
+                <p className="section-description">
+                  Need to change your email? Contact your system administrator.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {activeSection === 'security' && (
+            <div className="profile-section">
+              <h2>Security</h2>
+              <p className="section-description">
+                Manage your password and security settings
+              </p>
+
+              {profileMessage.text && (
+                <div className={`profile-message ${profileMessage.type}`}>
+                  {profileMessage.text}
+                </div>
+              )}
+
+              <div className="password-change-form">
+                <h3>Change Password</h3>
+
+                <div className="form-group">
+                  <label>Current Password</label>
+                  <input
+                    type="password"
+                    value={passwordData.current_password}
+                    onChange={(e) => setPasswordData({ ...passwordData, current_password: e.target.value })}
+                    placeholder="Enter current password"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>New Password</label>
+                  <input
+                    type="password"
+                    value={passwordData.new_password}
+                    onChange={(e) => setPasswordData({ ...passwordData, new_password: e.target.value })}
+                    placeholder="Enter new password"
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Confirm New Password</label>
+                  <input
+                    type="password"
+                    value={passwordData.confirm_password}
+                    onChange={(e) => setPasswordData({ ...passwordData, confirm_password: e.target.value })}
+                    placeholder="Confirm new password"
+                  />
+                </div>
+
+                <button
+                  className="btn-primary"
+                  onClick={changePassword}
+                  disabled={changingPassword || !passwordData.current_password || !passwordData.new_password || !passwordData.confirm_password}
+                >
+                  {changingPassword ? 'Changing...' : 'Change Password'}
+                </button>
+              </div>
+            </div>
           )}
 
           {/* Organizational Settings Sections */}

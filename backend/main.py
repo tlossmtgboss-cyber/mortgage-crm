@@ -19780,8 +19780,98 @@ async def get_current_user_info(current_user: User = Depends(get_current_user)):
         "email_verified": current_user.email_verified,
         "onboarding_completed": current_user.onboarding_completed,
         "user_metadata": current_user.user_metadata,
+        "phone": getattr(current_user, 'phone', None),
+        "nmls_number": getattr(current_user, 'nmls_number', None),
+        "job_title": getattr(current_user, 'job_title', None),
         "created_at": current_user.created_at.isoformat() if current_user.created_at else None
     }
+
+
+class UserProfileUpdate(BaseModel):
+    """Schema for updating user profile"""
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
+    nmls_number: Optional[str] = None
+    job_title: Optional[str] = None
+
+
+@app.put("/api/v1/users/me")
+async def update_current_user_profile(
+    profile_update: UserProfileUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update current user's profile information"""
+    try:
+        if profile_update.full_name is not None:
+            current_user.full_name = profile_update.full_name
+        if profile_update.phone is not None:
+            if hasattr(current_user, 'phone'):
+                current_user.phone = profile_update.phone
+        if profile_update.nmls_number is not None:
+            if hasattr(current_user, 'nmls_number'):
+                current_user.nmls_number = profile_update.nmls_number
+        if profile_update.job_title is not None:
+            if hasattr(current_user, 'job_title'):
+                current_user.job_title = profile_update.job_title
+
+        db.commit()
+        db.refresh(current_user)
+
+        logger.info(f"Profile updated for user {current_user.email}")
+        return {
+            "success": True,
+            "message": "Profile updated successfully",
+            "user": {
+                "id": current_user.id,
+                "email": current_user.email,
+                "full_name": current_user.full_name,
+                "phone": getattr(current_user, 'phone', None),
+                "nmls_number": getattr(current_user, 'nmls_number', None),
+                "job_title": getattr(current_user, 'job_title', None)
+            }
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating profile: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class PasswordChange(BaseModel):
+    """Schema for changing password"""
+    current_password: str
+    new_password: str
+
+
+@app.put("/api/v1/users/me/password")
+async def change_current_user_password(
+    password_data: PasswordChange,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Change current user's password"""
+    try:
+        # Verify current password
+        if not pwd_context.verify(password_data.current_password, current_user.hashed_password):
+            raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+        # Validate new password
+        if len(password_data.new_password) < 6:
+            raise HTTPException(status_code=400, detail="New password must be at least 6 characters")
+
+        # Hash and save new password
+        current_user.hashed_password = pwd_context.hash(password_data.new_password)
+        db.commit()
+
+        logger.info(f"Password changed for user {current_user.email}")
+        return {"success": True, "message": "Password changed successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error changing password: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.patch("/api/v1/users/me/goals")
 async def update_user_goals(

@@ -3383,3 +3383,177 @@ textarea.text-input {
 .dialer-settings-section .message-banner button:hover {
   opacity: 1;
 }
+
+/* ============================================
+   User Profile Sections
+   ============================================ */
+
+.profile-section {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.profile-section h2 {
+  margin: 0 0 8px 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: #1a1a2e;
+}
+
+.profile-section h3 {
+  margin: 24px 0 16px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+}
+
+.profile-form {
+  max-width: 500px;
+}
+
+.profile-form .form-group {
+  margin-bottom: 20px;
+}
+
+.profile-form .form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #333;
+}
+
+.profile-form .form-group input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 15px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.profile-form .form-group input:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
+}
+
+.profile-form .form-group input.disabled-input {
+  background: #f5f5f5;
+  color: #666;
+  cursor: not-allowed;
+}
+
+.profile-form .form-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 13px;
+  color: #888;
+}
+
+.profile-message {
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+.profile-message.success {
+  background: #e8f5e9;
+  border: 1px solid #c8e6c9;
+  color: #2e7d32;
+}
+
+.profile-message.error {
+  background: #ffebee;
+  border: 1px solid #ffcdd2;
+  color: #c62828;
+}
+
+/* Account Settings Card */
+.account-info-card {
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.account-info-card h3 {
+  margin: 0 0 16px 0;
+}
+
+.info-row {
+  display: flex;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.info-row:last-child {
+  border-bottom: none;
+}
+
+.info-label {
+  font-weight: 500;
+  color: #666;
+  width: 150px;
+}
+
+.info-value {
+  color: #333;
+}
+
+.info-value.status-active {
+  color: #2e7d32;
+  font-weight: 500;
+}
+
+/* Password Change Form */
+.password-change-form {
+  max-width: 500px;
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.password-change-form h3 {
+  margin: 0 0 20px 0;
+}
+
+.password-change-form .form-group {
+  margin-bottom: 20px;
+}
+
+.password-change-form .form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #333;
+}
+
+.password-change-form .form-group input {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 15px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.password-change-form .form-group input:focus {
+  outline: none;
+  border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.1);
+}
+
+.account-actions {
+  background: #fff3e0;
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.account-actions h3 {
+  margin: 0 0 8px 0;
+  color: #e65100;
+}
