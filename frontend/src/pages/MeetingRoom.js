@@ -269,6 +269,13 @@ const MeetingRoom = () => {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Attach stream to video element when stream or joined state changes
+  useEffect(() => {
+    if (localStream && localVideoRef.current) {
+      localVideoRef.current.srcObject = localStream;
+    }
+  }, [localStream, joined]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
