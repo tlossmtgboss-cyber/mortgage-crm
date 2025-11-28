@@ -11,13 +11,30 @@ const COMMUNICATION_METHODS = [
   { key: 'referral_partner', label: 'Referral Partner', color: '#ec4899' }
 ];
 
-// Default task responsibility roles
+// Legacy field mapping for backwards compatibility
+const LEGACY_RESPONSIBILITY_FIELDS = {
+  lo: 'lo_responsible',
+  jr_lo: 'jr_lo_responsible',
+  production_asst: 'production_asst_responsible',
+  concierge: 'concierge_responsible',
+  ai: 'ai_responsible'
+};
+
+// Legacy role mapping for backwards compatibility
+const LEGACY_ROLE_MAP = {
+  lo: 'loan_officer',
+  jr_lo: 'junior_loan_officer',
+  production_asst: 'production_assistant',
+  concierge: 'concierge'
+};
+
+// Fallback roles if dynamic fetch fails
 const DEFAULT_RESPONSIBILITY_ROLES = [
-  { key: 'lo', label: 'LO', fullName: 'Loan Officer', roleValue: 'loan_officer', canDelete: false },
-  { key: 'jr_lo', label: 'Jr. LO', fullName: 'Junior Loan Officer', roleValue: 'junior_loan_officer', canDelete: true },
-  { key: 'production_asst', label: 'Production Asst.', fullName: 'Production Assistant', roleValue: 'production_assistant', canDelete: true },
-  { key: 'concierge', label: 'Concierge', fullName: 'Concierge', roleValue: 'concierge', canDelete: true },
-  { key: 'ai', label: 'AI', fullName: 'AI Automation', roleValue: 'ai', canDelete: false }
+  { id: null, key: 'lo', label: 'LO', fullName: 'Loan Officer', roleValue: 'loan_officer', canDelete: false, isLegacy: true },
+  { id: null, key: 'jr_lo', label: 'Jr. LO', fullName: 'Junior Loan Officer', roleValue: 'junior_loan_officer', canDelete: true, isLegacy: true },
+  { id: null, key: 'production_asst', label: 'Production Asst.', fullName: 'Production Assistant', roleValue: 'production_assistant', canDelete: true, isLegacy: true },
+  { id: null, key: 'concierge', label: 'Concierge', fullName: 'Concierge', roleValue: 'concierge', canDelete: true, isLegacy: true },
+  { id: null, key: 'ai', label: 'AI', fullName: 'AI Automation', roleValue: 'ai', canDelete: false, isLegacy: true }
 ];
 
 function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClose }) {
@@ -34,6 +51,7 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
   const [showRoleDropdown, setShowRoleDropdown] = useState(null);
   const [editingRole, setEditingRole] = useState(null);
   const [responsibilityRoles, setResponsibilityRoles] = useState(DEFAULT_RESPONSIBILITY_ROLES);
+  const [dynamicRoles, setDynamicRoles] = useState([]); // Roles from admin Role table
   const [showAddRole, setShowAddRole] = useState(false);
   const [newRole, setNewRole] = useState({ label: '', fullName: '' });
   const [deleteRoleModal, setDeleteRoleModal] = useState(null);
@@ -44,6 +62,35 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
       setLoading(true);
       const token = localStorage.getItem('token');
       const headers = { 'Authorization': `Bearer ${token}` };
+
+      // Fetch available roles from admin Role table FIRST
+      try {
+        const rolesResponse = await fetch(`${API_BASE}/api/v1/workflow-config/available-roles`, { headers });
+        if (rolesResponse.ok) {
+          const rolesData = await rolesResponse.json();
+          const fetchedRoles = rolesData.roles || [];
+          setDynamicRoles(fetchedRoles);
+
+          // Convert dynamic roles to responsibility roles format
+          // Keep legacy AI role at the end, but use dynamic roles for everything else
+          const dynamicRoleEntries = fetchedRoles.map(role => ({
+            id: role.id,
+            key: `dynamic_${role.id}`,
+            label: getAbbreviation(role.name),
+            fullName: role.name,
+            roleValue: role.name.toLowerCase().replace(/\s+/g, '_'),
+            canDelete: false, // Admin-created roles can't be deleted from workflow UI
+            isLegacy: false,
+            isDynamic: true
+          }));
+
+          // Keep AI role at the end
+          const aiRole = DEFAULT_RESPONSIBILITY_ROLES.find(r => r.key === 'ai');
+          setResponsibilityRoles([...dynamicRoleEntries, aiRole]);
+        }
+      } catch (roleErr) {
+        console.warn('Could not fetch dynamic roles, using defaults:', roleErr);
+      }
 
       // Fetch workflow configuration
       const response = await fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}`, { headers });
@@ -75,6 +122,16 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
         setRoleAssignments(data.role_assignments || []);
       }
 
+      // Sync workflow roles with admin roles (creates role assignments for new roles)
+      try {
+        await fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}/sync-roles`, {
+          method: 'POST',
+          headers
+        });
+      } catch (syncErr) {
+        console.warn('Could not sync workflow roles:', syncErr);
+      }
+
       // Fetch users for role assignment
       const usersResponse = await fetch(`${API_BASE}/api/v1/users`, { headers });
       if (usersResponse.ok) {
@@ -97,6 +154,17 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
       setLoading(false);
     }
   }, [workflowKey]);
+
+  // Helper function to generate abbreviation from role name
+  const getAbbreviation = (name) => {
+    if (!name) return '';
+    const words = name.split(/\s+/);
+    if (words.length === 1) {
+      return name.substring(0, 3).toUpperCase();
+    }
+    // Take first letter of each word
+    return words.map(w => w[0]).join('').toUpperCase();
+  };
 
   useEffect(() => {
     fetchWorkflowConfig();
@@ -141,38 +209,74 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
     }
   };
 
-  // Toggle responsibility for a day
-  const toggleResponsibility = async (dayId, role) => {
+  // Toggle responsibility for a day - supports both legacy and dynamic roles
+  const toggleResponsibility = async (dayId, roleKey, roleData = null) => {
     const day = days.find(d => d.id === dayId);
     if (!day) return;
 
-    const fieldMap = {
-      lo: 'lo_responsible',
-      jr_lo: 'jr_lo_responsible',
-      production_asst: 'production_asst_responsible',
-      concierge: 'concierge_responsible',
-      ai: 'ai_responsible'
-    };
-
-    const field = fieldMap[role];
-    const newValue = !day[field];
+    // Check if this is a dynamic role (from admin Role table)
+    const isDynamic = roleData?.isDynamic || roleKey.startsWith('dynamic_');
 
     try {
       setSaving(true);
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}/days/${dayId}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ [field]: newValue })
-      });
 
-      if (response.ok) {
-        setDays(prev => prev.map(d =>
-          d.id === dayId ? { ...d, [field]: newValue } : d
-        ));
+      if (isDynamic && roleData?.id) {
+        // For dynamic roles, use the role_responsibilities JSON field
+        const roleResponsibilities = day.role_responsibilities || {};
+        const roleIdStr = String(roleData.id);
+        const newValue = !roleResponsibilities[roleIdStr];
+
+        // Use the dedicated endpoint for role responsibilities
+        const response = await fetch(
+          `${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}/days/${dayId}/role-responsibility`,
+          {
+            method: 'PUT',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ role_id: roleData.id, responsible: newValue })
+          }
+        );
+
+        if (response.ok) {
+          const updatedRoleResp = { ...roleResponsibilities, [roleIdStr]: newValue };
+          setDays(prev => prev.map(d =>
+            d.id === dayId ? { ...d, role_responsibilities: updatedRoleResp } : d
+          ));
+        }
+      } else {
+        // Legacy roles use individual boolean columns
+        const fieldMap = {
+          lo: 'lo_responsible',
+          jr_lo: 'jr_lo_responsible',
+          production_asst: 'production_asst_responsible',
+          concierge: 'concierge_responsible',
+          ai: 'ai_responsible'
+        };
+
+        const field = fieldMap[roleKey];
+        if (!field) {
+          console.warn('Unknown legacy role:', roleKey);
+          return;
+        }
+        const newValue = !day[field];
+
+        const response = await fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}/days/${dayId}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ [field]: newValue })
+        });
+
+        if (response.ok) {
+          setDays(prev => prev.map(d =>
+            d.id === dayId ? { ...d, [field]: newValue } : d
+          ));
+        }
       }
     } catch (err) {
       console.error('Error updating responsibility:', err);
@@ -236,14 +340,27 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
     }
   };
 
-  // Assign user to role
-  const handleAssignUser = async (role, userId) => {
+  // Assign user to role - supports both legacy roles and dynamic roles
+  const handleAssignUser = async (roleKey, userId, roleData = null) => {
     try {
       setSaving(true);
       const token = localStorage.getItem('token');
 
-      // Check if role assignment exists
-      const existingAssignment = roleAssignments.find(ra => ra.role === role);
+      // Check if this is a dynamic role
+      const isDynamic = roleData?.isDynamic || roleKey.startsWith('dynamic_');
+
+      let existingAssignment;
+      let requestBody;
+
+      if (isDynamic && roleData?.id) {
+        // For dynamic roles, find by role_id
+        existingAssignment = roleAssignments.find(ra => ra.role_id === roleData.id);
+        requestBody = { role_id: roleData.id, user_id: userId || null };
+      } else {
+        // Legacy roles use 'role' string
+        existingAssignment = roleAssignments.find(ra => ra.role === roleKey);
+        requestBody = { role: roleKey, user_id: userId || null };
+      }
 
       let response;
       if (existingAssignment) {
@@ -262,14 +379,19 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ role, user_id: userId || null })
+          body: JSON.stringify(requestBody)
         });
       }
 
       if (response.ok) {
         const updatedAssignment = await response.json();
         setRoleAssignments(prev => {
-          const filtered = prev.filter(ra => ra.role !== role);
+          // Filter out existing assignment by id or by role/role_id match
+          const filtered = prev.filter(ra => {
+            if (existingAssignment) return ra.id !== existingAssignment.id;
+            if (isDynamic && roleData?.id) return ra.role_id !== roleData.id;
+            return ra.role !== roleKey;
+          });
           return [...filtered, updatedAssignment];
         });
       }
@@ -289,17 +411,26 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
     return user ? user.name || user.email : 'Unassigned';
   };
 
-  // Get assigned user for a role
-  const getAssignedUser = (role) => {
-    const roleMap = {
-      lo: 'loan_officer',
-      jr_lo: 'junior_loan_officer',
-      production_asst: 'production_assistant',
-      concierge: 'concierge',
-      ai: 'ai'
-    };
-    const assignment = roleAssignments.find(ra => ra.role === roleMap[role]);
-    return assignment?.user_id;
+  // Get assigned user for a role - supports both legacy and dynamic roles
+  const getAssignedUser = (roleKey, roleData = null) => {
+    const isDynamic = roleData?.isDynamic || roleKey.startsWith('dynamic_');
+
+    if (isDynamic && roleData?.id) {
+      // For dynamic roles, look up by role_id
+      const assignment = roleAssignments.find(ra => ra.role_id === roleData.id);
+      return assignment?.user_id;
+    } else {
+      // Legacy roles use the role enum value
+      const roleMap = {
+        lo: 'loan_officer',
+        jr_lo: 'junior_loan_officer',
+        production_asst: 'production_assistant',
+        concierge: 'concierge',
+        ai: 'ai'
+      };
+      const assignment = roleAssignments.find(ra => ra.role === roleMap[roleKey]);
+      return assignment?.user_id;
+    }
   };
 
   // Check day health
@@ -500,33 +631,19 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
             <h3>Role Assignments</h3>
             <p className="section-description">Click on a role to assign a specific user to handle those tasks</p>
           </div>
-          <button className="btn-add-role" onClick={() => setShowAddRole(true)}>
-            + Add Role
-          </button>
+          {/* Hide Add Role button since roles are now managed from Admin */}
         </div>
         <div className="role-assignments-grid">
           {responsibilityRoles.filter(r => r.key !== 'ai').map(role => {
-            const roleMap = {
-              lo: 'loan_officer',
-              jr_lo: 'junior_loan_officer',
-              production_asst: 'production_assistant',
-              concierge: 'concierge'
-            };
-            const assignedUserId = getAssignedUser(role.key);
+            const assignedUserId = getAssignedUser(role.key, role);
 
             return (
               <div key={role.key} className="role-assignment-card">
                 <div className="role-header">
                   <span className="role-name">{role.fullName}</span>
                   <span className="role-abbr">({role.label})</span>
-                  {role.canDelete && (
-                    <button
-                      className="btn-delete-role"
-                      onClick={(e) => { e.stopPropagation(); handleDeleteRole(role.key); }}
-                      title="Delete role"
-                    >
-                      &times;
-                    </button>
+                  {role.isDynamic && (
+                    <span className="role-badge dynamic">Dynamic</span>
                   )}
                 </div>
                 <div className="role-user" onClick={() => setEditingRole(role.key)}>
@@ -534,7 +651,7 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
                     <select
                       autoFocus
                       value={assignedUserId || ''}
-                      onChange={(e) => handleAssignUser(roleMap[role.key] || role.roleValue, e.target.value ? parseInt(e.target.value) : null)}
+                      onChange={(e) => handleAssignUser(role.key, e.target.value ? parseInt(e.target.value) : null, role)}
                       onBlur={() => setEditingRole(null)}
                     >
                       <option value="">-- Unassigned --</option>
@@ -712,16 +829,25 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
                   );
                 })}
 
-                {/* Responsibility Checkboxes */}
+                {/* Responsibility Checkboxes - supports both legacy and dynamic roles */}
                 {responsibilityRoles.map(role => {
-                  const fieldMap = {
-                    lo: 'lo_responsible',
-                    jr_lo: 'jr_lo_responsible',
-                    production_asst: 'production_asst_responsible',
-                    concierge: 'concierge_responsible',
-                    ai: 'ai_responsible'
-                  };
-                  const isResponsible = day[fieldMap[role.key]];
+                  let isResponsible;
+
+                  if (role.isDynamic && role.id) {
+                    // Dynamic roles use role_responsibilities JSON
+                    const roleResp = day.role_responsibilities || {};
+                    isResponsible = roleResp[String(role.id)] === true;
+                  } else {
+                    // Legacy roles use individual boolean columns
+                    const fieldMap = {
+                      lo: 'lo_responsible',
+                      jr_lo: 'jr_lo_responsible',
+                      production_asst: 'production_asst_responsible',
+                      concierge: 'concierge_responsible',
+                      ai: 'ai_responsible'
+                    };
+                    isResponsible = day[fieldMap[role.key]];
+                  }
 
                   return (
                     <td key={role.key} className="checkbox-cell">
@@ -729,7 +855,7 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
                         <input
                           type="checkbox"
                           checked={isResponsible || false}
-                          onChange={() => toggleResponsibility(day.id, role.key)}
+                          onChange={() => toggleResponsibility(day.id, role.key, role)}
                           disabled={saving}
                         />
                         <span className={`custom-checkbox ${isResponsible ? 'checked' : ''}`}></span>

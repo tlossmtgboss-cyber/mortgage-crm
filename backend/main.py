@@ -38322,6 +38322,101 @@ async def shutdown_event():
     except Exception as e:
         logger.error(f"Error stopping scheduler: {e}")
 
+
+# ============================================================================
+# DYNAMIC ROLE MIGRATION
+# ============================================================================
+
+@app.post("/api/v1/migrations/add-dynamic-role-columns", response_model=None)
+async def add_dynamic_role_columns_migration(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Add dynamic role support columns to workflow tables.
+
+    Adds:
+    - workflow_day_configs.role_responsibilities (JSONB) - Stores {role_id: boolean} mapping
+    - workflow_role_assignments.role_id (Integer FK) - Links to roles table
+
+    This enables admin-created roles to be used in workflow configurations instead
+    of hardcoded enums.
+    """
+    try:
+        logger.info(f"Running migration: add dynamic role columns (user: {current_user.id})")
+
+        # Add role_responsibilities JSONB column to workflow_day_configs
+        try:
+            db.execute(text("""
+                ALTER TABLE workflow_day_configs
+                ADD COLUMN IF NOT EXISTS role_responsibilities JSONB DEFAULT '{}'::jsonb
+            """))
+            logger.info("Added role_responsibilities column to workflow_day_configs")
+        except Exception as e:
+            if "already exists" in str(e).lower():
+                logger.info("role_responsibilities column already exists")
+            else:
+                logger.warning(f"Could not add role_responsibilities: {e}")
+
+        # Add role_id column to workflow_role_assignments
+        try:
+            db.execute(text("""
+                ALTER TABLE workflow_role_assignments
+                ADD COLUMN IF NOT EXISTS role_id INTEGER REFERENCES roles(id)
+            """))
+            logger.info("Added role_id column to workflow_role_assignments")
+        except Exception as e:
+            if "already exists" in str(e).lower():
+                logger.info("role_id column already exists")
+            else:
+                logger.warning(f"Could not add role_id: {e}")
+
+        # Make the old 'role' enum column nullable
+        try:
+            db.execute(text("""
+                ALTER TABLE workflow_role_assignments
+                ALTER COLUMN role DROP NOT NULL
+            """))
+            logger.info("Made 'role' column nullable")
+        except Exception as e:
+            logger.warning(f"Could not make role column nullable (may already be): {e}")
+
+        # Create index for faster lookups
+        try:
+            db.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_workflow_role_assignments_role_id
+                ON workflow_role_assignments(role_id)
+            """))
+            logger.info("Created index on role_id")
+        except Exception as e:
+            if "already exists" in str(e).lower():
+                logger.info("Index already exists")
+            else:
+                logger.warning(f"Could not create index: {e}")
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": "Dynamic role columns migration completed successfully",
+            "columns_added": [
+                "workflow_day_configs.role_responsibilities",
+                "workflow_role_assignments.role_id"
+            ]
+        }
+
+    except Exception as e:
+        logger.error(f"Dynamic role columns migration failed: {e}")
+        db.rollback()
+        import traceback
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+
 # ============================================================================
 # MAIN
 # ============================================================================
