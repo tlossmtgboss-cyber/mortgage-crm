@@ -925,7 +925,11 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
                   />
                   <span className="checkbox-text">Repeat weekly until closed</span>
                 </label>
-                <p className="field-hint">Task repeats every week until loan is closed, canceled, withdrawn, or denied</p>
+                <p className="field-hint">
+                  Task repeats weekly until loan is closed, canceled, withdrawn, or denied.
+                  <br />
+                  <em>Monday updates: First update goes out on the Monday following LE Pending date entry (not same day if added on Monday).</em>
+                </p>
               </div>
               <div className="modal-actions">
                 <button className="btn-cancel" onClick={() => { setEditingDay(null); setEditDayForm({ label: '', value: '', repeat_weekly: false }); }}>
