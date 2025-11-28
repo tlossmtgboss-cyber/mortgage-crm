@@ -220,6 +220,53 @@ const generateMockLeads = () => {
       next_action: 'Check-in Weekly',
     },
 
+    // Nurture (Long-Term Nurture)
+    {
+      id: 17,
+      name: 'Thomas Rivera',
+      email: 'trivera@email.com',
+      phone: '(555) 789-3456',
+      stage: 'Long-Term Nurture',
+      source: 'Website',
+      credit_score: 710,
+      loan_amount: 350000,
+      property_type: 'Single Family',
+      created_at: new Date(currentDate.getTime() - 45 * 24 * 60 * 60 * 1000).toISOString(),
+      ai_score: 55,
+      next_action: 'Quarterly Check-in',
+      nurture_reason: 'Not ready to buy for 6+ months',
+    },
+    {
+      id: 18,
+      name: 'Sandra Mitchell',
+      email: 'smitchell@email.com',
+      phone: '(555) 890-4567',
+      stage: 'Long-Term Nurture',
+      source: 'Referral - Amy Smith',
+      credit_score: 680,
+      loan_amount: 425000,
+      property_type: 'Townhouse',
+      created_at: new Date(currentDate.getTime() - 60 * 24 * 60 * 60 * 1000).toISOString(),
+      ai_score: 50,
+      next_action: 'Follow up in Q2',
+      nurture_reason: 'Waiting for lease to end',
+    },
+    {
+      id: 19,
+      name: 'Gregory Foster',
+      email: 'gfoster@email.com',
+      phone: '(555) 901-5678',
+      stage: 'Long-Term Nurture',
+      source: 'Zillow',
+      credit_score: 695,
+      loan_amount: 520000,
+      property_type: 'Single Family',
+      created_at: new Date(currentDate.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString(),
+      ai_score: 48,
+      next_action: 'Send market update',
+      nurture_reason: 'No response after multiple contacts',
+    },
+
     // Withdrawn
     {
       id: 15,
@@ -316,6 +363,7 @@ function Leads() {
     'Application',
     'Pre-Qualified',
     'Pre-Approved',
+    'Nurture',
     'Withdrawn',
     'Does Not Qualify',
   ];
@@ -367,7 +415,9 @@ function Leads() {
   // Filter by stage
   let filteredLeads = activeFilter === 'All'
     ? safeLeads
-    : safeLeads.filter(lead => lead.stage === activeFilter);
+    : activeFilter === 'Nurture'
+      ? safeLeads.filter(lead => lead.stage === 'Nurture' || lead.stage === 'Long-Term Nurture')
+      : safeLeads.filter(lead => lead.stage === activeFilter);
 
   // Filter by search query
   if (searchQuery.trim()) {
@@ -587,6 +637,8 @@ function Leads() {
       'Application': 'orange',
       'Pre-Qualified': 'teal',
       'Pre-Approved': 'cyan',
+      'Nurture': 'purple',
+      'Long-Term Nurture': 'purple',
       'Withdrawn': 'red',
       'Does Not Qualify': 'gray',
     };
@@ -1038,6 +1090,7 @@ function Leads() {
                     <option value="Application">Application</option>
                     <option value="Pre-Qualified">Pre-Qualified</option>
                     <option value="Pre-Approved">Pre-Approved</option>
+                    <option value="Long-Term Nurture">Nurture</option>
                     <option value="Withdrawn">Withdrawn</option>
                     <option value="Does Not Qualify">Does Not Qualify</option>
                   </select>

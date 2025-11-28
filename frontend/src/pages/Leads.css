@@ -187,6 +187,11 @@
   color: var(--color-error);
 }
 
+.status-purple {
+  background: rgba(147, 51, 234, 0.1);
+  color: #7c3aed;
+}
+
 .table-actions {
   display: flex;
   gap: var(--space-xs);
