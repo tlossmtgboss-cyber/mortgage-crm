@@ -24039,6 +24039,7 @@ async def approve_unified_task(
     Approve a unified task and train AI with feedback.
     """
     try:
+        from performance_cache import cache_key, invalidate_cache
         source = approval.get("source")
         approved_response = approval.get("approved_response")
         feedback = approval.get("feedback")
@@ -24163,6 +24164,7 @@ async def reject_unified_task(
     Reject/skip a unified task and optionally train AI with feedback.
     """
     try:
+        from performance_cache import cache_key, invalidate_cache
         source = rejection.get("source")
         feedback = rejection.get("feedback", "Rejected by user")
 
