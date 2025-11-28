@@ -940,8 +940,26 @@ function AILandingPage() {
           console.log('Data from backend:', data);
           console.log('Prioritized tasks from backend:', data?.prioritized_tasks);
 
-          // If prioritized_tasks are returned, show them in the right sidebar
-          if (data && data.prioritized_tasks && data.prioritized_tasks.length > 0) {
+          // ONLY show task sidebar for EXPLICIT task questions
+          // NOT for general questions like "daily briefing", "pipeline audit", "what should I do next"
+          const msgLower = message.toLowerCase();
+
+          // Strict patterns - ONLY explicit task questions trigger the task sidebar
+          const isExplicitTaskQuestion =
+            // Explicit "what tasks" questions
+            (msgLower.includes('task') && msgLower.includes('what')) ||
+            (msgLower.includes('task') && msgLower.includes('need')) ||
+            // "What do I need to do" - must have all three words and NOT be a briefing/pipeline question
+            (msgLower.includes('what') && msgLower.includes('need') && msgLower.includes('do') && !msgLower.includes('briefing') && !msgLower.includes('pipeline') && !msgLower.includes('audit')) ||
+            // Outstanding/overdue tasks explicitly
+            msgLower.includes('outstanding task') ||
+            msgLower.includes('overdue task') ||
+            // Explicit to-do list questions
+            (msgLower.includes('to-do') && (msgLower.includes('list') || msgLower.includes('what'))) ||
+            (msgLower.includes('todo') && (msgLower.includes('list') || msgLower.includes('what')));
+
+          // If prioritized_tasks are returned AND user explicitly asked about tasks, show them in the right sidebar
+          if (isExplicitTaskQuestion && data && data.prioritized_tasks && data.prioritized_tasks.length > 0) {
             // Convert to task format for the sidebar
             const tasks = data.prioritized_tasks.map((task, idx) => ({
               id: task.id || idx + 1,
@@ -967,52 +985,25 @@ function AILandingPage() {
               tasks: tasks
             });
             setShowRightSidebar(true);
-          } else if (fullResponse) {
-            // ONLY show the right sidebar for specific task-related questions
-            // User must be explicitly asking about tasks to do, what needs to be done, or priorities
-            const msgLower = message.toLowerCase();
+          } else if (isExplicitTaskQuestion && fullResponse) {
+            // Parse the AI response to extract actionable items for the sidebar
+            const extractedItems = parseResponseForActionItems(fullResponse, message);
+            if (extractedItems.length > 0) {
+              setTaskListData(extractedItems);
+              setSelectedTask(extractedItems[0]);
 
-            // Patterns that indicate user is asking about their tasks/to-do list
-            const isAskingAboutTasks =
-              // Direct task questions
-              (msgLower.includes('task') && (msgLower.includes('what') || msgLower.includes('my') || msgLower.includes('need') || msgLower.includes('do'))) ||
-              // "What do I need to do" variations
-              (msgLower.includes('what') && msgLower.includes('need') && msgLower.includes('do')) ||
-              (msgLower.includes('what') && msgLower.includes('should') && msgLower.includes('do')) ||
-              // Priority questions
-              (msgLower.includes('priorit') && (msgLower.includes('what') || msgLower.includes('my') || msgLower.includes('top'))) ||
-              // "What's on my plate" / "what's pending"
-              msgLower.includes('what\'s pending') ||
-              msgLower.includes('what is pending') ||
-              msgLower.includes('outstanding task') ||
-              msgLower.includes('overdue task') ||
-              // Daily briefing / to-do
-              (msgLower.includes('daily') && msgLower.includes('briefing')) ||
-              msgLower.includes('to-do') ||
-              msgLower.includes('todo') ||
-              // Explicit task completion questions
-              (msgLower.includes('tasks') && msgLower.includes('complet'));
-
-            if (isAskingAboutTasks) {
-              // Parse the AI response to extract actionable items for the sidebar
-              const extractedItems = parseResponseForActionItems(fullResponse, message);
-              if (extractedItems.length > 0) {
-                setTaskListData(extractedItems);
-                setSelectedTask(extractedItems[0]);
-
-                // Set structured content for the right sidebar
-                setStructuredContent({
-                  id: Date.now(),
-                  content: fullResponse,
-                  type: 'task_priorities',
-                  title: 'Tasks',
-                  tasks: extractedItems
-                });
-                setShowRightSidebar(true);
-              }
+              // Set structured content for the right sidebar
+              setStructuredContent({
+                id: Date.now(),
+                content: fullResponse,
+                type: 'task_priorities',
+                title: 'Tasks',
+                tasks: extractedItems
+              });
+              setShowRightSidebar(true);
             }
-            // For all other questions (pipeline audit, bottlenecks, etc.), just show the answer without sidebar
           }
+          // For all other questions (daily briefing, pipeline audit, bottlenecks, etc.), just show the answer without sidebar
 
           // Update conversation history
           setConversationHistory(prev => [
@@ -2102,17 +2093,13 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
                   <strong>Pipeline Audit</strong>
                   <span>Identify bottlenecks and stalled deals</span>
                 </button>
-                <button onClick={() => handleExamplePrompt('Focus Reset - Help me get back on track')}>
-                  <strong>Focus Reset</strong>
-                  <span>Get back on track when scattered</span>
+                <button onClick={() => navigate('/reconciliation')}>
+                  <strong>Reconcile Emails</strong>
+                  <span>Review and process incoming emails</span>
                 </button>
                 <button onClick={() => handleExamplePrompt('What should I do next?')}>
                   <strong>What Should I Do Next?</strong>
                   <span>Priority decision guidance</span>
-                </button>
-                <button onClick={() => handleExamplePrompt('Accountability Review - Review my performance')}>
-                  <strong>Accountability Review</strong>
-                  <span>Review your performance</span>
                 </button>
               </div>
             </div>

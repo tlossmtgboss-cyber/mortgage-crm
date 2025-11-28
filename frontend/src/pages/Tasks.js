@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { teamAPI, tasksAPI, reconciliationAPI } from '../services/api';
+import { teamAPI, tasksAPI, reconciliationAPI, aiAPI } from '../services/api';
 import MergeCenter from './MergeCenter';
 import './Tasks.css';
 
@@ -611,6 +611,8 @@ function Tasks() {
   const [dontAskAgainDelete, setDontAskAgainDelete] = useState(false);
   const [snoozedTasks, setSnoozedTasks] = useState(new Set());
   const [teamMembers, setTeamMembers] = useState([]);
+  const [aiAcknowledgment, setAiAcknowledgment] = useState(null);
+  const [sendingInstruction, setSendingInstruction] = useState(false);
 
   // Save completed tasks to localStorage whenever it changes
   useEffect(() => {
@@ -649,7 +651,8 @@ function Tasks() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, activeTab, prioritizedTasks, aiTasks, loanIssues]);
 
-  // Update draft message and owner when task changes
+  // Update draft message and owner when task ID changes (not on every re-render)
+  const selectedTaskId = selectedTask?.id;
   useEffect(() => {
     if (selectedTask) {
       setDraftMessage(selectedTask.ai_message || '');
@@ -659,7 +662,8 @@ function Tasks() {
       setEditingMessage(false);
       setShowHistory(false);
     }
-  }, [selectedTask]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedTaskId]);
 
   const loadTasks = async () => {
     try {
@@ -695,21 +699,23 @@ function Tasks() {
         communication_history: []
       }));
 
-      // Categorize tasks by source/type
-      const priorityTasks = transformedTasks.filter(t =>
+      // Filter tasks by type:
+      // - Workflow and Manual tasks go to the Tasks page
+      // - Reconciliation items (AI Engine from email parsing) stay on Reconciliation page only
+      const workflowAndManualTasks = transformedTasks.filter(t =>
         t.source === 'Workflow' || t.source === 'Manual'
-      );
-      const aiEngineTasks = transformedTasks.filter(t =>
-        t.source === 'AI Engine'
       );
       const messageTasks = transformedTasks.filter(t =>
         t.email_from || t.email_subject
       );
 
-      setPrioritizedTasks(priorityTasks.length > 0 ? priorityTasks : mockPrioritizedTasks());
+      // Tasks page shows ONLY workflow and manual tasks (NOT reconciliation items)
+      // Reconciliation items are reviewed on the Reconciliation page
+      setPrioritizedTasks(workflowAndManualTasks.length > 0 ? workflowAndManualTasks : mockPrioritizedTasks());
       setLoanIssues(mockLoanIssues());
+      // AI tasks from workflows (not reconciliation) - these are AI-suggested actions
       setAiTasks({
-        pending: aiEngineTasks,
+        pending: [],  // AI Engine reconciliation items handled on Reconciliation page
         waiting: []
       });
       setMumAlerts(mockMumAlerts());
@@ -877,8 +883,6 @@ function Tasks() {
     switch (activeTab) {
       case 'outstanding':
         return allTasks.filter(task => !snoozedTasks.has(task.id));
-      case 'ai-approval':
-        return allTasks.filter(task => task.source === 'AI Engine' && !snoozedTasks.has(task.id));
       case 'messages':
         return allTasks.filter(task => task.source === 'Messages' && !snoozedTasks.has(task.id));
       case 'mum':
@@ -1013,24 +1017,36 @@ function Tasks() {
   const getAggregatedTasks = () => {
     const tasks = [];
 
-    // Add manual prioritized tasks
+    // Add ALL prioritized tasks (includes workflow, manual, AND AI Engine/reconciliation)
+    // Track added task IDs to avoid duplicates
+    const addedTaskIds = new Set();
+
     prioritizedTasks.forEach((task, idx) => {
       const taskId = task.id || `priority-${idx}`;
-      if (!completedTasks.has(taskId)) {
+      if (!completedTasks.has(taskId) && !addedTaskIds.has(taskId)) {
+        addedTaskIds.add(taskId);
+        // Set sourceIcon based on source
+        let sourceIcon = '🎯';
+        if (task.source === 'Workflow') sourceIcon = '⚡';
+        else if (task.source === 'AI Engine') sourceIcon = '🤖';
+        else if (task.source === 'Manual') sourceIcon = '🎯';
+
         tasks.push({
           ...task,
           id: taskId,
           source: task.source || 'Manual Priority',
-          sourceIcon: task.source === 'Workflow' ? '⚡' : '🎯'
+          sourceIcon
         });
       }
     });
 
     // Add loan issues as critical tasks
     loanIssues.forEach((issue, idx) => {
-      if (!completedTasks.has(`issue-${idx}`)) {
+      const taskId = `issue-${idx}`;
+      if (!completedTasks.has(taskId) && !addedTaskIds.has(taskId)) {
+        addedTaskIds.add(taskId);
         tasks.push({
-          id: `issue-${idx}`,
+          id: taskId,
           ...issue,
           title: issue.issue,
           stage: 'Milestone Alert',
@@ -1041,32 +1057,16 @@ function Tasks() {
       }
     });
 
-    // Add AI pending tasks
-    aiTasks.pending.forEach((task, idx) => {
-      const taskId = task.id || `ai-pending-${idx}`;
-      if (!completedTasks.has(taskId)) {
-        const { id: _originalId, ...taskWithoutId } = task; // Exclude original id
-        tasks.push({
-          ...taskWithoutId,
-          id: taskId,  // Set our id LAST to ensure it's not overwritten
-          title: task.title || task.task,
-          stage: task.stage || 'AI Suggested',
-          urgency: task.urgency || 'medium',
-          ai_action: task.ai_confidence ? `AI confidence: ${task.ai_confidence}%` : (task.confidence ? `AI confidence: ${task.confidence}%` : null),
-          source: 'AI Engine',
-          sourceIcon: '🤖'
-        });
-      }
-    });
-
-    // Add AI waiting tasks
+    // Note: AI pending tasks are now included in prioritizedTasks, so we skip adding them separately
+    // to avoid duplicates. Only add AI waiting tasks that aren't already in prioritizedTasks.
     aiTasks.waiting.forEach((task, idx) => {
       const taskId = `ai-waiting-${idx}`;
-      if (!completedTasks.has(taskId)) {
-        const { id: _originalId, ...taskWithoutId } = task; // Exclude original id
+      if (!completedTasks.has(taskId) && !addedTaskIds.has(taskId)) {
+        addedTaskIds.add(taskId);
+        const { id: _originalId, ...taskWithoutId } = task;
         tasks.push({
           ...taskWithoutId,
-          id: taskId,  // Set our id LAST to ensure it's not overwritten
+          id: taskId,
           title: task.task,
           stage: 'Needs Approval',
           urgency: task.urgency || 'low',
@@ -1078,9 +1078,11 @@ function Tasks() {
 
     // Add MUM alerts
     mumAlerts.forEach((alert, idx) => {
-      if (!completedTasks.has(`mum-${idx}`)) {
+      const taskId = `mum-${idx}`;
+      if (!completedTasks.has(taskId) && !addedTaskIds.has(taskId)) {
+        addedTaskIds.add(taskId);
         tasks.push({
-          id: `mum-${idx}`,
+          id: taskId,
           ...alert,
           borrower: alert.client,
           stage: 'Client Retention',
@@ -1094,9 +1096,11 @@ function Tasks() {
     // Add lead alerts as tasks
     if (leadMetrics.alerts) {
       leadMetrics.alerts.forEach((alert, idx) => {
-        if (alert && !completedTasks.has(`lead-${idx}`)) {
+        const taskId = `lead-${idx}`;
+        if (alert && !completedTasks.has(taskId) && !addedTaskIds.has(taskId)) {
+          addedTaskIds.add(taskId);
           tasks.push({
-            id: `lead-${idx}`,
+            id: taskId,
             title: alert,
             borrower: '',
             stage: 'Leads',
@@ -1111,12 +1115,13 @@ function Tasks() {
 
     // Add unread messages as tasks
     messages.filter(m => !m.read).forEach((msg, idx) => {
-      const msgId = `message-${idx}`;
-      if (!completedTasks.has(msgId)) {
-        const { id: _originalId, ...msgWithoutId } = msg; // Exclude original id
+      const taskId = `message-${idx}`;
+      if (!completedTasks.has(taskId) && !addedTaskIds.has(taskId)) {
+        addedTaskIds.add(taskId);
+        const { id: _originalId, ...msgWithoutId } = msg;
         tasks.push({
           ...msgWithoutId,
-          id: msgId,  // Set our id LAST to ensure it's not overwritten
+          id: taskId,
           title: `Message from ${msg.from}`,
           borrower: msg.from,
           stage: 'Communication',
@@ -1459,13 +1464,44 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
                       <span className="training-icon">🎓</span>
                       <span className="training-title">Train AI (Optional)</span>
                     </div>
-                    <textarea
-                      className="ai-training-input"
-                      placeholder="Type instructions to teach AI how to handle similar tasks in the future... (e.g., 'Always mention our competitive rates when following up on pre-approvals')"
-                      value={aiInstructions}
-                      onChange={(e) => setAiInstructions(e.target.value)}
-                      rows={3}
-                    />
+                    <div className="ai-training-input-container">
+                      <textarea
+                        className="ai-training-input"
+                        placeholder="Type instructions to teach AI how to handle similar tasks in the future... (e.g., 'Always mention our competitive rates when following up on pre-approvals')"
+                        value={aiInstructions}
+                        onChange={(e) => setAiInstructions(e.target.value)}
+                        rows={3}
+                      />
+                      {aiInstructions.trim() && (
+                        <button
+                          className="btn-send-to-ai"
+                          disabled={sendingInstruction}
+                          onClick={async () => {
+                            setSendingInstruction(true);
+                            try {
+                              const response = await aiAPI.submitTrainingInstruction(
+                                aiInstructions,
+                                {
+                                  task_type: selectedTask.source || 'general',
+                                  borrower_name: selectedTask.borrower || '',
+                                  task_title: selectedTask.title || '',
+                                  stage: selectedTask.stage || ''
+                                }
+                              );
+                              setAiAcknowledgment(response.acknowledgment);
+                              setAiInstructions('');
+                            } catch (error) {
+                              console.error('Failed to send instruction:', error);
+                              setAiAcknowledgment('Failed to send instruction. Please try again.');
+                            } finally {
+                              setSendingInstruction(false);
+                            }
+                          }}
+                        >
+                          {sendingInstruction ? 'Sending...' : 'Send to AI'}
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {/* AI-Drafted Message Section */}
@@ -1623,12 +1659,6 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
           Outstanding Tasks ({allTasks.filter(t => !snoozedTasks.has(t.id)).length})
         </button>
         <button
-          className={`tab-button ${activeTab === 'ai-approval' ? 'active' : ''}`}
-          onClick={() => setActiveTab('ai-approval')}
-        >
-          🤖 Pending Your Approval ({allTasks.filter(t => t.source === 'AI Engine' && !snoozedTasks.has(t.id)).length})
-        </button>
-        <button
           className={`tab-button ${activeTab === 'messages' ? 'active' : ''}`}
           onClick={() => setActiveTab('messages')}
         >
@@ -1652,13 +1682,6 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
       {activeTab === 'outstanding' && (
         <div className="tab-content">
           <TaskEmailLayout tasks={tabTasks} emptyMessage="No outstanding tasks" />
-        </div>
-      )}
-
-      {/* AI Task Engine Tab - Pending Your Approval */}
-      {activeTab === 'ai-approval' && (
-        <div className="tab-content">
-          <TaskEmailLayout tasks={tabTasks} emptyMessage="No AI tasks pending approval" />
         </div>
       )}
 
@@ -1835,6 +1858,37 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Acknowledgment Modal */}
+      {aiAcknowledgment && (
+        <div className="modal-overlay" onClick={() => setAiAcknowledgment(null)}>
+          <div className="modal-content ai-acknowledgment-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="ai-ack-header">
+              <span className="ai-ack-icon">🤖</span>
+              <h2>AI Training Received</h2>
+            </div>
+            <div className="ai-ack-body">
+              <div
+                className="ai-ack-message"
+                dangerouslySetInnerHTML={{
+                  __html: aiAcknowledgment
+                    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                    .replace(/\n/g, '<br />')
+                    .replace(/• /g, '<br />• ')
+                }}
+              />
+            </div>
+            <div className="modal-buttons">
+              <button
+                className="btn-modal-primary"
+                onClick={() => setAiAcknowledgment(null)}
+              >
+                Got it!
+              </button>
             </div>
           </div>
         </div>

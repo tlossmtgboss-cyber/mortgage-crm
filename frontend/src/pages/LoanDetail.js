@@ -1035,6 +1035,20 @@ function LoanDetail() {
                   onChange={(e) => handleFieldChange('borrower_phone', e.target.value)}
                 />
               </div>
+              <div className="info-field">
+                <label>Preferred Communication</label>
+                <select
+                  value={formData.preferred_communication || ''}
+                  onChange={(e) => handleFieldChange('preferred_communication', e.target.value)}
+                  style={{ padding: '10px', borderRadius: '6px', border: '1px solid #ddd', fontSize: '14px' }}
+                >
+                  <option value="">-- Select Preference --</option>
+                  <option value="email">Email</option>
+                  <option value="phone">Phone Call</option>
+                  <option value="text">Text Message</option>
+                  <option value="voicemail">Voicemail</option>
+                </select>
+              </div>
               {/* Custom Fields */}
               {customFields.map((field) => (
                 <div className="info-field" key={field.key}>

@@ -444,6 +444,13 @@ export const aiAPI = {
     const response = await api.post('/api/v1/ai/create-lead-from-screenshot', leadData);
     return response.data;
   },
+  submitTrainingInstruction: async (instruction, taskContext = {}) => {
+    const response = await api.post('/api/v1/ai/training/instruction', {
+      instruction,
+      task_context: taskContext
+    });
+    return response.data;
+  },
 };
 
 export const conversationsAPI = {
