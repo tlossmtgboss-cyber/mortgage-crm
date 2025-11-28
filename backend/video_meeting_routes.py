@@ -601,6 +601,202 @@ async def end_meeting(
     return {"success": True, "meeting": {"id": room.id, "status": room.status, "actual_end": room.actual_end.isoformat()}}
 
 
+class MeetingInviteRequest(BaseModel):
+    email: EmailStr
+    name: Optional[str] = None
+    join_url: str
+    meeting_name: Optional[str] = "Video Meeting"
+    host_name: Optional[str] = None
+
+
+@router.post("/rooms/{room_id}/invite")
+async def send_meeting_invite(
+    room_id: int,
+    data: MeetingInviteRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Send a meeting invite email to a participant."""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Video meeting models not initialized")
+
+    VideoMeetingRoom = _models.get('VideoMeetingRoom')
+    MeetingParticipant = _models.get('MeetingParticipant')
+
+    room = db.query(VideoMeetingRoom).filter(VideoMeetingRoom.id == room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Meeting room not found")
+
+    # SECURITY: Verify user has access to this room (host or participant)
+    if not verify_room_access(room, current_user, db):
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    # Get participant name
+    participant_name = data.name or data.email.split('@')[0]
+    host_name = data.host_name or current_user.email.split('@')[0]
+    meeting_name = data.meeting_name or room.room_name
+
+    # Check if participant already exists
+    existing_participant = None
+    if MeetingParticipant:
+        existing_participant = db.query(MeetingParticipant).filter(
+            MeetingParticipant.meeting_id == room_id,
+            MeetingParticipant.email == data.email
+        ).first()
+
+    # Add participant if not exists
+    if not existing_participant and MeetingParticipant:
+        participant = MeetingParticipant(
+            meeting_id=room_id,
+            email=data.email,
+            display_name=participant_name,
+            role="participant",
+            status="invited"
+        )
+        db.add(participant)
+        db.commit()
+        db.refresh(participant)
+
+    # Send the email invite
+    try:
+        from email_service import send_meeting_invite_email
+
+        email_sent = await send_meeting_invite_email(
+            to_email=data.email,
+            participant_name=participant_name,
+            host_name=host_name,
+            meeting_name=meeting_name,
+            join_url=data.join_url,
+            scheduled_time=room.scheduled_start
+        )
+
+        if not email_sent:
+            logger.warning(f"Failed to send meeting invite email to {data.email}")
+            return {
+                "success": True,
+                "participant_added": True,
+                "email_sent": False,
+                "message": "Participant added but email could not be sent"
+            }
+
+    except ImportError:
+        logger.warning("Email service not available, skipping email send")
+        return {
+            "success": True,
+            "participant_added": True,
+            "email_sent": False,
+            "message": "Participant added but email service not available"
+        }
+    except Exception as e:
+        logger.error(f"Error sending meeting invite: {e}")
+        return {
+            "success": True,
+            "participant_added": True,
+            "email_sent": False,
+            "message": f"Participant added but email failed: {str(e)}"
+        }
+
+    return {
+        "success": True,
+        "participant_added": True,
+        "email_sent": True,
+        "message": f"Invite sent to {data.email}"
+    }
+
+
+# ============================================================================
+# SCREEN RECORDING ENDPOINTS
+# ============================================================================
+
+from fastapi import File, UploadFile, Form
+import uuid
+import os
+
+# Storage for screen recordings (in production, use S3 or similar)
+SCREEN_RECORDINGS_DIR = os.path.join(os.path.dirname(__file__), "screen_recordings")
+os.makedirs(SCREEN_RECORDINGS_DIR, exist_ok=True)
+
+
+@router.post("/screen-recordings/upload")
+async def upload_screen_recording(
+    file: UploadFile = File(...),
+    meeting_id: Optional[str] = Form(None),
+    room_code: Optional[str] = Form(None),
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Upload a screen recording and return a shareable link."""
+    try:
+        # Generate unique filename
+        recording_id = str(uuid.uuid4())
+        file_extension = file.filename.split('.')[-1] if '.' in file.filename else 'webm'
+        filename = f"{recording_id}.{file_extension}"
+        filepath = os.path.join(SCREEN_RECORDINGS_DIR, filename)
+
+        # Save the file
+        contents = await file.read()
+        with open(filepath, 'wb') as f:
+            f.write(contents)
+
+        # Generate shareable URL
+        # In production, this would be a cloud storage URL
+        base_url = os.getenv('BACKEND_URL', 'https://mortgage-crm-production-7a9a.up.railway.app')
+        share_url = f"{base_url}/api/v1/meetings/screen-recordings/{recording_id}"
+
+        # Log recording metadata
+        logger.info(f"Screen recording uploaded: {recording_id} by user {current_user.id}, meeting: {meeting_id or room_code}")
+
+        return {
+            "success": True,
+            "recording_id": recording_id,
+            "share_url": share_url,
+            "filename": filename,
+            "size_bytes": len(contents)
+        }
+
+    except Exception as e:
+        logger.error(f"Error uploading screen recording: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to upload recording: {str(e)}")
+
+
+@router.get("/screen-recordings/{recording_id}")
+async def get_screen_recording(
+    recording_id: str
+):
+    """Retrieve a screen recording by ID (public endpoint for sharing)."""
+    from fastapi.responses import FileResponse
+
+    # Find the recording file
+    for ext in ['webm', 'mp4', 'mkv']:
+        filepath = os.path.join(SCREEN_RECORDINGS_DIR, f"{recording_id}.{ext}")
+        if os.path.exists(filepath):
+            return FileResponse(
+                filepath,
+                media_type=f"video/{ext}",
+                filename=f"screen-recording-{recording_id}.{ext}"
+            )
+
+    raise HTTPException(status_code=404, detail="Recording not found")
+
+
+@router.delete("/screen-recordings/{recording_id}")
+async def delete_screen_recording(
+    recording_id: str,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Delete a screen recording."""
+    # Find and delete the recording file
+    for ext in ['webm', 'mp4', 'mkv']:
+        filepath = os.path.join(SCREEN_RECORDINGS_DIR, f"{recording_id}.{ext}")
+        if os.path.exists(filepath):
+            os.remove(filepath)
+            return {"success": True, "message": "Recording deleted"}
+
+    raise HTTPException(status_code=404, detail="Recording not found")
+
+
 # ============================================================================
 # PARTICIPANT ENDPOINTS
 # ============================================================================

@@ -3,8 +3,10 @@ import { aiAPI } from '../services/api';
 import './SmartAIChat.css';
 
 function SmartAIChat({ leadId, loanId, context = {} }) {
-  // Don't render on login/public pages or standalone AI page
-  const isAuthPage = ['/', '/login', '/register', '/verify-email', '/verify-email-sent', '/onboarding', '/ai'].includes(window.location.pathname);
+  // Don't render on login/public pages, standalone AI page, or video meeting pages
+  const currentPath = window.location.pathname;
+  const isAuthPage = ['/', '/login', '/register', '/verify-email', '/verify-email-sent', '/onboarding', '/ai'].includes(currentPath);
+  const isMeetingPage = currentPath.startsWith('/meeting/') || currentPath === '/video-meetings';
 
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
@@ -195,8 +197,8 @@ function SmartAIChat({ leadId, loanId, context = {} }) {
     recognition.start();
   };
 
-  // Don't render on auth pages or without token
-  if (isAuthPage || !localStorage.getItem('token')) {
+  // Don't render on auth pages, meeting pages, or without token
+  if (isAuthPage || isMeetingPage || !localStorage.getItem('token')) {
     return null;
   }
 

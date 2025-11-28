@@ -35,10 +35,29 @@ const MeetingRoom = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
 
+  // Screen recording state
+  const [isScreenRecording, setIsScreenRecording] = useState(false);
+  const [screenRecordingTime, setScreenRecordingTime] = useState(0);
+  const [screenRecorder, setScreenRecorder] = useState(null);
+  const [recordedChunks, setRecordedChunks] = useState([]);
+  const [showScreenRecordingModal, setShowScreenRecordingModal] = useState(false);
+  const [screenRecordingUrl, setScreenRecordingUrl] = useState('');
+  const [screenRecordingUploading, setScreenRecordingUploading] = useState(false);
+  const [recipientName, setRecipientName] = useState('');
+  const screenRecordingTimerRef = useRef(null);
+  const screenStreamRef = useRef(null);
+
   // Chat state
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
   const [showChat, setShowChat] = useState(false);
+
+  // Invite user state
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteName, setInviteName] = useState('');
+  const [inviteSending, setInviteSending] = useState(false);
+  const [inviteSuccess, setInviteSuccess] = useState(false);
 
   // Refs
   const localVideoRef = useRef(null);
@@ -251,6 +270,263 @@ const MeetingRoom = () => {
     setChatInput('');
   };
 
+  // Send meeting invite via email
+  const sendMeetingInvite = async () => {
+    if (!inviteEmail.trim()) return;
+
+    setInviteSending(true);
+    setInviteSuccess(false);
+
+    try {
+      const token = localStorage.getItem('token');
+      const joinUrl = `${window.location.origin}/meeting/${roomCode}`;
+
+      const response = await fetch(`${API_BASE}/api/v1/meetings/rooms/${meeting?.id}/invite`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          email: inviteEmail,
+          name: inviteName || inviteEmail.split('@')[0],
+          join_url: joinUrl,
+          meeting_name: meeting?.room_name || 'Video Meeting',
+          host_name: displayName
+        })
+      });
+
+      if (response.ok) {
+        setInviteSuccess(true);
+        setTimeout(() => {
+          setShowInviteModal(false);
+          setInviteEmail('');
+          setInviteName('');
+          setInviteSuccess(false);
+        }, 2000);
+      } else {
+        const errorData = await response.json();
+        alert(errorData.detail || 'Failed to send invite');
+      }
+    } catch (err) {
+      console.error('Error sending invite:', err);
+      alert('Failed to send invite. Please try again.');
+    } finally {
+      setInviteSending(false);
+    }
+  };
+
+  // Pre-fill invite from meeting's linked lead/loan
+  useEffect(() => {
+    if (meeting?.lead_email) {
+      setInviteEmail(meeting.lead_email);
+      setInviteName(meeting.lead_name || '');
+    } else if (meeting?.borrower_email) {
+      setInviteEmail(meeting.borrower_email);
+      setInviteName(meeting.borrower_name || '');
+    }
+  }, [meeting]);
+
+  // Start screen recording
+  const startScreenRecording = async () => {
+    try {
+      // Get screen capture with audio
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: {
+          cursor: 'always'
+        },
+        audio: true
+      });
+
+      // Try to get microphone audio separately
+      let audioStream;
+      try {
+        audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      } catch (e) {
+        console.warn('Could not capture microphone audio:', e);
+      }
+
+      // Combine streams if both available
+      let combinedStream;
+      if (audioStream) {
+        const audioContext = new AudioContext();
+        const destination = audioContext.createMediaStreamDestination();
+
+        // Add screen audio if present
+        const screenAudioTracks = screenStream.getAudioTracks();
+        if (screenAudioTracks.length > 0) {
+          const screenSource = audioContext.createMediaStreamSource(new MediaStream([screenAudioTracks[0]]));
+          screenSource.connect(destination);
+        }
+
+        // Add microphone audio
+        const micSource = audioContext.createMediaStreamSource(audioStream);
+        micSource.connect(destination);
+
+        combinedStream = new MediaStream([
+          ...screenStream.getVideoTracks(),
+          ...destination.stream.getAudioTracks()
+        ]);
+      } else {
+        combinedStream = screenStream;
+      }
+
+      screenStreamRef.current = screenStream;
+
+      // Setup MediaRecorder
+      const recorder = new MediaRecorder(combinedStream, {
+        mimeType: 'video/webm;codecs=vp9,opus'
+      });
+
+      const chunks = [];
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunks.push(e.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        // Clear timer
+        if (screenRecordingTimerRef.current) {
+          clearInterval(screenRecordingTimerRef.current);
+        }
+
+        // Create blob from recorded chunks
+        const blob = new Blob(chunks, { type: 'video/webm' });
+        setRecordedChunks(chunks);
+
+        // Upload the recording
+        await uploadScreenRecording(blob);
+      };
+
+      // Handle stream ended (user clicked "Stop sharing" in browser)
+      screenStream.getVideoTracks()[0].onended = () => {
+        stopScreenRecording();
+      };
+
+      recorder.start(1000); // Collect data every second
+      setScreenRecorder(recorder);
+      setIsScreenRecording(true);
+
+      // Start timer
+      screenRecordingTimerRef.current = setInterval(() => {
+        setScreenRecordingTime(t => t + 1);
+      }, 1000);
+
+    } catch (err) {
+      console.error('Error starting screen recording:', err);
+      alert('Failed to start screen recording. Please make sure you allowed screen sharing.');
+    }
+  };
+
+  // Stop screen recording
+  const stopScreenRecording = () => {
+    if (screenRecorder && screenRecorder.state !== 'inactive') {
+      screenRecorder.stop();
+    }
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach(track => track.stop());
+    }
+    setIsScreenRecording(false);
+    setScreenRecordingUploading(true);
+  };
+
+  // Upload screen recording and get shareable link
+  const uploadScreenRecording = async (blob) => {
+    try {
+      const token = localStorage.getItem('token');
+      const formData = new FormData();
+      formData.append('file', blob, `screen-recording-${Date.now()}.webm`);
+      formData.append('meeting_id', meeting?.id || '');
+      formData.append('room_code', roomCode);
+
+      const response = await fetch(`${API_BASE}/api/v1/meetings/screen-recordings/upload`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setScreenRecordingUrl(data.share_url);
+        setShowScreenRecordingModal(true);
+      } else {
+        // Fallback: create local blob URL
+        const localUrl = URL.createObjectURL(blob);
+        setScreenRecordingUrl(localUrl);
+        setShowScreenRecordingModal(true);
+      }
+    } catch (err) {
+      console.error('Error uploading screen recording:', err);
+      // Fallback: create local blob URL
+      const localUrl = URL.createObjectURL(new Blob(recordedChunks, { type: 'video/webm' }));
+      setScreenRecordingUrl(localUrl);
+      setShowScreenRecordingModal(true);
+    } finally {
+      setScreenRecordingUploading(false);
+      setScreenRecordingTime(0);
+    }
+  };
+
+  // Copy screen recording link and log to conversation
+  const copyScreenRecordingLink = async () => {
+    try {
+      await navigator.clipboard.writeText(screenRecordingUrl);
+
+      // Log to conversation/activity if recipient name provided
+      if (recipientName.trim()) {
+        const token = localStorage.getItem('token');
+        try {
+          await fetch(`${API_BASE}/api/v1/activities/`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              activity_type: 'screen_recording',
+              description: `Screen recording sent to ${recipientName}`,
+              loan_id: meeting?.loan_id,
+              lead_id: meeting?.lead_id,
+              metadata: {
+                recording_url: screenRecordingUrl,
+                recipient_name: recipientName,
+                meeting_room: roomCode
+              }
+            })
+          });
+        } catch (e) {
+          console.warn('Could not log activity:', e);
+        }
+
+        // Also add to local chat
+        setChatMessages(prev => [...prev, {
+          id: Date.now(),
+          sender: 'System',
+          text: `Screen recording sent to ${recipientName}`,
+          timestamp: new Date()
+        }]);
+      }
+
+      alert('Link copied to clipboard!');
+    } catch (err) {
+      console.error('Failed to copy link:', err);
+      alert('Failed to copy link. Please copy manually: ' + screenRecordingUrl);
+    }
+  };
+
+  // Download screen recording locally
+  const downloadScreenRecording = () => {
+    const a = document.createElement('a');
+    a.href = screenRecordingUrl;
+    a.download = `screen-recording-${new Date().toISOString().slice(0, 10)}.webm`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   // Leave meeting
   const leaveMeeting = () => {
     if (localStream) {
@@ -455,6 +731,12 @@ const MeetingRoom = () => {
               REC {formatTime(recordingTime)}
             </div>
           )}
+          {isScreenRecording && (
+            <div className="recording-indicator screen-rec">
+              <span className="rec-dot"></span>
+              SCREEN REC {formatTime(screenRecordingTime)}
+            </div>
+          )}
         </div>
         <div className="header-right">
           <span className="participant-count">
@@ -548,6 +830,27 @@ const MeetingRoom = () => {
             💬
             <span className="btn-label">Chat</span>
           </button>
+
+          <button
+            className="control-btn invite"
+            onClick={() => setShowInviteModal(true)}
+            title="Add User"
+          >
+            👤+
+            <span className="btn-label">Add User</span>
+          </button>
+
+          <button
+            className={`control-btn screen-record ${isScreenRecording ? 'recording' : ''}`}
+            onClick={isScreenRecording ? stopScreenRecording : startScreenRecording}
+            title={isScreenRecording ? 'Stop Screen Recording' : 'Record Screen'}
+            disabled={screenRecordingUploading}
+          >
+            {screenRecordingUploading ? '⏳' : isScreenRecording ? '⏹️' : '⏺️'}
+            <span className="btn-label">
+              {screenRecordingUploading ? 'Processing...' : isScreenRecording ? 'Stop' : 'Record'}
+            </span>
+          </button>
         </div>
 
         <div className="controls-right">
@@ -593,6 +896,133 @@ const MeetingRoom = () => {
               placeholder="Type a message..."
             />
             <button onClick={sendChatMessage}>Send</button>
+          </div>
+        </div>
+      )}
+
+      {/* Invite User Modal */}
+      {showInviteModal && (
+        <div className="invite-modal-overlay" onClick={() => setShowInviteModal(false)}>
+          <div className="invite-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="invite-modal-header">
+              <h3>Invite to Meeting</h3>
+              <button className="close-modal" onClick={() => setShowInviteModal(false)}>×</button>
+            </div>
+            <div className="invite-modal-body">
+              {inviteSuccess ? (
+                <div className="invite-success">
+                  <span className="success-icon">✓</span>
+                  <p>Invitation sent successfully!</p>
+                </div>
+              ) : (
+                <>
+                  <div className="invite-form-group">
+                    <label>Email Address *</label>
+                    <input
+                      type="email"
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                      placeholder="Enter email address"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="invite-form-group">
+                    <label>Name (optional)</label>
+                    <input
+                      type="text"
+                      value={inviteName}
+                      onChange={(e) => setInviteName(e.target.value)}
+                      placeholder="Enter name"
+                    />
+                  </div>
+                  <div className="invite-info">
+                    <p>An email will be sent with a link to join this meeting.</p>
+                  </div>
+                </>
+              )}
+            </div>
+            {!inviteSuccess && (
+              <div className="invite-modal-footer">
+                <button
+                  className="cancel-btn"
+                  onClick={() => setShowInviteModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  className="send-invite-btn"
+                  onClick={sendMeetingInvite}
+                  disabled={!inviteEmail.trim() || inviteSending}
+                >
+                  {inviteSending ? 'Sending...' : 'Send Invite'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Screen Recording Share Modal */}
+      {showScreenRecordingModal && (
+        <div className="invite-modal-overlay" onClick={() => setShowScreenRecordingModal(false)}>
+          <div className="screen-recording-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="invite-modal-header">
+              <h3>Screen Recording Ready</h3>
+              <button className="close-modal" onClick={() => setShowScreenRecordingModal(false)}>×</button>
+            </div>
+            <div className="screen-recording-modal-body">
+              <div className="recording-success-icon">🎬</div>
+              <p className="recording-ready-text">Your screen recording is ready to share!</p>
+
+              <div className="invite-form-group">
+                <label>Recipient Name (for activity log)</label>
+                <input
+                  type="text"
+                  value={recipientName}
+                  onChange={(e) => setRecipientName(e.target.value)}
+                  placeholder="e.g., John Smith"
+                />
+              </div>
+
+              <div className="share-link-container">
+                <label>Share Link</label>
+                <div className="share-link-input">
+                  <input
+                    type="text"
+                    value={screenRecordingUrl}
+                    readOnly
+                  />
+                  <button
+                    className="copy-link-btn"
+                    onClick={copyScreenRecordingLink}
+                    title="Copy link"
+                  >
+                    📋
+                  </button>
+                </div>
+              </div>
+
+              <div className="recording-actions">
+                <button
+                  className="download-recording-btn"
+                  onClick={downloadScreenRecording}
+                >
+                  ⬇️ Download Recording
+                </button>
+                <button
+                  className="send-invite-btn"
+                  onClick={copyScreenRecordingLink}
+                >
+                  📋 Copy & Log Activity
+                </button>
+              </div>
+
+              {recipientName && (
+                <p className="activity-log-note">
+                  Activity will be logged as: "Screen recording sent to {recipientName}"
+                </p>
+              )}
+            </div>
           </div>
         </div>
       )}

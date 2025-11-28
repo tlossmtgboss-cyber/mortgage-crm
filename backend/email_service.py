@@ -473,5 +473,223 @@ This email was sent by Pipeline 360 CRM
         return self.send_html_email(to_email, subject, html_body, plain_text)
 
 
+    def format_meeting_invite_email(
+        self,
+        participant_name: str,
+        host_name: str,
+        meeting_name: str,
+        join_url: str,
+        scheduled_time: Optional[datetime] = None
+    ) -> str:
+        """Format meeting invite email as HTML"""
+        time_str = scheduled_time.strftime('%B %d, %Y at %I:%M %p') if scheduled_time else "Now"
+
+        html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }}
+        .container {{
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }}
+        .logo {{
+            text-align: center;
+            margin-bottom: 30px;
+        }}
+        .logo h1 {{
+            color: #3b82f6;
+            font-size: 28px;
+            margin: 0;
+        }}
+        h2 {{
+            color: #1a1a2e;
+            margin-top: 0;
+        }}
+        p {{
+            color: #4b5563;
+            font-size: 16px;
+        }}
+        .meeting-card {{
+            background: linear-gradient(135deg, #3b82f6 0%, #1e40af 100%);
+            color: white;
+            padding: 24px;
+            border-radius: 12px;
+            margin: 24px 0;
+            text-align: center;
+        }}
+        .meeting-card h3 {{
+            margin: 0 0 8px 0;
+            font-size: 22px;
+        }}
+        .meeting-card .host {{
+            opacity: 0.9;
+            font-size: 14px;
+            margin-bottom: 16px;
+        }}
+        .meeting-card .time {{
+            font-size: 16px;
+            background: rgba(255,255,255,0.2);
+            padding: 8px 16px;
+            border-radius: 6px;
+            display: inline-block;
+        }}
+        .btn-join {{
+            display: inline-block;
+            background: #10b981;
+            color: white !important;
+            padding: 16px 48px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 18px;
+            margin: 24px 0;
+        }}
+        .btn-join:hover {{
+            background: #059669;
+        }}
+        .info-box {{
+            background: #f0f9ff;
+            border-left: 4px solid #3b82f6;
+            padding: 16px;
+            margin: 24px 0;
+            border-radius: 4px;
+        }}
+        .info-box h4 {{
+            margin: 0 0 8px 0;
+            color: #1e40af;
+        }}
+        .info-box ul {{
+            margin: 0;
+            padding-left: 20px;
+        }}
+        .info-box li {{
+            margin: 8px 0;
+            color: #4b5563;
+        }}
+        .footer {{
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid #e5e7eb;
+            text-align: center;
+            color: #9ca3af;
+            font-size: 13px;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <h1>📹 Video Meeting Invite</h1>
+        </div>
+
+        <h2>Hi {participant_name},</h2>
+
+        <p>You've been invited to join a video meeting!</p>
+
+        <div class="meeting-card">
+            <h3>{meeting_name}</h3>
+            <p class="host">Hosted by {host_name}</p>
+            <div class="time">🕐 {time_str}</div>
+        </div>
+
+        <div style="text-align: center;">
+            <a href="{join_url}" class="btn-join">Join Meeting</a>
+        </div>
+
+        <div class="info-box">
+            <h4>Before You Join</h4>
+            <ul>
+                <li>Make sure your camera and microphone are working</li>
+                <li>Find a quiet, well-lit space</li>
+                <li>Use a stable internet connection</li>
+                <li>Click the button above when you're ready to join</li>
+            </ul>
+        </div>
+
+        <p style="text-align: center; color: #6b7280; font-size: 14px;">
+            Or copy this link:<br>
+            <a href="{join_url}" style="color: #3b82f6;">{join_url}</a>
+        </p>
+
+        <div class="footer">
+            <p>This meeting invite was sent via Pipeline 360 CRM</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+        return html
+
+    def send_meeting_invite(
+        self,
+        to_email: str,
+        participant_name: str,
+        host_name: str,
+        meeting_name: str,
+        join_url: str,
+        scheduled_time: Optional[datetime] = None
+    ) -> bool:
+        """Send meeting invite email"""
+        time_str = scheduled_time.strftime('%B %d, %Y at %I:%M %p') if scheduled_time else "Now"
+        subject = f"📹 Video Meeting: {meeting_name}"
+        html_body = self.format_meeting_invite_email(
+            participant_name, host_name, meeting_name, join_url, scheduled_time
+        )
+
+        plain_text = f"""
+Hi {participant_name},
+
+You've been invited to join a video meeting!
+
+MEETING: {meeting_name}
+HOST: {host_name}
+TIME: {time_str}
+
+Click here to join:
+{join_url}
+
+Before you join:
+- Make sure your camera and microphone are working
+- Find a quiet, well-lit space
+- Use a stable internet connection
+
+This meeting invite was sent via Pipeline 360 CRM
+"""
+
+        return self.send_html_email(to_email, subject, html_body, plain_text)
+
+
 # Global instance
 email_service = EmailService()
+
+
+# Async wrapper function for use in video meeting routes
+async def send_meeting_invite_email(
+    to_email: str,
+    participant_name: str,
+    host_name: str,
+    meeting_name: str,
+    join_url: str,
+    scheduled_time: Optional[datetime] = None
+) -> bool:
+    """Async wrapper for sending meeting invite emails"""
+    return email_service.send_meeting_invite(
+        to_email=to_email,
+        participant_name=participant_name,
+        host_name=host_name,
+        meeting_name=meeting_name,
+        join_url=join_url,
+        scheduled_time=scheduled_time
+    )
