@@ -13,6 +13,7 @@ import EscalationModal from '../components/EscalationModal';
 import TeamAssignment from '../components/TeamAssignment';
 import EmploymentTab from '../components/EmploymentTab';
 import RateLockRecommendation from '../components/RateLockRecommendation';
+import VideoMeetings from '../components/VideoMeetings';
 import './LeadDetail.css';
 
 // Mock loans data (same as Loans.js)
@@ -69,6 +70,7 @@ function LoanDetail() {
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [showEscalationModal, setShowEscalationModal] = useState(false);
+  const [showVideoMeetings, setShowVideoMeetings] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [emailHistory, setEmailHistory] = useState([]);
   const [selectedEmail, setSelectedEmail] = useState(null);
@@ -111,11 +113,52 @@ function LoanDetail() {
   const [showAddFieldModal, setShowAddFieldModal] = useState(false);
   const [newFieldName, setNewFieldName] = useState('');
 
+  // Loan navigation state
+  const [loansList, setLoansList] = useState([]);
+  const [currentLoanIndex, setCurrentLoanIndex] = useState(-1);
+
   useEffect(() => {
     loadLoanData();
     loadEmailHistory();
+    loadLoansList();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // Load list of loans for navigation
+  const loadLoansList = async () => {
+    try {
+      let loans = [];
+      try {
+        const response = await loansAPI.getAll();
+        loans = response.loans || response || [];
+      } catch (apiError) {
+        // Fallback to mock data
+        loans = generateMockLoans();
+      }
+      setLoansList(loans);
+      // Find current loan index
+      const currentId = parseInt(id);
+      const index = loans.findIndex(l => l.id === currentId);
+      setCurrentLoanIndex(index);
+    } catch (error) {
+      console.error('Error loading loans list:', error);
+    }
+  };
+
+  // Navigate to next loan
+  const handleViewNextLoan = () => {
+    if (loansList.length === 0) return;
+
+    let nextIndex = currentLoanIndex + 1;
+    if (nextIndex >= loansList.length) {
+      nextIndex = 0; // Loop back to first loan
+    }
+
+    const nextLoan = loansList[nextIndex];
+    if (nextLoan && nextLoan.id) {
+      navigate(`/loans/${nextLoan.id}`);
+    }
+  };
 
   // Custom field handlers
   const handleAddCustomField = () => {
@@ -437,6 +480,9 @@ function LoanDetail() {
       case 'teams':
         setShowTeamsModal(true);
         break;
+      case 'video':
+        setShowVideoMeetings(true);
+        break;
       case 'record':
         setShowRecordingModal(true);
         break;
@@ -478,9 +524,14 @@ function LoanDetail() {
     <div className="lead-detail-page">
       {/* Header */}
       <div className="detail-header">
-        <button className="btn-back" onClick={() => navigate('/loans')}>
-          ← Back to Loans
-        </button>
+        <div className="nav-buttons">
+          <button className="btn-back" onClick={() => navigate('/loans')}>
+            ← Back to Loans
+          </button>
+          <button className="btn-next" onClick={handleViewNextLoan} disabled={loansList.length === 0}>
+            View Next Loan →
+          </button>
+        </div>
 
         {/* Rate Lock Recommendation - Inline in header */}
         <div className="header-rate-lock">
@@ -1967,12 +2018,12 @@ function LoanDetail() {
               <span>Set Appointment</span>
             </button>
             <button
-              className="action-btn teams"
-              onClick={() => handleAction('teams')}
-              title="Create Microsoft Teams meeting"
+              className="action-btn video"
+              onClick={() => handleAction('video')}
+              title="Start UVIP video call"
             >
-              <span className="icon">👥</span>
-              <span>Teams Meeting</span>
+              <span className="icon">🎥</span>
+              <span>UVIP Video Call</span>
             </button>
             <button
               className="action-btn record"
@@ -2071,6 +2122,19 @@ function LoanDetail() {
           onClose={() => setShowEscalationModal(false)}
           lead={{ id: loan.id, name: loan.borrower_name || loan.borrower, loan_number: loan.loan_number }}
         />
+      )}
+
+      {/* UVIP Video Meetings Modal */}
+      {showVideoMeetings && (
+        <div className="modal-overlay" onClick={() => setShowVideoMeetings(false)}>
+          <div className="modal-content video-meetings-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close-btn" onClick={() => setShowVideoMeetings(false)}>×</button>
+            <VideoMeetings
+              onClose={() => setShowVideoMeetings(false)}
+              loanId={loan?.id}
+            />
+          </div>
+        </div>
       )}
     </div>
   );

@@ -13,6 +13,7 @@ import CreateTaskModal from '../components/CreateTaskModal';
 import AppointmentModal from '../components/AppointmentModal';
 import TeamAssignment from '../components/TeamAssignment';
 import EmploymentTab from '../components/EmploymentTab';
+import VideoMeetings from '../components/VideoMeetings';
 import './LeadDetail.css';
 
 // Mock lead data generator (same as Leads.js)
@@ -62,6 +63,7 @@ function LeadDetail() {
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [showEscalationModal, setShowEscalationModal] = useState(false);
+  const [showVideoMeetings, setShowVideoMeetings] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState('');
 
@@ -100,6 +102,10 @@ function LeadDetail() {
   const [customFields, setCustomFields] = useState([]);
   const [showAddFieldModal, setShowAddFieldModal] = useState(false);
   const [newFieldName, setNewFieldName] = useState('');
+
+  // Lead navigation state
+  const [leadsList, setLeadsList] = useState([]);
+  const [currentLeadIndex, setCurrentLeadIndex] = useState(-1);
 
   const handleAddCustomField = () => {
     if (!newFieldName.trim()) return;
@@ -211,8 +217,45 @@ function LeadDetail() {
     loadLeadData();
     loadEmails();
     markLeadAsViewed();
+    loadLeadsList();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // Load list of leads for navigation
+  const loadLeadsList = async () => {
+    try {
+      let leads = [];
+      try {
+        const response = await leadsAPI.getAll();
+        leads = response.leads || response || [];
+      } catch (apiError) {
+        // Fallback to mock data
+        leads = generateMockLeads();
+      }
+      setLeadsList(leads);
+      // Find current lead index
+      const currentId = parseInt(id);
+      const index = leads.findIndex(l => l.id === currentId);
+      setCurrentLeadIndex(index);
+    } catch (error) {
+      console.error('Error loading leads list:', error);
+    }
+  };
+
+  // Navigate to next lead
+  const handleViewNextLead = () => {
+    if (leadsList.length === 0) return;
+
+    let nextIndex = currentLeadIndex + 1;
+    if (nextIndex >= leadsList.length) {
+      nextIndex = 0; // Loop back to first lead
+    }
+
+    const nextLead = leadsList[nextIndex];
+    if (nextLead && nextLead.id) {
+      navigate(`/leads/${nextLead.id}`);
+    }
+  };
 
   const markLeadAsViewed = () => {
     try {
@@ -688,6 +731,9 @@ function LeadDetail() {
       case 'teams':
         setShowTeamsModal(true);
         break;
+      case 'video':
+        setShowVideoMeetings(true);
+        break;
       case 'record':
         setShowRecordingModal(true);
         break;
@@ -725,9 +771,14 @@ function LeadDetail() {
     <div className="lead-detail-page">
       {/* Header */}
       <div className="detail-header">
-        <button className="btn-back" onClick={() => navigate('/leads')}>
-          ← Back to Leads
-        </button>
+        <div className="nav-buttons">
+          <button className="btn-back" onClick={() => navigate('/leads')}>
+            ← Back to Leads
+          </button>
+          <button className="btn-next" onClick={handleViewNextLead} disabled={leadsList.length === 0}>
+            View Next Lead →
+          </button>
+        </div>
         <div className="header-actions">
           {editing ? (
             <>
@@ -1882,12 +1933,12 @@ function LeadDetail() {
                 <span>Set Appointment</span>
               </button>
               <button
-                className="action-btn teams"
-                onClick={() => handleAction('teams')}
-                title="Create Microsoft Teams meeting"
+                className="action-btn video"
+                onClick={() => handleAction('video')}
+                title="Start UVIP video call"
               >
-                <span className="icon">👥</span>
-                <span>Teams Meeting</span>
+                <span className="icon">🎥</span>
+                <span>UVIP Video Call</span>
               </button>
               <button
                 className="action-btn record"
@@ -1997,6 +2048,19 @@ function LeadDetail() {
           onClose={() => setShowAppointmentModal(false)}
           lead={lead}
         />
+      )}
+
+      {/* UVIP Video Meetings Modal */}
+      {showVideoMeetings && (
+        <div className="modal-overlay" onClick={() => setShowVideoMeetings(false)}>
+          <div className="modal-content video-meetings-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close-btn" onClick={() => setShowVideoMeetings(false)}>×</button>
+            <VideoMeetings
+              onClose={() => setShowVideoMeetings(false)}
+              leadId={lead?.id}
+            />
+          </div>
+        </div>
       )}
     </div>
   );

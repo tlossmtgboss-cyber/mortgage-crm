@@ -10,6 +10,8 @@ import VoicemailModal from '../components/VoicemailModal';
 import VoicemailDrop from '../components/VoicemailDrop';
 import TeamAssignment from '../components/TeamAssignment';
 import EmploymentTab from '../components/EmploymentTab';
+import VideoMeetings from '../components/VideoMeetings';
+import AppointmentModal from '../components/AppointmentModal';
 import './LeadDetail.css';
 
 // Mock lead data generator (same as Leads.js)
@@ -56,11 +58,17 @@ function MumClientDetail() {
   const [showRecordingModal, setShowRecordingModal] = useState(false);
   const [showVoicemailModal, setShowVoicemailModal] = useState(false);
   const [showVoicemailDrop, setShowVoicemailDrop] = useState(false);
+  const [showVideoMeetings, setShowVideoMeetings] = useState(false);
+  const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [customFields, setCustomFields] = useState([]);
   const [showAddFieldModal, setShowAddFieldModal] = useState(false);
   const [newFieldName, setNewFieldName] = useState('');
+
+  // Client navigation state
+  const [clientsList, setClientsList] = useState([]);
+  const [currentClientIndex, setCurrentClientIndex] = useState(-1);
 
   const handleAddCustomField = () => {
     if (!newFieldName.trim()) return;
@@ -78,8 +86,47 @@ function MumClientDetail() {
     loadClientData();
     loadEmails();
     markClientAsViewed();
+    loadClientsList();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // Load clients list for navigation
+  const loadClientsList = async () => {
+    try {
+      let clients = [];
+      try {
+        const response = await mumAPI.getAll();
+        clients = response.clients || response || [];
+      } catch (apiError) {
+        console.log('API failed, using empty clients list for navigation');
+        clients = [];
+      }
+      setClientsList(clients);
+
+      // Find the current client index in the list
+      const currentId = parseInt(id);
+      const index = clients.findIndex(c => c.id === currentId);
+      setCurrentClientIndex(index);
+    } catch (error) {
+      console.error('Error loading clients list:', error);
+    }
+  };
+
+  // Navigate to the next client
+  const handleViewNextClient = () => {
+    if (clientsList.length === 0) return;
+
+    let nextIndex = currentClientIndex + 1;
+    // Loop back to the first client if we're at the end
+    if (nextIndex >= clientsList.length) {
+      nextIndex = 0;
+    }
+
+    const nextClient = clientsList[nextIndex];
+    if (nextClient && nextClient.id) {
+      navigate(`/portfolio/${nextClient.id}`);
+    }
+  };
 
   const markClientAsViewed = () => {
     try {
@@ -513,10 +560,13 @@ function MumClientDetail() {
         navigate('/tasks');
         break;
       case 'calendar':
-        navigate('/calendar');
+        setShowAppointmentModal(true);
         break;
       case 'teams':
         setShowTeamsModal(true);
+        break;
+      case 'video':
+        setShowVideoMeetings(true);
         break;
       case 'record':
         setShowRecordingModal(true);
@@ -552,9 +602,18 @@ function MumClientDetail() {
     <div className="lead-detail-page">
       {/* Header */}
       <div className="detail-header">
-        <button className="btn-back" onClick={() => navigate('/portfolio')}>
-          ← Back to Portfolio
-        </button>
+        <div className="nav-buttons">
+          <button className="btn-back" onClick={() => navigate('/portfolio')}>
+            ← Back to Portfolio
+          </button>
+          <button
+            className="btn-next"
+            onClick={handleViewNextClient}
+            disabled={clientsList.length === 0}
+          >
+            View Next Client →
+          </button>
+        </div>
         <div className="header-actions">
           {editing ? (
             <>
@@ -1541,12 +1600,12 @@ function MumClientDetail() {
                 <span>Set Appointment</span>
               </button>
               <button
-                className="action-btn teams"
-                onClick={() => handleAction('teams')}
-                title="Create Microsoft Teams meeting"
+                className="action-btn video"
+                onClick={() => handleAction('video')}
+                title="Start UVIP video call"
               >
-                <span className="icon">👥</span>
-                <span>Teams Meeting</span>
+                <span className="icon">🎥</span>
+                <span>UVIP Video Call</span>
               </button>
               <button
                 className="action-btn record"
@@ -1621,6 +1680,28 @@ function MumClientDetail() {
           recipientName={client.name}
           onClose={() => setShowVoicemailDrop(false)}
         />
+      )}
+
+      {/* Appointment Modal */}
+      {client && (
+        <AppointmentModal
+          isOpen={showAppointmentModal}
+          onClose={() => setShowAppointmentModal(false)}
+          lead={client}
+        />
+      )}
+
+      {/* UVIP Video Meetings Modal */}
+      {showVideoMeetings && (
+        <div className="modal-overlay" onClick={() => setShowVideoMeetings(false)}>
+          <div className="modal-content video-meetings-modal" onClick={(e) => e.stopPropagation()}>
+            <button className="modal-close-btn" onClick={() => setShowVideoMeetings(false)}>×</button>
+            <VideoMeetings
+              onClose={() => setShowVideoMeetings(false)}
+              contactId={client?.id}
+            />
+          </div>
+        </div>
       )}
     </div>
   );
