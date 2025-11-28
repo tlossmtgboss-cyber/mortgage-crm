@@ -181,7 +181,9 @@ class IPAccessControlMiddleware(BaseHTTPMiddleware):
                 allowed_origins = [
                     "https://www.pipeline360.io",
                     "https://pipeline360.io",
-                    "https://frontend-",  # Vercel preview deployments
+                    "https://mortgage-crm-nine.vercel.app",  # Production Vercel
+                    "https://mortgage-crm",  # Vercel preview deployments
+                    "https://frontend-",  # Vercel preview deployments (legacy)
                     "http://localhost:3000",
                     "http://localhost:3001",
                 ]
