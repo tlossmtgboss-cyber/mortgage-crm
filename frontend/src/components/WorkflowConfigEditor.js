@@ -37,7 +37,7 @@ const DEFAULT_RESPONSIBILITY_ROLES = [
   { id: null, key: 'ai', label: 'AI', fullName: 'AI Automation', roleValue: 'ai', canDelete: false, isLegacy: true }
 ];
 
-function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClose }) {
+function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClose, embedded = false }) {
   const [workflowConfig, setWorkflowConfig] = useState(null);
   const [days, setDays] = useState([]);
   const [roleAssignments, setRoleAssignments] = useState([]);
@@ -644,7 +644,7 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
   }
 
   return (
-    <div className="workflow-config-editor">
+    <div className={`workflow-config-editor ${embedded ? 'embedded' : ''}`}>
       {/* Header */}
       <div className="editor-header" style={{ borderColor: workflowColor }}>
         <div className="editor-title">
@@ -668,7 +668,9 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
           >
             {saving ? 'Saving...' : 'Save Workflow'}
           </button>
-          <button onClick={onClose} className="btn-close">Close</button>
+          {!embedded && onClose && (
+            <button onClick={onClose} className="btn-close">Close</button>
+          )}
         </div>
       </div>
 

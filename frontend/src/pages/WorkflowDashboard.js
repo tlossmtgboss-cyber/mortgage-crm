@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import WorkflowConfigEditor from '../components/WorkflowConfigEditor';
 import './WorkflowDashboard.css';
 
@@ -20,25 +19,15 @@ const WORKFLOW_TABS = [
 ];
 
 function WorkflowDashboard() {
-  const navigate = useNavigate();
   const [dashboard, setDashboard] = useState(null);
   const [workflows, setWorkflows] = useState([]);
   const [activeTab, setActiveTab] = useState('prospect');
-  const [workflowData, setWorkflowData] = useState(null);
-  const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [tabLoading, setTabLoading] = useState(false);
-  const [showConfigEditor, setShowConfigEditor] = useState(false);
-  const [configEditorWorkflow, setConfigEditorWorkflow] = useState(null);
 
   useEffect(() => {
     fetchDashboardData();
     fetchWorkflowDefinitions();
   }, []);
-
-  useEffect(() => {
-    fetchWorkflowTasks(activeTab);
-  }, [activeTab]);
 
   const fetchDashboardData = async () => {
     try {
@@ -70,62 +59,9 @@ function WorkflowDashboard() {
     }
   };
 
-  const fetchWorkflowTasks = async (workflowKey) => {
-    setTabLoading(true);
-    try {
-      const token = localStorage.getItem('token');
-      const headers = { 'Authorization': `Bearer ${token}` };
-
-      // Fetch workflow definition with tasks
-      const [defRes, tasksRes] = await Promise.all([
-        fetch(`${API_BASE}/api/v1/workflow/definitions/${workflowKey}`, { headers }),
-        fetch(`${API_BASE}/api/v1/workflow/definitions/${workflowKey}/tasks?status=pending&limit=50`, { headers })
-      ]);
-
-      const [defData, tasksData] = await Promise.all([
-        defRes.json(),
-        tasksRes.json()
-      ]);
-
-      setWorkflowData(defData);
-      setTasks(tasksData.tasks || []);
-    } catch (error) {
-      console.error('Error fetching workflow tasks:', error);
-      setWorkflowData(null);
-      setTasks([]);
-    } finally {
-      setTabLoading(false);
-    }
-  };
-
-  const completeTask = async (taskId) => {
-    try {
-      const token = localStorage.getItem('token');
-      await fetch(`${API_BASE}/api/v1/workflow/tasks/${taskId}/complete`, {
-        method: 'PUT',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      fetchWorkflowTasks(activeTab);
-    } catch (error) {
-      console.error('Error completing task:', error);
-    }
-  };
-
   const getWorkflowTaskCount = (workflowKey) => {
     const workflow = workflows.find(w => w.name === workflowKey);
     return workflow?.task_count || 0;
-  };
-
-  const openConfigEditor = (workflow) => {
-    setConfigEditorWorkflow(workflow);
-    setShowConfigEditor(true);
-  };
-
-  const closeConfigEditor = () => {
-    setShowConfigEditor(false);
-    setConfigEditorWorkflow(null);
-    // Refresh data after editing
-    fetchWorkflowTasks(activeTab);
   };
 
   if (loading) {
@@ -181,187 +117,19 @@ function WorkflowDashboard() {
           >
             {tab.name}
             <span className="tab-count">({getWorkflowTaskCount(tab.key)})</span>
-            {activeTab === tab.key && (
-              <span
-                className="tab-config-btn"
-                onClick={(e) => { e.stopPropagation(); openConfigEditor(tab); }}
-                title="Configure Workflow"
-              >
-                &#9881;
-              </span>
-            )}
           </button>
         ))}
       </div>
 
-      {/* Tab Content */}
-      <div className="workflow-content">
-        {tabLoading ? (
-          <div className="tab-loading">Loading {activeWorkflow?.name} workflow...</div>
-        ) : (
-          <WorkflowTabContent
-            workflow={workflowData}
-            tasks={tasks}
-            activeWorkflow={activeWorkflow}
-            onComplete={completeTask}
-            onRefresh={() => fetchWorkflowTasks(activeTab)}
-            navigate={navigate}
-            onOpenConfig={() => openConfigEditor(activeWorkflow)}
-          />
-        )}
-      </div>
-
-      {/* Workflow Config Editor Modal */}
-      {showConfigEditor && configEditorWorkflow && (
-        <div className="config-editor-overlay" onClick={closeConfigEditor}>
-          <div className="config-editor-modal" onClick={(e) => e.stopPropagation()}>
-            <WorkflowConfigEditor
-              workflowKey={configEditorWorkflow.key}
-              workflowName={configEditorWorkflow.name}
-              workflowColor={configEditorWorkflow.color}
-              onClose={closeConfigEditor}
-            />
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Workflow Tab Content Component
-function WorkflowTabContent({ workflow, tasks, activeWorkflow, onComplete, onRefresh, navigate, onOpenConfig }) {
-  if (!workflow) {
-    return (
-      <div className="workflow-tab-section">
-        <div className="workflow-header-section">
-          <div className="workflow-info">
-            <h3 style={{ color: activeWorkflow?.color }}>{activeWorkflow?.name} Workflow</h3>
-            <p className="workflow-description">Loading workflow details...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="workflow-tab-section">
-      {/* Workflow Info Header */}
-      <div className="workflow-header-section">
-        <div className="workflow-info">
-          <h3 style={{ color: workflow.color || activeWorkflow?.color }}>
-            {workflow.display_name || activeWorkflow?.name} Workflow
-          </h3>
-          <p className="workflow-description">{workflow.description}</p>
-          <p className="workflow-objective">
-            <strong>Objective:</strong> {workflow.objective}
-          </p>
-        </div>
-        <div className="workflow-stats">
-          <div className="stat-item">
-            <span className="stat-number" style={{ color: workflow.color }}>{workflow.task_count || 0}</span>
-            <span className="stat-label">Total Tasks</span>
-          </div>
-          <div className="stat-item">
-            <span className="stat-number">{tasks.length}</span>
-            <span className="stat-label">Pending</span>
-          </div>
-          <button className="btn-configure-workflow" onClick={onOpenConfig} title="Configure Workflow">
-            Configure Workflow
-          </button>
-        </div>
-      </div>
-
-      {/* Task Templates (from workflow definition) */}
-      {workflow.tasks && workflow.tasks.length > 0 && (
-        <div className="task-templates-section">
-          <div className="section-header">
-            <h4>Task Templates</h4>
-            <span className="template-count">{workflow.tasks.length} tasks in sequence</span>
-          </div>
-          <div className="task-templates-grid">
-            {workflow.tasks.map((task, idx) => (
-              <div key={task.id || idx} className="task-template-card">
-                <div className="template-sequence">{task.sequence || idx + 1}</div>
-                <div className="template-info">
-                  <div className="template-name">{task.name}</div>
-                  <div className="template-timing">{task.timing_label || `${task.timing_type}: ${task.timing_value}`}</div>
-                  <div className="template-channels">
-                    {task.requires_phone && <span className="channel-badge phone">Phone</span>}
-                    {task.requires_text && <span className="channel-badge text">Text</span>}
-                    {task.requires_email && <span className="channel-badge email">Email</span>}
-                    {task.requires_partner_contact && <span className="channel-badge partner">Partner</span>}
-                  </div>
-                  {task.assigned_to && (
-                    <div className="template-assigned">Assigned to: {task.assigned_to}</div>
-                  )}
-                </div>
-                {task.is_automated && <span className="auto-badge">Auto</span>}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Active Task Instances */}
-      <div className="active-tasks-section">
-        <div className="section-header">
-          <h4>Active Tasks</h4>
-          <button onClick={onRefresh} className="btn-refresh">Refresh</button>
-        </div>
-
-        {tasks.length === 0 ? (
-          <div className="empty-state">
-            <p>No pending tasks in this workflow</p>
-            <p className="empty-hint">Tasks will appear here when workflows are triggered for leads/loans</p>
-          </div>
-        ) : (
-          <table className="workflow-table">
-            <thead>
-              <tr>
-                <th>Task</th>
-                <th>Borrower</th>
-                <th>Scheduled</th>
-                <th>Assigned To</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tasks.map(task => (
-                <tr key={task.id}>
-                  <td>
-                    <strong>{task.task_name}</strong>
-                  </td>
-                  <td>{task.borrower_name}</td>
-                  <td>{task.scheduled_date ? new Date(task.scheduled_date).toLocaleDateString() : '-'}</td>
-                  <td>{task.assigned_to || '-'}</td>
-                  <td>
-                    <div className="action-buttons">
-                      {task.lead_id && (
-                        <button
-                          onClick={() => navigate(`/leads/${task.lead_id}`)}
-                          className="btn-view"
-                        >
-                          View Lead
-                        </button>
-                      )}
-                      {task.loan_id && (
-                        <button
-                          onClick={() => navigate(`/loans/${task.loan_id}`)}
-                          className="btn-view"
-                        >
-                          View Loan
-                        </button>
-                      )}
-                      <button onClick={() => onComplete(task.id)} className="btn-complete">
-                        Complete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+      {/* Embedded Workflow Configuration - replaces Active Tasks */}
+      <div className="workflow-content embedded-config">
+        <WorkflowConfigEditor
+          key={activeTab} // Force re-mount when tab changes
+          workflowKey={activeWorkflow.key}
+          workflowName={activeWorkflow.name}
+          workflowColor={activeWorkflow.color}
+          embedded={true}
+        />
       </div>
     </div>
   );

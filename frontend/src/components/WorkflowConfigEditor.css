@@ -8,6 +8,23 @@
   overflow-x: auto;
 }
 
+/* Embedded mode styles - when shown inside WorkflowDashboard */
+.workflow-config-editor.embedded {
+  margin: 0;
+  border-radius: 8px;
+  box-shadow: none;
+  background: #fafafa;
+}
+
+.workflow-config-editor.embedded .editor-header {
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+}
+
+.workflow-config-editor.embedded .editor-title h2 {
+  font-size: 20px;
+}
+
 /* Header */
 .editor-header {
   display: flex;

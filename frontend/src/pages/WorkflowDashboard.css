@@ -112,6 +112,19 @@
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
+/* Embedded config editor styling */
+.workflow-content.embedded-config {
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.workflow-content.embedded-config .workflow-config-editor {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
 .overview-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
