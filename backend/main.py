@@ -511,6 +511,7 @@ class Lead(Base):
     co_applicant_name = Column(String)
     co_applicant_email = Column(String)
     co_applicant_phone = Column(String)
+    preferred_communication = Column(String)  # email, phone, text, voicemail
     stage = Column(SQLEnum(LeadStage), default=LeadStage.NEW)
     source = Column(String)
     referral_partner_id = Column(Integer, ForeignKey("referral_partners.id"))
@@ -606,7 +607,11 @@ class Loan(Base):
     id = Column(Integer, primary_key=True, index=True)
     loan_number = Column(String, unique=True, index=True, nullable=False)
     borrower_name = Column(String, nullable=False)
+    borrower_email = Column(String)
+    borrower_phone = Column(String)
+    preferred_communication = Column(String)  # email, phone, text, voicemail
     coborrower_name = Column(String)
+    co_borrower_email = Column(String)
     stage = Column(SQLEnum(LoanStage), default=LoanStage.DISCLOSED)
     program = Column(String)
     loan_type = Column(String)
@@ -24126,6 +24131,10 @@ async def approve_unified_task(
 
         db.commit()
 
+        # Invalidate the unified tasks cache so completed tasks don't reappear
+        cache_k = cache_key("unified_tasks", current_user.id)
+        invalidate_cache(cache_k)
+
         logger.info(f"Unified task approved: {source}/{task_id} by user {current_user.id}")
 
         return {
@@ -24216,6 +24225,10 @@ async def reject_unified_task(
             db.add(training)
 
         db.commit()
+
+        # Invalidate the unified tasks cache so rejected tasks don't reappear
+        cache_k = cache_key("unified_tasks", current_user.id)
+        invalidate_cache(cache_k)
 
         logger.info(f"Unified task rejected: {source}/{task_id} by user {current_user.id}")
 
@@ -34114,6 +34127,45 @@ def run_phase2_permission_migration():
             logger.info(f"   ⚠️  Found {existing_count} existing templates, skipping seed")
 
         logger.info("✅ Phase 2 Permission System Migration Completed!")
+
+        # Step 5: Add preferred_communication column to leads and loans tables
+        try:
+            db.execute(text("""
+                ALTER TABLE leads ADD COLUMN IF NOT EXISTS preferred_communication VARCHAR(50);
+                ALTER TABLE loans ADD COLUMN IF NOT EXISTS preferred_communication VARCHAR(50);
+                ALTER TABLE loans ADD COLUMN IF NOT EXISTS borrower_email VARCHAR(255);
+                ALTER TABLE loans ADD COLUMN IF NOT EXISTS borrower_phone VARCHAR(50);
+                ALTER TABLE loans ADD COLUMN IF NOT EXISTS co_borrower_email VARCHAR(255);
+            """))
+            db.commit()
+            logger.info("   ✅ Added preferred_communication columns to leads and loans tables")
+        except Exception as e:
+            logger.warning(f"   ⚠️  preferred_communication columns: {str(e)}")
+            db.rollback()
+
+        # Step 6: Create ai_training_instructions table for AI training feature
+        try:
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS ai_training_instructions (
+                    id SERIAL PRIMARY KEY,
+                    user_id VARCHAR(255) NOT NULL,
+                    company_id VARCHAR(255),
+                    instruction_text TEXT NOT NULL,
+                    task_type VARCHAR(100),
+                    task_context JSONB,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    status VARCHAR(50) DEFAULT 'active'
+                );
+                CREATE INDEX IF NOT EXISTS idx_ai_training_instructions_user
+                    ON ai_training_instructions(user_id);
+                CREATE INDEX IF NOT EXISTS idx_ai_training_instructions_type
+                    ON ai_training_instructions(task_type);
+            """))
+            db.commit()
+            logger.info("   ✅ Created ai_training_instructions table")
+        except Exception as e:
+            logger.warning(f"   ⚠️  ai_training_instructions table: {str(e)}")
+            db.rollback()
 
     except Exception as e:
         logger.error(f"❌ Phase 2 migration error: {e}")
