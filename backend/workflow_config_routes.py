@@ -318,7 +318,20 @@ async def add_day_config(
             'id': new_day.id,
             'day_label': new_day.day_label,
             'day_order': new_day.day_order,
-            'day_value': new_day.day_value
+            'day_value': new_day.day_value,
+            'phone_enabled': new_day.phone_enabled,
+            'text_enabled': new_day.text_enabled,
+            'email_enabled': new_day.email_enabled,
+            'referral_partner_enabled': new_day.referral_partner_enabled,
+            'lo_responsible': new_day.lo_responsible,
+            'jr_lo_responsible': new_day.jr_lo_responsible,
+            'production_asst_responsible': new_day.production_asst_responsible,
+            'concierge_responsible': new_day.concierge_responsible,
+            'ai_responsible': new_day.ai_responsible,
+            'role_responsibilities': new_day.role_responsibilities or {},
+            'health_status': 'healthy',
+            'health_message': None,
+            'task_description': new_day.task_description
         }
     }
 

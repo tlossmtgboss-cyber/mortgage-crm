@@ -354,7 +354,9 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
       });
 
       if (response.ok) {
-        const addedDay = await response.json();
+        const result = await response.json();
+        // Backend returns {success: true, day: {...}} - extract the day object
+        const addedDay = result.day || result;
         setDays(prev => [...prev, addedDay].sort((a, b) => a.day_order - b.day_order));
         setNewDay({ label: '', value: '' });
         setShowAddDay(false);
