@@ -381,12 +381,26 @@ function Settings() {
   const loadTeamMembers = async () => {
     setLoadingTeam(true);
     try {
-      const data = await teamAPI.getWorkflowMembers();
-      // API returns { members: [...] } not { team_members: [...] }
-      setTeamMembers(data.members || data.team_members || []);
-      setAvailableRoles([]); // Workflow members don't use the role system
+      const data = await teamAPI.getMembers();
+      // API returns array directly from ensureArray, or handle object formats
+      let members = [];
+      if (Array.isArray(data)) {
+        members = data;
+      } else if (data && typeof data === 'object') {
+        members = data.team_members || data.members || [];
+      }
+      // Map to expected format with name field for display
+      const mappedMembers = members.map(m => ({
+        ...m,
+        name: m.full_name || `${m.first_name || ''} ${m.last_name || ''}`.trim() || 'Unknown',
+        user_id: m.id,
+        loan_count: m.tasks_count || 0
+      }));
+      setTeamMembers(mappedMembers);
+      setAvailableRoles([]); // Team members don't use the old role system
     } catch (error) {
       console.error('Error loading team members:', error);
+      setTeamMembers([]); // Set empty array on error to prevent crashes
     } finally {
       setLoadingTeam(false);
     }
@@ -3857,7 +3871,7 @@ const API_BASE_URL = isProduction
                         <tbody>
                           {teamMembers.map((member, index) => (
                             <tr
-                              key={`${member.name}-${member.role}-${index}`}
+                              key={member.id || `${member.name || 'unknown'}-${index}`}
                               className="team-member-row"
                               onClick={() => {
                                 // Navigate to team member profile if they have a user_id
@@ -3870,15 +3884,15 @@ const API_BASE_URL = isProduction
                               <td>
                                 <div className="member-info-cell">
                                   <div className="member-avatar-small">
-                                    {member.name.charAt(0).toUpperCase()}
+                                    {(member.name || 'U').charAt(0).toUpperCase()}
                                   </div>
                                   <div>
-                                    <div className="member-name">{member.name}</div>
+                                    <div className="member-name">{member.name || 'Unknown'}</div>
                                   </div>
                                 </div>
                               </td>
                               <td>
-                                <span className="role-badge-inline">{member.role}</span>
+                                <span className="role-badge-inline">{member.role || 'N/A'}</span>
                               </td>
                               <td>
                                 <span className="member-email-text">{member.email || 'N/A'}</span>
