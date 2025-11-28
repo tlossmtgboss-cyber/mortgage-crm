@@ -453,3 +453,45 @@ async def run_mortgage_glossary_migration(
     except Exception as e:
         logger.error(f"Migration error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/add-concierge-responsible-column")
+async def add_concierge_responsible_column(
+    admin: Any = Depends(get_admin_user)
+):
+    """
+    Add concierge_responsible column to workflow_day_configs table
+    """
+    try:
+        from database import engine
+        from sqlalchemy import text
+
+        logger.info("Adding concierge_responsible column to workflow_day_configs...")
+
+        with engine.connect() as conn:
+            # Check if column already exists
+            try:
+                conn.execute(text("SELECT concierge_responsible FROM workflow_day_configs LIMIT 1"))
+                return {
+                    "status": "success",
+                    "message": "Column concierge_responsible already exists"
+                }
+            except:
+                pass  # Column doesn't exist, proceed with adding it
+
+            # Add the column
+            conn.execute(text("""
+                ALTER TABLE workflow_day_configs
+                ADD COLUMN concierge_responsible BOOLEAN DEFAULT FALSE
+            """))
+            conn.commit()
+            logger.info("Added concierge_responsible column successfully")
+
+        return {
+            "status": "success",
+            "message": "Added concierge_responsible column to workflow_day_configs table"
+        }
+
+    except Exception as e:
+        logger.error(f"Migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

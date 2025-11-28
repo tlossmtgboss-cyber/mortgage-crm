@@ -24,6 +24,7 @@ class TaskResponsibility(str, enum.Enum):
     LO = "loan_officer"
     JR_LO = "junior_loan_officer"
     PRODUCTION_ASSISTANT = "production_assistant"
+    CONCIERGE = "concierge"
     AI = "ai"
     PROCESSOR = "processor"
     UNDERWRITER = "underwriter"
@@ -89,6 +90,7 @@ def create_workflow_config_models(Base):
         lo_responsible = Column(Boolean, default=False)
         jr_lo_responsible = Column(Boolean, default=False)
         production_asst_responsible = Column(Boolean, default=False)
+        concierge_responsible = Column(Boolean, default=False)
         ai_responsible = Column(Boolean, default=False)
 
         # Task health status

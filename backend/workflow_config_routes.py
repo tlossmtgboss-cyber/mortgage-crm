@@ -38,6 +38,7 @@ class DayConfigCreate(BaseModel):
     lo_responsible: bool = False
     jr_lo_responsible: bool = False
     production_asst_responsible: bool = False
+    concierge_responsible: bool = False
     ai_responsible: bool = False
     task_description: Optional[str] = None
 
@@ -52,6 +53,7 @@ class DayConfigUpdate(BaseModel):
     lo_responsible: Optional[bool] = None
     jr_lo_responsible: Optional[bool] = None
     production_asst_responsible: Optional[bool] = None
+    concierge_responsible: Optional[bool] = None
     ai_responsible: Optional[bool] = None
     is_active: Optional[bool] = None
     task_description: Optional[str] = None
@@ -190,6 +192,7 @@ async def get_workflow_config(
             'lo_responsible': day.lo_responsible,
             'jr_lo_responsible': day.jr_lo_responsible,
             'production_asst_responsible': day.production_asst_responsible,
+            'concierge_responsible': getattr(day, 'concierge_responsible', False),
             'ai_responsible': day.ai_responsible,
             'health_status': day.health_status.value if day.health_status else 'healthy',
             'health_message': day.health_message,
@@ -270,6 +273,7 @@ async def add_day_config(
         lo_responsible=day_config.lo_responsible,
         jr_lo_responsible=day_config.jr_lo_responsible,
         production_asst_responsible=day_config.production_asst_responsible,
+        concierge_responsible=day_config.concierge_responsible,
         ai_responsible=day_config.ai_responsible,
         task_description=day_config.task_description
     )
@@ -674,7 +678,8 @@ async def check_day_health(
         issues.append("No communication method enabled")
 
     # Check 2: At least one responsible party assigned
-    if not any([day.lo_responsible, day.jr_lo_responsible, day.production_asst_responsible, day.ai_responsible]):
+    concierge_resp = getattr(day, 'concierge_responsible', False)
+    if not any([day.lo_responsible, day.jr_lo_responsible, day.production_asst_responsible, concierge_resp, day.ai_responsible]):
         issues.append("No responsible party assigned")
 
     # Check 3: If role is responsible, verify user is assigned
@@ -689,6 +694,8 @@ async def check_day_health(
         issues.append("Jr. LO responsible but no user assigned to Jr. LO role")
     if day.production_asst_responsible and 'production_assistant' not in role_assignments:
         issues.append("Production Asst. responsible but no user assigned")
+    if concierge_resp and 'concierge' not in role_assignments:
+        issues.append("Concierge responsible but no user assigned to Concierge role")
 
     # Update health status
     if issues:

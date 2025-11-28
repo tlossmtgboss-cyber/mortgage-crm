@@ -11,12 +11,13 @@ const COMMUNICATION_METHODS = [
   { key: 'referral_partner', label: 'Referral Partner', color: '#ec4899' }
 ];
 
-// Task responsibility roles
-const RESPONSIBILITY_ROLES = [
-  { key: 'lo', label: 'LO', fullName: 'Loan Officer' },
-  { key: 'jr_lo', label: 'Jr. LO', fullName: 'Junior Loan Officer' },
-  { key: 'production_asst', label: 'Production Asst.', fullName: 'Production Assistant' },
-  { key: 'ai', label: 'AI', fullName: 'AI Automation' }
+// Default task responsibility roles
+const DEFAULT_RESPONSIBILITY_ROLES = [
+  { key: 'lo', label: 'LO', fullName: 'Loan Officer', roleValue: 'loan_officer', canDelete: false },
+  { key: 'jr_lo', label: 'Jr. LO', fullName: 'Junior Loan Officer', roleValue: 'junior_loan_officer', canDelete: true },
+  { key: 'production_asst', label: 'Production Asst.', fullName: 'Production Assistant', roleValue: 'production_assistant', canDelete: true },
+  { key: 'concierge', label: 'Concierge', fullName: 'Concierge', roleValue: 'concierge', canDelete: true },
+  { key: 'ai', label: 'AI', fullName: 'AI Automation', roleValue: 'ai', canDelete: false }
 ];
 
 function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClose }) {
@@ -32,6 +33,11 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
   const [newDay, setNewDay] = useState({ label: '', value: '' });
   const [showRoleDropdown, setShowRoleDropdown] = useState(null);
   const [editingRole, setEditingRole] = useState(null);
+  const [responsibilityRoles, setResponsibilityRoles] = useState(DEFAULT_RESPONSIBILITY_ROLES);
+  const [showAddRole, setShowAddRole] = useState(false);
+  const [newRole, setNewRole] = useState({ label: '', fullName: '' });
+  const [deleteRoleModal, setDeleteRoleModal] = useState(null);
+  const [reassignToRole, setReassignToRole] = useState('');
 
   const fetchWorkflowConfig = useCallback(async () => {
     try {
@@ -144,6 +150,7 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
       lo: 'lo_responsible',
       jr_lo: 'jr_lo_responsible',
       production_asst: 'production_asst_responsible',
+      concierge: 'concierge_responsible',
       ai: 'ai_responsible'
     };
 
@@ -288,6 +295,7 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
       lo: 'loan_officer',
       jr_lo: 'junior_loan_officer',
       production_asst: 'production_assistant',
+      concierge: 'concierge',
       ai: 'ai'
     };
     const assignment = roleAssignments.find(ra => ra.role === roleMap[role]);
@@ -314,6 +322,126 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
       }
     } catch (err) {
       console.error('Error running health check:', err);
+    }
+  };
+
+  // Add a new role
+  const handleAddRole = () => {
+    if (!newRole.label || !newRole.fullName) return;
+
+    const roleKey = newRole.fullName.toLowerCase().replace(/\s+/g, '_');
+    const roleValue = roleKey;
+
+    // Check if role already exists
+    if (responsibilityRoles.some(r => r.key === roleKey)) {
+      alert('A role with this name already exists');
+      return;
+    }
+
+    const newRoleEntry = {
+      key: roleKey,
+      label: newRole.label,
+      fullName: newRole.fullName,
+      roleValue: roleValue,
+      canDelete: true
+    };
+
+    setResponsibilityRoles(prev => [...prev.filter(r => r.key !== 'ai'), newRoleEntry, prev.find(r => r.key === 'ai')]);
+    setNewRole({ label: '', fullName: '' });
+    setShowAddRole(false);
+  };
+
+  // Check if role has tasks assigned
+  const roleHasTasks = (roleKey) => {
+    const fieldMap = {
+      lo: 'lo_responsible',
+      jr_lo: 'jr_lo_responsible',
+      production_asst: 'production_asst_responsible',
+      concierge: 'concierge_responsible',
+      ai: 'ai_responsible'
+    };
+    const field = fieldMap[roleKey];
+    if (!field) return false;
+    return days.some(day => day[field]);
+  };
+
+  // Handle role deletion with reassignment
+  const handleDeleteRole = (roleKey) => {
+    const role = responsibilityRoles.find(r => r.key === roleKey);
+    if (!role || !role.canDelete) return;
+
+    if (roleHasTasks(roleKey)) {
+      setDeleteRoleModal(role);
+      setReassignToRole('');
+    } else {
+      // No tasks, can delete directly
+      setResponsibilityRoles(prev => prev.filter(r => r.key !== roleKey));
+    }
+  };
+
+  // Confirm role deletion with task reassignment
+  const confirmDeleteRole = async () => {
+    if (!deleteRoleModal || !reassignToRole) return;
+
+    const fromRoleKey = deleteRoleModal.key;
+    const toRoleKey = reassignToRole;
+
+    // Reassign tasks from old role to new role
+    const fromFieldMap = {
+      lo: 'lo_responsible',
+      jr_lo: 'jr_lo_responsible',
+      production_asst: 'production_asst_responsible',
+      concierge: 'concierge_responsible',
+      ai: 'ai_responsible'
+    };
+    const toFieldMap = fromFieldMap;
+
+    const fromField = fromFieldMap[fromRoleKey];
+    const toField = toFieldMap[toRoleKey];
+
+    if (!fromField || !toField) {
+      alert('Invalid role selection');
+      return;
+    }
+
+    try {
+      setSaving(true);
+      const token = localStorage.getItem('token');
+
+      // Update each day that has the deleted role's tasks
+      for (const day of days) {
+        if (day[fromField]) {
+          await fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}/days/${day.id}`, {
+            method: 'PUT',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              [fromField]: false,
+              [toField]: true
+            })
+          });
+        }
+      }
+
+      // Update local state
+      setDays(prev => prev.map(day => {
+        if (day[fromField]) {
+          return { ...day, [fromField]: false, [toField]: true };
+        }
+        return day;
+      }));
+
+      // Remove role from list
+      setResponsibilityRoles(prev => prev.filter(r => r.key !== fromRoleKey));
+      setDeleteRoleModal(null);
+      setReassignToRole('');
+    } catch (err) {
+      console.error('Error reassigning tasks:', err);
+      alert('Failed to reassign tasks. Please try again.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -367,14 +495,22 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
 
       {/* Role Assignments Section */}
       <div className="role-assignments-section">
-        <h3>Role Assignments</h3>
-        <p className="section-description">Click on a role to assign a specific user to handle those tasks</p>
+        <div className="role-section-header">
+          <div>
+            <h3>Role Assignments</h3>
+            <p className="section-description">Click on a role to assign a specific user to handle those tasks</p>
+          </div>
+          <button className="btn-add-role" onClick={() => setShowAddRole(true)}>
+            + Add Role
+          </button>
+        </div>
         <div className="role-assignments-grid">
-          {RESPONSIBILITY_ROLES.filter(r => r.key !== 'ai').map(role => {
+          {responsibilityRoles.filter(r => r.key !== 'ai').map(role => {
             const roleMap = {
               lo: 'loan_officer',
               jr_lo: 'junior_loan_officer',
-              production_asst: 'production_assistant'
+              production_asst: 'production_assistant',
+              concierge: 'concierge'
             };
             const assignedUserId = getAssignedUser(role.key);
 
@@ -383,13 +519,22 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
                 <div className="role-header">
                   <span className="role-name">{role.fullName}</span>
                   <span className="role-abbr">({role.label})</span>
+                  {role.canDelete && (
+                    <button
+                      className="btn-delete-role"
+                      onClick={(e) => { e.stopPropagation(); handleDeleteRole(role.key); }}
+                      title="Delete role"
+                    >
+                      &times;
+                    </button>
+                  )}
                 </div>
                 <div className="role-user" onClick={() => setEditingRole(role.key)}>
                   {editingRole === role.key ? (
                     <select
                       autoFocus
                       value={assignedUserId || ''}
-                      onChange={(e) => handleAssignUser(roleMap[role.key], e.target.value ? parseInt(e.target.value) : null)}
+                      onChange={(e) => handleAssignUser(roleMap[role.key] || role.roleValue, e.target.value ? parseInt(e.target.value) : null)}
                       onBlur={() => setEditingRole(null)}
                     >
                       <option value="">-- Unassigned --</option>
@@ -409,6 +554,85 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
             );
           })}
         </div>
+
+        {/* Add Role Modal */}
+        {showAddRole && (
+          <div className="modal-overlay">
+            <div className="modal-content">
+              <h4>Add New Role</h4>
+              <div className="form-group">
+                <label>Abbreviation (e.g., "LC")</label>
+                <input
+                  type="text"
+                  value={newRole.label}
+                  onChange={(e) => setNewRole(prev => ({ ...prev, label: e.target.value }))}
+                  placeholder="Short label"
+                  maxLength={10}
+                />
+              </div>
+              <div className="form-group">
+                <label>Full Name (e.g., "Loan Coordinator")</label>
+                <input
+                  type="text"
+                  value={newRole.fullName}
+                  onChange={(e) => setNewRole(prev => ({ ...prev, fullName: e.target.value }))}
+                  placeholder="Full role name"
+                />
+              </div>
+              <div className="modal-actions">
+                <button className="btn-cancel" onClick={() => { setShowAddRole(false); setNewRole({ label: '', fullName: '' }); }}>
+                  Cancel
+                </button>
+                <button
+                  className="btn-save"
+                  onClick={handleAddRole}
+                  disabled={!newRole.label || !newRole.fullName}
+                >
+                  Add Role
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delete Role Modal with Reassignment */}
+        {deleteRoleModal && (
+          <div className="modal-overlay">
+            <div className="modal-content">
+              <h4>Delete Role: {deleteRoleModal.fullName}</h4>
+              <p className="warning-text">
+                This role has tasks assigned to it. Please select a role to reassign these tasks to:
+              </p>
+              <div className="form-group">
+                <label>Reassign tasks to:</label>
+                <select
+                  value={reassignToRole}
+                  onChange={(e) => setReassignToRole(e.target.value)}
+                >
+                  <option value="">-- Select a role --</option>
+                  {responsibilityRoles
+                    .filter(r => r.key !== deleteRoleModal.key && r.key !== 'ai')
+                    .map(r => (
+                      <option key={r.key} value={r.key}>{r.fullName}</option>
+                    ))
+                  }
+                </select>
+              </div>
+              <div className="modal-actions">
+                <button className="btn-cancel" onClick={() => { setDeleteRoleModal(null); setReassignToRole(''); }}>
+                  Cancel
+                </button>
+                <button
+                  className="btn-delete"
+                  onClick={confirmDeleteRole}
+                  disabled={!reassignToRole || saving}
+                >
+                  {saving ? 'Reassigning...' : 'Delete & Reassign'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Workflow Grid */}
@@ -421,7 +645,7 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
               <th colSpan={COMMUNICATION_METHODS.length} className="comm-header">
                 Communication Method
               </th>
-              <th colSpan={RESPONSIBILITY_ROLES.length} className="resp-header">
+              <th colSpan={responsibilityRoles.length} className="resp-header">
                 Task Responsibility
               </th>
               <th className="actions-col">Actions</th>
@@ -434,7 +658,7 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
                   {method.label}
                 </th>
               ))}
-              {RESPONSIBILITY_ROLES.map(role => (
+              {responsibilityRoles.map(role => (
                 <th key={role.key}>{role.label}</th>
               ))}
               <th></th>
@@ -489,11 +713,12 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
                 })}
 
                 {/* Responsibility Checkboxes */}
-                {RESPONSIBILITY_ROLES.map(role => {
+                {responsibilityRoles.map(role => {
                   const fieldMap = {
                     lo: 'lo_responsible',
                     jr_lo: 'jr_lo_responsible',
                     production_asst: 'production_asst_responsible',
+                    concierge: 'concierge_responsible',
                     ai: 'ai_responsible'
                   };
                   const isResponsible = day[fieldMap[role.key]];
