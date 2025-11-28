@@ -685,6 +685,16 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
         </div>
       )}
 
+      {/* Workflow Stats - shows actual task count */}
+      {embedded && (
+        <div className="workflow-stats-inline">
+          <div className="stat-box">
+            <div className="stat-value" style={{ color: workflowColor }}>{days.length}</div>
+            <div className="stat-label">Total Tasks</div>
+          </div>
+        </div>
+      )}
+
       {/* Role Assignments Section */}
       <div className="role-assignments-section">
         <div className="role-section-header">

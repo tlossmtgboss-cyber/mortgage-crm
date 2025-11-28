@@ -25,6 +25,37 @@
   font-size: 20px;
 }
 
+/* Inline workflow stats */
+.workflow-stats-inline {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.workflow-stats-inline .stat-box {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px 24px;
+  text-align: center;
+  min-width: 120px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.workflow-stats-inline .stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.workflow-stats-inline .stat-label {
+  font-size: 11px;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+}
+
 /* Header */
 .editor-header {
   display: flex;
