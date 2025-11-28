@@ -19992,7 +19992,7 @@ async def create_microsoft_oauth_table(db: Session = Depends(get_db)):
             content={"status": "error", "message": str(e)}
         )
 
-@app.post("/api/v1/migrations/create-loan-team-members-table")
+@app.post("/api/v1/loans/setup-team-members-table")
 async def create_loan_team_members_table(db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """Create the loan_team_members table for custom team member assignments"""
     try:
