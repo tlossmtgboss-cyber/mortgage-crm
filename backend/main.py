@@ -18649,32 +18649,66 @@ async def sync_microsoft_emails_now(
         if not oauth_record.sync_enabled:
             raise HTTPException(status_code=400, detail="Email sync is disabled")
 
-        # Fetch emails
-        result = await fetch_microsoft_emails(oauth_record, db, limit=50)
+        # Fetch emails with timeout
+        import asyncio
+        try:
+            result = await asyncio.wait_for(
+                fetch_microsoft_emails(oauth_record, db, limit=50),
+                timeout=60  # 60 second timeout for fetching emails
+            )
+        except asyncio.TimeoutError:
+            logger.error(f"Microsoft email fetch timed out for user {current_user.id}")
+            raise HTTPException(status_code=504, detail="Email fetch timed out - please try again")
 
         if "error" in result:
             raise HTTPException(status_code=500, detail=result["error"])
 
-        # Process each email through DRE
+        # Process each email through DRE with individual error handling
         emails = result.get("emails", [])
         processed_count = 0
+        skipped_count = 0
+        error_count = 0
+        errors = []
 
-        for email_data in emails:
-            process_result = await process_microsoft_email_to_dre(email_data, current_user.id, db)
-            if process_result.get("status") == "success":
-                processed_count += 1
+        for idx, email_data in enumerate(emails):
+            try:
+                # Process each email with a 45-second timeout
+                process_result = await asyncio.wait_for(
+                    process_microsoft_email_to_dre(email_data, current_user.id, db),
+                    timeout=45
+                )
+                if process_result.get("status") == "success":
+                    processed_count += 1
+                elif process_result.get("status") == "skipped":
+                    skipped_count += 1
+                else:
+                    error_count += 1
+            except asyncio.TimeoutError:
+                error_count += 1
+                subject = email_data.get("subject", "Unknown")[:50]
+                errors.append(f"Timeout processing email {idx+1}: {subject}")
+                logger.warning(f"Timeout processing email {idx+1}/{len(emails)}: {subject}")
+            except Exception as e:
+                error_count += 1
+                subject = email_data.get("subject", "Unknown")[:50]
+                errors.append(f"Error processing email {idx+1}: {str(e)[:100]}")
+                logger.error(f"Error processing email {idx+1}/{len(emails)} ({subject}): {e}")
+                # Continue with next email instead of failing entire sync
 
         # Update last_sync_at timestamp
         oauth_record.last_sync_at = datetime.now(timezone.utc)
         db.commit()
 
-        logger.info(f"Synced {processed_count}/{len(emails)} emails for user {current_user.id}")
+        logger.info(f"Synced {processed_count}/{len(emails)} emails for user {current_user.id} (skipped: {skipped_count}, errors: {error_count})")
 
         return {
             "status": "success",
             "fetched_count": len(emails),
             "processed_count": processed_count,
-            "message": f"Synced {processed_count} emails successfully"
+            "skipped_count": skipped_count,
+            "error_count": error_count,
+            "errors": errors[:5] if errors else [],  # Return first 5 errors
+            "message": f"Synced {processed_count} emails successfully" + (f" ({error_count} errors)" if error_count else "")
         }
 
     except HTTPException:

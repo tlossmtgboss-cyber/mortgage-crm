@@ -6,11 +6,16 @@ Comprehensive AI-powered email parsing for all CRM profile types
 import os
 import json
 import logging
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 import anthropic
 
 logger = logging.getLogger(__name__)
+
+# Thread pool for running blocking API calls
+_executor = ThreadPoolExecutor(max_workers=3)
 
 
 class ClaudeEmailParser:
@@ -236,11 +241,25 @@ class ClaudeEmailParser:
         self.model = "claude-sonnet-4-20250514"
         logger.info("Claude Email Parser initialized")
 
+    def _call_claude_sync(self, prompt: str) -> str:
+        """Synchronous Claude API call - runs in thread pool"""
+        response = self.client.messages.create(
+            model=self.model,
+            max_tokens=4000,
+            temperature=0.1,  # Low temperature for consistent extraction
+            messages=[{
+                "role": "user",
+                "content": prompt
+            }]
+        )
+        return response.content[0].text
+
     async def parse_email(
         self,
         email_data: Dict[str, Any],
         profile_type: str,
-        current_profile: Optional[Dict] = None
+        current_profile: Optional[Dict] = None,
+        timeout_seconds: int = 30
     ) -> Dict[str, Any]:
         """
         Parse email and extract all relevant CRM fields
@@ -249,6 +268,7 @@ class ClaudeEmailParser:
             email_data: Raw email with body, subject, sender, etc.
             profile_type: 'lead', 'active_loan', 'mum_client', 'team_member'
             current_profile: Existing profile data for update detection
+            timeout_seconds: Max time to wait for Claude API response
 
         Returns:
             Complete extraction with fields, confidence, milestones, conflicts
@@ -267,20 +287,18 @@ class ClaudeEmailParser:
                 current_profile
             )
 
-            # Call Claude API
-            logger.info(f"Calling Claude API for {profile_type} email parsing")
-            response = self.client.messages.create(
-                model=self.model,
-                max_tokens=4000,
-                temperature=0.1,  # Low temperature for consistent extraction
-                messages=[{
-                    "role": "user",
-                    "content": prompt
-                }]
-            )
+            # Call Claude API in thread pool with timeout to avoid blocking event loop
+            logger.info(f"Calling Claude API for {profile_type} email parsing (timeout: {timeout_seconds}s)")
+            loop = asyncio.get_event_loop()
 
-            # Parse Claude's JSON response
-            response_text = response.content[0].text
+            try:
+                response_text = await asyncio.wait_for(
+                    loop.run_in_executor(_executor, self._call_claude_sync, prompt),
+                    timeout=timeout_seconds
+                )
+            except asyncio.TimeoutError:
+                logger.error(f"Claude API timed out after {timeout_seconds}s for {profile_type} email")
+                raise TimeoutError(f"Claude API call timed out after {timeout_seconds} seconds")
 
             # Extract JSON from response (Claude may wrap it in markdown)
             extracted = self._extract_json(response_text)
@@ -292,6 +310,8 @@ class ClaudeEmailParser:
             logger.info(f"Successfully parsed {profile_type} email in {processing_time_ms}ms")
             return result
 
+        except TimeoutError:
+            raise
         except Exception as e:
             logger.error(f"Error parsing email with Claude: {e}")
             raise
