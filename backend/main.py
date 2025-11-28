@@ -12576,8 +12576,9 @@ def apply_extracted_data(extracted_data: ExtractedData, db: Session) -> bool:
                 if parsed := parse_date(value):
                     lead.application_completed_date = parsed
                     updated_fields.append("application_completed_date")
-                    # Also update stage to APPLICATION
-                    lead.stage = LeadStage.APPLICATION
+                    # Also update stage to APPLICATION using raw SQL
+                    db.execute(text("UPDATE leads SET stage = :stage WHERE id = :id"),
+                               {"stage": LeadStage.APPLICATION.name, "id": lead.id})
                     updated_fields.append("stage->APPLICATION")
 
             if value := get_field_value(fields, "credit_pulled_date"):
@@ -12589,8 +12590,9 @@ def apply_extracted_data(extracted_data: ExtractedData, db: Session) -> bool:
                 if parsed := parse_date(value):
                     lead.preapproval_issued_date = parsed
                     updated_fields.append("preapproval_issued_date")
-                    # Also update stage to PRE_APPROVED
-                    lead.stage = LeadStage.PRE_APPROVED
+                    # Also update stage to PRE_APPROVED using raw SQL
+                    db.execute(text("UPDATE leads SET stage = :stage WHERE id = :id"),
+                               {"stage": LeadStage.PRE_APPROVED.name, "id": lead.id})
                     updated_fields.append("stage->PRE_APPROVED")
 
             # Update timestamp
@@ -15020,7 +15022,7 @@ async def approve_reconciliation(
                 lead = db.query(Lead).filter(Lead.id == extracted.match_entity_id).first()
                 if lead:
                     old_status = lead.stage.name if lead.stage else "NEW"
-                    # Map string to LeadStage enum
+                    # Map string to LeadStage enum - only includes valid LeadStage values
                     lead_stage_map = {
                         "NEW": LeadStage.NEW,
                         "ATTEMPTED_CONTACT": LeadStage.ATTEMPTED_CONTACT,
@@ -15031,24 +15033,27 @@ async def approve_reconciliation(
                         "PRE_APPROVED": LeadStage.PRE_APPROVED,
                         "UNDER_CONTRACT": LeadStage.UNDER_CONTRACT,
                         "LONG_TERM_NURTURE": LeadStage.LONG_TERM_NURTURE,
-                        "DISCLOSED": LeadStage.DISCLOSED,
-                        "PROCESSING": LeadStage.PROCESSING,
-                        "SUBMITTED": LeadStage.SUBMITTED,
-                        "UW_RECEIVED": LeadStage.UW_RECEIVED,
-                        "APPROVED": LeadStage.APPROVED,
-                        "SUSPENDED": LeadStage.SUSPENDED,
-                        "CTC": LeadStage.CTC,
-                        "DOCS": LeadStage.DOCS,
-                        "FUNDED": LeadStage.FUNDED,
+                        "CLOSED": LeadStage.CLOSED,
+                        "AMR": LeadStage.AMR,
+                        "REFERRAL_SOURCE": LeadStage.REFERRAL_SOURCE,
+                        "WITHDRAWN": LeadStage.WITHDRAWN,
+                        "DOES_NOT_QUALIFY": LeadStage.DOES_NOT_QUALIFY,
                     }
-                    if approval.update_status_to.upper() in lead_stage_map:
-                        new_stage = lead_stage_map[approval.update_status_to.upper()]
+
+                    # If user selected a Loan stage, the lead needs to be converted to a loan
+                    # For now, just skip the status update if it's not a valid lead stage
+                    status_upper = approval.update_status_to.upper()
+                    if status_upper in lead_stage_map:
+                        new_stage = lead_stage_map[status_upper]
                         # Use raw SQL to update stage
                         db.execute(text("UPDATE leads SET stage = :stage WHERE id = :id"),
                                    {"stage": new_stage.name, "id": lead.id})
                         new_status = new_stage.name
                         status_updated = True
                         logger.info(f"Updated lead {lead.id} stage from {old_status} to {new_status}")
+                    else:
+                        # Loan stage requested for a lead - log this
+                        logger.warning(f"Attempted to set loan stage '{status_upper}' on lead {lead.id}. Lead stages and loan stages are different. Data will still be applied.")
 
             elif extracted.match_entity_type == "loan":
                 loan = db.query(Loan).filter(Loan.id == extracted.match_entity_id).first()
