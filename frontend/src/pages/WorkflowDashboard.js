@@ -87,30 +87,6 @@ function WorkflowDashboard() {
         </div>
       </div>
 
-      {/* Metrics Cards */}
-      <div className="workflow-metrics">
-        <div className="metric-card">
-          <div className="metric-value">{dashboard?.pending_tasks || 0}</div>
-          <div className="metric-label">Pending Tasks</div>
-        </div>
-        <div className="metric-card warning">
-          <div className="metric-value">{dashboard?.overdue_tasks || 0}</div>
-          <div className="metric-label">Overdue</div>
-        </div>
-        <div className="metric-card">
-          <div className="metric-value">{dashboard?.unacknowledged_alerts || 0}</div>
-          <div className="metric-label">Alerts</div>
-        </div>
-        <div className="metric-card">
-          <div className="metric-value">{dashboard?.last_mile_today || 0}</div>
-          <div className="metric-label">Last Mile Today</div>
-        </div>
-        <div className="metric-card danger">
-          <div className="metric-value">{dashboard?.high_risk_loans || 0}</div>
-          <div className="metric-label">High Risk</div>
-        </div>
-      </div>
-
       {/* Workflow Tab Navigation - 10 Tabs */}
       <div className="workflow-tabs">
         {WORKFLOW_TABS.map(tab => (
