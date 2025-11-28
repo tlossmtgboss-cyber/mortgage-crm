@@ -10981,6 +10981,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Analytics Tracking routes not loaded: {e}")
 
+# Include Feature Flags routes
+try:
+    from feature_flags_routes import router as feature_flags_router
+    app.include_router(feature_flags_router, tags=["Feature Flags"])
+    logger.info("✅ Feature Flags routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Feature Flags routes not loaded: {e}")
+
 # Email Monitor Migration Endpoint
 @app.post("/api/v1/migrations/add-email-monitor")
 async def add_email_monitor_migration(db: Session = Depends(get_db)):

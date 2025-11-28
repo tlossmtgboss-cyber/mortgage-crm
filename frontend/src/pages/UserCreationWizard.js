@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import CategoryTasksModal from '../components/CategoryTasksModal';
 import PermissionsStep from '../components/onboarding/steps/PermissionsStep';
+import FeatureSelection from '../components/FeatureSelection';
 import './UserCreationWizard.css';
 
 // Use HTTPS Railway URL in production, localhost for development
@@ -15,6 +16,7 @@ const STEPS = {
   BASIC_INFO: 'basic_info',
   ROLE_BUILDER: 'role_builder',
   PERMISSIONS: 'permissions',
+  FEATURES: 'features',
   REVIEW: 'review',
   SCORECARD: 'scorecard',
   ACTIVATION: 'activation'
@@ -24,6 +26,7 @@ const STEP_ORDER = [
   STEPS.BASIC_INFO,
   STEPS.ROLE_BUILDER,
   STEPS.PERMISSIONS,
+  STEPS.FEATURES,
   STEPS.REVIEW,
   STEPS.SCORECARD,
   STEPS.ACTIVATION
@@ -33,6 +36,7 @@ const STEP_LABELS = {
   [STEPS.BASIC_INFO]: 'Basic Info',
   [STEPS.ROLE_BUILDER]: 'Role Builder',
   [STEPS.PERMISSIONS]: 'Permissions',
+  [STEPS.FEATURES]: 'Features',
   [STEPS.REVIEW]: 'Review',
   [STEPS.SCORECARD]: 'Scorecard',
   [STEPS.ACTIVATION]: 'Activation'
@@ -76,6 +80,8 @@ function UserCreationWizard() {
     // Stage-based permissions
     stages: [],
     features: {},
+    // Feature Selection - enabled feature keys
+    selected_features: [],
     // Generated data
     scorecard: null,
     created_user_id: null,
@@ -555,6 +561,38 @@ function UserCreationWizard() {
     );
   };
 
+  const renderFeatures = () => {
+    const handleFeaturesChange = (selectedFeatureKeys) => {
+      updateFormData({ selected_features: selectedFeatureKeys });
+    };
+
+    return (
+      <div className="wizard-content">
+        <h2>Feature Access</h2>
+        <p className="step-description">Select which platform features this user will have access to.</p>
+
+        <FeatureSelection
+          companyId={1}
+          selectedFeatures={formData.selected_features}
+          onFeaturesChange={handleFeaturesChange}
+          showPricing={false}
+        />
+
+        <div className="wizard-actions">
+          <button className="btn-secondary" onClick={prevStep}>
+            Back
+          </button>
+          <button
+            className="btn-primary"
+            onClick={nextStep}
+          >
+            Continue
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   const renderReview = () => {
     const selectedRole = roles.find(r => r.id === formData.role_id);
     const selectedTemplate = permissionTemplates.find(t => t.id === formData.permission_template_id);
@@ -790,6 +828,7 @@ function UserCreationWizard() {
               selected_responsibilities: [],
               permission_template_id: null,
               custom_permissions: {},
+              selected_features: [],
               scorecard: null,
               created_user_id: null,
               activation_token: null
@@ -810,6 +849,8 @@ function UserCreationWizard() {
         return renderRoleBuilder();
       case STEPS.PERMISSIONS:
         return renderPermissions();
+      case STEPS.FEATURES:
+        return renderFeatures();
       case STEPS.REVIEW:
         return renderReview();
       case STEPS.SCORECARD:
