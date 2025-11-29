@@ -464,6 +464,67 @@ async def list_verified_caller_ids(
     return {"caller_ids": caller_ids}
 
 
+@router.post("/check-verification/{phone_number}")
+async def check_verification_status(
+    phone_number: str,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Check and update verification status for a caller ID"""
+    from main import VerifiedCallerId
+
+    # Normalize phone number
+    normalized = phone_number.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+    if not normalized.startswith("+"):
+        normalized = "+1" + normalized.lstrip("1")
+
+    # Check with Twilio
+    provider = get_telephony_provider()
+    result = provider.check_caller_id_verification(normalized)
+
+    if result.get("verified"):
+        # Update our record
+        caller_id = db.query(VerifiedCallerId).filter(
+            VerifiedCallerId.user_id == current_user.id,
+            VerifiedCallerId.phone_number == normalized
+        ).first()
+
+        if caller_id:
+            caller_id.verification_status = "verified"
+            caller_id.twilio_sid = result.get("sid")
+            db.commit()
+            return {
+                "success": True,
+                "verified": True,
+                "phone_number": normalized,
+                "message": "Caller ID verified successfully!"
+            }
+        else:
+            # Create new verified record if not exists
+            new_caller_id = VerifiedCallerId(
+                user_id=current_user.id,
+                phone_number=normalized,
+                friendly_name=result.get("friendly_name", "Verified Number"),
+                twilio_sid=result.get("sid"),
+                verification_status="verified"
+            )
+            db.add(new_caller_id)
+            db.commit()
+            return {
+                "success": True,
+                "verified": True,
+                "phone_number": normalized,
+                "message": "Caller ID verified and saved!"
+            }
+
+    return {
+        "success": True,
+        "verified": False,
+        "phone_number": normalized,
+        "message": "Verification not yet complete. Please answer the call from Twilio and enter the validation code."
+    }
+
+
 # =============================================================================
 # Click-to-Dial
 # =============================================================================

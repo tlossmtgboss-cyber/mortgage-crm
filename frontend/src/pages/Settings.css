@@ -3438,11 +3438,38 @@ textarea.text-input {
   white-space: nowrap;
 }
 
+.dialer-settings-section .verify-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.dialer-settings-section .verify-buttons .btn-secondary {
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+}
+
+.dialer-settings-section .verify-buttons .btn-secondary:hover:not(:disabled) {
+  background: #e5e7eb;
+}
+
+.dialer-settings-section .verify-buttons .btn-secondary:disabled {
+  background: #f9fafb;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
 .dialer-settings-section .verify-caller-id > small {
   display: block;
   margin-top: 12px;
   font-size: 12px;
-  color: #888;
+  color: #666;
+  line-height: 1.6;
+}
+
+.dialer-settings-section .verify-caller-id > small strong {
+  color: #374151;
 }
 
 .dialer-settings-section .settings-actions {

@@ -146,13 +146,18 @@ const PowerDialer = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setSession({ session_id: data.session_id, ...data });
-        setSelectedTasks([]);
-        // Get first task
-        await getNextTask(data.session_id);
+        if (data.success) {
+          setSession({ session_id: data.session_id, ...data });
+          setSelectedTasks([]);
+          // Get first task
+          await getNextTask(data.session_id);
+        } else {
+          // Backend returned success: false with an error message
+          setError(data.error || 'Failed to start session');
+        }
       } else {
         const err = await response.json();
-        setError(err.detail || 'Failed to start session');
+        setError(err.detail || err.error || 'Failed to start session');
       }
     } catch (err) {
       setError('Error starting session: ' + err.message);

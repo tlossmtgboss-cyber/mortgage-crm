@@ -68,7 +68,8 @@ const DialerSettingsSection = () => {
       });
       if (response.ok) {
         const data = await response.json();
-        setVerifiedCallerIds(Array.isArray(data) ? data : []);
+        // API returns { caller_ids: [...] }
+        setVerifiedCallerIds(data.caller_ids || []);
       }
     } catch (err) {
       console.error('Error fetching verified caller IDs:', err);
@@ -119,17 +120,45 @@ const DialerSettingsSection = () => {
       if (data.success) {
         setMessage({
           type: 'success',
-          text: `Verification call initiated! Enter code: ${data.validation_code} when you receive the call.`
+          text: `Verification call initiated! Enter code: ${data.validation_code} when you receive the call. After completing the call, click "Check Verification Status".`
         });
-        setVerifyPhone('');
+        // Don't clear phone - user may need to check verification
         setVerifyName('');
-        // Refresh caller IDs after a delay
-        setTimeout(fetchVerifiedCallerIds, 30000);
       } else {
         setMessage({ type: 'error', text: data.error || 'Failed to start verification' });
       }
     } catch (err) {
       setMessage({ type: 'error', text: 'Error starting verification: ' + err.message });
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const checkVerification = async () => {
+    if (!verifyPhone) {
+      setMessage({ type: 'error', text: 'Please enter a phone number to check' });
+      return;
+    }
+
+    setVerifying(true);
+    setMessage(null);
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/dialer/check-verification/${encodeURIComponent(verifyPhone)}`, {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
+
+      const data = await response.json();
+      if (data.verified) {
+        setMessage({ type: 'success', text: data.message });
+        setVerifyPhone('');
+        // Refresh the caller IDs list
+        await fetchVerifiedCallerIds();
+      } else {
+        setMessage({ type: 'warning', text: data.message });
+      }
+    } catch (err) {
+      setMessage({ type: 'error', text: 'Error checking verification: ' + err.message });
     } finally {
       setVerifying(false);
     }
@@ -199,16 +228,27 @@ const DialerSettingsSection = () => {
               onChange={(e) => setVerifyName(e.target.value)}
               placeholder="Display Name (e.g., Your Company)"
             />
-            <button
-              onClick={startVerification}
-              disabled={verifying}
-              className="btn-primary"
-            >
-              {verifying ? 'Calling...' : 'Verify Number'}
-            </button>
+            <div className="verify-buttons">
+              <button
+                onClick={startVerification}
+                disabled={verifying}
+                className="btn-primary"
+              >
+                {verifying ? 'Processing...' : 'Start Verification'}
+              </button>
+              <button
+                onClick={checkVerification}
+                disabled={verifying || !verifyPhone}
+                className="btn-secondary"
+              >
+                Check Status
+              </button>
+            </div>
           </div>
           <small>
-            Twilio will call this number with a verification code. Enter the code when prompted.
+            <strong>Step 1:</strong> Enter your phone number and click "Start Verification". Twilio will call you with a code.<br />
+            <strong>Step 2:</strong> Answer the call and enter the code when prompted.<br />
+            <strong>Step 3:</strong> Click "Check Status" to confirm verification is complete.
           </small>
         </div>
       </div>
