@@ -3644,6 +3644,8 @@ class ReconciliationApproval(BaseModel):
     extracted_data_id: int
     approved_fields: Optional[Dict[str, Any]] = None  # If partial approval
     corrections: Optional[Dict[str, Any]] = None  # If user corrected values
+    deleted_fields: Optional[List[str]] = None  # Fields user wants to delete/ignore
+    renamed_fields: Optional[Dict[str, str]] = None  # Field renames { old_key: new_key }
     delegate_to_ai: Optional[bool] = False  # If user wants AI to handle this task type in future
     email_intent: Optional[str] = None  # Email intent type (for AI delegation)
     recommended_action: Optional[Dict[str, Any]] = None  # Recommended action details
@@ -14980,6 +14982,42 @@ async def approve_reconciliation(
                     # Update field value
                     extracted.fields[field_name]["value"] = corrected_value
                     extracted.fields[field_name]["confidence"] = 1.0  # User-verified
+
+        # Apply field deletions if provided
+        if approval.deleted_fields:
+            for field_name in approval.deleted_fields:
+                if field_name in extracted.fields:
+                    # Create training event for deletion
+                    training = AITrainingEvent(
+                        extracted_data_id=extracted.id,
+                        field_name=field_name,
+                        original_value=str(extracted.fields[field_name].get("value", "")),
+                        corrected_value="[DELETED]",
+                        label="deleted",
+                        user_id=current_user.id
+                    )
+                    db.add(training)
+                    # Remove field from extracted data
+                    del extracted.fields[field_name]
+                    logger.info(f"Deleted field {field_name} from extracted data {extracted.id}")
+
+        # Apply field renames if provided
+        if approval.renamed_fields:
+            for old_key, new_key in approval.renamed_fields.items():
+                if old_key in extracted.fields:
+                    # Create training event for rename
+                    training = AITrainingEvent(
+                        extracted_data_id=extracted.id,
+                        field_name=old_key,
+                        original_value=old_key,
+                        corrected_value=new_key,
+                        label="renamed",
+                        user_id=current_user.id
+                    )
+                    db.add(training)
+                    # Move field to new key
+                    extracted.fields[new_key] = extracted.fields.pop(old_key)
+                    logger.info(f"Renamed field {old_key} -> {new_key} in extracted data {extracted.id}")
 
         # Apply partial approval if specified
         if approval.approved_fields:
