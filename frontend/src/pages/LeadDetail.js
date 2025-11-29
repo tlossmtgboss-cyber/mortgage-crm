@@ -413,7 +413,7 @@ function LeadDetail() {
   };
 
   // Search contacts for CC autocomplete
-  const searchContacts = async (query) => {
+  const searchCcContacts = async (query) => {
     if (!query || query.length < 2) {
       setCcSearchResults([]);
       return;
@@ -2458,7 +2458,7 @@ function LeadDetail() {
                   value={ccSearchQuery}
                   onChange={(e) => {
                     setCcSearchQuery(e.target.value);
-                    searchContacts(e.target.value);
+                    searchCcContacts(e.target.value);
                   }}
                   placeholder="Search contacts to add CC..."
                   style={{
