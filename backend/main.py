@@ -14675,6 +14675,10 @@ async def get_pending_reconciliation(
                     item.fields
                 )
 
+            # Re-run matching to get fresh candidates for display
+            # This ensures newly created loans/leads are found
+            fresh_matches = match_entity(item.fields or {}, db, current_user.id)
+
             results.append({
                 "id": item.id,
                 "event_id": item.event_id,
@@ -14700,7 +14704,8 @@ async def get_pending_reconciliation(
                 },
                 "email_intent": email_intent.get("intent"),
                 "email_intent_description": email_intent.get("description"),
-                "recommended_action": recommended_action
+                "recommended_action": recommended_action,
+                "matches": fresh_matches  # Include fresh match candidates
             })
 
         logger.info(f"Retrieved {len(results)} pending reconciliation items for user {current_user.id}")
