@@ -963,7 +963,7 @@ async def generate_tasks_for_pipeline(
 
                 db.execute(text("""
                     INSERT INTO ai_tasks (title, description, priority, type, lead_id, assigned_to_id, due_date, created_at, updated_at)
-                    VALUES (:title, :description, :priority, 'In Progress'::tasktype, :lead_id, :owner_id, :due_date, NOW(), NOW())
+                    VALUES (:title, :description, :priority, 'IN_PROGRESS'::tasktype, :lead_id, :owner_id, :due_date, NOW(), NOW())
                     ON CONFLICT DO NOTHING
                 """), {
                     "title": f"{title} - {lead_name}",
@@ -996,7 +996,7 @@ async def generate_tasks_for_pipeline(
 
                 db.execute(text("""
                     INSERT INTO ai_tasks (title, description, priority, type, loan_id, assigned_to_id, borrower_name, due_date, created_at, updated_at)
-                    VALUES (:title, :description, :priority, 'In Progress'::tasktype, :loan_id, :owner_id, :borrower_name, :due_date, NOW(), NOW())
+                    VALUES (:title, :description, :priority, 'IN_PROGRESS'::tasktype, :loan_id, :owner_id, :borrower_name, :due_date, NOW(), NOW())
                     ON CONFLICT DO NOTHING
                 """), {
                     "title": f"{title} - {borrower_name or loan_number}",
