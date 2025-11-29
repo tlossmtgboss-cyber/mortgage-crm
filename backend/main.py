@@ -27750,7 +27750,8 @@ async def start_email_oauth(current_user: User = Depends(get_current_user)):
     # Store user ID in state parameter to retrieve after callback
     state = f"{current_user.id}_{secrets.token_urlsafe(32)}"
 
-    # Microsoft authorization endpoint - prompt=select_account forces account picker
+    # Microsoft authorization endpoint - prompt=login forces full re-authentication
+    # Also add login_hint="" to prevent auto-fill of previous account
     auth_url = (
         f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/authorize?"
         f"client_id={client_id}&"
@@ -27759,7 +27760,7 @@ async def start_email_oauth(current_user: User = Depends(get_current_user)):
         f"response_mode=query&"
         f"scope=offline_access%20Mail.Read%20Mail.ReadWrite%20User.Read&"
         f"state={state}&"
-        f"prompt=select_account"
+        f"prompt=login"
     )
 
     return {
