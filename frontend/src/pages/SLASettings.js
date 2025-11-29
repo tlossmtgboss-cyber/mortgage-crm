@@ -47,8 +47,8 @@ const SLASettings = () => {
         setAlerts(alertsData);
       }
 
-      // Fetch measures
-      const measuresRes = await fetch(`${API_BASE_URL}/api/v1/sla/measures`, { headers });
+      // Fetch measures (including inactive ones so they can be reactivated)
+      const measuresRes = await fetch(`${API_BASE_URL}/api/v1/sla/measures?active_only=false`, { headers });
       if (measuresRes.ok) {
         const measuresData = await measuresRes.json();
         setMeasures(measuresData);
@@ -174,6 +174,39 @@ const SLASettings = () => {
       fetchDashboard();
     } catch (err) {
       console.error('Error saving measure:', err);
+    }
+  };
+
+  const toggleMeasureActive = async (measureId, newActiveState) => {
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(`${API_BASE_URL}/api/v1/sla/measures/${measureId}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ is_active: newActiveState })
+      });
+      fetchDashboard();
+    } catch (err) {
+      console.error('Error toggling measure active state:', err);
+    }
+  };
+
+  const deleteMeasure = async (measureId) => {
+    try {
+      const token = localStorage.getItem('token');
+      await fetch(`${API_BASE_URL}/api/v1/sla/measures/${measureId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      fetchDashboard();
+    } catch (err) {
+      console.error('Error deleting measure:', err);
     }
   };
 
@@ -492,22 +525,58 @@ const SLASettings = () => {
                       </div>
                     </td>
                     <td>
-                      <button
-                        onClick={() => {
-                          setEditingMeasure(measure);
-                          setShowEditModal(true);
-                        }}
-                        style={{
-                          padding: '6px 12px',
-                          background: '#f3f4f6',
-                          border: 'none',
-                          borderRadius: '4px',
-                          cursor: 'pointer',
-                          fontSize: '13px'
-                        }}
-                      >
-                        Edit
-                      </button>
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                        <button
+                          onClick={() => {
+                            setEditingMeasure(measure);
+                            setShowEditModal(true);
+                          }}
+                          style={{
+                            padding: '6px 12px',
+                            background: '#f3f4f6',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '13px'
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => toggleMeasureActive(measure.id, !measure.is_active)}
+                          style={{
+                            padding: '6px 12px',
+                            background: measure.is_active ? '#fef3c7' : '#d1fae5',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '13px',
+                            color: measure.is_active ? '#92400e' : '#065f46'
+                          }}
+                          title={measure.is_active ? 'Deactivate this measure' : 'Activate this measure'}
+                        >
+                          {measure.is_active ? 'Deactivate' : 'Activate'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (window.confirm(`Are you sure you want to delete "${measure.name}"? This action cannot be undone.`)) {
+                              deleteMeasure(measure.id);
+                            }
+                          }}
+                          style={{
+                            padding: '6px 12px',
+                            background: '#fee2e2',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            fontSize: '13px',
+                            color: '#991b1b'
+                          }}
+                          title="Delete this measure"
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
