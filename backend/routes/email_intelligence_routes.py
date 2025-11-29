@@ -2087,25 +2087,38 @@ class ConversationIntelligenceService:
                 logger.error(f"Failed to create task: {e}")
                 result["errors"].append(f"Task creation failed: {str(e)}")
 
-        # Update email status
-        self.db.execute(text("""
-            UPDATE email_reconciliation_queue
-            SET disposition = :disposition,
-                status = 'processed',
-                processed_by = :user_id,
-                processed_at = :processed_at,
-                processing_notes = :notes,
-                updated_at = :updated_at
-            WHERE id = :email_id
-        """), {
-            "disposition": disposition,
-            "user_id": user_id,
-            "processed_at": datetime.now(timezone.utc),
-            "notes": additional_notes,
-            "updated_at": datetime.now(timezone.utc),
-            "email_id": email_id
-        })
-        self.db.commit()
+        # Update email status - handle potential transaction failures
+        try:
+            self.db.rollback()  # Clear any failed transaction state
+        except:
+            pass
+
+        try:
+            self.db.execute(text("""
+                UPDATE email_reconciliation_queue
+                SET disposition = :disposition,
+                    status = 'processed',
+                    processed_by = :user_id,
+                    processed_at = :processed_at,
+                    processing_notes = :notes,
+                    updated_at = :updated_at
+                WHERE id = :email_id
+            """), {
+                "disposition": disposition,
+                "user_id": user_id,
+                "processed_at": datetime.now(timezone.utc),
+                "notes": additional_notes,
+                "updated_at": datetime.now(timezone.utc),
+                "email_id": email_id
+            })
+            self.db.commit()
+        except Exception as e:
+            logger.error(f"Failed to update email status: {e}")
+            result["errors"].append(f"Status update failed: {str(e)}")
+            try:
+                self.db.rollback()
+            except:
+                pass
 
         return result
 
