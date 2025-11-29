@@ -18,7 +18,7 @@
   margin-bottom: var(--space-xl);
   padding-bottom: var(--space-md);
   border-bottom: 1px solid var(--color-border-light);
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: var(--space-lg);
 }
 
@@ -40,6 +40,8 @@
   flex-direction: column;
   gap: 10px;
   align-items: flex-end;
+  position: relative;
+  flex-shrink: 0;
 }
 
 .sync-button {
@@ -91,11 +93,17 @@
 }
 
 .sync-status {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
   padding: 8px 16px;
   border-radius: 6px;
   font-size: 13px;
   font-weight: 500;
   animation: slideIn 0.3s ease;
+  white-space: nowrap;
+  z-index: 10;
 }
 
 .sync-status.success {
