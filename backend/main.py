@@ -12407,7 +12407,7 @@ except Exception as e:
 try:
     from routes.ai_feedback_routes import router as ai_feedback_router
     from routes import ai_feedback_routes
-    ai_feedback_routes.set_dependencies(get_db, get_current_active_user)
+    ai_feedback_routes.set_dependencies(get_db, get_current_user)
     ai_feedback_routes.ensure_tables_exist(engine)
     app.include_router(ai_feedback_router, prefix="/api/v1/ai-feedback", tags=["AI Feedback"])
     logger.info("✅ AI Feedback routes loaded")
