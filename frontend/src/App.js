@@ -85,6 +85,7 @@ const MeetingRoom = lazy(() => import('./pages/MeetingRoom'));
 const OAuthCallback = lazy(() => import('./pages/OAuthCallback'));
 const WorkflowStatusDetail = lazy(() => import('./pages/WorkflowStatusDetail'));
 const EmailIntelligence = lazy(() => import('./pages/EmailIntelligence'));
+const CommunicationIntelligence = lazy(() => import('./pages/CommunicationIntelligence'));
 
 // Simple loading component
 const PageLoader = () => (
@@ -1194,6 +1195,28 @@ function App() {
             }
           />
           <Route
+            path="/communication-intelligence"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><CommunicationIntelligence /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
             path="/email-intelligence"
             element={
               <PrivateRoute>
@@ -1208,7 +1231,7 @@ function App() {
                     taskCounts={taskCounts}
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <LazyPage><EmailIntelligence /></LazyPage>
+                    <LazyPage><CommunicationIntelligence /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>

@@ -77,10 +77,10 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
             Reconciliation {renderBadge(taskCounts.reconciliation)}
           </Link>
           <Link
-            to="/email-intelligence"
-            className={`nav-link ${isActive('/email-intelligence') ? 'active' : ''}`}
+            to="/communication-intelligence"
+            className={`nav-link ${isActive('/communication-intelligence') || isActive('/email-intelligence') ? 'active' : ''}`}
           >
-            Email Intel
+            Comm Intel
           </Link>
           <Link
             to="/calendar"
