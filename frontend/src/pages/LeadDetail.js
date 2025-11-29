@@ -47,6 +47,7 @@ function LeadDetail() {
   const [lead, setLead] = useState(null);
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [editing, setEditing] = useState(true); // Always in edit mode
   const [formData, setFormData] = useState({});
   const [emails, setEmails] = useState([]);
@@ -982,6 +983,31 @@ function LeadDetail() {
     return (
       <div className="lead-detail-page">
         <div className="loading">Loading lead details...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="lead-detail-page">
+        <div className="error-container" style={{ padding: '40px', textAlign: 'center' }}>
+          <h2 style={{ color: '#ef4444', marginBottom: '16px' }}>Error Loading Lead</h2>
+          <p style={{ color: '#6b7280', marginBottom: '24px' }}>{error}</p>
+          <button
+            onClick={() => navigate('/leads')}
+            style={{
+              padding: '12px 24px',
+              backgroundColor: '#3b82f6',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            ← Back to Leads
+          </button>
+        </div>
       </div>
     );
   }
