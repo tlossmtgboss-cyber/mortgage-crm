@@ -8269,22 +8269,40 @@ async def orchestrator_chat_stream(
     tasks_overdue = [t for t in all_tasks if t.due_date and t.due_date.date() < today and t.status != "completed"]
     outstanding_tasks = [t for t in all_tasks if t.status != "completed"]
 
-    # Helper to format task details
+    # Helper to format task details - ALWAYS include client name
     def format_task(task):
         parts = [f"**{task.title}**"]
         if task.priority:
             parts.append(f"Priority: {task.priority.title()}")
         if task.due_date:
             parts.append(f"Due: {task.due_date.strftime('%m/%d/%Y')}")
-        # Get related loan/lead info
+
+        # Get related loan/lead info - try multiple sources for client name
+        client_name = None
+        loan_amount = None
+
         if task.loan_id:
             loan = next((l for l in all_loans if l.id == task.loan_id), None)
             if loan:
-                parts.append(f"FOR: {loan.borrower_name} (${loan.amount:,.0f})" if loan.amount else f"FOR: {loan.borrower_name}")
-        elif task.lead_id:
+                client_name = loan.borrower_name
+                loan_amount = loan.amount
+
+        if not client_name and task.lead_id:
             lead = next((l for l in all_leads if l.id == task.lead_id), None)
             if lead:
-                parts.append(f"FOR: {lead.name}")
+                client_name = lead.name
+
+        # Fallback to related_contact_name if no loan/lead association
+        if not client_name and hasattr(task, 'related_contact_name') and task.related_contact_name:
+            client_name = task.related_contact_name
+
+        # Add client name to the task description
+        if client_name:
+            if loan_amount:
+                parts.append(f"FOR: {client_name} (${loan_amount:,.0f})")
+            else:
+                parts.append(f"FOR: {client_name}")
+
         return " | ".join(parts)
 
     # Format stage name
@@ -8374,18 +8392,21 @@ You are providing a detailed, actionable daily briefing. Be CONVERSATIONAL and H
 
 CRITICAL RULES:
 - **NEVER INVENT OR MAKE UP TASKS** - Only reference tasks that exist in the data above
+- **ALWAYS INCLUDE THE CLIENT/BORROWER NAME** - Every task MUST specify WHO it's for
 - The user has EXACTLY {len(tasks_overdue)} OVERDUE tasks
 - The user has EXACTLY {len(outstanding_tasks)} total outstanding tasks
 - The user has {len(all_leads)} leads and {len(all_loans)} active loans
+- Look for "FOR:" in the task data to find the client name - if a task has "FOR: John Smith" include that name
 
 {'**NO DATA FOUND - Tell the user they have no outstanding tasks and offer to help them add a new lead or import data.**' if not has_real_data else ''}
 
 OUTPUT FORMAT (be conversational, not robotic):
 1. Start with a friendly greeting and summary: "Good morning! Here's your priority breakdown for today..."
 2. If overdue tasks exist, HIGHLIGHT them first with urgency
-3. List each task with FULL CONTEXT (borrower name, loan amount, what needs to be done)
-4. End with a clear action recommendation: "I'd suggest starting with [X] because [reason]"
-5. Be encouraging and actionable, not just a data dump
+3. **EVERY task MUST include the client/borrower name** - e.g., "Follow up with **Sarah Johnson**" not just "Follow up"
+4. Include loan amounts when available: "$450,000 loan in Processing"
+5. End with a clear action recommendation: "I'd suggest starting with [X] because [reason]"
+6. Be encouraging and actionable, not just a data dump
 
 Example good response:
 "Good morning! You have 3 outstanding tasks that need attention today.
