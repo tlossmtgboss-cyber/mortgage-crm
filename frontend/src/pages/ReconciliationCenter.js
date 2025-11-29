@@ -5,10 +5,14 @@ import './ReconciliationCenter.css';
 
 function ReconciliationCenter() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('pending'); // 'pending', 'pendingReview', or 'completed'
-  const [pendingItems, setPendingItems] = useState([]);
-  const [pendingReviewItems, setPendingReviewItems] = useState([]);
+  const [activeTab, setActiveTab] = useState('new'); // 'new', 'autoProcessing', 'pendingReview', or 'completed'
+  const [newItems, setNewItems] = useState([]); // Fresh unprocessed messages
+  const [autoProcessingItems, setAutoProcessingItems] = useState([]); // AI handles automatically
+  const [pendingReviewItems, setPendingReviewItems] = useState([]); // AI completed, user verifies
   const [completedItems, setCompletedItems] = useState([]);
+  // Legacy alias for backwards compatibility
+  const pendingItems = autoProcessingItems;
+  const setPendingItems = setAutoProcessingItems;
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState(null);
   const [editedFields, setEditedFields] = useState({});
@@ -24,6 +28,7 @@ function ReconciliationCenter() {
   const [bulkProcessing, setBulkProcessing] = useState(false);
   const [approvalProgress, setApprovalProgress] = useState({ approved: 0, total: 20 });
   const [delegateToAI, setDelegateToAI] = useState(false);
+  const [allowAutoProcess, setAllowAutoProcess] = useState(false); // Checkbox for "Allow AI to auto-process similar messages"
 
   // No-match dialog state
   const [showNoMatchDialog, setShowNoMatchDialog] = useState(false);
@@ -250,30 +255,45 @@ function ReconciliationCenter() {
         const data = await response.json();
         const allItems = data.items || [];
 
-        // Split items: high confidence goes to auto-processing, low confidence needs review
+        // Split items into three categories:
+        // 1. New - Fresh unprocessed messages (not yet touched by AI auto-processing rules)
+        // 2. Auto-Processing - AI handles automatically (user approved similar messages before)
+        // 3. Pending Review - AI completed the work, user needs to verify and deploy
+        const newMessages = [];
         const autoProcess = [];
         const needsReview = [];
 
         allItems.forEach(item => {
-          // Items with low confidence or specific flags go to pending review
-          if (item.ai_confidence < 0.75 || item.match_confidence < 0.65 || item.status === 'needs_review') {
+          const enrichedItem = {
+            ...item,
+            email_subject: item.email?.subject,
+            email_from: item.email?.sender,
+            email_received_at: item.email?.received_at,
+            email_body: item.email?.body || item.email?.text_content || item.email?.html_content
+          };
+
+          // Check if AI has auto-processing rule for this type
+          if (item.auto_process_enabled || item.status === 'auto_processing') {
+            // AI is handling this automatically
+            autoProcess.push(enrichedItem);
+          } else if (item.ai_completed || item.status === 'ai_completed' || item.status === 'pending_review') {
+            // AI completed the work, waiting for user verification
             needsReview.push({
-              ...item,
+              ...enrichedItem,
               needs_human_review: true,
-              review_reason: item.ai_confidence < 0.75 ? 'Low AI confidence' :
+              review_reason: item.review_reason ||
+                            (item.ai_confidence < 0.75 ? 'Low AI confidence' :
                             item.match_confidence < 0.65 ? 'Low match confidence' :
-                            'Flagged for review',
-              email_subject: item.email?.subject,
-              email_from: item.email?.sender,
-              email_received_at: item.email?.received_at,
-              email_body: item.email?.body || item.email?.text_content || item.email?.html_content
+                            'AI completed - ready for review')
             });
           } else {
-            autoProcess.push(item);
+            // Fresh new message - not yet processed
+            newMessages.push(enrichedItem);
           }
         });
 
-        setPendingItems(autoProcess);
+        setNewItems(newMessages);
+        setAutoProcessingItems(autoProcess);
         setPendingReviewItems(needsReview);
       }
     } catch (error) {
@@ -497,6 +517,7 @@ function ReconciliationCenter() {
         deleted_fields: deletedFieldsList,
         renamed_fields: renamedFieldsObj,
         delegate_to_ai: delegateToAI,
+        allow_auto_process: allowAutoProcess, // Skip review for similar messages
         email_intent: selectedItem?.email_intent,
         recommended_action: selectedItem?.recommended_action
       };
@@ -542,7 +563,8 @@ function ReconciliationCenter() {
         setShowAppliedDataModal(true);
 
         // Remove from list and reset
-        setPendingItems(prev => prev.filter(item => item.id !== itemId));
+        setNewItems(prev => prev.filter(item => item.id !== itemId));
+        setAutoProcessingItems(prev => prev.filter(item => item.id !== itemId));
         setPendingReviewItems(prev => prev.filter(item => item.id !== itemId));
         setSelectedItem(null);
         setEditedFields({});
@@ -550,6 +572,7 @@ function ReconciliationCenter() {
         setRenamedFields({});
         setEditingFieldKey(null);
         setDelegateToAI(false);
+        setAllowAutoProcess(false);
         setSelectedEntityType(null);
         setCreateNewLoan(false);
         setStatusCorrectionData(null);
@@ -814,6 +837,9 @@ function ReconciliationCenter() {
     setSelectedEntityType(null);
     setCreateNewLoan(false);
     setSelectedLoanStage('UW_RECEIVED');
+    // Reset AI delegation checkboxes
+    setDelegateToAI(false);
+    setAllowAutoProcess(false);
   };
 
   const toggleItemSelection = (itemId) => {
@@ -1121,10 +1147,16 @@ function ReconciliationCenter() {
             {/* Tab Navigation */}
             <div className="tab-navigation">
               <button
-                className={`tab-button ${activeTab === 'pending' ? 'active' : ''}`}
-                onClick={() => setActiveTab('pending')}
+                className={`tab-button ${activeTab === 'new' ? 'active' : ''}`}
+                onClick={() => setActiveTab('new')}
               >
-                Auto-Processing ({pendingItems.length})
+                New ({newItems.length})
+              </button>
+              <button
+                className={`tab-button ${activeTab === 'autoProcessing' ? 'active' : ''}`}
+                onClick={() => setActiveTab('autoProcessing')}
+              >
+                Auto-Processing ({autoProcessingItems.length})
               </button>
               <button
                 className={`tab-button ${activeTab === 'pendingReview' ? 'active' : ''}`}
@@ -1171,14 +1203,292 @@ function ReconciliationCenter() {
           </div>
         </div>
 
-        {/* Bulk Actions Bar - only show for pending tab */}
-        {activeTab === 'pending' && pendingItems.length > 0 && (
+        {/* New Tab Content */}
+        {activeTab === 'new' && newItems.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-icon">📬</div>
+            <h2>No New Messages</h2>
+            <p>New emails will appear here for processing. Click "Sync Emails Now" to check for new messages.</p>
+          </div>
+        ) : activeTab === 'new' && newItems.length > 0 ? (
+          <div className="reconciliation-content">
+            {/* New Items List */}
+            <div className="items-list">
+              {newItems.map((item) => (
+                <div
+                  key={item.id}
+                  className={`reconciliation-item ${selectedItem?.id === item.id ? 'selected' : ''}`}
+                  onClick={() => handleSelectItem(item)}
+                >
+                  <div className="item-content">
+                    <div className="item-header">
+                      <div className="item-category">
+                        {item.category?.toUpperCase() || item.email_intent || 'NEW'}
+                      </div>
+                      <div className="status-badge new-badge">
+                        NEW
+                      </div>
+                    </div>
+                    <div className="item-subject">{item.email_subject || item.email?.subject}</div>
+                    <div className="item-meta">
+                      <span className="meta-sender">From: {item.email_from || item.email?.sender}</span>
+                      <span className="meta-date">
+                        {new Date(item.email_received_at || item.email?.received_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                    {item.email_body && (
+                      <div className="item-body-preview">
+                        {(() => {
+                          const cleaned = cleanEmailPreview(item.email_body);
+                          return cleaned.length > 120 ? cleaned.substring(0, 120) + '...' : cleaned;
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Detail Panel for New Items */}
+            {selectedItem && (
+              <div className="item-detail-panel">
+                <div className="detail-header">
+                  <div className="detail-title-section">
+                    <div className="detail-source">
+                      <span className="source-icon-large">📬</span>
+                      <span className="source-name">NEW MESSAGE</span>
+                    </div>
+                    <h2 className="detail-title">{selectedItem.email_intent || 'New Email'}</h2>
+                  </div>
+                  <button className="close-detail" onClick={() => setSelectedItem(null)}>×</button>
+                </div>
+
+                <div className="detail-body">
+                  <div className="detail-info-grid">
+                    <div className="detail-info-item">
+                      <span className="detail-label">FROM</span>
+                      <span className="detail-value">{selectedItem.email_from || selectedItem.email?.sender}</span>
+                    </div>
+                    <div className="detail-info-item">
+                      <span className="detail-label">SUBJECT</span>
+                      <span className="detail-value">{selectedItem.email_subject || selectedItem.email?.subject}</span>
+                    </div>
+                    <div className="detail-info-item">
+                      <span className="detail-label">RECEIVED</span>
+                      <span className="detail-value">
+                        {new Date(selectedItem.email_received_at || selectedItem.email?.received_at).toLocaleString()}
+                      </span>
+                    </div>
+                    <div className="detail-info-item">
+                      <span className="detail-label">STATUS</span>
+                      <span className="detail-value">Awaiting Processing</span>
+                    </div>
+                  </div>
+
+                  {/* Entity Type Selection Section */}
+                  <div className="entity-type-selection" style={{ marginBottom: '20px', padding: '15px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                    <h3 style={{ margin: '0 0 15px 0', fontSize: '14px', fontWeight: '600', color: '#374151' }}>
+                      Where should this data go?
+                    </h3>
+                    <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+                      <button
+                        onClick={() => { setSelectedEntityType('loan'); setCreateNewLoan(false); }}
+                        style={{
+                          flex: 1,
+                          padding: '12px',
+                          border: selectedEntityType === 'loan' ? '2px solid #3b82f6' : '1px solid #e5e7eb',
+                          borderRadius: '8px',
+                          background: selectedEntityType === 'loan' ? '#eff6ff' : 'white',
+                          cursor: 'pointer',
+                          fontWeight: selectedEntityType === 'loan' ? '600' : '400'
+                        }}
+                      >
+                        Active Loan
+                        <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
+                          {selectedItem.match_entity_type === 'loan' && selectedItem.match_entity_name ?
+                            `Match: ${selectedItem.match_entity_name}` : 'No match found'}
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => { setSelectedEntityType('lead'); setCreateNewLoan(false); }}
+                        style={{
+                          flex: 1,
+                          padding: '12px',
+                          border: selectedEntityType === 'lead' ? '2px solid #10b981' : '1px solid #e5e7eb',
+                          borderRadius: '8px',
+                          background: selectedEntityType === 'lead' ? '#ecfdf5' : 'white',
+                          cursor: 'pointer',
+                          fontWeight: selectedEntityType === 'lead' ? '600' : '400'
+                        }}
+                      >
+                        Lead
+                        <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
+                          {selectedItem.match_entity_type === 'lead' && selectedItem.match_entity_name ?
+                            `Match: ${selectedItem.match_entity_name}` : 'No match found'}
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => { setCreateNewLoan(true); setSelectedEntityType('loan'); }}
+                        style={{
+                          flex: 1,
+                          padding: '12px',
+                          border: createNewLoan ? '2px solid #8b5cf6' : '1px solid #e5e7eb',
+                          borderRadius: '8px',
+                          background: createNewLoan ? '#f5f3ff' : 'white',
+                          cursor: 'pointer',
+                          fontWeight: createNewLoan ? '600' : '400'
+                        }}
+                      >
+                        + Create New Loan
+                        <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
+                          {selectedItem.fields?.loan_number?.value || 'Add to pipeline'}
+                        </div>
+                      </button>
+                    </div>
+
+                    {/* Loan Stage Selector - shows when creating new loan */}
+                    {createNewLoan && (
+                      <div style={{ marginTop: '15px', padding: '12px', background: 'white', borderRadius: '6px', border: '1px solid #e5e7eb' }}>
+                        <label style={{ display: 'block', marginBottom: '8px', fontWeight: '500', color: '#374151' }}>
+                          Select Loan Stage:
+                        </label>
+                        <select
+                          value={selectedLoanStage}
+                          onChange={(e) => setSelectedLoanStage(e.target.value)}
+                          style={{
+                            width: '100%',
+                            padding: '10px',
+                            border: '1px solid #d1d5db',
+                            borderRadius: '6px',
+                            fontSize: '14px'
+                          }}
+                        >
+                          <optgroup label="Lead Stages">
+                            {allStages.filter(s => s.category === 'Lead').map(stage => (
+                              <option key={stage.value} value={stage.value}>{stage.label}</option>
+                            ))}
+                          </optgroup>
+                          <optgroup label="Active Loan Stages">
+                            {allStages.filter(s => s.category === 'Active Loan').map(stage => (
+                              <option key={stage.value} value={stage.value}>{stage.label}</option>
+                            ))}
+                          </optgroup>
+                        </select>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Extracted Fields */}
+                  {selectedItem.fields && Object.keys(selectedItem.fields).length > 0 && (
+                    <div className="extracted-fields-section">
+                      <h3>Extracted Fields</h3>
+                      <div className="fields-grid-recon">
+                        {Object.entries(selectedItem.fields || {}).map(([fieldName, fieldData]) => {
+                          const confidence = fieldData.confidence || 0;
+                          const value = fieldData.value;
+
+                          return (
+                            <div key={fieldName} className="field-row-recon">
+                              <div className="field-header-recon">
+                                <span className="field-name">{formatFieldName(fieldName)}</span>
+                                <span
+                                  className="field-confidence-badge"
+                                  style={{
+                                    backgroundColor: confidence > 0.8 ? '#10b981' : confidence > 0.6 ? '#f59e0b' : '#ef4444',
+                                    color: 'white'
+                                  }}
+                                >
+                                  {Math.round(confidence * 100)}%
+                                </span>
+                              </div>
+                              <div className="field-value-display">{value || 'N/A'}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Email Body */}
+                  <div className="email-details-section">
+                    <h4>Email Content</h4>
+                    <div className="email-details-content" style={{ background: '#f9fafb', padding: '15px', borderRadius: '8px', marginTop: '10px' }}>
+                      <div
+                        className="email-body-content"
+                        style={{
+                          padding: '15px',
+                          background: 'white',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '6px',
+                          maxHeight: '300px',
+                          overflowY: 'auto',
+                          whiteSpace: 'pre-wrap',
+                          fontFamily: 'monospace',
+                          fontSize: '13px',
+                          lineHeight: '1.5'
+                        }}
+                      >
+                        {selectedItem.email_body || selectedItem.email?.body || selectedItem.email?.text_content || 'No email body available'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* AI Auto-Process Checkbox */}
+                  <div className="ai-delegation-section" style={{ marginTop: '20px', padding: '15px', background: '#fef3c7', borderRadius: '8px', border: '1px solid #fcd34d' }}>
+                    <label className="delegation-checkbox" style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={delegateToAI}
+                        onChange={(e) => setDelegateToAI(e.target.checked)}
+                        style={{ marginTop: '3px' }}
+                      />
+                      <div>
+                        <span style={{ fontWeight: '600', color: '#92400e' }}>
+                          Let AI auto-process similar messages
+                        </span>
+                        <p style={{ margin: '5px 0 0', fontSize: '12px', color: '#78350f' }}>
+                          When approved, AI will automatically handle similar "{selectedItem.email_intent || 'email'}" messages in the future without requiring your review.
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="detail-action-buttons">
+                    <button
+                      className="btn-approve-recon"
+                      onClick={() => handleApprove(selectedItem.id)}
+                      disabled={processingAction}
+                    >
+                      {processingAction ? 'Processing...' : 'Process & Apply'}
+                    </button>
+                    <button
+                      className="btn-reject-recon"
+                      onClick={() => {
+                        const reason = prompt('Reason for rejection (optional):');
+                        if (reason !== null) {
+                          handleReject(selectedItem.id, reason);
+                        }
+                      }}
+                      disabled={processingAction}
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : null}
+
+        {/* Bulk Actions Bar - only show for autoProcessing tab */}
+        {activeTab === 'autoProcessing' && autoProcessingItems.length > 0 && (
           <div className="bulk-actions-bar">
             <div className="bulk-controls">
               <button
                 className="btn-select-all"
                 onClick={selectAll}
-                disabled={pendingItems.length === 0}
+                disabled={autoProcessingItems.length === 0}
               >
                 Select All (20)
               </button>
@@ -1206,7 +1516,7 @@ function ReconciliationCenter() {
                   </>
                 ) : (
                   <>
-                    ✓ Approve Selected ({selectedItems.size})
+                    Approve Selected ({selectedItems.size})
                   </>
                 )}
               </button>
@@ -1215,20 +1525,20 @@ function ReconciliationCenter() {
                 onClick={bulkReject}
                 disabled={selectedItems.size === 0 || bulkProcessing}
               >
-                ✕ Reject Selected
+                Reject Selected
               </button>
             </div>
           </div>
         )}
 
-        {/* Pending Tab Content */}
-        {activeTab === 'pending' && pendingItems.length === 0 ? (
+        {/* Auto-Processing Tab Content */}
+        {activeTab === 'autoProcessing' && autoProcessingItems.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-icon">✓</div>
-            <h2>All Caught Up!</h2>
-            <p>No pending reconciliation items. The AI will notify you when new data arrives.</p>
+            <div className="empty-icon">🤖</div>
+            <h2>No Auto-Processing Items</h2>
+            <p>Messages that AI handles automatically will appear here. Enable auto-processing by checking the box when approving similar messages.</p>
           </div>
-        ) : activeTab === 'pending' && pendingItems.length > 0 ? (
+        ) : activeTab === 'autoProcessing' && autoProcessingItems.length > 0 ? (
           <div className="reconciliation-content">
             {/* Items List */}
             <div className="items-list">
@@ -1929,7 +2239,7 @@ function ReconciliationCenter() {
 
                   {/* Email Details Section - Full Email Display */}
                   <div className="email-details-section">
-                    <h4>📧 Email Details</h4>
+                    <h4>Email Details</h4>
                     <div className="email-details-content" style={{ background: '#f9fafb', padding: '15px', borderRadius: '8px', marginTop: '10px' }}>
                       <div className="email-meta-row" style={{ marginBottom: '8px' }}>
                         <strong>From:</strong> {selectedItem.email_from}
@@ -1964,6 +2274,26 @@ function ReconciliationCenter() {
                     </div>
                   </div>
 
+                  {/* AI Skip Review Checkbox - for Pending Review items */}
+                  <div className="ai-skip-review-section" style={{ marginTop: '20px', padding: '15px', background: '#ecfdf5', borderRadius: '8px', border: '1px solid #86efac' }}>
+                    <label className="skip-review-checkbox" style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={allowAutoProcess}
+                        onChange={(e) => setAllowAutoProcess(e.target.checked)}
+                        style={{ marginTop: '3px' }}
+                      />
+                      <div>
+                        <span style={{ fontWeight: '600', color: '#166534' }}>
+                          Skip review for similar messages in the future
+                        </span>
+                        <p style={{ margin: '5px 0 0', fontSize: '12px', color: '#15803d' }}>
+                          When deployed, AI will automatically complete and deploy similar "{selectedItem.email_intent || 'email'}" messages without requiring your review.
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+
                   {/* Action Buttons - Match Task Layout */}
                   <div className="detail-action-buttons">
                     <button
@@ -1971,7 +2301,7 @@ function ReconciliationCenter() {
                       onClick={() => handleApprove(selectedItem.id)}
                       disabled={processingAction}
                     >
-                      {processingAction ? 'Processing...' : '✓ APPROVE & CONTINUE'}
+                      {processingAction ? 'Processing...' : 'DEPLOY'}
                     </button>
                     <button
                       className="btn-reject-recon"
@@ -1983,7 +2313,7 @@ function ReconciliationCenter() {
                       }}
                       disabled={processingAction}
                     >
-                      ✕ REJECT
+                      REJECT
                     </button>
                   </div>
                 </div>

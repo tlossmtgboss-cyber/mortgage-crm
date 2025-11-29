@@ -1186,6 +1186,16 @@
   color: #ef4444;
 }
 
+.status-badge.new-badge {
+  background: rgba(59, 130, 246, 0.2);
+  color: #3b82f6;
+}
+
+.status-badge.auto-processing {
+  background: rgba(139, 92, 246, 0.2);
+  color: #8b5cf6;
+}
+
 .status-text {
   font-weight: 600;
 }
