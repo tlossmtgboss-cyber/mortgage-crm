@@ -223,7 +223,11 @@
 }
 
 .borrower-add-btn,
-.add-borrower-btn {
+.add-borrower-btn,
+.borrower-btn.add-borrower-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 10px 16px;
   background: transparent;
   border: 2px dashed #218D8D;
@@ -234,10 +238,13 @@
   cursor: pointer;
   transition: all 0.2s ease;
   margin-left: auto;
+  white-space: nowrap;
+  min-height: 40px;
 }
 
 .borrower-add-btn:hover,
-.add-borrower-btn:hover {
+.add-borrower-btn:hover,
+.borrower-btn.add-borrower-btn:hover {
   background: #e9f5f5;
   border-color: #1a7070;
   color: #1a7070;
