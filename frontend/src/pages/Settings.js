@@ -2336,34 +2336,24 @@ const API_BASE_URL = isProduction
                       <p>{microsoftStatus.email_address}</p>
                     </div>
                     <div className="status-actions">
-                      <button className="btn-sync" onClick={(e) => { e.stopPropagation(); syncMicrosoftNow(); }} disabled={loadingMicrosoft || reprocessing}>
-                        {loadingMicrosoft ? 'Syncing...' : syncCompleted ? '✓ Synced' : '🔄 Sync Now'}
-                      </button>
-                      <button className="btn-sync" onClick={(e) => { e.stopPropagation(); createSampleTasks(); }} style={{background: '#218D8D'}}>
-                        ✨ Create 5 Sample Tasks
-                      </button>
-                      <button className="btn-sync" onClick={(e) => { e.stopPropagation(); runDatabaseMigration(); }} style={{background: '#10b981'}}>
-                        🔧 Fix Database
-                      </button>
-                      <button className="btn-sync" onClick={(e) => { e.stopPropagation(); reprocessFailedEmails(); }} disabled={loadingMicrosoft || reprocessing} style={{background: '#ff9800'}}>
-                        {reprocessing ? 'Processing...' : '🔄 Reprocess Failed'}
-                      </button>
-                      <button className="btn-disconnect" onClick={(e) => { e.stopPropagation(); disconnectMicrosoft365(); }} disabled={loadingMicrosoft || reprocessing}>
+                      <button className="btn-disconnect" onClick={(e) => { e.stopPropagation(); disconnectMicrosoft365(); }}>
                         Disconnect
                       </button>
                     </div>
                   </div>
-                  {(loadingMicrosoft || syncCompleted) && syncProgress.total > 0 && (
-                    <div className="sync-progress-container">
-                      <div className="sync-progress-bar">
-                        <div className="sync-progress-fill" style={{ width: `${(syncProgress.current / syncProgress.total) * 100}%` }}></div>
-                      </div>
-                      <div className="sync-progress-text">
-                        {syncCompleted ? <span className="progress-complete">✓ {syncProgress.current}/{syncProgress.total} emails synced</span> : <span>Syncing {syncProgress.current}/{syncProgress.total} emails...</span>}
-                      </div>
+                  {microsoftStatus.last_sync_at && (
+                    <div className="status-meta">
+                      Last synced: {(() => {
+                        const syncDate = new Date(microsoftStatus.last_sync_at);
+                        const now = new Date();
+                        // If the sync date is in the future, show "Just now" instead
+                        if (syncDate > now) {
+                          return 'Just now';
+                        }
+                        return syncDate.toLocaleString();
+                      })()}
                     </div>
                   )}
-                  {microsoftStatus.last_sync_at && <div className="status-meta">Last synced: {new Date(microsoftStatus.last_sync_at).toLocaleString()}</div>}
                 </div>
               ) : (
                 <div className="integration-connect-card">
