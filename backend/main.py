@@ -15124,7 +15124,8 @@ async def approve_reconciliation(
 
                 stage = loan_stage_map.get(stage_upper, LoanStage.PROCESSING)
 
-                # Create new loan without stage first (SQLAlchemy may send enum name instead of value)
+                # Create new loan with stage=None to bypass SQLAlchemy enum serialization
+                # We'll set the stage via raw SQL to ensure PostgreSQL gets the correct enum name
                 new_loan = Loan(
                     loan_number=loan_number,
                     borrower_name=borrower_name,
@@ -15139,18 +15140,19 @@ async def approve_reconciliation(
                     property_zip=get_val("property_zip"),
                     processor=get_val("processor"),
                     lender=get_val("lender"),
-                    loan_officer_id=current_user.id
+                    loan_officer_id=current_user.id,
+                    stage=None  # Explicitly set to None to avoid SQLAlchemy enum issues
                 )
                 db.add(new_loan)
-                logger.info(f"RECONCILIATION DEBUG: Created loan object, about to flush. Stage: {stage}, value={stage.value}, name={stage.name}")
+                logger.info(f"RECONCILIATION DEBUG: Created loan object with stage=None, about to flush")
                 db.flush()  # Get the ID
                 logger.info(f"RECONCILIATION DEBUG: First flush complete, loan ID: {new_loan.id}")
 
-                # Update stage using raw SQL to ensure correct enum value is used
-                # PostgreSQL enum expects values like 'Processing', not names like 'PROCESSING'
-                logger.info(f"RECONCILIATION DEBUG: About to execute UPDATE with stage={stage.value}")
+                # Update stage using raw SQL with enum NAME (uppercase)
+                # PostgreSQL enum was created with names like 'PROCESSING', not values like 'Processing'
+                logger.info(f"RECONCILIATION DEBUG: About to execute UPDATE with stage={stage.name}")
                 db.execute(text("UPDATE loans SET stage = :stage WHERE id = :id"),
-                           {"stage": stage.value, "id": new_loan.id})
+                           {"stage": stage.name, "id": new_loan.id})
                 logger.info(f"RECONCILIATION DEBUG: UPDATE executed, about to second flush")
                 db.flush()
 
@@ -15158,7 +15160,7 @@ async def approve_reconciliation(
                 extracted.match_entity_type = "loan"
                 extracted.match_entity_id = new_loan.id
 
-                logger.info(f"Created new loan {loan_number} (ID: {new_loan.id}) in {stage.value} stage")
+                logger.info(f"Created new loan {loan_number} (ID: {new_loan.id}) in {stage.name} stage")
 
         # Handle status update if requested
         status_updated = False
