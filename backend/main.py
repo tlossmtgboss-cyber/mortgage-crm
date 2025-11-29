@@ -16711,13 +16711,13 @@ async def disconnect_microsoft365(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.delete("/api/v1/admin/microsoft/delete-by-email")
-async def admin_delete_microsoft_oauth_by_email(
+@app.delete("/api/v1/microsoft/cleanup-oauth-by-email")
+async def cleanup_microsoft_oauth_by_email(
     email: str,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Admin endpoint to delete all Microsoft OAuth records for a specific email address"""
+    """Delete all Microsoft OAuth records for a specific email address (for cleanup purposes)"""
     try:
         # Find all records with this email address
         oauth_records = db.query(MicrosoftOAuthToken).filter(
@@ -16738,7 +16738,7 @@ async def admin_delete_microsoft_oauth_by_email(
 
         db.commit()
 
-        logger.info(f"Admin deleted {deleted_count} Microsoft OAuth record(s) for email: {email}")
+        logger.info(f"Cleanup deleted {deleted_count} Microsoft OAuth record(s) for email: {email}")
 
         return {
             "status": "success",
@@ -16747,7 +16747,7 @@ async def admin_delete_microsoft_oauth_by_email(
         }
 
     except Exception as e:
-        logger.error(f"Admin delete Microsoft OAuth error: {e}")
+        logger.error(f"Cleanup Microsoft OAuth error: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
