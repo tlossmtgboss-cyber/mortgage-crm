@@ -14955,9 +14955,11 @@ async def approve_reconciliation(
             borrower_phone = get_val("borrower_phone") or get_val("phone")
 
             # If no loan number, try to find existing loan by borrower name first
+            # IMPORTANT: Only search loans owned by the current user to prevent cross-user matching
             if not loan_number:
                 existing_by_name = db.query(Loan).filter(
-                    Loan.borrower_name.ilike(f"%{borrower_name}%")
+                    Loan.borrower_name.ilike(f"%{borrower_name}%"),
+                    Loan.loan_officer_id == current_user.id
                 ).first() if borrower_name and borrower_name != "Unknown" else None
 
                 if existing_by_name:
