@@ -430,7 +430,7 @@ function ReconciliationCenter() {
             first_name: firstName,
             last_name: lastName,
             loan_number: loanNumber,
-            loan_stage: 'NEW', // Default to New Lead stage
+            loan_stage: selectedLoanStage || 'NEW', // Use the stage selected in the first step, or default to NEW
             referral_partner_id: ''
           });
           setShowNoMatchDialog(true);

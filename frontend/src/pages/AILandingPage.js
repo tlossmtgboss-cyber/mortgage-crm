@@ -53,6 +53,12 @@ function AILandingPage() {
   const [structuredContent, setStructuredContent] = useState(null);
   const [showRightSidebar, setShowRightSidebar] = useState(false);
 
+  // Reconciliation sidebar state
+  const [reconciliationItems, setReconciliationItems] = useState([]);
+  const [selectedReconciliationItem, setSelectedReconciliationItem] = useState(null);
+  const [showReconciliationSidebar, setShowReconciliationSidebar] = useState(false);
+  const [reconciliationLoading, setReconciliationLoading] = useState(false);
+
   // Email compose state
   const [emailMode, setEmailMode] = useState(false);
   const [emailRecipient, setEmailRecipient] = useState(null);
@@ -440,6 +446,69 @@ function AILandingPage() {
     } else {
       recognitionRef.current.start();
       setIsListening(true);
+    }
+  };
+
+  // Fetch reconciliation pending items
+  const fetchReconciliationItems = async () => {
+    setReconciliationLoading(true);
+    try {
+      const response = await reconciliationAPI.getPending();
+      setReconciliationItems(response.items || []);
+      if (response.items && response.items.length > 0) {
+        setSelectedReconciliationItem(response.items[0]);
+      }
+    } catch (error) {
+      console.error('Error fetching reconciliation items:', error);
+      setReconciliationItems([]);
+    } finally {
+      setReconciliationLoading(false);
+    }
+  };
+
+  // Open reconciliation sidebar
+  const openReconciliationSidebar = async () => {
+    setShowReconciliationSidebar(true);
+    setShowRightSidebar(false); // Close task sidebar if open
+    await fetchReconciliationItems();
+  };
+
+  // Handle reconciliation approval
+  const handleReconciliationApprove = async (item, updateStatusTo = null) => {
+    try {
+      const payload = {
+        extracted_data_id: item.id,
+        ...(updateStatusTo && { update_status_to: updateStatusTo })
+      };
+      await reconciliationAPI.approve(payload);
+      // Remove from list and select next item
+      const newItems = reconciliationItems.filter(i => i.id !== item.id);
+      setReconciliationItems(newItems);
+      if (newItems.length > 0) {
+        setSelectedReconciliationItem(newItems[0]);
+      } else {
+        setSelectedReconciliationItem(null);
+      }
+    } catch (error) {
+      console.error('Error approving reconciliation:', error);
+      alert('Failed to approve: ' + (error.response?.data?.detail || error.message));
+    }
+  };
+
+  // Handle reconciliation rejection
+  const handleReconciliationReject = async (item, reason = 'User rejected') => {
+    try {
+      await reconciliationAPI.reject({ extracted_data_id: item.id, reason });
+      const newItems = reconciliationItems.filter(i => i.id !== item.id);
+      setReconciliationItems(newItems);
+      if (newItems.length > 0) {
+        setSelectedReconciliationItem(newItems[0]);
+      } else {
+        setSelectedReconciliationItem(null);
+      }
+    } catch (error) {
+      console.error('Error rejecting reconciliation:', error);
+      alert('Failed to reject: ' + (error.response?.data?.detail || error.message));
     }
   };
 
@@ -2093,7 +2162,7 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
                   <strong>Pipeline Audit</strong>
                   <span>Identify bottlenecks and stalled deals</span>
                 </button>
-                <button onClick={() => navigate('/reconciliation')}>
+                <button onClick={openReconciliationSidebar}>
                   <strong>Reconcile Emails</strong>
                   <span>Review and process incoming emails</span>
                 </button>
@@ -2500,6 +2569,124 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
               })()}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Reconciliation Sidebar */}
+      {showReconciliationSidebar && (
+        <div className="task-sidebar reconciliation-sidebar">
+          <div className="sidebar-header">
+            <h2>📧 Email Reconciliation</h2>
+            <button
+              className="close-sidebar-btn"
+              onClick={() => setShowReconciliationSidebar(false)}
+            >
+              ×
+            </button>
+          </div>
+
+          {reconciliationLoading ? (
+            <div className="sidebar-loading">
+              <div className="loading-spinner"></div>
+              <p>Loading pending items...</p>
+            </div>
+          ) : reconciliationItems.length === 0 ? (
+            <div className="sidebar-empty">
+              <p>✅ No pending items to reconcile</p>
+              <button
+                className="refresh-btn"
+                onClick={fetchReconciliationItems}
+              >
+                🔄 Refresh
+              </button>
+            </div>
+          ) : (
+            <div className="reconciliation-content">
+              {/* Item List */}
+              <div className="reconciliation-list">
+                <div className="list-header">
+                  <span>{reconciliationItems.length} pending items</span>
+                  <button
+                    className="refresh-btn-small"
+                    onClick={fetchReconciliationItems}
+                  >
+                    🔄
+                  </button>
+                </div>
+                {reconciliationItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className={`reconciliation-item ${selectedReconciliationItem?.id === item.id ? 'selected' : ''}`}
+                    onClick={() => setSelectedReconciliationItem(item)}
+                  >
+                    <div className="item-name">{item.borrower_name || 'Unknown'}</div>
+                    <div className="item-meta">
+                      <span className="item-type">{item.match_entity_type || 'New'}</span>
+                      {item.match_entity_id && (
+                        <span className="item-match">→ ID: {item.match_entity_id}</span>
+                      )}
+                    </div>
+                    <div className="item-source">{item.source || 'Email'}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Item Detail */}
+              {selectedReconciliationItem && (
+                <div className="reconciliation-detail">
+                  <h3>{selectedReconciliationItem.borrower_name || 'Unknown Entity'}</h3>
+
+                  <div className="detail-section">
+                    <label>Match Type</label>
+                    <span className={`match-badge ${selectedReconciliationItem.match_entity_type ? 'matched' : 'new'}`}>
+                      {selectedReconciliationItem.match_entity_type || 'New Record'}
+                    </span>
+                  </div>
+
+                  {selectedReconciliationItem.match_entity_id && (
+                    <div className="detail-section">
+                      <label>Matched To</label>
+                      <span>{selectedReconciliationItem.match_entity_type} #{selectedReconciliationItem.match_entity_id}</span>
+                    </div>
+                  )}
+
+                  <div className="detail-section">
+                    <label>Extracted Fields</label>
+                    <div className="fields-list">
+                      {selectedReconciliationItem.fields && Object.entries(selectedReconciliationItem.fields).map(([key, value]) => (
+                        <div key={key} className="field-item">
+                          <span className="field-key">{key}:</span>
+                          <span className="field-value">{String(value)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {selectedReconciliationItem.ai_suggested_status && (
+                    <div className="detail-section">
+                      <label>AI Suggested Status</label>
+                      <span className="status-badge">{selectedReconciliationItem.ai_suggested_status}</span>
+                    </div>
+                  )}
+
+                  <div className="reconciliation-actions">
+                    <button
+                      className="action-btn approve"
+                      onClick={() => handleReconciliationApprove(selectedReconciliationItem, selectedReconciliationItem.ai_suggested_status)}
+                    >
+                      ✅ Approve & Apply
+                    </button>
+                    <button
+                      className="action-btn reject"
+                      onClick={() => handleReconciliationReject(selectedReconciliationItem)}
+                    >
+                      ❌ Reject
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
