@@ -2,6 +2,8 @@
   padding: var(--space-xl);
   max-width: 1400px;
   margin: 0 auto;
+  min-height: 100%;
+  overflow-y: auto;
 }
 
 .reconciliation-container {
@@ -1215,6 +1217,33 @@
 }
 
 /* Reconciliation Detail Panel - Match Task Detail Layout */
+.item-detail-panel {
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  max-height: calc(100vh - 250px);
+  overflow-y: auto;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.item-detail-panel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.item-detail-panel::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 3px;
+}
+
+.item-detail-panel::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.item-detail-panel::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
 .item-detail-panel .detail-header {
   padding: 24px;
   border-bottom: 1px solid #e5e7eb;
