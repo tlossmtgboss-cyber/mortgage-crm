@@ -707,6 +707,239 @@ async def send_meeting_invite(
 
 
 # ============================================================================
+# WAITING ROOM ENDPOINTS
+# ============================================================================
+
+class WaitingRoomRequest(BaseModel):
+    display_name: str
+    email: Optional[str] = None
+
+
+@router.post("/rooms/{room_id}/waiting-room/join")
+async def request_to_join_meeting(
+    room_id: int,
+    data: WaitingRoomRequest,
+    db: Session = Depends(get_db)
+):
+    """Guest requests to join a meeting - adds them to waiting room."""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Video meeting models not initialized")
+
+    VideoMeetingRoom = _models.get('VideoMeetingRoom')
+    MeetingParticipant = _models.get('MeetingParticipant')
+
+    room = db.query(VideoMeetingRoom).filter(VideoMeetingRoom.id == room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Meeting room not found")
+
+    if room.status not in ["active", "scheduled"]:
+        raise HTTPException(status_code=400, detail="This meeting is not available to join")
+
+    # Check if participant already exists
+    existing = None
+    if MeetingParticipant and data.email:
+        existing = db.query(MeetingParticipant).filter(
+            MeetingParticipant.meeting_id == room_id,
+            MeetingParticipant.email == data.email
+        ).first()
+
+    if existing:
+        # Update status to waiting
+        existing.status = "waiting"
+        existing.display_name = data.display_name
+        db.commit()
+        participant_id = existing.id
+    elif MeetingParticipant:
+        # Create new waiting participant
+        participant = MeetingParticipant(
+            meeting_id=room_id,
+            email=data.email,
+            display_name=data.display_name,
+            role="participant",
+            status="waiting"
+        )
+        db.add(participant)
+        db.commit()
+        db.refresh(participant)
+        participant_id = participant.id
+    else:
+        participant_id = None
+
+    logger.info(f"Guest {data.display_name} requested to join meeting {room_id}")
+
+    return {
+        "success": True,
+        "participant_id": participant_id,
+        "status": "waiting",
+        "message": "Please wait for the host to admit you"
+    }
+
+
+@router.get("/rooms/{room_id}/waiting-room/status/{participant_id}")
+async def check_admission_status(
+    room_id: int,
+    participant_id: int,
+    db: Session = Depends(get_db)
+):
+    """Guest polls to check if they've been admitted."""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Video meeting models not initialized")
+
+    MeetingParticipant = _models.get('MeetingParticipant')
+
+    participant = db.query(MeetingParticipant).filter(
+        MeetingParticipant.id == participant_id,
+        MeetingParticipant.meeting_id == room_id
+    ).first()
+
+    if not participant:
+        raise HTTPException(status_code=404, detail="Participant not found")
+
+    return {
+        "status": participant.status,
+        "admitted": participant.status == "joined",
+        "rejected": participant.status == "removed"
+    }
+
+
+@router.get("/rooms/{room_id}/waiting-room")
+async def get_waiting_participants(
+    room_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Host gets list of participants waiting to be admitted."""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Video meeting models not initialized")
+
+    VideoMeetingRoom = _models.get('VideoMeetingRoom')
+    MeetingParticipant = _models.get('MeetingParticipant')
+
+    room = db.query(VideoMeetingRoom).filter(VideoMeetingRoom.id == room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Meeting room not found")
+
+    # Only host can see waiting room
+    if room.host_user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the host can view the waiting room")
+
+    waiting_participants = db.query(MeetingParticipant).filter(
+        MeetingParticipant.meeting_id == room_id,
+        MeetingParticipant.status == "waiting"
+    ).all()
+
+    return {
+        "waiting_count": len(waiting_participants),
+        "participants": [
+            {
+                "id": p.id,
+                "display_name": p.display_name,
+                "email": p.email,
+                "requested_at": p.joined_at.isoformat() if p.joined_at else None
+            }
+            for p in waiting_participants
+        ]
+    }
+
+
+class AdmitParticipantRequest(BaseModel):
+    action: str  # "admit" or "reject"
+
+
+@router.post("/rooms/{room_id}/waiting-room/{participant_id}")
+async def admit_or_reject_participant(
+    room_id: int,
+    participant_id: int,
+    data: AdmitParticipantRequest,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Host admits or rejects a waiting participant."""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Video meeting models not initialized")
+
+    VideoMeetingRoom = _models.get('VideoMeetingRoom')
+    MeetingParticipant = _models.get('MeetingParticipant')
+
+    room = db.query(VideoMeetingRoom).filter(VideoMeetingRoom.id == room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Meeting room not found")
+
+    # Only host can admit/reject
+    if room.host_user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the host can admit participants")
+
+    participant = db.query(MeetingParticipant).filter(
+        MeetingParticipant.id == participant_id,
+        MeetingParticipant.meeting_id == room_id
+    ).first()
+
+    if not participant:
+        raise HTTPException(status_code=404, detail="Participant not found")
+
+    if data.action == "admit":
+        participant.status = "joined"
+        participant.joined_at = datetime.utcnow()
+        message = f"Admitted {participant.display_name}"
+    elif data.action == "reject":
+        participant.status = "removed"
+        message = f"Rejected {participant.display_name}"
+    else:
+        raise HTTPException(status_code=400, detail="Invalid action. Use 'admit' or 'reject'")
+
+    db.commit()
+
+    logger.info(f"Host {current_user.id} {data.action}ed participant {participant_id} in meeting {room_id}")
+
+    return {
+        "success": True,
+        "action": data.action,
+        "participant_id": participant_id,
+        "message": message
+    }
+
+
+@router.post("/rooms/{room_id}/waiting-room/admit-all")
+async def admit_all_waiting(
+    room_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """Host admits all waiting participants at once."""
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Video meeting models not initialized")
+
+    VideoMeetingRoom = _models.get('VideoMeetingRoom')
+    MeetingParticipant = _models.get('MeetingParticipant')
+
+    room = db.query(VideoMeetingRoom).filter(VideoMeetingRoom.id == room_id).first()
+    if not room:
+        raise HTTPException(status_code=404, detail="Meeting room not found")
+
+    if room.host_user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Only the host can admit participants")
+
+    waiting = db.query(MeetingParticipant).filter(
+        MeetingParticipant.meeting_id == room_id,
+        MeetingParticipant.status == "waiting"
+    ).all()
+
+    admitted_count = 0
+    for p in waiting:
+        p.status = "joined"
+        p.joined_at = datetime.utcnow()
+        admitted_count += 1
+
+    db.commit()
+
+    return {
+        "success": True,
+        "admitted_count": admitted_count,
+        "message": f"Admitted {admitted_count} participant(s)"
+    }
+
+
+# ============================================================================
 # SCREEN RECORDING ENDPOINTS
 # ============================================================================
 

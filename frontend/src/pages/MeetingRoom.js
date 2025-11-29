@@ -59,6 +59,13 @@ const MeetingRoom = () => {
   const [inviteSending, setInviteSending] = useState(false);
   const [inviteSuccess, setInviteSuccess] = useState(false);
 
+  // Waiting room state
+  const [participantId, setParticipantId] = useState(null);
+  const [waitingParticipants, setWaitingParticipants] = useState([]);
+  const [admissionRejected, setAdmissionRejected] = useState(false);
+  const admissionPollRef = useRef(null);
+  const waitingRoomPollRef = useRef(null);
+
   // Refs
   const localVideoRef = useRef(null);
   const recordingTimerRef = useRef(null);
@@ -332,6 +339,179 @@ const MeetingRoom = () => {
       setInviteName(meeting.borrower_name || '');
     }
   }, [meeting]);
+
+  // Request to join waiting room (for guests)
+  const requestToJoin = async () => {
+    if (!displayName.trim()) {
+      alert('Please enter your name');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/meetings/rooms/${meeting?.id}/waiting-room/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          display_name: displayName,
+          email: null
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setParticipantId(data.participant_id);
+        setInWaitingRoom(true);
+        // Start polling for admission
+        startAdmissionPolling(data.participant_id);
+      } else {
+        const errorData = await response.json();
+        alert(errorData.detail || 'Failed to join waiting room');
+      }
+    } catch (err) {
+      console.error('Error requesting to join:', err);
+      alert('Failed to join meeting');
+    }
+  };
+
+  // Poll for admission status (guest side)
+  const startAdmissionPolling = (pId) => {
+    if (admissionPollRef.current) {
+      clearInterval(admissionPollRef.current);
+    }
+
+    admissionPollRef.current = setInterval(async () => {
+      try {
+        const response = await fetch(
+          `${API_BASE}/api/v1/meetings/rooms/${meeting?.id}/waiting-room/status/${pId}`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          if (data.admitted) {
+            // Admitted! Join the meeting
+            clearInterval(admissionPollRef.current);
+            await initializeMedia();
+            setJoined(true);
+            setInWaitingRoom(false);
+            setParticipants([{
+              id: 'local',
+              name: displayName,
+              isLocal: true,
+              audioEnabled: true,
+              videoEnabled: true
+            }]);
+          } else if (data.rejected) {
+            clearInterval(admissionPollRef.current);
+            setAdmissionRejected(true);
+            setInWaitingRoom(false);
+          }
+        }
+      } catch (err) {
+        console.error('Error polling admission status:', err);
+      }
+    }, 2000); // Poll every 2 seconds
+  };
+
+  // Poll for waiting participants (host side)
+  const startWaitingRoomPolling = useCallback(() => {
+    if (waitingRoomPollRef.current) {
+      clearInterval(waitingRoomPollRef.current);
+    }
+
+    const poll = async () => {
+      try {
+        const response = await fetch(
+          `${API_BASE}/api/v1/meetings/rooms/${meeting?.id}/waiting-room`,
+          { headers: getAuthHeaders() }
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setWaitingParticipants(data.participants || []);
+        }
+      } catch (err) {
+        console.error('Error polling waiting room:', err);
+      }
+    };
+
+    poll(); // Initial poll
+    waitingRoomPollRef.current = setInterval(poll, 3000); // Poll every 3 seconds
+  }, [meeting?.id, getAuthHeaders]);
+
+  // Start polling when host joins
+  useEffect(() => {
+    if (isHost && joined && meeting?.id) {
+      startWaitingRoomPolling();
+    }
+    return () => {
+      if (waitingRoomPollRef.current) {
+        clearInterval(waitingRoomPollRef.current);
+      }
+    };
+  }, [isHost, joined, meeting?.id, startWaitingRoomPolling]);
+
+  // Cleanup admission polling on unmount
+  useEffect(() => {
+    return () => {
+      if (admissionPollRef.current) {
+        clearInterval(admissionPollRef.current);
+      }
+    };
+  }, []);
+
+  // Admit a participant
+  const admitParticipant = async (pId) => {
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/v1/meetings/rooms/${meeting?.id}/waiting-room/${pId}`,
+        {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ action: 'admit' })
+        }
+      );
+      if (response.ok) {
+        setWaitingParticipants(prev => prev.filter(p => p.id !== pId));
+      }
+    } catch (err) {
+      console.error('Error admitting participant:', err);
+    }
+  };
+
+  // Reject a participant
+  const rejectParticipant = async (pId) => {
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/v1/meetings/rooms/${meeting?.id}/waiting-room/${pId}`,
+        {
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({ action: 'reject' })
+        }
+      );
+      if (response.ok) {
+        setWaitingParticipants(prev => prev.filter(p => p.id !== pId));
+      }
+    } catch (err) {
+      console.error('Error rejecting participant:', err);
+    }
+  };
+
+  // Admit all waiting participants
+  const admitAllParticipants = async () => {
+    try {
+      const response = await fetch(
+        `${API_BASE}/api/v1/meetings/rooms/${meeting?.id}/waiting-room/admit-all`,
+        {
+          method: 'POST',
+          headers: getAuthHeaders()
+        }
+      );
+      if (response.ok) {
+        setWaitingParticipants([]);
+      }
+    } catch (err) {
+      console.error('Error admitting all participants:', err);
+    }
+  };
 
   // Start screen recording
   const startScreenRecording = async () => {
@@ -619,6 +799,22 @@ const MeetingRoom = () => {
     );
   }
 
+  // Rejected state
+  if (admissionRejected) {
+    return (
+      <div className="meeting-room-container">
+        <div className="meeting-error">
+          <span className="error-icon">!</span>
+          <h2>Access Denied</h2>
+          <p>The host has not admitted you to this meeting.</p>
+          <button className="back-btn" onClick={() => window.close()}>
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Waiting room
   if (inWaitingRoom && !joined) {
     return (
@@ -732,9 +928,18 @@ const MeetingRoom = () => {
                 </div>
               )}
 
-              <button className="join-btn" onClick={handleJoin}>
-                Join Meeting
-              </button>
+              {isHost ? (
+                <button className="join-btn" onClick={handleJoin}>
+                  Start Meeting
+                </button>
+              ) : (
+                <button className="join-btn" onClick={requestToJoin}>
+                  Request to Join
+                </button>
+              )}
+              {!isHost && (
+                <p className="join-note">You will be placed in a waiting room until the host admits you.</p>
+              )}
             </div>
           </div>
         </div>
@@ -923,6 +1128,44 @@ const MeetingRoom = () => {
               placeholder="Type a message..."
             />
             <button onClick={sendChatMessage}>Send</button>
+          </div>
+        </div>
+      )}
+
+      {/* Waiting Room Panel (Host only) */}
+      {isHost && waitingParticipants.length > 0 && (
+        <div className="waiting-room-panel">
+          <div className="waiting-panel-header">
+            <h4>Waiting Room ({waitingParticipants.length})</h4>
+            {waitingParticipants.length > 1 && (
+              <button className="admit-all-btn" onClick={admitAllParticipants}>
+                Admit All
+              </button>
+            )}
+          </div>
+          <div className="waiting-list">
+            {waitingParticipants.map(p => (
+              <div key={p.id} className="waiting-participant">
+                <span className="participant-avatar">{p.display_name?.[0]?.toUpperCase() || '?'}</span>
+                <span className="participant-name">{sanitizeText(p.display_name)}</span>
+                <div className="participant-actions">
+                  <button
+                    className="admit-btn"
+                    onClick={() => admitParticipant(p.id)}
+                    title="Admit"
+                  >
+                    Admit
+                  </button>
+                  <button
+                    className="reject-btn"
+                    onClick={() => rejectParticipant(p.id)}
+                    title="Reject"
+                  >
+                    Reject
+                  </button>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
