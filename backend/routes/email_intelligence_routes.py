@@ -2743,26 +2743,43 @@ async def get_sla_tracking(
     """Get SLA tracking records"""
     user_id = get_current_user_id(db)
 
-    query = """
-        SELECT s.id, s.reconciliation_email_id, s.sla_type, s.sla_hours,
-               s.email_received_at, s.response_due_at, s.responded_at, s.status,
-               e.from_email, e.subject
-        FROM email_sla_tracking s
-        JOIN email_reconciliation_queue e ON s.reconciliation_email_id = e.id
-        WHERE s.user_id = :user_id
-    """
-    params = {"user_id": user_id}
+    try:
+        # Check if table exists first
+        table_check = db.execute(text("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables
+                WHERE table_name = 'email_sla_tracking'
+            )
+        """)).scalar()
 
-    if status:
-        query += " AND s.status = :status"
-        params["status"] = status
+        if not table_check:
+            # Table doesn't exist - return empty result
+            return {"slas": [], "total": 0, "message": "SLA tracking table not initialized"}
 
-    if not include_breached:
-        query += " AND s.status != 'breached'"
+        query = """
+            SELECT s.id, s.reconciliation_email_id, s.sla_type, s.sla_hours,
+                   s.email_received_at, s.response_due_at, s.responded_at, s.status,
+                   e.from_email, e.subject
+            FROM email_sla_tracking s
+            JOIN email_reconciliation_queue e ON s.reconciliation_email_id = e.id
+            WHERE s.user_id = :user_id
+        """
+        params = {"user_id": user_id}
 
-    query += " ORDER BY s.response_due_at ASC"
+        if status:
+            query += " AND s.status = :status"
+            params["status"] = status
 
-    result = db.execute(text(query), params).fetchall()
+        if not include_breached:
+            query += " AND s.status != 'breached'"
+
+        query += " ORDER BY s.response_due_at ASC"
+
+        result = db.execute(text(query), params).fetchall()
+    except Exception as e:
+        logger.error(f"Error fetching SLA tracking: {e}")
+        # Return empty result instead of crashing
+        return {"slas": [], "total": 0, "error": str(e)}
 
     slas = []
     for row in result:
