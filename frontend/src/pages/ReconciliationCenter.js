@@ -1162,8 +1162,42 @@ function ReconciliationCenter() {
       return `$${parseFloat(value).toLocaleString()}`;
     }
 
-    if (fieldName === 'rate') {
+    if (fieldName === 'rate' || fieldName === 'interest_rate') {
+      // Convert decimal to percentage if value is less than 1 (e.g., 0.05875 -> 5.875%)
+      const numValue = parseFloat(value);
+      if (!isNaN(numValue)) {
+        if (numValue < 1) {
+          return `${(numValue * 100).toFixed(3).replace(/\.?0+$/, '')}%`;
+        }
+        return `${numValue}%`;
+      }
       return `${value}%`;
+    }
+
+    return value;
+  };
+
+  // Format field value for display - handles rate conversion and currency formatting
+  const formatDisplayValue = (fieldName, value) => {
+    if (!value && value !== 0) return value;
+
+    // Handle rate/interest_rate - convert decimal to percentage
+    if (fieldName === 'rate' || fieldName === 'interest_rate') {
+      const numValue = parseFloat(value);
+      if (!isNaN(numValue)) {
+        if (numValue < 1) {
+          return `${(numValue * 100).toFixed(3).replace(/\.?0+$/, '')}%`;
+        }
+        return `${numValue}%`;
+      }
+    }
+
+    // Handle loan amounts
+    if (fieldName === 'loan_amount' || fieldName === 'appraisal_value' || fieldName === 'purchase_price') {
+      const numValue = parseFloat(value);
+      if (!isNaN(numValue)) {
+        return `$${numValue.toLocaleString()}`;
+      }
     }
 
     return value;
