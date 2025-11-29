@@ -19433,6 +19433,77 @@ async def reextract_all_pending_emails(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/api/v1/reconciliation/create-test-item")
+async def create_test_reconciliation_item(
+    fields: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a test extracted data item for testing reconciliation approval flow.
+
+    This endpoint is for development/testing purposes only.
+
+    Example request:
+    {
+        "first_name": "Clarissa",
+        "last_name": "Stansbury",
+        "email": "claire.sumika@gmail.com",
+        "phone": "(937) 789-9802"
+    }
+    """
+    try:
+        # First create a dummy incoming data event
+        test_event = IncomingDataEvent(
+            source="test",
+            raw_text=f"Test data for {fields.get('first_name', '')} {fields.get('last_name', '')}",
+            subject="Test Reconciliation Item",
+            sender="test@example.com",
+            user_id=current_user.id,
+            processed=True
+        )
+        db.add(test_event)
+        db.flush()
+
+        # Build fields dict with confidence scores
+        formatted_fields = {}
+        for field_name, field_value in fields.items():
+            if field_value is not None:
+                formatted_fields[field_name] = {
+                    "value": field_value,
+                    "confidence": 0.95
+                }
+
+        # Create extracted data with no match (will trigger "No Matching Borrower" dialog)
+        extracted = ExtractedData(
+            event_id=test_event.id,
+            category="lead_update",
+            subcategory="new_borrower",
+            fields=formatted_fields,
+            match_entity_type=None,  # No match - will trigger create borrower dialog
+            match_entity_id=None,
+            match_confidence=0.0,
+            ai_confidence=0.85,
+            status="pending_review"
+        )
+        db.add(extracted)
+        db.commit()
+        db.refresh(extracted)
+
+        logger.info(f"Created test extracted data item {extracted.id} for testing")
+
+        return {
+            "status": "success",
+            "extracted_data_id": extracted.id,
+            "event_id": test_event.id,
+            "fields": formatted_fields,
+            "message": f"Test item created successfully. Use extracted_data_id={extracted.id} for approval."
+        }
+    except Exception as e:
+        logger.error(f"Error creating test item: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/v1/microsoft/sync-calendar")
 async def sync_microsoft_calendar(
     current_user: User = Depends(get_current_user),
