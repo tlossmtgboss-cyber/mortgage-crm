@@ -11116,6 +11116,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Email Intelligence routes not loaded: {e}")
 
+# Include SLA Tracking routes
+try:
+    from routes.sla_tracking_routes import router as sla_tracking_router
+    app.include_router(sla_tracking_router, tags=["SLA Tracking"])
+    logger.info("✅ SLA Tracking routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ SLA Tracking routes not loaded: {e}")
+
 # Email Monitor Migration Endpoint
 @app.post("/api/v1/migrations/add-email-monitor")
 async def add_email_monitor_migration(db: Session = Depends(get_db)):
@@ -34545,6 +34553,14 @@ async def startup_event():
         logger.info("✅ Dialer lock cleanup job added (runs every 5 minutes)")
     except Exception as e:
         logger.warning(f"⚠️ Dialer lock cleanup job not added: {e}")
+
+    # Add SLA Tracking scheduled jobs
+    try:
+        from tasks.sla_tasks import setup_sla_scheduler
+        setup_sla_scheduler(scheduler)
+        logger.info("✅ SLA Tracking scheduler jobs added")
+    except Exception as e:
+        logger.warning(f"⚠️ SLA Tracking scheduler not loaded: {e}")
 
     logger.info("✅ CRM is ready!")
     logger.info("📚 API Documentation: http://localhost:8000/docs")

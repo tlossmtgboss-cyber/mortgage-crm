@@ -1,0 +1,745 @@
+"""
+SLA Tracking API Routes
+
+Provides endpoints for:
+- SLA Measure configuration (CRUD)
+- Milestone history tracking
+- Performance dashboards and trending
+- Alert management
+- Efficiency reports
+"""
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from typing import Optional, List
+from datetime import date, datetime, timedelta
+import logging
+
+from database import get_db, Base, engine
+
+from models.sla_tracking import (
+    SLAMeasure,
+    LoanMilestoneHistory,
+    SLAPerformanceSnapshot,
+    SLAAlert,
+    SLAEfficiencyReport,
+    TimeUnit,
+    SLAStatus,
+    MilestoneType,
+    AlertStatus
+)
+
+from schemas.sla_tracking import (
+    SLAMeasureCreate,
+    SLAMeasureUpdate,
+    SLAMeasureResponse,
+    MilestoneStartRequest,
+    MilestoneCompleteRequest,
+    MilestoneWaiveRequest,
+    MilestoneHistoryResponse,
+    SLAAlertResponse,
+    AlertAcknowledgeRequest,
+    AlertResolveRequest,
+    AlertEscalateRequest,
+    AlertSnoozeRequest,
+    SLADashboardResponse,
+    SLADashboardSummary,
+    PerformanceTrendResponse,
+    PerformanceTrendPoint,
+    TeamPerformanceResponse,
+    TeamPerformanceItem,
+    BottleneckAnalysisResponse,
+    StageBottleneck,
+    EfficiencyReportResponse,
+    EfficiencyReportGenerateRequest,
+    LoanSLAStatus,
+    LoanSLAStatusListResponse,
+    SLAConfigResponse,
+    MilestoneTypeEnum,
+    SLAStatusEnum
+)
+
+from crud.sla_tracking import (
+    create_sla_measure,
+    get_sla_measure,
+    get_sla_measure_by_type,
+    get_all_sla_measures,
+    update_sla_measure,
+    delete_sla_measure,
+    create_milestone_history,
+    get_milestone_history,
+    get_loan_milestones,
+    get_active_milestones,
+    get_overdue_milestones,
+    get_at_risk_milestones,
+    complete_milestone,
+    waive_milestone,
+    update_milestone_statuses_batch,
+    create_sla_alert,
+    get_sla_alert,
+    get_active_alerts,
+    get_alerts_for_loan,
+    acknowledge_alert,
+    resolve_alert,
+    escalate_alert,
+    snooze_alert,
+    get_performance_snapshots,
+    create_efficiency_report,
+    get_efficiency_reports,
+    get_dashboard_summary,
+    get_team_performance,
+    get_bottleneck_analysis,
+    seed_default_sla_measures
+)
+
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/api/v1/sla", tags=["sla-tracking"])
+
+
+# ============================================================================
+# Database Migration Endpoint
+# ============================================================================
+
+def ensure_sla_tables_exist():
+    """Create SLA tables if they don't exist"""
+    try:
+        with engine.connect() as conn:
+            # Check if tables exist first
+            result = conn.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'sla_measures'
+                )
+            """))
+            exists = result.scalar()
+
+            if not exists:
+                logger.info("Creating SLA tracking tables...")
+
+                # Create sla_measures table
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS sla_measures (
+                        id SERIAL PRIMARY KEY,
+                        organization_id INTEGER NOT NULL DEFAULT 1,
+                        milestone_type VARCHAR(50) NOT NULL,
+                        name VARCHAR(100) NOT NULL,
+                        description TEXT,
+                        target_value FLOAT NOT NULL,
+                        target_unit VARCHAR(20) NOT NULL DEFAULT 'hours',
+                        warning_threshold_pct FLOAT DEFAULT 75,
+                        critical_threshold_pct FLOAT DEFAULT 100,
+                        applies_to_loan_types JSONB,
+                        applies_to_channels JSONB,
+                        business_hours_only BOOLEAN DEFAULT TRUE,
+                        is_active BOOLEAN DEFAULT TRUE,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+
+                # Create loan_milestone_history table
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS loan_milestone_history (
+                        id SERIAL PRIMARY KEY,
+                        organization_id INTEGER NOT NULL DEFAULT 1,
+                        loan_id INTEGER,
+                        lead_id INTEGER,
+                        loan_number VARCHAR(50),
+                        sla_measure_id INTEGER NOT NULL REFERENCES sla_measures(id),
+                        milestone_type VARCHAR(50) NOT NULL,
+                        started_at TIMESTAMP WITH TIME ZONE,
+                        target_deadline TIMESTAMP WITH TIME ZONE,
+                        completed_at TIMESTAMP WITH TIME ZONE,
+                        status VARCHAR(20) DEFAULT 'not_started',
+                        target_hours FLOAT,
+                        actual_hours FLOAT,
+                        variance_hours FLOAT,
+                        variance_pct FLOAT,
+                        assigned_to_id INTEGER,
+                        completed_by_id INTEGER,
+                        notes TEXT,
+                        waive_reason TEXT,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+
+                # Create sla_performance_snapshots table
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS sla_performance_snapshots (
+                        id SERIAL PRIMARY KEY,
+                        organization_id INTEGER NOT NULL DEFAULT 1,
+                        snapshot_date DATE NOT NULL,
+                        period_type VARCHAR(20) DEFAULT 'daily',
+                        scope_type VARCHAR(20) NOT NULL,
+                        scope_id INTEGER,
+                        milestone_type VARCHAR(50),
+                        total_milestones INTEGER DEFAULT 0,
+                        completed_on_time INTEGER DEFAULT 0,
+                        completed_late INTEGER DEFAULT 0,
+                        still_in_progress INTEGER DEFAULT 0,
+                        overdue INTEGER DEFAULT 0,
+                        on_time_rate FLOAT,
+                        avg_completion_time_hours FLOAT,
+                        avg_variance_hours FLOAT,
+                        avg_variance_pct FLOAT,
+                        p50_completion_hours FLOAT,
+                        p90_completion_hours FLOAT,
+                        p95_completion_hours FLOAT,
+                        status_breakdown JSONB,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+
+                # Create sla_alerts table
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS sla_alerts (
+                        id SERIAL PRIMARY KEY,
+                        organization_id INTEGER NOT NULL DEFAULT 1,
+                        milestone_history_id INTEGER NOT NULL REFERENCES loan_milestone_history(id),
+                        loan_id INTEGER,
+                        lead_id INTEGER,
+                        alert_type VARCHAR(50) NOT NULL,
+                        milestone_type VARCHAR(50) NOT NULL,
+                        title VARCHAR(200) NOT NULL,
+                        message TEXT,
+                        status VARCHAR(20) DEFAULT 'active',
+                        assigned_to_id INTEGER,
+                        escalated_to_id INTEGER,
+                        triggered_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                        acknowledged_at TIMESTAMP WITH TIME ZONE,
+                        resolved_at TIMESTAMP WITH TIME ZONE,
+                        snooze_until TIMESTAMP WITH TIME ZONE,
+                        resolution_notes TEXT,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+
+                # Create sla_efficiency_reports table
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS sla_efficiency_reports (
+                        id SERIAL PRIMARY KEY,
+                        organization_id INTEGER NOT NULL DEFAULT 1,
+                        report_date DATE NOT NULL,
+                        period_start DATE NOT NULL,
+                        period_end DATE NOT NULL,
+                        total_loans_processed INTEGER,
+                        avg_days_to_close FLOAT,
+                        avg_days_to_fund FLOAT,
+                        overall_sla_compliance_rate FLOAT,
+                        bottleneck_stages JSONB,
+                        top_performers JSONB,
+                        improvement_areas JSONB,
+                        vs_prior_period JSONB,
+                        recommendations JSONB,
+                        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+
+                # Create indexes
+                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_sla_measures_org ON sla_measures(organization_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_sla_measures_type ON sla_measures(milestone_type)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_milestone_history_org ON loan_milestone_history(organization_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_milestone_history_loan ON loan_milestone_history(loan_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_milestone_history_lead ON loan_milestone_history(lead_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_milestone_history_status ON loan_milestone_history(status)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_sla_alerts_org ON sla_alerts(organization_id)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_sla_alerts_status ON sla_alerts(status)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS idx_performance_snapshots_date ON sla_performance_snapshots(snapshot_date)"))
+
+                conn.commit()
+                logger.info("SLA tracking tables created successfully")
+            else:
+                logger.info("SLA tracking tables already exist")
+
+    except Exception as e:
+        logger.warning(f"SLA tables check warning: {e}")
+
+
+# Auto-create tables on module load
+try:
+    ensure_sla_tables_exist()
+except Exception as e:
+    logger.warning(f"Could not auto-create SLA tables: {e}")
+
+
+# ============================================================================
+# Migration Endpoint
+# ============================================================================
+
+@router.post("/migrate")
+async def run_sla_migration(db: Session = Depends(get_db)):
+    """
+    Run SLA tracking database migrations and seed default measures.
+    Call this once to set up the SLA system.
+    """
+    try:
+        ensure_sla_tables_exist()
+
+        # Seed default SLA measures
+        created = seed_default_sla_measures(db)
+
+        return {
+            "status": "success",
+            "message": "SLA tracking tables created/verified",
+            "default_measures_created": len(created)
+        }
+    except Exception as e:
+        logger.error(f"Migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# SLA Measure Configuration Routes
+# ============================================================================
+
+@router.get("/measures", response_model=List[SLAMeasureResponse])
+async def list_sla_measures(
+    active_only: bool = Query(True, description="Only return active measures"),
+    db: Session = Depends(get_db)
+):
+    """Get all SLA measures for the organization."""
+    measures = get_all_sla_measures(db, active_only=active_only)
+    return measures
+
+
+@router.get("/measures/{measure_id}", response_model=SLAMeasureResponse)
+async def get_sla_measure_detail(
+    measure_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get a specific SLA measure by ID."""
+    measure = get_sla_measure(db, measure_id)
+    if not measure:
+        raise HTTPException(status_code=404, detail="SLA measure not found")
+    return measure
+
+
+@router.post("/measures", response_model=SLAMeasureResponse)
+async def create_new_sla_measure(
+    measure: SLAMeasureCreate,
+    db: Session = Depends(get_db)
+):
+    """Create a new SLA measure configuration."""
+    return create_sla_measure(db, measure)
+
+
+@router.put("/measures/{measure_id}", response_model=SLAMeasureResponse)
+async def update_sla_measure_detail(
+    measure_id: int,
+    measure: SLAMeasureUpdate,
+    db: Session = Depends(get_db)
+):
+    """Update an existing SLA measure."""
+    updated = update_sla_measure(db, measure_id, measure)
+    if not updated:
+        raise HTTPException(status_code=404, detail="SLA measure not found")
+    return updated
+
+
+@router.delete("/measures/{measure_id}")
+async def delete_sla_measure_item(
+    measure_id: int,
+    db: Session = Depends(get_db)
+):
+    """Deactivate an SLA measure (soft delete)."""
+    success = delete_sla_measure(db, measure_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="SLA measure not found")
+    return {"status": "success", "message": "SLA measure deactivated"}
+
+
+# ============================================================================
+# Milestone Tracking Routes
+# ============================================================================
+
+@router.post("/milestones/start")
+async def start_milestone_tracking(
+    request: MilestoneStartRequest,
+    db: Session = Depends(get_db)
+):
+    """Start tracking a milestone for a loan/lead."""
+    milestone = create_milestone_history(
+        db,
+        loan_id=request.loan_id,
+        lead_id=request.lead_id,
+        loan_number=request.loan_number,
+        milestone_type=MilestoneType[request.milestone_type.value.upper()],
+        assigned_to_id=request.assigned_to_id,
+        notes=request.notes
+    )
+    if not milestone:
+        raise HTTPException(
+            status_code=400,
+            detail="Could not start milestone. Check that SLA measure exists for this milestone type."
+        )
+    return {"status": "success", "milestone_id": milestone.id}
+
+
+@router.post("/milestones/{milestone_id}/complete")
+async def complete_milestone_tracking(
+    milestone_id: int,
+    request: MilestoneCompleteRequest,
+    db: Session = Depends(get_db)
+):
+    """Mark a milestone as completed."""
+    milestone = complete_milestone(
+        db,
+        milestone_id,
+        completed_by_id=request.completed_by_id,
+        notes=request.notes
+    )
+    if not milestone:
+        raise HTTPException(status_code=404, detail="Milestone not found or already completed")
+
+    return {
+        "status": "success",
+        "milestone_id": milestone.id,
+        "actual_hours": milestone.actual_hours,
+        "variance_hours": milestone.variance_hours,
+        "variance_pct": milestone.variance_pct,
+        "on_time": milestone.variance_hours <= 0 if milestone.variance_hours else True
+    }
+
+
+@router.post("/milestones/{milestone_id}/waive")
+async def waive_milestone_tracking(
+    milestone_id: int,
+    request: MilestoneWaiveRequest,
+    db: Session = Depends(get_db)
+):
+    """Waive a milestone (external dependency, etc.)."""
+    milestone = waive_milestone(db, milestone_id, request.waive_reason)
+    if not milestone:
+        raise HTTPException(status_code=404, detail="Milestone not found")
+    return {"status": "success", "milestone_id": milestone.id, "waive_reason": request.waive_reason}
+
+
+@router.get("/milestones/loan/{loan_id}", response_model=List[MilestoneHistoryResponse])
+async def get_loan_milestone_history(
+    loan_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get all milestones for a specific loan."""
+    milestones = get_loan_milestones(db, loan_id=loan_id)
+    return milestones
+
+
+@router.get("/milestones/lead/{lead_id}", response_model=List[MilestoneHistoryResponse])
+async def get_lead_milestone_history(
+    lead_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get all milestones for a specific lead."""
+    milestones = get_loan_milestones(db, lead_id=lead_id)
+    return milestones
+
+
+@router.get("/milestones/active")
+async def get_active_milestone_list(
+    status: Optional[str] = Query(None, description="Filter by status: at_risk, overdue"),
+    db: Session = Depends(get_db)
+):
+    """Get all active milestones, optionally filtered by status."""
+    if status == "at_risk":
+        milestones = get_at_risk_milestones(db)
+    elif status == "overdue":
+        milestones = get_overdue_milestones(db)
+    else:
+        milestones = get_active_milestones(db)
+
+    return {
+        "total": len(milestones),
+        "milestones": milestones
+    }
+
+
+# ============================================================================
+# Alert Management Routes
+# ============================================================================
+
+@router.get("/alerts", response_model=List[SLAAlertResponse])
+async def get_alert_list(
+    limit: int = Query(50, le=200),
+    db: Session = Depends(get_db)
+):
+    """Get active SLA alerts."""
+    return get_active_alerts(db, limit=limit)
+
+
+@router.get("/alerts/loan/{loan_id}", response_model=List[SLAAlertResponse])
+async def get_loan_alerts(
+    loan_id: int,
+    db: Session = Depends(get_db)
+):
+    """Get all alerts for a specific loan."""
+    return get_alerts_for_loan(db, loan_id=loan_id)
+
+
+@router.post("/alerts/{alert_id}/acknowledge")
+async def acknowledge_sla_alert(
+    alert_id: int,
+    request: AlertAcknowledgeRequest,
+    db: Session = Depends(get_db)
+):
+    """Acknowledge an SLA alert."""
+    alert = acknowledge_alert(db, alert_id, notes=request.notes)
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    return {"status": "success", "alert_id": alert.id}
+
+
+@router.post("/alerts/{alert_id}/resolve")
+async def resolve_sla_alert(
+    alert_id: int,
+    request: AlertResolveRequest,
+    db: Session = Depends(get_db)
+):
+    """Resolve an SLA alert."""
+    alert = resolve_alert(db, alert_id, request.resolution_notes)
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    return {"status": "success", "alert_id": alert.id}
+
+
+@router.post("/alerts/{alert_id}/escalate")
+async def escalate_sla_alert(
+    alert_id: int,
+    request: AlertEscalateRequest,
+    db: Session = Depends(get_db)
+):
+    """Escalate an SLA alert."""
+    alert = escalate_alert(db, alert_id, request.escalated_to_id, notes=request.notes)
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    return {"status": "success", "alert_id": alert.id, "escalated_to": request.escalated_to_id}
+
+
+@router.post("/alerts/{alert_id}/snooze")
+async def snooze_sla_alert(
+    alert_id: int,
+    request: AlertSnoozeRequest,
+    db: Session = Depends(get_db)
+):
+    """Snooze an SLA alert until a specified time."""
+    alert = snooze_alert(db, alert_id, request.snooze_until, notes=request.notes)
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    return {"status": "success", "alert_id": alert.id, "snoozed_until": request.snooze_until}
+
+
+# ============================================================================
+# Dashboard Routes
+# ============================================================================
+
+@router.get("/dashboard/summary")
+async def get_sla_dashboard_summary(
+    db: Session = Depends(get_db)
+):
+    """Get SLA dashboard summary metrics."""
+    summary = get_dashboard_summary(db)
+    return summary
+
+
+@router.get("/dashboard")
+async def get_full_sla_dashboard(
+    db: Session = Depends(get_db)
+):
+    """Get complete SLA dashboard data."""
+    summary = get_dashboard_summary(db)
+    alerts = get_active_alerts(db, limit=10)
+    at_risk = get_at_risk_milestones(db)[:10]
+
+    # Get performance trend for last 30 days
+    end_date = date.today()
+    start_date = end_date - timedelta(days=30)
+    snapshots = get_performance_snapshots(db, start_date, end_date)
+
+    trend_points = [
+        {
+            "date": s.snapshot_date.isoformat(),
+            "on_time_rate": s.on_time_rate or 0,
+            "avg_completion_hours": s.avg_completion_time_hours or 0,
+            "total_milestones": s.total_milestones or 0,
+            "overdue_count": s.overdue or 0
+        }
+        for s in snapshots
+    ]
+
+    return {
+        "summary": summary,
+        "recent_alerts": alerts,
+        "at_risk_loans": at_risk,
+        "performance_trend": trend_points
+    }
+
+
+@router.get("/dashboard/trend")
+async def get_performance_trend(
+    start_date: date = Query(None),
+    end_date: date = Query(None),
+    milestone_type: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """Get performance trending data for a date range."""
+    if not end_date:
+        end_date = date.today()
+    if not start_date:
+        start_date = end_date - timedelta(days=30)
+
+    mt = MilestoneType[milestone_type.upper()] if milestone_type else None
+    snapshots = get_performance_snapshots(db, start_date, end_date, milestone_type=mt)
+
+    return {
+        "period_start": start_date.isoformat(),
+        "period_end": end_date.isoformat(),
+        "milestone_type": milestone_type,
+        "data_points": [
+            {
+                "date": s.snapshot_date.isoformat(),
+                "on_time_rate": s.on_time_rate or 0,
+                "avg_completion_hours": s.avg_completion_time_hours or 0,
+                "total_milestones": s.total_milestones or 0,
+                "overdue_count": s.overdue or 0
+            }
+            for s in snapshots
+        ]
+    }
+
+
+@router.get("/dashboard/team-performance")
+async def get_team_performance_data(
+    start_date: date = Query(None),
+    end_date: date = Query(None),
+    db: Session = Depends(get_db)
+):
+    """Get team performance metrics."""
+    if not end_date:
+        end_date = date.today()
+    if not start_date:
+        start_date = end_date - timedelta(days=30)
+
+    performance = get_team_performance(db, start_date, end_date)
+
+    return {
+        "period_start": start_date.isoformat(),
+        "period_end": end_date.isoformat(),
+        "members": performance
+    }
+
+
+@router.get("/dashboard/bottlenecks")
+async def get_bottleneck_analysis_data(
+    start_date: date = Query(None),
+    end_date: date = Query(None),
+    db: Session = Depends(get_db)
+):
+    """Get bottleneck analysis showing stages with most delays."""
+    if not end_date:
+        end_date = date.today()
+    if not start_date:
+        start_date = end_date - timedelta(days=30)
+
+    bottlenecks = get_bottleneck_analysis(db, start_date, end_date)
+
+    # Generate recommendations
+    recommendations = []
+    for b in bottlenecks[:3]:
+        if b["delay_frequency_pct"] > 30:
+            recommendations.append(
+                f"Consider reviewing {b['milestone_type']} process - {b['delay_frequency_pct']}% of loans experience delays"
+            )
+
+    return {
+        "period_start": start_date.isoformat(),
+        "period_end": end_date.isoformat(),
+        "bottlenecks": bottlenecks,
+        "recommendations": recommendations
+    }
+
+
+# ============================================================================
+# Efficiency Reports Routes
+# ============================================================================
+
+@router.post("/reports/efficiency")
+async def generate_efficiency_report(
+    request: EfficiencyReportGenerateRequest,
+    db: Session = Depends(get_db)
+):
+    """Generate a new efficiency report for a period."""
+    report = create_efficiency_report(db, request.period_start, request.period_end)
+    return {
+        "status": "success",
+        "report_id": report.id,
+        "compliance_rate": report.overall_sla_compliance_rate
+    }
+
+
+@router.get("/reports/efficiency", response_model=List[EfficiencyReportResponse])
+async def list_efficiency_reports(
+    limit: int = Query(10, le=50),
+    db: Session = Depends(get_db)
+):
+    """Get recent efficiency reports."""
+    return get_efficiency_reports(db, limit=limit)
+
+
+# ============================================================================
+# Configuration Routes
+# ============================================================================
+
+@router.get("/config")
+async def get_sla_configuration(
+    db: Session = Depends(get_db)
+):
+    """Get complete SLA configuration."""
+    measures = get_all_sla_measures(db)
+
+    return {
+        "measures": measures,
+        "business_hours": {
+            "start_hour": 9,
+            "end_hour": 17,
+            "work_days": [0, 1, 2, 3, 4]  # Mon-Fri
+        },
+        "holidays": [],  # Would come from config
+        "escalation_rules": {
+            "warning_to_critical_hours": 4,
+            "auto_escalate_overdue": True
+        }
+    }
+
+
+@router.post("/config/seed-defaults")
+async def seed_default_measures(
+    db: Session = Depends(get_db)
+):
+    """Seed default SLA measures (run once during setup)."""
+    created = seed_default_sla_measures(db)
+    return {
+        "status": "success",
+        "measures_created": len(created),
+        "message": f"Created {len(created)} default SLA measures"
+    }
+
+
+# ============================================================================
+# Background Job Trigger Routes (for testing/manual runs)
+# ============================================================================
+
+@router.post("/jobs/update-statuses")
+async def trigger_status_update(
+    db: Session = Depends(get_db)
+):
+    """
+    Manually trigger milestone status update job.
+    This is normally run by a background scheduler.
+    """
+    results = update_milestone_statuses_batch(db)
+    return {
+        "status": "success",
+        "updated": results
+    }
