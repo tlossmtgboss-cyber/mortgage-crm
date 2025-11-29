@@ -753,33 +753,37 @@ async def get_all_upcoming_tasks(
         end_date = today + timedelta(days=days + 4)  # Add buffer for weekends
 
         # Query ALL tasks without stage filtering
+        # Include tasks without due dates (treat as today's tasks)
+        # Query from ai_tasks table (main task table used by the UI)
         query = """
             SELECT
                 t.id,
                 t.title,
                 t.description,
                 t.priority,
-                t.due_date,
-                t.status,
-                t.owner_id,
+                COALESCE(t.due_date, CURRENT_DATE) as due_date,
+                t.type::text,
+                t.assigned_to_id,
                 u.full_name as owner_name,
-                COALESCE(l.borrower_name, le.name, t.related_contact_name, 'Unknown') as client_name,
+                COALESCE(t.borrower_name, l.borrower_name, le.name, 'Unknown') as client_name,
                 COALESCE(l.loan_number, '') as loan_number
-            FROM tasks t
-            LEFT JOIN users u ON t.owner_id = u.id
+            FROM ai_tasks t
+            LEFT JOIN users u ON t.assigned_to_id = u.id
             LEFT JOIN loans l ON t.loan_id = l.id
             LEFT JOIN leads le ON t.lead_id = le.id
-            WHERE t.status != 'completed'
-            AND t.due_date IS NOT NULL
-            AND t.due_date >= :today
-            AND t.due_date <= :end_date
-            ORDER BY t.due_date ASC, t.priority DESC
+            WHERE t.type::text != 'Completed'
+            AND (t.due_date IS NULL OR t.due_date <= :end_date)
+            ORDER BY COALESCE(t.due_date, CURRENT_DATE) ASC, t.priority DESC
             LIMIT 200
         """
         params = {"today": today, "end_date": end_date}
 
         result = db.execute(text(query), params)
         tasks = result.fetchall()
+
+        logger.info(f"Upcoming tasks all: found {len(tasks)} raw tasks, today={today}, end={end_date}")
+        for t in tasks[:3]:
+            logger.info(f"  Task sample: id={t[0]}, title={t[1][:30] if t[1] else 'N/A'}, due={t[4]}, type={t[5]}")
 
         # Group tasks by day
         tasks_by_day = {}
