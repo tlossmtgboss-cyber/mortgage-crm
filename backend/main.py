@@ -21123,6 +21123,53 @@ class CallSummaryRequest(BaseModel):
     meeting_name: Optional[str] = None
     call_duration_seconds: Optional[int] = None
 
+@app.post("/api/v1/email-drafts/setup-table")
+async def setup_email_drafts_table(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Setup email_drafts table (non-admin accessible migration)"""
+    try:
+        # Create email_drafts table if not exists
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS email_drafts (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id),
+                lead_id INTEGER REFERENCES leads(id),
+                loan_id INTEGER REFERENCES loans(id),
+                recipient_email VARCHAR(255),
+                recipient_name VARCHAR(255),
+                cc_emails JSONB DEFAULT '[]',
+                subject VARCHAR(500),
+                body_html TEXT,
+                body_text TEXT,
+                source_type VARCHAR(50),
+                source_id VARCHAR(255),
+                recording_url TEXT,
+                call_summary TEXT,
+                action_items JSONB DEFAULT '[]',
+                status VARCHAR(50) DEFAULT 'draft',
+                sent_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+
+        # Create indexes
+        try:
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_email_drafts_user ON email_drafts(user_id)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_email_drafts_lead ON email_drafts(lead_id)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_email_drafts_status ON email_drafts(status)"))
+        except Exception:
+            pass
+
+        db.commit()
+        return {"success": True, "message": "Email drafts table created"}
+    except Exception as e:
+        logger.error(f"Error setting up email_drafts table: {e}")
+        db.rollback()
+        return {"success": False, "error": str(e)}
+
 @app.post("/api/v1/email-drafts")
 async def create_email_draft(
     draft: EmailDraftCreate,

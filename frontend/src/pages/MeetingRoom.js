@@ -13,7 +13,10 @@ const MeetingRoom = () => {
   const { roomCode } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const isHost = searchParams.get('host') === 'true';
+
+  // Host detection - determine from JWT and meeting data, not URL param
+  const [isHost, setIsHost] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState(null);
 
   // State
   const [meeting, setMeeting] = useState(null);
