@@ -12,6 +12,9 @@ function ReconciliationCenter() {
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState(null);
   const [editedFields, setEditedFields] = useState({});
+  const [deletedFields, setDeletedFields] = useState(new Set());
+  const [renamedFields, setRenamedFields] = useState({}); // { oldKey: newKey }
+  const [editingFieldKey, setEditingFieldKey] = useState(null); // currently editing field key
   const [processingAction, setProcessingAction] = useState(false);
   const [syncingEmails, setSyncingEmails] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState(null);
@@ -484,11 +487,15 @@ function ReconciliationCenter() {
       }
 
       const corrections = Object.keys(editedFields).length > 0 ? editedFields : null;
+      const deletedFieldsList = deletedFields.size > 0 ? Array.from(deletedFields) : null;
+      const renamedFieldsObj = Object.keys(renamedFields).length > 0 ? renamedFields : null;
 
       // Build request body with entity type options
       const requestBody = {
         extracted_data_id: itemId,
         corrections: corrections,
+        deleted_fields: deletedFieldsList,
+        renamed_fields: renamedFieldsObj,
         delegate_to_ai: delegateToAI,
         email_intent: selectedItem?.email_intent,
         recommended_action: selectedItem?.recommended_action
@@ -539,6 +546,9 @@ function ReconciliationCenter() {
         setPendingReviewItems(prev => prev.filter(item => item.id !== itemId));
         setSelectedItem(null);
         setEditedFields({});
+        setDeletedFields(new Set());
+        setRenamedFields({});
+        setEditingFieldKey(null);
         setDelegateToAI(false);
         setSelectedEntityType(null);
         setCreateNewLoan(false);
@@ -719,10 +729,87 @@ function ReconciliationCenter() {
     }));
   };
 
+  // Handle deleting a field
+  const handleFieldDelete = (fieldName) => {
+    setDeletedFields(prev => {
+      const newSet = new Set(prev);
+      newSet.add(fieldName);
+      return newSet;
+    });
+  };
+
+  // Handle restoring a deleted field
+  const handleFieldRestore = (fieldName) => {
+    setDeletedFields(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(fieldName);
+      return newSet;
+    });
+  };
+
+  // Handle renaming a field key
+  const handleFieldRename = (oldKey, newKey) => {
+    if (newKey && newKey !== oldKey) {
+      setRenamedFields(prev => ({
+        ...prev,
+        [oldKey]: newKey
+      }));
+    }
+    setEditingFieldKey(null);
+  };
+
+  // Handle undoing a field rename
+  const handleFieldRenameUndo = (oldKey) => {
+    setRenamedFields(prev => {
+      const newFields = { ...prev };
+      delete newFields[oldKey];
+      return newFields;
+    });
+  };
+
+  // Get the effective field key (after any rename)
+  const getEffectiveFieldKey = (originalKey) => {
+    return renamedFields[originalKey] || originalKey;
+  };
+
+  // Available field types for renaming dropdown
+  const fieldTypeOptions = [
+    { value: 'first_name', label: 'First Name' },
+    { value: 'last_name', label: 'Last Name' },
+    { value: 'borrower_name', label: 'Borrower Name' },
+    { value: 'coborrower_first_name', label: 'Co-Borrower First Name' },
+    { value: 'coborrower_last_name', label: 'Co-Borrower Last Name' },
+    { value: 'coborrower_name', label: 'Co-Borrower Name' },
+    { value: 'email', label: 'Email' },
+    { value: 'phone', label: 'Phone' },
+    { value: 'loan_number', label: 'Loan Number' },
+    { value: 'property_address', label: 'Property Address' },
+    { value: 'property_city', label: 'Property City' },
+    { value: 'property_state', label: 'Property State' },
+    { value: 'property_zip', label: 'Property Zip' },
+    { value: 'loan_amount', label: 'Loan Amount' },
+    { value: 'amount', label: 'Amount' },
+    { value: 'lender', label: 'Lender' },
+    { value: 'processor', label: 'Processor' },
+    { value: 'processing_assistant', label: 'Processing Assistant' },
+    { value: 'loan_officer', label: 'Loan Officer' },
+    { value: 'loan_officer_name', label: 'Loan Officer Name' },
+    { value: 'program', label: 'Program' },
+    { value: 'interest_rate', label: 'Interest Rate' },
+    { value: 'closing_date', label: 'Closing Date' },
+    { value: 'lock_expiration', label: 'Lock Expiration' },
+    { value: 'referral_partner', label: 'Referral Partner' },
+    { value: 'realtor_name', label: 'Realtor Name' },
+    { value: 'notes', label: 'Notes' }
+  ];
+
   // Handle selecting an item - resets entity type selection
   const handleSelectItem = (item) => {
     setSelectedItem(item);
     setEditedFields({});
+    setDeletedFields(new Set());
+    setRenamedFields({});
+    setEditingFieldKey(null);
     // Reset entity type selection to show AI's suggestion
     setSelectedEntityType(null);
     setCreateNewLoan(false);
@@ -1310,40 +1397,158 @@ function ReconciliationCenter() {
                   <h3>Extracted Fields</h3>
                   <div className="fields-grid">
                     {Object.entries(selectedItem.fields || {}).map(([fieldName, fieldData]) => {
+                      const isDeleted = deletedFields.has(fieldName);
+                      const isRenamed = fieldName in renamedFields;
+                      const effectiveKey = getEffectiveFieldKey(fieldName);
                       const confidence = fieldData.confidence || 0;
                       const value = fieldData.value;
                       const isEdited = fieldName in editedFields;
-                      const displayValue = isEdited
-                        ? editedFields[fieldName]
-                        : formatFieldValue(fieldName, value);
+
+                      if (isDeleted) {
+                        // Show deleted field with restore option
+                        return (
+                          <div key={fieldName} className="field-row deleted" style={{ opacity: 0.5, background: '#fee2e2' }}>
+                            <div className="field-label" style={{ textDecoration: 'line-through' }}>
+                              <span>{formatFieldName(fieldName)}</span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ color: '#991b1b', fontSize: '12px' }}>Deleted</span>
+                              <button
+                                onClick={() => handleFieldRestore(fieldName)}
+                                style={{
+                                  padding: '4px 8px',
+                                  fontSize: '11px',
+                                  background: '#f3f4f6',
+                                  border: '1px solid #d1d5db',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer'
+                                }}
+                                title="Restore field"
+                              >
+                                ↩ Restore
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      }
 
                       return (
-                        <div key={fieldName} className="field-row">
-                          <div className="field-label">
-                            <span>{formatFieldName(fieldName)}</span>
+                        <div key={fieldName} className={`field-row ${isRenamed ? 'renamed' : ''}`}>
+                          <div className="field-label" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {editingFieldKey === fieldName ? (
+                              // Show dropdown for selecting new field type
+                              <select
+                                value={effectiveKey}
+                                onChange={(e) => handleFieldRename(fieldName, e.target.value)}
+                                onBlur={() => setEditingFieldKey(null)}
+                                autoFocus
+                                style={{
+                                  padding: '4px 8px',
+                                  fontSize: '12px',
+                                  borderRadius: '4px',
+                                  border: '1px solid #3b82f6',
+                                  minWidth: '160px'
+                                }}
+                              >
+                                <option value={fieldName}>{formatFieldName(fieldName)}</option>
+                                {fieldTypeOptions
+                                  .filter(opt => opt.value !== fieldName)
+                                  .map(opt => (
+                                    <option key={opt.value} value={opt.value}>
+                                      {opt.label}
+                                    </option>
+                                  ))}
+                              </select>
+                            ) : (
+                              <>
+                                <span
+                                  onClick={() => setEditingFieldKey(fieldName)}
+                                  style={{
+                                    cursor: 'pointer',
+                                    borderBottom: '1px dashed #9ca3af'
+                                  }}
+                                  title="Click to change field type"
+                                >
+                                  {formatFieldName(effectiveKey)}
+                                </span>
+                                {isRenamed && (
+                                  <span style={{
+                                    fontSize: '10px',
+                                    color: '#2563eb',
+                                    background: '#dbeafe',
+                                    padding: '2px 6px',
+                                    borderRadius: '4px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                  }}>
+                                    was: {formatFieldName(fieldName)}
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleFieldRenameUndo(fieldName);
+                                      }}
+                                      style={{
+                                        background: 'transparent',
+                                        border: 'none',
+                                        cursor: 'pointer',
+                                        fontSize: '10px',
+                                        padding: '0 2px'
+                                      }}
+                                      title="Undo rename"
+                                    >
+                                      ✕
+                                    </button>
+                                  </span>
+                                )}
+                              </>
+                            )}
                             <span
                               className="field-confidence"
-                              style={{ color: getConfidenceColor(confidence) }}
+                              style={{ color: getConfidenceColor(confidence), marginLeft: 'auto' }}
                             >
                               {Math.round(confidence * 100)}%
                             </span>
                           </div>
-                          <input
-                            type="text"
-                            className={`field-input ${isEdited ? 'edited' : ''}`}
-                            value={isEdited ? editedFields[fieldName] : value || ''}
-                            onChange={(e) => handleFieldEdit(fieldName, e.target.value)}
-                          />
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <input
+                              type="text"
+                              className={`field-input ${isEdited ? 'edited' : ''}`}
+                              value={isEdited ? editedFields[fieldName] : value || ''}
+                              onChange={(e) => handleFieldEdit(fieldName, e.target.value)}
+                              style={{ flex: 1 }}
+                            />
+                            <button
+                              onClick={() => handleFieldDelete(fieldName)}
+                              style={{
+                                padding: '6px 10px',
+                                background: '#fef2f2',
+                                border: '1px solid #fecaca',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                color: '#dc2626',
+                                fontSize: '14px'
+                              }}
+                              title="Delete field"
+                            >
+                              🗑️
+                            </button>
+                          </div>
                         </div>
                       );
                     })}
                   </div>
                 </div>
 
-                {Object.keys(editedFields).length > 0 && (
+                {(Object.keys(editedFields).length > 0 || deletedFields.size > 0 || Object.keys(renamedFields).length > 0) && (
                   <div className="corrections-notice">
-                    <strong>Note:</strong> {Object.keys(editedFields).length} field(s) edited.
-                    The AI will learn from your corrections.
+                    <strong>Changes:</strong>{' '}
+                    {Object.keys(editedFields).length > 0 && `${Object.keys(editedFields).length} edited`}
+                    {Object.keys(editedFields).length > 0 && (deletedFields.size > 0 || Object.keys(renamedFields).length > 0) && ', '}
+                    {deletedFields.size > 0 && `${deletedFields.size} deleted`}
+                    {deletedFields.size > 0 && Object.keys(renamedFields).length > 0 && ', '}
+                    {Object.keys(renamedFields).length > 0 && `${Object.keys(renamedFields).length} renamed`}
+                    . The AI will learn from your corrections.
                   </div>
                 )}
 
@@ -1550,23 +1755,6 @@ function ReconciliationCenter() {
                       <span className="detail-value">
                         {new Date(selectedItem.email_received_at).toLocaleString()}
                       </span>
-                    </div>
-                    <div className="detail-info-item detail-comm-method-item">
-                      <span className="detail-label">SEND VIA</span>
-                      <div className="comm-method-selector">
-                        <button className="comm-method-btn active">
-                          📧 Email
-                        </button>
-                        <button className="comm-method-btn">
-                          💬 Text
-                        </button>
-                        <button className="comm-method-btn">
-                          📞 Phone
-                        </button>
-                        <button className="comm-method-btn">
-                          🎙️ Voicemail
-                        </button>
-                      </div>
                     </div>
                   </div>
 
