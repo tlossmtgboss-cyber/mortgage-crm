@@ -355,11 +355,13 @@ def ensure_email_intelligence_tables_exist():
                     -- Timing
                     email_received_at TIMESTAMP WITH TIME ZONE,
                     response_due_at TIMESTAMP WITH TIME ZONE,
-                    response_sent_at TIMESTAMP WITH TIME ZONE,
+                    responded_at TIMESTAMP WITH TIME ZONE,
+                    response_email_id INTEGER,
 
                     -- Status
                     status VARCHAR(50),
                     breach_notified BOOLEAN DEFAULT FALSE,
+                    breach_notified_at TIMESTAMP WITH TIME ZONE,
 
                     -- Metrics
                     response_time_hours NUMERIC(10, 2),
@@ -367,7 +369,8 @@ def ensure_email_intelligence_tables_exist():
                     -- User ownership
                     user_id INTEGER,
 
-                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_sla_track_status ON email_sla_tracking(status);
@@ -1893,3 +1896,898 @@ async def cron_sync_emails_to_queue(
     except Exception as e:
         logger.error(f"Error in cron sync: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ================================================================
+# PHASE 3: CONVERSATION INTELLIGENCE SERVICE
+# ================================================================
+
+class ConversationIntelligenceService:
+    """
+    AI-powered conversation logging and document tracking.
+
+    Called when:
+    1. Email is dispositioned in the queue
+    2. Email is auto-processed by rules
+    3. Manual "save to conversation log" action
+    """
+
+    def __init__(self, db: Session):
+        self.db = db
+        self.anthropic_api_key = os.environ.get("ANTHROPIC_API_KEY")
+
+    async def process_email_disposition(
+        self,
+        email_id: int,
+        disposition: str,
+        user_id: int,
+        override_summary: Optional[str] = None,
+        additional_notes: Optional[str] = None,
+        create_task: bool = False,
+        task_title: Optional[str] = None,
+        task_due_days: int = 3
+    ) -> Dict[str, Any]:
+        """
+        Main entry point when an email is dispositioned.
+
+        Returns dict with:
+        - conversation_log_created: bool
+        - documents_tracked: int
+        - sla_created: bool
+        - task_created: bool
+        """
+
+        result = {
+            "email_id": email_id,
+            "disposition": disposition,
+            "conversation_log_created": False,
+            "conversation_log_id": None,
+            "documents_tracked": 0,
+            "document_ids": [],
+            "sla_created": False,
+            "sla_id": None,
+            "task_created": False,
+            "task_id": None,
+            "errors": []
+        }
+
+        # Get the email
+        email_row = self.db.execute(text("""
+            SELECT id, from_email, from_name, to_emails, cc_emails, subject,
+                   body_preview, body_full, sent_date, received_date,
+                   has_attachments, attachment_names, direction,
+                   ai_analysis, matched_contact_id, matched_loan_id, matched_lead_id,
+                   thread_id
+            FROM email_reconciliation_queue
+            WHERE id = :email_id AND user_id = :user_id
+        """), {"email_id": email_id, "user_id": user_id}).fetchone()
+
+        if not email_row:
+            result["errors"].append(f"Email {email_id} not found")
+            return result
+
+        email_data = {
+            "id": email_row[0],
+            "from_email": email_row[1],
+            "from_name": email_row[2],
+            "to_emails": email_row[3],
+            "cc_emails": email_row[4],
+            "subject": email_row[5],
+            "body_preview": email_row[6],
+            "body_full": email_row[7],
+            "sent_date": email_row[8],
+            "received_date": email_row[9],
+            "has_attachments": email_row[10],
+            "attachment_names": email_row[11],
+            "direction": email_row[12],
+            "ai_analysis": email_row[13],
+            "matched_contact_id": email_row[14],
+            "matched_loan_id": email_row[15],
+            "matched_lead_id": email_row[16],
+            "thread_id": email_row[17]
+        }
+
+        # Get or run AI analysis
+        analysis = email_data.get("ai_analysis") or {}
+        if isinstance(analysis, str):
+            try:
+                analysis = json.loads(analysis)
+            except:
+                analysis = {}
+
+        if not analysis and self.anthropic_api_key:
+            try:
+                analysis = await self._run_ai_analysis(email_data)
+                self.db.execute(text("""
+                    UPDATE email_reconciliation_queue
+                    SET ai_analysis = :analysis, analyzed_at = :analyzed_at
+                    WHERE id = :email_id
+                """), {
+                    "analysis": json.dumps(analysis),
+                    "analyzed_at": datetime.now(timezone.utc),
+                    "email_id": email_id
+                })
+                self.db.commit()
+            except Exception as e:
+                logger.error(f"AI analysis failed for email {email_id}: {e}")
+                analysis = self._basic_analysis_dict(email_data)
+
+        # 1. Create conversation log entry (for most dispositions)
+        if disposition not in ['skip', 'archived']:
+            try:
+                log_id = await self._create_conversation_log(
+                    email_data=email_data,
+                    analysis=analysis,
+                    override_summary=override_summary,
+                    additional_notes=additional_notes,
+                    user_id=user_id
+                )
+                if log_id:
+                    result["conversation_log_created"] = True
+                    result["conversation_log_id"] = log_id
+            except Exception as e:
+                logger.error(f"Failed to create conversation log: {e}")
+                result["errors"].append(f"Conversation log failed: {str(e)}")
+
+        # 2. Track documents if applicable
+        if disposition in ['document_request', 'document_received'] or \
+           analysis.get('documents_requested') or analysis.get('documents_attached'):
+            try:
+                doc_ids = await self._track_documents(
+                    email_data=email_data,
+                    analysis=analysis,
+                    disposition=disposition,
+                    user_id=user_id
+                )
+                result["documents_tracked"] = len(doc_ids)
+                result["document_ids"] = doc_ids
+            except Exception as e:
+                logger.error(f"Failed to track documents: {e}")
+                result["errors"].append(f"Document tracking failed: {str(e)}")
+
+        # 3. Create SLA tracking for inbound emails needing response
+        if email_data.get("direction") == 'inbound' and disposition in ['action_required', 'general_correspondence']:
+            try:
+                sla_id = await self._create_sla_tracking(
+                    email_data=email_data,
+                    analysis=analysis,
+                    user_id=user_id
+                )
+                if sla_id:
+                    result["sla_created"] = True
+                    result["sla_id"] = sla_id
+            except Exception as e:
+                logger.error(f"Failed to create SLA: {e}")
+                result["errors"].append(f"SLA tracking failed: {str(e)}")
+
+        # 4. Create follow-up task if requested
+        if create_task:
+            try:
+                task_id = await self._create_followup_task(
+                    email_data=email_data,
+                    analysis=analysis,
+                    user_id=user_id,
+                    task_title=task_title,
+                    due_days=task_due_days
+                )
+                if task_id:
+                    result["task_created"] = True
+                    result["task_id"] = task_id
+            except Exception as e:
+                logger.error(f"Failed to create task: {e}")
+                result["errors"].append(f"Task creation failed: {str(e)}")
+
+        # Update email status
+        self.db.execute(text("""
+            UPDATE email_reconciliation_queue
+            SET disposition = :disposition,
+                status = 'processed',
+                processed_by = :user_id,
+                processed_at = :processed_at,
+                processing_notes = :notes,
+                updated_at = :updated_at
+            WHERE id = :email_id
+        """), {
+            "disposition": disposition,
+            "user_id": user_id,
+            "processed_at": datetime.now(timezone.utc),
+            "notes": additional_notes,
+            "updated_at": datetime.now(timezone.utc),
+            "email_id": email_id
+        })
+        self.db.commit()
+
+        return result
+
+    async def _create_conversation_log(
+        self,
+        email_data: Dict[str, Any],
+        analysis: Dict[str, Any],
+        override_summary: Optional[str],
+        additional_notes: Optional[str],
+        user_id: int
+    ) -> Optional[int]:
+        """Create conversation log entry from email"""
+
+        loan_id = email_data.get("matched_loan_id")
+        lead_id = email_data.get("matched_lead_id")
+        contact_id = email_data.get("matched_contact_id")
+
+        # Must have at least one entity link
+        if not any([loan_id, lead_id, contact_id]):
+            logger.warning(f"Email {email_data['id']} has no entity match, skipping conversation log")
+            return None
+
+        # Build summary
+        summary = override_summary or analysis.get('summary', '')
+        if not summary:
+            summary = f"Email from {email_data.get('from_email', 'unknown')}: {email_data.get('subject', 'No subject')}"
+
+        if additional_notes:
+            summary = f"{summary}\n\nNotes: {additional_notes}"
+
+        # Insert conversation log
+        result = self.db.execute(text("""
+            INSERT INTO email_conversation_log (
+                contact_id, loan_id, lead_id,
+                reconciliation_email_id, email_subject, email_date, direction,
+                summary, key_points, action_items, next_steps,
+                documents_requested, documents_received, documents_mentioned,
+                sentiment, urgency_level, borrower_concerns,
+                user_id, created_at
+            ) VALUES (
+                :contact_id, :loan_id, :lead_id,
+                :email_id, :subject, :email_date, :direction,
+                :summary, :key_points, :action_items, :next_steps,
+                :docs_requested, :docs_received, :docs_mentioned,
+                :sentiment, :urgency, :concerns,
+                :user_id, :created_at
+            ) RETURNING id
+        """), {
+            "contact_id": contact_id,
+            "loan_id": loan_id,
+            "lead_id": lead_id,
+            "email_id": email_data["id"],
+            "subject": email_data.get("subject"),
+            "email_date": email_data.get("sent_date") or email_data.get("received_date"),
+            "direction": email_data.get("direction", "inbound"),
+            "summary": summary,
+            "key_points": json.dumps(analysis.get("key_points", [])),
+            "action_items": json.dumps(analysis.get("action_items", [])),
+            "next_steps": json.dumps(analysis.get("next_steps", [])),
+            "docs_requested": json.dumps(analysis.get("documents_requested", [])),
+            "docs_received": json.dumps(analysis.get("documents_attached", [])),
+            "docs_mentioned": json.dumps(analysis.get("documents_mentioned", [])),
+            "sentiment": analysis.get("sentiment", "neutral"),
+            "urgency": analysis.get("urgency_level", 3),
+            "concerns": json.dumps(analysis.get("borrower_concerns", [])),
+            "user_id": user_id,
+            "created_at": datetime.now(timezone.utc)
+        })
+
+        log_id = result.fetchone()[0]
+        self.db.commit()
+
+        logger.info(f"Created conversation log {log_id} for email {email_data['id']}")
+        return log_id
+
+    async def _track_documents(
+        self,
+        email_data: Dict[str, Any],
+        analysis: Dict[str, Any],
+        disposition: str,
+        user_id: int
+    ) -> List[int]:
+        """Track document requests and receipts from email"""
+
+        doc_ids = []
+        loan_id = email_data.get("matched_loan_id")
+        lead_id = email_data.get("matched_lead_id")
+
+        # Track documents we requested (outbound)
+        if disposition == 'document_request' or \
+           (email_data.get("direction") == 'outbound' and analysis.get('documents_requested')):
+            docs = analysis.get('documents_requested', [])
+            for doc_name in docs:
+                doc_type = self._classify_document_type(doc_name)
+
+                # Check if already tracking
+                existing = self.db.execute(text("""
+                    SELECT id FROM email_document_tracking
+                    WHERE (loan_id = :loan_id OR lead_id = :lead_id)
+                      AND document_name = :doc_name
+                      AND status IN ('requested', 'reminded')
+                """), {"loan_id": loan_id, "lead_id": lead_id, "doc_name": doc_name}).fetchone()
+
+                if existing:
+                    # Update existing - increment reminder
+                    self.db.execute(text("""
+                        UPDATE email_document_tracking
+                        SET reminder_count = reminder_count + 1,
+                            next_reminder_date = :next_date,
+                            updated_at = :updated_at
+                        WHERE id = :id
+                    """), {
+                        "next_date": datetime.now(timezone.utc) + timedelta(days=3),
+                        "updated_at": datetime.now(timezone.utc),
+                        "id": existing[0]
+                    })
+                    doc_ids.append(existing[0])
+                else:
+                    # Create new tracking
+                    result = self.db.execute(text("""
+                        INSERT INTO email_document_tracking (
+                            loan_id, lead_id, document_name, document_type,
+                            status, requested_date, requested_via, requested_email_id,
+                            next_reminder_date, user_id, created_at
+                        ) VALUES (
+                            :loan_id, :lead_id, :doc_name, :doc_type,
+                            'requested', :req_date, 'email', :email_id,
+                            :next_date, :user_id, :created_at
+                        ) RETURNING id
+                    """), {
+                        "loan_id": loan_id,
+                        "lead_id": lead_id,
+                        "doc_name": doc_name,
+                        "doc_type": doc_type,
+                        "req_date": datetime.now(timezone.utc),
+                        "email_id": email_data["id"],
+                        "next_date": datetime.now(timezone.utc) + timedelta(days=3),
+                        "user_id": user_id,
+                        "created_at": datetime.now(timezone.utc)
+                    })
+                    doc_ids.append(result.fetchone()[0])
+
+        # Track documents received (inbound with attachments)
+        if disposition == 'document_received' or \
+           (email_data.get("direction") == 'inbound' and email_data.get("has_attachments")):
+            attachments = email_data.get("attachment_names") or []
+            if isinstance(attachments, str):
+                try:
+                    attachments = json.loads(attachments)
+                except:
+                    attachments = []
+
+            docs_mentioned = analysis.get('documents_attached', []) or analysis.get('documents_mentioned', [])
+            all_docs = list(set(attachments + docs_mentioned))
+
+            for doc_name in all_docs:
+                if not doc_name:
+                    continue
+                doc_type = self._classify_document_type(doc_name)
+
+                # Find matching open request
+                existing = self.db.execute(text("""
+                    SELECT id FROM email_document_tracking
+                    WHERE (loan_id = :loan_id OR lead_id = :lead_id)
+                      AND document_type = :doc_type
+                      AND status IN ('requested', 'reminded')
+                    LIMIT 1
+                """), {"loan_id": loan_id, "lead_id": lead_id, "doc_type": doc_type}).fetchone()
+
+                if existing:
+                    # Mark as received
+                    self.db.execute(text("""
+                        UPDATE email_document_tracking
+                        SET status = 'received',
+                            received_date = :recv_date,
+                            received_via = 'email',
+                            received_email_id = :email_id,
+                            updated_at = :updated_at
+                        WHERE id = :id
+                    """), {
+                        "recv_date": datetime.now(timezone.utc),
+                        "email_id": email_data["id"],
+                        "updated_at": datetime.now(timezone.utc),
+                        "id": existing[0]
+                    })
+                    doc_ids.append(existing[0])
+                else:
+                    # Create new record as received (unsolicited)
+                    result = self.db.execute(text("""
+                        INSERT INTO email_document_tracking (
+                            loan_id, lead_id, document_name, document_type,
+                            status, received_date, received_via, received_email_id,
+                            user_id, created_at
+                        ) VALUES (
+                            :loan_id, :lead_id, :doc_name, :doc_type,
+                            'received', :recv_date, 'email', :email_id,
+                            :user_id, :created_at
+                        ) RETURNING id
+                    """), {
+                        "loan_id": loan_id,
+                        "lead_id": lead_id,
+                        "doc_name": doc_name,
+                        "doc_type": doc_type,
+                        "recv_date": datetime.now(timezone.utc),
+                        "email_id": email_data["id"],
+                        "user_id": user_id,
+                        "created_at": datetime.now(timezone.utc)
+                    })
+                    doc_ids.append(result.fetchone()[0])
+
+        self.db.commit()
+        return doc_ids
+
+    def _classify_document_type(self, doc_name: str) -> str:
+        """Classify document type from filename"""
+        doc_lower = doc_name.lower()
+
+        classifications = [
+            (['w2', 'w-2'], 'w2'),
+            (['paystub', 'pay stub', 'paycheck'], 'paystub'),
+            (['bank statement', 'bank stmt', 'checking', 'savings'], 'bank_statement'),
+            (['tax return', '1040', 'tax transcript'], 'tax_return'),
+            (['driver', 'license', 'passport', 'id card', 'identification'], 'identification'),
+            (['insurance', 'hoi', 'homeowner'], 'insurance'),
+            (['appraisal'], 'appraisal'),
+            (['title', 'deed'], 'title'),
+            (['1099'], '1099'),
+            (['lease', 'rental'], 'lease'),
+            (['award letter', 'benefit', 'social security'], 'benefits'),
+            (['profit', 'loss', 'p&l'], 'profit_loss'),
+            (['voided check', 'void check'], 'voided_check'),
+            (['gift letter'], 'gift_letter'),
+            (['explanation', 'loe', 'loc'], 'letter_of_explanation'),
+            (['purchase', 'contract', 'agreement'], 'purchase_contract'),
+        ]
+
+        for keywords, doc_type in classifications:
+            if any(kw in doc_lower for kw in keywords):
+                return doc_type
+
+        return 'other'
+
+    async def _create_sla_tracking(
+        self,
+        email_data: Dict[str, Any],
+        analysis: Dict[str, Any],
+        user_id: int
+    ) -> Optional[int]:
+        """Create SLA tracking for email needing response"""
+
+        urgency = analysis.get('urgency_level', 3)
+
+        if urgency >= 5:
+            sla_hours = 2
+            sla_type = 'critical_response'
+        elif urgency >= 4:
+            sla_hours = 4
+            sla_type = 'urgent_response'
+        elif urgency >= 3:
+            sla_hours = 24
+            sla_type = 'standard_response'
+        else:
+            sla_hours = 48
+            sla_type = 'low_priority_response'
+
+        # Check if SLA exists
+        existing = self.db.execute(text("""
+            SELECT id FROM email_sla_tracking
+            WHERE reconciliation_email_id = :email_id
+        """), {"email_id": email_data["id"]}).fetchone()
+
+        if existing:
+            return existing[0]
+
+        received_at = email_data.get("received_date") or email_data.get("sent_date") or datetime.now(timezone.utc)
+        if isinstance(received_at, str):
+            try:
+                received_at = datetime.fromisoformat(received_at.replace('Z', '+00:00'))
+            except:
+                received_at = datetime.now(timezone.utc)
+
+        due_at = received_at + timedelta(hours=sla_hours)
+
+        result = self.db.execute(text("""
+            INSERT INTO email_sla_tracking (
+                reconciliation_email_id, thread_id, sla_type, sla_hours,
+                email_received_at, response_due_at, status, user_id, created_at
+            ) VALUES (
+                :email_id, :thread_id, :sla_type, :sla_hours,
+                :received_at, :due_at, 'pending', :user_id, :created_at
+            ) RETURNING id
+        """), {
+            "email_id": email_data["id"],
+            "thread_id": email_data.get("thread_id"),
+            "sla_type": sla_type,
+            "sla_hours": sla_hours,
+            "received_at": received_at,
+            "due_at": due_at,
+            "user_id": user_id,
+            "created_at": datetime.now(timezone.utc)
+        })
+
+        sla_id = result.fetchone()[0]
+        self.db.commit()
+
+        logger.info(f"Created SLA tracking {sla_id}: {sla_type} ({sla_hours}h)")
+        return sla_id
+
+    async def _create_followup_task(
+        self,
+        email_data: Dict[str, Any],
+        analysis: Dict[str, Any],
+        user_id: int,
+        task_title: Optional[str],
+        due_days: int
+    ) -> Optional[int]:
+        """Create a follow-up task"""
+
+        loan_id = email_data.get("matched_loan_id")
+        lead_id = email_data.get("matched_lead_id")
+
+        title = task_title or f"Follow up: {email_data.get('subject', 'Email')}"
+        description = f"Generated from email\nFrom: {email_data.get('from_email')}\nSubject: {email_data.get('subject')}"
+
+        if analysis.get("action_items"):
+            description += f"\n\nAction items:\n" + "\n".join([f"- {item}" for item in analysis.get("action_items", [])])
+
+        due_date = datetime.now(timezone.utc) + timedelta(days=due_days)
+
+        # Check if tasks table exists and create task
+        try:
+            result = self.db.execute(text("""
+                INSERT INTO tasks (
+                    title, description, due_date, priority,
+                    loan_id, lead_id, assigned_to, created_by,
+                    source, source_id, status, created_at
+                ) VALUES (
+                    :title, :description, :due_date, :priority,
+                    :loan_id, :lead_id, :assigned_to, :created_by,
+                    'email_intelligence', :source_id, 'pending', :created_at
+                ) RETURNING id
+            """), {
+                "title": title[:255],
+                "description": description,
+                "due_date": due_date,
+                "priority": "high" if analysis.get("urgency_level", 3) >= 4 else "medium",
+                "loan_id": loan_id,
+                "lead_id": lead_id,
+                "assigned_to": user_id,
+                "created_by": user_id,
+                "source_id": email_data["id"],
+                "created_at": datetime.now(timezone.utc)
+            })
+
+            task_id = result.fetchone()[0]
+            self.db.commit()
+            logger.info(f"Created task {task_id} from email {email_data['id']}")
+            return task_id
+        except Exception as e:
+            logger.warning(f"Could not create task (table may not exist): {e}")
+            return None
+
+    async def _run_ai_analysis(self, email_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Run AI analysis on email"""
+
+        if not self.anthropic_api_key:
+            return self._basic_analysis_dict(email_data)
+
+        try:
+            import anthropic
+            client = anthropic.Anthropic(api_key=self.anthropic_api_key)
+
+            prompt = f"""Analyze this mortgage-related email and extract key information.
+
+EMAIL:
+From: {email_data.get('from_email')} ({email_data.get('from_name', 'Unknown')})
+Subject: {email_data.get('subject')}
+Date: {email_data.get('sent_date')}
+Has Attachments: {email_data.get('has_attachments')}
+Attachments: {email_data.get('attachment_names', [])}
+
+Body:
+{email_data.get('body_preview') or email_data.get('body_full', 'No body')}
+
+Return ONLY valid JSON with this structure:
+{{
+    "summary": "2-3 sentence summary for conversation log",
+    "key_points": ["key point 1", "key point 2"],
+    "action_items": ["action if any"],
+    "next_steps": ["suggested next step"],
+    "documents_requested": ["docs WE requested if outbound"],
+    "documents_attached": ["docs attached/sent by client"],
+    "documents_mentioned": ["other docs discussed"],
+    "sentiment": "positive|neutral|negative|urgent",
+    "urgency_level": 1-5,
+    "borrower_concerns": ["any concerns raised"]
+}}"""
+
+            message = client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=1500,
+                messages=[{"role": "user", "content": prompt}]
+            )
+
+            response_text = message.content[0].text
+            response_text = re.sub(r'```json\s*|\s*```', '', response_text).strip()
+
+            return json.loads(response_text)
+
+        except Exception as e:
+            logger.error(f"AI analysis failed: {e}")
+            return self._basic_analysis_dict(email_data)
+
+    def _basic_analysis_dict(self, email_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Fallback basic analysis"""
+        return {
+            "summary": f"Email from {email_data.get('from_email', 'unknown')}: {email_data.get('subject', 'No subject')}",
+            "key_points": [],
+            "action_items": [],
+            "next_steps": [],
+            "documents_requested": [],
+            "documents_attached": [],
+            "documents_mentioned": [],
+            "sentiment": "neutral",
+            "urgency_level": 3,
+            "borrower_concerns": []
+        }
+
+
+# ================================================================
+# PHASE 3 API ENDPOINTS
+# ================================================================
+
+@router.post("/queue/{email_id}/process-with-intelligence")
+async def process_email_with_intelligence(
+    email_id: int,
+    disposition: str = Query(..., description="Disposition for the email"),
+    override_summary: Optional[str] = Query(None, description="Override AI summary"),
+    additional_notes: Optional[str] = Query(None, description="Additional notes"),
+    create_task: bool = Query(False, description="Create follow-up task"),
+    task_title: Optional[str] = Query(None, description="Task title if creating"),
+    task_due_days: int = Query(3, description="Days until task due"),
+    db: Session = Depends(get_db)
+):
+    """
+    Process email with full conversation intelligence.
+
+    Creates:
+    - Conversation log entry (AI-generated summary)
+    - Document tracking records
+    - SLA tracking (if needed)
+    - Follow-up task (optional)
+    """
+    user_id = get_current_user_id(db)
+
+    service = ConversationIntelligenceService(db)
+
+    result = await service.process_email_disposition(
+        email_id=email_id,
+        disposition=disposition,
+        user_id=user_id,
+        override_summary=override_summary,
+        additional_notes=additional_notes,
+        create_task=create_task,
+        task_title=task_title,
+        task_due_days=task_due_days
+    )
+
+    return result
+
+
+@router.post("/batch-process-with-intelligence")
+async def batch_process_emails_with_intelligence(
+    limit: int = Query(50, le=200),
+    auto_disposition: bool = Query(True, description="Auto-determine disposition"),
+    db: Session = Depends(get_db)
+):
+    """
+    Batch process pending emails with conversation intelligence.
+
+    Processes emails that have entity matches (loan/lead).
+    """
+    user_id = get_current_user_id(db)
+
+    # Get pending emails with matches
+    pending = db.execute(text("""
+        SELECT id, direction, has_attachments, ai_analysis
+        FROM email_reconciliation_queue
+        WHERE user_id = :user_id
+          AND status = 'pending'
+          AND (matched_loan_id IS NOT NULL OR matched_lead_id IS NOT NULL)
+        ORDER BY is_priority DESC, received_date DESC
+        LIMIT :limit
+    """), {"user_id": user_id, "limit": limit}).fetchall()
+
+    results = {
+        "processed": 0,
+        "skipped": 0,
+        "errors": 0,
+        "details": []
+    }
+
+    service = ConversationIntelligenceService(db)
+
+    for row in pending:
+        email_id = row[0]
+        direction = row[1]
+        has_attachments = row[2]
+        analysis = row[3] or {}
+
+        if isinstance(analysis, str):
+            try:
+                analysis = json.loads(analysis)
+            except:
+                analysis = {}
+
+        try:
+            # Determine disposition
+            if auto_disposition:
+                disposition = _auto_determine_disposition(direction, has_attachments, analysis)
+            else:
+                disposition = "general_correspondence"
+
+            result = await service.process_email_disposition(
+                email_id=email_id,
+                disposition=disposition,
+                user_id=user_id
+            )
+
+            results["processed"] += 1
+            results["details"].append({
+                "email_id": email_id,
+                "disposition": disposition,
+                "conversation_log_created": result.get("conversation_log_created"),
+                "documents_tracked": result.get("documents_tracked")
+            })
+
+        except Exception as e:
+            logger.error(f"Failed to process email {email_id}: {e}")
+            results["errors"] += 1
+            results["details"].append({
+                "email_id": email_id,
+                "error": str(e)
+            })
+
+    return results
+
+
+def _auto_determine_disposition(direction: str, has_attachments: bool, analysis: Dict[str, Any]) -> str:
+    """Auto-determine disposition based on email characteristics"""
+
+    # Document request (outbound)
+    if direction == 'outbound' and analysis.get('documents_requested'):
+        return 'document_request'
+
+    # Document received (inbound with attachments)
+    if direction == 'inbound' and (has_attachments or analysis.get('documents_attached')):
+        return 'document_received'
+
+    # High urgency
+    if analysis.get('urgency_level', 3) >= 4:
+        return 'action_required'
+
+    # Urgent sentiment
+    if analysis.get('sentiment') == 'urgent':
+        return 'action_required'
+
+    return 'general_correspondence'
+
+
+@router.get("/conversation-log/loan/{loan_id}")
+async def get_loan_conversation_log(
+    loan_id: int,
+    limit: int = Query(50, le=200),
+    db: Session = Depends(get_db)
+):
+    """Get conversation log entries for a loan"""
+    user_id = get_current_user_id(db)
+
+    result = db.execute(text("""
+        SELECT id, email_subject, email_date, direction, summary,
+               key_points, action_items, sentiment, urgency_level,
+               documents_requested, documents_received, created_at
+        FROM email_conversation_log
+        WHERE loan_id = :loan_id AND user_id = :user_id
+        ORDER BY email_date DESC
+        LIMIT :limit
+    """), {"loan_id": loan_id, "user_id": user_id, "limit": limit}).fetchall()
+
+    entries = []
+    for row in result:
+        entries.append({
+            "id": row[0],
+            "email_subject": row[1],
+            "email_date": str(row[2]) if row[2] else None,
+            "direction": row[3],
+            "summary": row[4],
+            "key_points": row[5],
+            "action_items": row[6],
+            "sentiment": row[7],
+            "urgency_level": row[8],
+            "documents_requested": row[9],
+            "documents_received": row[10],
+            "created_at": str(row[11]) if row[11] else None
+        })
+
+    return {"entries": entries, "total": len(entries), "loan_id": loan_id}
+
+
+@router.get("/sla-tracking")
+async def get_sla_tracking(
+    status: Optional[str] = Query(None, description="Filter by status"),
+    include_breached: bool = Query(True),
+    db: Session = Depends(get_db)
+):
+    """Get SLA tracking records"""
+    user_id = get_current_user_id(db)
+
+    query = """
+        SELECT s.id, s.reconciliation_email_id, s.sla_type, s.sla_hours,
+               s.email_received_at, s.response_due_at, s.responded_at, s.status,
+               e.from_email, e.subject
+        FROM email_sla_tracking s
+        JOIN email_reconciliation_queue e ON s.reconciliation_email_id = e.id
+        WHERE s.user_id = :user_id
+    """
+    params = {"user_id": user_id}
+
+    if status:
+        query += " AND s.status = :status"
+        params["status"] = status
+
+    if not include_breached:
+        query += " AND s.status != 'breached'"
+
+    query += " ORDER BY s.response_due_at ASC"
+
+    result = db.execute(text(query), params).fetchall()
+
+    slas = []
+    for row in result:
+        due_at = row[5]
+        is_overdue = False
+        if due_at and row[7] == 'pending':
+            if isinstance(due_at, str):
+                try:
+                    due_at = datetime.fromisoformat(due_at.replace('Z', '+00:00'))
+                except:
+                    pass
+            if isinstance(due_at, datetime):
+                is_overdue = due_at < datetime.now(timezone.utc)
+
+        slas.append({
+            "id": row[0],
+            "email_id": row[1],
+            "sla_type": row[2],
+            "sla_hours": row[3],
+            "received_at": str(row[4]) if row[4] else None,
+            "due_at": str(row[5]) if row[5] else None,
+            "responded_at": str(row[6]) if row[6] else None,
+            "status": row[7],
+            "from_email": row[8],
+            "subject": row[9],
+            "is_overdue": is_overdue
+        })
+
+    return {"slas": slas, "total": len(slas)}
+
+
+@router.post("/sla-tracking/{sla_id}/respond")
+async def mark_sla_responded(
+    sla_id: int,
+    response_email_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """Mark SLA as responded"""
+    user_id = get_current_user_id(db)
+
+    db.execute(text("""
+        UPDATE email_sla_tracking
+        SET status = 'responded',
+            responded_at = :responded_at,
+            response_email_id = :response_email_id,
+            updated_at = :updated_at
+        WHERE id = :sla_id AND user_id = :user_id
+    """), {
+        "responded_at": datetime.now(timezone.utc),
+        "response_email_id": response_email_id,
+        "updated_at": datetime.now(timezone.utc),
+        "sla_id": sla_id,
+        "user_id": user_id
+    })
+    db.commit()
+
+    return {"status": "success", "sla_id": sla_id}
