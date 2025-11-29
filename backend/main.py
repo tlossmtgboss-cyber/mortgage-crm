@@ -15126,6 +15126,7 @@ async def approve_reconciliation(
 
                 # Use raw SQL INSERT to bypass SQLAlchemy enum serialization completely
                 # This ensures we control exactly what gets sent to PostgreSQL
+                logger.info(f"RECONCILIATION V3: Starting raw SQL INSERT for loan. Stage will be: {stage.name}")
                 amount = float(get_val("amount", 0) or get_val("loan_amount", 0) or 0)
 
                 result = db.execute(
