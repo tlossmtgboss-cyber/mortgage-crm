@@ -29512,17 +29512,17 @@ def filter_loans_by_permissions(query, user: User, db: Session):
     - loans.view_all: See all loans
     - loans.view_team: See team's loans
     - loans.view_assigned: See only assigned loans (where user is loan_officer)
+
+    Default behavior (no permissions set): Show assigned loans
     """
     if has_permission(user.id, 'loans.view_all', db):
         # Management/Operations: See all loans
         return query
 
-    if has_permission(user.id, 'loans.view_assigned', db):
-        # Sales: See only loans where they are the loan officer
-        return query.filter(Loan.loan_officer_id == user.id)
-
-    # No permission to view loans
-    return query.filter(Loan.id == None)  # Returns empty result
+    # Default: Show loans where user is the loan officer
+    # This handles both explicit 'loans.view_assigned' permission AND users with no permissions set
+    # (More permissive default to avoid breaking functionality for users without explicit permissions)
+    return query.filter(Loan.loan_officer_id == user.id)
 
 
 def apply_role_template_to_user(user_id: int, role_name: str, granted_by_id: int, db: Session) -> bool:
