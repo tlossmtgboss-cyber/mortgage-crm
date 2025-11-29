@@ -2788,12 +2788,19 @@ def get_daily_summary(db: Session, user_id: int) -> Dict[str, Any]:
         logger.debug(f"AITask query failed: {e}")
         db.rollback()
 
-    # Build loan_id -> borrower_name map for AI tasks
+    # Build loan_id -> borrower_name map for AI tasks using raw SQL to avoid enum issues
     loan_ids = [t.loan_id for t in ai_tasks if t.loan_id]
     loan_map = {}
     if loan_ids:
-        loans_for_tasks = db.query(Loan).filter(Loan.id.in_(loan_ids)).all()
-        loan_map = {l.id: l.borrower_name for l in loans_for_tasks}
+        try:
+            from sqlalchemy import text
+            result = db.execute(text("""
+                SELECT id, borrower_name FROM loans WHERE id = ANY(:loan_ids)
+            """), {"loan_ids": loan_ids})
+            loan_map = {row.id: row.borrower_name for row in result}
+        except Exception as e:
+            logger.debug(f"Loan name lookup failed: {e}")
+            db.rollback()
 
     # Build a map of lead_id -> lead_name for enriching task display
     lead_ids = [t.lead_id for t in all_tasks if t.lead_id]
@@ -2817,16 +2824,38 @@ def get_daily_summary(db: Session, user_id: int) -> Dict[str, Any]:
         status = lead.stage.value if lead.stage else 'Unassigned'
         lead_status_breakdown[status] = lead_status_breakdown.get(status, 0) + 1
 
-    # Get ACTUAL LOAN DATA
-    all_loans = db.query(Loan).filter(Loan.loan_officer_id == user_id).all()
-    total_loans = len(all_loans)
-    total_pipeline_value = sum(float(loan.amount or 0) for loan in all_loans)
-
-    # Group loans by stage
+    # Get ACTUAL LOAN DATA - use raw SQL to avoid enum deserialization issues
+    all_loans = []
+    total_loans = 0
+    total_pipeline_value = 0
     loan_stage_breakdown = {}
-    for loan in all_loans:
-        stage = loan.stage or 'Unknown'
-        loan_stage_breakdown[stage] = loan_stage_breakdown.get(stage, 0) + 1
+    try:
+        # Use raw SQL to get loan counts by stage, avoiding enum issues
+        from sqlalchemy import text
+        result = db.execute(text("""
+            SELECT
+                COALESCE(stage::text, 'Unknown') as stage,
+                COUNT(*) as count,
+                SUM(COALESCE(amount, 0)) as total_amount
+            FROM loans
+            WHERE loan_officer_id = :user_id
+            GROUP BY stage
+        """), {"user_id": user_id})
+
+        for row in result:
+            stage_name = row.stage if row.stage else 'Unknown'
+            loan_stage_breakdown[stage_name] = row.count
+            total_loans += row.count
+            total_pipeline_value += float(row.total_amount or 0)
+    except Exception as e:
+        logger.warning(f"Loan query failed, using fallback: {e}")
+        db.rollback()
+        # Fallback: try simple count query
+        try:
+            total_loans = db.query(func.count(Loan.id)).filter(Loan.loan_officer_id == user_id).scalar() or 0
+            total_pipeline_value = db.query(func.sum(Loan.amount)).filter(Loan.loan_officer_id == user_id).scalar() or 0
+        except Exception:
+            db.rollback()
 
     # Get MUM clients (safely check if table exists)
     mum_clients = []
@@ -3020,14 +3049,28 @@ def search_records(db: Session, user_id: int, query: str) -> Dict[str, Any]:
         )
     ).limit(10).all()
 
-    # Search loans
-    loans = db.query(Loan).filter(
-        Loan.loan_officer_id == user_id,
-        or_(
-            Loan.borrower_name.ilike(search_term),
-            Loan.property_address.ilike(search_term)
-        )
-    ).limit(10).all()
+    # Search loans using raw SQL to avoid enum deserialization issues
+    loan_results = []
+    try:
+        from sqlalchemy import text
+        result = db.execute(text("""
+            SELECT id, borrower_name, amount, stage::text as stage
+            FROM loans
+            WHERE loan_officer_id = :user_id
+            AND (borrower_name ILIKE :search_term OR property_address ILIKE :search_term)
+            LIMIT 10
+        """), {"user_id": user_id, "search_term": search_term})
+        loan_results = [
+            {
+                "id": row.id,
+                "borrower_name": row.borrower_name,
+                "loan_amount": float(row.amount) if row.amount else 0,
+                "stage": row.stage
+            } for row in result
+        ]
+    except Exception as e:
+        logger.debug(f"Loan search failed: {e}")
+        db.rollback()
 
     return {
         "leads": [
@@ -3039,14 +3082,7 @@ def search_records(db: Session, user_id: int, query: str) -> Dict[str, Any]:
                 "status": l.stage.value if l.stage else "Unassigned"
             } for l in leads
         ],
-        "loans": [
-            {
-                "id": loan.id,
-                "borrower_name": loan.borrower_name,
-                "loan_amount": float(loan.amount) if loan.amount else 0,
-                "stage": loan.stage
-            } for loan in loans
-        ],
+        "loans": loan_results,
         "query": query
     }
 
