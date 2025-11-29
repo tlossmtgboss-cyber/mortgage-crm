@@ -849,33 +849,6 @@ function LoanDetail() {
           </div>
 
           <div className="loan-field">
-            <label>Loan Officer</label>
-            <input
-              type="text"
-              value={formData.loan_officer_name || ''}
-              onChange={(e) => handleFieldChange('loan_officer_name', e.target.value)}
-            />
-          </div>
-
-          <div className="loan-field">
-            <label>Processor</label>
-            <input
-              type="text"
-              value={formData.processor || ''}
-              onChange={(e) => handleFieldChange('processor', e.target.value)}
-            />
-          </div>
-
-          <div className="loan-field">
-            <label>Underwriter</label>
-            <input
-              type="text"
-              value={formData.underwriter || ''}
-              onChange={(e) => handleFieldChange('underwriter', e.target.value)}
-            />
-          </div>
-
-          <div className="loan-field">
             <label>Closing Date</label>
             <input
               type="date"
