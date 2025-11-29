@@ -55,20 +55,22 @@ function WorkflowUpcomingTasks({ workflowKey, workflowName, workflowColor }) {
   const [selectedUser, setSelectedUser] = useState(null);
   const [viewMode, setViewMode] = useState('calendar'); // 'calendar' or 'capacity'
   const [totalTasks, setTotalTasks] = useState(0);
+  const [showAllTasks, setShowAllTasks] = useState(false);
 
   const businessDays = getNext7BusinessDays();
 
-  const fetchUpcomingTasks = useCallback(async () => {
+  const fetchUpcomingTasks = useCallback(async (getAllTasks = false) => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
       const headers = { 'Authorization': `Bearer ${token}` };
 
-      // Try to fetch from API
-      const response = await fetch(
-        `${API_BASE}/api/v1/workflow/upcoming-tasks/${workflowKey}`,
-        { headers }
-      );
+      // Fetch from appropriate endpoint
+      const endpoint = getAllTasks
+        ? `${API_BASE}/api/v1/workflow/upcoming-tasks-all`
+        : `${API_BASE}/api/v1/workflow/upcoming-tasks/${workflowKey}`;
+
+      const response = await fetch(endpoint, { headers });
 
       if (response.ok) {
         const data = await response.json();
@@ -94,6 +96,16 @@ function WorkflowUpcomingTasks({ workflowKey, workflowName, workflowColor }) {
     setTotalTasks(0);
   };
 
+  const handleGetAllTasks = () => {
+    setShowAllTasks(true);
+    fetchUpcomingTasks(true);
+  };
+
+  const handleGetStageTasks = () => {
+    setShowAllTasks(false);
+    fetchUpcomingTasks(false);
+  };
+
   useEffect(() => {
     fetchUpcomingTasks();
   }, [fetchUpcomingTasks]);
@@ -107,22 +119,40 @@ function WorkflowUpcomingTasks({ workflowKey, workflowName, workflowColor }) {
       {/* Header */}
       <div className="upcoming-header">
         <div className="header-info">
-          <h3 style={{ color: workflowColor }}>{workflowName} - Upcoming Tasks</h3>
+          <h3 style={{ color: workflowColor }}>
+            {showAllTasks ? 'All Upcoming Tasks' : `${workflowName} - Upcoming Tasks`}
+          </h3>
           <p className="header-subtitle">Next 7 business days • {totalTasks} total tasks</p>
         </div>
-        <div className="view-toggle">
-          <button
-            className={viewMode === 'calendar' ? 'active' : ''}
-            onClick={() => setViewMode('calendar')}
-          >
-            📅 Calendar View
-          </button>
-          <button
-            className={viewMode === 'capacity' ? 'active' : ''}
-            onClick={() => setViewMode('capacity')}
-          >
-            📊 Capacity View
-          </button>
+        <div className="header-actions">
+          <div className="task-filter-toggle">
+            <button
+              className={`filter-btn ${!showAllTasks ? 'active' : ''}`}
+              onClick={handleGetStageTasks}
+            >
+              {workflowName} Only
+            </button>
+            <button
+              className={`filter-btn get-tasks-btn ${showAllTasks ? 'active' : ''}`}
+              onClick={handleGetAllTasks}
+            >
+              Get All Tasks
+            </button>
+          </div>
+          <div className="view-toggle">
+            <button
+              className={viewMode === 'calendar' ? 'active' : ''}
+              onClick={() => setViewMode('calendar')}
+            >
+              📅 Calendar View
+            </button>
+            <button
+              className={viewMode === 'capacity' ? 'active' : ''}
+              onClick={() => setViewMode('capacity')}
+            >
+              📊 Capacity View
+            </button>
+          </div>
         </div>
       </div>
 

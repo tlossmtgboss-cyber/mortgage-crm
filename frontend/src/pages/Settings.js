@@ -1493,7 +1493,7 @@ const API_BASE_URL = isProduction
       id: 'gmail',
       name: 'Gmail',
       description: 'Sync Gmail emails and contacts with your CRM',
-      icon: '📧',
+      icon: '',
       color: '#ea4335',
       category: 'Email'
     },
@@ -1501,7 +1501,7 @@ const API_BASE_URL = isProduction
       id: 'outlook',
       name: 'Outlook Email',
       description: 'Sync emails and automatically extract lead information with AI',
-      icon: '📧',
+      icon: '',
       color: '#0078d4',
       category: 'Email'
     },
@@ -1509,7 +1509,7 @@ const API_BASE_URL = isProduction
       id: 'outlook-calendar',
       name: 'Outlook Calendar',
       description: 'Sync calendar events and schedule appointments',
-      icon: '📅',
+      icon: '',
       color: '#0078d4',
       category: 'Calendar'
     },
@@ -1517,7 +1517,7 @@ const API_BASE_URL = isProduction
       id: 'teams',
       name: 'Microsoft Teams',
       description: 'Send messages, make calls, and collaborate with your team',
-      icon: '💬',
+      icon: '',
       color: '#6264a7',
       category: 'Communication'
     },
@@ -1525,7 +1525,7 @@ const API_BASE_URL = isProduction
       id: 'zoom',
       name: 'Zoom',
       description: 'Host virtual meetings and consultations with clients',
-      icon: '📹',
+      icon: '',
       color: '#2d8cff',
       category: 'Communication'
     },
@@ -1533,7 +1533,7 @@ const API_BASE_URL = isProduction
       id: 'calendly',
       name: 'Calendly',
       description: 'Automated scheduling for client meetings',
-      icon: '🗓️',
+      icon: '',
       color: '#006bff',
       category: 'Scheduling'
     },
@@ -1541,7 +1541,7 @@ const API_BASE_URL = isProduction
       id: 'docusign',
       name: 'DocuSign',
       description: 'Send and sign loan documents electronically',
-      icon: '📝',
+      icon: '',
       color: '#ffd500',
       category: 'Documents'
     },
@@ -1549,7 +1549,7 @@ const API_BASE_URL = isProduction
       id: 'salesforce',
       name: 'Salesforce',
       description: 'Sync contacts and deals with your Salesforce CRM',
-      icon: '☁️',
+      icon: '',
       color: '#00a1e0',
       category: 'CRM'
     },
@@ -1557,7 +1557,7 @@ const API_BASE_URL = isProduction
       id: 'hubspot',
       name: 'HubSpot',
       description: 'Marketing automation and lead nurturing',
-      icon: '🎯',
+      icon: '',
       color: '#ff7a59',
       category: 'Marketing'
     },
@@ -1565,7 +1565,7 @@ const API_BASE_URL = isProduction
       id: 'mailchimp',
       name: 'Mailchimp',
       description: 'Email marketing campaigns for your clients',
-      icon: '✉️',
+      icon: '',
       color: '#ffe01b',
       category: 'Marketing'
     },
@@ -1573,7 +1573,7 @@ const API_BASE_URL = isProduction
       id: 'twilio',
       name: 'Twilio SMS',
       description: 'Send SMS messages to leads and clients',
-      icon: '📱',
+      icon: '',
       color: '#f22f46',
       category: 'Communication'
     },
@@ -1581,7 +1581,7 @@ const API_BASE_URL = isProduction
       id: 'ringcentral',
       name: 'RingCentral',
       description: 'Click-to-call and SMS via RingCentral phone system',
-      icon: '📞',
+      icon: '',
       color: '#0073ae',
       category: 'Communication'
     },
@@ -1589,7 +1589,7 @@ const API_BASE_URL = isProduction
       id: 'slack',
       name: 'Slack',
       description: 'Get notifications and updates in your Slack workspace',
-      icon: '💼',
+      icon: '',
       color: '#4a154b',
       category: 'Communication'
     },
@@ -1597,7 +1597,7 @@ const API_BASE_URL = isProduction
       id: 'zapier',
       name: 'Zapier',
       description: 'Connect with 5,000+ apps through automated workflows',
-      icon: '⚡',
+      icon: '',
       color: '#ff4a00',
       category: 'Automation'
     },
@@ -1605,7 +1605,7 @@ const API_BASE_URL = isProduction
       id: 'synthflow',
       name: 'Synthflow AI',
       description: 'AI-powered voice agents for automated client calls and lead qualification',
-      icon: '🤖',
+      icon: '',
       color: '#218D8D',
       category: 'AI & Automation'
     },
@@ -2268,8 +2268,7 @@ const API_BASE_URL = isProduction
                   <p style={{ color: '#6b7280', marginBottom: '20px' }}>Create and manage email marketing campaigns</p>
 
                   <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '40px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>✉️</div>
-                    <h4 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: '600' }}>Email Templates Coming Soon</h4>
+                                        <h4 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: '600' }}>Email Templates Coming Soon</h4>
                     <p style={{ color: '#6b7280', margin: '0 0 20px 0' }}>
                       Create email templates for drip campaigns, newsletters, and automated follow-ups
                     </p>
@@ -2289,8 +2288,7 @@ const API_BASE_URL = isProduction
                   <p style={{ color: '#6b7280', marginBottom: '20px' }}>Create and manage SMS marketing campaigns</p>
 
                   <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '12px', padding: '40px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>💬</div>
-                    <h4 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: '600' }}>SMS Templates Coming Soon</h4>
+                                        <h4 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: '600' }}>SMS Templates Coming Soon</h4>
                     <p style={{ color: '#6b7280', margin: '0 0 20px 0' }}>
                       Create text message templates for quick client communication and marketing blasts
                     </p>
@@ -2329,24 +2327,22 @@ const API_BASE_URL = isProduction
           {/* OUTLOOK EMAIL */}
           {activeSection === 'outlook-email' && (
             <div className="integration-detail-section">
-              <h2>📧 Outlook Email Integration</h2>
+              <h2>Outlook Email Integration</h2>
               <p className="section-description">
                 Sync emails and automatically extract lead information with AI
               </p>
 
               {microsoftStatus.connected ? (
-                <div className="microsoft-status-panel">
-                  <div className="status-header">
-                    <div className="status-icon" style={{background: '#0078d4'}}>📧</div>
-                    <div className="status-info">
+                <div className="connection-status-card connected">
+                  <div className="connection-status-header">
+                    <div className="connection-status-indicator"></div>
+                    <div className="connection-status-info">
                       <h3>Microsoft 365 Connected</h3>
-                      <p>{microsoftStatus.email_address}</p>
+                      <p className="connection-email">{microsoftStatus.email_address}</p>
                     </div>
-                    <div className="status-actions">
-                      <button className="btn-disconnect" onClick={(e) => { e.stopPropagation(); disconnectMicrosoft365(); }}>
-                        Disconnect
-                      </button>
-                    </div>
+                    <button className="btn-disconnect" onClick={(e) => { e.stopPropagation(); disconnectMicrosoft365(); }}>
+                      Disconnect
+                    </button>
                   </div>
                   {microsoftStatus.last_sync_at && (
                     <div className="status-meta">
@@ -2363,8 +2359,7 @@ const API_BASE_URL = isProduction
                   )}
                 </div>
               ) : (
-                <div className="integration-connect-card">
-                  <div className="connect-icon" style={{background: '#0078d4'}}>📧</div>
+                <div className="connection-prompt-card">
                   <h3>Connect Outlook Email</h3>
                   <p>Connect your Microsoft 365 account to sync emails and extract lead information automatically</p>
                   <button className="btn-connect" onClick={() => connectMicrosoft365()}>Connect Outlook Email</button>
@@ -2376,18 +2371,21 @@ const API_BASE_URL = isProduction
           {/* OUTLOOK CALENDAR */}
           {activeSection === 'outlook-calendar' && (
             <div className="integration-detail-section">
-              <h2>📅 Outlook Calendar Integration</h2>
+              <h2>Outlook Calendar Integration</h2>
               <p className="section-description">Sync calendar events and schedule appointments</p>
               {microsoftStatus.connected ? (
-                <div className="integration-status-card">
-                  <div className="status-icon-large" style={{background: '#0078d4'}}>📅</div>
-                  <h3>Calendar Connected</h3>
-                  <p>Your Outlook Calendar is connected and syncing</p>
-                  <p className="status-detail">Account: {microsoftStatus.email_address}</p>
+                <div className="connection-status-card connected">
+                  <div className="connection-status-header">
+                    <div className="connection-status-indicator"></div>
+                    <div className="connection-status-info">
+                      <h3>Calendar Connected</h3>
+                      <p>Your Outlook Calendar is connected and syncing</p>
+                      <p className="connection-email">Account: {microsoftStatus.email_address}</p>
+                    </div>
+                  </div>
                 </div>
               ) : (
-                <div className="integration-connect-card">
-                  <div className="connect-icon" style={{background: '#0078d4'}}>📅</div>
+                <div className="connection-prompt-card">
                   <h3>Connect Outlook Calendar</h3>
                   <p>Connect your Microsoft 365 account to sync calendar events</p>
                   <button className="btn-connect" onClick={() => connectMicrosoft365()}>Connect Outlook Calendar</button>
@@ -2399,20 +2397,20 @@ const API_BASE_URL = isProduction
           {/* GMAIL */}
           {activeSection === 'gmail' && (
             <div className="integration-detail-section">
-              <h2>📧 Gmail Integration</h2>
+              <h2>Gmail Integration</h2>
               <p className="section-description">
                 Sync Gmail emails and automatically extract lead information with AI
               </p>
 
               {gmailStatus.connected ? (
-                <div className="microsoft-status-panel">
-                  <div className="status-header">
-                    <div className="status-icon" style={{background: '#EA4335'}}>📧</div>
-                    <div className="status-info">
+                <div className="connection-status-card connected gmail">
+                  <div className="connection-status-header">
+                    <div className="connection-status-indicator"></div>
+                    <div className="connection-status-info">
                       <h3>Gmail Connected</h3>
-                      <p>{gmailStatus.email}</p>
+                      <p className="connection-email">{gmailStatus.email}</p>
                     </div>
-                    <div className="status-actions">
+                    <div className="connection-actions">
                       <button className="btn-sync" onClick={async () => {
                         setLoadingGmail(true);
                         try {
@@ -2433,7 +2431,7 @@ const API_BASE_URL = isProduction
                           setLoadingGmail(false);
                         }
                       }} disabled={loadingGmail}>
-                        {loadingGmail ? 'Syncing...' : '🔄 Sync Now'}
+                        {loadingGmail ? 'Syncing...' : 'Sync Now'}
                       </button>
                       <button className="btn-disconnect" onClick={disconnectGmail} disabled={loadingGmail}>
                         Disconnect
@@ -2441,12 +2439,11 @@ const API_BASE_URL = isProduction
                     </div>
                   </div>
                   {gmailStatus.connected_at && (
-                    <div className="status-meta">Connected: {new Date(gmailStatus.connected_at).toLocaleString()}</div>
+                    <div className="connection-meta">Connected: {new Date(gmailStatus.connected_at).toLocaleString()}</div>
                   )}
                 </div>
               ) : (
-                <div className="integration-connect-card">
-                  <div className="connect-icon" style={{background: '#EA4335'}}>📧</div>
+                <div className="connection-prompt-card">
                   <h3>Connect Gmail</h3>
                   <p>Connect your Gmail account to sync emails and extract lead information automatically</p>
                   <button className="btn-connect" onClick={connectGmail} disabled={loadingGmail}>
@@ -2458,10 +2455,10 @@ const API_BASE_URL = isProduction
               <div className="integration-features" style={{marginTop: '24px'}}>
                 <h4>Features</h4>
                 <ul>
-                  <li>✅ Automatic email sync every 5 minutes</li>
-                  <li>✅ AI-powered lead extraction</li>
-                  <li>✅ Mortgage-related email detection</li>
-                  <li>✅ Auto-link to existing leads and loans</li>
+                  <li>Automatic email sync every 5 minutes</li>
+                  <li>AI-powered lead extraction</li>
+                  <li>Mortgage-related email detection</li>
+                  <li>Auto-link to existing leads and loans</li>
                 </ul>
               </div>
             </div>
@@ -2470,10 +2467,9 @@ const API_BASE_URL = isProduction
           {/* MICROSOFT TEAMS */}
           {activeSection === 'teams' && (
             <div className="integration-detail-section">
-              <h2>💬 Microsoft Teams Integration</h2>
+              <h2>Microsoft Teams Integration</h2>
               <p className="section-description">Send messages, make calls, and collaborate with your team</p>
               <div className="integration-coming-soon">
-                <div className="coming-soon-icon">💬</div>
                 <h3>Coming Soon</h3>
                 <p>Microsoft Teams integration is currently in development</p>
               </div>
@@ -2483,7 +2479,7 @@ const API_BASE_URL = isProduction
           {/* CALENDLY */}
           {activeSection === 'calendly' && (
             <div className="calendar-settings-section">
-              <h2>🗓️ Calendly Integration</h2>
+              <h2>Calendly Integration</h2>
               <p className="section-description">
                 Connect Calendly and configure AI scheduling for automatic appointment booking
               </p>
@@ -2500,7 +2496,7 @@ const API_BASE_URL = isProduction
                   </div>
                   <div className="connection-status">
                     {calendlyEventTypes.length > 0 ? (
-                      <span className="status-badge connected">✓ Connected</span>
+                      <span className="status-badge connected">Connected</span>
                     ) : (
                       <span className="status-badge disconnected">Not Connected</span>
                     )}
@@ -2515,7 +2511,7 @@ const API_BASE_URL = isProduction
                         onClick={fetchCalendlyEventTypes}
                         disabled={loadingCalendly}
                       >
-                        {loadingCalendly ? 'Refreshing...' : '🔄 Refresh Event Types'}
+                        {loadingCalendly ? 'Refreshing...' : 'Refresh Event Types'}
                       </button>
                       <span className="connection-detail">
                         {calendlyEventTypes.length} event types loaded
@@ -2527,7 +2523,7 @@ const API_BASE_URL = isProduction
                       onClick={connectCalendly}
                       disabled={loadingCalendly}
                     >
-                      {loadingCalendly ? 'Connecting...' : '🔗 Connect Calendly'}
+                      {loadingCalendly ? 'Connecting...' : 'Connect Calendly'}
                     </button>
                   )}
                 </div>
@@ -2535,8 +2531,7 @@ const API_BASE_URL = isProduction
 
               {/* How AI Scheduling Works */}
               <div className="info-card">
-                <div className="info-icon">🤖</div>
-                <div className="info-content">
+                                <div className="info-content">
                   <h3>How AI Scheduling Works</h3>
                   <p>When AI schedules appointments with leads, it automatically selects the right calendar based on the lead's current stage. For example:</p>
                   <ul>
@@ -2611,8 +2606,7 @@ const API_BASE_URL = isProduction
                 <h3>Current Mappings</h3>
                 {calendarMappings.length === 0 ? (
                   <div className="empty-state">
-                    <div className="empty-icon">📅</div>
-                    <p>No calendar mappings configured yet.</p>
+                                        <p>No calendar mappings configured yet.</p>
                     <p className="empty-hint">Create your first mapping above to get started.</p>
                   </div>
                 ) : (
@@ -2643,7 +2637,7 @@ const API_BASE_URL = isProduction
                                 </div>
                               </td>
                               <td>
-                                <span className="status-badge active">✓ Active</span>
+                                <span className="status-badge active">Active</span>
                               </td>
                             </tr>
                           );
@@ -2671,20 +2665,19 @@ const API_BASE_URL = isProduction
           {/* TWILIO SMS */}
           {activeSection === 'twilio-sms' && (
             <div className="phone-integration-section">
-              <h2>📱 Twilio SMS Integration</h2>
+              <h2>Twilio SMS Integration</h2>
               <p className="section-description">Send SMS messages to leads and clients</p>
               <div className="phone-status-card">
                 <div className="card-header">
                   <h3>Integration Status</h3>
-                  <button className="btn-refresh" onClick={checkTwilioStatus} disabled={loadingTwilio}>{loadingTwilio ? 'Checking...' : '🔄 Refresh'}</button>
+                  <button className="btn-refresh" onClick={checkTwilioStatus} disabled={loadingTwilio}>{loadingTwilio ? 'Checking...' : 'Refresh'}</button>
                 </div>
                 <div className="status-grid">
                   <div className="status-item">
-                    <div className="status-icon" style={{background: twilioStatus.configured ? '#f22f46' : '#6b7280'}}>📱</div>
-                    <div className="status-info">
+                                        <div className="status-info">
                       <h4>Twilio SMS API</h4>
                       <p>{twilioStatus.message || 'Advanced SMS features'}</p>
-                      <span className={`status-badge ${twilioStatus.configured ? 'connected' : 'disconnected'}`}>{twilioStatus.configured ? '✓ Active' : 'Not Configured'}</span>
+                      <span className={`status-badge ${twilioStatus.configured ? 'connected' : 'disconnected'}`}>{twilioStatus.configured ? 'Active' : 'Not Configured'}</span>
                       {twilioStatus.configured && twilioStatus.phone_number && <p className="status-detail">From: {twilioStatus.phone_number}</p>}
                     </div>
                   </div>
@@ -2699,7 +2692,7 @@ const API_BASE_URL = isProduction
                     <input type="tel" className="form-input" placeholder="Enter phone number (e.g., 555-123-4567)" value={testPhoneNumber} onChange={(e) => setTestPhoneNumber(e.target.value)} />
                   </div>
                   <div className="test-actions">
-                    <button className="btn-test sms" onClick={testSMS} disabled={!testPhoneNumber}>💬 Test SMS</button>
+                    <button className="btn-test sms" onClick={testSMS} disabled={!testPhoneNumber}>Test SMS</button>
                   </div>
                 </div>
                 {testResults.length > 0 && (
@@ -2721,8 +2714,7 @@ const API_BASE_URL = isProduction
                 )}
               </div>
               <div className="info-card">
-                <div className="info-icon">💡</div>
-                <div className="info-content">
+                                <div className="info-content">
                   <h3>Twilio SMS Features</h3>
                   <ul>
                     <li>Send SMS directly from CRM without using your phone</li>
@@ -2739,12 +2731,11 @@ const API_BASE_URL = isProduction
           {/* ZOOM */}
           {activeSection === 'zoom' && (
             <div className="integration-detail-section">
-              <h2>📹 Zoom Integration</h2>
+              <h2>Zoom Integration</h2>
               <p className="section-description">Host virtual meetings and consultations with clients</p>
 
               <div className="integration-connect-card">
-                <div className="connect-icon" style={{background: '#2d8cff'}}>📹</div>
-                <h3>Connect Zoom</h3>
+                                <h3>Connect Zoom</h3>
                 <p>Connect your Zoom account to schedule and host virtual meetings with clients</p>
                 <div className="connect-form">
                   <div className="form-group">
@@ -2762,16 +2753,15 @@ const API_BASE_URL = isProduction
               <div className="integration-features" style={{marginTop: '24px'}}>
                 <h4>Features</h4>
                 <ul>
-                  <li>📹 Schedule Zoom meetings from CRM</li>
-                  <li>🔗 Auto-generate meeting links for appointments</li>
-                  <li>📧 Send meeting invites to clients</li>
-                  <li>📊 Track meeting attendance and duration</li>
+                  <li>Schedule Zoom meetings from CRM</li>
+                  <li>Auto-generate meeting links for appointments</li>
+                  <li>Send meeting invites to clients</li>
+                  <li>Track meeting attendance and duration</li>
                 </ul>
               </div>
 
               <div className="info-card" style={{marginTop: '24px'}}>
-                <div className="info-icon">💡</div>
-                <div className="info-content">
+                                <div className="info-content">
                   <h3>How to get Zoom API credentials</h3>
                   <ol>
                     <li>Go to <a href="https://marketplace.zoom.us" target="_blank" rel="noopener noreferrer">Zoom App Marketplace</a></li>
@@ -2787,12 +2777,11 @@ const API_BASE_URL = isProduction
           {/* SALESFORCE */}
           {activeSection === 'salesforce' && (
             <div className="integration-detail-section">
-              <h2>☁️ Salesforce Integration</h2>
+              <h2>Salesforce Integration</h2>
               <p className="section-description">Sync contacts and deals with your Salesforce CRM</p>
 
               <div className="integration-connect-card">
-                <div className="connect-icon" style={{background: '#00a1e0'}}>☁️</div>
-                <h3>Connect Salesforce</h3>
+                                <h3>Connect Salesforce</h3>
                 <p>Connect your Salesforce account to sync contacts, leads, and opportunities</p>
                 <div className="connect-form">
                   <div className="form-group">
@@ -2814,10 +2803,10 @@ const API_BASE_URL = isProduction
               <div className="integration-features" style={{marginTop: '24px'}}>
                 <h4>Features</h4>
                 <ul>
-                  <li>🔄 Two-way sync of contacts and leads</li>
-                  <li>📊 Sync opportunities and pipeline data</li>
-                  <li>📝 Map custom fields between systems</li>
-                  <li>🔔 Real-time updates via webhooks</li>
+                  <li>Two-way sync of contacts and leads</li>
+                  <li>Sync opportunities and pipeline data</li>
+                  <li>Map custom fields between systems</li>
+                  <li>Real-time updates via webhooks</li>
                 </ul>
               </div>
             </div>
@@ -2826,12 +2815,11 @@ const API_BASE_URL = isProduction
           {/* HUBSPOT */}
           {activeSection === 'hubspot' && (
             <div className="integration-detail-section">
-              <h2>🎯 HubSpot Integration</h2>
+              <h2>HubSpot Integration</h2>
               <p className="section-description">Marketing automation and lead nurturing</p>
 
               <div className="integration-connect-card">
-                <div className="connect-icon" style={{background: '#ff7a59'}}>🎯</div>
-                <h3>Connect HubSpot</h3>
+                                <h3>Connect HubSpot</h3>
                 <p>Connect your HubSpot account to sync contacts and automate marketing</p>
                 <div className="connect-form">
                   <div className="form-group">
@@ -2849,10 +2837,10 @@ const API_BASE_URL = isProduction
               <div className="integration-features" style={{marginTop: '24px'}}>
                 <h4>Features</h4>
                 <ul>
-                  <li>📧 Sync email marketing campaigns</li>
-                  <li>🎯 Lead scoring and nurturing</li>
-                  <li>📊 Marketing analytics integration</li>
-                  <li>🔄 Contact and deal sync</li>
+                  <li>Sync email marketing campaigns</li>
+                  <li>Lead scoring and nurturing</li>
+                  <li>Marketing analytics integration</li>
+                  <li>Contact and deal sync</li>
                 </ul>
               </div>
             </div>
@@ -2861,12 +2849,11 @@ const API_BASE_URL = isProduction
           {/* MAILCHIMP */}
           {activeSection === 'mailchimp' && (
             <div className="integration-detail-section">
-              <h2>✉️ Mailchimp Integration</h2>
+              <h2>Mailchimp Integration</h2>
               <p className="section-description">Email marketing campaigns for your clients</p>
 
               <div className="integration-connect-card">
-                <div className="connect-icon" style={{background: '#ffe01b'}}>✉️</div>
-                <h3>Connect Mailchimp</h3>
+                                <h3>Connect Mailchimp</h3>
                 <p>Connect your Mailchimp account to manage email campaigns</p>
                 <div className="connect-form">
                   <div className="form-group">
@@ -2884,10 +2871,10 @@ const API_BASE_URL = isProduction
               <div className="integration-features" style={{marginTop: '24px'}}>
                 <h4>Features</h4>
                 <ul>
-                  <li>📧 Sync contacts to Mailchimp lists</li>
-                  <li>📊 Track email campaign performance</li>
-                  <li>🎯 Segment audiences by lead stage</li>
-                  <li>🔄 Automated email workflows</li>
+                  <li>Sync contacts to Mailchimp lists</li>
+                  <li>Track email campaign performance</li>
+                  <li>Segment audiences by lead stage</li>
+                  <li>Automated email workflows</li>
                 </ul>
               </div>
             </div>
@@ -2896,24 +2883,23 @@ const API_BASE_URL = isProduction
           {/* TWILIO */}
           {activeSection === 'twilio' && (
             <div className="integration-detail-section">
-              <h2>📱 Twilio SMS Integration</h2>
+              <h2>Twilio SMS Integration</h2>
               <p className="section-description">Send SMS messages to leads and clients</p>
 
               <div className="phone-status-card">
                 <div className="card-header">
                   <h3>Integration Status</h3>
                   <button className="btn-refresh" onClick={checkTwilioStatus} disabled={loadingTwilio}>
-                    {loadingTwilio ? 'Checking...' : '🔄 Refresh'}
+                    {loadingTwilio ? 'Checking...' : 'Refresh'}
                   </button>
                 </div>
                 <div className="status-grid">
                   <div className="status-item">
-                    <div className="status-icon" style={{background: twilioStatus.configured ? '#f22f46' : '#6b7280'}}>📱</div>
-                    <div className="status-info">
+                                        <div className="status-info">
                       <h4>Twilio SMS API</h4>
                       <p>{twilioStatus.message || 'Advanced SMS features'}</p>
                       <span className={`status-badge ${twilioStatus.configured ? 'connected' : 'disconnected'}`}>
-                        {twilioStatus.configured ? '✓ Active' : 'Not Configured'}
+                        {twilioStatus.configured ? 'Active' : 'Not Configured'}
                       </span>
                       {twilioStatus.configured && twilioStatus.phone_number && (
                         <p className="status-detail">From: {twilioStatus.phone_number}</p>
@@ -2925,8 +2911,7 @@ const API_BASE_URL = isProduction
 
               {!twilioStatus.configured && (
                 <div className="integration-connect-card" style={{marginTop: '24px'}}>
-                  <div className="connect-icon" style={{background: '#f22f46'}}>📱</div>
-                  <h3>Configure Twilio</h3>
+                                    <h3>Configure Twilio</h3>
                   <p>Add these environment variables to your Railway backend:</p>
                   <div className="code-block">
                     <code>
@@ -2941,10 +2926,10 @@ const API_BASE_URL = isProduction
               <div className="integration-features" style={{marginTop: '24px'}}>
                 <h4>Features</h4>
                 <ul>
-                  <li>📱 Send SMS directly from CRM</li>
-                  <li>📊 Track delivery status</li>
-                  <li>📝 SMS templates</li>
-                  <li>🔄 Automated SMS workflows</li>
+                  <li>Send SMS directly from CRM</li>
+                  <li>Track delivery status</li>
+                  <li>SMS templates</li>
+                  <li>Automated SMS workflows</li>
                 </ul>
               </div>
             </div>
@@ -2953,12 +2938,11 @@ const API_BASE_URL = isProduction
           {/* RINGCENTRAL */}
           {activeSection === 'ringcentral' && (
             <div className="integration-detail-section">
-              <h2>📞 RingCentral Integration</h2>
+              <h2>RingCentral Integration</h2>
               <p className="section-description">Click-to-call and SMS via RingCentral phone system</p>
 
               <div className="integration-connect-card">
-                <div className="connect-icon" style={{background: '#0073ae'}}>📞</div>
-                <h3>Connect RingCentral</h3>
+                                <h3>Connect RingCentral</h3>
                 <p>Connect your RingCentral account for click-to-call and SMS</p>
                 <div className="connect-form">
                   <div className="form-group">
@@ -2983,10 +2967,10 @@ const API_BASE_URL = isProduction
               <div className="integration-features" style={{marginTop: '24px'}}>
                 <h4>Features</h4>
                 <ul>
-                  <li>📞 Click-to-call from CRM</li>
-                  <li>📱 Send SMS via RingCentral</li>
-                  <li>📊 Call logging and analytics</li>
-                  <li>🔔 Incoming call notifications</li>
+                  <li>Click-to-call from CRM</li>
+                  <li>Send SMS via RingCentral</li>
+                  <li>Call logging and analytics</li>
+                  <li>Incoming call notifications</li>
                 </ul>
               </div>
             </div>
@@ -2995,12 +2979,11 @@ const API_BASE_URL = isProduction
           {/* SLACK */}
           {activeSection === 'slack' && (
             <div className="integration-detail-section">
-              <h2>💼 Slack Integration</h2>
+              <h2>Slack Integration</h2>
               <p className="section-description">Get notifications and updates in your Slack workspace</p>
 
               <div className="integration-connect-card">
-                <div className="connect-icon" style={{background: '#4a154b'}}>💼</div>
-                <h3>Connect Slack</h3>
+                                <h3>Connect Slack</h3>
                 <p>Connect your Slack workspace to receive notifications</p>
                 <div className="connect-form">
                   <div className="form-group">
@@ -3018,9 +3001,9 @@ const API_BASE_URL = isProduction
               <div className="integration-features" style={{marginTop: '24px'}}>
                 <h4>Notification Types</h4>
                 <ul>
-                  <li>🔔 New lead notifications</li>
-                  <li>📊 Pipeline stage changes</li>
-                  <li>📝 Document uploads</li>
+                  <li>New lead notifications</li>
+                  <li>Pipeline stage changes</li>
+                  <li>Document uploads</li>
                   <li>✅ Task completions</li>
                   <li>💰 Loan closings</li>
                 </ul>
@@ -3031,12 +3014,11 @@ const API_BASE_URL = isProduction
           {/* ZAPIER */}
           {activeSection === 'zapier' && (
             <div className="integration-detail-section">
-              <h2>⚡ Zapier Integration</h2>
+              <h2>Zapier Integration</h2>
               <p className="section-description">Connect with 5,000+ apps through automated workflows</p>
 
               <div className="integration-connect-card">
-                <div className="connect-icon" style={{background: '#ff4a00'}}>⚡</div>
-                <h3>Connect Zapier</h3>
+                                <h3>Connect Zapier</h3>
                 <p>Use your API key to connect this CRM with Zapier</p>
                 <div className="info-box">
                   <p>Go to <strong>Settings → API Keys</strong> to generate an API key for Zapier integration.</p>
@@ -3049,17 +3031,16 @@ const API_BASE_URL = isProduction
               <div className="integration-features" style={{marginTop: '24px'}}>
                 <h4>Popular Zaps</h4>
                 <ul>
-                  <li>📧 Create lead from new email</li>
-                  <li>📊 Add lead to Google Sheets</li>
-                  <li>📱 Send SMS when lead stage changes</li>
-                  <li>📅 Create calendar event for appointments</li>
-                  <li>🔔 Notify team on Slack for new leads</li>
+                  <li>Create lead from new email</li>
+                  <li>Add lead to Google Sheets</li>
+                  <li>Send SMS when lead stage changes</li>
+                  <li>Create calendar event for appointments</li>
+                  <li>Notify team on Slack for new leads</li>
                 </ul>
               </div>
 
               <div className="info-card" style={{marginTop: '24px'}}>
-                <div className="info-icon">💡</div>
-                <div className="info-content">
+                                <div className="info-content">
                   <h3>How to use with Zapier</h3>
                   <ol>
                     <li>Generate an API key in Settings → API Keys</li>
@@ -3075,12 +3056,11 @@ const API_BASE_URL = isProduction
           {/* SYNTHFLOW AI */}
           {activeSection === 'synthflow' && (
             <div className="integration-detail-section">
-              <h2>🤖 Synthflow AI Integration</h2>
+              <h2>Synthflow AI Integration</h2>
               <p className="section-description">AI-powered voice agents for automated client calls and lead qualification</p>
 
               <div className="integration-connect-card">
-                <div className="connect-icon" style={{background: '#218D8D'}}>🤖</div>
-                <h3>Connect Synthflow AI</h3>
+                                <h3>Connect Synthflow AI</h3>
                 <p>Connect your Synthflow account to enable AI voice agents</p>
                 <div className="connect-form">
                   <div className="form-group">
@@ -3098,11 +3078,11 @@ const API_BASE_URL = isProduction
               <div className="integration-features" style={{marginTop: '24px'}}>
                 <h4>Features</h4>
                 <ul>
-                  <li>🤖 AI voice agents for outbound calls</li>
-                  <li>📞 Automated lead qualification</li>
-                  <li>📊 Call transcription and analysis</li>
-                  <li>🔄 CRM sync for call outcomes</li>
-                  <li>📅 Schedule appointments via AI</li>
+                  <li>AI voice agents for outbound calls</li>
+                  <li>Automated lead qualification</li>
+                  <li>Call transcription and analysis</li>
+                  <li>CRM sync for call outcomes</li>
+                  <li>Schedule appointments via AI</li>
                 </ul>
               </div>
             </div>
@@ -3111,12 +3091,11 @@ const API_BASE_URL = isProduction
           {/* RECALL.AI */}
           {activeSection === 'recallai' && (
             <div className="integration-detail-section">
-              <h2>🎙️ Recall.ai Integration</h2>
+              <h2>Recall.ai Integration</h2>
               <p className="section-description">Record and transcribe meetings from Zoom, Teams, and Google Meet with AI</p>
 
               <div className="integration-connect-card">
-                <div className="connect-icon" style={{background: '#10b981'}}>🎙️</div>
-                <h3>Connect Recall.ai</h3>
+                                <h3>Connect Recall.ai</h3>
                 <p>Connect your Recall.ai account to record and transcribe meetings</p>
                 <div className="connect-form">
                   <div className="form-group">
@@ -3131,10 +3110,10 @@ const API_BASE_URL = isProduction
                 <h4>Features</h4>
                 <ul>
                   <li>🎙️ Auto-record Zoom, Teams, Meet calls</li>
-                  <li>📝 AI transcription</li>
-                  <li>📊 Meeting summaries and action items</li>
+                  <li>AI transcription</li>
+                  <li>Meeting summaries and action items</li>
                   <li>🔍 Searchable meeting archives</li>
-                  <li>🔄 Sync notes to CRM</li>
+                  <li>Sync notes to CRM</li>
                 </ul>
               </div>
             </div>
@@ -3167,9 +3146,9 @@ const API_BASE_URL = isProduction
                 <h4>Features</h4>
                 <ul>
                   <li>💳 Collect application fees</li>
-                  <li>📊 Track payment history</li>
-                  <li>📧 Automated payment receipts</li>
-                  <li>🔄 Sync with accounting</li>
+                  <li>Track payment history</li>
+                  <li>Automated payment receipts</li>
+                  <li>Sync with accounting</li>
                 </ul>
               </div>
             </div>
@@ -3202,8 +3181,8 @@ const API_BASE_URL = isProduction
                 <h4>Features</h4>
                 <ul>
                   <li>💰 Track commissions and income</li>
-                  <li>📊 Sync invoices and payments</li>
-                  <li>📝 Expense tracking</li>
+                  <li>Sync invoices and payments</li>
+                  <li>Expense tracking</li>
                   <li>📈 Financial reporting</li>
                 </ul>
               </div>
@@ -3227,9 +3206,9 @@ const API_BASE_URL = isProduction
                 <h4>Features</h4>
                 <ul>
                   <li>📆 Two-way calendar sync</li>
-                  <li>🔔 Appointment reminders</li>
-                  <li>📊 Schedule availability</li>
-                  <li>🔗 Auto-add meeting links</li>
+                  <li>Appointment reminders</li>
+                  <li>Schedule availability</li>
+                  <li>Auto-add meeting links</li>
                 </ul>
               </div>
             </div>
@@ -3253,8 +3232,8 @@ const API_BASE_URL = isProduction
                 <ul>
                   <li>📂 Auto-upload loan documents</li>
                   <li>📁 Organized folder structure per loan</li>
-                  <li>🔗 Share documents with clients</li>
-                  <li>🔄 Version history tracking</li>
+                  <li>Share documents with clients</li>
+                  <li>Version history tracking</li>
                 </ul>
               </div>
             </div>
@@ -3263,12 +3242,11 @@ const API_BASE_URL = isProduction
           {/* DOCUSIGN */}
           {activeSection === 'docusign' && (
             <div className="integration-detail-section">
-              <h2>📝 DocuSign Integration</h2>
+              <h2>DocuSign Integration</h2>
               <p className="section-description">Send and sign loan documents electronically</p>
 
               <div className="integration-connect-card">
-                <div className="connect-icon" style={{background: '#ffd500'}}>📝</div>
-                <h3>Connect DocuSign</h3>
+                                <h3>Connect DocuSign</h3>
                 <p>Connect your DocuSign account for electronic signatures</p>
                 <div className="connect-form">
                   <div className="form-group">
@@ -3290,9 +3268,9 @@ const API_BASE_URL = isProduction
               <div className="integration-features" style={{marginTop: '24px'}}>
                 <h4>Features</h4>
                 <ul>
-                  <li>📝 Send documents for signature</li>
+                  <li>Send documents for signature</li>
                   <li>✅ Track signing status</li>
-                  <li>📧 Automated reminders</li>
+                  <li>Automated reminders</li>
                   <li>📁 Auto-save signed documents</li>
                 </ul>
               </div>
@@ -3369,40 +3347,35 @@ const API_BASE_URL = isProduction
                     onClick={checkTwilioStatus}
                     disabled={loadingTwilio}
                   >
-                    {loadingTwilio ? 'Checking...' : '🔄 Refresh'}
+                    {loadingTwilio ? 'Checking...' : 'Refresh'}
                   </button>
                 </div>
 
                 <div className="status-grid">
                   {/* Native Phone Features */}
                   <div className="status-item">
-                    <div className="status-icon" style={{background: '#10b981'}}>📞</div>
-                    <div className="status-info">
+                                        <div className="status-info">
                       <h4>Click-to-Call</h4>
                       <p>Native phone integration</p>
-                      <span className="status-badge connected">✓ Active</span>
+                      <span className="status-badge connected">Active</span>
                     </div>
                   </div>
 
                   <div className="status-item">
-                    <div className="status-icon" style={{background: '#3b82f6'}}>💬</div>
-                    <div className="status-info">
+                                        <div className="status-info">
                       <h4>SMS/Text</h4>
                       <p>Native messaging integration</p>
-                      <span className="status-badge connected">✓ Active</span>
+                      <span className="status-badge connected">Active</span>
                     </div>
                   </div>
 
                   {/* Twilio SMS API */}
                   <div className="status-item">
-                    <div className="status-icon" style={{background: twilioStatus.configured ? '#f22f46' : '#6b7280'}}>
-                      📱
-                    </div>
                     <div className="status-info">
                       <h4>Twilio SMS API</h4>
                       <p>{twilioStatus.message || 'Advanced SMS features'}</p>
                       <span className={`status-badge ${twilioStatus.configured ? 'connected' : 'disconnected'}`}>
-                        {twilioStatus.configured ? '✓ Active' : 'Not Configured'}
+                        {twilioStatus.configured ? 'Active' : 'Not Configured'}
                       </span>
                       {twilioStatus.configured && twilioStatus.phone_number && (
                         <p className="status-detail">From: {twilioStatus.phone_number}</p>
@@ -3437,14 +3410,14 @@ const API_BASE_URL = isProduction
                       onClick={testClickToCall}
                       disabled={!testPhoneNumber}
                     >
-                      📞 Test Click-to-Call
+                      Test Click-to-Call
                     </button>
                     <button
                       className="btn-test sms"
                       onClick={testSMS}
                       disabled={!testPhoneNumber}
                     >
-                      💬 Test SMS
+                      Test SMS
                     </button>
                   </div>
                 </div>
@@ -3473,13 +3446,12 @@ const API_BASE_URL = isProduction
 
               {/* How It Works Card */}
               <div className="info-card">
-                <div className="info-icon">💡</div>
-                <div className="info-content">
+                                <div className="info-content">
                   <h3>How Phone Integration Works</h3>
                   <p><strong>Native Features (Always Active):</strong></p>
                   <ul>
                     <li><strong>Click-to-Call:</strong> Click any phone number in the CRM to open your phone dialer</li>
-                    <li><strong>SMS/Text:</strong> Click the 💬 button to open your messaging app</li>
+                    <li><strong>SMS/Text:</strong> Click the button to open your messaging app</li>
                     <li>Works with any carrier (Verizon, AT&T, T-Mobile, etc.)</li>
                     <li>No configuration required - works immediately!</li>
                   </ul>
@@ -3621,8 +3593,7 @@ const API_BASE_URL = isProduction
                   <p>Loading API keys...</p>
                 ) : apiKeys.length === 0 ? (
                   <div className="empty-state">
-                    <div className="empty-icon">🔑</div>
-                    <p>No API keys yet.</p>
+                                        <p>No API keys yet.</p>
                     <p className="empty-hint">Create your first API key above to get started with integrations.</p>
                   </div>
                 ) : (
@@ -3647,7 +3618,7 @@ const API_BASE_URL = isProduction
                             <td>{key.last_used_at ? new Date(key.last_used_at).toLocaleDateString() : 'Never'}</td>
                             <td>
                               <span className={`status-badge ${key.is_active ? 'active' : 'inactive'}`}>
-                                {key.is_active ? '✓ Active' : '✗ Revoked'}
+                                {key.is_active ? 'Active' : 'Revoked'}
                               </span>
                             </td>
                             <td>
@@ -3686,7 +3657,7 @@ const API_BASE_URL = isProduction
 
           {activeSection === 'it-helpdesk' && (
             <div className="it-helpdesk-section">
-              <h2>🛠️ AI IT Helpdesk</h2>
+              <h2>AI IT Helpdesk</h2>
               <p className="section-description">
                 Get AI-powered help for technical issues. Describe your problem and the AI will diagnose it and propose a fix.
               </p>
@@ -3819,8 +3790,7 @@ const API_BASE_URL = isProduction
                   <p>Loading tickets...</p>
                 ) : itTickets.length === 0 ? (
                   <div className="empty-state">
-                    <div className="empty-icon">🎫</div>
-                    <p>No IT tickets yet.</p>
+                                        <p>No IT tickets yet.</p>
                     <p className="empty-hint">Submit an issue above to get AI-powered help.</p>
                   </div>
                 ) : (
@@ -3836,10 +3806,10 @@ const API_BASE_URL = isProduction
                             {ticket.title || ticket.description.substring(0, 50) + '...'}
                           </div>
                           <span className={`ticket-status status-${ticket.status}`}>
-                            {ticket.status === 'analyzing' && '⏳ Analyzing'}
-                            {ticket.status === 'awaiting_approval' && '⚠️ Awaiting Approval'}
-                            {ticket.status === 'approved' && '✅ Approved'}
-                            {ticket.status === 'resolved' && '✓ Resolved'}
+                            {ticket.status === 'analyzing' && 'Analyzing'}
+                            {ticket.status === 'awaiting_approval' && 'Awaiting Approval'}
+                            {ticket.status === 'approved' && 'Approved'}
+                            {ticket.status === 'resolved' && 'Resolved'}
                           </span>
                         </div>
                         <div className="ticket-meta">
@@ -3858,13 +3828,13 @@ const API_BASE_URL = isProduction
                   <h3>Ticket #{selectedTicket.id}: {selectedTicket.title || 'IT Issue'}</h3>
 
                   <div className="detail-section">
-                    <h4>📝 Problem Description</h4>
+                    <h4>Problem Description</h4>
                     <p>{selectedTicket.description}</p>
                   </div>
 
                   {selectedTicket.ai_diagnosis && (
                     <div className="detail-section">
-                      <h4>🎯 AI Diagnosis</h4>
+                      <h4>AI Diagnosis</h4>
                       <p><strong>Root Cause:</strong> {selectedTicket.root_cause}</p>
                       <p>{selectedTicket.ai_diagnosis}</p>
                     </div>
@@ -3872,7 +3842,7 @@ const API_BASE_URL = isProduction
 
                   {selectedTicket.proposed_fix && (
                     <div className="detail-section">
-                      <h4>💡 Proposed Fix ({selectedTicket.proposed_fix.risk_level} risk)</h4>
+                      <h4>Proposed Fix ({selectedTicket.proposed_fix.risk_level} risk)</h4>
 
                       {selectedTicket.proposed_fix.steps && (
                         <div>
@@ -4173,8 +4143,7 @@ const API_BASE_URL = isProduction
                 <>
                   {teamMembers.length === 0 ? (
                     <div className="empty-state">
-                      <div className="empty-icon">👥</div>
-                      <p>No workflow team members found. Team members will appear once they are assigned to loans.</p>
+                                            <p>No workflow team members found. Team members will appear once they are assigned to loans.</p>
                     </div>
                   ) : (
                     <div className="team-members-table-container">
@@ -4384,7 +4353,7 @@ const API_BASE_URL = isProduction
                                   handleToggleVerified(user.id, user.email_verified);
                                 }}
                               >
-                                {user.email_verified ? '✓ Verified' : '✗ Not Verified'}
+                                {user.email_verified ? 'Verified' : 'Not Verified'}
                               </button>
                             </td>
                             <td>
@@ -4414,8 +4383,7 @@ const API_BASE_URL = isProduction
 
                   {users.length === 0 && (
                     <div className="empty-state">
-                      <div className="empty-icon">👥</div>
-                      <p>No users found</p>
+                                            <p>No users found</p>
                     </div>
                   )}
                 </div>
@@ -4437,8 +4405,7 @@ const API_BASE_URL = isProduction
 
               <div className="warning-card" style={{background: '#fff3cd', border: '2px solid #ffc107', padding: '24px', borderRadius: '8px', marginBottom: '24px'}}>
                 <div style={{display: 'flex', alignItems: 'start', gap: '16px'}}>
-                  <div style={{fontSize: '32px'}}>⚠️</div>
-                  <div>
+                                    <div>
                     <h3 style={{margin: '0 0 12px 0', color: '#856404'}}>Warning: This action cannot be undone!</h3>
                     <p style={{margin: '0 0 12px 0', color: '#856404'}}>This will permanently delete:</p>
                     <ul style={{margin: '0', paddingLeft: '20px', color: '#856404'}}>
@@ -4457,8 +4424,7 @@ const API_BASE_URL = isProduction
               </div>
 
               <div className="info-card" style={{marginBottom: '24px'}}>
-                <div className="info-icon">📋</div>
-                <div className="info-content">
+                                <div className="info-content">
                   <h3>What happens after clearing?</h3>
                   <p>After clearing all dummy data, you'll have a clean slate to:</p>
                   <ul>
@@ -4474,7 +4440,7 @@ const API_BASE_URL = isProduction
                 <button
                   className="btn-danger"
                   onClick={async () => {
-                    if (window.confirm('⚠️ Are you absolutely sure you want to clear ALL dummy data?\n\nThis will delete:\n- All tasks\n- All pending approvals\n- All messages\n- All loans and leads\n- All activities\n\nThis action CANNOT be undone!')) {
+                    if (window.confirm('Are you absolutely sure you want to clear ALL dummy data?\n\nThis will delete:\n- All tasks\n- All pending approvals\n- All messages\n- All loans and leads\n- All activities\n\nThis action CANNOT be undone!')) {
                       try {
                         const response = await fetch(`${API_BASE_URL}/api/v1/admin/clear-sample-data`, {
                           method: 'POST',
@@ -4519,7 +4485,7 @@ const API_BASE_URL = isProduction
                     cursor: 'pointer'
                   }}
                 >
-                  🗑️ Clear All Dummy Data
+                  Clear All Dummy Data
                 </button>
               </div>
             </div>
