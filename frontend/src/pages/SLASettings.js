@@ -255,6 +255,154 @@ const SLASettings = () => {
     return type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   };
 
+  // Define milestone stages for sorting - Lead stage first, then Loan stage
+  const leadStageMilestones = [
+    'lead_response', 'initial_consultation', 'lead_created', 'pre_qualified', 'preapproval'
+  ];
+
+  const loanStageMilestones = [
+    'application_submitted', 'documents_requested', 'documents_received',
+    'document_collection', 'application_complete',
+    'submitted_to_processing', 'processing_start',
+    'appraisal_ordered', 'appraisal_received',
+    'title_ordered', 'title_received',
+    'insurance_ordered', 'insurance_received',
+    'submitted_to_uw', 'uw_decision', 'approved',
+    'conditions_issued', 'conditions_cleared', 'clear_to_close',
+    'closing_docs_out', 'closing_scheduled', 'closed', 'funded', 'loan_funded'
+  ];
+
+  // Get stage category for a milestone type
+  const getMilestoneStage = (milestoneType) => {
+    if (leadStageMilestones.includes(milestoneType)) return 'lead';
+    if (loanStageMilestones.includes(milestoneType)) return 'loan';
+    return 'other';
+  };
+
+  // Get sort order for a milestone within its stage
+  const getMilestoneOrder = (milestoneType) => {
+    const leadIndex = leadStageMilestones.indexOf(milestoneType);
+    if (leadIndex !== -1) return leadIndex;
+    const loanIndex = loanStageMilestones.indexOf(milestoneType);
+    if (loanIndex !== -1) return loanIndex;
+    return 999;
+  };
+
+  // Sort measures: Lead stage first, then Loan stage, then by status (Active first), then by order within stage
+  const sortedMeasures = [...measures].sort((a, b) => {
+    // First sort by stage (Lead = 0, Loan = 1, Other = 2)
+    const stageOrder = { lead: 0, loan: 1, other: 2 };
+    const stageA = stageOrder[getMilestoneStage(a.milestone_type)];
+    const stageB = stageOrder[getMilestoneStage(b.milestone_type)];
+    if (stageA !== stageB) return stageA - stageB;
+
+    // Then sort by active status (Active first)
+    if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
+
+    // Then sort by order within stage
+    return getMilestoneOrder(a.milestone_type) - getMilestoneOrder(b.milestone_type);
+  });
+
+  // Group measures by stage for display
+  const groupedMeasures = {
+    lead: sortedMeasures.filter(m => getMilestoneStage(m.milestone_type) === 'lead'),
+    loan: sortedMeasures.filter(m => getMilestoneStage(m.milestone_type) === 'loan'),
+    other: sortedMeasures.filter(m => getMilestoneStage(m.milestone_type) === 'other')
+  };
+
+  // Render a single measure row
+  const renderMeasureRow = (measure) => (
+    <tr key={measure.id}>
+      <td>
+        <div className="milestone-name">{measure.name}</div>
+        <div className="milestone-type">{formatMilestoneType(measure.milestone_type)}</div>
+      </td>
+      <td>
+        <span className="target-badge">
+          {formatTargetUnit(measure.target_value, measure.target_unit)}
+        </span>
+      </td>
+      <td>
+        <span style={{ fontSize: '13px', color: '#4b5563' }}>
+          {formatMilestoneType(measure.trigger_from || 'previous_milestone')}
+          {measure.trigger_from_is_default && (
+            <span style={{
+              marginLeft: '6px',
+              fontSize: '10px',
+              padding: '2px 6px',
+              background: '#dbeafe',
+              color: '#1d4ed8',
+              borderRadius: '10px'
+            }}>
+              Default
+            </span>
+          )}
+        </span>
+      </td>
+      <td>{measure.warning_threshold_pct}%</td>
+      <td>
+        <div className={`status-indicator ${measure.is_active ? 'active' : 'inactive'}`}>
+          <span className="dot"></span>
+          {measure.is_active ? 'Active' : 'Inactive'}
+        </div>
+      </td>
+      <td>
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+          <button
+            onClick={() => {
+              setEditingMeasure(measure);
+              setShowEditModal(true);
+            }}
+            style={{
+              padding: '6px 12px',
+              background: '#f3f4f6',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '13px'
+            }}
+          >
+            Edit
+          </button>
+          <button
+            onClick={() => toggleMeasureActive(measure.id, !measure.is_active)}
+            style={{
+              padding: '6px 12px',
+              background: measure.is_active ? '#fef3c7' : '#d1fae5',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '13px',
+              color: measure.is_active ? '#92400e' : '#065f46'
+            }}
+            title={measure.is_active ? 'Deactivate this measure' : 'Activate this measure'}
+          >
+            {measure.is_active ? 'Deactivate' : 'Activate'}
+          </button>
+          <button
+            onClick={() => {
+              if (window.confirm(`Are you sure you want to delete "${measure.name}"? This action cannot be undone.`)) {
+                deleteMeasure(measure.id);
+              }
+            }}
+            style={{
+              padding: '6px 12px',
+              background: '#fee2e2',
+              border: 'none',
+              borderRadius: '4px',
+              cursor: 'pointer',
+              fontSize: '13px',
+              color: '#991b1b'
+            }}
+            title="Delete this measure"
+          >
+            Delete
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+
   const formatTargetUnit = (value, unit) => {
     const absValue = Math.abs(value);
     const unitLabel = unit === 'hours' ? 'hours' : unit === 'days' ? 'days' : 'business days';
@@ -492,97 +640,56 @@ const SLASettings = () => {
                 </tr>
               </thead>
               <tbody>
-                {measures.map((measure) => (
-                  <tr key={measure.id}>
-                    <td>
-                      <div className="milestone-name">{measure.name}</div>
-                      <div className="milestone-type">{formatMilestoneType(measure.milestone_type)}</div>
-                    </td>
-                    <td>
-                      <span className="target-badge">
-                        {formatTargetUnit(measure.target_value, measure.target_unit)}
-                      </span>
-                    </td>
-                    <td>
-                      <span style={{ fontSize: '13px', color: '#4b5563' }}>
-                        {formatMilestoneType(measure.trigger_from || 'previous_milestone')}
-                        {measure.trigger_from_is_default && (
-                          <span style={{
-                            marginLeft: '6px',
-                            fontSize: '10px',
-                            padding: '2px 6px',
-                            background: '#dbeafe',
-                            color: '#1d4ed8',
-                            borderRadius: '10px'
-                          }}>
-                            Default
-                          </span>
-                        )}
-                      </span>
-                    </td>
-                    <td>{measure.warning_threshold_pct}%</td>
-                    <td>
-                      <div className={`status-indicator ${measure.is_active ? 'active' : 'inactive'}`}>
-                        <span className="dot"></span>
-                        {measure.is_active ? 'Active' : 'Inactive'}
-                      </div>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                        <button
-                          onClick={() => {
-                            setEditingMeasure(measure);
-                            setShowEditModal(true);
-                          }}
-                          style={{
-                            padding: '6px 12px',
-                            background: '#f3f4f6',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '13px'
-                          }}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => toggleMeasureActive(measure.id, !measure.is_active)}
-                          style={{
-                            padding: '6px 12px',
-                            background: measure.is_active ? '#fef3c7' : '#d1fae5',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '13px',
-                            color: measure.is_active ? '#92400e' : '#065f46'
-                          }}
-                          title={measure.is_active ? 'Deactivate this measure' : 'Activate this measure'}
-                        >
-                          {measure.is_active ? 'Deactivate' : 'Activate'}
-                        </button>
-                        <button
-                          onClick={() => {
-                            if (window.confirm(`Are you sure you want to delete "${measure.name}"? This action cannot be undone.`)) {
-                              deleteMeasure(measure.id);
-                            }
-                          }}
-                          style={{
-                            padding: '6px 12px',
-                            background: '#fee2e2',
-                            border: 'none',
-                            borderRadius: '4px',
-                            cursor: 'pointer',
-                            fontSize: '13px',
-                            color: '#991b1b'
-                          }}
-                          title="Delete this measure"
-                        >
-                          Delete
-                        </button>
-                      </div>
+                {/* Lead Stage Section */}
+                {groupedMeasures.lead.length > 0 && (
+                  <tr className="stage-header-row">
+                    <td colSpan="6" style={{
+                      background: '#e0f2f1',
+                      padding: '10px 16px',
+                      fontWeight: '600',
+                      fontSize: '13px',
+                      color: '#00695c',
+                      borderBottom: '2px solid #26a69a'
+                    }}>
+                      📋 Lead Stage Milestones ({groupedMeasures.lead.length})
                     </td>
                   </tr>
-                ))}
+                )}
+                {groupedMeasures.lead.map((measure) => renderMeasureRow(measure))}
+
+                {/* Loan Stage Section */}
+                {groupedMeasures.loan.length > 0 && (
+                  <tr className="stage-header-row">
+                    <td colSpan="6" style={{
+                      background: '#e3f2fd',
+                      padding: '10px 16px',
+                      fontWeight: '600',
+                      fontSize: '13px',
+                      color: '#1565c0',
+                      borderBottom: '2px solid #42a5f5'
+                    }}>
+                      🏦 Active Loan Stage Milestones ({groupedMeasures.loan.length})
+                    </td>
+                  </tr>
+                )}
+                {groupedMeasures.loan.map((measure) => renderMeasureRow(measure))}
+
+                {/* Other Milestones Section */}
+                {groupedMeasures.other.length > 0 && (
+                  <tr className="stage-header-row">
+                    <td colSpan="6" style={{
+                      background: '#f3f4f6',
+                      padding: '10px 16px',
+                      fontWeight: '600',
+                      fontSize: '13px',
+                      color: '#6b7280',
+                      borderBottom: '2px solid #9ca3af'
+                    }}>
+                      📁 Other Milestones ({groupedMeasures.other.length})
+                    </td>
+                  </tr>
+                )}
+                {groupedMeasures.other.map((measure) => renderMeasureRow(measure))}
               </tbody>
             </table>
           )}
