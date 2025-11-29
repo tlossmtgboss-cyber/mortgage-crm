@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import Optional, List
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 import logging
 
 from database import get_db, Base, engine
@@ -642,12 +642,16 @@ async def get_bottleneck_analysis_data(
     if not start_date:
         start_date = end_date - timedelta(days=30)
 
-    bottlenecks = get_bottleneck_analysis(db, start_date, end_date)
+    try:
+        bottlenecks = get_bottleneck_analysis(db, start_date, end_date)
+    except Exception as e:
+        logger.warning(f"Bottleneck analysis error: {e}")
+        bottlenecks = []
 
     # Generate recommendations
     recommendations = []
     for b in bottlenecks[:3]:
-        if b["delay_frequency_pct"] > 30:
+        if b.get("delay_frequency_pct", 0) > 30:
             recommendations.append(
                 f"Consider reviewing {b['milestone_type']} process - {b['delay_frequency_pct']}% of loans experience delays"
             )
@@ -657,6 +661,118 @@ async def get_bottleneck_analysis_data(
         "period_end": end_date.isoformat(),
         "bottlenecks": bottlenecks,
         "recommendations": recommendations
+    }
+
+
+@router.get("/dashboard/run-rates")
+async def get_run_rate_report(
+    lookback_days: int = Query(30, ge=7, le=90),
+    db: Session = Depends(get_db)
+):
+    """
+    Get run rate report with forecasting for all milestone types.
+
+    Run rates show the average completions per day/week for each milestone type,
+    with trend analysis (improving/declining/stable) and inventory forecasts.
+
+    Returns:
+        - milestone_run_rates: Run rate metrics per milestone type
+        - inventory_forecasts: Current inventory and time to clear
+        - bottlenecks: Potential bottlenecks identified
+        - summary: Overall health metrics
+    """
+    from tasks.sla_tasks import calculate_run_rate, calculate_inventory_forecast, calculate_health_score
+
+    # Get all active SLA measures
+    measures = get_all_sla_measures(db, organization_id=1, active_only=True)
+    milestone_types = list(set(m.milestone_type for m in measures))
+
+    report = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "lookback_days": lookback_days,
+        "milestone_run_rates": [],
+        "inventory_forecasts": [],
+        "bottlenecks": [],
+        "summary": {}
+    }
+
+    total_inventory = 0
+    total_at_risk = 0
+    total_overdue = 0
+
+    for mt in milestone_types:
+        try:
+            # Calculate run rate
+            run_rate = calculate_run_rate(db, mt, lookback_days=lookback_days, organization_id=1)
+            report["milestone_run_rates"].append(run_rate)
+
+            # Calculate inventory forecast
+            forecast = calculate_inventory_forecast(db, mt, organization_id=1)
+            report["inventory_forecasts"].append(forecast)
+
+            # Track bottlenecks
+            if forecast["is_potential_bottleneck"]:
+                report["bottlenecks"].append({
+                    "milestone_type": mt.value,
+                    "inventory": forecast["current_inventory"],
+                    "days_to_clear": forecast["days_to_clear_inventory"],
+                    "overdue_count": forecast["overdue_count"],
+                    "at_risk_count": forecast["at_risk_count"],
+                    "daily_run_rate": forecast["daily_run_rate"],
+                    "trend": run_rate["trend"]
+                })
+
+            # Aggregate totals
+            total_inventory += forecast["current_inventory"]
+            total_at_risk += forecast["at_risk_count"]
+            total_overdue += forecast["overdue_count"]
+        except Exception as e:
+            logger.warning(f"Error calculating run rate for {mt}: {e}")
+
+    # Sort bottlenecks by days to clear (worst first)
+    report["bottlenecks"].sort(
+        key=lambda x: x["days_to_clear"] if x["days_to_clear"] else float('inf'),
+        reverse=True
+    )
+
+    # Summary
+    report["summary"] = {
+        "total_active_milestones": total_inventory,
+        "total_at_risk": total_at_risk,
+        "total_overdue": total_overdue,
+        "bottleneck_count": len(report["bottlenecks"]),
+        "health_score": calculate_health_score(total_inventory, total_at_risk, total_overdue)
+    }
+
+    return report
+
+
+@router.get("/dashboard/run-rates/{milestone_type}")
+async def get_milestone_run_rate(
+    milestone_type: str,
+    lookback_days: int = Query(30, ge=7, le=90),
+    db: Session = Depends(get_db)
+):
+    """
+    Get detailed run rate and forecast for a specific milestone type.
+
+    Returns run rate metrics, trend analysis, and inventory forecast.
+    """
+    from tasks.sla_tasks import calculate_run_rate, calculate_inventory_forecast
+
+    # Convert string to MilestoneType enum
+    try:
+        mt = MilestoneType(milestone_type)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid milestone type: {milestone_type}")
+
+    run_rate = calculate_run_rate(db, mt, lookback_days=lookback_days, organization_id=1)
+    forecast = calculate_inventory_forecast(db, mt, organization_id=1)
+
+    return {
+        "milestone_type": milestone_type,
+        "run_rate": run_rate,
+        "forecast": forecast
     }
 
 

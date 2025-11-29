@@ -3,17 +3,19 @@ SLA Background Tasks
 
 Scheduled jobs for:
 - Updating milestone statuses (every 15 minutes)
-- Creating performance snapshots (daily)
+- Creating performance snapshots (8 AM and 12 PM)
 - Generating efficiency reports (weekly)
 - Reactivating snoozed alerts
 - Creating risk alerts
+- Run rate calculations with inventory forecasting
 """
 
 import logging
 from datetime import datetime, date, timedelta, timezone
-from typing import Optional
+from typing import Optional, Dict, Any, List
 
 from sqlalchemy.orm import Session
+from sqlalchemy import func, and_
 
 from database import SessionLocal
 from crud.sla_tracking import (
@@ -21,9 +23,17 @@ from crud.sla_tracking import (
     create_performance_snapshot,
     create_efficiency_report,
     reactivate_snoozed_alerts,
-    get_all_sla_measures
+    get_all_sla_measures,
+    get_active_milestones
 )
 from services.sla_tracking_service import get_sla_service
+from models.sla_tracking import (
+    LoanMilestoneHistory,
+    SLAMeasure,
+    SLAStatus,
+    MilestoneType,
+    TimeUnit
+)
 
 logger = logging.getLogger(__name__)
 
@@ -123,26 +133,282 @@ def reactivate_snoozed_alerts_task():
 
 
 # ============================================================================
-# Daily Snapshot Task
+# Run Rate & Forecasting Calculations
 # ============================================================================
 
-def create_daily_snapshot_task(snapshot_date: Optional[date] = None):
+def calculate_run_rate(
+    db: Session,
+    milestone_type: MilestoneType,
+    lookback_days: int = 30,
+    organization_id: int = 1
+) -> Dict[str, Any]:
     """
-    Background task to create daily performance snapshots.
-    Should run once daily, after midnight.
+    Calculate run rate for a specific milestone type.
 
-    Creates snapshots at:
-    - Organization level (overall)
-    - Per milestone type
+    Run rate = average completions per day over the lookback period
+
+    Returns:
+        Dict with run rate metrics including:
+        - daily_run_rate: Average completions per day
+        - weekly_run_rate: Average completions per week
+        - avg_completion_time_hours: Average time to complete
+        - on_time_rate: Percentage completed on time
+        - trend: "improving", "declining", or "stable"
+    """
+    now = datetime.now(timezone.utc)
+    lookback_start = now - timedelta(days=lookback_days)
+    half_period_start = now - timedelta(days=lookback_days // 2)
+
+    # Get completions in the lookback period
+    completions = db.query(LoanMilestoneHistory).filter(
+        and_(
+            LoanMilestoneHistory.organization_id == organization_id,
+            LoanMilestoneHistory.milestone_type == milestone_type,
+            LoanMilestoneHistory.status == SLAStatus.COMPLETED,
+            LoanMilestoneHistory.completed_at >= lookback_start,
+            LoanMilestoneHistory.completed_at <= now
+        )
+    ).all()
+
+    total_completions = len(completions)
+
+    if total_completions == 0:
+        return {
+            "milestone_type": milestone_type.value,
+            "daily_run_rate": 0,
+            "weekly_run_rate": 0,
+            "avg_completion_time_hours": 0,
+            "on_time_rate": 0,
+            "trend": "stable",
+            "lookback_days": lookback_days,
+            "total_completions": 0
+        }
+
+    # Calculate basic run rates
+    daily_run_rate = total_completions / lookback_days
+    weekly_run_rate = daily_run_rate * 7
+
+    # Calculate average completion time
+    completion_times = [
+        c.actual_hours for c in completions
+        if c.actual_hours is not None
+    ]
+    avg_completion_time = sum(completion_times) / len(completion_times) if completion_times else 0
+
+    # Calculate on-time rate
+    on_time_count = sum(1 for c in completions if c.variance_hours is None or c.variance_hours <= 0)
+    on_time_rate = (on_time_count / total_completions) * 100
+
+    # Calculate trend (compare first half vs second half)
+    first_half = [c for c in completions if c.completed_at < half_period_start]
+    second_half = [c for c in completions if c.completed_at >= half_period_start]
+
+    first_half_rate = len(first_half) / (lookback_days / 2) if lookback_days > 0 else 0
+    second_half_rate = len(second_half) / (lookback_days / 2) if lookback_days > 0 else 0
+
+    if second_half_rate > first_half_rate * 1.1:
+        trend = "improving"
+    elif second_half_rate < first_half_rate * 0.9:
+        trend = "declining"
+    else:
+        trend = "stable"
+
+    return {
+        "milestone_type": milestone_type.value,
+        "daily_run_rate": round(daily_run_rate, 2),
+        "weekly_run_rate": round(weekly_run_rate, 2),
+        "avg_completion_time_hours": round(avg_completion_time, 1),
+        "on_time_rate": round(on_time_rate, 1),
+        "trend": trend,
+        "lookback_days": lookback_days,
+        "total_completions": total_completions
+    }
+
+
+def calculate_inventory_forecast(
+    db: Session,
+    milestone_type: MilestoneType,
+    organization_id: int = 1
+) -> Dict[str, Any]:
+    """
+    Calculate inventory forecast for a milestone type.
+
+    Uses current inventory (active milestones) and run rate to forecast:
+    - Days to clear current inventory
+    - Expected completions this week
+    - Projected bottlenecks
+    """
+    # Get current inventory (active milestones)
+    active_milestones = db.query(LoanMilestoneHistory).filter(
+        and_(
+            LoanMilestoneHistory.organization_id == organization_id,
+            LoanMilestoneHistory.milestone_type == milestone_type,
+            LoanMilestoneHistory.status.in_([
+                SLAStatus.IN_PROGRESS,
+                SLAStatus.ON_TRACK,
+                SLAStatus.AT_RISK,
+                SLAStatus.OVERDUE
+            ])
+        )
+    ).all()
+
+    current_inventory = len(active_milestones)
+
+    # Get run rate
+    run_rate = calculate_run_rate(db, milestone_type, lookback_days=30, organization_id=organization_id)
+    daily_rate = run_rate["daily_run_rate"]
+
+    # Calculate forecasts
+    if daily_rate > 0:
+        days_to_clear = current_inventory / daily_rate
+        expected_completions_week = min(daily_rate * 7, current_inventory)
+    else:
+        days_to_clear = float('inf') if current_inventory > 0 else 0
+        expected_completions_week = 0
+
+    # Count at-risk and overdue
+    at_risk_count = sum(1 for m in active_milestones if m.status == SLAStatus.AT_RISK)
+    overdue_count = sum(1 for m in active_milestones if m.status == SLAStatus.OVERDUE)
+
+    # Calculate average time remaining to deadline
+    now = datetime.now(timezone.utc)
+    time_to_deadline = []
+    for m in active_milestones:
+        if m.target_deadline:
+            hours_remaining = (m.target_deadline - now).total_seconds() / 3600
+            time_to_deadline.append(hours_remaining)
+
+    avg_hours_to_deadline = sum(time_to_deadline) / len(time_to_deadline) if time_to_deadline else 0
+
+    # Determine if this is a bottleneck
+    is_bottleneck = (
+        current_inventory > 0 and
+        (days_to_clear > 7 or overdue_count > current_inventory * 0.2 or at_risk_count > current_inventory * 0.3)
+    )
+
+    return {
+        "milestone_type": milestone_type.value,
+        "current_inventory": current_inventory,
+        "at_risk_count": at_risk_count,
+        "overdue_count": overdue_count,
+        "daily_run_rate": daily_rate,
+        "days_to_clear_inventory": round(days_to_clear, 1) if days_to_clear != float('inf') else None,
+        "expected_completions_this_week": round(expected_completions_week, 1),
+        "avg_hours_to_deadline": round(avg_hours_to_deadline, 1),
+        "is_potential_bottleneck": is_bottleneck,
+        "run_rate_trend": run_rate["trend"],
+        "on_time_rate": run_rate["on_time_rate"]
+    }
+
+
+def generate_run_rate_report(organization_id: int = 1) -> Dict[str, Any]:
+    """
+    Generate comprehensive run rate report for all milestone types.
+    Includes forecasting based on current inventory.
     """
     db = None
     try:
         db = get_db_session()
+        logger.info("Generating run rate report...")
 
-        if not snapshot_date:
-            snapshot_date = date.today() - timedelta(days=1)  # Yesterday's snapshot
+        # Get all active SLA measures
+        measures = get_all_sla_measures(db, organization_id=organization_id, active_only=True)
+        milestone_types = list(set(m.milestone_type for m in measures))
 
-        logger.info(f"Starting daily snapshot creation for {snapshot_date}...")
+        report = {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "organization_id": organization_id,
+            "milestone_run_rates": [],
+            "inventory_forecasts": [],
+            "bottlenecks": [],
+            "summary": {}
+        }
+
+        total_inventory = 0
+        total_at_risk = 0
+        total_overdue = 0
+
+        for mt in milestone_types:
+            # Calculate run rate
+            run_rate = calculate_run_rate(db, mt, lookback_days=30, organization_id=organization_id)
+            report["milestone_run_rates"].append(run_rate)
+
+            # Calculate inventory forecast
+            forecast = calculate_inventory_forecast(db, mt, organization_id=organization_id)
+            report["inventory_forecasts"].append(forecast)
+
+            # Track bottlenecks
+            if forecast["is_potential_bottleneck"]:
+                report["bottlenecks"].append({
+                    "milestone_type": mt.value,
+                    "inventory": forecast["current_inventory"],
+                    "days_to_clear": forecast["days_to_clear_inventory"],
+                    "overdue_count": forecast["overdue_count"],
+                    "at_risk_count": forecast["at_risk_count"]
+                })
+
+            # Aggregate totals
+            total_inventory += forecast["current_inventory"]
+            total_at_risk += forecast["at_risk_count"]
+            total_overdue += forecast["overdue_count"]
+
+        # Sort bottlenecks by severity (days to clear)
+        report["bottlenecks"].sort(
+            key=lambda x: x["days_to_clear"] if x["days_to_clear"] else float('inf'),
+            reverse=True
+        )
+
+        # Summary
+        report["summary"] = {
+            "total_active_milestones": total_inventory,
+            "total_at_risk": total_at_risk,
+            "total_overdue": total_overdue,
+            "bottleneck_count": len(report["bottlenecks"]),
+            "health_score": calculate_health_score(total_inventory, total_at_risk, total_overdue)
+        }
+
+        logger.info(f"Run rate report generated: {report['summary']}")
+        return report
+
+    except Exception as e:
+        logger.error(f"Error generating run rate report: {e}")
+        return {"error": str(e)}
+    finally:
+        if db:
+            db.close()
+
+
+def calculate_health_score(total: int, at_risk: int, overdue: int) -> int:
+    """
+    Calculate overall health score (0-100).
+    100 = all on track, 0 = all overdue
+    """
+    if total == 0:
+        return 100
+
+    on_track = total - at_risk - overdue
+    # Weight: on_track = 100%, at_risk = 50%, overdue = 0%
+    score = ((on_track * 100) + (at_risk * 50) + (overdue * 0)) / total
+    return round(score)
+
+
+# ============================================================================
+# Snapshot Task (8 AM and 12 PM)
+# ============================================================================
+
+def create_snapshot_with_run_rates(snapshot_time: str = "morning"):
+    """
+    Create performance snapshot including run rates and forecasts.
+
+    Args:
+        snapshot_time: "morning" (8 AM) or "midday" (12 PM)
+    """
+    db = None
+    try:
+        db = get_db_session()
+        snapshot_date = date.today()
+
+        logger.info(f"Creating {snapshot_time} snapshot for {snapshot_date}...")
 
         # Create org-level snapshot
         org_snapshot = create_performance_snapshot(
@@ -151,7 +417,7 @@ def create_daily_snapshot_task(snapshot_date: Optional[date] = None):
             scope_type="organization",
             scope_id=None,
             milestone_type=None,
-            period_type="daily",
+            period_type=f"intraday_{snapshot_time}",
             organization_id=1
         )
         logger.info(f"Created org snapshot: on_time_rate={org_snapshot.on_time_rate}%")
@@ -160,30 +426,69 @@ def create_daily_snapshot_task(snapshot_date: Optional[date] = None):
         measures = get_all_sla_measures(db, organization_id=1, active_only=True)
         milestone_types = list(set(m.milestone_type for m in measures))
 
-        # Create per-milestone-type snapshots
+        # Create per-milestone-type snapshots with run rate data
+        snapshot_results = []
         for mt in milestone_types:
             try:
-                create_performance_snapshot(
+                # Create performance snapshot
+                snapshot = create_performance_snapshot(
                     db,
                     snapshot_date=snapshot_date,
                     scope_type="organization",
                     scope_id=None,
                     milestone_type=mt,
-                    period_type="daily",
+                    period_type=f"intraday_{snapshot_time}",
                     organization_id=1
                 )
+
+                # Calculate run rate and forecast
+                run_rate = calculate_run_rate(db, mt, lookback_days=30, organization_id=1)
+                forecast = calculate_inventory_forecast(db, mt, organization_id=1)
+
+                snapshot_results.append({
+                    "milestone_type": mt.value,
+                    "snapshot_id": snapshot.id,
+                    "on_time_rate": snapshot.on_time_rate,
+                    "daily_run_rate": run_rate["daily_run_rate"],
+                    "trend": run_rate["trend"],
+                    "current_inventory": forecast["current_inventory"],
+                    "days_to_clear": forecast["days_to_clear_inventory"],
+                    "is_bottleneck": forecast["is_potential_bottleneck"]
+                })
+
             except Exception as e:
                 logger.warning(f"Error creating snapshot for {mt}: {e}")
 
-        logger.info(f"Daily snapshot creation complete for {snapshot_date}")
-        return {"status": "success", "date": str(snapshot_date)}
+        # Generate comprehensive run rate report
+        run_rate_report = generate_run_rate_report(organization_id=1)
+
+        logger.info(f"{snapshot_time.capitalize()} snapshot creation complete")
+        return {
+            "status": "success",
+            "snapshot_time": snapshot_time,
+            "date": str(snapshot_date),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "milestone_snapshots": snapshot_results,
+            "summary": run_rate_report.get("summary", {}),
+            "bottlenecks": run_rate_report.get("bottlenecks", [])
+        }
 
     except Exception as e:
-        logger.error(f"Error in daily snapshot task: {e}")
+        logger.error(f"Error in {snapshot_time} snapshot task: {e}")
         return {"error": str(e)}
     finally:
         if db:
             db.close()
+
+
+def create_morning_snapshot_task():
+    """8 AM snapshot with run rates and forecasting."""
+    return create_snapshot_with_run_rates(snapshot_time="morning")
+
+
+def create_midday_snapshot_task():
+    """12 PM snapshot with run rates and forecasting."""
+    return create_snapshot_with_run_rates(snapshot_time="midday")
 
 
 # ============================================================================
@@ -267,8 +572,8 @@ def run_daily_sla_tasks():
     # Run regular tasks first
     results["regular"] = run_all_sla_tasks()
 
-    # Create daily snapshot
-    results["snapshot"] = create_daily_snapshot_task()
+    # Create morning snapshot (for manual runs)
+    results["snapshot"] = create_morning_snapshot_task()
 
     logger.info(f"Daily SLA tasks complete: {results}")
     return results
@@ -334,12 +639,21 @@ def setup_sla_scheduler(scheduler):
         replace_existing=True
     )
 
-    # Daily snapshot at 1 AM
+    # Morning snapshot at 8 AM (with run rates and forecasting)
     scheduler.add_job(
-        create_daily_snapshot_task,
-        trigger=CronTrigger(hour=1, minute=0),
-        id="sla_daily_snapshot",
-        name="Create Daily SLA Snapshot",
+        create_morning_snapshot_task,
+        trigger=CronTrigger(hour=8, minute=0),
+        id="sla_morning_snapshot",
+        name="Create Morning SLA Snapshot (8 AM)",
+        replace_existing=True
+    )
+
+    # Midday snapshot at 12 PM (with run rates and forecasting)
+    scheduler.add_job(
+        create_midday_snapshot_task,
+        trigger=CronTrigger(hour=12, minute=0),
+        id="sla_midday_snapshot",
+        name="Create Midday SLA Snapshot (12 PM)",
         replace_existing=True
     )
 
@@ -352,4 +666,4 @@ def setup_sla_scheduler(scheduler):
         replace_existing=True
     )
 
-    logger.info("SLA scheduler jobs configured")
+    logger.info("SLA scheduler jobs configured: status updates (15min), alerts (hourly), snapshots (8am/12pm), weekly report (Mon 6am)")
