@@ -12985,6 +12985,37 @@ async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Ses
 
         logger.info(f"Ingested NEW Microsoft email {db_event.id} from {sender} (msg_id: {message_id[:20]}...)")
 
+        # Also queue to Email Intelligence system for intelligent disposition
+        try:
+            from routes.email_intelligence_routes import queue_email_for_intelligence
+            intel_email_data = {
+                "email_provider": "microsoft365",
+                "provider_message_id": message_id,
+                "thread_id": email_data.get("conversationId"),
+                "from_email": sender,
+                "from_name": email_data.get("from", {}).get("emailAddress", {}).get("name", ""),
+                "to_emails": recipients,
+                "cc_emails": [r.get("emailAddress", {}).get("address", "") for r in email_data.get("ccRecipients", [])],
+                "subject": subject,
+                "body_preview": raw_text[:500] if raw_text else "",
+                "body_full": raw_text,
+                "body_html": raw_html,
+                "sent_date": email_data.get("sentDateTime"),
+                "received_date": received_at,
+                "has_attachments": email_data.get("hasAttachments", False),
+                "direction": "inbound"
+            }
+            await queue_email_for_intelligence(
+                db=db,
+                user_id=user_id,
+                email_data=intel_email_data,
+                auto_analyze=False,  # Don't auto-analyze during sync
+                source="microsoft365"
+            )
+            logger.debug(f"Queued email {message_id[:20]}... to Email Intelligence")
+        except Exception as intel_error:
+            logger.warning(f"Email Intelligence queue error: {intel_error}")
+
         # Check AI provider setting
         ai_provider = os.getenv("AI_PROVIDER", "openai").lower()
 

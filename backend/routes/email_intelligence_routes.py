@@ -1543,3 +1543,353 @@ async def migrate_email_intelligence_tables(
         return {"status": "success", "message": "Email intelligence tables created/updated"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ================================================================
+# HELPER FUNCTIONS FOR EXTERNAL INTEGRATION
+# ================================================================
+
+async def queue_email_for_intelligence(
+    db: Session,
+    user_id: int,
+    email_data: Dict[str, Any],
+    auto_analyze: bool = False,
+    source: str = "sync"
+) -> Dict[str, Any]:
+    """
+    Queue an email for the Email Intelligence system.
+
+    Called by Gmail and Microsoft sync services to add ALL emails
+    to the reconciliation queue for intelligent processing.
+
+    Args:
+        db: Database session
+        user_id: User ID who owns the email
+        email_data: Dict with email fields (from_email, subject, body, etc.)
+        auto_analyze: Whether to run AI analysis immediately
+        source: Source identifier (gmail_sync, microsoft_sync, manual)
+
+    Returns:
+        Dict with status, email_id, match info, and analysis (if requested)
+    """
+    try:
+        # Check for duplicate by provider message ID
+        provider = email_data.get("email_provider", source)
+        msg_id = email_data.get("provider_message_id") or email_data.get("id", "")
+
+        if msg_id:
+            existing = db.execute(text("""
+                SELECT id FROM email_reconciliation_queue
+                WHERE email_provider = :provider AND provider_message_id = :msg_id AND user_id = :user_id
+            """), {
+                "provider": provider,
+                "msg_id": msg_id,
+                "user_id": user_id
+            }).fetchone()
+
+            if existing:
+                return {"status": "duplicate", "existing_id": existing[0]}
+
+        # Extract email fields with fallbacks
+        from_email = email_data.get("from_email") or ""
+        if not from_email and email_data.get("from"):
+            # Handle Microsoft format: {"emailAddress": {"address": "..."}}
+            if isinstance(email_data["from"], dict):
+                from_email = email_data["from"].get("emailAddress", {}).get("address", "")
+            else:
+                from_email = email_data["from"]
+
+        from_name = email_data.get("from_name", "")
+        if not from_name and email_data.get("from") and isinstance(email_data["from"], dict):
+            from_name = email_data["from"].get("emailAddress", {}).get("name", "")
+
+        # Extract to_emails
+        to_emails = email_data.get("to_emails", [])
+        if not to_emails and email_data.get("toRecipients"):
+            to_emails = [r.get("emailAddress", {}).get("address", "") for r in email_data["toRecipients"] if r]
+
+        # Extract cc_emails
+        cc_emails = email_data.get("cc_emails", [])
+        if not cc_emails and email_data.get("ccRecipients"):
+            cc_emails = [r.get("emailAddress", {}).get("address", "") for r in email_data["ccRecipients"] if r]
+
+        # Extract body content
+        body_preview = email_data.get("body_preview", "")
+        body_full = email_data.get("body_full")
+        body_html = email_data.get("body_html")
+
+        if not body_preview and email_data.get("body"):
+            if isinstance(email_data["body"], dict):
+                content = email_data["body"].get("content", "")
+                content_type = email_data["body"].get("contentType", "text")
+                if content_type == "html":
+                    body_html = content
+                    # Strip HTML for preview
+                    import re
+                    body_preview = re.sub(r'<[^>]+>', ' ', content)[:500]
+                else:
+                    body_preview = content[:500]
+                    body_full = content
+            else:
+                body_preview = str(email_data["body"])[:500]
+
+        # Get dates
+        sent_date = email_data.get("sent_date") or email_data.get("sentDateTime")
+        received_date = email_data.get("received_date") or email_data.get("receivedDateTime")
+
+        # Determine direction based on our email being in from/to
+        direction = email_data.get("direction", "inbound")
+
+        # Handle attachments
+        has_attachments = email_data.get("has_attachments", False) or email_data.get("hasAttachments", False)
+        attachment_count = email_data.get("attachment_count", 0)
+        attachment_names = email_data.get("attachment_names", [])
+
+        # Insert into queue
+        result = db.execute(text("""
+            INSERT INTO email_reconciliation_queue (
+                email_provider, provider_message_id, thread_id,
+                from_email, from_name, to_emails, cc_emails, subject,
+                body_preview, body_full, body_html,
+                has_attachments, attachment_count, attachment_names,
+                sent_date, received_date, direction,
+                status, user_id
+            ) VALUES (
+                :provider, :msg_id, :thread_id,
+                :from_email, :from_name, :to_emails, :cc_emails, :subject,
+                :body_preview, :body_full, :body_html,
+                :has_attachments, :attachment_count, :attachment_names,
+                :sent_date, :received_date, :direction,
+                'pending', :user_id
+            ) RETURNING id
+        """), {
+            "provider": provider,
+            "msg_id": msg_id,
+            "thread_id": email_data.get("thread_id") or email_data.get("conversationId"),
+            "from_email": from_email,
+            "from_name": from_name,
+            "to_emails": json.dumps(to_emails) if isinstance(to_emails, list) else to_emails,
+            "cc_emails": json.dumps(cc_emails) if isinstance(cc_emails, list) else cc_emails,
+            "subject": email_data.get("subject", ""),
+            "body_preview": body_preview[:500] if body_preview else "",
+            "body_full": body_full,
+            "body_html": body_html,
+            "has_attachments": has_attachments,
+            "attachment_count": attachment_count,
+            "attachment_names": json.dumps(attachment_names) if isinstance(attachment_names, list) else attachment_names,
+            "sent_date": sent_date,
+            "received_date": received_date,
+            "direction": direction,
+            "user_id": user_id
+        })
+
+        email_id = result.fetchone()[0]
+        db.commit()
+
+        # Auto-match to known clients
+        match_info = None
+        if from_email:
+            match_result = db.execute(text("""
+                SELECT contact_id, loan_id, lead_id, client_name
+                FROM known_client_emails
+                WHERE email_address = :email AND user_id = :user_id
+                LIMIT 1
+            """), {"email": from_email.lower(), "user_id": user_id}).fetchone()
+
+            if match_result:
+                db.execute(text("""
+                    UPDATE email_reconciliation_queue
+                    SET matched_contact_id = :contact_id,
+                        matched_loan_id = :loan_id,
+                        matched_lead_id = :lead_id,
+                        match_method = 'known_client_email',
+                        match_confidence = 1.0,
+                        is_priority = TRUE
+                    WHERE id = :email_id
+                """), {
+                    "contact_id": match_result[0],
+                    "loan_id": match_result[1],
+                    "lead_id": match_result[2],
+                    "email_id": email_id
+                })
+                db.commit()
+
+                match_info = {
+                    "contact_id": match_result[0],
+                    "loan_id": match_result[1],
+                    "lead_id": match_result[2],
+                    "client_name": match_result[3],
+                    "method": "known_client_email"
+                }
+
+        # Run AI analysis if requested
+        analysis = None
+        if auto_analyze:
+            try:
+                engine = EmailIntelligenceEngine(db)
+                analysis = await engine.analyze_email({
+                    "from_email": from_email,
+                    "from_name": from_name,
+                    "subject": email_data.get("subject", ""),
+                    "body_preview": body_preview
+                })
+
+                db.execute(text("""
+                    UPDATE email_reconciliation_queue
+                    SET ai_analysis = :analysis,
+                        analyzed_at = :analyzed_at,
+                        disposition = :disposition,
+                        direction = :direction
+                    WHERE id = :email_id
+                """), {
+                    "analysis": json.dumps(analysis.dict()),
+                    "analyzed_at": datetime.now(timezone.utc),
+                    "disposition": analysis.disposition,
+                    "direction": analysis.direction,
+                    "email_id": email_id
+                })
+                db.commit()
+            except Exception as e:
+                logger.warning(f"Auto-analysis failed for email {email_id}: {e}")
+
+        return {
+            "status": "queued",
+            "email_id": email_id,
+            "match": match_info,
+            "analysis": analysis.dict() if analysis else None
+        }
+
+    except Exception as e:
+        logger.error(f"Error queuing email for intelligence: {e}")
+        db.rollback()
+        return {"status": "error", "error": str(e)}
+
+
+@router.post("/batch-import")
+async def batch_import_emails(
+    emails: List[Dict[str, Any]],
+    auto_analyze: bool = Query(False),
+    db: Session = Depends(get_db)
+):
+    """
+    Import multiple emails to the queue in batch.
+
+    This is the primary endpoint for email sync services.
+    """
+    user_id = get_current_user_id(db)
+
+    results = {
+        "queued": 0,
+        "duplicates": 0,
+        "errors": 0,
+        "matched": 0,
+        "details": []
+    }
+
+    for email in emails:
+        result = await queue_email_for_intelligence(
+            db=db,
+            user_id=user_id,
+            email_data=email,
+            auto_analyze=auto_analyze,
+            source=email.get("email_provider", "batch")
+        )
+
+        if result["status"] == "queued":
+            results["queued"] += 1
+            if result.get("match"):
+                results["matched"] += 1
+        elif result["status"] == "duplicate":
+            results["duplicates"] += 1
+        else:
+            results["errors"] += 1
+
+        results["details"].append(result)
+
+    return results
+
+
+@router.post("/cron-sync-to-queue")
+async def cron_sync_emails_to_queue(
+    api_key: str = Query(..., description="API key for cron authentication"),
+    days_back: int = Query(1, le=7),
+    db: Session = Depends(get_db)
+):
+    """
+    Cron endpoint to sync ALL emails from connected providers to the intelligence queue.
+
+    Unlike the regular cron sync which only processes matching emails through DRE,
+    this queues ALL emails for intelligent disposition.
+    """
+    import os
+
+    expected_key = os.getenv("CRON_API_KEY")
+    if not expected_key or api_key != expected_key:
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    # First, refresh known client emails
+    try:
+        from sqlalchemy import text
+
+        # Get all users
+        users = db.execute(text("SELECT id FROM users")).fetchall()
+
+        total_synced = 0
+        for user_row in users:
+            user_id = user_row[0]
+
+            # Sync leads
+            leads = db.execute(text("""
+                SELECT id, email, name FROM leads
+                WHERE email IS NOT NULL AND loan_officer_id = :user_id
+            """), {"user_id": user_id}).fetchall()
+
+            for lead in leads:
+                if lead[1]:
+                    db.execute(text("""
+                        INSERT INTO known_client_emails (email_address, lead_id, client_name, source_type, source_id, user_id)
+                        VALUES (:email, :lead_id, :name, 'lead', :lead_id, :user_id)
+                        ON CONFLICT (email_address, user_id) DO UPDATE SET
+                            lead_id = COALESCE(known_client_emails.lead_id, :lead_id),
+                            updated_at = CURRENT_TIMESTAMP
+                    """), {
+                        "email": lead[1].lower(),
+                        "lead_id": lead[0],
+                        "name": lead[2],
+                        "user_id": user_id
+                    })
+
+            # Sync loans
+            loans = db.execute(text("""
+                SELECT id, borrower_email, borrower_name FROM loans
+                WHERE borrower_email IS NOT NULL AND loan_officer_id = :user_id
+            """), {"user_id": user_id}).fetchall()
+
+            for loan in loans:
+                if loan[1]:
+                    db.execute(text("""
+                        INSERT INTO known_client_emails (email_address, loan_id, client_name, source_type, source_id, user_id)
+                        VALUES (:email, :loan_id, :name, 'loan', :loan_id, :user_id)
+                        ON CONFLICT (email_address, user_id) DO UPDATE SET
+                            loan_id = COALESCE(known_client_emails.loan_id, :loan_id),
+                            updated_at = CURRENT_TIMESTAMP
+                    """), {
+                        "email": loan[1].lower(),
+                        "loan_id": loan[0],
+                        "name": loan[2],
+                        "user_id": user_id
+                    })
+
+            total_synced += len(leads) + len(loans)
+
+        db.commit()
+
+        return {
+            "status": "success",
+            "known_clients_synced": total_synced,
+            "message": "Run the provider-specific sync endpoints to queue emails"
+        }
+
+    except Exception as e:
+        logger.error(f"Error in cron sync: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

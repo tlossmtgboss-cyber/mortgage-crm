@@ -630,6 +630,42 @@ async def cron_sync_all_gmail(
                 # Process emails through extraction pipeline
                 from main import process_microsoft_email_to_dre, IncomingDataEvent, ExtractedData
 
+                # Also queue ALL emails to Email Intelligence system
+                queued_to_intelligence = 0
+                try:
+                    from routes.email_intelligence_routes import queue_email_for_intelligence
+                    for email in emails:
+                        intel_email_data = {
+                            "email_provider": "gmail",
+                            "provider_message_id": email.get("id", ""),
+                            "thread_id": email.get("thread_id"),
+                            "from_email": email.get("from", ""),
+                            "from_name": email.get("from_name", ""),
+                            "to_emails": [email.get("to", "")] if email.get("to") else [],
+                            "cc_emails": email.get("cc", []),
+                            "subject": email.get("subject", ""),
+                            "body_preview": (email.get("body_text") or email.get("body_html", ""))[:500],
+                            "body_full": email.get("body_text"),
+                            "body_html": email.get("body_html"),
+                            "sent_date": email.get("date"),
+                            "received_date": email.get("date"),
+                            "has_attachments": bool(email.get("attachments")),
+                            "attachment_count": len(email.get("attachments", [])),
+                            "attachment_names": [a.get("filename", "") for a in email.get("attachments", [])],
+                            "direction": "inbound"  # Gmail sync is typically inbox
+                        }
+                        result = await queue_email_for_intelligence(
+                            db=db,
+                            user_id=user_id,
+                            email_data=intel_email_data,
+                            auto_analyze=False,  # Don't auto-analyze during sync (too slow)
+                            source="gmail_sync"
+                        )
+                        if result.get("status") == "queued":
+                            queued_to_intelligence += 1
+                except Exception as intel_error:
+                    logger.warning(f"Email Intelligence queue error for user {user_id}: {intel_error}")
+
                 processed_count = 0
                 for email in emails:
                     try:
@@ -697,7 +733,8 @@ async def cron_sync_all_gmail(
                     "email": user_email,
                     "status": "success",
                     "emails_fetched": len(emails),
-                    "emails_processed": processed_count
+                    "emails_processed": processed_count,
+                    "emails_queued_to_intelligence": queued_to_intelligence
                 })
 
             except Exception as e:
