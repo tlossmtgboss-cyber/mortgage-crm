@@ -220,7 +220,14 @@
 .connection-status-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 16px;
+  flex-wrap: wrap;
+}
+
+.connection-status-header .btn-disconnect {
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
 .connection-status-indicator {
@@ -377,10 +384,6 @@
 
 .btn-disconnect:hover:not(:disabled) {
   background: #fef2f2;
-}
-
-.btn-disconnect:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.3);
   transform: translateY(-1px);
 }
 

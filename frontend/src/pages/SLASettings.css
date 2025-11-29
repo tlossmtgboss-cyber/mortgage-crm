@@ -907,6 +907,118 @@
   color: #991b1b;
 }
 
+/* Clickable Summary Cards */
+.summary-card.clickable {
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.summary-card.clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.summary-card.clickable:active {
+  transform: translateY(0);
+}
+
+.summary-card.on-track.clickable:hover {
+  border-left-color: #059669;
+  background: linear-gradient(135deg, white 0%, #ecfdf5 100%);
+}
+
+.summary-card.at-risk.clickable:hover {
+  border-left-color: #d97706;
+  background: linear-gradient(135deg, white 0%, #fffbeb 100%);
+}
+
+.summary-card.overdue.clickable:hover {
+  border-left-color: #dc2626;
+  background: linear-gradient(135deg, white 0%, #fef2f2 100%);
+}
+
+.summary-card.alerts.clickable:hover {
+  border-left-color: #7c3aed;
+  background: linear-gradient(135deg, white 0%, #f5f3ff 100%);
+}
+
+.card-drill-hint {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-top: 8px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.summary-card.clickable:hover .card-drill-hint {
+  opacity: 1;
+}
+
+/* Drag Handle */
+.drag-handle {
+  cursor: grab;
+  color: #9ca3af;
+  font-size: 14px;
+  padding: 4px;
+  user-select: none;
+  transition: color 0.2s;
+}
+
+.drag-handle:hover {
+  color: #6b7280;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+/* Draggable Row */
+.draggable-row {
+  transition: background 0.2s, opacity 0.2s;
+}
+
+.draggable-row:hover {
+  background: #f9fafb;
+}
+
+.draggable-row.dragging {
+  opacity: 0.5;
+  background: #e5e7eb;
+}
+
+.draggable-row:active {
+  cursor: grabbing;
+}
+
+/* Drill-Down Modal */
+.drill-down-modal {
+  max-width: 600px;
+  max-height: 85vh;
+}
+
+.drill-down-body {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+/* Health Score Animation */
+@keyframes pulse-score {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+}
+
+.health-score-display {
+  animation: pulse-score 2s ease-in-out infinite;
+}
+
+/* Stage Header Row Styling */
+.stage-header-row td {
+  padding: 10px 16px !important;
+  font-weight: 600;
+  font-size: 13px;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .sla-dashboard-summary {

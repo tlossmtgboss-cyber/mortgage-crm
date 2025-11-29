@@ -19,6 +19,14 @@ const SLASettings = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingMeasure, setEditingMeasure] = useState(null);
 
+  // Drill-down modal state
+  const [showDrillDown, setShowDrillDown] = useState(false);
+  const [drillDownType, setDrillDownType] = useState(null); // 'on_track', 'at_risk', 'overdue', 'health'
+
+  // Drag-and-drop state
+  const [draggedItem, setDraggedItem] = useState(null);
+  const [measureOrder, setMeasureOrder] = useState([]);
+
   // Reports state
   const [teamMembers, setTeamMembers] = useState([]);
   const [reportHistory, setReportHistory] = useState([]);
@@ -266,6 +274,103 @@ const SLASettings = () => {
     return type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   };
 
+  // Handle drill-down click on summary cards
+  const handleDrillDown = (type) => {
+    setDrillDownType(type);
+    setShowDrillDown(true);
+  };
+
+  // Get drill-down data based on type
+  const getDrillDownData = () => {
+    if (!summary?.milestone_breakdown) return [];
+
+    const breakdown = summary.milestone_breakdown;
+    let items = [];
+
+    Object.entries(breakdown).forEach(([milestoneType, stats]) => {
+      if (drillDownType === 'on_track') {
+        const onTrack = stats.total - (stats.at_risk || 0) - (stats.overdue || 0);
+        if (onTrack > 0) {
+          items.push({
+            milestone_type: milestoneType,
+            count: onTrack,
+            status: 'on_track',
+            details: `${onTrack} of ${stats.total} loans on track`
+          });
+        }
+      } else if (drillDownType === 'at_risk') {
+        if (stats.at_risk > 0) {
+          items.push({
+            milestone_type: milestoneType,
+            count: stats.at_risk,
+            status: 'at_risk',
+            details: `${stats.at_risk} loans approaching deadline`
+          });
+        }
+      } else if (drillDownType === 'overdue') {
+        if (stats.overdue > 0) {
+          items.push({
+            milestone_type: milestoneType,
+            count: stats.overdue,
+            status: 'overdue',
+            details: `${stats.overdue} loans past deadline`
+          });
+        }
+      }
+    });
+
+    return items.sort((a, b) => b.count - a.count);
+  };
+
+  // Drag-and-drop handlers
+  const handleDragStart = (e, measure) => {
+    setDraggedItem(measure);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e, targetMeasure, stage) => {
+    e.preventDefault();
+    if (!draggedItem || draggedItem.id === targetMeasure.id) return;
+
+    // Only allow reordering within the same stage
+    const draggedStage = getMilestoneStage(draggedItem.milestone_type);
+    const targetStage = getMilestoneStage(targetMeasure.milestone_type);
+
+    if (draggedStage !== targetStage) {
+      setDraggedItem(null);
+      return;
+    }
+
+    // Get current stage items
+    const stageItems = groupedMeasures[stage];
+    const draggedIdx = stageItems.findIndex(m => m.id === draggedItem.id);
+    const targetIdx = stageItems.findIndex(m => m.id === targetMeasure.id);
+
+    // Create new order
+    const newItems = [...stageItems];
+    newItems.splice(draggedIdx, 1);
+    newItems.splice(targetIdx, 0, draggedItem);
+
+    // Update the local order display
+    const newOrder = newItems.map(m => m.id);
+    setMeasureOrder(prev => {
+      const updated = { ...prev };
+      updated[stage] = newOrder;
+      return updated;
+    });
+
+    setDraggedItem(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedItem(null);
+  };
+
   // Define milestone stages for sorting - Lead stage first, then Loan stage
   const leadStageMilestones = [
     'lead_response', 'initial_consultation', 'lead_created', 'pre_qualified', 'preapproval'
@@ -321,12 +426,25 @@ const SLASettings = () => {
     other: sortedMeasures.filter(m => getMilestoneStage(m.milestone_type) === 'other')
   };
 
-  // Render a single measure row
-  const renderMeasureRow = (measure) => (
-    <tr key={measure.id}>
+  // Render a single measure row with drag-and-drop support
+  const renderMeasureRow = (measure, stage) => (
+    <tr
+      key={measure.id}
+      draggable
+      onDragStart={(e) => handleDragStart(e, measure)}
+      onDragOver={handleDragOver}
+      onDrop={(e) => handleDrop(e, measure, stage)}
+      onDragEnd={handleDragEnd}
+      className={`draggable-row ${draggedItem?.id === measure.id ? 'dragging' : ''}`}
+    >
       <td>
-        <div className="milestone-name">{measure.name}</div>
-        <div className="milestone-type">{formatMilestoneType(measure.milestone_type)}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span className="drag-handle" title="Drag to reorder">⋮⋮</span>
+          <div>
+            <div className="milestone-name">{measure.name}</div>
+            <div className="milestone-type">{formatMilestoneType(measure.milestone_type)}</div>
+          </div>
+        </div>
       </td>
       <td>
         <span className="target-badge">
@@ -442,27 +560,47 @@ const SLASettings = () => {
         <p>Monitor loan lifecycle milestones and service level agreements</p>
       </div>
 
-      {/* Dashboard Summary */}
+      {/* Dashboard Summary - Clickable Cards */}
       <div className="sla-dashboard-summary">
-        <div className="summary-card on-track">
+        <div
+          className="summary-card on-track clickable"
+          onClick={() => handleDrillDown('on_track')}
+          title="Click to see details"
+        >
           <div className="card-label">On Track</div>
           <div className="card-value">{summary?.on_track_count || 0}</div>
           <div className="card-sub">milestones within SLA</div>
+          <div className="card-drill-hint">Click for details</div>
         </div>
-        <div className="summary-card at-risk">
+        <div
+          className="summary-card at-risk clickable"
+          onClick={() => handleDrillDown('at_risk')}
+          title="Click to see details"
+        >
           <div className="card-label">At Risk</div>
           <div className="card-value">{summary?.at_risk_count || 0}</div>
           <div className="card-sub">approaching deadline</div>
+          <div className="card-drill-hint">Click for details</div>
         </div>
-        <div className="summary-card overdue">
+        <div
+          className="summary-card overdue clickable"
+          onClick={() => handleDrillDown('overdue')}
+          title="Click to see details"
+        >
           <div className="card-label">Overdue</div>
           <div className="card-value">{summary?.overdue_count || 0}</div>
           <div className="card-sub">past deadline</div>
+          <div className="card-drill-hint">Click for details</div>
         </div>
-        <div className="summary-card alerts">
+        <div
+          className="summary-card alerts clickable"
+          onClick={() => handleDrillDown('health')}
+          title="Click to see details"
+        >
           <div className="card-label">Health Score</div>
           <div className="card-value">{runRates?.summary?.health_score || 100}</div>
           <div className="card-sub">out of 100</div>
+          <div className="card-drill-hint">Click for details</div>
         </div>
       </div>
 
@@ -666,7 +804,7 @@ const SLASettings = () => {
                     </td>
                   </tr>
                 )}
-                {groupedMeasures.lead.map((measure) => renderMeasureRow(measure))}
+                {groupedMeasures.lead.map((measure) => renderMeasureRow(measure, 'lead'))}
 
                 {/* Loan Stage Section */}
                 {groupedMeasures.loan.length > 0 && (
@@ -683,7 +821,7 @@ const SLASettings = () => {
                     </td>
                   </tr>
                 )}
-                {groupedMeasures.loan.map((measure) => renderMeasureRow(measure))}
+                {groupedMeasures.loan.map((measure) => renderMeasureRow(measure, 'loan'))}
 
                 {/* Other Milestones Section */}
                 {groupedMeasures.other.length > 0 && (
@@ -700,7 +838,7 @@ const SLASettings = () => {
                     </td>
                   </tr>
                 )}
-                {groupedMeasures.other.map((measure) => renderMeasureRow(measure))}
+                {groupedMeasures.other.map((measure) => renderMeasureRow(measure, 'other'))}
               </tbody>
             </table>
           )}
@@ -809,6 +947,23 @@ const SLASettings = () => {
           onClose={() => {
             setShowEditModal(false);
             setEditingMeasure(null);
+          }}
+        />
+      )}
+
+      {/* Drill-Down Modal */}
+      {showDrillDown && (
+        <DrillDownModal
+          type={drillDownType}
+          data={getDrillDownData()}
+          summary={summary}
+          runRates={runRates}
+          alerts={alerts}
+          bottlenecks={bottlenecks}
+          formatMilestoneType={formatMilestoneType}
+          onClose={() => {
+            setShowDrillDown(false);
+            setDrillDownType(null);
           }}
         />
       )}
@@ -1427,6 +1582,286 @@ const EditMeasureModal = ({ measure, onSave, onClose }) => {
             <button type="submit" className="btn-save">Save Measure</button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+};
+
+// Drill-Down Modal Component
+const DrillDownModal = ({ type, data, summary, runRates, alerts, bottlenecks, formatMilestoneType, onClose }) => {
+  const getTitle = () => {
+    switch (type) {
+      case 'on_track': return 'On Track Milestones';
+      case 'at_risk': return 'At Risk Milestones';
+      case 'overdue': return 'Overdue Milestones';
+      case 'health': return 'Health Score Breakdown';
+      default: return 'Details';
+    }
+  };
+
+  const getIcon = () => {
+    switch (type) {
+      case 'on_track': return '✅';
+      case 'at_risk': return '⚠️';
+      case 'overdue': return '🚨';
+      case 'health': return '💊';
+      default: return '📊';
+    }
+  };
+
+  const getStatusColor = () => {
+    switch (type) {
+      case 'on_track': return '#10b981';
+      case 'at_risk': return '#f59e0b';
+      case 'overdue': return '#ef4444';
+      case 'health': return '#8b5cf6';
+      default: return '#6b7280';
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content drill-down-modal" onClick={e => e.stopPropagation()}>
+        <div className="modal-header" style={{ borderLeft: `4px solid ${getStatusColor()}` }}>
+          <h3>{getIcon()} {getTitle()}</h3>
+          <button className="close-btn" onClick={onClose}>&times;</button>
+        </div>
+        <div className="modal-body drill-down-body">
+          {type === 'health' ? (
+            // Health Score breakdown
+            <div className="health-breakdown">
+              <div className="health-score-display" style={{ textAlign: 'center', marginBottom: '24px' }}>
+                <div style={{
+                  fontSize: '64px',
+                  fontWeight: '700',
+                  color: (runRates?.summary?.health_score || 100) >= 80 ? '#10b981' :
+                         (runRates?.summary?.health_score || 100) >= 60 ? '#f59e0b' : '#ef4444'
+                }}>
+                  {runRates?.summary?.health_score || 100}
+                </div>
+                <div style={{ color: '#6b7280', fontSize: '14px' }}>Overall Health Score</div>
+              </div>
+
+              <div className="health-factors" style={{ display: 'grid', gap: '12px' }}>
+                <div className="health-factor" style={{
+                  padding: '16px',
+                  background: '#f9fafb',
+                  borderRadius: '8px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <div>
+                    <div style={{ fontWeight: '600' }}>On-Time Rate</div>
+                    <div style={{ fontSize: '12px', color: '#6b7280' }}>Percentage of milestones completed on time</div>
+                  </div>
+                  <div style={{
+                    fontSize: '24px',
+                    fontWeight: '600',
+                    color: (summary?.overall_on_time_rate || 0) >= 85 ? '#10b981' : '#f59e0b'
+                  }}>
+                    {(summary?.overall_on_time_rate || 0).toFixed(1)}%
+                  </div>
+                </div>
+
+                <div className="health-factor" style={{
+                  padding: '16px',
+                  background: '#f9fafb',
+                  borderRadius: '8px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <div>
+                    <div style={{ fontWeight: '600' }}>Active Milestones</div>
+                    <div style={{ fontSize: '12px', color: '#6b7280' }}>Currently being tracked</div>
+                  </div>
+                  <div style={{ fontSize: '24px', fontWeight: '600', color: '#1f2937' }}>
+                    {summary?.total_active_milestones || 0}
+                  </div>
+                </div>
+
+                <div className="health-factor" style={{
+                  padding: '16px',
+                  background: '#fef3c7',
+                  borderRadius: '8px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <div>
+                    <div style={{ fontWeight: '600', color: '#92400e' }}>At Risk</div>
+                    <div style={{ fontSize: '12px', color: '#b45309' }}>Approaching deadline</div>
+                  </div>
+                  <div style={{ fontSize: '24px', fontWeight: '600', color: '#f59e0b' }}>
+                    {summary?.at_risk_count || 0}
+                  </div>
+                </div>
+
+                <div className="health-factor" style={{
+                  padding: '16px',
+                  background: '#fee2e2',
+                  borderRadius: '8px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center'
+                }}>
+                  <div>
+                    <div style={{ fontWeight: '600', color: '#991b1b' }}>Overdue</div>
+                    <div style={{ fontSize: '12px', color: '#b91c1c' }}>Past deadline</div>
+                  </div>
+                  <div style={{ fontSize: '24px', fontWeight: '600', color: '#ef4444' }}>
+                    {summary?.overdue_count || 0}
+                  </div>
+                </div>
+              </div>
+
+              {/* Top Bottlenecks */}
+              {bottlenecks && bottlenecks.length > 0 && (
+                <div style={{ marginTop: '24px' }}>
+                  <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px' }}>
+                    Top Bottlenecks Affecting Health
+                  </h4>
+                  {bottlenecks.slice(0, 3).map((bn, idx) => (
+                    <div key={bn.milestone_type} style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '12px',
+                      padding: '10px',
+                      background: '#f9fafb',
+                      borderRadius: '6px',
+                      marginBottom: '8px'
+                    }}>
+                      <span style={{
+                        width: '24px',
+                        height: '24px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: idx === 0 ? '#ef4444' : idx === 1 ? '#f59e0b' : '#6b7280',
+                        color: 'white',
+                        borderRadius: '50%',
+                        fontSize: '12px',
+                        fontWeight: '600'
+                      }}>
+                        {idx + 1}
+                      </span>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: '500' }}>{formatMilestoneType(bn.milestone_type)}</div>
+                        <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                          {bn.avg_delay_hours?.toFixed(1)}h avg delay • {bn.total_affected_loans} loans
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            // On Track / At Risk / Overdue breakdown
+            <div className="milestone-breakdown">
+              <div style={{
+                padding: '16px',
+                background: type === 'on_track' ? '#d1fae5' : type === 'at_risk' ? '#fef3c7' : '#fee2e2',
+                borderRadius: '8px',
+                marginBottom: '20px',
+                textAlign: 'center'
+              }}>
+                <div style={{ fontSize: '48px', fontWeight: '700', color: getStatusColor() }}>
+                  {type === 'on_track' ? (summary?.on_track_count || 0) :
+                   type === 'at_risk' ? (summary?.at_risk_count || 0) :
+                   (summary?.overdue_count || 0)}
+                </div>
+                <div style={{ color: '#6b7280', fontSize: '14px' }}>
+                  {type === 'on_track' ? 'Total On Track' :
+                   type === 'at_risk' ? 'Total At Risk' : 'Total Overdue'}
+                </div>
+              </div>
+
+              {data && data.length > 0 ? (
+                <div className="breakdown-list" style={{ display: 'grid', gap: '10px' }}>
+                  <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px' }}>
+                    Breakdown by Milestone
+                  </div>
+                  {data.map((item) => (
+                    <div key={item.milestone_type} style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '12px 16px',
+                      background: '#f9fafb',
+                      borderRadius: '8px',
+                      borderLeft: `3px solid ${getStatusColor()}`
+                    }}>
+                      <div>
+                        <div style={{ fontWeight: '500' }}>{formatMilestoneType(item.milestone_type)}</div>
+                        <div style={{ fontSize: '12px', color: '#6b7280' }}>{item.details}</div>
+                      </div>
+                      <div style={{
+                        fontSize: '20px',
+                        fontWeight: '600',
+                        color: getStatusColor()
+                      }}>
+                        {item.count}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{
+                  textAlign: 'center',
+                  padding: '32px',
+                  color: '#6b7280'
+                }}>
+                  <div style={{ fontSize: '32px', marginBottom: '8px' }}>
+                    {type === 'on_track' ? '🎉' : type === 'at_risk' ? '✅' : '✅'}
+                  </div>
+                  <div style={{ fontWeight: '500' }}>
+                    {type === 'on_track' ? 'No specific breakdown available' :
+                     type === 'at_risk' ? 'No milestones at risk!' :
+                     'No overdue milestones!'}
+                  </div>
+                  <div style={{ fontSize: '13px', marginTop: '4px' }}>
+                    {type === 'on_track' ? 'All milestones are performing well' :
+                     'All milestones are on track'}
+                  </div>
+                </div>
+              )}
+
+              {/* Related Alerts for At Risk and Overdue */}
+              {(type === 'at_risk' || type === 'overdue') && alerts && alerts.length > 0 && (
+                <div style={{ marginTop: '24px' }}>
+                  <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px' }}>
+                    Related Alerts
+                  </div>
+                  {alerts
+                    .filter(a => type === 'overdue' ? a.alert_type === 'overdue' : a.alert_type === 'at_risk')
+                    .slice(0, 5)
+                    .map((alert) => (
+                      <div key={alert.id} style={{
+                        padding: '12px',
+                        background: type === 'overdue' ? '#fef2f2' : '#fffbeb',
+                        border: `1px solid ${type === 'overdue' ? '#fecaca' : '#fcd34d'}`,
+                        borderRadius: '6px',
+                        marginBottom: '8px',
+                        fontSize: '13px'
+                      }}>
+                        <div style={{ fontWeight: '500' }}>{alert.title}</div>
+                        <div style={{ color: '#6b7280', marginTop: '4px' }}>{alert.message}</div>
+                        <div style={{ color: '#9ca3af', fontSize: '11px', marginTop: '4px' }}>
+                          Loan: {alert.loan_number || alert.loan_id || 'N/A'} •
+                          Triggered: {new Date(alert.triggered_at).toLocaleDateString()}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+        <div className="modal-footer">
+          <button type="button" className="btn-cancel" onClick={onClose}>Close</button>
+        </div>
       </div>
     </div>
   );

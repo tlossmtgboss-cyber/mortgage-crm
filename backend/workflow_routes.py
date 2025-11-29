@@ -763,13 +763,12 @@ async def get_all_upcoming_tasks(
                 t.status,
                 t.owner_id,
                 u.full_name as owner_name,
-                COALESCE(l.borrower_name, le.first_name || ' ' || le.last_name, t.related_contact_name, 'Unknown') as client_name,
-                COALESCE(lo.loan_number, '') as loan_number
+                COALESCE(l.borrower_name, le.name, t.related_contact_name, 'Unknown') as client_name,
+                COALESCE(l.loan_number, '') as loan_number
             FROM tasks t
             LEFT JOIN users u ON t.owner_id = u.id
             LEFT JOIN loans l ON t.loan_id = l.id
             LEFT JOIN leads le ON t.lead_id = le.id
-            LEFT JOIN loans lo ON t.loan_id = lo.id
             WHERE t.status != 'completed'
             AND t.due_date IS NOT NULL
             AND t.due_date >= :today
@@ -921,15 +920,14 @@ async def get_upcoming_tasks_by_workflow(
                 t.status,
                 t.owner_id,
                 u.full_name as owner_name,
-                COALESCE(l.borrower_name, le.first_name || ' ' || le.last_name) as client_name,
-                COALESCE(lo.loan_number, '') as loan_number,
+                COALESCE(l.borrower_name, le.name, t.related_contact_name, 'Unknown') as client_name,
+                COALESCE(l.loan_number, '') as loan_number,
                 l.stage as loan_stage,
                 le.stage as lead_stage
             FROM tasks t
             LEFT JOIN users u ON t.owner_id = u.id
             LEFT JOIN loans l ON t.loan_id = l.id
             LEFT JOIN leads le ON t.lead_id = le.id
-            LEFT JOIN loans lo ON t.loan_id = lo.id
             WHERE t.status != 'completed'
             AND t.due_date IS NOT NULL
             AND t.due_date >= :today
