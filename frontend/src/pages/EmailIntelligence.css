@@ -51,6 +51,19 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
+.stat-card.clickable {
+  cursor: pointer;
+}
+
+.stat-card.clickable:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.15);
+}
+
+.stat-card.clickable:active {
+  transform: translateY(-2px);
+}
+
 .stat-value {
   font-size: 42px;
   font-weight: 700;
@@ -1091,3 +1104,52 @@
     padding: 12px;
   }
 }
+
+/* All Documents Section */
+.all-documents-section {
+  background: white;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.section-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a2e;
+}
+
+.doc-summary {
+  text-align: center;
+  padding: 16px;
+  color: #666;
+  font-size: 14px;
+  border-top: 1px solid #eee;
+  margin-top: 16px;
+}
+
+.loan-link:hover {
+  color: #1d4ed8;
+}
+
+.no-loan {
+  color: #999;
+}
+
+.doc-source {
+  font-size: 13px;
+  color: #666;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+

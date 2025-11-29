@@ -1291,6 +1291,66 @@ async def get_document_tracking(
     return {"documents": documents, "total": len(documents)}
 
 
+@router.get("/document-tracking/all")
+async def get_all_document_tracking(
+    status: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db)
+):
+    """Get all document tracking records for the current user"""
+    user_id = get_current_user_id(db)
+
+    # First get total count
+    count_query = "SELECT COUNT(*) FROM email_document_tracking WHERE user_id = :user_id"
+    count_params = {"user_id": user_id}
+    if status:
+        count_query += " AND status = :status"
+        count_params["status"] = status
+
+    total = db.execute(text(count_query), count_params).scalar() or 0
+
+    # Then get documents with source email info
+    query = """
+        SELECT edt.id, edt.document_name, edt.document_type, edt.status,
+               edt.loan_id, edt.lead_id, edt.requested_date, edt.received_date,
+               edt.reminder_count, edt.next_reminder_date, edt.created_at,
+               eq.from_email, eq.from_name
+        FROM email_document_tracking edt
+        LEFT JOIN email_queue eq ON edt.received_email_id = eq.id
+        WHERE edt.user_id = :user_id
+    """
+    params = {"user_id": user_id, "limit": limit, "offset": offset}
+
+    if status:
+        query += " AND edt.status = :status"
+        params["status"] = status
+
+    query += " ORDER BY COALESCE(edt.received_date, edt.created_at) DESC LIMIT :limit OFFSET :offset"
+
+    result = db.execute(text(query), params).fetchall()
+
+    documents = []
+    for row in result:
+        documents.append({
+            "id": row[0],
+            "document_name": row[1],
+            "document_type": row[2],
+            "status": row[3],
+            "loan_id": row[4],
+            "lead_id": row[5],
+            "requested_date": str(row[6]) if row[6] else None,
+            "received_date": str(row[7]) if row[7] else None,
+            "reminder_count": row[8],
+            "next_reminder_date": str(row[9]) if row[9] else None,
+            "created_at": str(row[10]) if row[10] else None,
+            "from_email": row[11],
+            "from_name": row[12]
+        })
+
+    return {"documents": documents, "total": total}
+
+
 @router.post("/document-tracking/{doc_id}/received")
 async def mark_document_received(
     doc_id: int,

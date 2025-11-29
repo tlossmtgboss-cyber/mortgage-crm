@@ -667,6 +667,76 @@ function EmailIntelligence() {
             )}
           </div>
         )}
+
+        {/* All Documents Tab */}
+        {activeTab === 'all-documents' && (
+          <div className="all-documents-section">
+            <div className="section-header">
+              <h3>All Received Documents</h3>
+              <button className="refresh-btn" onClick={loadAllDocuments}>
+                🔄 Refresh
+              </button>
+            </div>
+
+            {loading ? (
+              <div className="loading-spinner">Loading...</div>
+            ) : allDocuments.length === 0 ? (
+              <div className="empty-state">
+                <div className="empty-icon">📄</div>
+                <h3>No documents tracked</h3>
+                <p>Documents will appear here as they're received via email</p>
+              </div>
+            ) : (
+              <div className="document-list">
+                <table className="doc-table">
+                  <thead>
+                    <tr>
+                      <th>Document</th>
+                      <th>Type</th>
+                      <th>Loan</th>
+                      <th>Status</th>
+                      <th>Received</th>
+                      <th>Source</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {allDocuments.map(doc => (
+                      <tr key={doc.id} className={`doc-row ${doc.status}`}>
+                        <td className="doc-name">{doc.document_name}</td>
+                        <td className="doc-type">{doc.document_type}</td>
+                        <td>
+                          {doc.loan_id ? (
+                            <span
+                              className="loan-link"
+                              onClick={() => navigate(`/loans/${doc.loan_id}`)}
+                              style={{ cursor: 'pointer', color: '#3b82f6', textDecoration: 'underline' }}
+                            >
+                              #{doc.loan_id}
+                            </span>
+                          ) : (
+                            <span className="no-loan">-</span>
+                          )}
+                        </td>
+                        <td>
+                          <span className={`status-badge ${doc.status}`}>
+                            {doc.status}
+                          </span>
+                        </td>
+                        <td>{formatDate(doc.received_date || doc.created_at)}</td>
+                        <td className="doc-source">
+                          {doc.from_email || doc.source_email || '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="doc-summary">
+                  Showing {allDocuments.length} of {allDocumentsTotal} documents
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Email Detail Modal */}
