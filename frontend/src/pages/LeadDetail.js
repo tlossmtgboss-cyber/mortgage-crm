@@ -228,6 +228,7 @@ function LeadDetail() {
   useEffect(() => {
     loadLeadData();
     loadEmails();
+    loadEmailDrafts();
     markLeadAsViewed();
     loadLeadsList();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -383,6 +384,219 @@ function LeadDetail() {
       setEmails(emailActivities || []);
     } catch (error) {
       console.error('Failed to load emails:', error);
+    }
+  };
+
+  // Load email drafts for this lead
+  const loadEmailDrafts = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+      const API_BASE = isProduction
+        ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+        : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
+
+      const response = await fetch(`${API_BASE}/api/v1/email-drafts?lead_id=${id}&status=draft`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setEmailDrafts(data.drafts || data || []);
+      }
+    } catch (error) {
+      console.error('Failed to load email drafts:', error);
+    }
+  };
+
+  // Search contacts for CC autocomplete
+  const searchContacts = async (query) => {
+    if (!query || query.length < 2) {
+      setCcSearchResults([]);
+      return;
+    }
+
+    setCcSearchLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+      const API_BASE = isProduction
+        ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+        : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
+
+      const response = await fetch(`${API_BASE}/api/v1/contacts/search?q=${encodeURIComponent(query)}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setCcSearchResults(data.results || data || []);
+      }
+    } catch (error) {
+      console.error('Failed to search contacts:', error);
+    } finally {
+      setCcSearchLoading(false);
+    }
+  };
+
+  // Add CC recipient
+  const addCcRecipient = (contact) => {
+    if (!ccRecipients.find(c => c.email === contact.email)) {
+      setCcRecipients([...ccRecipients, contact]);
+    }
+    setCcSearchQuery('');
+    setCcSearchResults([]);
+  };
+
+  // Remove CC recipient
+  const removeCcRecipient = (email) => {
+    setCcRecipients(ccRecipients.filter(c => c.email !== email));
+  };
+
+  // Open draft for editing
+  const openDraft = (draft) => {
+    setSelectedDraft({
+      ...draft,
+      body_html: draft.body_html || '',
+      subject: draft.subject || ''
+    });
+    setCcRecipients(draft.cc_emails || []);
+    setShowDraftModal(true);
+  };
+
+  // Save draft changes
+  const saveDraft = async () => {
+    if (!selectedDraft) return;
+
+    setDraftLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+      const API_BASE = isProduction
+        ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+        : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
+
+      const response = await fetch(`${API_BASE}/api/v1/email-drafts/${selectedDraft.id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          subject: selectedDraft.subject,
+          body_html: selectedDraft.body_html,
+          cc_emails: ccRecipients
+        })
+      });
+
+      if (response.ok) {
+        await loadEmailDrafts();
+        alert('Draft saved successfully!');
+      } else {
+        throw new Error('Failed to save draft');
+      }
+    } catch (error) {
+      console.error('Error saving draft:', error);
+      alert('Failed to save draft');
+    } finally {
+      setDraftLoading(false);
+    }
+  };
+
+  // Delete draft
+  const deleteDraft = async () => {
+    if (!selectedDraft) return;
+
+    if (!window.confirm('Are you sure you want to delete this draft?')) return;
+
+    setDraftLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+      const API_BASE = isProduction
+        ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+        : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
+
+      const response = await fetch(`${API_BASE}/api/v1/email-drafts/${selectedDraft.id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        setShowDraftModal(false);
+        setSelectedDraft(null);
+        await loadEmailDrafts();
+        alert('Draft deleted');
+      } else {
+        throw new Error('Failed to delete draft');
+      }
+    } catch (error) {
+      console.error('Error deleting draft:', error);
+      alert('Failed to delete draft');
+    } finally {
+      setDraftLoading(false);
+    }
+  };
+
+  // Send draft email
+  const sendDraft = async () => {
+    if (!selectedDraft) return;
+
+    setDraftLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+      const API_BASE = isProduction
+        ? 'https://mortgage-crm-production-7a9a.up.railway.app'
+        : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
+
+      // First save any changes
+      await fetch(`${API_BASE}/api/v1/email-drafts/${selectedDraft.id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          subject: selectedDraft.subject,
+          body_html: selectedDraft.body_html,
+          cc_emails: ccRecipients
+        })
+      });
+
+      // Then send
+      const response = await fetch(`${API_BASE}/api/v1/email-drafts/${selectedDraft.id}/send`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        setShowDraftModal(false);
+        setSelectedDraft(null);
+        await loadEmailDrafts();
+        await loadEmails();
+        alert('Email sent successfully!');
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to send email');
+      }
+    } catch (error) {
+      console.error('Error sending email:', error);
+      alert('Failed to send email: ' + error.message);
+    } finally {
+      setDraftLoading(false);
     }
   };
 
@@ -1347,6 +1561,54 @@ function LeadDetail() {
                 </button>
               </div>
 
+              {/* Email Drafts Section */}
+              {emailDrafts.length > 0 && (
+                <div className="email-drafts-section" style={{ marginBottom: '24px' }}>
+                  <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                    <span style={{
+                      backgroundColor: '#fef3c7',
+                      color: '#d97706',
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      fontSize: '12px',
+                      fontWeight: '600'
+                    }}>DRAFTS</span>
+                    Email Drafts ({emailDrafts.length})
+                  </h3>
+                  <div className="email-list">
+                    {emailDrafts.map((draft) => (
+                      <div
+                        key={draft.id}
+                        className="email-item draft-item"
+                        onClick={() => openDraft(draft)}
+                        style={{ cursor: 'pointer', borderLeft: '4px solid #f59e0b' }}
+                      >
+                        <div className="email-header">
+                          <span className="email-subject" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{
+                              backgroundColor: '#fef3c7',
+                              color: '#d97706',
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              fontSize: '10px',
+                              fontWeight: '600'
+                            }}>DRAFT</span>
+                            {draft.subject || 'No subject'}
+                          </span>
+                          <span className="email-date">
+                            {new Date(draft.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <div className="email-preview">
+                          To: {draft.recipient_email}
+                          {draft.source_type === 'call_recording' && ' (Call Summary)'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Email History */}
               <div className="email-history-section">
                 <h3>Email History</h3>
@@ -2105,6 +2367,269 @@ function LeadDetail() {
           loan_amount: lead?.loan_amount
         }}
       />
+
+      {/* Email Draft Modal */}
+      {showDraftModal && selectedDraft && (
+        <div className="modal-overlay" onClick={() => setShowDraftModal(false)}>
+          <div className="modal-content draft-modal" onClick={(e) => e.stopPropagation()} style={{
+            maxWidth: '800px',
+            width: '90%',
+            maxHeight: '90vh',
+            overflow: 'auto',
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            padding: '24px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <h2 style={{ margin: 0 }}>
+                <span style={{
+                  backgroundColor: '#fef3c7',
+                  color: '#d97706',
+                  padding: '4px 10px',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  marginRight: '10px'
+                }}>DRAFT</span>
+                Edit Email Draft
+              </h2>
+              <button
+                onClick={() => setShowDraftModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  color: '#666'
+                }}
+              >×</button>
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', color: '#374151' }}>To:</label>
+              <input
+                type="text"
+                value={selectedDraft.recipient_email || ''}
+                readOnly
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  backgroundColor: '#f9fafb'
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', color: '#374151' }}>
+                CC Recipients:
+              </label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '8px' }}>
+                {ccRecipients.map((recipient, index) => (
+                  <span
+                    key={index}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      backgroundColor: '#e5e7eb',
+                      padding: '4px 10px',
+                      borderRadius: '20px',
+                      fontSize: '14px'
+                    }}
+                  >
+                    {recipient.name || recipient.email}
+                    <button
+                      onClick={() => removeCcRecipient(recipient.email)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        color: '#6b7280',
+                        padding: '0 2px'
+                      }}
+                    >×</button>
+                  </span>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: '8px', position: 'relative' }}>
+                <input
+                  type="text"
+                  value={ccSearchQuery}
+                  onChange={(e) => {
+                    setCcSearchQuery(e.target.value);
+                    searchContacts(e.target.value);
+                  }}
+                  placeholder="Search contacts to add CC..."
+                  style={{
+                    flex: 1,
+                    padding: '10px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px'
+                  }}
+                />
+                <button
+                  onClick={() => {
+                    if (ccSearchQuery && ccSearchQuery.includes('@')) {
+                      addCcRecipient({ email: ccSearchQuery, name: ccSearchQuery });
+                    }
+                  }}
+                  style={{
+                    padding: '10px 16px',
+                    backgroundColor: '#3b82f6',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '18px'
+                  }}
+                  title="Add CC recipient"
+                >+</button>
+              </div>
+              {ccSearchResults.length > 0 && (
+                <div style={{
+                  position: 'absolute',
+                  backgroundColor: 'white',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+                  maxHeight: '200px',
+                  overflow: 'auto',
+                  zIndex: 1000,
+                  width: 'calc(100% - 80px)'
+                }}>
+                  {ccSearchResults.map((contact, index) => (
+                    <div
+                      key={index}
+                      onClick={() => addCcRecipient(contact)}
+                      style={{
+                        padding: '10px',
+                        cursor: 'pointer',
+                        borderBottom: '1px solid #e5e7eb'
+                      }}
+                      onMouseEnter={(e) => e.target.style.backgroundColor = '#f3f4f6'}
+                      onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
+                    >
+                      <div style={{ fontWeight: '600' }}>{contact.name}</div>
+                      <div style={{ fontSize: '12px', color: '#6b7280' }}>{contact.email}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {ccSearchLoading && (
+                <div style={{ marginTop: '8px', color: '#6b7280', fontSize: '14px' }}>
+                  Searching...
+                </div>
+              )}
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', color: '#374151' }}>Subject:</label>
+              <input
+                type="text"
+                value={selectedDraft.subject || ''}
+                onChange={(e) => setSelectedDraft({ ...selectedDraft, subject: e.target.value })}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px'
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontWeight: '600', color: '#374151' }}>Body:</label>
+              <textarea
+                value={selectedDraft.body_html?.replace(/<[^>]*>/g, '') || selectedDraft.body_text || ''}
+                onChange={(e) => setSelectedDraft({
+                  ...selectedDraft,
+                  body_html: e.target.value,
+                  body_text: e.target.value
+                })}
+                rows={12}
+                style={{
+                  width: '100%',
+                  padding: '12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  resize: 'vertical',
+                  fontFamily: 'inherit',
+                  lineHeight: '1.5'
+                }}
+              />
+            </div>
+
+            {selectedDraft.action_items && selectedDraft.action_items.length > 0 && (
+              <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#f9fafb', borderRadius: '8px' }}>
+                <h4 style={{ margin: '0 0 12px 0', color: '#374151' }}>Action Items:</h4>
+                <ul style={{ margin: 0, paddingLeft: '20px' }}>
+                  {selectedDraft.action_items.map((item, index) => (
+                    <li key={index} style={{ marginBottom: '8px', color: '#4b5563' }}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {selectedDraft.recording_url && (
+              <div style={{ marginBottom: '20px', padding: '12px', backgroundColor: '#fef3c7', borderRadius: '8px' }}>
+                <span style={{ color: '#d97706' }}>Recording attached: </span>
+                <a href={selectedDraft.recording_url} target="_blank" rel="noopener noreferrer" style={{ color: '#2563eb' }}>
+                  View Recording
+                </a>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={deleteDraft}
+                disabled={draftLoading}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#fee2e2',
+                  color: '#dc2626',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: draftLoading ? 'not-allowed' : 'pointer',
+                  fontWeight: '600'
+                }}
+              >
+                Delete
+              </button>
+              <button
+                onClick={saveDraft}
+                disabled={draftLoading}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#f3f4f6',
+                  color: '#374151',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  cursor: draftLoading ? 'not-allowed' : 'pointer',
+                  fontWeight: '600'
+                }}
+              >
+                {draftLoading ? 'Saving...' : 'Save Draft'}
+              </button>
+              <button
+                onClick={sendDraft}
+                disabled={draftLoading}
+                style={{
+                  padding: '10px 24px',
+                  backgroundColor: '#3b82f6',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: draftLoading ? 'not-allowed' : 'pointer',
+                  fontWeight: '600'
+                }}
+              >
+                {draftLoading ? 'Sending...' : 'Send Email'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

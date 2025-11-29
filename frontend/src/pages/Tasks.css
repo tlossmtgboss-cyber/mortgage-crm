@@ -4,7 +4,8 @@
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 64px); /* Account for top nav */
+  min-height: calc(100vh - 64px); /* Account for top nav - use min-height for initial render */
+  height: calc(100vh - 64px);
   overflow: hidden;
 }
 
@@ -513,6 +514,8 @@
   flex: 1;
   min-height: 0; /* Important for flexbox children to scroll */
   overflow: hidden;
+  /* Explicit height calculation to prevent cut-off on initial navigation */
+  height: calc(100vh - 200px); /* Account for header, tabs, and padding */
 }
 
 @keyframes fadeIn {
