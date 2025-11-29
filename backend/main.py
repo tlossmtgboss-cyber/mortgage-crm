@@ -10916,6 +10916,25 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Could not load Smart Scheduler routes: {e}")
 
+# Include Enhanced Scheduler routes (Advanced features)
+try:
+    from scheduler_enhancements import create_scheduler_enhancement_models
+    from scheduler_enhanced_routes import router as scheduler_enhanced_router, set_enhanced_dependencies
+
+    # Create enhanced scheduler models using our Base
+    scheduler_enhanced_models = create_scheduler_enhancement_models(Base)
+
+    # Set dependencies for the enhanced routes
+    set_enhanced_dependencies(get_db, get_current_user, smart_scheduler_models, scheduler_enhanced_models)
+
+    # Include the enhanced router
+    app.include_router(scheduler_enhanced_router, tags=["Smart Scheduler Enhanced"])
+    logger.info("✅ Enhanced Scheduler routes loaded (Resources, SLA, Analytics, Group Sessions)")
+except Exception as e:
+    import traceback
+    logger.warning(f"⚠️ Could not load Enhanced Scheduler routes: {e}")
+    logger.warning(f"Traceback: {traceback.format_exc()}")
+
 # Include Video Meeting routes (UVIP - Ultimate Video Intelligence Platform)
 _video_meeting_error = None
 try:
