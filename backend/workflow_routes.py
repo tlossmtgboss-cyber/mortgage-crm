@@ -977,7 +977,7 @@ async def generate_tasks_for_pipeline(
 
         # Get all loans
         loans_result = db.execute(text("""
-            SELECT l.id, l.borrower_name, l.stage::text, l.lo_id, l.loan_number
+            SELECT l.id, l.borrower_name, l.stage::text, l.loan_officer_id, l.loan_number
             FROM loans l
             WHERE l.stage IS NOT NULL
             LIMIT 100
@@ -985,7 +985,7 @@ async def generate_tasks_for_pipeline(
         loans = loans_result.fetchall()
 
         for loan in loans:
-            loan_id, borrower_name, stage, lo_id, loan_number = loan
+            loan_id, borrower_name, stage, loan_officer_id, loan_number = loan
             stage_upper = stage.upper().replace(' ', '_').replace('-', '_') if stage else 'DISCLOSED'
 
             templates = loan_task_templates.get(stage_upper, loan_task_templates.get('DISCLOSED', []))
@@ -1003,7 +1003,7 @@ async def generate_tasks_for_pipeline(
                     "description": description,
                     "priority": priority,
                     "loan_id": loan_id,
-                    "owner_id": lo_id or 1,
+                    "owner_id": loan_officer_id or 1,
                     "borrower_name": borrower_name,
                     "due_date": due_date
                 })
