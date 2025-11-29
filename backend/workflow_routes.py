@@ -878,6 +878,155 @@ async def get_all_upcoming_tasks(
         }
 
 
+@router.post("/generate-tasks")
+async def generate_tasks_for_pipeline(
+    db: Session = Depends(get_db)
+):
+    """Generate follow-up tasks for all leads and loans based on their stage"""
+    try:
+        from datetime import datetime, timedelta
+        import random
+
+        today = datetime.now()
+        tasks_created = 0
+
+        # Task templates by lead stage
+        lead_task_templates = {
+            'NEW': [
+                ("Initial contact call", "Call to introduce yourself and understand their needs", "high"),
+                ("Send welcome email", "Send personalized welcome email with next steps", "medium"),
+            ],
+            'CONTACTED': [
+                ("Follow up call", "Follow up on previous conversation", "high"),
+                ("Send rate information", "Provide current rate options", "medium"),
+            ],
+            'QUALIFIED': [
+                ("Schedule pre-qualification call", "Discuss financial situation and loan options", "high"),
+                ("Request income documentation", "Request W2s, pay stubs, tax returns", "high"),
+            ],
+            'PRE_QUALIFIED': [
+                ("Send pre-qualification letter", "Generate and send pre-qual letter", "high"),
+                ("Property search check-in", "Check on property search progress", "medium"),
+            ],
+            'PRE_APPROVED': [
+                ("Pre-approval follow-up", "Check if borrower found a property", "high"),
+                ("Rate lock discussion", "Discuss rate lock options", "medium"),
+            ],
+        }
+
+        # Task templates by loan stage
+        loan_task_templates = {
+            'DISCLOSED': [
+                ("Review disclosure documents", "Ensure borrower reviewed and signed disclosures", "high"),
+                ("Collect remaining conditions", "Follow up on outstanding conditions", "high"),
+            ],
+            'PROCESSING': [
+                ("Processing status update", "Check with processor on file status", "medium"),
+                ("Borrower update call", "Update borrower on processing progress", "medium"),
+            ],
+            'SUBMITTED': [
+                ("Underwriting follow-up", "Check on underwriting timeline", "high"),
+                ("Prepare for conditions", "Anticipate potential conditions", "medium"),
+            ],
+            'APPROVED': [
+                ("Clear conditions", "Work on clearing remaining conditions", "high"),
+                ("Schedule closing", "Coordinate closing date with all parties", "high"),
+            ],
+            'CTC': [
+                ("Final walkthrough reminder", "Remind borrower about final walkthrough", "high"),
+                ("Closing preparation", "Confirm closing details and funds needed", "high"),
+            ],
+            'DOCS_OUT': [
+                ("Closing document review", "Review closing docs for accuracy", "high"),
+                ("Wire instructions", "Verify wire instructions with title", "urgent"),
+            ],
+        }
+
+        # Get all leads
+        leads_result = db.execute(text("""
+            SELECT l.id, l.name, l.stage::text, l.owner_id
+            FROM leads l
+            WHERE l.stage IS NOT NULL
+            LIMIT 100
+        """))
+        leads = leads_result.fetchall()
+
+        for lead in leads:
+            lead_id, lead_name, stage, owner_id = lead
+            stage_upper = stage.upper().replace(' ', '_').replace('-', '_') if stage else 'NEW'
+
+            templates = lead_task_templates.get(stage_upper, lead_task_templates.get('NEW', []))
+
+            for title, description, priority in templates:
+                # Random due date in next 7 days
+                due_date = today + timedelta(days=random.randint(1, 7))
+
+                db.execute(text("""
+                    INSERT INTO ai_tasks (title, description, priority, type, lead_id, assigned_to_id, due_date, created_at, updated_at)
+                    VALUES (:title, :description, :priority, 'In Progress'::tasktype, :lead_id, :owner_id, :due_date, NOW(), NOW())
+                    ON CONFLICT DO NOTHING
+                """), {
+                    "title": f"{title} - {lead_name}",
+                    "description": description,
+                    "priority": priority,
+                    "lead_id": lead_id,
+                    "owner_id": owner_id or 1,
+                    "due_date": due_date
+                })
+                tasks_created += 1
+
+        # Get all loans
+        loans_result = db.execute(text("""
+            SELECT l.id, l.borrower_name, l.stage::text, l.lo_id, l.loan_number
+            FROM loans l
+            WHERE l.stage IS NOT NULL
+            LIMIT 100
+        """))
+        loans = loans_result.fetchall()
+
+        for loan in loans:
+            loan_id, borrower_name, stage, lo_id, loan_number = loan
+            stage_upper = stage.upper().replace(' ', '_').replace('-', '_') if stage else 'DISCLOSED'
+
+            templates = loan_task_templates.get(stage_upper, loan_task_templates.get('DISCLOSED', []))
+
+            for title, description, priority in templates:
+                # Random due date in next 7 days
+                due_date = today + timedelta(days=random.randint(1, 7))
+
+                db.execute(text("""
+                    INSERT INTO ai_tasks (title, description, priority, type, loan_id, assigned_to_id, borrower_name, due_date, created_at, updated_at)
+                    VALUES (:title, :description, :priority, 'In Progress'::tasktype, :loan_id, :owner_id, :borrower_name, :due_date, NOW(), NOW())
+                    ON CONFLICT DO NOTHING
+                """), {
+                    "title": f"{title} - {borrower_name or loan_number}",
+                    "description": description,
+                    "priority": priority,
+                    "loan_id": loan_id,
+                    "owner_id": lo_id or 1,
+                    "borrower_name": borrower_name,
+                    "due_date": due_date
+                })
+                tasks_created += 1
+
+        db.commit()
+
+        return {
+            "success": True,
+            "tasks_created": tasks_created,
+            "leads_processed": len(leads),
+            "loans_processed": len(loans)
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Generate tasks error: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
 # Map workflow keys to stage filters
 WORKFLOW_STAGE_MAPPING = {
     'prospect': {'lead_stages': ['new', 'contacted', 'qualified'], 'loan_stages': []},
