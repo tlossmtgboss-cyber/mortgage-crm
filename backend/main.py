@@ -16711,6 +16711,46 @@ async def disconnect_microsoft365(
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.delete("/api/v1/admin/microsoft/delete-by-email")
+async def admin_delete_microsoft_oauth_by_email(
+    email: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Admin endpoint to delete all Microsoft OAuth records for a specific email address"""
+    try:
+        # Find all records with this email address
+        oauth_records = db.query(MicrosoftOAuthToken).filter(
+            MicrosoftOAuthToken.email_address == email
+        ).all()
+
+        if not oauth_records:
+            return {
+                "status": "not_found",
+                "message": f"No Microsoft OAuth records found for email: {email}",
+                "deleted_count": 0
+            }
+
+        deleted_count = len(oauth_records)
+        for record in oauth_records:
+            logger.info(f"Deleting Microsoft OAuth record for email {email}, user_id: {record.user_id}")
+            db.delete(record)
+
+        db.commit()
+
+        logger.info(f"Admin deleted {deleted_count} Microsoft OAuth record(s) for email: {email}")
+
+        return {
+            "status": "success",
+            "message": f"Successfully deleted {deleted_count} Microsoft OAuth record(s) for email: {email}",
+            "deleted_count": deleted_count
+        }
+
+    except Exception as e:
+        logger.error(f"Admin delete Microsoft OAuth error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/api/v1/microsoft/sync-diagnostics")
 async def get_email_sync_diagnostics(
     current_user: User = Depends(get_current_user),
