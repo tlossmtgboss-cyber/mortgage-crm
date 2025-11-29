@@ -223,32 +223,36 @@
 }
 
 .borrower-add-btn,
-.add-borrower-btn,
-.borrower-btn.add-borrower-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 10px 16px;
-  background: transparent;
-  border: 2px dashed #218D8D;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #218D8D;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  margin-left: auto;
-  white-space: nowrap;
-  min-height: 40px;
+.borrower-selector .add-borrower-btn,
+.borrower-selector .borrower-btn.add-borrower-btn,
+button.borrower-btn.add-borrower-btn {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 10px 16px !important;
+  background: transparent !important;
+  border: 2px dashed #218D8D !important;
+  border-radius: 6px !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: #218D8D !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+  margin-left: auto !important;
+  white-space: nowrap !important;
+  min-height: 40px !important;
+  width: auto !important;
+  height: auto !important;
 }
 
 .borrower-add-btn:hover,
-.add-borrower-btn:hover,
-.borrower-btn.add-borrower-btn:hover {
-  background: #e9f5f5;
-  border-color: #1a7070;
-  color: #1a7070;
-  transform: translateY(-2px);
+.borrower-selector .add-borrower-btn:hover,
+.borrower-selector .borrower-btn.add-borrower-btn:hover,
+button.borrower-btn.add-borrower-btn:hover {
+  background: #e9f5f5 !important;
+  border-color: #1a7070 !important;
+  color: #1a7070 !important;
+  transform: translateY(-2px) !important;
 }
 
 /* Compact Loan Toolbar */
