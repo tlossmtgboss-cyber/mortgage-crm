@@ -269,54 +269,65 @@ async def get_callable_contacts(
     Returns leads and loan borrowers that have phone numbers.
     """
     from main import Lead, Loan
+    from sqlalchemy import and_
 
     contacts = []
 
-    # Get leads with phone numbers assigned to current user
-    leads_query = db.query(Lead).filter(
-        Lead.owner_id == current_user.id,
-        Lead.phone.isnot(None),
-        Lead.phone != ''
-    ).order_by(Lead.last_contact.asc().nullslast(), Lead.created_at.desc())
+    try:
+        # Get leads with phone numbers assigned to current user
+        leads_query = db.query(Lead).filter(
+            Lead.owner_id == current_user.id,
+            Lead.phone.isnot(None)
+        ).order_by(Lead.created_at.desc())
 
-    for lead in leads_query.offset(skip).limit(limit).all():
-        contacts.append({
-            'id': f'lead-{lead.id}',
-            'entity_type': 'lead',
-            'entity_id': lead.id,
-            'contact_name': lead.name,
-            'contact_phone': lead.phone,
-            'contact_email': lead.email,
-            'stage': lead.stage.value if lead.stage else None,
-            'last_contact': lead.last_contact.isoformat() if lead.last_contact else None,
-            'source': lead.source,
-            'lead_id': lead.id,
-            'loan_id': None
-        })
+        for lead in leads_query.offset(skip).limit(limit).all():
+            # Skip empty phone numbers
+            if not lead.phone or lead.phone.strip() == '':
+                continue
+            contacts.append({
+                'id': f'lead-{lead.id}',
+                'entity_type': 'lead',
+                'entity_id': lead.id,
+                'contact_name': lead.name,
+                'contact_phone': lead.phone,
+                'contact_email': lead.email,
+                'stage': lead.stage.value if lead.stage else None,
+                'last_contact': lead.last_contact.isoformat() if lead.last_contact else None,
+                'source': lead.source,
+                'lead_id': lead.id,
+                'loan_id': None
+            })
+    except Exception as e:
+        logger.error(f"Error fetching leads: {e}")
 
     # Get loans with borrower phone numbers if we need more
     remaining = limit - len(contacts)
     if remaining > 0:
-        loans_query = db.query(Loan).filter(
-            Loan.loan_officer_id == current_user.id,
-            Loan.borrower_phone.isnot(None),
-            Loan.borrower_phone != ''
-        ).order_by(Loan.created_at.desc())
+        try:
+            loans_query = db.query(Loan).filter(
+                Loan.loan_officer_id == current_user.id,
+                Loan.borrower_phone.isnot(None)
+            ).order_by(Loan.created_at.desc())
 
-        for loan in loans_query.limit(remaining).all():
-            contacts.append({
-                'id': f'loan-{loan.id}',
-                'entity_type': 'loan',
-                'entity_id': loan.id,
-                'contact_name': loan.borrower_name,
-                'contact_phone': loan.borrower_phone,
-                'contact_email': loan.borrower_email,
-                'stage': loan.stage.value if loan.stage else None,
-                'last_contact': None,
-                'loan_number': loan.loan_number,
-                'lead_id': None,
-                'loan_id': loan.id
-            })
+            for loan in loans_query.limit(remaining).all():
+                # Skip empty phone numbers
+                if not loan.borrower_phone or loan.borrower_phone.strip() == '':
+                    continue
+                contacts.append({
+                    'id': f'loan-{loan.id}',
+                    'entity_type': 'loan',
+                    'entity_id': loan.id,
+                    'contact_name': loan.borrower_name,
+                    'contact_phone': loan.borrower_phone,
+                    'contact_email': loan.borrower_email,
+                    'stage': loan.stage.value if loan.stage else None,
+                    'last_contact': None,
+                    'loan_number': loan.loan_number,
+                    'lead_id': None,
+                    'loan_id': loan.id
+                })
+        except Exception as e:
+            logger.error(f"Error fetching loans: {e}")
 
     return {
         'contacts': contacts,
