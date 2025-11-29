@@ -1550,6 +1550,34 @@ class AILearningMetric(Base):
     last_updated = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
+class EmailDraft(Base):
+    """Stores email drafts including AI-generated call summaries"""
+    __tablename__ = "email_drafts"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"), index=True)
+    loan_id = Column(Integer, ForeignKey("loans.id"), index=True)
+    # Email content
+    recipient_email = Column(String, index=True)
+    recipient_name = Column(String)
+    cc_emails = Column(JSON)  # Array of CC recipients
+    subject = Column(String)
+    body_html = Column(Text)
+    body_text = Column(Text)
+    # Source reference
+    source_type = Column(String)  # "call_recording", "ai_generated", "manual"
+    source_id = Column(String)  # Recording ID or other reference
+    recording_url = Column(String)  # URL to the recording if applicable
+    # AI-generated content
+    call_summary = Column(Text)
+    action_items = Column(JSON)  # List of action items from the call
+    # Status
+    status = Column(String, default="draft", index=True)  # "draft", "sent", "deleted"
+    sent_at = Column(DateTime)
+    # Metadata
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
 class MicrosoftToken(Base):
     """Stores Microsoft Graph OAuth tokens for email access"""
     __tablename__ = "microsoft_tokens"
@@ -20993,6 +21021,475 @@ async def preview_email_signature(
     }
 
 # ============================================================================
+# EMAIL DRAFTS - Call Recording Summaries
+# ============================================================================
+
+class EmailDraftCreate(BaseModel):
+    lead_id: Optional[int] = None
+    loan_id: Optional[int] = None
+    recipient_email: str
+    recipient_name: Optional[str] = None
+    cc_emails: Optional[List[str]] = []
+    subject: str
+    body_html: str
+    body_text: Optional[str] = None
+    source_type: Optional[str] = "manual"
+    source_id: Optional[str] = None
+    recording_url: Optional[str] = None
+    call_summary: Optional[str] = None
+    action_items: Optional[List[str]] = []
+
+class EmailDraftUpdate(BaseModel):
+    recipient_email: Optional[str] = None
+    recipient_name: Optional[str] = None
+    cc_emails: Optional[List[str]] = None
+    subject: Optional[str] = None
+    body_html: Optional[str] = None
+    body_text: Optional[str] = None
+    status: Optional[str] = None
+
+class CallSummaryRequest(BaseModel):
+    recording_url: str
+    lead_id: Optional[int] = None
+    loan_id: Optional[int] = None
+    recipient_email: str
+    recipient_name: Optional[str] = None
+    meeting_name: Optional[str] = None
+    call_duration_seconds: Optional[int] = None
+
+@app.post("/api/v1/email-drafts")
+async def create_email_draft(
+    draft: EmailDraftCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Create a new email draft"""
+    try:
+        new_draft = EmailDraft(
+            user_id=current_user.id,
+            lead_id=draft.lead_id,
+            loan_id=draft.loan_id,
+            recipient_email=draft.recipient_email,
+            recipient_name=draft.recipient_name,
+            cc_emails=draft.cc_emails or [],
+            subject=draft.subject,
+            body_html=draft.body_html,
+            body_text=draft.body_text,
+            source_type=draft.source_type,
+            source_id=draft.source_id,
+            recording_url=draft.recording_url,
+            call_summary=draft.call_summary,
+            action_items=draft.action_items or [],
+            status="draft"
+        )
+        db.add(new_draft)
+        db.commit()
+        db.refresh(new_draft)
+
+        return {
+            "success": True,
+            "draft_id": new_draft.id,
+            "message": "Email draft created successfully"
+        }
+    except Exception as e:
+        logger.error(f"Error creating email draft: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/email-drafts")
+async def get_email_drafts(
+    lead_id: Optional[int] = None,
+    loan_id: Optional[int] = None,
+    status: Optional[str] = "draft",
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get email drafts, optionally filtered by lead/loan"""
+    try:
+        query = db.query(EmailDraft).filter(EmailDraft.user_id == current_user.id)
+
+        if status:
+            query = query.filter(EmailDraft.status == status)
+        if lead_id:
+            query = query.filter(EmailDraft.lead_id == lead_id)
+        if loan_id:
+            query = query.filter(EmailDraft.loan_id == loan_id)
+
+        drafts = query.order_by(EmailDraft.created_at.desc()).all()
+
+        return {
+            "drafts": [
+                {
+                    "id": d.id,
+                    "lead_id": d.lead_id,
+                    "loan_id": d.loan_id,
+                    "recipient_email": d.recipient_email,
+                    "recipient_name": d.recipient_name,
+                    "cc_emails": d.cc_emails or [],
+                    "subject": d.subject,
+                    "body_html": d.body_html,
+                    "body_text": d.body_text,
+                    "source_type": d.source_type,
+                    "recording_url": d.recording_url,
+                    "call_summary": d.call_summary,
+                    "action_items": d.action_items or [],
+                    "status": d.status,
+                    "created_at": d.created_at.isoformat() if d.created_at else None,
+                    "updated_at": d.updated_at.isoformat() if d.updated_at else None
+                }
+                for d in drafts
+            ],
+            "total": len(drafts)
+        }
+    except Exception as e:
+        logger.error(f"Error fetching email drafts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/email-drafts/{draft_id}")
+async def get_email_draft(
+    draft_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get a specific email draft"""
+    draft = db.query(EmailDraft).filter(
+        EmailDraft.id == draft_id,
+        EmailDraft.user_id == current_user.id
+    ).first()
+
+    if not draft:
+        raise HTTPException(status_code=404, detail="Draft not found")
+
+    return {
+        "id": draft.id,
+        "lead_id": draft.lead_id,
+        "loan_id": draft.loan_id,
+        "recipient_email": draft.recipient_email,
+        "recipient_name": draft.recipient_name,
+        "cc_emails": draft.cc_emails or [],
+        "subject": draft.subject,
+        "body_html": draft.body_html,
+        "body_text": draft.body_text,
+        "source_type": draft.source_type,
+        "source_id": draft.source_id,
+        "recording_url": draft.recording_url,
+        "call_summary": draft.call_summary,
+        "action_items": draft.action_items or [],
+        "status": draft.status,
+        "created_at": draft.created_at.isoformat() if draft.created_at else None,
+        "updated_at": draft.updated_at.isoformat() if draft.updated_at else None
+    }
+
+@app.put("/api/v1/email-drafts/{draft_id}")
+async def update_email_draft(
+    draft_id: int,
+    update: EmailDraftUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update an email draft"""
+    draft = db.query(EmailDraft).filter(
+        EmailDraft.id == draft_id,
+        EmailDraft.user_id == current_user.id
+    ).first()
+
+    if not draft:
+        raise HTTPException(status_code=404, detail="Draft not found")
+
+    if update.recipient_email is not None:
+        draft.recipient_email = update.recipient_email
+    if update.recipient_name is not None:
+        draft.recipient_name = update.recipient_name
+    if update.cc_emails is not None:
+        draft.cc_emails = update.cc_emails
+    if update.subject is not None:
+        draft.subject = update.subject
+    if update.body_html is not None:
+        draft.body_html = update.body_html
+    if update.body_text is not None:
+        draft.body_text = update.body_text
+    if update.status is not None:
+        draft.status = update.status
+        if update.status == "sent":
+            draft.sent_at = datetime.now(timezone.utc)
+
+    db.commit()
+
+    return {"success": True, "message": "Draft updated successfully"}
+
+@app.delete("/api/v1/email-drafts/{draft_id}")
+async def delete_email_draft(
+    draft_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Delete (or mark as deleted) an email draft"""
+    draft = db.query(EmailDraft).filter(
+        EmailDraft.id == draft_id,
+        EmailDraft.user_id == current_user.id
+    ).first()
+
+    if not draft:
+        raise HTTPException(status_code=404, detail="Draft not found")
+
+    draft.status = "deleted"
+    db.commit()
+
+    return {"success": True, "message": "Draft deleted successfully"}
+
+@app.post("/api/v1/email-drafts/{draft_id}/send")
+async def send_email_draft(
+    draft_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Send an email draft via Microsoft 365"""
+    draft = db.query(EmailDraft).filter(
+        EmailDraft.id == draft_id,
+        EmailDraft.user_id == current_user.id
+    ).first()
+
+    if not draft:
+        raise HTTPException(status_code=404, detail="Draft not found")
+
+    # Get Microsoft OAuth token
+    oauth_record = db.query(MicrosoftOAuthToken).filter(
+        MicrosoftOAuthToken.user_id == current_user.id
+    ).first()
+
+    if not oauth_record:
+        raise HTTPException(status_code=400, detail="Microsoft 365 not connected. Please connect your email first.")
+
+    try:
+        # Refresh token if needed
+        await refresh_microsoft_token(oauth_record, db)
+
+        # Build the email
+        to_recipients = [{"emailAddress": {"address": draft.recipient_email}}]
+        cc_recipients = [{"emailAddress": {"address": email}} for email in (draft.cc_emails or [])]
+
+        email_data = {
+            "message": {
+                "subject": draft.subject,
+                "body": {
+                    "contentType": "HTML",
+                    "content": draft.body_html
+                },
+                "toRecipients": to_recipients,
+                "ccRecipients": cc_recipients if cc_recipients else []
+            },
+            "saveToSentItems": True
+        }
+
+        # Send via Microsoft Graph API
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                "https://graph.microsoft.com/v1.0/me/sendMail",
+                headers={
+                    "Authorization": f"Bearer {oauth_record.access_token}",
+                    "Content-Type": "application/json"
+                },
+                json=email_data,
+                timeout=30.0
+            )
+
+            if response.status_code == 202:
+                draft.status = "sent"
+                draft.sent_at = datetime.now(timezone.utc)
+                db.commit()
+
+                logger.info(f"Email sent successfully from draft {draft_id}")
+                return {"success": True, "message": "Email sent successfully"}
+            else:
+                error_detail = response.text
+                logger.error(f"Failed to send email: {response.status_code} - {error_detail}")
+                raise HTTPException(status_code=500, detail=f"Failed to send email: {error_detail}")
+
+    except Exception as e:
+        logger.error(f"Error sending email draft: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/email-drafts/generate-call-summary")
+async def generate_call_summary_draft(
+    request: CallSummaryRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Generate an AI-powered call summary email draft from a recording"""
+    try:
+        # Get lead/loan info for context
+        lead_name = request.recipient_name or "Valued Client"
+        lead_info = None
+
+        if request.lead_id:
+            lead = db.query(Lead).filter(Lead.id == request.lead_id).first()
+            if lead:
+                lead_name = f"{lead.first_name} {lead.last_name}".strip() or lead_name
+                lead_info = lead
+
+        # Generate AI summary using Claude
+        client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+        prompt = f"""Generate a professional email summarizing a call with a mortgage client.
+
+Client Name: {lead_name}
+Meeting Name: {request.meeting_name or 'Call'}
+Call Duration: {request.call_duration_seconds // 60 if request.call_duration_seconds else 'Unknown'} minutes
+Recording Available: Yes
+
+Please generate:
+1. A professional email subject line
+2. An email body that includes:
+   - A warm greeting
+   - A summary of what was discussed (use placeholder text since we don't have the actual transcript)
+   - Key takeaways and next steps
+   - Action items for the recipient (formatted as a checklist)
+   - A professional closing
+
+Format the response as JSON:
+{{
+    "subject": "Subject line here",
+    "body_html": "<html formatted email body>",
+    "body_text": "Plain text version",
+    "summary": "Brief summary of the call",
+    "action_items": ["Action item 1", "Action item 2", "Action item 3"]
+}}
+
+Make the email warm but professional, and include placeholder action items like:
+- Review loan documents sent
+- Provide updated income documentation
+- Schedule follow-up call for next week
+- Complete and return disclosure forms"""
+
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=2000,
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        # Parse the AI response
+        ai_response = response.content[0].text
+
+        # Try to parse as JSON
+        import json
+        try:
+            # Find JSON in the response
+            json_start = ai_response.find('{')
+            json_end = ai_response.rfind('}') + 1
+            if json_start >= 0 and json_end > json_start:
+                email_data = json.loads(ai_response[json_start:json_end])
+            else:
+                raise ValueError("No JSON found in response")
+        except json.JSONDecodeError:
+            # Fallback: create structured response manually
+            email_data = {
+                "subject": f"Summary of Our Call - {request.meeting_name or 'Follow Up'}",
+                "body_html": f"""<p>Dear {lead_name},</p>
+<p>Thank you for taking the time to speak with me today. I wanted to follow up with a summary of our conversation.</p>
+<p><strong>Discussion Summary:</strong></p>
+<p>We discussed your mortgage needs and reviewed the next steps in the process.</p>
+<p><strong>Action Items for You:</strong></p>
+<ul>
+<li>Review the loan documents I'll be sending</li>
+<li>Gather updated income documentation</li>
+<li>Let me know your availability for a follow-up call</li>
+</ul>
+<p>Please don't hesitate to reach out if you have any questions.</p>
+<p>Best regards</p>""",
+                "body_text": f"Dear {lead_name},\n\nThank you for taking the time to speak with me today...",
+                "summary": "Follow-up from our call",
+                "action_items": ["Review loan documents", "Provide updated income documentation", "Schedule follow-up"]
+            }
+
+        # Create the draft
+        new_draft = EmailDraft(
+            user_id=current_user.id,
+            lead_id=request.lead_id,
+            loan_id=request.loan_id,
+            recipient_email=request.recipient_email,
+            recipient_name=lead_name,
+            cc_emails=[],
+            subject=email_data.get("subject", f"Summary of Our Call - {request.meeting_name or 'Follow Up'}"),
+            body_html=email_data.get("body_html", ""),
+            body_text=email_data.get("body_text", ""),
+            source_type="call_recording",
+            recording_url=request.recording_url,
+            call_summary=email_data.get("summary", ""),
+            action_items=email_data.get("action_items", []),
+            status="draft"
+        )
+        db.add(new_draft)
+        db.commit()
+        db.refresh(new_draft)
+
+        logger.info(f"Generated call summary draft {new_draft.id} for lead {request.lead_id}")
+
+        return {
+            "success": True,
+            "draft_id": new_draft.id,
+            "subject": new_draft.subject,
+            "message": "Call summary email draft created successfully"
+        }
+
+    except Exception as e:
+        logger.error(f"Error generating call summary: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/contacts/search")
+async def search_contacts(
+    q: str = Query(..., min_length=1),
+    limit: int = Query(10, le=50),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Search contacts for CC autocomplete - searches leads, users, and contacts"""
+    try:
+        results = []
+        search_term = f"%{q.lower()}%"
+
+        # Search leads
+        leads = db.query(Lead).filter(
+            or_(
+                func.lower(Lead.first_name).like(search_term),
+                func.lower(Lead.last_name).like(search_term),
+                func.lower(Lead.email).like(search_term)
+            )
+        ).limit(limit // 2).all()
+
+        for lead in leads:
+            if lead.email:
+                results.append({
+                    "id": f"lead_{lead.id}",
+                    "name": f"{lead.first_name or ''} {lead.last_name or ''}".strip(),
+                    "email": lead.email,
+                    "type": "lead"
+                })
+
+        # Search users (team members)
+        users = db.query(User).filter(
+            or_(
+                func.lower(User.full_name).like(search_term),
+                func.lower(User.email).like(search_term)
+            ),
+            User.is_active == True
+        ).limit(limit // 2).all()
+
+        for user in users:
+            results.append({
+                "id": f"user_{user.id}",
+                "name": user.full_name or user.email.split('@')[0],
+                "email": user.email,
+                "type": "user"
+            })
+
+        return {"results": results[:limit], "total": len(results)}
+
+    except Exception as e:
+        logger.error(f"Error searching contacts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================================
 # API KEY MANAGEMENT
 # ============================================================================
 
@@ -37710,6 +38207,75 @@ async def create_beta_tables_migration(
 
     except Exception as e:
         logger.error(f"Beta tables migration failed: {e}")
+        db.rollback()
+        import traceback
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+
+@app.post("/api/v1/migrations/create-email-drafts-table", response_model=None)
+async def create_email_drafts_table_migration(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Create email_drafts table for AI-generated call summaries.
+    """
+    try:
+        logger.info(f"Running migration: create email_drafts table (user: {current_user.id})")
+
+        # Create email_drafts table
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS email_drafts (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id),
+                lead_id INTEGER REFERENCES leads(id),
+                loan_id INTEGER REFERENCES loans(id),
+                recipient_email VARCHAR(255),
+                recipient_name VARCHAR(255),
+                cc_emails JSONB DEFAULT '[]',
+                subject VARCHAR(500),
+                body_html TEXT,
+                body_text TEXT,
+                source_type VARCHAR(50),
+                source_id VARCHAR(255),
+                recording_url TEXT,
+                call_summary TEXT,
+                action_items JSONB DEFAULT '[]',
+                status VARCHAR(50) DEFAULT 'draft',
+                sent_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+
+        # Create indexes
+        try:
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_email_drafts_user ON email_drafts(user_id)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_email_drafts_lead ON email_drafts(lead_id)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_email_drafts_loan ON email_drafts(loan_id)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_email_drafts_status ON email_drafts(status)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_email_drafts_recipient ON email_drafts(recipient_email)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS idx_email_drafts_created ON email_drafts(created_at)"))
+        except Exception:
+            pass  # Indexes may already exist
+
+        db.commit()
+
+        logger.info("Email drafts table migration completed successfully")
+
+        return {
+            "success": True,
+            "message": "Email drafts table created successfully",
+            "tables_created": ["email_drafts"]
+        }
+
+    except Exception as e:
+        logger.error(f"Email drafts table migration failed: {e}")
         db.rollback()
         import traceback
         return {

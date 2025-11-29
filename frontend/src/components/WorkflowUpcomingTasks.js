@@ -56,6 +56,14 @@ function WorkflowUpcomingTasks({ workflowKey, workflowName, workflowColor }) {
   const [viewMode, setViewMode] = useState('calendar'); // 'calendar' or 'capacity'
   const [totalTasks, setTotalTasks] = useState(0);
   const [showAllTasks, setShowAllTasks] = useState(false);
+  const [expandedDays, setExpandedDays] = useState({});
+
+  const toggleDayExpand = (dateKey) => {
+    setExpandedDays(prev => ({
+      ...prev,
+      [dateKey]: !prev[dateKey]
+    }));
+  };
 
   const businessDays = getNext7BusinessDays();
 
@@ -164,15 +172,17 @@ function WorkflowUpcomingTasks({ workflowKey, workflowName, workflowColor }) {
               const dateKey = day.toISOString().split('T')[0];
               const dayTasks = tasksByDay[dateKey] || [];
               const isToday = formatDate(day) === 'Today';
+              const isExpanded = expandedDays[dateKey];
+              const displayTasks = isExpanded ? dayTasks : dayTasks.slice(0, 8);
 
               return (
-                <div key={dateKey} className={`day-column ${isToday ? 'today' : ''}`}>
+                <div key={dateKey} className={`day-column ${isToday ? 'today' : ''} ${isExpanded ? 'expanded' : ''}`}>
                   <div className="day-header">
                     <span className="day-name">{formatDate(day)}</span>
                     <span className="task-count">{dayTasks.length} tasks</span>
                   </div>
-                  <div className="day-tasks">
-                    {dayTasks.slice(0, 8).map(task => (
+                  <div className={`day-tasks ${isExpanded ? 'expanded' : ''}`}>
+                    {displayTasks.map(task => (
                       <div
                         key={task.id}
                         className="task-card-mini"
@@ -193,7 +203,9 @@ function WorkflowUpcomingTasks({ workflowKey, workflowName, workflowColor }) {
                       </div>
                     ))}
                     {dayTasks.length > 8 && (
-                      <div className="more-tasks">+{dayTasks.length - 8} more</div>
+                      <div className="more-tasks" onClick={() => toggleDayExpand(dateKey)}>
+                        {isExpanded ? 'Show less' : `+${dayTasks.length - 8} more`}
+                      </div>
                     )}
                     {dayTasks.length === 0 && (
                       <div className="no-tasks">No tasks scheduled</div>

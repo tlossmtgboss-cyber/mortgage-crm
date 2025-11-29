@@ -160,7 +160,7 @@ class DialerEngine:
             status=DialerSessionStatus.ACTIVE,
             total_tasks=len(task_ids),
             completed_tasks=0,
-            started_at=datetime.utcnow()
+            caller_id_used=caller_id
         )
         self.db.add(session)
         self.db.flush()  # Get session ID

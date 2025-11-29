@@ -44,6 +44,9 @@ const MeetingRoom = () => {
   const [screenRecordingUrl, setScreenRecordingUrl] = useState('');
   const [screenRecordingUploading, setScreenRecordingUploading] = useState(false);
   const [recipientName, setRecipientName] = useState('');
+  const [recipientEmail, setRecipientEmail] = useState('');
+  const [generatingEmailSummary, setGeneratingEmailSummary] = useState(false);
+  const [emailSummaryGenerated, setEmailSummaryGenerated] = useState(false);
   const screenRecordingTimerRef = useRef(null);
   const screenStreamRef = useRef(null);
 
@@ -713,6 +716,73 @@ const MeetingRoom = () => {
     document.body.removeChild(a);
   };
 
+  // Generate AI email summary from recording
+  const generateEmailSummary = async () => {
+    if (!recipientEmail) {
+      alert('Please enter a recipient email address');
+      return;
+    }
+
+    setGeneratingEmailSummary(true);
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE}/api/v1/email-drafts/generate-call-summary`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          lead_id: meeting?.lead_id || null,
+          loan_id: meeting?.loan_id || null,
+          recipient_email: recipientEmail,
+          recipient_name: recipientName || 'Valued Client',
+          meeting_name: meeting?.name || 'Video Call',
+          recording_url: screenRecordingUrl,
+          call_duration_seconds: screenRecordingTime
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setEmailSummaryGenerated(true);
+        alert(`Email summary draft created! You can find it in the Email tab of the borrower's profile page.`);
+
+        // Log the activity
+        try {
+          await fetch(`${API_BASE}/api/v1/activities/`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              activity_type: 'email_draft',
+              description: `Call summary email draft created for ${recipientName || recipientEmail}`,
+              loan_id: meeting?.loan_id,
+              lead_id: meeting?.lead_id,
+              metadata: {
+                draft_id: data.draft_id,
+                subject: data.subject,
+                recording_url: screenRecordingUrl
+              }
+            })
+          });
+        } catch (e) {
+          console.warn('Could not log activity:', e);
+        }
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to generate email summary');
+      }
+    } catch (err) {
+      console.error('Error generating email summary:', err);
+      alert('Failed to generate email summary: ' + err.message);
+    } finally {
+      setGeneratingEmailSummary(false);
+    }
+  };
+
   // Leave meeting
   const leaveMeeting = () => {
     if (localStream) {
@@ -1245,12 +1315,22 @@ const MeetingRoom = () => {
               <p className="recording-ready-text">Your screen recording is ready to share!</p>
 
               <div className="invite-form-group">
-                <label>Recipient Name (for activity log)</label>
+                <label>Recipient Name</label>
                 <input
                   type="text"
                   value={recipientName}
                   onChange={(e) => setRecipientName(e.target.value)}
                   placeholder="e.g., John Smith"
+                />
+              </div>
+
+              <div className="invite-form-group">
+                <label>Recipient Email (for summary email)</label>
+                <input
+                  type="email"
+                  value={recipientEmail}
+                  onChange={(e) => setRecipientEmail(e.target.value)}
+                  placeholder="e.g., john@example.com"
                 />
               </div>
 
@@ -1277,17 +1357,41 @@ const MeetingRoom = () => {
                   className="download-recording-btn"
                   onClick={downloadScreenRecording}
                 >
-                  ⬇️ Download Recording
+                  Download Recording
                 </button>
                 <button
                   className="send-invite-btn"
                   onClick={copyScreenRecordingLink}
                 >
-                  📋 Copy & Log Activity
+                  Copy & Log Activity
                 </button>
               </div>
 
-              {recipientName && (
+              <div className="email-summary-section">
+                <div className="section-divider">
+                  <span>Email Summary</span>
+                </div>
+                <p className="email-summary-description">
+                  Generate an AI-powered email summary with action items for the recipient.
+                  The draft will be saved to the borrower's Email tab for review before sending.
+                </p>
+                <button
+                  className={`generate-summary-btn ${emailSummaryGenerated ? 'generated' : ''}`}
+                  onClick={generateEmailSummary}
+                  disabled={!recipientEmail || generatingEmailSummary || emailSummaryGenerated}
+                >
+                  {generatingEmailSummary ? 'Generating...' :
+                   emailSummaryGenerated ? 'Draft Created!' :
+                   'Generate Email Summary'}
+                </button>
+                {emailSummaryGenerated && (
+                  <p className="email-summary-success">
+                    Email draft saved! View it in the Email tab of the borrower's profile.
+                  </p>
+                )}
+              </div>
+
+              {recipientName && !emailSummaryGenerated && (
                 <p className="activity-log-note">
                   Activity will be logged as: "Screen recording sent to {recipientName}"
                 </p>
