@@ -14958,6 +14958,8 @@ async def approve_reconciliation(
         if not extracted:
             raise HTTPException(status_code=404, detail="Extracted data not found")
 
+        logger.info(f"RECON_DEBUG_V4_START: Found extracted data {approval.extracted_data_id}, processing approval")
+
         # Apply corrections if provided
         if approval.corrections:
             for field_name, corrected_value in approval.corrections.items():
@@ -14994,6 +14996,7 @@ async def approve_reconciliation(
                 extracted.match_entity_id = approval.target_entity_id
 
         # Handle "Create New Loan" option
+        logger.info(f"RECON_DEBUG_V4: create_new_loan={approval.create_new_loan}")
         if approval.create_new_loan:
             # Create a new loan from the extracted data
             fields = extracted.fields or {}
