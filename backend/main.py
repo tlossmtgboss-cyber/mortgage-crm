@@ -21437,7 +21437,7 @@ async def generate_call_summary_draft(
         if request.lead_id:
             lead = db.query(Lead).filter(Lead.id == request.lead_id).first()
             if lead:
-                lead_name = f"{lead.first_name} {lead.last_name}".strip() or lead_name
+                lead_name = lead.name or lead_name
                 lead_info = lead
 
         # Generate AI summary using Claude
@@ -21561,11 +21561,10 @@ async def search_contacts(
         results = []
         search_term = f"%{q.lower()}%"
 
-        # Search leads
+        # Search leads by name and email
         leads = db.query(Lead).filter(
             or_(
-                func.lower(Lead.first_name).like(search_term),
-                func.lower(Lead.last_name).like(search_term),
+                func.lower(Lead.name).like(search_term),
                 func.lower(Lead.email).like(search_term)
             )
         ).limit(limit // 2).all()
@@ -21574,7 +21573,7 @@ async def search_contacts(
             if lead.email:
                 results.append({
                     "id": f"lead_{lead.id}",
-                    "name": f"{lead.first_name or ''} {lead.last_name or ''}".strip(),
+                    "name": lead.name or "",
                     "email": lead.email,
                     "type": "lead"
                 })
