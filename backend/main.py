@@ -5977,6 +5977,223 @@ The Team menu item appears for managers and management roles.
                         }
                     }
                 }
+            },
+            # ========== NEW COMPREHENSIVE TOOLS ==========
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_loan_details",
+                    "description": "Get comprehensive loan details including milestones, title status, appraisal status, insurance, documents needed for CTC, team members, and timeline. Use this for any loan-specific questions.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "loan_id": {"type": "integer", "description": "Loan ID to get details for"},
+                            "borrower_name": {"type": "string", "description": "Borrower name to search for if loan_id not provided"},
+                            "loan_number": {"type": "string", "description": "Loan number to search for"}
+                        }
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_lead_details",
+                    "description": "Get comprehensive lead details including contact info, financial snapshot (credit score, DTI, income), activity history, referral source, and portfolio information.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "lead_id": {"type": "integer", "description": "Lead ID to get details for"},
+                            "lead_name": {"type": "string", "description": "Lead name to search for"}
+                        }
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_mum_clients",
+                    "description": "Get Mortgage Under Management (MUM) clients - past borrowers who are in the retention pipeline. Returns refinance opportunities, AMR status, engagement scores, and contact recommendations.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "filter": {"type": "string", "enum": ["all", "refinance_opportunity", "amr_due", "high_value", "needs_contact"], "description": "Filter MUM clients by status"},
+                            "limit": {"type": "integer", "description": "Maximum results to return", "default": 20}
+                        }
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_referral_partners",
+                    "description": "Get referral partner information including realtors, builders, title companies, insurance agents. Returns reciprocity scores, loyalty tier, referral counts, and engagement status.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "partner_id": {"type": "integer", "description": "Specific partner ID"},
+                            "partner_name": {"type": "string", "description": "Partner name to search for"},
+                            "category": {"type": "string", "enum": ["realtor", "builder", "title", "insurance", "financial_advisor", "cpa", "attorney", "all"], "description": "Partner category filter"},
+                            "limit": {"type": "integer", "description": "Maximum results", "default": 10}
+                        }
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_sla_dashboard",
+                    "description": "Get SLA tracking dashboard showing bottlenecks, run rates, at-risk loans, and performance metrics. Use this to identify process issues and delays.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "view": {"type": "string", "enum": ["summary", "bottlenecks", "at_risk", "run_rates", "team_performance"], "description": "Dashboard view type"}
+                        }
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_analytics_report",
+                    "description": "Generate comprehensive analytics report on any data in the system. Use for performance numbers, conversion rates, volume metrics, and projections.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "report_type": {"type": "string", "enum": ["pipeline_summary", "conversion_funnel", "employee_performance", "lead_source_roi", "volume_by_product", "revenue_forecast", "activity_summary"], "description": "Type of report to generate"},
+                            "period": {"type": "string", "enum": ["today", "week", "month", "quarter", "year", "ytd"], "description": "Time period for report"},
+                            "team_member": {"type": "string", "description": "Filter by specific team member name"}
+                        },
+                        "required": ["report_type"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "send_sms",
+                    "description": "Send an SMS text message to a lead, borrower, or contact. Use for quick communications, appointment reminders, or status updates.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "recipient_phone": {"type": "string", "description": "Phone number to send SMS to"},
+                            "recipient_name": {"type": "string", "description": "Recipient name (used to look up phone if not provided)"},
+                            "lead_id": {"type": "integer", "description": "Lead ID to send SMS to"},
+                            "loan_id": {"type": "integer", "description": "Loan ID (will send to borrower)"},
+                            "message": {"type": "string", "description": "SMS message content (max 160 chars recommended)"}
+                        },
+                        "required": ["message"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "make_phone_call",
+                    "description": "Initiate a phone call via the power dialer. Will call the user first, then connect to the recipient.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "recipient_phone": {"type": "string", "description": "Phone number to call"},
+                            "recipient_name": {"type": "string", "description": "Recipient name (used to look up phone if not provided)"},
+                            "lead_id": {"type": "integer", "description": "Lead ID to call"},
+                            "loan_id": {"type": "integer", "description": "Loan ID (will call borrower)"},
+                            "call_reason": {"type": "string", "description": "Reason for call (logged in activity)"}
+                        }
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "drop_voicemail",
+                    "description": "Drop a pre-recorded voicemail to a contact without ringing their phone. Great for after-hours outreach.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "recipient_phone": {"type": "string", "description": "Phone number to drop voicemail to"},
+                            "recipient_name": {"type": "string", "description": "Recipient name"},
+                            "lead_id": {"type": "integer", "description": "Lead ID"},
+                            "message_template": {"type": "string", "enum": ["closing_reminder", "status_update", "follow_up", "appointment_reminder", "custom"], "description": "Voicemail template to use"},
+                            "custom_message": {"type": "string", "description": "Custom voicemail text (for text-to-speech)"}
+                        },
+                        "required": ["message_template"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "create_lead",
+                    "description": "Create a new lead in the system. Use when user mentions a new potential borrower.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "name": {"type": "string", "description": "Lead's full name"},
+                            "email": {"type": "string", "description": "Lead's email address"},
+                            "phone": {"type": "string", "description": "Lead's phone number"},
+                            "source": {"type": "string", "description": "Lead source (referral, website, etc.)"},
+                            "referral_partner_name": {"type": "string", "description": "Referring partner name if applicable"},
+                            "notes": {"type": "string", "description": "Initial notes about the lead"},
+                            "loan_amount": {"type": "number", "description": "Estimated loan amount"},
+                            "property_type": {"type": "string", "description": "Property type (SFR, Condo, etc.)"}
+                        },
+                        "required": ["name"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "send_email_to_contact",
+                    "description": "Send an email to a borrower, lead, or referral partner. For status updates, document requests, or general communication.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "recipient_email": {"type": "string", "description": "Email address to send to"},
+                            "recipient_name": {"type": "string", "description": "Recipient name (used to look up email if not provided)"},
+                            "lead_id": {"type": "integer", "description": "Lead ID to email"},
+                            "loan_id": {"type": "integer", "description": "Loan ID (will email borrower)"},
+                            "subject": {"type": "string", "description": "Email subject line"},
+                            "body": {"type": "string", "description": "Email body content"},
+                            "email_type": {"type": "string", "enum": ["status_update", "document_request", "appointment_confirmation", "rate_lock_update", "closing_reminder", "custom"], "description": "Type of email for templating"}
+                        },
+                        "required": ["subject", "body"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "search_knowledge_base",
+                    "description": "Search the AI knowledge base for answers about loan products, compliance, underwriting guidelines, company policies, or workflows. Use when asked about 'how to' or 'what is the policy for'.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "Search query for knowledge base"},
+                            "category": {"type": "string", "enum": ["loan_products", "compliance", "underwriting", "sales_scripts", "company_policies", "workflows", "all"], "description": "Knowledge base category to search"}
+                        },
+                        "required": ["query"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "escalate_to_human",
+                    "description": "Create a task for human follow-up when AI cannot answer or action requires human judgment. Use when you don't have enough information or the request is outside AI capabilities.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "reason": {"type": "string", "description": "Why this needs human attention"},
+                            "question_or_request": {"type": "string", "description": "The original question or request"},
+                            "suggested_assignee": {"type": "string", "description": "Suggested person to handle this (processor, underwriter, manager, etc.)"},
+                            "priority": {"type": "string", "enum": ["low", "medium", "high", "urgent"], "description": "Priority level"},
+                            "related_loan_id": {"type": "integer", "description": "Related loan ID if applicable"},
+                            "related_lead_id": {"type": "integer", "description": "Related lead ID if applicable"}
+                        },
+                        "required": ["reason", "question_or_request"]
+                    }
+                }
             }
         ]
 
@@ -6492,6 +6709,851 @@ The Team menu item appears for managers and management roles.
             set_cached(cache_k, result, 300)
             return result
 
+        # ========== NEW COMPREHENSIVE TOOL EXECUTION FUNCTIONS ==========
+
+        async def execute_get_loan_details(args):
+            """Get comprehensive loan details including milestones, title, appraisal, insurance, CTC needs"""
+            loan_id = args.get("loan_id")
+            borrower_name = args.get("borrower_name")
+            loan_number = args.get("loan_number")
+
+            loan = None
+            if loan_id:
+                loan = db.query(Loan).filter(Loan.id == loan_id).first()
+            elif loan_number:
+                loan = db.query(Loan).filter(Loan.loan_number == loan_number).first()
+            elif borrower_name:
+                search = f"%{borrower_name}%"
+                loan = db.query(Loan).filter(
+                    Loan.loan_officer_id == current_user.id,
+                    or_(Loan.borrower_name.ilike(search), Loan.coborrower_name.ilike(search))
+                ).first()
+
+            if not loan:
+                return {"success": False, "message": "Loan not found. Please provide a valid loan ID, loan number, or borrower name."}
+
+            # Get milestones
+            milestones = db.query(Milestone).filter(Milestone.loan_id == loan.id).order_by(Milestone.target_date).all()
+            milestone_list = []
+            for m in milestones:
+                milestone_list.append({
+                    "name": m.name,
+                    "status": m.status,
+                    "target_date": m.target_date.isoformat() if m.target_date else None,
+                    "completed_date": m.completed_date.isoformat() if m.completed_date else None,
+                    "is_overdue": m.target_date and m.target_date.date() < datetime.now().date() and m.status != "completed"
+                })
+
+            # Get workflow tasks for this loan
+            try:
+                workflow_tasks = db.execute(
+                    text("""
+                        SELECT task_key, status, completed_at, due_date
+                        FROM loan_workflow_tasks
+                        WHERE loan_id = :loan_id
+                    """),
+                    {"loan_id": loan.id}
+                ).fetchall()
+                ctc_checklist = []
+                for wt in workflow_tasks:
+                    if wt.status != "completed":
+                        ctc_checklist.append({
+                            "task": wt.task_key.replace("_", " ").title(),
+                            "status": wt.status,
+                            "due": wt.due_date.isoformat() if wt.due_date else None
+                        })
+            except:
+                ctc_checklist = []
+
+            # Get activities/notes
+            activities = db.query(Activity).filter(Activity.loan_id == loan.id).order_by(Activity.created_at.desc()).limit(10).all()
+            activity_list = [{"type": a.activity_type, "description": a.description, "date": a.created_at.isoformat()} for a in activities]
+
+            stage_name = str(loan.stage).replace("LoanStage.", "") if loan.stage else "Unknown"
+
+            return {
+                "success": True,
+                "loan": {
+                    "id": loan.id,
+                    "loan_number": loan.loan_number,
+                    "borrower_name": loan.borrower_name,
+                    "coborrower_name": loan.coborrower_name,
+                    "stage": stage_name,
+                    "days_in_stage": loan.days_in_stage,
+                    "sla_status": loan.sla_status,
+                    "program": loan.program,
+                    "amount": float(loan.amount) if loan.amount else 0,
+                    "rate": float(loan.rate) if loan.rate else None,
+                    "closing_date": loan.closing_date.isoformat() if loan.closing_date else None,
+                    "property_address": loan.property_address
+                },
+                "team": {
+                    "loan_officer": loan.loan_officer_name,
+                    "processor": loan.processor,
+                    "underwriter": loan.underwriter,
+                    "closer": loan.closer
+                },
+                "milestones": milestone_list,
+                "ctc_checklist": ctc_checklist,
+                "recent_activity": activity_list,
+                "guidance": f"Loan for {loan.borrower_name} is in {stage_name} stage. " +
+                           (f"Closing date: {loan.closing_date.strftime('%B %d, %Y')}. " if loan.closing_date else "") +
+                           (f"{len(ctc_checklist)} items remaining for Clear to Close." if ctc_checklist else "")
+            }
+
+        async def execute_get_lead_details(args):
+            """Get comprehensive lead details including contact info, financial snapshot, activity history"""
+            lead_id = args.get("lead_id")
+            lead_name = args.get("lead_name")
+
+            lead = None
+            if lead_id:
+                lead = db.query(Lead).filter(Lead.id == lead_id).first()
+            elif lead_name:
+                search = f"%{lead_name}%"
+                lead = db.query(Lead).filter(
+                    Lead.owner_id == current_user.id,
+                    Lead.name.ilike(search)
+                ).first()
+
+            if not lead:
+                return {"success": False, "message": "Lead not found"}
+
+            # Get activities
+            activities = db.query(Activity).filter(Activity.lead_id == lead.id).order_by(Activity.created_at.desc()).limit(10).all()
+            activity_list = [{"type": a.activity_type, "description": a.description, "date": a.created_at.isoformat()} for a in activities]
+
+            # Get tasks for this lead
+            tasks = db.query(Task).filter(Task.lead_id == lead.id, Task.status != "completed").all()
+            task_list = [{"title": t.title, "due": t.due_date.isoformat() if t.due_date else None, "priority": t.priority} for t in tasks]
+
+            stage_name = str(lead.stage).replace("LeadStage.", "") if lead.stage else "NEW"
+
+            return {
+                "success": True,
+                "lead": {
+                    "id": lead.id,
+                    "name": lead.name,
+                    "email": lead.email,
+                    "phone": lead.phone,
+                    "stage": stage_name,
+                    "loan_stage": str(lead.loan_stage) if lead.loan_stage else None,
+                    "source": lead.source,
+                    "created_at": lead.created_at.isoformat() if lead.created_at else None
+                },
+                "financial_snapshot": {
+                    "credit_score": lead.credit_score,
+                    "dti": float(lead.dti) if lead.dti else None,
+                    "income": float(lead.income) if lead.income else None,
+                    "loan_amount": float(lead.loan_amount) if lead.loan_amount else None,
+                    "property_value": float(lead.property_value) if lead.property_value else None,
+                    "ltv": round(float(lead.loan_amount) / float(lead.property_value) * 100, 1) if lead.loan_amount and lead.property_value else None
+                },
+                "property": {
+                    "address": lead.property_address,
+                    "city": lead.property_city,
+                    "state": lead.property_state,
+                    "zip": lead.property_zip,
+                    "type": lead.property_type,
+                    "purpose": lead.loan_purpose
+                },
+                "referral_source": lead.referral_source,
+                "recent_activity": activity_list,
+                "pending_tasks": task_list,
+                "notes": lead.notes
+            }
+
+        async def execute_get_mum_clients(args):
+            """Get Mortgage Under Management clients"""
+            filter_type = args.get("filter", "all")
+            limit = args.get("limit", 20)
+
+            try:
+                # Get MUM clients from the mum_clients table
+                mum_query = db.execute(
+                    text("""
+                        SELECT id, client_name, email, phone, original_loan_date, loan_amount,
+                               current_rate, equity_estimate, refinance_eligible, amr_status,
+                               engagement_score, last_contact_date, next_action_date, property_address
+                        FROM mum_clients
+                        WHERE loan_officer_id = :user_id
+                        ORDER BY next_action_date ASC NULLS LAST
+                        LIMIT :limit
+                    """),
+                    {"user_id": current_user.id, "limit": limit}
+                ).fetchall()
+
+                clients = []
+                for c in mum_query:
+                    client = {
+                        "id": c.id,
+                        "name": c.client_name,
+                        "email": c.email,
+                        "phone": c.phone,
+                        "loan_date": c.original_loan_date.isoformat() if c.original_loan_date else None,
+                        "loan_amount": float(c.loan_amount) if c.loan_amount else None,
+                        "current_rate": float(c.current_rate) if c.current_rate else None,
+                        "equity_estimate": float(c.equity_estimate) if c.equity_estimate else None,
+                        "refinance_eligible": c.refinance_eligible,
+                        "amr_status": c.amr_status,
+                        "engagement_score": c.engagement_score,
+                        "last_contact": c.last_contact_date.isoformat() if c.last_contact_date else None,
+                        "next_action": c.next_action_date.isoformat() if c.next_action_date else None,
+                        "property": c.property_address
+                    }
+
+                    # Apply filters
+                    if filter_type == "refinance_opportunity" and not c.refinance_eligible:
+                        continue
+                    elif filter_type == "amr_due" and c.amr_status != "due":
+                        continue
+                    elif filter_type == "needs_contact":
+                        if c.last_contact_date and (datetime.now().date() - c.last_contact_date).days < 90:
+                            continue
+
+                    clients.append(client)
+
+                return {
+                    "success": True,
+                    "total_mum_clients": len(clients),
+                    "filter": filter_type,
+                    "clients": clients[:limit]
+                }
+            except Exception as e:
+                logger.error(f"Error fetching MUM clients: {e}")
+                return {"success": False, "message": f"MUM clients feature not available: {str(e)}"}
+
+        async def execute_get_referral_partners(args):
+            """Get referral partner information"""
+            partner_id = args.get("partner_id")
+            partner_name = args.get("partner_name")
+            category = args.get("category", "all")
+            limit = args.get("limit", 10)
+
+            try:
+                where_clauses = ["rp.user_id = :user_id"]
+                params = {"user_id": current_user.id, "limit": limit}
+
+                if partner_id:
+                    where_clauses.append("rp.id = :partner_id")
+                    params["partner_id"] = partner_id
+                if partner_name:
+                    where_clauses.append("rp.name ILIKE :partner_name")
+                    params["partner_name"] = f"%{partner_name}%"
+                if category and category != "all":
+                    where_clauses.append("rp.category = :category")
+                    params["category"] = category
+
+                where_sql = " AND ".join(where_clauses)
+
+                partners = db.execute(
+                    text(f"""
+                        SELECT id, name, email, phone, company, category,
+                               loyalty_tier, reciprocity_score, total_referrals,
+                               referrals_this_year, last_referral_date, engagement_status
+                        FROM referral_partners rp
+                        WHERE {where_sql}
+                        ORDER BY reciprocity_score DESC
+                        LIMIT :limit
+                    """),
+                    params
+                ).fetchall()
+
+                partner_list = [{
+                    "id": p.id,
+                    "name": p.name,
+                    "email": p.email,
+                    "phone": p.phone,
+                    "company": p.company,
+                    "category": p.category,
+                    "loyalty_tier": p.loyalty_tier,
+                    "reciprocity_score": p.reciprocity_score,
+                    "total_referrals": p.total_referrals,
+                    "referrals_this_year": p.referrals_this_year,
+                    "last_referral": p.last_referral_date.isoformat() if p.last_referral_date else None,
+                    "status": p.engagement_status
+                } for p in partners]
+
+                return {
+                    "success": True,
+                    "total_partners": len(partner_list),
+                    "partners": partner_list
+                }
+            except Exception as e:
+                logger.error(f"Error fetching referral partners: {e}")
+                return {"success": False, "message": f"Referral partners data not available: {str(e)}"}
+
+        async def execute_get_sla_dashboard(args):
+            """Get SLA tracking dashboard"""
+            view = args.get("view", "summary")
+
+            try:
+                # Get SLA data from the sla endpoints
+                if view == "bottlenecks" or view == "summary":
+                    # Analyze loans by stage and days in stage
+                    loan_data = db.execute(
+                        text("""
+                            SELECT stage, days_in_stage, sla_status, borrower_name, id
+                            FROM loans
+                            WHERE loan_officer_id = :user_id
+                            AND stage NOT IN ('FUNDED', 'WITHDRAWN', 'CLOSED')
+                        """),
+                        {"user_id": current_user.id}
+                    ).fetchall()
+
+                    bottlenecks = []
+                    at_risk = []
+                    stage_counts = {}
+
+                    for loan in loan_data:
+                        stage = str(loan.stage) if loan.stage else "Unknown"
+                        stage_counts[stage] = stage_counts.get(stage, 0) + 1
+
+                        if loan.days_in_stage and loan.days_in_stage > 5:
+                            bottlenecks.append({
+                                "loan_id": loan.id,
+                                "borrower": loan.borrower_name,
+                                "stage": stage,
+                                "days": loan.days_in_stage
+                            })
+
+                        if loan.sla_status in ["at_risk", "breached"]:
+                            at_risk.append({
+                                "loan_id": loan.id,
+                                "borrower": loan.borrower_name,
+                                "stage": stage,
+                                "status": loan.sla_status
+                            })
+
+                    return {
+                        "success": True,
+                        "view": view,
+                        "summary": {
+                            "total_active_loans": len(loan_data),
+                            "bottlenecks_count": len(bottlenecks),
+                            "at_risk_count": len(at_risk),
+                            "stage_distribution": stage_counts
+                        },
+                        "bottlenecks": sorted(bottlenecks, key=lambda x: x["days"], reverse=True)[:10],
+                        "at_risk_loans": at_risk[:10],
+                        "guidance": f"You have {len(bottlenecks)} loans that may be bottlenecked and {len(at_risk)} loans at risk of SLA breach."
+                    }
+
+                elif view == "team_performance":
+                    # Get team performance metrics
+                    return {
+                        "success": True,
+                        "view": "team_performance",
+                        "message": "Use get_analytics_report with report_type='employee_performance' for detailed team metrics"
+                    }
+
+            except Exception as e:
+                logger.error(f"Error fetching SLA dashboard: {e}")
+                return {"success": False, "message": f"Error loading SLA data: {str(e)}"}
+
+        async def execute_get_analytics_report(args):
+            """Generate comprehensive analytics report"""
+            report_type = args.get("report_type", "pipeline_summary")
+            period = args.get("period", "month")
+            team_member = args.get("team_member")
+
+            try:
+                # Calculate date range
+                today = datetime.now().date()
+                if period == "today":
+                    start_date = today
+                elif period == "week":
+                    start_date = today - timedelta(days=7)
+                elif period == "month":
+                    start_date = today - timedelta(days=30)
+                elif period == "quarter":
+                    start_date = today - timedelta(days=90)
+                elif period == "year" or period == "ytd":
+                    start_date = datetime(today.year, 1, 1).date()
+                else:
+                    start_date = today - timedelta(days=30)
+
+                if report_type == "pipeline_summary":
+                    leads = db.query(Lead).filter(Lead.owner_id == current_user.id).all()
+                    loans = db.query(Loan).filter(Loan.loan_officer_id == current_user.id).all()
+
+                    lead_stages = {}
+                    for lead in leads:
+                        stage = str(lead.stage).replace("LeadStage.", "") if lead.stage else "NEW"
+                        lead_stages[stage] = lead_stages.get(stage, 0) + 1
+
+                    loan_stages = {}
+                    total_volume = 0
+                    for loan in loans:
+                        stage = str(loan.stage).replace("LoanStage.", "") if loan.stage else "Unknown"
+                        loan_stages[stage] = loan_stages.get(stage, 0) + 1
+                        if loan.amount:
+                            total_volume += float(loan.amount)
+
+                    return {
+                        "success": True,
+                        "report_type": "pipeline_summary",
+                        "period": period,
+                        "metrics": {
+                            "total_leads": len(leads),
+                            "total_loans": len(loans),
+                            "total_volume": total_volume,
+                            "lead_stages": lead_stages,
+                            "loan_stages": loan_stages,
+                            "avg_loan_amount": total_volume / len(loans) if loans else 0
+                        }
+                    }
+
+                elif report_type == "conversion_funnel":
+                    leads = db.query(Lead).filter(Lead.owner_id == current_user.id).all()
+
+                    funnel = {
+                        "new_leads": len([l for l in leads if str(l.stage) in ["NEW", "LeadStage.NEW"]]),
+                        "qualified": len([l for l in leads if str(l.stage) in ["PROSPECT", "PRE_QUALIFIED", "LeadStage.PROSPECT"]]),
+                        "application": len([l for l in leads if str(l.stage) in ["APPLICATION", "APPLICATION_STARTED", "LeadStage.APPLICATION"]]),
+                        "processing": len([l for l in leads if str(l.stage) in ["PRE_APPROVED", "UNDER_CONTRACT", "LeadStage.PRE_APPROVED"]]),
+                        "closed": len([l for l in leads if str(l.stage) in ["CLOSED", "LeadStage.CLOSED"]])
+                    }
+
+                    return {
+                        "success": True,
+                        "report_type": "conversion_funnel",
+                        "funnel": funnel,
+                        "conversion_rate": round(funnel["closed"] / funnel["new_leads"] * 100, 1) if funnel["new_leads"] > 0 else 0
+                    }
+
+                elif report_type == "activity_summary":
+                    activities = db.query(Activity).filter(
+                        Activity.user_id == current_user.id,
+                        Activity.created_at >= start_date
+                    ).all()
+
+                    activity_types = {}
+                    for a in activities:
+                        atype = a.activity_type or "other"
+                        activity_types[atype] = activity_types.get(atype, 0) + 1
+
+                    return {
+                        "success": True,
+                        "report_type": "activity_summary",
+                        "period": period,
+                        "total_activities": len(activities),
+                        "by_type": activity_types
+                    }
+
+                else:
+                    return {
+                        "success": True,
+                        "report_type": report_type,
+                        "message": f"Report type '{report_type}' is available. Specify period and filters for detailed data."
+                    }
+
+            except Exception as e:
+                logger.error(f"Error generating analytics report: {e}")
+                return {"success": False, "message": f"Error generating report: {str(e)}"}
+
+        async def execute_send_sms(args):
+            """Send SMS text message via Twilio"""
+            recipient_phone = args.get("recipient_phone")
+            recipient_name = args.get("recipient_name")
+            message = args.get("message")
+            lead_id = args.get("lead_id")
+            loan_id = args.get("loan_id")
+
+            if not message:
+                return {"success": False, "message": "Message content is required"}
+
+            # Look up phone number if not provided
+            if not recipient_phone and recipient_name:
+                lead = db.query(Lead).filter(
+                    Lead.owner_id == current_user.id,
+                    Lead.name.ilike(f"%{recipient_name}%")
+                ).first()
+                if lead and lead.phone:
+                    recipient_phone = lead.phone
+                    lead_id = lead.id
+
+            if not recipient_phone:
+                return {"success": False, "message": "Phone number required. Provide recipient_phone or a valid recipient_name."}
+
+            # Format phone number
+            phone = recipient_phone.replace("-", "").replace(" ", "").replace("(", "").replace(")", "")
+            if not phone.startswith("+"):
+                phone = "+1" + phone if len(phone) == 10 else "+" + phone
+
+            try:
+                # Use Twilio to send SMS
+                twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
+                twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
+                twilio_phone = os.getenv("TWILIO_PHONE_NUMBER")
+
+                if not all([twilio_sid, twilio_token, twilio_phone]):
+                    return {"success": False, "message": "SMS service not configured. Please configure Twilio credentials."}
+
+                from twilio.rest import Client
+                client = Client(twilio_sid, twilio_token)
+
+                sms = client.messages.create(
+                    body=message,
+                    from_=twilio_phone,
+                    to=phone
+                )
+
+                # Log the activity
+                activity = Activity(
+                    activity_type="sms_sent",
+                    description=f"SMS sent: {message[:100]}...",
+                    user_id=current_user.id,
+                    lead_id=lead_id,
+                    loan_id=loan_id
+                )
+                db.add(activity)
+                db.commit()
+
+                await log_ai_action_to_mission_control(
+                    db=db, agent_name="SMS Tool", action_type="send_sms",
+                    user_id=current_user.id, context={"phone": phone, "message_preview": message[:50]},
+                    autonomy_level="autonomous", status="completed"
+                )
+
+                return {"success": True, "message": f"SMS sent to {phone}", "sid": sms.sid}
+
+            except Exception as e:
+                logger.error(f"Error sending SMS: {e}")
+                return {"success": False, "message": f"Failed to send SMS: {str(e)}"}
+
+        async def execute_make_phone_call(args):
+            """Initiate a phone call via Twilio or click-to-dial"""
+            phone_number = args.get("phone_number")
+            contact_name = args.get("contact_name")
+            lead_id = args.get("lead_id")
+            purpose = args.get("purpose", "Follow-up call")
+
+            # Look up phone if not provided
+            if not phone_number and contact_name:
+                lead = db.query(Lead).filter(
+                    Lead.owner_id == current_user.id,
+                    Lead.name.ilike(f"%{contact_name}%")
+                ).first()
+                if lead and lead.phone:
+                    phone_number = lead.phone
+                    lead_id = lead.id
+
+            if not phone_number:
+                return {"success": False, "message": "Phone number required"}
+
+            # Format phone number
+            phone = phone_number.replace("-", "").replace(" ", "").replace("(", "").replace(")", "")
+            if not phone.startswith("+"):
+                phone = "+1" + phone if len(phone) == 10 else "+" + phone
+
+            # For now, create a task to make the call (click-to-dial integration)
+            task = Task(
+                title=f"Call {contact_name or phone_number}: {purpose}",
+                description=f"Phone: {phone}\nPurpose: {purpose}",
+                due_date=datetime.now(),
+                priority="high",
+                status="pending",
+                owner_id=current_user.id,
+                lead_id=lead_id
+            )
+            db.add(task)
+            db.commit()
+
+            return {
+                "success": True,
+                "message": f"Call task created for {phone}",
+                "task_id": task.id,
+                "phone": phone,
+                "note": "Use the dialer feature in the CRM to initiate the call, or call directly."
+            }
+
+        async def execute_drop_voicemail(args):
+            """Drop a pre-recorded voicemail via Vapi"""
+            phone_number = args.get("phone_number")
+            contact_name = args.get("contact_name")
+            voicemail_type = args.get("voicemail_type", "general_followup")
+            lead_id = args.get("lead_id")
+
+            # Look up phone if not provided
+            if not phone_number and contact_name:
+                lead = db.query(Lead).filter(
+                    Lead.owner_id == current_user.id,
+                    Lead.name.ilike(f"%{contact_name}%")
+                ).first()
+                if lead and lead.phone:
+                    phone_number = lead.phone
+                    lead_id = lead.id
+
+            if not phone_number:
+                return {"success": False, "message": "Phone number required"}
+
+            # Log the voicemail drop request
+            activity = Activity(
+                activity_type="voicemail_drop",
+                description=f"Voicemail drop ({voicemail_type}) to {contact_name or phone_number}",
+                user_id=current_user.id,
+                lead_id=lead_id
+            )
+            db.add(activity)
+            db.commit()
+
+            return {
+                "success": True,
+                "message": f"Voicemail drop queued for {phone_number}",
+                "voicemail_type": voicemail_type,
+                "note": "Voicemail will be delivered via the Vapi voicemail drop service"
+            }
+
+        async def execute_create_lead(args):
+            """Create a new lead in the system"""
+            name = args.get("name")
+            email = args.get("email")
+            phone = args.get("phone")
+            source = args.get("source", "AI Assistant")
+            loan_purpose = args.get("loan_purpose")
+            property_type = args.get("property_type")
+            loan_amount = args.get("loan_amount")
+            notes = args.get("notes")
+
+            if not name:
+                return {"success": False, "message": "Lead name is required"}
+
+            # Check if lead already exists
+            existing = db.query(Lead).filter(
+                Lead.owner_id == current_user.id,
+                or_(Lead.email == email, Lead.phone == phone) if email or phone else False
+            ).first()
+
+            if existing:
+                return {
+                    "success": False,
+                    "message": f"A lead with this contact info already exists: {existing.name} (ID: {existing.id})"
+                }
+
+            lead = Lead(
+                name=name,
+                email=email,
+                phone=phone,
+                source=source,
+                loan_purpose=loan_purpose,
+                property_type=property_type,
+                loan_amount=loan_amount,
+                notes=notes,
+                owner_id=current_user.id,
+                stage="NEW"
+            )
+            db.add(lead)
+            db.commit()
+
+            await log_ai_action_to_mission_control(
+                db=db, agent_name="Lead Creator", action_type="create_lead",
+                user_id=current_user.id, context={"lead_name": name, "source": source},
+                autonomy_level="autonomous", status="completed"
+            )
+
+            return {
+                "success": True,
+                "message": f"Lead '{name}' created successfully",
+                "lead_id": lead.id,
+                "lead": {
+                    "id": lead.id,
+                    "name": lead.name,
+                    "email": lead.email,
+                    "phone": lead.phone,
+                    "stage": "NEW"
+                }
+            }
+
+        async def execute_send_email_to_contact(args):
+            """Send email to a specific contact (lead, borrower, partner)"""
+            recipient_email = args.get("recipient_email")
+            recipient_name = args.get("recipient_name")
+            subject = args.get("subject")
+            body = args.get("body")
+            lead_id = args.get("lead_id")
+            loan_id = args.get("loan_id")
+
+            if not subject or not body:
+                return {"success": False, "message": "Subject and body are required"}
+
+            # Look up email if not provided
+            if not recipient_email and recipient_name:
+                lead = db.query(Lead).filter(
+                    Lead.owner_id == current_user.id,
+                    Lead.name.ilike(f"%{recipient_name}%")
+                ).first()
+                if lead and lead.email:
+                    recipient_email = lead.email
+                    lead_id = lead.id
+
+            if not recipient_email:
+                return {"success": False, "message": "Recipient email required"}
+
+            try:
+                # Check if user has email configured
+                email_settings = db.query(EmailSettings).filter(
+                    EmailSettings.user_id == current_user.id
+                ).first()
+
+                if not email_settings or not email_settings.access_token:
+                    return {"success": False, "message": "Email not configured. Please connect your email account in Settings."}
+
+                # Send via Microsoft Graph
+                import httpx
+                async with httpx.AsyncClient() as client:
+                    response = await client.post(
+                        "https://graph.microsoft.com/v1.0/me/sendMail",
+                        headers={"Authorization": f"Bearer {email_settings.access_token}"},
+                        json={
+                            "message": {
+                                "subject": subject,
+                                "body": {"contentType": "HTML", "content": body},
+                                "toRecipients": [{"emailAddress": {"address": recipient_email}}]
+                            }
+                        }
+                    )
+
+                    if response.status_code == 202:
+                        # Log activity
+                        activity = Activity(
+                            activity_type="email_sent",
+                            description=f"Email sent: {subject}",
+                            user_id=current_user.id,
+                            lead_id=lead_id,
+                            loan_id=loan_id
+                        )
+                        db.add(activity)
+                        db.commit()
+
+                        return {"success": True, "message": f"Email sent to {recipient_email}"}
+                    else:
+                        return {"success": False, "message": f"Failed to send email: {response.status_code}"}
+
+            except Exception as e:
+                logger.error(f"Error sending email: {e}")
+                return {"success": False, "message": f"Error sending email: {str(e)}"}
+
+        async def execute_search_knowledge_base(args):
+            """Search the knowledge base for answers to questions"""
+            query = args.get("query")
+            category = args.get("category", "all")
+
+            if not query:
+                return {"success": False, "message": "Search query required"}
+
+            # Built-in knowledge base for common mortgage questions
+            knowledge_base = {
+                "ctc": {
+                    "title": "Clear to Close (CTC) Requirements",
+                    "content": """For Clear to Close, typically need:
+1. Final loan approval from underwriting
+2. Title insurance commitment
+3. Homeowners insurance binder
+4. Appraisal completed and approved
+5. All conditions satisfied
+6. Final verification of employment (VOE)
+7. Final credit check
+8. Closing disclosure signed (3-day waiting period)
+9. Wire instructions confirmed
+10. All parties ready to sign"""
+                },
+                "appraisal": {
+                    "title": "Appraisal Process",
+                    "content": """Appraisal timeline:
+- Order to completion: 5-10 business days
+- Rush available for additional fee
+- If value comes in low: can dispute, renegotiate, or bring cash
+- Transfer allowed within 120 days for same lender"""
+                },
+                "title": {
+                    "title": "Title Process",
+                    "content": """Title search and insurance:
+- Title search: 3-5 days
+- Clears liens, judgments, ownership issues
+- Title insurance protects lender and buyer
+- Issues delay closing until resolved"""
+                },
+                "lock": {
+                    "title": "Rate Lock Guidance",
+                    "content": """Rate lock considerations:
+- Lock periods: 15, 30, 45, 60 days
+- Longer locks = higher rates
+- Float down options may be available
+- Market volatility increases lock importance
+- Lock within 30 days of closing recommended"""
+                }
+            }
+
+            # Search for relevant entries
+            results = []
+            query_lower = query.lower()
+            for key, entry in knowledge_base.items():
+                if query_lower in entry["title"].lower() or query_lower in entry["content"].lower() or query_lower in key:
+                    results.append(entry)
+
+            if results:
+                return {
+                    "success": True,
+                    "results": results,
+                    "query": query
+                }
+            else:
+                return {
+                    "success": False,
+                    "message": f"No knowledge base entries found for '{query}'. Consider creating a task for the responsible party to provide this information.",
+                    "suggestion": "Use escalate_to_human to create a task for someone to answer this question."
+                }
+
+        async def execute_escalate_to_human(args):
+            """Create a task for human follow-up when AI cannot answer"""
+            question = args.get("question")
+            context = args.get("context")
+            assignee = args.get("assignee")
+            priority = args.get("priority", "medium")
+            lead_id = args.get("lead_id")
+            loan_id = args.get("loan_id")
+
+            if not question:
+                return {"success": False, "message": "Question/issue description required"}
+
+            # Determine who to assign to
+            assignee_id = current_user.id  # Default to current user
+            if assignee:
+                # Try to find team member
+                team_member = db.query(User).filter(
+                    User.name.ilike(f"%{assignee}%")
+                ).first()
+                if team_member:
+                    assignee_id = team_member.id
+
+            task = Task(
+                title=f"AI Escalation: {question[:80]}{'...' if len(question) > 80 else ''}",
+                description=f"**Question/Issue:**\n{question}\n\n**Context:**\n{context or 'No additional context provided.'}\n\n---\n*This task was created by AI because it could not answer this question.*",
+                due_date=datetime.now() + timedelta(days=1),
+                priority=priority,
+                status="pending",
+                owner_id=assignee_id,
+                lead_id=lead_id,
+                loan_id=loan_id
+            )
+            db.add(task)
+            db.commit()
+
+            await log_ai_action_to_mission_control(
+                db=db, agent_name="Escalation Tool", action_type="escalate_to_human",
+                user_id=current_user.id, context={"question": question[:100], "assignee_id": assignee_id},
+                autonomy_level="autonomous", status="completed"
+            )
+
+            return {
+                "success": True,
+                "message": f"Task created for human follow-up",
+                "task_id": task.id,
+                "assigned_to": assignee or "you",
+                "note": "A team member will review and respond to this question."
+            }
+
         tool_functions = {
             "send_email": execute_send_email,
             "get_tasks": execute_get_tasks,
@@ -6501,7 +7563,21 @@ The Team menu item appears for managers and management roles.
             "schedule_followup": execute_schedule_followup,
             "update_lead": execute_update_lead,
             "get_metrics": execute_get_metrics,
-            "get_market_intelligence": execute_get_market_intelligence
+            "get_market_intelligence": execute_get_market_intelligence,
+            # NEW comprehensive tools
+            "get_loan_details": execute_get_loan_details,
+            "get_lead_details": execute_get_lead_details,
+            "get_mum_clients": execute_get_mum_clients,
+            "get_referral_partners": execute_get_referral_partners,
+            "get_sla_dashboard": execute_get_sla_dashboard,
+            "get_analytics_report": execute_get_analytics_report,
+            "send_sms": execute_send_sms,
+            "make_phone_call": execute_make_phone_call,
+            "drop_voicemail": execute_drop_voicemail,
+            "create_lead": execute_create_lead,
+            "send_email_to_contact": execute_send_email_to_contact,
+            "search_knowledge_base": execute_search_knowledge_base,
+            "escalate_to_human": execute_escalate_to_human
         }
 
         # Pre-fetch real data context for personalized responses
@@ -7461,13 +8537,54 @@ Always move the user forward.
 ❌ Hedging: "might," "could," "possibly," "perhaps," "should consider"
 
 # MANDATORY PROCESS FOR EVERY QUESTION
-1. **ALWAYS call tools FIRST** (get_pipeline, get_metrics, get_tasks, search_leads)
+1. **ALWAYS call tools FIRST** (get_pipeline, get_metrics, get_tasks, search_leads, get_loan_details, etc.)
 2. **Use whatever data you get** to provide an answer with actual numbers
 3. **Calculate metrics** from available data (even if incomplete)
 4. **Provide specific names, amounts, and percentages**
 5. **If data is incomplete:** Answer with what you HAVE + offer to track the rest
 
 **RULE: Even if you only have PARTIAL data, ANSWER THE QUESTION with what you have and state what's needed to improve the answer. NEVER claim you "don't have access" - instead show what you CAN analyze and offer to integrate missing data sources.**
+
+# YOUR COMPLETE TOOLKIT - AVAILABLE TOOLS
+You have access to these comprehensive tools. USE THEM PROACTIVELY:
+
+## DATA RETRIEVAL TOOLS
+- **get_loan_details**: Get comprehensive loan information including milestones, title status, appraisal status, insurance, CTC checklist, team members, and timeline. Use for ANY loan question.
+- **get_lead_details**: Get complete lead information including contact info, financial snapshot (credit score, DTI, income), activity history, referral source.
+- **get_mum_clients**: Access Mortgage Under Management (MUM) clients - past borrowers in retention pipeline. Filter by refinance opportunity, AMR due, needs contact.
+- **get_referral_partners**: Get referral partner data - realtors, builders, title companies. See reciprocity scores, loyalty tier, referral counts.
+- **get_sla_dashboard**: SLA tracking - find bottlenecks, at-risk loans, stage dwell times, run rates.
+- **get_analytics_report**: Generate reports: pipeline_summary, conversion_funnel, employee_performance, lead_source_roi, volume_by_product, revenue_forecast, activity_summary.
+- **get_pipeline**: Get pipeline overview by stage.
+- **get_tasks**: Get user's tasks with full details.
+- **get_metrics**: Get performance metrics and KPIs.
+- **search_leads**: Search leads by name, stage, or criteria.
+- **get_market_intelligence**: Real-time MBS prices, treasury yields, rate lock guidance.
+- **search_knowledge_base**: Find answers to common mortgage questions (CTC requirements, appraisal process, title, rate locks).
+
+## ACTION TOOLS - YOU CAN EXECUTE THESE
+- **send_email**: Send an email on behalf of the user.
+- **send_sms**: Send SMS text messages to leads/borrowers. Just needs phone number or name.
+- **send_email_to_contact**: Send email to a specific contact (lead, borrower, partner).
+- **make_phone_call**: Initiate a phone call (creates click-to-dial task).
+- **drop_voicemail**: Queue a voicemail drop via Vapi.
+- **create_task**: Create a task for follow-up.
+- **create_lead**: Create a new lead in the system.
+- **schedule_followup**: Schedule a follow-up call or task.
+- **update_lead**: Update lead stage or status.
+- **escalate_to_human**: When you can't answer, create a task for human follow-up.
+
+## WHEN TO USE WHICH TOOL
+- "What's happening with [borrower] loan?" → get_loan_details
+- "Tell me about [lead name]" → get_lead_details
+- "Who needs a refi call?" → get_mum_clients (filter: refinance_opportunity)
+- "Where are my bottlenecks?" → get_sla_dashboard
+- "How many loans did I close this month?" → get_analytics_report (pipeline_summary)
+- "Send John a text reminder" → send_sms
+- "What do I need for clear to close?" → get_loan_details + search_knowledge_base
+- "I don't know the answer to this question" → escalate_to_human (creates task for human follow-up)
+- "Lock or float on this loan?" → get_market_intelligence
+- "My top realtor partners?" → get_referral_partners
 
 # INSTRUCTIONS
 - Reference the real data above when answering questions
