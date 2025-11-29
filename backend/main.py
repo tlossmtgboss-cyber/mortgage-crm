@@ -15023,39 +15023,27 @@ async def approve_reconciliation(
             # Get phone - handle borrower_phone field name
             borrower_phone = get_val("borrower_phone") or get_val("phone")
 
-            # If no loan number, try to find existing loan by borrower name first
-            # IMPORTANT: Only search loans owned by the current user to prevent cross-user matching
+            # If no loan number, generate one (skip searching for existing loans to avoid enum errors)
+            # NOTE: Previously searched for existing loans, but this causes issues when DB has
+            # loans with enum values that don't match the current enum definition
             logger.info(f"RECON_DEBUG_V7: loan_number={loan_number}, borrower_name={borrower_name}")
             if not loan_number:
-                logger.info("RECON_DEBUG_V7: Searching for existing loan by borrower name")
-                existing_by_name = db.query(Loan).filter(
-                    Loan.borrower_name.ilike(f"%{borrower_name}%"),
-                    Loan.loan_officer_id == current_user.id
-                ).first() if borrower_name and borrower_name != "Unknown" else None
-
-                if existing_by_name:
-                    # Found existing loan by borrower name - use it
-                    extracted.match_entity_type = "loan"
-                    extracted.match_entity_id = existing_by_name.id
-                    extracted.status = "approved"  # Mark as approved
-                    extracted.reviewed_by = current_user.id
-                    extracted.reviewed_at = datetime.now(timezone.utc)
-                    logger.info(f"Found existing loan by borrower name '{borrower_name}', using loan {existing_by_name.loan_number}")
-                    # Skip creating new loan, just apply data
-                    db.commit()
-                    return {"status": "approved", "message": f"Matched to existing loan {existing_by_name.loan_number}", "entity_id": existing_by_name.id}
-
                 # Generate a loan number
                 import random
                 loan_number = f"NEW{datetime.now().strftime('%Y%m%d')}{random.randint(1000, 9999)}"
                 logger.info(f"Generated loan number {loan_number} for borrower {borrower_name}")
 
-            # Check if loan already exists
-            existing_loan = db.query(Loan).filter(Loan.loan_number == loan_number).first()
-            if existing_loan:
+            # Check if loan already exists using raw SQL to avoid enum deserialization issues
+            result = db.execute(
+                text("SELECT id FROM loans WHERE loan_number = :loan_number"),
+                {"loan_number": loan_number}
+            ).first()
+
+            if result:
                 # Use existing loan instead of creating new
+                existing_loan_id = result[0]
                 extracted.match_entity_type = "loan"
-                extracted.match_entity_id = existing_loan.id
+                extracted.match_entity_id = existing_loan_id
                 logger.info(f"Found existing loan {loan_number}, using it instead of creating new")
             else:
                 # Determine stage
