@@ -237,7 +237,7 @@ class DialerEngine:
         # Get task breakdown
         tasks = self.db.query(DialerSessionTask).filter(
             DialerSessionTask.session_id == session_id
-        ).order_by(DialerSessionTask.position).all()
+        ).order_by(DialerSessionTask.task_order).all()
 
         pending = sum(1 for t in tasks if t.status == "pending")
         completed = sum(1 for t in tasks if t.status == "completed")
@@ -281,7 +281,7 @@ class DialerEngine:
         task = self.db.query(DialerSessionTask).filter(
             DialerSessionTask.session_id == session_id,
             DialerSessionTask.status == DialerTaskStatus.PENDING
-        ).order_by(DialerSessionTask.position).first()
+        ).order_by(DialerSessionTask.task_order).first()
 
         if not task:
             return None
@@ -293,7 +293,7 @@ class DialerEngine:
             "contact_name": task.contact_name,
             "lead_id": task.lead_id,
             "loan_id": task.loan_id,
-            "position": task.position,
+            "position": task.task_order,
             "attempts": task.attempts
         }
 
