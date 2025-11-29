@@ -491,7 +491,6 @@ function CommunicationIntelligence() {
           className={`mode-btn ${commMode === 'email' ? 'active' : ''}`}
           onClick={() => setCommMode('email')}
         >
-          <span className="mode-icon">📧</span>
           <span className="mode-label">Email</span>
           {emailStats.pending_count > 0 && (
             <span className="mode-badge">{emailStats.pending_count}</span>
@@ -501,7 +500,6 @@ function CommunicationIntelligence() {
           className={`mode-btn ${commMode === 'sms' ? 'active' : ''}`}
           onClick={() => setCommMode('sms')}
         >
-          <span className="mode-icon">💬</span>
           <span className="mode-label">SMS</span>
           {smsStats.totals?.pending > 0 && (
             <span className="mode-badge">{smsStats.totals.pending}</span>
@@ -618,14 +616,13 @@ function CommunicationIntelligence() {
                 <option value="yes">Has Match</option>
                 <option value="no">No Match</option>
               </select>
-              <button className="refresh-btn" onClick={loadData}>🔄 Refresh</button>
+              <button className="refresh-btn" onClick={loadData}>Refresh</button>
             </div>
 
             {loading ? (
               <div className="loading-spinner">Loading...</div>
             ) : emailQueue.length === 0 ? (
               <div className="empty-state">
-                <div className="empty-icon">📭</div>
                 <h3>No emails in queue</h3>
                 <p>Sync your email to import messages for processing</p>
               </div>
@@ -648,7 +645,7 @@ function CommunicationIntelligence() {
                     <div className="item-preview">{email.body_preview?.substring(0, 150)}...</div>
                     <div className="item-footer">
                       <div className="item-tags">
-                        {email.has_attachments && <span className="tag attachment">📎 {email.attachment_count}</span>}
+                        {email.has_attachments && <span className="tag attachment">{email.attachment_count} attachments</span>}
                         {email.ai_analysis?.disposition && <span className="tag disposition">{email.ai_analysis.disposition}</span>}
                         {email.ai_analysis?.urgency_level && (
                           <span className="tag urgency" style={{ backgroundColor: getUrgencyLabel(email.ai_analysis.urgency_level).color }}>
@@ -682,11 +679,10 @@ function CommunicationIntelligence() {
                 onChange={(e) => setSelectedLoanId(e.target.value)}
                 className="loan-id-input"
               />
-              <button className="refresh-btn" onClick={loadEmailConversations}>🔍 Load Conversations</button>
+              <button className="refresh-btn" onClick={loadEmailConversations}>Load Conversations</button>
             </div>
             {!selectedLoanId ? (
               <div className="empty-state">
-                <div className="empty-icon">💬</div>
                 <h3>Enter a Loan ID</h3>
                 <p>View the AI-generated conversation log for any loan</p>
               </div>
@@ -694,7 +690,6 @@ function CommunicationIntelligence() {
               <div className="loading-spinner">Loading...</div>
             ) : emailConversations.length === 0 ? (
               <div className="empty-state">
-                <div className="empty-icon">📝</div>
                 <h3>No conversations found</h3>
                 <p>No conversation logs for Loan #{selectedLoanId}</p>
               </div>
@@ -703,7 +698,7 @@ function CommunicationIntelligence() {
                 {emailConversations.map(conv => (
                   <div key={conv.id} className="conversation-card">
                     <div className="conv-header">
-                      <span className="conv-direction">{conv.direction === 'inbound' ? '📥' : '📤'} {conv.direction}</span>
+                      <span className="conv-direction">{conv.direction}</span>
                       <span className="conv-date">{formatDate(conv.email_date)}</span>
                     </div>
                     <div className="conv-subject">{conv.email_subject || '(No Subject)'}</div>
@@ -723,14 +718,14 @@ function CommunicationIntelligence() {
           <div className="documents-section">
             <div className="filters-row">
               <input type="number" placeholder="Enter Loan ID" value={docLoanId} onChange={(e) => setDocLoanId(e.target.value)} className="loan-id-input" />
-              <button className="refresh-btn" onClick={loadEmailDocuments}>🔍 Load Documents</button>
+              <button className="refresh-btn" onClick={loadEmailDocuments}>Load Documents</button>
             </div>
             {!docLoanId ? (
-              <div className="empty-state"><div className="empty-icon">📁</div><h3>Enter a Loan ID</h3></div>
+              <div className="empty-state"><h3>Enter a Loan ID</h3></div>
             ) : loading ? (
               <div className="loading-spinner">Loading...</div>
             ) : emailDocuments.length === 0 ? (
-              <div className="empty-state"><div className="empty-icon">📄</div><h3>No documents tracked</h3></div>
+              <div className="empty-state"><h3>No documents tracked</h3></div>
             ) : (
               <div className="document-list">
                 <table className="doc-table">
@@ -756,12 +751,12 @@ function CommunicationIntelligence() {
           <div className="all-documents-section">
             <div className="section-header">
               <h3>All Received Documents</h3>
-              <button className="refresh-btn" onClick={loadAllEmailDocuments}>🔄 Refresh</button>
+              <button className="refresh-btn" onClick={loadAllEmailDocuments}>Refresh</button>
             </div>
             {loading ? (
               <div className="loading-spinner">Loading...</div>
             ) : emailAllDocuments.length === 0 ? (
-              <div className="empty-state"><div className="empty-icon">📄</div><h3>No documents tracked</h3></div>
+              <div className="empty-state"><h3>No documents tracked</h3></div>
             ) : (
               <div className="document-list">
                 <table className="doc-table">
@@ -788,7 +783,7 @@ function CommunicationIntelligence() {
             {loading ? (
               <div className="loading-spinner">Loading...</div>
             ) : emailSlaItems.length === 0 ? (
-              <div className="empty-state"><div className="empty-icon">⏰</div><h3>All caught up!</h3><p>No pending SLA items</p></div>
+              <div className="empty-state"><h3>All caught up!</h3><p>No pending SLA items</p></div>
             ) : (
               <div className="sla-list">
                 {emailSlaItems.map(sla => (
@@ -836,14 +831,13 @@ function CommunicationIntelligence() {
                 <option value="">Response Status</option>
                 <option value="yes">Needs Response</option>
               </select>
-              <button className="refresh-btn" onClick={loadData}>🔄 Refresh</button>
+              <button className="refresh-btn" onClick={loadData}>Refresh</button>
             </div>
 
             {loading ? (
               <div className="loading-spinner">Loading...</div>
             ) : smsQueue.length === 0 ? (
               <div className="empty-state">
-                <div className="empty-icon">💬</div>
                 <h3>No SMS messages in queue</h3>
                 <p>Messages will appear here when received via Twilio webhook</p>
               </div>
@@ -854,7 +848,7 @@ function CommunicationIntelligence() {
                     <div className="item-header">
                       <div className="from-info">
                         <span className="from-name">
-                          {sms.direction === 'inbound' ? '📥' : '📤'} {formatPhone(sms.direction === 'inbound' ? sms.from_phone : sms.to_phone)}
+                          {formatPhone(sms.direction === 'inbound' ? sms.from_phone : sms.to_phone)} ({sms.direction})
                         </span>
                         {sms.loan_borrower_name && <span className="from-email">{sms.loan_borrower_name}</span>}
                         {sms.lead_name && <span className="from-email">{sms.lead_name}</span>}
@@ -868,7 +862,7 @@ function CommunicationIntelligence() {
                     <div className="item-preview sms-body">{sms.message_body}</div>
                     <div className="item-footer">
                       <div className="item-tags">
-                        {sms.has_media && <span className="tag attachment">📷 {sms.media_count} media</span>}
+                        {sms.has_media && <span className="tag attachment">{sms.media_count} media</span>}
                         {sms.disposition && <span className="tag disposition">{sms.disposition}</span>}
                         {sms.requires_response && <span className="tag response-needed">Response Needed</span>}
                         {sms.is_opt_out && <span className="tag opt-out">OPT-OUT</span>}
@@ -905,11 +899,10 @@ function CommunicationIntelligence() {
                 onChange={(e) => setSmsPhoneFilter(e.target.value)}
                 className="phone-input"
               />
-              <button className="refresh-btn" onClick={loadSmsConversations}>🔍 Load Conversations</button>
+              <button className="refresh-btn" onClick={loadSmsConversations}>Load Conversations</button>
             </div>
             {!smsPhoneFilter ? (
               <div className="empty-state">
-                <div className="empty-icon">💬</div>
                 <h3>Enter a Phone Number</h3>
                 <p>View the SMS conversation history for any phone number</p>
               </div>
@@ -917,7 +910,6 @@ function CommunicationIntelligence() {
               <div className="loading-spinner">Loading...</div>
             ) : smsConversations.length === 0 ? (
               <div className="empty-state">
-                <div className="empty-icon">📝</div>
                 <h3>No conversations found</h3>
                 <p>No SMS history for {formatPhone(smsPhoneFilter)}</p>
               </div>
@@ -941,13 +933,12 @@ function CommunicationIntelligence() {
           <div className="templates-section">
             <div className="section-header">
               <h3>SMS Templates</h3>
-              <button className="refresh-btn" onClick={loadSmsTemplates}>🔄 Refresh</button>
+              <button className="refresh-btn" onClick={loadSmsTemplates}>Refresh</button>
             </div>
             {loading ? (
               <div className="loading-spinner">Loading...</div>
             ) : smsTemplates.length === 0 ? (
               <div className="empty-state">
-                <div className="empty-icon">📝</div>
                 <h3>No templates yet</h3>
                 <p>Create SMS templates for quick responses</p>
               </div>
@@ -974,13 +965,12 @@ function CommunicationIntelligence() {
           <div className="opt-outs-section">
             <div className="section-header">
               <h3>Opted-Out Phone Numbers</h3>
-              <button className="refresh-btn" onClick={loadSmsOptOuts}>🔄 Refresh</button>
+              <button className="refresh-btn" onClick={loadSmsOptOuts}>Refresh</button>
             </div>
             {loading ? (
               <div className="loading-spinner">Loading...</div>
             ) : smsOptOuts.length === 0 ? (
               <div className="empty-state">
-                <div className="empty-icon">✅</div>
                 <h3>No opt-outs</h3>
                 <p>All contacts are subscribed to SMS</p>
               </div>
@@ -1014,7 +1004,6 @@ function CommunicationIntelligence() {
               <div className="loading-spinner">Loading...</div>
             ) : smsSlaItems.length === 0 ? (
               <div className="empty-state">
-                <div className="empty-icon">⏰</div>
                 <h3>All caught up!</h3>
                 <p>No pending SMS SLAs</p>
               </div>
@@ -1043,13 +1032,12 @@ function CommunicationIntelligence() {
           <div className="doc-mentions-section">
             <div className="section-header">
               <h3>Document Mentions in SMS</h3>
-              <button className="refresh-btn" onClick={loadSmsDocMentions}>🔄 Refresh</button>
+              <button className="refresh-btn" onClick={loadSmsDocMentions}>Refresh</button>
             </div>
             {loading ? (
               <div className="loading-spinner">Loading...</div>
             ) : smsDocMentions.length === 0 ? (
               <div className="empty-state">
-                <div className="empty-icon">📄</div>
                 <h3>No document mentions</h3>
                 <p>When borrowers mention documents in SMS, they'll appear here</p>
               </div>
@@ -1177,7 +1165,6 @@ function CommunicationIntelligence() {
                       className={`disposition-option ${selectedDisposition === opt.value ? 'selected' : ''}`}
                       onClick={() => setSelectedDisposition(opt.value)}
                     >
-                      <span className="opt-icon">{opt.icon}</span>
                       <span className="opt-label">{opt.label}</span>
                     </button>
                   ))}
