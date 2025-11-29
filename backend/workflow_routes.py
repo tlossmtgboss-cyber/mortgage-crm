@@ -735,3 +735,178 @@ async def get_workflow_tasks_for_user(
             "count": 0,
             "note": "Workflow task instances table may not exist yet"
         }
+
+
+# ============== Upcoming Tasks by Workflow Stage ==============
+
+# Map workflow keys to stage filters
+WORKFLOW_STAGE_MAPPING = {
+    'prospect': {'lead_stages': ['new', 'contacted', 'qualified'], 'loan_stages': []},
+    'prequal': {'lead_stages': ['pre_qualified'], 'loan_stages': []},
+    'pre_approved': {'lead_stages': ['pre_approved'], 'loan_stages': ['Disclosed']},
+    'under_contract': {'lead_stages': [], 'loan_stages': ['Processing', 'Submitted', 'UW Received', 'Approved', 'Suspended']},
+    'lead_purchase': {'lead_stages': ['purchased'], 'loan_stages': []},
+    'theme_day': {'is_theme_day': True},
+    'last_mile': {'lead_stages': [], 'loan_stages': ['CTC', 'Docs Out']},
+    'post_close': {'lead_stages': [], 'loan_stages': ['Funded']},
+    'credit_repair': {'lead_stages': ['credit_repair'], 'loan_stages': []},
+    'nurture': {'lead_stages': ['nurture', 'not_ready'], 'loan_stages': []}
+}
+
+
+@router.get("/upcoming-tasks/{workflow_key}")
+async def get_upcoming_tasks_by_workflow(
+    workflow_key: str,
+    days: int = 7,
+    db: Session = Depends(get_db)
+):
+    """Get upcoming tasks filtered by workflow stage for the next N business days"""
+    try:
+        from datetime import datetime, timedelta
+        import json
+
+        # Get the stage mapping for this workflow
+        stage_filter = WORKFLOW_STAGE_MAPPING.get(workflow_key, {})
+        lead_stages = stage_filter.get('lead_stages', [])
+        loan_stages = stage_filter.get('loan_stages', [])
+
+        # Calculate business days range
+        today = datetime.now().date()
+        end_date = today + timedelta(days=days + 4)  # Add buffer for weekends
+
+        # Build query for tasks
+        query = """
+            SELECT
+                t.id,
+                t.title,
+                t.description,
+                t.priority,
+                t.due_date,
+                t.status,
+                t.owner_id,
+                u.full_name as owner_name,
+                COALESCE(l.borrower_name, le.first_name || ' ' || le.last_name) as client_name,
+                COALESCE(lo.loan_number, '') as loan_number,
+                l.stage as loan_stage,
+                le.stage as lead_stage
+            FROM tasks t
+            LEFT JOIN users u ON t.owner_id = u.id
+            LEFT JOIN loans l ON t.loan_id = l.id
+            LEFT JOIN leads le ON t.lead_id = le.id
+            LEFT JOIN loans lo ON t.loan_id = lo.id
+            WHERE t.status != 'completed'
+            AND t.due_date IS NOT NULL
+            AND t.due_date >= :today
+            AND t.due_date <= :end_date
+        """
+        params = {"today": today, "end_date": end_date}
+
+        # Add stage filters based on workflow
+        if lead_stages and loan_stages:
+            query += " AND (le.stage IN :lead_stages OR l.stage IN :loan_stages)"
+            params["lead_stages"] = tuple(lead_stages) if len(lead_stages) > 1 else (lead_stages[0],)
+            params["loan_stages"] = tuple(loan_stages) if len(loan_stages) > 1 else (loan_stages[0],)
+        elif lead_stages:
+            query += " AND le.stage IN :lead_stages"
+            params["lead_stages"] = tuple(lead_stages) if len(lead_stages) > 1 else (lead_stages[0],)
+        elif loan_stages:
+            query += " AND l.stage IN :loan_stages"
+            params["loan_stages"] = tuple(loan_stages) if len(loan_stages) > 1 else (loan_stages[0],)
+
+        query += " ORDER BY t.due_date ASC, t.priority DESC LIMIT 200"
+
+        result = db.execute(text(query), params)
+        tasks = result.fetchall()
+
+        # Group tasks by day
+        tasks_by_day = {}
+        user_stats = {}
+
+        for task in tasks:
+            due_date = task[4]
+            if due_date:
+                # Skip weekends
+                if due_date.weekday() >= 5:
+                    continue
+
+                date_key = due_date.strftime('%Y-%m-%d')
+                if date_key not in tasks_by_day:
+                    tasks_by_day[date_key] = []
+
+                owner_id = task[6]
+                owner_name = task[7] or "Unassigned"
+
+                task_data = {
+                    "id": str(task[0]),
+                    "title": task[1],
+                    "description": task[2] or "",
+                    "priority": task[3] or "medium",
+                    "dueTime": due_date.strftime('%H:%M') if due_date else "09:00",
+                    "estimatedMinutes": 30,
+                    "status": task[5] or "pending",
+                    "clientName": task[8] or "Unknown",
+                    "loanNumber": task[9] or "",
+                    "assignedTo": {
+                        "id": owner_id,
+                        "name": owner_name,
+                        "role": "Team Member"
+                    }
+                }
+                tasks_by_day[date_key].append(task_data)
+
+                # Track user stats
+                if owner_id not in user_stats:
+                    user_stats[owner_id] = {
+                        "id": owner_id,
+                        "name": owner_name,
+                        "role": "Team Member",
+                        "avgDailyCapacity": 15,
+                        "totalAssigned": 0,
+                        "dailyTasks": {}
+                    }
+                user_stats[owner_id]["totalAssigned"] += 1
+                if date_key not in user_stats[owner_id]["dailyTasks"]:
+                    user_stats[owner_id]["dailyTasks"][date_key] = 0
+                user_stats[owner_id]["dailyTasks"][date_key] += 1
+
+        # Calculate user capacity
+        user_capacity = []
+        for user_id, stats in user_stats.items():
+            daily_tasks = [
+                {"date": d, "assigned": c, "estimatedHours": c * 0.5}
+                for d, c in sorted(stats["dailyTasks"].items())
+            ]
+            avg_daily = stats["totalAssigned"] / max(len(stats["dailyTasks"]), 1)
+            user_capacity.append({
+                "id": stats["id"],
+                "name": stats["name"],
+                "role": stats["role"],
+                "avgDailyCapacity": stats["avgDailyCapacity"],
+                "totalAssigned": stats["totalAssigned"],
+                "avgDailyAssigned": round(avg_daily, 1),
+                "dailyTasks": daily_tasks,
+                "capacityUtilization": min(100, round((avg_daily / stats["avgDailyCapacity"]) * 100)),
+                "overCapacity": avg_daily > stats["avgDailyCapacity"],
+                "completedToday": 0,
+                "completedThisWeek": 0
+            })
+
+        total_tasks = sum(len(tasks) for tasks in tasks_by_day.values())
+
+        return {
+            "workflow_key": workflow_key,
+            "tasks_by_day": tasks_by_day,
+            "user_capacity": user_capacity,
+            "total_tasks": total_tasks
+        }
+
+    except Exception as e:
+        logger.error(f"Get upcoming tasks error: {e}")
+        # Return empty structure on error
+        return {
+            "workflow_key": workflow_key,
+            "tasks_by_day": {},
+            "user_capacity": [],
+            "total_tasks": 0,
+            "error": str(e)
+        }

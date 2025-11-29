@@ -76,99 +76,22 @@ function WorkflowUpcomingTasks({ workflowKey, workflowName, workflowColor }) {
         setUserCapacity(data.user_capacity || []);
         setTotalTasks(data.total_tasks || 0);
       } else {
-        // Generate mock data for demo
-        generateMockData();
+        // Set empty state if API returns error
+        setEmptyState();
       }
     } catch (error) {
       console.error('Error fetching upcoming tasks:', error);
-      generateMockData();
+      setEmptyState();
     } finally {
       setLoading(false);
     }
   }, [workflowKey]);
 
-  const generateMockData = () => {
-    const users = [
-      { id: 1, name: 'Sarah Johnson', role: 'Loan Officer', avgDailyCapacity: 15 },
-      { id: 2, name: 'Mike Chen', role: 'Processor', avgDailyCapacity: 20 },
-      { id: 3, name: 'Emily Davis', role: 'Jr. Loan Officer', avgDailyCapacity: 12 },
-      { id: 4, name: 'David Wilson', role: 'Production Assistant', avgDailyCapacity: 25 },
-      { id: 5, name: 'Lisa Brown', role: 'Concierge', avgDailyCapacity: 18 }
-    ];
-
-    const taskTypes = [
-      'Initial Contact Call',
-      'Send Follow-up Email',
-      'Document Collection',
-      'Credit Review',
-      'Rate Lock Reminder',
-      'Application Review',
-      'Disclosure Delivery',
-      'Appraisal Follow-up',
-      'Condition Clearing',
-      'Closing Prep'
-    ];
-
-    const clients = [
-      'John Smith', 'Maria Garcia', 'Robert Lee', 'Jennifer Williams',
-      'Michael Brown', 'Amanda Taylor', 'James Anderson', 'Patricia Martinez'
-    ];
-
-    const mockTasksByDay = {};
-    let total = 0;
-
-    businessDays.forEach(day => {
-      const dateKey = day.toISOString().split('T')[0];
-      const numTasks = Math.floor(Math.random() * 15) + 8;
-      total += numTasks;
-
-      mockTasksByDay[dateKey] = Array.from({ length: numTasks }, (_, i) => ({
-        id: `${dateKey}-${i}`,
-        title: taskTypes[Math.floor(Math.random() * taskTypes.length)],
-        clientName: clients[Math.floor(Math.random() * clients.length)],
-        assignedTo: users[Math.floor(Math.random() * users.length)],
-        priority: ['urgent', 'high', 'medium', 'low'][Math.floor(Math.random() * 4)],
-        dueTime: `${Math.floor(Math.random() * 8) + 9}:00`,
-        estimatedMinutes: [15, 30, 45, 60][Math.floor(Math.random() * 4)],
-        status: 'pending',
-        loanNumber: `LN${Math.floor(Math.random() * 900000) + 100000}`
-      }));
-    });
-
-    // Generate user capacity data
-    const mockUserCapacity = users.map(user => {
-      const dailyTasks = businessDays.map(day => {
-        const dateKey = day.toISOString().split('T')[0];
-        const tasksForUser = mockTasksByDay[dateKey]?.filter(t => t.assignedTo.id === user.id) || [];
-        const completedYesterday = Math.floor(Math.random() * user.avgDailyCapacity * 0.3) + Math.floor(user.avgDailyCapacity * 0.6);
-
-        return {
-          date: dateKey,
-          assigned: tasksForUser.length,
-          estimatedHours: tasksForUser.reduce((sum, t) => sum + (t.estimatedMinutes || 30), 0) / 60
-        };
-      });
-
-      const totalAssigned = dailyTasks.reduce((sum, d) => sum + d.assigned, 0);
-      const avgDaily = totalAssigned / 7;
-      const completedToday = Math.floor(Math.random() * 10) + 5;
-      const completedThisWeek = Math.floor(Math.random() * 50) + 30;
-
-      return {
-        ...user,
-        dailyTasks,
-        totalAssigned,
-        avgDailyAssigned: avgDaily.toFixed(1),
-        completedToday,
-        completedThisWeek,
-        capacityUtilization: Math.min(100, Math.round((avgDaily / user.avgDailyCapacity) * 100)),
-        overCapacity: avgDaily > user.avgDailyCapacity
-      };
-    });
-
-    setTasksByDay(mockTasksByDay);
-    setUserCapacity(mockUserCapacity);
-    setTotalTasks(total);
+  const setEmptyState = () => {
+    // Set empty state when no tasks are found for this workflow
+    setTasksByDay({});
+    setUserCapacity([]);
+    setTotalTasks(0);
   };
 
   useEffect(() => {
