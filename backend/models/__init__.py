@@ -10,6 +10,17 @@ from .team_member_profile import TeamMemberProfile
 from .email_interaction import EmailInteraction
 from .field_update_history import FieldUpdateHistory
 from .data_conflict import DataConflict
+from .sla_tracking import (
+    SLAMeasure,
+    LoanMilestoneHistory,
+    SLAPerformanceSnapshot,
+    SLAAlert,
+    SLAEfficiencyReport,
+    TimeUnit,
+    SLAStatus,
+    MilestoneType,
+    AlertStatus
+)
 
 __all__ = [
     'LeadProfile',
@@ -18,5 +29,15 @@ __all__ = [
     'TeamMemberProfile',
     'EmailInteraction',
     'FieldUpdateHistory',
-    'DataConflict'
+    'DataConflict',
+    # SLA Tracking
+    'SLAMeasure',
+    'LoanMilestoneHistory',
+    'SLAPerformanceSnapshot',
+    'SLAAlert',
+    'SLAEfficiencyReport',
+    'TimeUnit',
+    'SLAStatus',
+    'MilestoneType',
+    'AlertStatus'
 ]

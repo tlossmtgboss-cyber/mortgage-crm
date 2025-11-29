@@ -15274,10 +15274,24 @@ async def approve_reconciliation(
 
             logger.info(f"Approved and applied extracted data {extracted.id} by user {current_user.id}")
 
+            # Get entity name for the response
+            entity_name = None
+            if extracted.match_entity_type == "loan" and extracted.match_entity_id:
+                loan_entity = db.query(Loan).filter(Loan.id == extracted.match_entity_id).first()
+                if loan_entity:
+                    entity_name = loan_entity.borrower_name
+            elif extracted.match_entity_type == "lead" and extracted.match_entity_id:
+                lead_entity = db.query(Lead).filter(Lead.id == extracted.match_entity_id).first()
+                if lead_entity:
+                    entity_name = lead_entity.name
+
             return {
                 "status": "success",
                 "message": "Data approved and applied to CRM",
                 "extracted_data_id": extracted.id,
+                "entity_type": extracted.match_entity_type,
+                "entity_id": extracted.match_entity_id,
+                "entity_name": entity_name,
                 "ai_delegation_enabled": approval.delegate_to_ai if approval.delegate_to_ai else False,
                 "applied_fields": applied_fields,
                 "status_updated": status_updated,

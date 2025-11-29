@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
 import './ReconciliationCenter.css';
 
 function ReconciliationCenter() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('pending'); // 'pending', 'pendingReview', or 'completed'
   const [pendingItems, setPendingItems] = useState([]);
   const [pendingReviewItems, setPendingReviewItems] = useState([]);
@@ -520,9 +522,11 @@ function ReconciliationCenter() {
       if (response.ok) {
         const responseData = await response.json();
 
-        // Show applied data summary modal
+        // Show applied data summary modal with link to profile
         setAppliedDataSummary({
-          entityName: statusCorrectionData?.entity_name || selectedItem?.match_name || 'Borrower',
+          entityName: responseData.entity_name || statusCorrectionData?.entity_name || selectedItem?.match_name || 'Borrower',
+          entityType: responseData.entity_type,
+          entityId: responseData.entity_id,
           appliedFields: responseData.applied_fields || [],
           statusUpdated: responseData.status_updated,
           oldStatus: responseData.old_status,
@@ -628,6 +632,19 @@ function ReconciliationCenter() {
       });
 
       if (response.ok) {
+        const responseData = await response.json();
+
+        // Show applied data summary modal with link to profile
+        setAppliedDataSummary({
+          entityName: responseData.entity_name || `${newBorrowerForm.first_name} ${newBorrowerForm.last_name}`,
+          entityType: responseData.entity_type,
+          entityId: responseData.entity_id,
+          appliedFields: [],
+          statusUpdated: false,
+          isNewBorrower: true
+        });
+        setShowAppliedDataModal(true);
+
         // Remove from list and reset
         setPendingItems(prev => prev.filter(item => item.id !== itemId));
         setPendingReviewItems(prev => prev.filter(item => item.id !== itemId));
@@ -2456,7 +2473,7 @@ function ReconciliationCenter() {
             <div className="dialog-header" style={{ background: '#d1fae5', borderBottom: '2px solid #10b981' }}>
               <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: 0, color: '#065f46' }}>
                 <span style={{ fontSize: '24px' }}>✅</span>
-                Data Applied Successfully
+                {appliedDataSummary.isNewBorrower ? 'Borrower Added Successfully' : 'Data Applied Successfully'}
               </h3>
               <button
                 className="dialog-close"
@@ -2468,7 +2485,10 @@ function ReconciliationCenter() {
             </div>
             <div className="dialog-body" style={{ padding: '24px' }}>
               <p style={{ fontSize: '15px', color: '#374151', marginBottom: '20px' }}>
-                The following data has been added to <strong>{appliedDataSummary.entityName}</strong>'s profile:
+                {appliedDataSummary.isNewBorrower
+                  ? <><strong>{appliedDataSummary.entityName}</strong> has been added to the CRM.</>
+                  : <>The following data has been added to <strong>{appliedDataSummary.entityName}</strong>'s profile:</>
+                }
               </p>
 
               {appliedDataSummary.statusUpdated && (
@@ -2542,23 +2562,50 @@ function ReconciliationCenter() {
               padding: '16px 24px',
               borderTop: '1px solid #e5e7eb',
               display: 'flex',
-              justifyContent: 'flex-end',
+              justifyContent: 'space-between',
+              alignItems: 'center',
               background: '#f9fafb'
             }}>
               <button
                 onClick={() => setShowAppliedDataModal(false)}
                 style={{
                   padding: '10px 24px',
-                  border: 'none',
+                  border: '1px solid #d1d5db',
                   borderRadius: '6px',
-                  background: '#10b981',
-                  color: 'white',
+                  background: 'white',
+                  color: '#374151',
                   cursor: 'pointer',
-                  fontWeight: '600'
+                  fontWeight: '500'
                 }}
               >
-                Done
+                Close
               </button>
+              {appliedDataSummary.entityId && appliedDataSummary.entityType && (
+                <button
+                  onClick={() => {
+                    setShowAppliedDataModal(false);
+                    const route = appliedDataSummary.entityType === 'loan'
+                      ? `/loans/${appliedDataSummary.entityId}`
+                      : `/leads/${appliedDataSummary.entityId}`;
+                    navigate(route);
+                  }}
+                  style={{
+                    padding: '10px 24px',
+                    border: 'none',
+                    borderRadius: '6px',
+                    background: '#10b981',
+                    color: 'white',
+                    cursor: 'pointer',
+                    fontWeight: '600',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  <span>👤</span>
+                  View {appliedDataSummary.entityName}'s Profile
+                </button>
+              )}
             </div>
           </div>
         </div>

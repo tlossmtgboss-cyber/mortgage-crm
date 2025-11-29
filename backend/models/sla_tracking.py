@@ -1,0 +1,303 @@
+"""
+SLA (Service Level Agreement) Tracking Models
+
+Models for tracking loan lifecycle milestones, SLA compliance, and performance metrics.
+Enables real-time monitoring of:
+- Milestone achievement vs targets
+- Team/individual performance trending
+- At-risk loan identification
+- Efficiency reporting
+"""
+
+from sqlalchemy import Column, Integer, String, Float, Boolean, Date, DateTime, ForeignKey, Text, JSON, Enum as SQLEnum
+from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
+from database import Base
+import enum
+
+
+# ============ Enums ============
+
+class TimeUnit(str, enum.Enum):
+    """Time measurement units for SLA targets."""
+    HOURS = "hours"
+    DAYS = "days"
+    BUSINESS_DAYS = "business_days"
+
+
+class SLAStatus(str, enum.Enum):
+    """Status of a milestone relative to SLA target."""
+    NOT_STARTED = "not_started"
+    IN_PROGRESS = "in_progress"
+    ON_TRACK = "on_track"
+    AT_RISK = "at_risk"
+    OVERDUE = "overdue"
+    COMPLETED = "completed"
+    WAIVED = "waived"
+
+
+class MilestoneType(str, enum.Enum):
+    """Types of loan lifecycle milestones."""
+    # Lead Stage
+    LEAD_RESPONSE = "lead_response"
+    INITIAL_CONSULTATION = "initial_consultation"
+    PREAPPROVAL = "preapproval"
+
+    # Application Stage
+    APPLICATION_SUBMITTED = "application_submitted"
+    DOCUMENT_COLLECTION = "document_collection"
+    APPLICATION_COMPLETE = "application_complete"
+
+    # Processing Stage
+    PROCESSING_START = "processing_start"
+    APPRAISAL_ORDERED = "appraisal_ordered"
+    APPRAISAL_RECEIVED = "appraisal_received"
+    TITLE_ORDERED = "title_ordered"
+    TITLE_RECEIVED = "title_received"
+
+    # Underwriting Stage
+    SUBMITTED_TO_UW = "submitted_to_uw"
+    UW_DECISION = "uw_decision"
+    CONDITIONS_ISSUED = "conditions_issued"
+    CONDITIONS_CLEARED = "conditions_cleared"
+
+    # Closing Stage
+    CLEAR_TO_CLOSE = "clear_to_close"
+    CLOSING_DOCS_OUT = "closing_docs_out"
+    CLOSING_SCHEDULED = "closing_scheduled"
+    CLOSED = "closed"
+    FUNDED = "funded"
+
+
+class AlertStatus(str, enum.Enum):
+    """Status of SLA alerts."""
+    ACTIVE = "active"
+    ACKNOWLEDGED = "acknowledged"
+    RESOLVED = "resolved"
+    ESCALATED = "escalated"
+    SNOOZED = "snoozed"
+
+
+# ============ SLA Measure Configuration ============
+
+class SLAMeasure(Base):
+    """
+    Configuration for each SLA measure/milestone.
+    Defines the target time and thresholds for each stage transition.
+    """
+    __tablename__ = "sla_measures"
+
+    id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, index=True, nullable=False, default=1)
+
+    # Milestone identification
+    milestone_type = Column(SQLEnum(MilestoneType), nullable=False, index=True)
+    name = Column(String(100), nullable=False)
+    description = Column(Text)
+
+    # Target configuration
+    target_value = Column(Float, nullable=False)  # e.g., 4 hours, 2 days
+    target_unit = Column(SQLEnum(TimeUnit), nullable=False, default=TimeUnit.HOURS)
+
+    # Thresholds (as percentage of target)
+    warning_threshold_pct = Column(Float, default=75)  # At 75% of target = warning
+    critical_threshold_pct = Column(Float, default=100)  # At 100% = overdue
+
+    # Business rules
+    applies_to_loan_types = Column(JSON)  # ["conventional", "fha", "va"] or null for all
+    applies_to_channels = Column(JSON)  # ["retail", "wholesale"] or null for all
+    business_hours_only = Column(Boolean, default=True)
+
+    # Activation
+    is_active = Column(Boolean, default=True)
+
+    # Relationships
+    history_records = relationship("LoanMilestoneHistory", back_populates="sla_measure")
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+# ============ Loan Milestone History ============
+
+class LoanMilestoneHistory(Base):
+    """
+    Tracks each milestone event for every loan.
+    Used to calculate actual vs. target times and SLA compliance.
+    """
+    __tablename__ = "loan_milestone_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, index=True, nullable=False, default=1)
+
+    # Loan reference
+    loan_id = Column(Integer, ForeignKey("loans.id"), nullable=True, index=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True, index=True)
+    loan_number = Column(String(50), index=True)
+
+    # Milestone tracking
+    sla_measure_id = Column(Integer, ForeignKey("sla_measures.id"), nullable=False)
+    milestone_type = Column(SQLEnum(MilestoneType), nullable=False, index=True)
+
+    # Timing
+    started_at = Column(DateTime(timezone=True))  # When milestone timer started
+    target_deadline = Column(DateTime(timezone=True))  # Calculated deadline
+    completed_at = Column(DateTime(timezone=True))  # When actually completed
+
+    # Status
+    status = Column(SQLEnum(SLAStatus), default=SLAStatus.NOT_STARTED, index=True)
+
+    # Performance metrics
+    target_hours = Column(Float)  # Target in hours (normalized)
+    actual_hours = Column(Float)  # Actual time taken
+    variance_hours = Column(Float)  # Difference (negative = ahead, positive = behind)
+    variance_pct = Column(Float)  # Percentage over/under
+
+    # Assignment
+    assigned_to_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    completed_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    # Notes
+    notes = Column(Text)
+    waive_reason = Column(Text)  # If milestone was waived
+
+    # Relationships
+    sla_measure = relationship("SLAMeasure", back_populates="history_records")
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+# ============ SLA Performance Snapshots ============
+
+class SLAPerformanceSnapshot(Base):
+    """
+    Daily/weekly snapshots of SLA performance for trending and reporting.
+    Aggregated metrics at team and individual level.
+    """
+    __tablename__ = "sla_performance_snapshots"
+
+    id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, index=True, nullable=False, default=1)
+
+    # Snapshot timing
+    snapshot_date = Column(Date, nullable=False, index=True)
+    period_type = Column(String(20), default="daily")  # daily, weekly, monthly
+
+    # Scope
+    scope_type = Column(String(20), nullable=False)  # organization, team, user
+    scope_id = Column(Integer)  # team_id or user_id, null for org-wide
+
+    # Milestone type (null = all milestones)
+    milestone_type = Column(SQLEnum(MilestoneType), nullable=True)
+
+    # Volume metrics
+    total_milestones = Column(Integer, default=0)
+    completed_on_time = Column(Integer, default=0)
+    completed_late = Column(Integer, default=0)
+    still_in_progress = Column(Integer, default=0)
+    overdue = Column(Integer, default=0)
+
+    # Performance metrics
+    on_time_rate = Column(Float)  # Percentage
+    avg_completion_time_hours = Column(Float)
+    avg_variance_hours = Column(Float)
+    avg_variance_pct = Column(Float)
+
+    # Percentiles
+    p50_completion_hours = Column(Float)  # Median
+    p90_completion_hours = Column(Float)  # 90th percentile
+    p95_completion_hours = Column(Float)  # 95th percentile
+
+    # Breakdown by status (JSON for flexibility)
+    status_breakdown = Column(JSON)  # {"on_track": 10, "at_risk": 3, "overdue": 1}
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+# ============ SLA Alerts ============
+
+class SLAAlert(Base):
+    """
+    Alerts for SLA violations and at-risk milestones.
+    Used for notifications and escalation workflows.
+    """
+    __tablename__ = "sla_alerts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, index=True, nullable=False, default=1)
+
+    # Related records
+    milestone_history_id = Column(Integer, ForeignKey("loan_milestone_history.id"), nullable=False)
+    loan_id = Column(Integer, ForeignKey("loans.id"), nullable=True)
+    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
+
+    # Alert details
+    alert_type = Column(String(50), nullable=False)  # "warning", "critical", "escalation"
+    milestone_type = Column(SQLEnum(MilestoneType), nullable=False)
+
+    # Message
+    title = Column(String(200), nullable=False)
+    message = Column(Text)
+
+    # Status
+    status = Column(SQLEnum(AlertStatus), default=AlertStatus.ACTIVE, index=True)
+
+    # Assignment
+    assigned_to_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    escalated_to_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    # Timing
+    triggered_at = Column(DateTime(timezone=True), server_default=func.now())
+    acknowledged_at = Column(DateTime(timezone=True))
+    resolved_at = Column(DateTime(timezone=True))
+    snooze_until = Column(DateTime(timezone=True))
+
+    # Actions taken
+    resolution_notes = Column(Text)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+# ============ SLA Efficiency Reports ============
+
+class SLAEfficiencyReport(Base):
+    """
+    Detailed efficiency reports for analysis.
+    Generated periodically for management review.
+    """
+    __tablename__ = "sla_efficiency_reports"
+
+    id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, index=True, nullable=False, default=1)
+
+    # Report period
+    report_date = Column(Date, nullable=False)
+    period_start = Column(Date, nullable=False)
+    period_end = Column(Date, nullable=False)
+
+    # Overall metrics
+    total_loans_processed = Column(Integer)
+    avg_days_to_close = Column(Float)
+    avg_days_to_fund = Column(Float)
+
+    # SLA compliance
+    overall_sla_compliance_rate = Column(Float)
+
+    # Bottleneck analysis (JSON for flexibility)
+    bottleneck_stages = Column(JSON)  # [{"stage": "underwriting", "avg_delay_hours": 12}]
+
+    # Top performers
+    top_performers = Column(JSON)  # [{"user_id": 1, "on_time_rate": 98.5}]
+
+    # Areas needing improvement
+    improvement_areas = Column(JSON)  # [{"milestone": "appraisal_received", "avg_variance_pct": 25}]
+
+    # Trend comparison
+    vs_prior_period = Column(JSON)  # {"on_time_rate_change": +5.2, "avg_time_change": -0.5}
+
+    # Recommendations (AI-generated or manual)
+    recommendations = Column(JSON)  # ["Consider adding processing staff", "Review appraisal vendor SLAs"]
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
