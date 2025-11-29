@@ -7020,12 +7020,13 @@ The Team menu item appears for managers and management roles.
                 # Get SLA data from the sla endpoints
                 if view == "bottlenecks" or view == "summary":
                     # Analyze loans by stage and days in stage
+                    # Cast stage to text to avoid enum comparison issues
                     loan_data = db.execute(
                         text("""
-                            SELECT stage, days_in_stage, sla_status, borrower_name, id
+                            SELECT stage::text as stage, days_in_stage, sla_status, borrower_name, id
                             FROM loans
                             WHERE loan_officer_id = :user_id
-                            AND stage NOT IN ('FUNDED', 'WITHDRAWN', 'CLOSED')
+                            AND stage::text NOT IN ('FUNDED', 'WITHDRAWN', 'CLOSED')
                         """),
                         {"user_id": current_user.id}
                     ).fetchall()
