@@ -377,6 +377,47 @@ def ensure_email_intelligence_tables_exist():
                 CREATE INDEX IF NOT EXISTS idx_sla_track_due ON email_sla_tracking(response_due_at);
             """))
 
+            # Add missing columns to email_sla_tracking if they don't exist
+            conn.execute(text("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_name = 'email_sla_tracking' AND column_name = 'responded_at'
+                    ) THEN
+                        ALTER TABLE email_sla_tracking ADD COLUMN responded_at TIMESTAMP WITH TIME ZONE;
+                    END IF;
+
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_name = 'email_sla_tracking' AND column_name = 'response_email_id'
+                    ) THEN
+                        ALTER TABLE email_sla_tracking ADD COLUMN response_email_id INTEGER;
+                    END IF;
+
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_name = 'email_sla_tracking' AND column_name = 'breach_notified'
+                    ) THEN
+                        ALTER TABLE email_sla_tracking ADD COLUMN breach_notified BOOLEAN DEFAULT FALSE;
+                    END IF;
+
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_name = 'email_sla_tracking' AND column_name = 'breach_notified_at'
+                    ) THEN
+                        ALTER TABLE email_sla_tracking ADD COLUMN breach_notified_at TIMESTAMP WITH TIME ZONE;
+                    END IF;
+
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.columns
+                        WHERE table_name = 'email_sla_tracking' AND column_name = 'response_time_hours'
+                    ) THEN
+                        ALTER TABLE email_sla_tracking ADD COLUMN response_time_hours NUMERIC(10, 2);
+                    END IF;
+                END $$;
+            """))
+
             # 7. Known Client Emails - Cache of all known client email addresses
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS known_client_emails (
