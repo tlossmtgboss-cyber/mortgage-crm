@@ -1680,7 +1680,7 @@ function ReconciliationCenter() {
                               <input
                                 type="text"
                                 className={`field-value-input ${isEdited ? 'edited' : ''}`}
-                                value={isEdited ? editedFields[fieldName] : value || ''}
+                                value={isEdited ? editedFields[fieldName] : formatDisplayValue(fieldName, value) || ''}
                                 onChange={(e) => handleFieldEdit(fieldName, e.target.value)}
                                 style={{
                                   flex: 1,
@@ -2207,7 +2207,7 @@ function ReconciliationCenter() {
                             <input
                               type="text"
                               className={`field-input ${isEdited ? 'edited' : ''}`}
-                              value={isEdited ? editedFields[fieldName] : value || ''}
+                              value={isEdited ? editedFields[fieldName] : formatDisplayValue(fieldName, value) || ''}
                               onChange={(e) => handleFieldEdit(fieldName, e.target.value)}
                               style={{ flex: 1 }}
                             />
@@ -2810,7 +2810,7 @@ function ReconciliationCenter() {
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                               <input
                                 type="text"
-                                value={isEdited ? editedFields[fieldName] : value || ''}
+                                value={isEdited ? editedFields[fieldName] : formatDisplayValue(fieldName, value) || ''}
                                 onChange={(e) => handleFieldEdit(fieldName, e.target.value)}
                                 style={{
                                   flex: 1,
@@ -3114,7 +3114,7 @@ function ReconciliationCenter() {
                           <input
                             type="text"
                             className="field-input"
-                            value={value || ''}
+                            value={formatDisplayValue(fieldName, value) || ''}
                             readOnly
                             disabled
                           />

@@ -4577,11 +4577,11 @@ async def generate_ai_email(
         demo_user = db.query(User).filter(User.email == "demo@example.com").first()
         current_user = {
             "id": demo_user.id if demo_user else 1,
-            "name": demo_user.name if demo_user else "Loan Officer",
+            "name": demo_user.full_name if demo_user else "Loan Officer",
             "email": demo_user.email if demo_user else "demo@example.com",
             "phone": getattr(demo_user, 'phone', '') if demo_user else "",
-            "title": getattr(demo_user, 'title', 'Loan Officer') if demo_user else "Loan Officer",
-            "nmls_id": getattr(demo_user, 'nmls_id', '') if demo_user else ""
+            "title": getattr(demo_user, 'current_role', 'Loan Officer') if demo_user else "Loan Officer",
+            "nmls_id": getattr(demo_user, 'nmls_number', '') if demo_user else ""
         }
 
         # Get the base prompt for this template
@@ -4707,7 +4707,7 @@ async def send_composed_email(
         demo_user = db.query(User).filter(User.email == "demo@example.com").first()
         current_user = {
             "id": demo_user.id if demo_user else 1,
-            "name": demo_user.name if demo_user else "Pipeline 360",
+            "name": demo_user.full_name if demo_user else "Pipeline 360",
             "email": demo_user.email if demo_user else "demo@example.com"
         }
 
