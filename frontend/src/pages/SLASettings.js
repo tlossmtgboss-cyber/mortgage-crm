@@ -26,6 +26,7 @@ const SLASettings = () => {
   // Drag-and-drop state
   const [draggedItem, setDraggedItem] = useState(null);
   const [measureOrder, setMeasureOrder] = useState([]);
+  const [dragOverItem, setDragOverItem] = useState(null);
 
   // Reports state
   const [teamMembers, setTeamMembers] = useState([]);
@@ -326,16 +327,35 @@ const SLASettings = () => {
   const handleDragStart = (e, measure) => {
     setDraggedItem(measure);
     e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', measure.id.toString());
+    // Add a slight delay to make the dragging visual more apparent
+    setTimeout(() => {
+      e.target.closest('tr').style.opacity = '0.4';
+    }, 0);
   };
 
-  const handleDragOver = (e) => {
+  const handleDragOver = (e, measure) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
+    if (measure && draggedItem && measure.id !== draggedItem.id) {
+      setDragOverItem(measure.id);
+    }
+  };
+
+  const handleDragLeave = (e) => {
+    // Only clear if we're leaving the row entirely
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+      setDragOverItem(null);
+    }
   };
 
   const handleDrop = (e, targetMeasure, stage) => {
     e.preventDefault();
-    if (!draggedItem || draggedItem.id === targetMeasure.id) return;
+    setDragOverItem(null);
+    if (!draggedItem || draggedItem.id === targetMeasure.id) {
+      setDraggedItem(null);
+      return;
+    }
 
     // Only allow reordering within the same stage
     const draggedStage = getMilestoneStage(draggedItem.milestone_type);
@@ -356,6 +376,16 @@ const SLASettings = () => {
     newItems.splice(draggedIdx, 1);
     newItems.splice(targetIdx, 0, draggedItem);
 
+    // Update measures state to reflect new order
+    const newMeasures = measures.map(m => {
+      const newIndex = newItems.findIndex(ni => ni.id === m.id);
+      if (newIndex !== -1) {
+        return { ...m, display_order: newIndex };
+      }
+      return m;
+    });
+    setMeasures(newMeasures);
+
     // Update the local order display
     const newOrder = newItems.map(m => m.id);
     setMeasureOrder(prev => {
@@ -367,8 +397,13 @@ const SLASettings = () => {
     setDraggedItem(null);
   };
 
-  const handleDragEnd = () => {
+  const handleDragEnd = (e) => {
     setDraggedItem(null);
+    setDragOverItem(null);
+    // Reset opacity
+    if (e.target.closest('tr')) {
+      e.target.closest('tr').style.opacity = '1';
+    }
   };
 
   // Define milestone stages for sorting - Lead stage first, then Loan stage
@@ -430,16 +465,34 @@ const SLASettings = () => {
   const renderMeasureRow = (measure, stage) => (
     <tr
       key={measure.id}
-      draggable
+      draggable="true"
       onDragStart={(e) => handleDragStart(e, measure)}
-      onDragOver={handleDragOver}
+      onDragOver={(e) => handleDragOver(e, measure)}
+      onDragLeave={handleDragLeave}
       onDrop={(e) => handleDrop(e, measure, stage)}
       onDragEnd={handleDragEnd}
-      className={`draggable-row ${draggedItem?.id === measure.id ? 'dragging' : ''}`}
+      className={`draggable-row ${draggedItem?.id === measure.id ? 'dragging' : ''} ${dragOverItem === measure.id ? 'drag-over' : ''}`}
+      style={{
+        cursor: 'grab',
+        transition: 'all 0.2s ease',
+        background: dragOverItem === measure.id ? '#e0f2f1' : undefined,
+        borderTop: dragOverItem === measure.id ? '3px solid #218D8D' : undefined
+      }}
     >
       <td>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span className="drag-handle" title="Drag to reorder">⋮⋮</span>
+          <span
+            className="drag-handle"
+            title="Drag to reorder within this section"
+            style={{
+              cursor: 'grab',
+              padding: '4px 8px',
+              borderRadius: '4px',
+              background: '#f3f4f6',
+              fontSize: '16px',
+              color: '#6b7280'
+            }}
+          >☰</span>
           <div>
             <div className="milestone-name">{measure.name}</div>
             <div className="milestone-type">{formatMilestoneType(measure.milestone_type)}</div>

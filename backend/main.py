@@ -23017,26 +23017,105 @@ async def get_loans(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Phase 3: Apply permission-based filtering
-    query = db.query(Loan)
-    query = filter_loans_by_permissions(query, current_user, db)
+    """Get loans using raw SQL to avoid enum deserialization issues"""
+    try:
+        # Build WHERE clause based on permissions
+        where_clauses = []
+        params = {"skip": skip, "limit": limit, "user_id": current_user.id}
 
-    if stage:
-        try:
-            stage_enum = LoanStage(stage)
-            query = query.filter(Loan.stage == stage_enum)
-        except ValueError:
-            pass
+        # Check if user has view_all permission
+        if not has_permission(current_user.id, 'loans.view_all', db):
+            where_clauses.append("loan_officer_id = :user_id")
 
-    loans = query.order_by(Loan.updated_at.desc()).offset(skip).limit(limit).all()
-    return loans
+        # Filter by stage if provided
+        if stage:
+            where_clauses.append("stage = :stage")
+            params["stage"] = stage.upper()
+
+        where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
+
+        sql = f"""
+            SELECT id, loan_number, borrower_name, stage, program, amount, rate,
+                   closing_date, days_in_stage, sla_status, created_at,
+                   loan_officer_name, loan_officer_email, processor, processor_email,
+                   underwriter, underwriter_email, closer, closer_email
+            FROM loans
+            WHERE {where_sql}
+            ORDER BY updated_at DESC
+            OFFSET :skip LIMIT :limit
+        """
+
+        results = db.execute(text(sql), params).fetchall()
+
+        # Convert to list of dicts with proper enum handling
+        loans = []
+        valid_stages = {s.name for s in LoanStage}
+
+        for row in results:
+            row_dict = dict(row._mapping)
+            # Normalize stage - default to PROCESSING if invalid
+            stage_val = row_dict.get('stage')
+            if stage_val:
+                stage_upper = str(stage_val).upper()
+                if stage_upper in valid_stages:
+                    row_dict['stage'] = LoanStage[stage_upper]
+                else:
+                    row_dict['stage'] = LoanStage.PROCESSING
+            else:
+                row_dict['stage'] = LoanStage.PROCESSING
+
+            loans.append(row_dict)
+
+        return loans
+    except Exception as e:
+        logger.error(f"Error fetching loans: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/v1/loans/{loan_id}", response_model=LoanResponse)
 async def get_loan(loan_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    loan = db.query(Loan).filter(Loan.id == loan_id, Loan.loan_officer_id == current_user.id).first()
-    if not loan:
-        raise HTTPException(status_code=404, detail="Loan not found")
-    return loan
+    """Get single loan using raw SQL to avoid enum deserialization issues"""
+    try:
+        sql = """
+            SELECT id, loan_number, borrower_name, stage, program, amount, rate,
+                   closing_date, days_in_stage, sla_status, created_at,
+                   loan_officer_name, loan_officer_email, processor, processor_email,
+                   underwriter, underwriter_email, closer, closer_email, loan_officer_id
+            FROM loans
+            WHERE id = :loan_id
+        """
+        result = db.execute(text(sql), {"loan_id": loan_id}).first()
+
+        if not result:
+            raise HTTPException(status_code=404, detail="Loan not found")
+
+        row_dict = dict(result._mapping)
+
+        # Check ownership unless user has view_all permission
+        if not has_permission(current_user.id, 'loans.view_all', db):
+            if row_dict.get('loan_officer_id') != current_user.id:
+                raise HTTPException(status_code=404, detail="Loan not found")
+
+        # Normalize stage
+        valid_stages = {s.name for s in LoanStage}
+        stage_val = row_dict.get('stage')
+        if stage_val:
+            stage_upper = str(stage_val).upper()
+            if stage_upper in valid_stages:
+                row_dict['stage'] = LoanStage[stage_upper]
+            else:
+                row_dict['stage'] = LoanStage.PROCESSING
+        else:
+            row_dict['stage'] = LoanStage.PROCESSING
+
+        # Remove loan_officer_id from response (not in LoanResponse model)
+        row_dict.pop('loan_officer_id', None)
+
+        return row_dict
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching loan {loan_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.patch("/api/v1/loans/{loan_id}", response_model=LoanResponse)
 async def update_loan(loan_id: int, loan_update: LoanUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):

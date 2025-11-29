@@ -296,6 +296,15 @@ const VideoMeetings = ({ onClose, leadId, loanId, contactId }) => {
   const getFilteredMeetings = () => {
     let filtered = [...meetings];
 
+    // Exclude meetings associated with the current lead/loan being viewed
+    // When viewing a borrower's profile, we shouldn't show meetings FOR that borrower
+    if (leadId) {
+      filtered = filtered.filter(m => m.lead_id !== leadId);
+    }
+    if (loanId) {
+      filtered = filtered.filter(m => m.loan_id !== loanId);
+    }
+
     // Status filter
     if (statusFilter !== 'all') {
       filtered = filtered.filter(m => m.status === statusFilter);

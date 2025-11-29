@@ -975,7 +975,8 @@
 
 /* Draggable Row */
 .draggable-row {
-  transition: background 0.2s, opacity 0.2s;
+  transition: background 0.2s, opacity 0.2s, border 0.2s;
+  cursor: grab;
 }
 
 .draggable-row:hover {
@@ -983,12 +984,40 @@
 }
 
 .draggable-row.dragging {
-  opacity: 0.5;
+  opacity: 0.4;
   background: #e5e7eb;
+}
+
+.draggable-row.drag-over {
+  background: #e0f2f1 !important;
+  border-top: 3px solid #218D8D !important;
 }
 
 .draggable-row:active {
   cursor: grabbing;
+}
+
+/* Improve drag handle visibility */
+.drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  background: #f3f4f6;
+  border-radius: 4px;
+  transition: background 0.2s, color 0.2s;
+}
+
+.drag-handle:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.draggable-row:active .drag-handle,
+.draggable-row.dragging .drag-handle {
+  background: #218D8D;
+  color: white;
 }
 
 /* Drill-Down Modal */
