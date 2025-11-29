@@ -710,9 +710,26 @@ function Tasks() {
         !t.email_subject
       );
 
+      // Deduplicate tasks by title + borrower (keep the most recent one)
+      const seen = new Map();
+      const deduplicatedTasks = workflowAndManualTasks.filter(task => {
+        const key = `${task.title}|${task.borrower}|${task.stage}`;
+        if (seen.has(key)) {
+          // Keep the one with the higher ID (more recent)
+          const existing = seen.get(key);
+          if (task.id > existing.id) {
+            seen.set(key, task);
+            return false; // We'll add the newer one, skip this iteration
+          }
+          return false; // Skip duplicate
+        }
+        seen.set(key, task);
+        return true;
+      });
+
       // Tasks page shows ONLY workflow and manual tasks (NO reconciliation items, NO emails)
       // If no real tasks exist, show empty list - NOT mock data with emails
-      setPrioritizedTasks(workflowAndManualTasks);
+      setPrioritizedTasks(deduplicatedTasks);
       setLoanIssues(mockLoanIssues());
       // AI tasks are EMPTY - reconciliation items handled on Reconciliation page only
       setAiTasks({
