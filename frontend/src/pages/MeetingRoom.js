@@ -305,12 +305,18 @@ const MeetingRoom = () => {
           setInviteSuccess(false);
         }, 2000);
       } else {
-        const errorData = await response.json();
-        alert(errorData.detail || 'Failed to send invite');
+        let errorMessage = 'Failed to send invite';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.detail || errorData.message || errorData.error || JSON.stringify(errorData);
+        } catch (parseErr) {
+          errorMessage = `Server error (${response.status})`;
+        }
+        alert(errorMessage);
       }
     } catch (err) {
       console.error('Error sending invite:', err);
-      alert('Failed to send invite. Please try again.');
+      alert('Failed to send invite: ' + (err.message || 'Network error'));
     } finally {
       setInviteSending(false);
     }

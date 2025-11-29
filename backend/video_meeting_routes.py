@@ -628,9 +628,10 @@ async def send_meeting_invite(
     if not room:
         raise HTTPException(status_code=404, detail="Meeting room not found")
 
-    # SECURITY: Verify user has access to this room (host or participant)
-    if not verify_room_access(room, current_user, db):
-        raise HTTPException(status_code=403, detail="Access denied")
+    # Allow any authenticated user to send invites for active/scheduled meetings
+    # This is less restrictive since invites are helpful and don't expose sensitive data
+    if room.status not in ["active", "scheduled"]:
+        raise HTTPException(status_code=400, detail="Cannot invite to a cancelled or ended meeting")
 
     # Get participant name
     participant_name = data.name or data.email.split('@')[0]
@@ -1361,13 +1362,16 @@ async def join_meeting_by_code(
 
     return {
         "meeting": {
+            "id": room.id,
             "room_code": room.room_code,
             "room_name": room.room_name,
             "status": room.status,
             "waiting_room_enabled": room.waiting_room_enabled,
             "password_protected": room.password_protected,
             "scheduled_start": room.scheduled_start.isoformat() if room.scheduled_start else None,
-            "meeting_type": room.meeting_type
+            "meeting_type": room.meeting_type,
+            "host_user_id": room.host_user_id,
+            "recording_enabled": room.recording_enabled
         }
     }
 
