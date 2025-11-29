@@ -906,8 +906,8 @@
   grid-template-columns: 350px 1fr;
   grid-template-rows: 1fr; /* Explicit row sizing */
   gap: 0;
-  height: calc(100vh - 180px);
-  min-height: 500px;
+  height: calc(100vh - 260px); /* Account for top nav, page header, tabs */
+  min-height: 600px;
   background: white;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
@@ -1033,6 +1033,7 @@
   padding: 24px 32px;
   border-bottom: 1px solid #e5e7eb;
   background: white;
+  flex-shrink: 0; /* Prevent header from being cut off */
 }
 
 .detail-title-section {
@@ -1192,6 +1193,7 @@
   border-top: 1px solid #e5e7eb;
   background: #f9fafb;
   flex-wrap: wrap;
+  flex-shrink: 0; /* Prevent footer from being cut off */
 }
 
 .btn-detail-complete {
