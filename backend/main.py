@@ -15124,43 +15124,50 @@ async def approve_reconciliation(
 
                 stage = loan_stage_map.get(stage_upper, LoanStage.PROCESSING)
 
-                # Create new loan with stage=None to bypass SQLAlchemy enum serialization
-                # We'll set the stage via raw SQL to ensure PostgreSQL gets the correct enum name
-                new_loan = Loan(
-                    loan_number=loan_number,
-                    borrower_name=borrower_name,
-                    borrower_email=borrower_email,
-                    borrower_phone=borrower_phone,
-                    coborrower_name=get_val("coborrower_name"),
-                    program=get_val("program"),
-                    amount=float(get_val("amount", 0) or get_val("loan_amount", 0) or 0),
-                    property_address=get_val("property_address"),
-                    property_city=get_val("property_city"),
-                    property_state=get_val("property_state"),
-                    property_zip=get_val("property_zip"),
-                    processor=get_val("processor"),
-                    lender=get_val("lender"),
-                    loan_officer_id=current_user.id,
-                    stage=None  # Explicitly set to None to avoid SQLAlchemy enum issues
-                )
-                db.add(new_loan)
-                logger.info(f"RECONCILIATION DEBUG: Created loan object with stage=None, about to flush")
-                db.flush()  # Get the ID
-                logger.info(f"RECONCILIATION DEBUG: First flush complete, loan ID: {new_loan.id}")
+                # Use raw SQL INSERT to bypass SQLAlchemy enum serialization completely
+                # This ensures we control exactly what gets sent to PostgreSQL
+                amount = float(get_val("amount", 0) or get_val("loan_amount", 0) or 0)
 
-                # Update stage using raw SQL with enum NAME (uppercase)
-                # PostgreSQL enum was created with names like 'PROCESSING', not values like 'Processing'
-                logger.info(f"RECONCILIATION DEBUG: About to execute UPDATE with stage={stage.name}")
-                db.execute(text("UPDATE loans SET stage = :stage WHERE id = :id"),
-                           {"stage": stage.name, "id": new_loan.id})
-                logger.info(f"RECONCILIATION DEBUG: UPDATE executed, about to second flush")
-                db.flush()
+                result = db.execute(
+                    text("""
+                        INSERT INTO loans (
+                            loan_number, borrower_name, borrower_email, borrower_phone,
+                            coborrower_name, program, amount, property_address,
+                            property_city, property_state, property_zip, processor, lender,
+                            loan_officer_id, stage, days_in_stage, sla_status, created_at, updated_at
+                        ) VALUES (
+                            :loan_number, :borrower_name, :borrower_email, :borrower_phone,
+                            :coborrower_name, :program, :amount, :property_address,
+                            :property_city, :property_state, :property_zip, :processor, :lender,
+                            :loan_officer_id, :stage, 0, 'on-track', NOW(), NOW()
+                        ) RETURNING id
+                    """),
+                    {
+                        "loan_number": loan_number,
+                        "borrower_name": borrower_name,
+                        "borrower_email": borrower_email,
+                        "borrower_phone": borrower_phone,
+                        "coborrower_name": get_val("coborrower_name"),
+                        "program": get_val("program"),
+                        "amount": amount,
+                        "property_address": get_val("property_address"),
+                        "property_city": get_val("property_city"),
+                        "property_state": get_val("property_state"),
+                        "property_zip": get_val("property_zip"),
+                        "processor": get_val("processor"),
+                        "lender": get_val("lender"),
+                        "loan_officer_id": current_user.id,
+                        "stage": stage.name  # Use enum NAME (uppercase) for PostgreSQL
+                    }
+                )
+                new_loan_id = result.scalar()
+                logger.info(f"RECONCILIATION DEBUG: Created loan via raw SQL, ID: {new_loan_id}, stage: {stage.name}")
 
                 # Update extracted data to point to new loan
                 extracted.match_entity_type = "loan"
-                extracted.match_entity_id = new_loan.id
+                extracted.match_entity_id = new_loan_id
 
-                logger.info(f"Created new loan {loan_number} (ID: {new_loan.id}) in {stage.name} stage")
+                logger.info(f"Created new loan {loan_number} (ID: {new_loan_id}) in {stage.name} stage")
 
         # Handle status update if requested
         status_updated = False
