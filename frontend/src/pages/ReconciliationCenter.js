@@ -77,12 +77,10 @@ function ReconciliationCenter() {
     // Active Loan Stages
     { value: 'DISCLOSED', label: 'Disclosed', category: 'Active Loan' },
     { value: 'PROCESSING', label: 'Processing', category: 'Active Loan' },
-    { value: 'SUBMITTED', label: 'Submitted', category: 'Active Loan' },
     { value: 'UW_RECEIVED', label: 'Underwriting Received', category: 'Active Loan' },
     { value: 'APPROVED', label: 'Approved', category: 'Active Loan' },
-    { value: 'SUSPENDED', label: 'Suspended', category: 'Active Loan' },
     { value: 'CTC', label: 'Clear to Close', category: 'Active Loan' },
-    { value: 'DOCS', label: 'Docs Out', category: 'Active Loan' },
+    { value: 'SUSPENDED', label: 'Suspended', category: 'Active Loan' },
     { value: 'FUNDED', label: 'Funded', category: 'Active Loan' },
     // MUM / Portfolio Stages
     { value: 'CLOSED', label: 'Closed (Portfolio)', category: 'MUM' },
