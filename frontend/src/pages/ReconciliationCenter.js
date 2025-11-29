@@ -19,6 +19,10 @@ function ReconciliationCenter() {
   const [deletedFields, setDeletedFields] = useState(new Set());
   const [renamedFields, setRenamedFields] = useState({}); // { oldKey: newKey }
   const [editingFieldKey, setEditingFieldKey] = useState(null); // currently editing field key
+  const [showAddFieldForm, setShowAddFieldForm] = useState(false); // show add field form
+  const [newFieldKey, setNewFieldKey] = useState(''); // new field key
+  const [newFieldValue, setNewFieldValue] = useState(''); // new field value
+  const [addedFields, setAddedFields] = useState({}); // { fieldKey: { value, confidence } }
   const [processingAction, setProcessingAction] = useState(false);
   const [syncingEmails, setSyncingEmails] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState(null);
@@ -770,6 +774,44 @@ function ReconciliationCenter() {
     });
   };
 
+  // Handle adding a new field
+  const handleAddField = () => {
+    if (!newFieldKey.trim() || !newFieldValue.trim()) return;
+
+    // Convert field key to snake_case
+    const fieldKey = newFieldKey.toLowerCase().replace(/\s+/g, '_');
+
+    setAddedFields(prev => ({
+      ...prev,
+      [fieldKey]: { value: newFieldValue, confidence: 1.0 }
+    }));
+
+    // Reset form
+    setNewFieldKey('');
+    setNewFieldValue('');
+    setShowAddFieldForm(false);
+  };
+
+  // Handle removing an added field
+  const handleRemoveAddedField = (fieldKey) => {
+    setAddedFields(prev => {
+      const newFields = { ...prev };
+      delete newFields[fieldKey];
+      return newFields;
+    });
+  };
+
+  // Reset field editing state when selecting a new item
+  const resetFieldEditState = () => {
+    setEditedFields({});
+    setDeletedFields(new Set());
+    setRenamedFields({});
+    setAddedFields({});
+    setShowAddFieldForm(false);
+    setNewFieldKey('');
+    setNewFieldValue('');
+  };
+
   // Handle renaming a field key
   const handleFieldRename = (oldKey, newKey) => {
     if (newKey && newKey !== oldKey) {
@@ -833,6 +875,10 @@ function ReconciliationCenter() {
     setDeletedFields(new Set());
     setRenamedFields({});
     setEditingFieldKey(null);
+    setAddedFields({});
+    setShowAddFieldForm(false);
+    setNewFieldKey('');
+    setNewFieldValue('');
     // Reset entity type selection to show AI's suggestion
     setSelectedEntityType(null);
     setCreateNewLoan(false);
@@ -1292,15 +1338,33 @@ function ReconciliationCenter() {
                     </h3>
                     <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
                       <button
+                        onClick={() => { setSelectedEntityType('lead'); setCreateNewLoan(false); }}
+                        style={{
+                          flex: 1,
+                          padding: '12px',
+                          border: selectedEntityType === 'lead' && !createNewLoan ? '2px solid #10b981' : '1px solid #e5e7eb',
+                          borderRadius: '8px',
+                          background: selectedEntityType === 'lead' && !createNewLoan ? '#ecfdf5' : 'white',
+                          cursor: 'pointer',
+                          fontWeight: selectedEntityType === 'lead' && !createNewLoan ? '600' : '400'
+                        }}
+                      >
+                        Lead
+                        <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
+                          {selectedItem.match_entity_type === 'lead' && selectedItem.match_entity_name ?
+                            `Match: ${selectedItem.match_entity_name}` : 'No match found'}
+                        </div>
+                      </button>
+                      <button
                         onClick={() => { setSelectedEntityType('loan'); setCreateNewLoan(false); }}
                         style={{
                           flex: 1,
                           padding: '12px',
-                          border: selectedEntityType === 'loan' ? '2px solid #3b82f6' : '1px solid #e5e7eb',
+                          border: selectedEntityType === 'loan' && !createNewLoan ? '2px solid #3b82f6' : '1px solid #e5e7eb',
                           borderRadius: '8px',
-                          background: selectedEntityType === 'loan' ? '#eff6ff' : 'white',
+                          background: selectedEntityType === 'loan' && !createNewLoan ? '#eff6ff' : 'white',
                           cursor: 'pointer',
-                          fontWeight: selectedEntityType === 'loan' ? '600' : '400'
+                          fontWeight: selectedEntityType === 'loan' && !createNewLoan ? '600' : '400'
                         }}
                       >
                         Active Loan
@@ -1310,20 +1374,20 @@ function ReconciliationCenter() {
                         </div>
                       </button>
                       <button
-                        onClick={() => { setSelectedEntityType('lead'); setCreateNewLoan(false); }}
+                        onClick={() => { setSelectedEntityType('portfolio'); setCreateNewLoan(false); }}
                         style={{
                           flex: 1,
                           padding: '12px',
-                          border: selectedEntityType === 'lead' ? '2px solid #10b981' : '1px solid #e5e7eb',
+                          border: selectedEntityType === 'portfolio' ? '2px solid #f59e0b' : '1px solid #e5e7eb',
                           borderRadius: '8px',
-                          background: selectedEntityType === 'lead' ? '#ecfdf5' : 'white',
+                          background: selectedEntityType === 'portfolio' ? '#fef3c7' : 'white',
                           cursor: 'pointer',
-                          fontWeight: selectedEntityType === 'lead' ? '600' : '400'
+                          fontWeight: selectedEntityType === 'portfolio' ? '600' : '400'
                         }}
                       >
-                        Lead
+                        Portfolio
                         <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
-                          {selectedItem.match_entity_type === 'lead' && selectedItem.match_entity_name ?
+                          {selectedItem.match_entity_type === 'portfolio' && selectedItem.match_entity_name ?
                             `Match: ${selectedItem.match_entity_name}` : 'No match found'}
                         </div>
                       </button>
@@ -1378,36 +1442,322 @@ function ReconciliationCenter() {
                     )}
                   </div>
 
-                  {/* Extracted Fields */}
-                  {selectedItem.fields && Object.keys(selectedItem.fields).length > 0 && (
-                    <div className="extracted-fields-section">
-                      <h3>Extracted Fields</h3>
-                      <div className="fields-grid-recon">
-                        {Object.entries(selectedItem.fields || {}).map(([fieldName, fieldData]) => {
-                          const confidence = fieldData.confidence || 0;
-                          const value = fieldData.value;
+                  {/* Extracted Fields - Editable */}
+                  <div className="extracted-fields-section">
+                    <div className="section-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                      <h3 style={{ margin: 0 }}>Extracted Fields</h3>
+                      <button
+                        onClick={() => setShowAddFieldForm(true)}
+                        style={{
+                          padding: '6px 12px',
+                          fontSize: '12px',
+                          background: '#10b981',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px'
+                        }}
+                      >
+                        + Add Field
+                      </button>
+                    </div>
 
+                    {/* Add Field Form */}
+                    {showAddFieldForm && (
+                      <div className="add-field-form" style={{
+                        background: '#f0fdf4',
+                        border: '1px solid #86efac',
+                        borderRadius: '8px',
+                        padding: '12px',
+                        marginBottom: '12px'
+                      }}>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+                          <div style={{ flex: 1 }}>
+                            <label style={{ display: 'block', fontSize: '11px', color: '#374151', marginBottom: '4px' }}>Field Name</label>
+                            <select
+                              value={newFieldKey}
+                              onChange={(e) => setNewFieldKey(e.target.value)}
+                              style={{
+                                width: '100%',
+                                padding: '8px',
+                                border: '1px solid #d1d5db',
+                                borderRadius: '6px',
+                                fontSize: '13px'
+                              }}
+                            >
+                              <option value="">Select field type...</option>
+                              {fieldTypeOptions.map(opt => (
+                                <option key={opt.value} value={opt.value}>{opt.label}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div style={{ flex: 2 }}>
+                            <label style={{ display: 'block', fontSize: '11px', color: '#374151', marginBottom: '4px' }}>Value</label>
+                            <input
+                              type="text"
+                              value={newFieldValue}
+                              onChange={(e) => setNewFieldValue(e.target.value)}
+                              placeholder="Enter value..."
+                              style={{
+                                width: '100%',
+                                padding: '8px',
+                                border: '1px solid #d1d5db',
+                                borderRadius: '6px',
+                                fontSize: '13px'
+                              }}
+                            />
+                          </div>
+                          <button
+                            onClick={handleAddField}
+                            disabled={!newFieldKey || !newFieldValue}
+                            style={{
+                              padding: '8px 16px',
+                              background: newFieldKey && newFieldValue ? '#10b981' : '#d1d5db',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '6px',
+                              cursor: newFieldKey && newFieldValue ? 'pointer' : 'not-allowed',
+                              fontSize: '13px'
+                            }}
+                          >
+                            Add
+                          </button>
+                          <button
+                            onClick={() => {
+                              setShowAddFieldForm(false);
+                              setNewFieldKey('');
+                              setNewFieldValue('');
+                            }}
+                            style={{
+                              padding: '8px 12px',
+                              background: '#f3f4f6',
+                              color: '#374151',
+                              border: '1px solid #d1d5db',
+                              borderRadius: '6px',
+                              cursor: 'pointer',
+                              fontSize: '13px'
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="fields-grid-recon">
+                      {/* Existing fields */}
+                      {Object.entries(selectedItem.fields || {}).map(([fieldName, fieldData]) => {
+                        const isDeleted = deletedFields.has(fieldName);
+                        const isRenamed = fieldName in renamedFields;
+                        const effectiveKey = getEffectiveFieldKey(fieldName);
+                        const confidence = fieldData.confidence || 0;
+                        const value = fieldData.value;
+                        const isEdited = fieldName in editedFields;
+
+                        if (isDeleted) {
                           return (
-                            <div key={fieldName} className="field-row-recon">
-                              <div className="field-header-recon">
+                            <div key={fieldName} className="field-row-recon deleted" style={{ opacity: 0.5, background: '#fee2e2', borderRadius: '6px' }}>
+                              <div className="field-header-recon" style={{ textDecoration: 'line-through' }}>
                                 <span className="field-name">{formatFieldName(fieldName)}</span>
-                                <span
-                                  className="field-confidence-badge"
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{ color: '#991b1b', fontSize: '12px' }}>Deleted</span>
+                                <button
+                                  onClick={() => handleFieldRestore(fieldName)}
                                   style={{
-                                    backgroundColor: confidence > 0.8 ? '#10b981' : confidence > 0.6 ? '#f59e0b' : '#ef4444',
-                                    color: 'white'
+                                    padding: '4px 8px',
+                                    fontSize: '11px',
+                                    background: '#f3f4f6',
+                                    border: '1px solid #d1d5db',
+                                    borderRadius: '4px',
+                                    cursor: 'pointer'
                                   }}
                                 >
-                                  {Math.round(confidence * 100)}%
-                                </span>
+                                  Restore
+                                </button>
                               </div>
-                              <div className="field-value-display">{value || 'N/A'}</div>
                             </div>
                           );
-                        })}
-                      </div>
+                        }
+
+                        return (
+                          <div key={fieldName} className={`field-row-recon ${isRenamed ? 'renamed' : ''}`}>
+                            <div className="field-header-recon" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              {editingFieldKey === fieldName ? (
+                                <select
+                                  value={effectiveKey}
+                                  onChange={(e) => handleFieldRename(fieldName, e.target.value)}
+                                  onBlur={() => setEditingFieldKey(null)}
+                                  autoFocus
+                                  style={{
+                                    padding: '4px 8px',
+                                    fontSize: '12px',
+                                    borderRadius: '4px',
+                                    border: '1px solid #3b82f6',
+                                    minWidth: '140px'
+                                  }}
+                                >
+                                  <option value={fieldName}>{formatFieldName(fieldName)}</option>
+                                  {fieldTypeOptions
+                                    .filter(opt => opt.value !== fieldName)
+                                    .map(opt => (
+                                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                    ))}
+                                </select>
+                              ) : (
+                                <span
+                                  className="field-name"
+                                  onClick={() => setEditingFieldKey(fieldName)}
+                                  style={{ cursor: 'pointer', borderBottom: '1px dashed #9ca3af' }}
+                                  title="Click to change field type"
+                                >
+                                  {formatFieldName(effectiveKey)}
+                                </span>
+                              )}
+                              {isRenamed && (
+                                <span style={{
+                                  fontSize: '10px',
+                                  color: '#2563eb',
+                                  background: '#dbeafe',
+                                  padding: '2px 6px',
+                                  borderRadius: '4px'
+                                }}>
+                                  was: {formatFieldName(fieldName)}
+                                  <button
+                                    onClick={() => handleFieldRenameUndo(fieldName)}
+                                    style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '10px', marginLeft: '4px' }}
+                                  >×</button>
+                                </span>
+                              )}
+                              <span
+                                className="field-confidence-badge"
+                                style={{
+                                  backgroundColor: confidence > 0.8 ? '#10b981' : confidence > 0.6 ? '#f59e0b' : '#ef4444',
+                                  color: 'white',
+                                  marginLeft: 'auto'
+                                }}
+                              >
+                                {Math.round(confidence * 100)}%
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <input
+                                type="text"
+                                className={`field-value-input ${isEdited ? 'edited' : ''}`}
+                                value={isEdited ? editedFields[fieldName] : value || ''}
+                                onChange={(e) => handleFieldEdit(fieldName, e.target.value)}
+                                style={{
+                                  flex: 1,
+                                  padding: '8px 10px',
+                                  border: isEdited ? '2px solid #3b82f6' : '1px solid #e5e7eb',
+                                  borderRadius: '6px',
+                                  fontSize: '14px',
+                                  background: isEdited ? '#eff6ff' : 'white'
+                                }}
+                              />
+                              <button
+                                onClick={() => handleFieldDelete(fieldName)}
+                                style={{
+                                  padding: '6px 10px',
+                                  background: '#fef2f2',
+                                  border: '1px solid #fecaca',
+                                  borderRadius: '4px',
+                                  cursor: 'pointer',
+                                  color: '#dc2626',
+                                  fontSize: '14px'
+                                }}
+                                title="Delete field"
+                              >
+                                🗑️
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {/* Added fields */}
+                      {Object.entries(addedFields).map(([fieldKey, fieldData]) => (
+                        <div key={`added-${fieldKey}`} className="field-row-recon added" style={{ background: '#f0fdf4', borderRadius: '6px' }}>
+                          <div className="field-header-recon" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span className="field-name">{formatFieldName(fieldKey)}</span>
+                            <span style={{
+                              fontSize: '10px',
+                              color: '#166534',
+                              background: '#dcfce7',
+                              padding: '2px 6px',
+                              borderRadius: '4px'
+                            }}>
+                              NEW
+                            </span>
+                            <span
+                              className="field-confidence-badge"
+                              style={{ backgroundColor: '#10b981', color: 'white', marginLeft: 'auto' }}
+                            >
+                              100%
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <input
+                              type="text"
+                              value={fieldData.value}
+                              onChange={(e) => setAddedFields(prev => ({
+                                ...prev,
+                                [fieldKey]: { ...prev[fieldKey], value: e.target.value }
+                              }))}
+                              style={{
+                                flex: 1,
+                                padding: '8px 10px',
+                                border: '2px solid #10b981',
+                                borderRadius: '6px',
+                                fontSize: '14px',
+                                background: '#f0fdf4'
+                              }}
+                            />
+                            <button
+                              onClick={() => handleRemoveAddedField(fieldKey)}
+                              style={{
+                                padding: '6px 10px',
+                                background: '#fef2f2',
+                                border: '1px solid #fecaca',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                color: '#dc2626',
+                                fontSize: '14px'
+                              }}
+                              title="Remove field"
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  )}
+
+                    {/* Changes summary */}
+                    {(Object.keys(editedFields).length > 0 || deletedFields.size > 0 || Object.keys(renamedFields).length > 0 || Object.keys(addedFields).length > 0) && (
+                      <div style={{
+                        marginTop: '12px',
+                        padding: '10px',
+                        background: '#fef3c7',
+                        border: '1px solid #fcd34d',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        color: '#92400e'
+                      }}>
+                        <strong>Changes:</strong>{' '}
+                        {Object.keys(addedFields).length > 0 && `${Object.keys(addedFields).length} added`}
+                        {Object.keys(addedFields).length > 0 && (Object.keys(editedFields).length > 0 || deletedFields.size > 0 || Object.keys(renamedFields).length > 0) && ', '}
+                        {Object.keys(editedFields).length > 0 && `${Object.keys(editedFields).length} edited`}
+                        {Object.keys(editedFields).length > 0 && (deletedFields.size > 0 || Object.keys(renamedFields).length > 0) && ', '}
+                        {deletedFields.size > 0 && `${deletedFields.size} deleted`}
+                        {deletedFields.size > 0 && Object.keys(renamedFields).length > 0 && ', '}
+                        {Object.keys(renamedFields).length > 0 && `${Object.keys(renamedFields).length} renamed`}
+                      </div>
+                    )}
+                  </div>
 
                   {/* Email Body */}
                   <div className="email-details-section">
@@ -2084,42 +2434,60 @@ function ReconciliationCenter() {
                   {/* Entity Type Selection Section */}
                   <div className="entity-type-selection" style={{ marginBottom: '20px', padding: '15px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
                     <h3 style={{ margin: '0 0 15px 0', fontSize: '14px', fontWeight: '600', color: '#374151' }}>
-                      🎯 Where should this data go?
+                      Where should this data go?
                     </h3>
                     <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+                      <button
+                        onClick={() => { setSelectedEntityType('lead'); setCreateNewLoan(false); }}
+                        style={{
+                          flex: 1,
+                          padding: '12px',
+                          border: selectedEntityType === 'lead' && !createNewLoan ? '2px solid #10b981' : '1px solid #e5e7eb',
+                          borderRadius: '8px',
+                          background: selectedEntityType === 'lead' && !createNewLoan ? '#ecfdf5' : 'white',
+                          cursor: 'pointer',
+                          fontWeight: selectedEntityType === 'lead' && !createNewLoan ? '600' : '400'
+                        }}
+                      >
+                        Lead
+                        <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
+                          {selectedItem.match_entity_type === 'lead' && selectedItem.match_entity_name ?
+                            `Match: ${selectedItem.match_entity_name}` : 'No match found'}
+                        </div>
+                      </button>
                       <button
                         onClick={() => { setSelectedEntityType('loan'); setCreateNewLoan(false); }}
                         style={{
                           flex: 1,
                           padding: '12px',
-                          border: selectedEntityType === 'loan' ? '2px solid #3b82f6' : '1px solid #e5e7eb',
+                          border: selectedEntityType === 'loan' && !createNewLoan ? '2px solid #3b82f6' : '1px solid #e5e7eb',
                           borderRadius: '8px',
-                          background: selectedEntityType === 'loan' ? '#eff6ff' : 'white',
+                          background: selectedEntityType === 'loan' && !createNewLoan ? '#eff6ff' : 'white',
                           cursor: 'pointer',
-                          fontWeight: selectedEntityType === 'loan' ? '600' : '400'
+                          fontWeight: selectedEntityType === 'loan' && !createNewLoan ? '600' : '400'
                         }}
                       >
-                        📋 Active Loan
+                        Active Loan
                         <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
                           {selectedItem.match_entity_type === 'loan' && selectedItem.match_entity_name ?
                             `Match: ${selectedItem.match_entity_name}` : 'No match found'}
                         </div>
                       </button>
                       <button
-                        onClick={() => { setSelectedEntityType('lead'); setCreateNewLoan(false); }}
+                        onClick={() => { setSelectedEntityType('portfolio'); setCreateNewLoan(false); }}
                         style={{
                           flex: 1,
                           padding: '12px',
-                          border: selectedEntityType === 'lead' ? '2px solid #10b981' : '1px solid #e5e7eb',
+                          border: selectedEntityType === 'portfolio' ? '2px solid #f59e0b' : '1px solid #e5e7eb',
                           borderRadius: '8px',
-                          background: selectedEntityType === 'lead' ? '#ecfdf5' : 'white',
+                          background: selectedEntityType === 'portfolio' ? '#fef3c7' : 'white',
                           cursor: 'pointer',
-                          fontWeight: selectedEntityType === 'lead' ? '600' : '400'
+                          fontWeight: selectedEntityType === 'portfolio' ? '600' : '400'
                         }}
                       >
-                        👤 Lead
+                        Portfolio
                         <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
-                          {selectedItem.match_entity_type === 'lead' && selectedItem.match_entity_name ?
+                          {selectedItem.match_entity_type === 'portfolio' && selectedItem.match_entity_name ?
                             `Match: ${selectedItem.match_entity_name}` : 'No match found'}
                         </div>
                       </button>
@@ -2135,7 +2503,7 @@ function ReconciliationCenter() {
                           fontWeight: createNewLoan ? '600' : '400'
                         }}
                       >
-                        ➕ Create New Loan
+                        + Create New Loan
                         <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
                           {selectedItem.fields?.loan_number?.value || 'Add to pipeline'}
                         </div>
