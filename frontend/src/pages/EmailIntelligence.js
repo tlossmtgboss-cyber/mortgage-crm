@@ -32,6 +32,10 @@ function EmailIntelligence() {
   const [slaItems, setSlaItems] = useState([]);
   const [slaTotal, setSlaTotal] = useState(0);
 
+  // All documents state (global view)
+  const [allDocuments, setAllDocuments] = useState([]);
+  const [allDocumentsTotal, setAllDocumentsTotal] = useState(0);
+
   // Stats
   const [stats, setStats] = useState({});
 
@@ -83,6 +87,9 @@ function EmailIntelligence() {
           break;
         case 'documents':
           await loadDocuments();
+          break;
+        case 'all-documents':
+          await loadAllDocuments();
           break;
         case 'sla':
           await loadSlaItems();
@@ -186,6 +193,22 @@ function EmailIntelligence() {
     }
   };
 
+  const loadAllDocuments = async () => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/email-intelligence/document-tracking/all?limit=100`,
+        { headers: getAuthHeaders() }
+      );
+      if (response.ok) {
+        const data = await response.json();
+        setAllDocuments(data.documents || []);
+        setAllDocumentsTotal(data.total || 0);
+      }
+    } catch (error) {
+      console.error('Error loading all documents:', error);
+    }
+  };
+
   const handleViewEmail = (email) => {
     setSelectedEmail(email);
     setShowDetailModal(true);
@@ -286,21 +309,43 @@ function EmailIntelligence() {
         <p className="subtitle">AI-powered email analysis, conversation tracking, and document management</p>
       </div>
 
-      {/* Stats Summary */}
+      {/* Stats Summary - Clickable cards */}
       <div className="stats-grid">
-        <div className="stat-card">
+        <div
+          className="stat-card clickable"
+          onClick={() => {
+            setQueueFilters({ ...queueFilters, status: 'pending' });
+            setActiveTab('queue');
+          }}
+          title="Click to view pending emails"
+        >
           <div className="stat-value">{stats.pending_count || 0}</div>
           <div className="stat-label">Pending Emails</div>
         </div>
-        <div className="stat-card">
+        <div
+          className="stat-card clickable"
+          onClick={() => {
+            setQueueFilters({ ...queueFilters, status: 'processed' });
+            setActiveTab('queue');
+          }}
+          title="Click to view processed emails"
+        >
           <div className="stat-value">{stats.processed_count || 0}</div>
           <div className="stat-label">Processed</div>
         </div>
-        <div className="stat-card">
+        <div
+          className="stat-card clickable"
+          onClick={() => setActiveTab('conversations')}
+          title="Click to view conversation logs"
+        >
           <div className="stat-value">{stats.conversation_logs_created || 0}</div>
           <div className="stat-label">Conversations</div>
         </div>
-        <div className="stat-card">
+        <div
+          className="stat-card clickable"
+          onClick={() => setActiveTab('all-documents')}
+          title="Click to view all received documents"
+        >
           <div className="stat-value">{stats.documents_received || 0}</div>
           <div className="stat-label">Docs Received</div>
         </div>
@@ -331,6 +376,12 @@ function EmailIntelligence() {
           onClick={() => setActiveTab('sla')}
         >
           SLA Tracking
+        </button>
+        <button
+          className={`tab-button ${activeTab === 'all-documents' ? 'active' : ''}`}
+          onClick={() => setActiveTab('all-documents')}
+        >
+          All Documents ({stats.documents_received || 0})
         </button>
       </div>
 

@@ -11118,6 +11118,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Email Intelligence routes not loaded: {e}")
 
+# Include SMS Intelligence routes
+try:
+    from routes.sms_intelligence_routes import router as sms_intelligence_router
+    app.include_router(sms_intelligence_router, tags=["SMS Intelligence"])
+    logger.info("✅ SMS Intelligence routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ SMS Intelligence routes not loaded: {e}")
+
 # Include SLA Tracking routes
 try:
     from routes.sla_tracking_routes import router as sla_tracking_router
