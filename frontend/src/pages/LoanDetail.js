@@ -748,13 +748,20 @@ function LoanDetail() {
 
           <div className="loan-field">
             <label>Interest Rate</label>
-            <input
-              type="number"
-              step="0.001"
-              value={formData.rate || ''}
-              onChange={(e) => handleFieldChange('rate', parseFloat(e.target.value))}
-              placeholder="%"
-            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <input
+                type="number"
+                step="0.001"
+                value={formData.rate ? (formData.rate * 100).toFixed(3).replace(/\.?0+$/, '') : ''}
+                onChange={(e) => {
+                  const percentValue = parseFloat(e.target.value);
+                  handleFieldChange('rate', isNaN(percentValue) ? null : percentValue / 100);
+                }}
+                placeholder="e.g. 5.625"
+                style={{ flex: 1 }}
+              />
+              <span style={{ color: '#6b7280', fontWeight: '500' }}>%</span>
+            </div>
           </div>
 
           <div className="loan-field">
@@ -796,13 +803,20 @@ function LoanDetail() {
 
           <div className="loan-field">
             <label>APR</label>
-            <input
-              type="number"
-              step="0.001"
-              value={formData.apr || ''}
-              onChange={(e) => handleFieldChange('apr', parseFloat(e.target.value))}
-              placeholder="%"
-            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <input
+                type="number"
+                step="0.001"
+                value={formData.apr ? (formData.apr * 100).toFixed(3).replace(/\.?0+$/, '') : ''}
+                onChange={(e) => {
+                  const percentValue = parseFloat(e.target.value);
+                  handleFieldChange('apr', isNaN(percentValue) ? null : percentValue / 100);
+                }}
+                placeholder="e.g. 5.875"
+                style={{ flex: 1 }}
+              />
+              <span style={{ color: '#6b7280', fontWeight: '500' }}>%</span>
+            </div>
           </div>
 
           <div className="loan-field">

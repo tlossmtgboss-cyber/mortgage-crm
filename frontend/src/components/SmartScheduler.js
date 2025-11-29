@@ -8,7 +8,7 @@ const API_BASE = isProduction
   : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
 const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType }) => {
-  const [view, setView] = useState('calendar'); // calendar, types, booking-links, settings
+  const [view, setView] = useState('calendar'); // calendar, types, booking-links, settings, tutorial
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -41,6 +41,11 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
   const [showNewTypeModal, setShowNewTypeModal] = useState(false);
   const [showNewLinkModal, setShowNewLinkModal] = useState(false);
   const [editingType, setEditingType] = useState(null);
+
+  // Settings sub-tab state
+  const [settingsTab, setSettingsTab] = useState('working-hours'); // working-hours, booking, ai
+  const [editableConfig, setEditableConfig] = useState(null);
+  const [savingSettings, setSavingSettings] = useState(false);
 
   // New link form state
   const [linkForm, setLinkForm] = useState({
@@ -91,7 +96,10 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
 
       if (configRes.ok) {
         const configData = await configRes.json();
-        setConfig(configData.config || configData.defaults);
+        const loadedConfig = configData.config || configData.defaults;
+        setConfig(loadedConfig);
+        // Initialize editable config with current values
+        setEditableConfig(JSON.parse(JSON.stringify(loadedConfig)));
       }
 
       if (typesRes.ok) {
@@ -343,6 +351,56 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
     });
   };
 
+  // Save settings to backend
+  const handleSaveSettings = async () => {
+    if (!editableConfig) return;
+
+    setSavingSettings(true);
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/scheduler/config`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(editableConfig)
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setConfig(data.config || editableConfig);
+        alert('Settings saved successfully!');
+      } else {
+        const err = await response.json();
+        alert(`Failed to save: ${err.detail}`);
+      }
+    } catch (err) {
+      console.error('Save settings error:', err);
+      alert('Failed to save settings');
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
+  // Update working hours for a specific day
+  const updateWorkingHours = (day, field, value) => {
+    setEditableConfig(prev => ({
+      ...prev,
+      working_hours: {
+        ...prev.working_hours,
+        [day]: {
+          ...prev.working_hours[day],
+          [field]: value
+        }
+      }
+    }));
+  };
+
+  // Update a general config field
+  const updateConfigField = (field, value) => {
+    setEditableConfig(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
   // Calendar helpers
   const getDaysInMonth = (date) => {
     const year = date.getFullYear();
@@ -585,67 +643,278 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
     </div>
   );
 
-  // Render settings view
-  const renderSettingsView = () => (
-    <div className="scheduler-settings-view">
-      <h3>Scheduler Settings</h3>
+  // Generate time options for select dropdowns (5:00 AM to 10:00 PM)
+  const timeOptions = [];
+  for (let h = 5; h <= 22; h++) {
+    for (let m = 0; m < 60; m += 30) {
+      const hour = h.toString().padStart(2, '0');
+      const minute = m.toString().padStart(2, '0');
+      const time24 = `${hour}:${minute}`;
+      const hour12 = h > 12 ? h - 12 : (h === 0 ? 12 : h);
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      const label = `${hour12}:${minute.padStart(2, '0')} ${ampm}`;
+      timeOptions.push({ value: time24, label });
+    }
+  }
 
-      {config ? (
-        <div className="settings-form">
-          <div className="setting-group">
-            <h4>Working Hours</h4>
-            <div className="working-hours-grid">
-              {Object.entries(config.working_hours || {}).map(([day, hours]) => (
-                <div key={day} className={`day-hours ${hours.enabled ? 'enabled' : 'disabled'}`}>
-                  <span className="day-name">{day.charAt(0).toUpperCase() + day.slice(1)}</span>
-                  <span className="hours">
-                    {hours.enabled ? `${hours.start} - ${hours.end}` : 'Off'}
-                  </span>
+  // Render working hours tab content
+  const renderWorkingHoursTab = () => {
+    const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const dayLabels = {
+      sunday: 'Sunday',
+      monday: 'Monday',
+      tuesday: 'Tuesday',
+      wednesday: 'Wednesday',
+      thursday: 'Thursday',
+      friday: 'Friday',
+      saturday: 'Saturday'
+    };
+
+    return (
+      <div className="settings-tab-content">
+        <p className="settings-description">Configure which days and hours you're available for appointments.</p>
+        <div className="working-hours-editor">
+          {days.map(day => {
+            const hours = editableConfig?.working_hours?.[day] || { enabled: false, start: '09:00', end: '17:00' };
+            return (
+              <div key={day} className={`day-row ${hours.enabled ? 'enabled' : 'disabled'}`}>
+                <div className="day-toggle">
+                  <label className="toggle-switch">
+                    <input
+                      type="checkbox"
+                      checked={hours.enabled}
+                      onChange={(e) => updateWorkingHours(day, 'enabled', e.target.checked)}
+                    />
+                    <span className="toggle-slider"></span>
+                  </label>
+                  <span className="day-label">{dayLabels[day]}</span>
                 </div>
-              ))}
-            </div>
+                {hours.enabled ? (
+                  <div className="time-range">
+                    <select
+                      value={hours.start}
+                      onChange={(e) => updateWorkingHours(day, 'start', e.target.value)}
+                    >
+                      {timeOptions.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                    <span className="time-separator">to</span>
+                    <select
+                      value={hours.end}
+                      onChange={(e) => updateWorkingHours(day, 'end', e.target.value)}
+                    >
+                      {timeOptions.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="time-range-off">
+                    <span>Unavailable</span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  // Render booking settings tab content
+  const renderBookingTab = () => (
+    <div className="settings-tab-content">
+      <p className="settings-description">Configure default booking behavior and limits.</p>
+      <div className="booking-settings-form">
+        <div className="form-group">
+          <label>Default Duration</label>
+          <select
+            value={editableConfig?.default_duration_minutes || 30}
+            onChange={(e) => updateConfigField('default_duration_minutes', parseInt(e.target.value))}
+          >
+            <option value={15}>15 minutes</option>
+            <option value={20}>20 minutes</option>
+            <option value={30}>30 minutes</option>
+            <option value={45}>45 minutes</option>
+            <option value={60}>60 minutes</option>
+            <option value={90}>90 minutes</option>
+          </select>
+        </div>
+
+        <div className="form-row">
+          <div className="form-group">
+            <label>Buffer Before (minutes)</label>
+            <input
+              type="number"
+              value={editableConfig?.buffer_before_minutes || 0}
+              onChange={(e) => updateConfigField('buffer_before_minutes', parseInt(e.target.value) || 0)}
+              min="0"
+              max="60"
+            />
+            <span className="help-text">Time before appointments for preparation</span>
           </div>
 
-          <div className="setting-group">
-            <h4>Booking Settings</h4>
-            <div className="settings-grid">
-              <div className="setting-item">
-                <label>Default Duration</label>
-                <span>{config.default_duration_minutes} minutes</span>
-              </div>
-              <div className="setting-item">
-                <label>Buffer Before</label>
-                <span>{config.buffer_before_minutes} minutes</span>
-              </div>
-              <div className="setting-item">
-                <label>Buffer After</label>
-                <span>{config.buffer_after_minutes} minutes</span>
-              </div>
-              <div className="setting-item">
-                <label>Min Notice</label>
-                <span>{config.min_notice_hours} hours</span>
-              </div>
-              <div className="setting-item">
-                <label>Max Advance</label>
-                <span>{config.max_advance_days} days</span>
-              </div>
-              <div className="setting-item">
-                <label>Max Per Day</label>
-                <span>{config.max_meetings_per_day} meetings</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="setting-group">
-            <h4>AI Settings</h4>
-            <div className="ai-setting">
-              <span>AI Scheduling</span>
-              <span className={`status ${config.ai_scheduling_enabled ? 'enabled' : 'disabled'}`}>
-                {config.ai_scheduling_enabled ? 'Enabled' : 'Disabled'}
-              </span>
-            </div>
+          <div className="form-group">
+            <label>Buffer After (minutes)</label>
+            <input
+              type="number"
+              value={editableConfig?.buffer_after_minutes || 0}
+              onChange={(e) => updateConfigField('buffer_after_minutes', parseInt(e.target.value) || 0)}
+              min="0"
+              max="60"
+            />
+            <span className="help-text">Time after appointments for follow-up</span>
           </div>
         </div>
+
+        <div className="form-row">
+          <div className="form-group">
+            <label>Minimum Notice (hours)</label>
+            <input
+              type="number"
+              value={editableConfig?.min_notice_hours || 1}
+              onChange={(e) => updateConfigField('min_notice_hours', parseInt(e.target.value) || 1)}
+              min="1"
+              max="168"
+            />
+            <span className="help-text">How far in advance clients must book</span>
+          </div>
+
+          <div className="form-group">
+            <label>Max Advance Booking (days)</label>
+            <input
+              type="number"
+              value={editableConfig?.max_advance_days || 30}
+              onChange={(e) => updateConfigField('max_advance_days', parseInt(e.target.value) || 30)}
+              min="1"
+              max="365"
+            />
+            <span className="help-text">How far in the future clients can book</span>
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label>Max Meetings Per Day</label>
+          <input
+            type="number"
+            value={editableConfig?.max_meetings_per_day || 8}
+            onChange={(e) => updateConfigField('max_meetings_per_day', parseInt(e.target.value) || 8)}
+            min="1"
+            max="20"
+          />
+          <span className="help-text">Maximum number of appointments per day</span>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Render AI settings tab content
+  const renderAITab = () => (
+    <div className="settings-tab-content">
+      <p className="settings-description">Configure AI-powered scheduling features.</p>
+      <div className="ai-settings-form">
+        <div className="form-group checkbox-group">
+          <label className="toggle-label">
+            <label className="toggle-switch">
+              <input
+                type="checkbox"
+                checked={editableConfig?.ai_scheduling_enabled || false}
+                onChange={(e) => updateConfigField('ai_scheduling_enabled', e.target.checked)}
+              />
+              <span className="toggle-slider"></span>
+            </label>
+            <div className="toggle-info">
+              <span className="toggle-title">AI Smart Scheduling</span>
+              <span className="toggle-description">Let AI suggest optimal meeting times based on your patterns and client preferences</span>
+            </div>
+          </label>
+        </div>
+
+        <div className="form-group checkbox-group">
+          <label className="toggle-label">
+            <label className="toggle-switch">
+              <input
+                type="checkbox"
+                checked={editableConfig?.auto_reschedule_enabled || false}
+                onChange={(e) => updateConfigField('auto_reschedule_enabled', e.target.checked)}
+              />
+              <span className="toggle-slider"></span>
+            </label>
+            <div className="toggle-info">
+              <span className="toggle-title">Auto-Reschedule Suggestions</span>
+              <span className="toggle-description">Automatically suggest better times when conflicts arise</span>
+            </div>
+          </label>
+        </div>
+
+        <div className="form-group checkbox-group">
+          <label className="toggle-label">
+            <label className="toggle-switch">
+              <input
+                type="checkbox"
+                checked={editableConfig?.smart_reminders_enabled || false}
+                onChange={(e) => updateConfigField('smart_reminders_enabled', e.target.checked)}
+              />
+              <span className="toggle-slider"></span>
+            </label>
+            <div className="toggle-info">
+              <span className="toggle-title">Smart Reminders</span>
+              <span className="toggle-description">AI-optimized reminder timing based on client engagement</span>
+            </div>
+          </label>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Render settings view with sub-tabs
+  const renderSettingsView = () => (
+    <div className="scheduler-settings-view">
+      {editableConfig ? (
+        <>
+          <div className="settings-sub-tabs">
+            <button
+              className={`sub-tab ${settingsTab === 'working-hours' ? 'active' : ''}`}
+              onClick={() => setSettingsTab('working-hours')}
+            >
+              Working Hours
+            </button>
+            <button
+              className={`sub-tab ${settingsTab === 'booking' ? 'active' : ''}`}
+              onClick={() => setSettingsTab('booking')}
+            >
+              Booking Settings
+            </button>
+            <button
+              className={`sub-tab ${settingsTab === 'ai' ? 'active' : ''}`}
+              onClick={() => setSettingsTab('ai')}
+            >
+              AI Settings
+            </button>
+          </div>
+
+          {settingsTab === 'working-hours' && renderWorkingHoursTab()}
+          {settingsTab === 'booking' && renderBookingTab()}
+          {settingsTab === 'ai' && renderAITab()}
+
+          <div className="settings-actions">
+            <button
+              className="save-settings-btn"
+              onClick={handleSaveSettings}
+              disabled={savingSettings}
+            >
+              {savingSettings ? 'Saving...' : 'Save Settings'}
+            </button>
+            <button
+              className="reset-settings-btn"
+              onClick={() => setEditableConfig(JSON.parse(JSON.stringify(config)))}
+              disabled={savingSettings}
+            >
+              Reset Changes
+            </button>
+          </div>
+        </>
       ) : (
         <div className="empty-state">
           <p>No configuration found</p>
@@ -1078,6 +1347,197 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
     );
   };
 
+  // Render Tutorial View
+  const renderTutorialView = () => (
+    <div className="scheduler-tutorial-view">
+      <div className="tutorial-header">
+        <h3>Smart Scheduler Tutorial</h3>
+        <p className="tutorial-intro">Learn how to maximize productivity with our AI-powered scheduling system</p>
+      </div>
+
+      <div className="tutorial-sections">
+        {/* Quick Start */}
+        <div className="tutorial-section">
+          <div className="section-icon">🚀</div>
+          <h4>Quick Start Guide</h4>
+          <div className="section-content">
+            <ol>
+              <li><strong>Create Appointment Types:</strong> Go to "Appointment Types" tab and click "Seed Defaults" to create standard mortgage appointment types (Discovery Call, Pre-Approval Review, Document Collection, etc.)</li>
+              <li><strong>Set Your Hours:</strong> Navigate to "Settings" tab and configure your working hours for each day of the week</li>
+              <li><strong>Book Appointments:</strong> Click on any date in the Calendar view and select "+ New Appointment" to schedule a meeting</li>
+              <li><strong>Share Booking Links:</strong> Create public booking links in the "Booking Links" tab that clients can use to self-schedule</li>
+            </ol>
+          </div>
+        </div>
+
+        {/* Calendar Features */}
+        <div className="tutorial-section">
+          <div className="section-icon">📅</div>
+          <h4>Calendar Features</h4>
+          <div className="section-content">
+            <ul>
+              <li><strong>Month Navigation:</strong> Use the arrow buttons to move between months</li>
+              <li><strong>Day Selection:</strong> Click on any date to see appointments for that day</li>
+              <li><strong>Appointment Dots:</strong> Blue dots indicate days with scheduled appointments</li>
+              <li><strong>Today Indicator:</strong> The current date is highlighted with a red circle</li>
+              <li><strong>Quick Actions:</strong> Join video calls directly or cancel appointments from the day view</li>
+            </ul>
+          </div>
+        </div>
+
+        {/* Appointment Types */}
+        <div className="tutorial-section">
+          <div className="section-icon">📋</div>
+          <h4>Appointment Types</h4>
+          <div className="section-content">
+            <p>Customize appointment types for different meeting purposes:</p>
+            <ul>
+              <li><strong>Discovery Call:</strong> Initial consultation with new leads (15-30 min)</li>
+              <li><strong>Pre-Approval Review:</strong> Review pre-approval documents and terms (30-45 min)</li>
+              <li><strong>Document Collection:</strong> Gather required mortgage documents (30-60 min)</li>
+              <li><strong>Rate Lock Discussion:</strong> Review market conditions and lock options (20-30 min)</li>
+              <li><strong>Closing Prep:</strong> Final walkthrough before closing (45-60 min)</li>
+            </ul>
+            <p className="tip">Tip: Click on any appointment type card to edit its settings, durations, and colors.</p>
+          </div>
+        </div>
+
+        {/* Booking Links */}
+        <div className="tutorial-section">
+          <div className="section-icon">🔗</div>
+          <h4>Booking Links</h4>
+          <div className="section-content">
+            <p>Create shareable links for clients to book directly:</p>
+            <ul>
+              <li><strong>Custom URL Slugs:</strong> Create memorable URLs like /book/john-smith</li>
+              <li><strong>Type Filtering:</strong> Limit which appointment types are available on each link</li>
+              <li><strong>Analytics:</strong> Track views and bookings for each link</li>
+              <li><strong>Easy Sharing:</strong> Copy links with one click to share via email or text</li>
+            </ul>
+          </div>
+        </div>
+
+        {/* AI Features */}
+        <div className="tutorial-section highlight">
+          <div className="section-icon">🤖</div>
+          <h4>AI-Powered Features</h4>
+          <div className="section-content">
+            <p>The Smart Scheduler includes advanced AI capabilities:</p>
+            <ul>
+              <li><strong>Smart Scheduling:</strong> AI suggests optimal meeting times based on your patterns and client preferences</li>
+              <li><strong>Auto-Reschedule:</strong> Automatically suggests better times when conflicts arise</li>
+              <li><strong>Smart Reminders:</strong> AI-optimized reminder timing based on client engagement history</li>
+              <li><strong>No-Show Detection:</strong> Automatically detects missed appointments and initiates recovery workflows</li>
+              <li><strong>Load Balancing:</strong> Distributes appointments evenly across team members based on capacity</li>
+            </ul>
+            <p className="tip">Enable AI features in Settings → AI Settings tab</p>
+          </div>
+        </div>
+
+        {/* Resource Management */}
+        <div className="tutorial-section">
+          <div className="section-icon">👥</div>
+          <h4>Resource Management (Teams)</h4>
+          <div className="section-content">
+            <p>For organizations with multiple loan officers:</p>
+            <ul>
+              <li><strong>Staff Profiles:</strong> Configure skills, languages, and licensed states for each team member</li>
+              <li><strong>Capacity Management:</strong> Set daily appointment limits per person</li>
+              <li><strong>Smart Routing:</strong> Automatically route appointments to available team members</li>
+              <li><strong>SLA Monitoring:</strong> Track team utilization and response times</li>
+            </ul>
+          </div>
+        </div>
+
+        {/* Soft Holds */}
+        <div className="tutorial-section">
+          <div className="section-icon">⏳</div>
+          <h4>Soft Hold System</h4>
+          <div className="section-content">
+            <p>Prevent double-booking during AI conversations:</p>
+            <ul>
+              <li><strong>Temporary Holds:</strong> When AI is discussing appointment times with a client, slots are temporarily reserved</li>
+              <li><strong>Auto-Release:</strong> Holds automatically expire after 5 minutes if not confirmed</li>
+              <li><strong>Convert to Booking:</strong> Once the client confirms, the hold converts to a real appointment</li>
+            </ul>
+          </div>
+        </div>
+
+        {/* Group Sessions */}
+        <div className="tutorial-section">
+          <div className="section-icon">🎓</div>
+          <h4>Group Sessions & Workshops</h4>
+          <div className="section-content">
+            <p>Host educational sessions for multiple attendees:</p>
+            <ul>
+              <li><strong>First-Time Homebuyer Workshops:</strong> Educational seminars with capacity limits</li>
+              <li><strong>Rate Watch Webinars:</strong> Group sessions on market conditions</li>
+              <li><strong>Waitlist Management:</strong> Automatically manage overflow registrations</li>
+              <li><strong>Virtual/In-Person:</strong> Support for both meeting formats</li>
+            </ul>
+          </div>
+        </div>
+
+        {/* Campaign Tracking */}
+        <div className="tutorial-section">
+          <div className="section-icon">📊</div>
+          <h4>Campaign Attribution</h4>
+          <div className="section-content">
+            <p>Track the effectiveness of your outreach:</p>
+            <ul>
+              <li><strong>Voicemail Drops:</strong> Track appointments booked from voicemail campaigns</li>
+              <li><strong>SMS Campaigns:</strong> Measure reply-to-booking conversion rates</li>
+              <li><strong>Full Funnel:</strong> Track from initial contact through to funded loan</li>
+              <li><strong>ROI Analysis:</strong> Understand which channels drive the most closings</li>
+            </ul>
+          </div>
+        </div>
+
+        {/* Analytics */}
+        <div className="tutorial-section">
+          <div className="section-icon">📈</div>
+          <h4>Analytics & Insights</h4>
+          <div className="section-content">
+            <p>Data-driven scheduling optimization:</p>
+            <ul>
+              <li><strong>Show Rate Tracking:</strong> Monitor appointment attendance rates</li>
+              <li><strong>Best Times Analysis:</strong> Discover when clients are most likely to show up</li>
+              <li><strong>Channel Performance:</strong> Compare booking sources (web, phone, AI)</li>
+              <li><strong>Day/Hour Heatmaps:</strong> Visualize your busiest times</li>
+            </ul>
+          </div>
+        </div>
+
+        {/* Best Practices */}
+        <div className="tutorial-section best-practices">
+          <div className="section-icon">💡</div>
+          <h4>Best Practices</h4>
+          <div className="section-content">
+            <ul>
+              <li><strong>Buffer Time:</strong> Add 5-15 minute buffers between appointments for notes and preparation</li>
+              <li><strong>Minimum Notice:</strong> Require at least 2-4 hours notice for new bookings to prevent last-minute chaos</li>
+              <li><strong>Confirmation Emails:</strong> Enable automatic confirmations to reduce no-shows</li>
+              <li><strong>Video Links:</strong> Use integrated video meeting links for seamless virtual appointments</li>
+              <li><strong>Regular Review:</strong> Check your analytics weekly to optimize your schedule</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div className="tutorial-footer">
+        <p>Need more help? Contact support or visit our documentation.</p>
+        <div className="tutorial-actions">
+          <button className="start-btn" onClick={() => setView('calendar')}>
+            Go to Calendar
+          </button>
+          <button className="setup-btn" onClick={() => setView('settings')}>
+            Configure Settings
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   if (loading) {
     return (
       <div className="smart-scheduler loading">
@@ -1116,6 +1576,12 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
           >
             Settings
           </button>
+          <button
+            className={`tab tutorial-tab ${view === 'tutorial' ? 'active' : ''}`}
+            onClick={() => setView('tutorial')}
+          >
+            Tutorial
+          </button>
         </div>
         {onClose && (
           <button className="close-scheduler" onClick={onClose}>&times;</button>
@@ -1134,6 +1600,7 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
         {view === 'types' && renderTypesView()}
         {view === 'booking-links' && renderBookingLinksView()}
         {view === 'settings' && renderSettingsView()}
+        {view === 'tutorial' && renderTutorialView()}
       </div>
 
       {showBookingModal && renderBookingModal()}
