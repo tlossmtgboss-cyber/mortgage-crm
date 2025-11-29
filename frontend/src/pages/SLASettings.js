@@ -13,10 +13,16 @@ const SLASettings = () => {
   const [measures, setMeasures] = useState([]);
   const [trend, setTrend] = useState([]);
   const [bottlenecks, setBottlenecks] = useState([]);
+  const [runRates, setRunRates] = useState(null);
 
   // Modal state
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingMeasure, setEditingMeasure] = useState(null);
+
+  // Reports state
+  const [teamMembers, setTeamMembers] = useState([]);
+  const [reportHistory, setReportHistory] = useState([]);
+  const [sendingReport, setSendingReport] = useState(false);
 
   const fetchDashboard = useCallback(async () => {
     try {
@@ -60,6 +66,25 @@ const SLASettings = () => {
       if (bottlenecksRes.ok) {
         const bottlenecksData = await bottlenecksRes.json();
         setBottlenecks(bottlenecksData.bottlenecks || []);
+      }
+
+      // Fetch run rates
+      const runRatesRes = await fetch(`${API_BASE_URL}/api/v1/sla/dashboard/run-rates`, { headers });
+      if (runRatesRes.ok) {
+        const runRatesData = await runRatesRes.json();
+        setRunRates(runRatesData);
+      }
+
+      // Fetch team members for reports
+      try {
+        const usersRes = await fetch(`${API_BASE_URL}/api/v1/users`, { headers });
+        if (usersRes.ok) {
+          const usersData = await usersRes.json();
+          setTeamMembers(usersData.users || usersData || []);
+        }
+      } catch (e) {
+        // Users endpoint might not exist, use empty array
+        setTeamMembers([]);
       }
 
       setError(null);
@@ -152,6 +177,47 @@ const SLASettings = () => {
     }
   };
 
+  const sendReport = async (emailAddress, options = {}) => {
+    try {
+      setSendingReport(true);
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/api/v1/sla/reports/send-email`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          email_address: emailAddress,
+          include_run_rates: options.includeRunRates !== false,
+          include_forecasts: options.includeForecasts !== false,
+          include_bottlenecks: options.includeBottlenecks !== false
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        // Add to history
+        setReportHistory(prev => [{
+          id: Date.now(),
+          email: emailAddress,
+          sentAt: new Date().toISOString(),
+          status: 'sent',
+          summary: result.report_summary
+        }, ...prev.slice(0, 9)]);
+        return { success: true, message: `Report sent to ${emailAddress}` };
+      } else {
+        const error = await response.json();
+        return { success: false, message: error.detail || 'Failed to send report' };
+      }
+    } catch (err) {
+      console.error('Error sending report:', err);
+      return { success: false, message: 'Failed to send report' };
+    } finally {
+      setSendingReport(false);
+    }
+  };
+
   const formatMilestoneType = (type) => {
     return type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   };
@@ -199,9 +265,9 @@ const SLASettings = () => {
           <div className="card-sub">past deadline</div>
         </div>
         <div className="summary-card alerts">
-          <div className="card-label">Active Alerts</div>
-          <div className="card-value">{summary?.active_alerts_count || 0}</div>
-          <div className="card-sub">requiring attention</div>
+          <div className="card-label">Health Score</div>
+          <div className="card-value">{runRates?.summary?.health_score || 100}</div>
+          <div className="card-sub">out of 100</div>
         </div>
       </div>
 
@@ -230,6 +296,12 @@ const SLASettings = () => {
           onClick={() => setActiveTab('bottlenecks')}
         >
           Bottlenecks
+        </button>
+        <button
+          className={activeTab === 'reports' ? 'active' : ''}
+          onClick={() => setActiveTab('reports')}
+        >
+          Reports
         </button>
       </div>
 
@@ -491,15 +563,15 @@ const SLASettings = () => {
                   <div className="bottleneck-content">
                     <div className="bottleneck-name">{formatMilestoneType(bottleneck.milestone_type)}</div>
                     <div className="bottleneck-stats">
-                      <span>Avg delay: {bottleneck.avg_delay_hours.toFixed(1)} hours</span>
-                      <span>Frequency: {bottleneck.delay_frequency_pct.toFixed(0)}% of loans</span>
-                      <span>Affected: {bottleneck.total_affected_loans} loans</span>
+                      <span>Avg delay: {bottleneck.avg_delay_hours?.toFixed(1) || 0} hours</span>
+                      <span>Frequency: {bottleneck.delay_frequency_pct?.toFixed(0) || 0}% of loans</span>
+                      <span>Affected: {bottleneck.total_affected_loans || 0} loans</span>
                     </div>
                   </div>
                   <div className="bottleneck-bar">
                     <div
                       className="fill"
-                      style={{ width: `${Math.min(bottleneck.delay_frequency_pct, 100)}%` }}
+                      style={{ width: `${Math.min(bottleneck.delay_frequency_pct || 0, 100)}%` }}
                     ></div>
                   </div>
                 </div>
@@ -507,6 +579,18 @@ const SLASettings = () => {
             </div>
           )}
         </div>
+      )}
+
+      {/* Reports Tab */}
+      {activeTab === 'reports' && (
+        <ReportsTab
+          runRates={runRates}
+          teamMembers={teamMembers}
+          reportHistory={reportHistory}
+          sendingReport={sendingReport}
+          onSendReport={sendReport}
+          formatMilestoneType={formatMilestoneType}
+        />
       )}
 
       {/* Edit Modal */}
@@ -521,6 +605,402 @@ const SLASettings = () => {
         />
       )}
     </div>
+  );
+};
+
+// Reports Tab Component
+const ReportsTab = ({ runRates, teamMembers, reportHistory, sendingReport, onSendReport, formatMilestoneType }) => {
+  const [selectedRecipients, setSelectedRecipients] = useState([]);
+  const [customEmail, setCustomEmail] = useState('');
+  const [reportOptions, setReportOptions] = useState({
+    includeRunRates: true,
+    includeForecasts: true,
+    includeBottlenecks: true
+  });
+  const [sendStatus, setSendStatus] = useState(null);
+
+  const handleAddCustomEmail = () => {
+    if (customEmail && customEmail.includes('@')) {
+      setSelectedRecipients(prev => [...prev, { email: customEmail, name: customEmail }]);
+      setCustomEmail('');
+    }
+  };
+
+  const handleToggleRecipient = (email) => {
+    setSelectedRecipients(prev => {
+      const exists = prev.find(r => r.email === email);
+      if (exists) {
+        return prev.filter(r => r.email !== email);
+      } else {
+        const member = teamMembers.find(m => m.email === email);
+        return [...prev, { email, name: member?.full_name || member?.name || email }];
+      }
+    });
+  };
+
+  const handleSendReports = async () => {
+    if (selectedRecipients.length === 0) {
+      setSendStatus({ type: 'error', message: 'Please select at least one recipient' });
+      return;
+    }
+
+    setSendStatus({ type: 'sending', message: 'Sending reports...' });
+    const results = [];
+
+    for (const recipient of selectedRecipients) {
+      const result = await onSendReport(recipient.email, reportOptions);
+      results.push({ email: recipient.email, ...result });
+    }
+
+    const successCount = results.filter(r => r.success).length;
+    const failCount = results.filter(r => !r.success).length;
+
+    if (failCount === 0) {
+      setSendStatus({ type: 'success', message: `Successfully sent ${successCount} report(s)` });
+    } else {
+      setSendStatus({ type: 'warning', message: `Sent ${successCount}, failed ${failCount}` });
+    }
+
+    // Clear selection after sending
+    setTimeout(() => {
+      setSelectedRecipients([]);
+      setSendStatus(null);
+    }, 3000);
+  };
+
+  return (
+    <>
+      {/* Run Rate Summary */}
+      <div className="sla-section">
+        <h2><span className="icon">📈</span> Run Rate Summary</h2>
+        <p style={{ color: '#6b7280', marginBottom: '20px' }}>
+          Current performance metrics and inventory forecasting
+        </p>
+
+        {runRates ? (
+          <>
+            <div className="trend-stats" style={{ marginBottom: '24px' }}>
+              <div className="trend-stat">
+                <div className="value" style={{ color: runRates.summary?.health_score >= 80 ? '#10b981' : runRates.summary?.health_score >= 60 ? '#f59e0b' : '#ef4444' }}>
+                  {runRates.summary?.health_score || 100}
+                </div>
+                <div className="label">Health Score</div>
+              </div>
+              <div className="trend-stat">
+                <div className="value">{runRates.summary?.total_active_milestones || 0}</div>
+                <div className="label">Active Milestones</div>
+              </div>
+              <div className="trend-stat">
+                <div className="value" style={{ color: '#f59e0b' }}>{runRates.summary?.total_at_risk || 0}</div>
+                <div className="label">At Risk</div>
+              </div>
+              <div className="trend-stat">
+                <div className="value" style={{ color: '#ef4444' }}>{runRates.summary?.total_overdue || 0}</div>
+                <div className="label">Overdue</div>
+              </div>
+            </div>
+
+            {/* Run Rates Table */}
+            {runRates.milestone_run_rates && runRates.milestone_run_rates.length > 0 && (
+              <table className="measures-table">
+                <thead>
+                  <tr>
+                    <th>Milestone</th>
+                    <th>Daily Rate</th>
+                    <th>Weekly Rate</th>
+                    <th>On-Time %</th>
+                    <th>Trend</th>
+                    <th>Inventory</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {runRates.milestone_run_rates.map((rr) => {
+                    const forecast = runRates.inventory_forecasts?.find(f => f.milestone_type === rr.milestone_type);
+                    return (
+                      <tr key={rr.milestone_type}>
+                        <td>
+                          <div className="milestone-name">{formatMilestoneType(rr.milestone_type)}</div>
+                        </td>
+                        <td>{rr.daily_run_rate}</td>
+                        <td>{rr.weekly_run_rate}</td>
+                        <td>
+                          <span style={{
+                            color: rr.on_time_rate >= 85 ? '#10b981' : rr.on_time_rate >= 70 ? '#f59e0b' : '#ef4444'
+                          }}>
+                            {rr.on_time_rate}%
+                          </span>
+                        </td>
+                        <td>
+                          <span className={`trend-badge trend-${rr.trend}`}>
+                            {rr.trend === 'improving' ? '↑' : rr.trend === 'declining' ? '↓' : '→'} {rr.trend}
+                          </span>
+                        </td>
+                        <td>
+                          {forecast?.current_inventory || 0}
+                          {forecast?.is_potential_bottleneck && (
+                            <span className="bottleneck-warning" title="Potential bottleneck">⚠️</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </>
+        ) : (
+          <div className="empty-state">
+            <div className="icon">📊</div>
+            <h3>No Run Rate Data Available</h3>
+            <p>Run rate data will appear once milestones are being tracked</p>
+          </div>
+        )}
+      </div>
+
+      {/* Send Reports Section */}
+      <div className="sla-section">
+        <h2><span className="icon">📧</span> Send Reports</h2>
+        <p style={{ color: '#6b7280', marginBottom: '20px' }}>
+          Send SLA run rate reports to team members and stakeholders
+        </p>
+
+        <div className="report-builder">
+          {/* Recipients Selection */}
+          <div className="report-recipients">
+            <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px' }}>Select Recipients</h3>
+
+            {/* Team Members */}
+            {teamMembers.length > 0 && (
+              <div className="team-members-list" style={{ marginBottom: '16px' }}>
+                {teamMembers.map((member) => (
+                  <label
+                    key={member.email || member.id}
+                    className="recipient-checkbox"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '8px 12px',
+                      background: selectedRecipients.find(r => r.email === member.email) ? '#e0f2f1' : '#f9fafb',
+                      borderRadius: '6px',
+                      marginBottom: '8px',
+                      cursor: 'pointer',
+                      border: selectedRecipients.find(r => r.email === member.email) ? '1px solid #218D8D' : '1px solid transparent'
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={!!selectedRecipients.find(r => r.email === member.email)}
+                      onChange={() => handleToggleRecipient(member.email)}
+                      style={{ marginRight: '10px' }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: '500' }}>{member.full_name || member.name || 'User'}</div>
+                      <div style={{ fontSize: '12px', color: '#6b7280' }}>{member.email}</div>
+                    </div>
+                    {member.role && (
+                      <span style={{
+                        marginLeft: 'auto',
+                        fontSize: '11px',
+                        padding: '2px 8px',
+                        background: '#e5e7eb',
+                        borderRadius: '10px',
+                        color: '#6b7280'
+                      }}>
+                        {member.role}
+                      </span>
+                    )}
+                  </label>
+                ))}
+              </div>
+            )}
+
+            {/* Custom Email Input */}
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+              <input
+                type="email"
+                value={customEmail}
+                onChange={(e) => setCustomEmail(e.target.value)}
+                placeholder="Add custom email address..."
+                style={{
+                  flex: 1,
+                  padding: '10px 12px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '14px'
+                }}
+                onKeyPress={(e) => e.key === 'Enter' && handleAddCustomEmail()}
+              />
+              <button
+                onClick={handleAddCustomEmail}
+                style={{
+                  padding: '10px 16px',
+                  background: '#f3f4f6',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  cursor: 'pointer'
+                }}
+              >
+                Add
+              </button>
+            </div>
+
+            {/* Selected Recipients */}
+            {selectedRecipients.length > 0 && (
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px' }}>
+                  Selected: {selectedRecipients.length} recipient(s)
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  {selectedRecipients.map((r) => (
+                    <span
+                      key={r.email}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '4px 10px',
+                        background: '#218D8D',
+                        color: 'white',
+                        borderRadius: '16px',
+                        fontSize: '12px'
+                      }}
+                    >
+                      {r.name || r.email}
+                      <button
+                        onClick={() => setSelectedRecipients(prev => prev.filter(x => x.email !== r.email))}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'white',
+                          cursor: 'pointer',
+                          padding: 0,
+                          fontSize: '14px',
+                          lineHeight: 1
+                        }}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Report Options */}
+          <div className="report-options" style={{ marginBottom: '20px' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px' }}>Report Contents</h3>
+            <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={reportOptions.includeRunRates}
+                  onChange={(e) => setReportOptions(prev => ({ ...prev, includeRunRates: e.target.checked }))}
+                />
+                Run Rates & Trends
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={reportOptions.includeForecasts}
+                  onChange={(e) => setReportOptions(prev => ({ ...prev, includeForecasts: e.target.checked }))}
+                />
+                Inventory Forecasts
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={reportOptions.includeBottlenecks}
+                  onChange={(e) => setReportOptions(prev => ({ ...prev, includeBottlenecks: e.target.checked }))}
+                />
+                Bottleneck Analysis
+              </label>
+            </div>
+          </div>
+
+          {/* Send Button */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <button
+              onClick={handleSendReports}
+              disabled={sendingReport || selectedRecipients.length === 0}
+              style={{
+                padding: '12px 24px',
+                background: selectedRecipients.length === 0 ? '#9ca3af' : '#218D8D',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: selectedRecipients.length === 0 ? 'not-allowed' : 'pointer',
+                fontSize: '14px',
+                fontWeight: '500',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}
+            >
+              {sendingReport ? (
+                <>
+                  <span className="loading-spinner" style={{ width: '16px', height: '16px', marginRight: '4px' }}></span>
+                  Sending...
+                </>
+              ) : (
+                <>
+                  📧 Send Report{selectedRecipients.length > 1 ? 's' : ''}
+                </>
+              )}
+            </button>
+
+            {sendStatus && (
+              <span style={{
+                padding: '8px 16px',
+                borderRadius: '6px',
+                fontSize: '13px',
+                background: sendStatus.type === 'success' ? '#d1fae5' : sendStatus.type === 'error' ? '#fee2e2' : sendStatus.type === 'warning' ? '#fef3c7' : '#e0f2fe',
+                color: sendStatus.type === 'success' ? '#065f46' : sendStatus.type === 'error' ? '#991b1b' : sendStatus.type === 'warning' ? '#92400e' : '#0369a1'
+              }}>
+                {sendStatus.message}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Report History */}
+      {reportHistory.length > 0 && (
+        <div className="sla-section">
+          <h2><span className="icon">📋</span> Recent Reports Sent</h2>
+          <table className="measures-table">
+            <thead>
+              <tr>
+                <th>Recipient</th>
+                <th>Sent At</th>
+                <th>Health Score</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reportHistory.map((report) => (
+                <tr key={report.id}>
+                  <td>{report.email}</td>
+                  <td>{new Date(report.sentAt).toLocaleString()}</td>
+                  <td>{report.summary?.health_score || '-'}</td>
+                  <td>
+                    <span style={{
+                      padding: '4px 8px',
+                      borderRadius: '10px',
+                      fontSize: '12px',
+                      background: report.status === 'sent' ? '#d1fae5' : '#fee2e2',
+                      color: report.status === 'sent' ? '#065f46' : '#991b1b'
+                    }}>
+                      {report.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
   );
 };
 
