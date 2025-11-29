@@ -14964,10 +14964,13 @@ async def approve_reconciliation(
                     # Found existing loan by borrower name - use it
                     extracted.match_entity_type = "loan"
                     extracted.match_entity_id = existing_by_name.id
+                    extracted.status = "approved"  # Mark as approved
+                    extracted.reviewed_by = current_user.id
+                    extracted.reviewed_at = datetime.now(timezone.utc)
                     logger.info(f"Found existing loan by borrower name '{borrower_name}', using loan {existing_by_name.loan_number}")
                     # Skip creating new loan, just apply data
                     db.commit()
-                    return {"status": "approved", "message": f"Matched to existing loan {existing_by_name.loan_number}"}
+                    return {"status": "approved", "message": f"Matched to existing loan {existing_by_name.loan_number}", "entity_id": existing_by_name.id}
 
                 # Generate a loan number
                 import random
@@ -19169,6 +19172,44 @@ async def debug_reconciliation(
     except Exception as e:
         logger.error(f"Debug error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/debug/all-loans")
+async def debug_all_loans(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Debug endpoint to see ALL loans in the database (bypasses permission filtering)"""
+    try:
+        from sqlalchemy import text
+
+        # Get ALL loans regardless of loan_officer_id
+        all_loans = db.execute(text("""
+            SELECT id, loan_number, borrower_name, borrower_email, stage, loan_officer_id, created_at
+            FROM loans
+            ORDER BY created_at DESC
+            LIMIT 50
+        """)).fetchall()
+
+        return {
+            "total_loans": len(all_loans),
+            "loans": [
+                {
+                    "id": row[0],
+                    "loan_number": row[1],
+                    "borrower_name": row[2],
+                    "borrower_email": row[3],
+                    "stage": row[4],
+                    "loan_officer_id": row[5],
+                    "created_at": str(row[6]) if row[6] else None
+                }
+                for row in all_loans
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Debug all loans error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/api/v1/microsoft/reprocess-emails")
 async def reprocess_unextracted_emails(
