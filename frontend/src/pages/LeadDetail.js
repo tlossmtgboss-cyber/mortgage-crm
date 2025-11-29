@@ -302,21 +302,22 @@ function LeadDetail() {
         console.log('✅ Loaded lead from API:', leadData);
         console.log('✅ Loaded activities from API:', activitiesData);
       } catch (apiError) {
-        console.log('⚠️ API failed, using mock data. Error:', apiError);
-        // Fallback to mock data
-        const mockLeads = generateMockLeads();
-        console.log('📦 Generated mock leads, total count:', mockLeads.length);
-        console.log('🔍 Looking for lead ID:', id, 'Type:', typeof id);
-        leadData = mockLeads.find(lead => lead.id === parseInt(id));
-        console.log('🎯 Found mock lead:', leadData);
+        console.log('⚠️ API failed. Error:', apiError);
 
-        if (!leadData) {
-          console.error('❌ Lead not found in mock data');
-          alert('Lead not found in mock data');
-          navigate('/leads');
+        // Check if it's a 404 error (lead not found)
+        if (apiError?.response?.status === 404) {
+          console.error('❌ Lead not found in database');
+          setError('Lead not found. It may have been deleted.');
+          setLoading(false);
           return;
         }
-        activitiesData = [];
+
+        // For other errors, try to show a helpful message
+        const errorMessage = apiError?.response?.data?.detail || apiError?.message || 'Failed to load lead';
+        console.error('❌ API Error:', errorMessage);
+        setError(errorMessage);
+        setLoading(false);
+        return;
       }
 
       console.log('✨ Setting lead data:', leadData);
