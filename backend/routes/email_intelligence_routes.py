@@ -1370,7 +1370,7 @@ async def import_email_to_queue(
         if existing:
             return {"status": "duplicate", "existing_id": existing[0]}
 
-    # Insert email
+    # Insert email (include entity IDs if provided)
     result = db.execute(text("""
         INSERT INTO email_reconciliation_queue (
             email_provider, provider_message_id, thread_id,
@@ -1378,6 +1378,8 @@ async def import_email_to_queue(
             body_preview, body_full, body_html,
             has_attachments, attachment_count, attachment_names,
             sent_date, received_date, direction,
+            matched_loan_id, matched_lead_id, matched_contact_id,
+            match_method, match_confidence,
             status, user_id
         ) VALUES (
             :provider, :msg_id, :thread_id,
@@ -1385,6 +1387,8 @@ async def import_email_to_queue(
             :body_preview, :body_full, :body_html,
             :has_attachments, :attachment_count, :attachment_names,
             :sent_date, :received_date, :direction,
+            :matched_loan_id, :matched_lead_id, :matched_contact_id,
+            :match_method, :match_confidence,
             'pending', :user_id
         ) RETURNING id
     """), {
@@ -1405,14 +1409,20 @@ async def import_email_to_queue(
         "sent_date": email_data.get("sent_date"),
         "received_date": email_data.get("received_date"),
         "direction": email_data.get("direction", "inbound"),
+        "matched_loan_id": email_data.get("matched_loan_id"),
+        "matched_lead_id": email_data.get("matched_lead_id"),
+        "matched_contact_id": email_data.get("matched_contact_id"),
+        "match_method": "manual" if email_data.get("matched_loan_id") or email_data.get("matched_lead_id") else None,
+        "match_confidence": 1.0 if email_data.get("matched_loan_id") or email_data.get("matched_lead_id") else None,
         "user_id": user_id
     })
 
     email_id = result.fetchone()[0]
     db.commit()
 
-    # Auto-match to known clients
-    if email_data.get("from_email"):
+    # Auto-match to known clients (only if entity IDs weren't provided)
+    has_entity_match = email_data.get("matched_loan_id") or email_data.get("matched_lead_id") or email_data.get("matched_contact_id")
+    if not has_entity_match and email_data.get("from_email"):
         match_result = db.execute(text("""
             SELECT contact_id, loan_id, lead_id
             FROM known_client_emails
