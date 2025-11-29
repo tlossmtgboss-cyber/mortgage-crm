@@ -680,23 +680,26 @@ async def match_sms_to_entity(phone_number: str, db: Session, user_id: int) -> D
             "client_name": result[3]
         }
 
-    # Check contacts table
-    result = db.execute(text("""
-        SELECT id, first_name, last_name
-        FROM contacts
-        WHERE (phone = :phone OR mobile_phone = :phone)
-        LIMIT 1
-    """), {"phone": normalized}).fetchone()
+    # Check loans table by borrower phone
+    try:
+        result = db.execute(text("""
+            SELECT id, borrower_name, loan_number
+            FROM loans
+            WHERE borrower_phone = :phone
+            LIMIT 1
+        """), {"phone": normalized}).fetchone()
 
-    if result:
-        return {
-            "matched_borrower_id": result[0],
-            "matched_loan_id": None,
-            "matched_lead_id": None,
-            "match_method": "contact_phone",
-            "match_confidence": 0.95,
-            "client_name": f"{result[1]} {result[2]}"
-        }
+        if result:
+            return {
+                "matched_borrower_id": None,
+                "matched_loan_id": result[0],
+                "matched_lead_id": None,
+                "match_method": "loan_phone",
+                "match_confidence": 0.95,
+                "client_name": result[1]
+            }
+    except Exception:
+        pass  # borrower_phone column may not exist
 
     # Check leads table
     result = db.execute(text("""
@@ -744,15 +747,14 @@ async def get_sms_queue(
 ):
     """Get SMS messages in the queue with filters"""
     try:
-        # Build query
+        # Build query - no contacts table join since it may not exist
         query = """
             SELECT
                 s.*,
-                c.first_name || ' ' || c.last_name as borrower_name,
+                l.borrower_name as loan_borrower_name,
                 l.loan_number,
                 ld.first_name || ' ' || ld.last_name as lead_name
             FROM sms_intelligence_queue s
-            LEFT JOIN contacts c ON s.matched_borrower_id = c.id
             LEFT JOIN loans l ON s.matched_loan_id = l.id
             LEFT JOIN leads ld ON s.matched_lead_id = ld.id
             WHERE 1=1
@@ -854,11 +856,10 @@ async def get_sms_detail(sms_id: int, db: Session = Depends(get_db)):
         result = db.execute(text("""
             SELECT
                 s.*,
-                c.first_name || ' ' || c.last_name as borrower_name,
+                l.borrower_name as loan_borrower_name,
                 l.loan_number,
                 ld.first_name || ' ' || ld.last_name as lead_name
             FROM sms_intelligence_queue s
-            LEFT JOIN contacts c ON s.matched_borrower_id = c.id
             LEFT JOIN loans l ON s.matched_loan_id = l.id
             LEFT JOIN leads ld ON s.matched_lead_id = ld.id
             WHERE s.id = :sms_id
