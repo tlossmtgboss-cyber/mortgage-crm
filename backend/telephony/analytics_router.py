@@ -374,13 +374,13 @@ def get_session_analytics(
 
         # Calculate session duration
         duration_minutes = 0
-        if session.started_at and session.ended_at:
-            duration_minutes = int((session.ended_at - session.started_at).total_seconds() / 60)
+        if session.created_at and session.completed_at:
+            duration_minutes = int((session.completed_at - session.created_at).total_seconds() / 60)
 
         session_stats.append({
             'session_id': session.id,
-            'started_at': session.started_at.isoformat() if session.started_at else None,
-            'ended_at': session.ended_at.isoformat() if session.ended_at else None,
+            'started_at': session.created_at.isoformat() if session.created_at else None,
+            'ended_at': session.completed_at.isoformat() if session.completed_at else None,
             'status': session.status.value if hasattr(session.status, 'value') else str(session.status),
             'total_tasks': task_count,
             'completed_tasks': completed_count,

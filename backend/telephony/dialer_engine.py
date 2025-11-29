@@ -265,8 +265,8 @@ class DialerEngine:
             "failed_tasks": failed,
             "skipped_tasks": skipped,
             "current_task": current_task,
-            "started_at": session.started_at.isoformat() if session.started_at else None,
-            "ended_at": session.ended_at.isoformat() if session.ended_at else None
+            "started_at": session.created_at.isoformat() if session.created_at else None,
+            "ended_at": session.completed_at.isoformat() if session.completed_at else None
         }
 
     def get_next_task(self, session_id: int) -> Optional[Dict[str, Any]]:
@@ -575,7 +575,7 @@ class DialerEngine:
 
         if pending == 0:
             session.status = DialerSessionStatus.COMPLETED
-            session.ended_at = datetime.utcnow()
+            session.completed_at = datetime.utcnow()
 
             # Send session completed event
             completed_count = self.db.query(DialerSessionTask).filter(
@@ -761,7 +761,7 @@ class DialerEngine:
                 self.compliance.release_soft_lock(current_task.contact_phone, self.agent_id)
 
         session.status = DialerSessionStatus.STOPPED
-        session.ended_at = datetime.utcnow()
+        session.completed_at = datetime.utcnow()
         session.current_task_id = None
         self.db.commit()
 
