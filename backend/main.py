@@ -12344,10 +12344,27 @@ def apply_extracted_data(extracted_data: ExtractedData, db: Session) -> bool:
 
             logger.info(f"Applying extracted data to loan {loan.id} ({loan.loan_number})")
 
-            # Borrower name
+            # Borrower name - handle separate first/last name fields
             if value := get_field_value(fields, "borrower_name"):
                 loan.borrower_name = str(value)
                 updated_fields.append("borrower_name")
+            elif get_field_value(fields, "first_name") or get_field_value(fields, "last_name"):
+                first = get_field_value(fields, "first_name") or ""
+                last = get_field_value(fields, "last_name") or ""
+                full_name = f"{first} {last}".strip()
+                if full_name:
+                    loan.borrower_name = full_name
+                    updated_fields.append("borrower_name")
+
+            # Borrower email
+            if value := get_field_value(fields, "borrower_email"):
+                loan.borrower_email = str(value)
+                updated_fields.append("borrower_email")
+
+            # Borrower phone
+            if value := get_field_value(fields, "borrower_phone"):
+                loan.borrower_phone = str(value)
+                updated_fields.append("borrower_phone")
 
             # Co-borrower name
             if value := get_field_value(fields, "coborrower_name"):
@@ -12539,16 +12556,32 @@ def apply_extracted_data(extracted_data: ExtractedData, db: Session) -> bool:
 
             logger.info(f"Applying extracted data to lead {lead.id} ({lead.name})")
 
-            # Update lead fields
+            # Update lead fields - handle various field name formats from AI extraction
+            # Name - check for combined or separate first/last name fields
             if value := get_field_value(fields, "borrower_name"):
                 lead.name = str(value)
                 updated_fields.append("name")
+            elif get_field_value(fields, "first_name") or get_field_value(fields, "last_name"):
+                first = get_field_value(fields, "first_name") or ""
+                last = get_field_value(fields, "last_name") or ""
+                full_name = f"{first} {last}".strip()
+                if full_name:
+                    lead.name = full_name
+                    updated_fields.append("name")
 
+            # Email - check multiple possible field names
             if value := get_field_value(fields, "email"):
                 lead.email = str(value)
                 updated_fields.append("email")
+            elif value := get_field_value(fields, "borrower_email"):
+                lead.email = str(value)
+                updated_fields.append("email")
 
+            # Phone - check multiple possible field names
             if value := get_field_value(fields, "phone"):
+                lead.phone = str(value)
+                updated_fields.append("phone")
+            elif value := get_field_value(fields, "borrower_phone"):
                 lead.phone = str(value)
                 updated_fields.append("phone")
 
