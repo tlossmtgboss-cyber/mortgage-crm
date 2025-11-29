@@ -59,25 +59,25 @@ function CommunicationIntelligence() {
   const [taskTitle, setTaskTitle] = useState('');
 
   const emailDispositionOptions = [
-    { value: 'document_received', label: 'Document Received', icon: '📄' },
-    { value: 'document_request', label: 'Document Request', icon: '📋' },
-    { value: 'action_required', label: 'Action Required', icon: '⚡' },
-    { value: 'general_correspondence', label: 'General Correspondence', icon: '💬' },
-    { value: 'status_update', label: 'Status Update', icon: '📊' },
-    { value: 'rate_lock_request', label: 'Rate Lock Request', icon: '🔒' },
-    { value: 'closing_related', label: 'Closing Related', icon: '🏠' },
-    { value: 'skip', label: 'Skip/Archive', icon: '⏭️' }
+    { value: 'document_received', label: 'Document Received' },
+    { value: 'document_request', label: 'Document Request' },
+    { value: 'action_required', label: 'Action Required' },
+    { value: 'general_correspondence', label: 'General Correspondence' },
+    { value: 'status_update', label: 'Status Update' },
+    { value: 'rate_lock_request', label: 'Rate Lock Request' },
+    { value: 'closing_related', label: 'Closing Related' },
+    { value: 'skip', label: 'Skip/Archive' }
   ];
 
   const smsDispositionOptions = [
-    { value: 'general_correspondence', label: 'General', icon: '💬' },
-    { value: 'document_mention', label: 'Document Mention', icon: '📄' },
-    { value: 'appointment_related', label: 'Appointment', icon: '📅' },
-    { value: 'status_inquiry', label: 'Status Question', icon: '❓' },
-    { value: 'action_required', label: 'Action Required', icon: '⚡' },
-    { value: 'opt_out', label: 'Opt-Out', icon: '🚫' },
-    { value: 'processed', label: 'Processed', icon: '✅' },
-    { value: 'skip', label: 'Skip', icon: '⏭️' }
+    { value: 'general_correspondence', label: 'General' },
+    { value: 'document_mention', label: 'Document Mention' },
+    { value: 'appointment_related', label: 'Appointment' },
+    { value: 'status_inquiry', label: 'Status Question' },
+    { value: 'action_required', label: 'Action Required' },
+    { value: 'opt_out', label: 'Opt-Out' },
+    { value: 'processed', label: 'Processed' },
+    { value: 'skip', label: 'Skip' }
   ];
 
   const getAuthHeaders = () => {
