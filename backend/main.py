@@ -15142,12 +15142,16 @@ async def approve_reconciliation(
                     loan_officer_id=current_user.id
                 )
                 db.add(new_loan)
+                logger.info(f"RECONCILIATION DEBUG: Created loan object, about to flush. Stage: {stage}, value={stage.value}, name={stage.name}")
                 db.flush()  # Get the ID
+                logger.info(f"RECONCILIATION DEBUG: First flush complete, loan ID: {new_loan.id}")
 
                 # Update stage using raw SQL to ensure correct enum value is used
                 # PostgreSQL enum expects values like 'Processing', not names like 'PROCESSING'
+                logger.info(f"RECONCILIATION DEBUG: About to execute UPDATE with stage={stage.value}")
                 db.execute(text("UPDATE loans SET stage = :stage WHERE id = :id"),
                            {"stage": stage.value, "id": new_loan.id})
+                logger.info(f"RECONCILIATION DEBUG: UPDATE executed, about to second flush")
                 db.flush()
 
                 # Update extracted data to point to new loan
