@@ -256,10 +256,13 @@ const SLASettings = () => {
   };
 
   const formatTargetUnit = (value, unit) => {
-    if (unit === 'hours') return `${value} hours`;
-    if (unit === 'days') return `${value} days`;
-    if (unit === 'business_days') return `${value} business days`;
-    return `${value} ${unit}`;
+    const absValue = Math.abs(value);
+    const unitLabel = unit === 'hours' ? 'hours' : unit === 'days' ? 'days' : 'business days';
+
+    if (value < 0) {
+      return `${absValue} ${unitLabel} before`;
+    }
+    return `${absValue} ${unitLabel}`;
   };
 
   if (loading) {
@@ -1205,10 +1208,12 @@ const EditMeasureModal = ({ measure, onSave, onClose }) => {
                   type="number"
                   value={formData.target_value}
                   onChange={e => setFormData({ ...formData, target_value: parseFloat(e.target.value) })}
-                  min="0"
                   step="0.5"
                   required
                 />
+                <p style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>
+                  Use negative values for "before" events (e.g., -10 = 10 days before trigger event)
+                </p>
               </div>
               <div className="form-group">
                 <label>Target Unit</label>

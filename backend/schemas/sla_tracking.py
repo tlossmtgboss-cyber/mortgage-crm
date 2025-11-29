@@ -120,7 +120,7 @@ class SLAMeasureBase(BaseModel):
     milestone_type: MilestoneTypeEnum
     name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = None
-    target_value: float = Field(..., gt=0)
+    target_value: float = Field(...)  # Can be negative for "before" events (e.g., -10 = 10 days before trigger)
     target_unit: TimeUnitEnum = TimeUnitEnum.HOURS
     trigger_from: Optional[str] = "previous_milestone"  # What event triggers the SLA timer
     trigger_from_is_default: bool = False  # If true, this trigger is the default for this milestone type

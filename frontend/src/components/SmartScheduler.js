@@ -50,8 +50,14 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
   // Reminder settings state
   const [reminderSettings, setReminderSettings] = useState({
     enabled: true,
+    bookingConfirmation: {
+      enabled: true,
+      method: 'both',
+      emailSubject: 'Your Appointment is Confirmed',
+      message: 'Your appointment has been confirmed for {{appointment_date}} at {{appointment_time}}. We look forward to speaking with you!'
+    },
     reminders: [
-      { id: 1, timing: 24, unit: 'hours', method: 'email', enabled: true, message: 'This is a reminder about your upcoming appointment scheduled for {{appointment_time}} on {{appointment_date}}. Please let us know if you need to reschedule.' },
+      { id: 1, timing: 24, unit: 'hours', method: 'both', enabled: true, message: 'This is a reminder about your upcoming appointment scheduled for {{appointment_time}} on {{appointment_date}}. Please let us know if you need to reschedule.' },
       { id: 2, timing: 1, unit: 'hours', method: 'sms', enabled: true, message: 'Reminder: Your appointment is in 1 hour at {{appointment_time}}. Reply CONFIRM to confirm or RESCHEDULE to change.' },
       { id: 3, timing: 15, unit: 'minutes', method: 'sms', enabled: false, message: 'Your appointment starts in 15 minutes. See you soon!' }
     ],
@@ -1021,6 +1027,67 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
               <div className="list-header">
                 <h4>Reminder Schedule</h4>
                 <button className="add-reminder-btn" onClick={addReminder}>+ Add Reminder</button>
+              </div>
+
+              {/* Booking Confirmation - Always First */}
+              <div className={`reminder-card booking-confirmation ${reminderSettings.bookingConfirmation?.enabled ? '' : 'disabled'}`}>
+                <div className="reminder-header">
+                  <div className="reminder-number">Booking Confirmation</div>
+                  <div className="reminder-controls">
+                    <label className="toggle-switch small">
+                      <input
+                        type="checkbox"
+                        checked={reminderSettings.bookingConfirmation?.enabled ?? true}
+                        onChange={(e) => setReminderSettings(prev => ({
+                          ...prev,
+                          bookingConfirmation: { ...prev.bookingConfirmation, enabled: e.target.checked }
+                        }))}
+                      />
+                      <span className="toggle-slider"></span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="reminder-config">
+                  <div className="timing-row">
+                    <label>Send</label>
+                    <span className="confirmation-timing">immediately after booking</span>
+                    <span>via</span>
+                    <select
+                      value={reminderSettings.bookingConfirmation?.method || 'both'}
+                      onChange={(e) => setReminderSettings(prev => ({
+                        ...prev,
+                        bookingConfirmation: { ...prev.bookingConfirmation, method: e.target.value }
+                      }))}
+                      className="method-select"
+                    >
+                      <option value="email">Email</option>
+                      <option value="sms">SMS</option>
+                      <option value="both">Both</option>
+                    </select>
+                  </div>
+
+                  <div className="message-row">
+                    <label>Message</label>
+                    <textarea
+                      value={reminderSettings.bookingConfirmation?.message || ''}
+                      onChange={(e) => setReminderSettings(prev => ({
+                        ...prev,
+                        bookingConfirmation: { ...prev.bookingConfirmation, message: e.target.value }
+                      }))}
+                      placeholder="Enter confirmation message..."
+                      rows={3}
+                    />
+                    <div className="message-help">
+                      <span className="help-label">Available variables:</span>
+                      <code>{'{{appointment_date}}'}</code>
+                      <code>{'{{appointment_time}}'}</code>
+                      <code>{'{{attendee_name}}'}</code>
+                      <code>{'{{appointment_type}}'}</code>
+                      <code>{'{{meeting_link}}'}</code>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {reminderSettings.reminders.map((reminder, index) => (
