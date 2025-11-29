@@ -1022,3 +1022,61 @@ This instruction is now part of my training for your workflow. I'll use it to im
         "instruction_recorded": True,
         "applied_to": task_type
     }
+
+
+# ============================================
+# AI REGENERATE MESSAGE ENDPOINT
+# ============================================
+
+@router.post("/regenerate-message")
+async def regenerate_message(
+    request_data: dict,
+    current_user= Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Regenerate a message for a specific channel based on task context and training instructions.
+    Channels: email, text, phone, voicemail
+    """
+    channel = request_data.get("channel", "email")
+    client_name = request_data.get("client_name", "").split()[0] if request_data.get("client_name") else "there"
+    task_title = request_data.get("task_title", "")
+    stage = request_data.get("stage", "")
+    training_instruction = request_data.get("training_instruction", "")
+
+    # Build the message based on channel and training instructions
+    if channel == "email":
+        message = f"""Hi {client_name},
+
+{training_instruction + chr(10) + chr(10) if training_instruction else ''}I wanted to reach out regarding your loan application{f' ({task_title})' if task_title else ''}.
+
+If you have any questions or need assistance, please don't hesitate to contact me. I'm here to help make this process as smooth as possible.
+
+Best regards,
+[Your Name]
+Loan Officer"""
+
+    elif channel == "text":
+        message = f"Hi {client_name}! {training_instruction + ' ' if training_instruction else ''}Just checking in on your loan. Let me know if you have any questions!"
+
+    elif channel == "phone":
+        message = f"""CALL SCRIPT for {client_name}:
+{chr(10) + 'Key Point: ' + training_instruction + chr(10) if training_instruction else ''}
+1. Greeting: "Hi {client_name}, this is [Your Name] calling about your loan application."
+2. Purpose: {task_title or 'Discuss current status and next steps'}
+3. Ask: "Do you have any questions I can help with?"
+4. Close: Schedule follow-up if needed"""
+
+    elif channel == "voicemail":
+        message = f"""Hi {client_name}, this is [Your Name] from [Company]. {training_instruction + ' ' if training_instruction else ''}I'm calling about your loan application. Please call me back at your convenience at [phone number]. Thank you!"""
+
+    else:
+        message = f"Hi {client_name}, reaching out about your loan application."
+
+    return {
+        "status": "success",
+        "channel": channel,
+        "message": message,
+        "client_name": client_name,
+        "training_applied": bool(training_instruction)
+    }

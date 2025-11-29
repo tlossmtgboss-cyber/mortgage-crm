@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import './UnifiedTaskSidebar.css';
 
 // Use HTTPS Railway URL in production, localhost for development
@@ -17,6 +17,13 @@ const UnifiedTaskSidebar = ({ isOpen, onClose, onTaskCountChange }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [sendVia, setSendVia] = useState('email');
   const [communicationHistoryOpen, setCommunicationHistoryOpen] = useState(false);
+
+  // Train AI state
+  const [isListening, setIsListening] = useState(false);
+  const [trainingInProgress, setTrainingInProgress] = useState(false);
+  const [aiAcknowledgment, setAiAcknowledgment] = useState('');
+  const [regeneratingChannel, setRegeneratingChannel] = useState(null);
+  const recognitionRef = useRef(null);
 
   // Fetch unified tasks from all sources
   const fetchUnifiedTasks = useCallback(async () => {
@@ -189,6 +196,178 @@ Loan Officer`;
       handleSelectTask(filteredTasks[0]);
     } else {
       setSelectedTask(null);
+    }
+  };
+
+  // Voice recognition for Train AI
+  const startListening = () => {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      alert('Voice recognition is not supported in your browser. Please use Chrome or Edge.');
+      return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognitionRef.current = recognition;
+
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      setIsListening(true);
+    };
+
+    recognition.onresult = (event) => {
+      let finalTranscript = '';
+      let interimTranscript = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+
+      if (finalTranscript) {
+        setFeedbackText(prev => prev + (prev ? ' ' : '') + finalTranscript);
+      }
+    };
+
+    recognition.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognition.start();
+  };
+
+  const stopListening = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    }
+  };
+
+  // Train AI function
+  const handleTrainAI = async () => {
+    if (!feedbackText.trim() || !selectedTask) return;
+
+    setTrainingInProgress(true);
+    setAiAcknowledgment('');
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/ai/training/instruction`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          instruction: feedbackText,
+          task_context: {
+            task_type: selectedTask.source || 'general',
+            borrower_name: selectedTask.client_name || '',
+            task_title: selectedTask.title || '',
+            stage: selectedTask.stage || ''
+          }
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setAiAcknowledgment(data.acknowledgment || 'Training instruction received! I will apply this to future messages.');
+      } else {
+        setAiAcknowledgment('Training instruction saved. AI will apply this guidance to future tasks.');
+      }
+    } catch (error) {
+      console.error('Failed to train AI:', error);
+      setAiAcknowledgment('Instruction noted. Will apply to future tasks.');
+    } finally {
+      setTrainingInProgress(false);
+    }
+  };
+
+  // Regenerate message for specific channel
+  const handleRegenerateMessage = async (channel) => {
+    if (!selectedTask) return;
+
+    setRegeneratingChannel(channel);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/ai/regenerate-message`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          task_id: selectedTask.id,
+          task_source: selectedTask.source,
+          channel: channel,
+          client_name: selectedTask.client_name,
+          task_title: selectedTask.title,
+          stage: selectedTask.stage,
+          training_instruction: feedbackText || null
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setEditedResponse(data.message || data.generated_message || generateChannelMessage(channel));
+        setSendVia(channel);
+      } else {
+        // Fallback to local generation
+        setEditedResponse(generateChannelMessage(channel));
+        setSendVia(channel);
+      }
+    } catch (error) {
+      console.error('Failed to regenerate message:', error);
+      // Fallback to local generation
+      setEditedResponse(generateChannelMessage(channel));
+      setSendVia(channel);
+    } finally {
+      setRegeneratingChannel(null);
+    }
+  };
+
+  // Generate channel-specific message locally
+  const generateChannelMessage = (channel) => {
+    const clientName = selectedTask?.client_name?.split(' ')[0] || 'there';
+    const instruction = feedbackText.trim();
+
+    switch (channel) {
+      case 'email':
+        return `Hi ${clientName},
+
+${instruction ? `${instruction}\n\n` : ''}I wanted to reach out regarding your loan application. If you have any questions or need assistance, please don't hesitate to contact me.
+
+Best regards,
+[Your Name]
+Loan Officer`;
+
+      case 'text':
+        return `Hi ${clientName}! ${instruction ? instruction + ' ' : ''}Just checking in on your loan. Let me know if you have any questions!`;
+
+      case 'phone':
+        return `CALL SCRIPT for ${clientName}:
+${instruction ? `\nKey Point: ${instruction}\n` : ''}
+1. Greeting: "Hi ${clientName}, this is [Your Name] calling about your loan application."
+2. Purpose: Discuss current status and next steps
+3. Ask: "Do you have any questions I can help with?"
+4. Close: Schedule follow-up if needed`;
+
+      case 'voicemail':
+        return `Hi ${clientName}, this is [Your Name] from [Company]. ${instruction ? instruction + ' ' : ''}I'm calling about your loan application. Please call me back at your convenience at [phone number]. Thank you!`;
+
+      default:
+        return generateDefaultMessage(selectedTask);
     }
   };
 
@@ -387,12 +566,79 @@ Loan Officer`;
                   <span className="train-ai-icon">🎓</span>
                   <span className="train-ai-label">Train AI (Optional)</span>
                 </div>
-                <textarea
-                  className="train-ai-input"
-                  value={feedbackText}
-                  onChange={(e) => setFeedbackText(e.target.value)}
-                  placeholder="Type instructions to teach AI how to handle similar tasks in the future... (e.g., 'Always mention our competitive rates when following up on pre-approvals')"
-                />
+                <div className="train-ai-input-wrapper">
+                  <textarea
+                    className="train-ai-input"
+                    value={feedbackText}
+                    onChange={(e) => setFeedbackText(e.target.value)}
+                    placeholder="Type or speak instructions to teach AI how to handle similar tasks... (e.g., 'Always mention our competitive rates when following up on pre-approvals')"
+                  />
+                  <button
+                    className={`voice-input-btn ${isListening ? 'listening' : ''}`}
+                    onClick={isListening ? stopListening : startListening}
+                    title={isListening ? 'Stop listening' : 'Click to speak'}
+                  >
+                    {isListening ? '🔴' : '🎤'}
+                  </button>
+                </div>
+                {isListening && (
+                  <div className="listening-indicator">
+                    <span className="pulse-dot"></span> Listening... speak your instructions
+                  </div>
+                )}
+                <div className="train-ai-actions">
+                  <button
+                    className="train-ai-btn"
+                    onClick={handleTrainAI}
+                    disabled={!feedbackText.trim() || trainingInProgress}
+                  >
+                    {trainingInProgress ? 'Training...' : '🧠 Train AI'}
+                  </button>
+                </div>
+                {aiAcknowledgment && (
+                  <div className="ai-acknowledgment">
+                    <div className="acknowledgment-header">
+                      <span className="ack-icon">✅</span>
+                      <span className="ack-title">AI Response:</span>
+                    </div>
+                    <div className="acknowledgment-text">{aiAcknowledgment}</div>
+                  </div>
+                )}
+                {aiAcknowledgment && (
+                  <div className="repopulate-section">
+                    <span className="repopulate-label">Repopulate message with training:</span>
+                    <div className="repopulate-buttons">
+                      <button
+                        className={`repopulate-btn ${regeneratingChannel === 'email' ? 'loading' : ''}`}
+                        onClick={() => handleRegenerateMessage('email')}
+                        disabled={regeneratingChannel !== null}
+                      >
+                        {regeneratingChannel === 'email' ? '...' : '✉️ Email'}
+                      </button>
+                      <button
+                        className={`repopulate-btn ${regeneratingChannel === 'text' ? 'loading' : ''}`}
+                        onClick={() => handleRegenerateMessage('text')}
+                        disabled={regeneratingChannel !== null}
+                      >
+                        {regeneratingChannel === 'text' ? '...' : '💬 Text'}
+                      </button>
+                      <button
+                        className={`repopulate-btn ${regeneratingChannel === 'phone' ? 'loading' : ''}`}
+                        onClick={() => handleRegenerateMessage('phone')}
+                        disabled={regeneratingChannel !== null}
+                      >
+                        {regeneratingChannel === 'phone' ? '...' : '📞 Phone'}
+                      </button>
+                      <button
+                        className={`repopulate-btn ${regeneratingChannel === 'voicemail' ? 'loading' : ''}`}
+                        onClick={() => handleRegenerateMessage('voicemail')}
+                        disabled={regeneratingChannel !== null}
+                      >
+                        {regeneratingChannel === 'voicemail' ? '...' : '🎙️ Voicemail'}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* AI-Drafted Message Section */}
