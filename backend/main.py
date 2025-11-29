@@ -14940,7 +14940,19 @@ async def approve_reconciliation(
 
             # Get loan number - generate if not provided
             loan_number = get_val("loan_number")
-            borrower_name = get_val("borrower_name", "Unknown")
+
+            # Get borrower name - handle separate first_name/last_name fields
+            borrower_name = get_val("borrower_name")
+            if not borrower_name:
+                first_name = get_val("first_name", "")
+                last_name = get_val("last_name", "")
+                borrower_name = f"{first_name} {last_name}".strip() or "Unknown"
+
+            # Get email - handle borrower_email field name
+            borrower_email = get_val("borrower_email") or get_val("email")
+
+            # Get phone - handle borrower_phone field name
+            borrower_phone = get_val("borrower_phone") or get_val("phone")
 
             # If no loan number, try to find existing loan by borrower name first
             if not loan_number:
@@ -15008,8 +15020,8 @@ async def approve_reconciliation(
                     lead_stage_enum = lead_stage_map[stage_upper]
                     new_lead = Lead(
                         name=borrower_name,
-                        email=get_val("borrower_email"),
-                        phone=get_val("borrower_phone"),
+                        email=borrower_email,
+                        phone=borrower_phone,
                         source="reconciliation",
                         owner_id=current_user.id
                     )
@@ -15045,6 +15057,8 @@ async def approve_reconciliation(
                 new_loan = Loan(
                     loan_number=loan_number,
                     borrower_name=borrower_name,
+                    borrower_email=borrower_email,
+                    borrower_phone=borrower_phone,
                     coborrower_name=get_val("coborrower_name"),
                     program=get_val("program"),
                     amount=float(get_val("amount", 0) or get_val("loan_amount", 0) or 0),
