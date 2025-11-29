@@ -939,7 +939,7 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
                 <p className="field-hint">
                   Task repeats weekly until loan is closed, canceled, withdrawn, or denied.
                   <br />
-                  <em>Monday updates: First update goes out on the Monday following LE Pending date entry (not same day if added on Monday).</em>
+                  <em>Monday updates: First update goes out on the Monday following Disclosed date entry (not same day if added on Monday).</em>
                 </p>
               </div>
               <div className="modal-actions">

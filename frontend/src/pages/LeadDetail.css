@@ -13,31 +13,15 @@
   margin-bottom: 24px;
 }
 
-.btn-back {
-  padding: 8px 16px;
-  background: white;
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-  color: #666;
-  transition: all 0.2s;
-}
-
-.btn-back:hover {
-  background: #f5f5f5;
-  border-color: #218D8D;
-  color: #218D8D;
-}
-
 .nav-buttons {
   display: flex;
   gap: 12px;
   align-items: center;
 }
 
+.btn-back,
 .btn-next {
-  padding: 8px 16px;
+  padding: 10px 20px;
   background: #218D8D;
   border: 1px solid #218D8D;
   border-radius: 6px;
@@ -46,13 +30,17 @@
   color: white;
   transition: all 0.2s;
   font-weight: 500;
+  min-width: 160px;
+  text-align: center;
 }
 
+.btn-back:hover,
 .btn-next:hover {
   background: #1a7070;
   border-color: #1a7070;
 }
 
+.btn-back:disabled,
 .btn-next:disabled {
   background: #ccc;
   border-color: #ccc;

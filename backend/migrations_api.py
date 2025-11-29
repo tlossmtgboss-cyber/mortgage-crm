@@ -567,7 +567,7 @@ async def run_weekly_task_columns_migration(
 
     Business Rules:
     - Monday Weekly Update: First update goes out on the Monday FOLLOWING the
-      LE Pending date entry (not same day if added on Monday)
+      Disclosed date entry (not same day if added on Monday)
     - Tasks repeat until loan is closed, canceled, withdrawn, or denied
     """
     try:

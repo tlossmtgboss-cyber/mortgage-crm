@@ -16,7 +16,7 @@ const LEAD_STATUSES = {
 };
 
 const ACTIVE_LOAN_STATUSES = {
-  le_pending: { name: 'LE Pending', color: '#6366f1' },
+  disclosed: { name: 'Disclosed', color: '#6366f1' },
   in_processing: { name: 'In Processing', color: '#3b82f6' },
   underwriting_received: { name: 'Underwriting Received', color: '#8b5cf6' },
   approved: { name: 'Approved', color: '#10b981' },
@@ -80,7 +80,7 @@ const STAGE_CONFIG = {
     color: '#10b981',
     statuses: ACTIVE_LOAN_STATUSES,
     defaultTasksByStatus: {
-      le_pending: [
+      disclosed: [
         { id: 22, title: 'Generate Loan Estimate', description: 'Create LE with loan terms, rates, closing costs, and cash to close', order: 1, auto_trigger: 'on_status_change', days_offset: 0 },
         { id: 23, title: 'Generate Initial Disclosures', description: 'Prepare TRID disclosures, state disclosures, and acknowledgment forms', order: 2, auto_trigger: 'after_previous', days_offset: 0 },
         { id: 24, title: 'Send LE Package', description: 'Deliver via email with eSign link, SMS notification, and portal update', order: 3, auto_trigger: 'after_previous', days_offset: 0 },

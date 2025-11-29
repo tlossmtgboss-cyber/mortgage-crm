@@ -519,7 +519,7 @@ WORKFLOW_DEFINITIONS = {
         "id": "workflow_under_contract",
         "name": "under_contract",
         "display_name": "Under Contract",
-        "description": "Statuses impacted: LE Pending, In Processing, In Underwriting, Approved, Clear to Close",
+        "description": "Statuses impacted: Disclosed, In Processing, In Underwriting, Approved, Clear to Close",
         "objective": "Create a 5-star processing experience",
         "color": "#f59e0b",
         "task_count": 9

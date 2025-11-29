@@ -4,7 +4,7 @@ Handles scheduling and execution of recurring weekly tasks like Monday updates.
 
 Business Rules:
 1. Monday Weekly Update: First update goes out on the Monday FOLLOWING the
-   LE Pending date entry (not the same day if added on Monday)
+   Disclosed date entry (not the same day if added on Monday)
 2. Tasks repeat every week until loan is closed, canceled, withdrawn, or denied
 3. Stakeholder emails exclude underwriter and closer
 
@@ -85,8 +85,8 @@ class WeeklyTaskScheduler:
         Get all loans eligible for weekly updates.
 
         Criteria:
-        - Loan is in LE Pending status or later (but not closed/canceled/etc.)
-        - Has an le_pending_date set
+        - Loan is in Disclosed status or later (but not closed/canceled/etc.)
+        - Has a disclosed_date set
         - Not in a terminal status
         """
         if not self.Loan:
@@ -100,7 +100,7 @@ class WeeklyTaskScheduler:
         try:
             loans = self.db.query(self.Loan).filter(
                 and_(
-                    # Has entered processing (has LE Pending date or equivalent)
+                    # Has entered processing (has Disclosed date or equivalent)
                     or_(
                         self.Loan.loan_estimate_sent_date.isnot(None),
                         self.Loan.stage.in_(['PROCESSING', 'SUBMITTED', 'UW_RECEIVED', 'APPROVED', 'SUSPENDED', 'CTC', 'DOCS'])
@@ -243,7 +243,7 @@ class WeeklyTaskScheduler:
         if loan_status in [s.lower() for s in stop_statuses]:
             return False
 
-        # Get the trigger date (LE Pending date or loan estimate sent date)
+        # Get the trigger date (Disclosed date or loan estimate sent date)
         trigger_date = getattr(loan, 'loan_estimate_sent_date', None) or getattr(loan, 'created_at', None)
         if not trigger_date:
             return False

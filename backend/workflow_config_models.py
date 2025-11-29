@@ -115,7 +115,7 @@ def create_workflow_config_models(Base):
         # When repeat_weekly=True, task repeats every week until loan closes
         # repeat_day_of_week: 0=Monday, 1=Tuesday, ..., 6=Sunday
         # First task goes out on the NEXT occurrence of that day after trigger date
-        # (e.g., if LE Pending added on Monday, first Monday update is NEXT Monday)
+        # (e.g., if Disclosed added on Monday, first Monday update is NEXT Monday)
         repeat_weekly = Column(Boolean, default=False)
         repeat_day_of_week = Column(Integer, nullable=True)  # 0=Monday, 6=Sunday
         repeat_until_status = Column(JSON, default=list)  # List of statuses that stop the repeat

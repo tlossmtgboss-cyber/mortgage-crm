@@ -1306,7 +1306,7 @@ async def process_weekly_tasks(
     to trigger weekly tasks like Monday Updates.
 
     Business Rules:
-    - Monday Weekly Update: First update goes out on the Monday FOLLOWING the LE Pending date entry
+    - Monday Weekly Update: First update goes out on the Monday FOLLOWING the Disclosed date entry
     - Tasks repeat every week until loan is closed, canceled, withdrawn, or denied
     - Stakeholder emails exclude underwriter and closer
 

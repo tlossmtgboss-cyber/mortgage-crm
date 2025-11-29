@@ -7,7 +7,7 @@ import './Loans.css';
 const stageIdToFilter = {
   'new': 'New Leads',
   'preapproved': 'Pre-Approved',
-  'le_pending': 'LE Pending',
+  'disclosed': 'Disclosed',
   'processing': 'In Processing',
   'underwriting': 'In Underwriting',
   'ctc': 'Clear to Close',
@@ -111,7 +111,7 @@ function Loans() {
 
   const filters = [
     'All',
-    'LE Pending',
+    'Disclosed',
     'In Processing',
     'In Underwriting',
     'Approved',
@@ -905,7 +905,7 @@ function Loans() {
 function getStatusClass(status) {
   const statusMap = {
     'Contract Received': 'received',
-    'LE Pending': 'le_pending',
+    'Disclosed': 'disclosed',
     'In Processing': 'processing',
     'Approved': 'approved',
     'Suspended': 'suspended',
