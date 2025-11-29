@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { sanitizeText } from '../utils/sanitize';
 import './MeetingRoom.css';
 
@@ -12,9 +12,8 @@ const API_BASE = isProduction
 const MeetingRoom = () => {
   const { roomCode } = useParams();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
 
-  // Host detection - determine from JWT and meeting data, not URL param
+  // Host detection - determine from user ID and meeting data (not URL param)
   const [isHost, setIsHost] = useState(false);
   const [currentUserId, setCurrentUserId] = useState(null);
 
@@ -89,6 +88,34 @@ const MeetingRoom = () => {
     const fetchMeeting = async () => {
       try {
         setLoading(true);
+
+        // First, get current user info from API if logged in
+        let userId = null;
+        let userName = 'Guest';
+        const token = localStorage.getItem('token');
+        if (token) {
+          try {
+            // Get actual user ID from /users/me endpoint
+            const userResponse = await fetch(`${API_BASE}/api/v1/users/me`, {
+              headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (userResponse.ok) {
+              const userData = await userResponse.json();
+              userId = userData.id;
+              userName = userData.full_name?.split(' ')[0] || userData.email?.split('@')[0] || 'Guest';
+              setCurrentUserId(userId);
+              setDisplayName(userName);
+            } else {
+              // Fallback to JWT parsing for display name
+              const payload = JSON.parse(atob(token.split('.')[1]));
+              userName = payload.sub?.split('@')[0] || 'Guest';
+              setDisplayName(userName);
+            }
+          } catch {
+            setDisplayName('Guest');
+          }
+        }
+
         const response = await fetch(`${API_BASE}/api/v1/meetings/join/${roomCode}`);
 
         if (!response.ok) {
@@ -99,20 +126,13 @@ const MeetingRoom = () => {
         const data = await response.json();
         setMeeting(data.meeting);
 
-        // Check if waiting room is enabled
-        if (data.meeting.waiting_room_enabled && !isHost) {
-          setInWaitingRoom(true);
-        }
+        // Determine if current user is the host by comparing user IDs
+        const userIsHost = userId && data.meeting.host_user_id && userId === data.meeting.host_user_id;
+        setIsHost(userIsHost);
 
-        // Auto-set display name if logged in
-        const token = localStorage.getItem('token');
-        if (token) {
-          try {
-            const payload = JSON.parse(atob(token.split('.')[1]));
-            setDisplayName(payload.sub?.split('@')[0] || 'Guest');
-          } catch {
-            setDisplayName('Guest');
-          }
+        // Check if waiting room is enabled - only for non-hosts
+        if (data.meeting.waiting_room_enabled && !userIsHost) {
+          setInWaitingRoom(true);
         }
       } catch (err) {
         setError(err.message);
@@ -122,7 +142,7 @@ const MeetingRoom = () => {
     };
 
     fetchMeeting();
-  }, [roomCode, isHost]);
+  }, [roomCode]);
 
   // Initialize media on join
   const initializeMedia = async () => {
