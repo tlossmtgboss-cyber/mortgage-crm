@@ -859,3 +859,287 @@ async def trigger_status_update(
         "status": "success",
         "updated": results
     }
+
+
+# ============================================================================
+# Email Report Endpoint
+# ============================================================================
+
+from pydantic import BaseModel, EmailStr
+
+class SLAReportEmailRequest(BaseModel):
+    email_address: str
+    include_run_rates: bool = True
+    include_forecasts: bool = True
+    include_bottlenecks: bool = True
+
+
+@router.post("/reports/send-email")
+async def send_sla_report_email(
+    request: SLAReportEmailRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Send SLA run rate report via email.
+
+    Generates a comprehensive report including:
+    - Run rates per milestone type
+    - Inventory forecasts
+    - Bottleneck analysis
+    - Health score
+    """
+    from tasks.sla_tasks import calculate_run_rate, calculate_inventory_forecast, calculate_health_score
+    import smtplib
+    import os
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+
+    # Get all active SLA measures
+    measures = get_all_sla_measures(db, organization_id=1, active_only=True)
+    milestone_types = list(set(m.milestone_type for m in measures))
+
+    # Build report data
+    run_rates = []
+    forecasts = []
+    bottlenecks = []
+    total_inventory = 0
+    total_at_risk = 0
+    total_overdue = 0
+
+    for mt in milestone_types:
+        try:
+            rr = calculate_run_rate(db, mt, lookback_days=30, organization_id=1)
+            run_rates.append(rr)
+
+            fc = calculate_inventory_forecast(db, mt, organization_id=1)
+            forecasts.append(fc)
+
+            if fc["is_potential_bottleneck"]:
+                bottlenecks.append({
+                    "milestone_type": mt.value,
+                    "inventory": fc["current_inventory"],
+                    "days_to_clear": fc["days_to_clear_inventory"],
+                    "daily_run_rate": fc["daily_run_rate"]
+                })
+
+            total_inventory += fc["current_inventory"]
+            total_at_risk += fc["at_risk_count"]
+            total_overdue += fc["overdue_count"]
+        except Exception as e:
+            logger.warning(f"Error calculating metrics for {mt}: {e}")
+
+    health_score = calculate_health_score(total_inventory, total_at_risk, total_overdue)
+    report_time = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+    # Build HTML email
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; background-color: #f5f5f5; }}
+            .container {{ max-width: 800px; margin: 0 auto; padding: 20px; }}
+            .header {{ background: linear-gradient(135deg, #218D8D 0%, #1a7070 100%); color: white; padding: 30px; text-align: center; border-radius: 12px 12px 0 0; }}
+            .header h1 {{ margin: 0; font-size: 28px; font-weight: 600; }}
+            .header p {{ margin: 10px 0 0; opacity: 0.9; }}
+            .content {{ background: white; padding: 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }}
+            .summary-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 30px; }}
+            .summary-card {{ background: #f8f9fa; padding: 20px; border-radius: 8px; text-align: center; }}
+            .summary-card.green {{ border-left: 4px solid #10b981; }}
+            .summary-card.yellow {{ border-left: 4px solid #f59e0b; }}
+            .summary-card.red {{ border-left: 4px solid #ef4444; }}
+            .summary-card.blue {{ border-left: 4px solid #3b82f6; }}
+            .summary-card .value {{ font-size: 32px; font-weight: 700; color: #1f2937; }}
+            .summary-card .label {{ font-size: 12px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; }}
+            .section {{ margin-bottom: 30px; }}
+            .section h2 {{ font-size: 18px; color: #1f2937; border-bottom: 2px solid #218D8D; padding-bottom: 10px; margin-bottom: 15px; }}
+            table {{ width: 100%; border-collapse: collapse; }}
+            th, td {{ padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb; }}
+            th {{ background: #f9fafb; font-size: 12px; text-transform: uppercase; color: #6b7280; font-weight: 600; }}
+            .trend-up {{ color: #10b981; }}
+            .trend-down {{ color: #ef4444; }}
+            .trend-stable {{ color: #6b7280; }}
+            .bottleneck-badge {{ display: inline-block; background: #fef2f2; color: #dc2626; padding: 4px 12px; border-radius: 16px; font-size: 12px; font-weight: 500; }}
+            .footer {{ text-align: center; padding: 20px; color: #9ca3af; font-size: 12px; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>SLA Run Rate Report</h1>
+                <p>Generated: {report_time}</p>
+            </div>
+            <div class="content">
+                <div class="summary-grid">
+                    <div class="summary-card blue">
+                        <div class="value">{health_score}</div>
+                        <div class="label">Health Score</div>
+                    </div>
+                    <div class="summary-card green">
+                        <div class="value">{total_inventory}</div>
+                        <div class="label">Active Milestones</div>
+                    </div>
+                    <div class="summary-card yellow">
+                        <div class="value">{total_at_risk}</div>
+                        <div class="label">At Risk</div>
+                    </div>
+                    <div class="summary-card red">
+                        <div class="value">{total_overdue}</div>
+                        <div class="label">Overdue</div>
+                    </div>
+                </div>
+    """
+
+    if request.include_run_rates and run_rates:
+        html_content += """
+                <div class="section">
+                    <h2>Run Rates by Milestone Type</h2>
+                    <table>
+                        <tr>
+                            <th>Milestone</th>
+                            <th>Daily Rate</th>
+                            <th>Weekly Rate</th>
+                            <th>On-Time %</th>
+                            <th>Trend</th>
+                        </tr>
+        """
+        for rr in sorted(run_rates, key=lambda x: x["daily_run_rate"], reverse=True):
+            trend_class = "trend-up" if rr["trend"] == "improving" else ("trend-down" if rr["trend"] == "declining" else "trend-stable")
+            trend_arrow = "↑" if rr["trend"] == "improving" else ("↓" if rr["trend"] == "declining" else "→")
+            html_content += f"""
+                        <tr>
+                            <td>{rr["milestone_type"].replace("_", " ").title()}</td>
+                            <td>{rr["daily_run_rate"]}</td>
+                            <td>{rr["weekly_run_rate"]}</td>
+                            <td>{rr["on_time_rate"]}%</td>
+                            <td class="{trend_class}">{trend_arrow} {rr["trend"].title()}</td>
+                        </tr>
+            """
+        html_content += """
+                    </table>
+                </div>
+        """
+
+    if request.include_forecasts and forecasts:
+        active_forecasts = [f for f in forecasts if f["current_inventory"] > 0]
+        if active_forecasts:
+            html_content += """
+                <div class="section">
+                    <h2>Inventory Forecast</h2>
+                    <table>
+                        <tr>
+                            <th>Milestone</th>
+                            <th>Inventory</th>
+                            <th>Days to Clear</th>
+                            <th>At Risk</th>
+                            <th>Overdue</th>
+                        </tr>
+            """
+            for fc in sorted(active_forecasts, key=lambda x: x["current_inventory"], reverse=True):
+                days_to_clear = fc["days_to_clear_inventory"] if fc["days_to_clear_inventory"] else "∞"
+                html_content += f"""
+                        <tr>
+                            <td>{fc["milestone_type"].replace("_", " ").title()}</td>
+                            <td>{fc["current_inventory"]}</td>
+                            <td>{days_to_clear}</td>
+                            <td>{fc["at_risk_count"]}</td>
+                            <td>{fc["overdue_count"]}</td>
+                        </tr>
+                """
+            html_content += """
+                    </table>
+                </div>
+            """
+
+    if request.include_bottlenecks and bottlenecks:
+        html_content += """
+                <div class="section">
+                    <h2>Potential Bottlenecks</h2>
+        """
+        for bn in bottlenecks:
+            days = bn["days_to_clear"] if bn["days_to_clear"] else "∞"
+            html_content += f"""
+                    <div style="background: #fef2f2; padding: 15px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid #ef4444;">
+                        <strong>{bn["milestone_type"].replace("_", " ").title()}</strong><br>
+                        <span style="color: #6b7280;">Inventory: {bn["inventory"]} | Days to clear: {days} | Daily rate: {bn["daily_run_rate"]}</span>
+                    </div>
+            """
+        html_content += """
+                </div>
+        """
+
+    if not bottlenecks and total_inventory == 0:
+        html_content += """
+                <div class="section">
+                    <div style="text-align: center; padding: 40px; color: #6b7280;">
+                        <div style="font-size: 48px; margin-bottom: 10px;">✓</div>
+                        <h3 style="color: #10b981; margin: 0;">All Clear</h3>
+                        <p>No active milestones or bottlenecks detected.</p>
+                        <p style="font-size: 12px;">SLA tracking will populate as loans progress through the pipeline.</p>
+                    </div>
+                </div>
+        """
+
+    html_content += """
+            </div>
+            <div class="footer">
+                <p>This report was generated automatically by the Mortgage CRM SLA Tracking System.</p>
+                <p>Snapshots are captured daily at 8 AM and 12 PM.</p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+    # Send email
+    try:
+        smtp_host = os.getenv('SMTP_HOST', 'smtp.gmail.com')
+        smtp_port = int(os.getenv('SMTP_PORT', 587))
+        smtp_user = os.getenv('SMTP_USER')
+        smtp_password = os.getenv('SMTP_PASSWORD')
+        from_email = os.getenv('FROM_EMAIL', 'noreply@mortgagecrm.com')
+        from_name = os.getenv('FROM_NAME', 'Mortgage CRM')
+
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = f"SLA Run Rate Report - {report_time}"
+        msg['From'] = f"{from_name} <{from_email}>"
+        msg['To'] = request.email_address
+
+        # Plain text version
+        text_content = f"""
+SLA Run Rate Report
+Generated: {report_time}
+
+Health Score: {health_score}/100
+Active Milestones: {total_inventory}
+At Risk: {total_at_risk}
+Overdue: {total_overdue}
+
+View the full report in HTML format.
+        """
+
+        msg.attach(MIMEText(text_content, 'plain'))
+        msg.attach(MIMEText(html_content, 'html'))
+
+        with smtplib.SMTP(smtp_host, smtp_port) as server:
+            server.starttls()
+            if smtp_user and smtp_password:
+                server.login(smtp_user, smtp_password)
+            server.send_message(msg)
+
+        logger.info(f"SLA report email sent to {request.email_address}")
+        return {
+            "status": "success",
+            "message": f"Report sent to {request.email_address}",
+            "report_summary": {
+                "health_score": health_score,
+                "total_inventory": total_inventory,
+                "at_risk": total_at_risk,
+                "overdue": total_overdue,
+                "bottleneck_count": len(bottlenecks)
+            }
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to send SLA report email: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
