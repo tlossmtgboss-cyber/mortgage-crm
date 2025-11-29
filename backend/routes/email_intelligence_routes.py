@@ -2549,22 +2549,28 @@ async def process_email_with_intelligence(
     - SLA tracking (if needed)
     - Follow-up task (optional)
     """
-    user_id = get_current_user_id(db)
+    try:
+        user_id = get_current_user_id(db)
 
-    service = ConversationIntelligenceService(db)
+        service = ConversationIntelligenceService(db)
 
-    result = await service.process_email_disposition(
-        email_id=email_id,
-        disposition=disposition,
-        user_id=user_id,
-        override_summary=override_summary,
-        additional_notes=additional_notes,
-        create_task=create_task,
-        task_title=task_title,
-        task_due_days=task_due_days
-    )
+        result = await service.process_email_disposition(
+            email_id=email_id,
+            disposition=disposition,
+            user_id=user_id,
+            override_summary=override_summary,
+            additional_notes=additional_notes,
+            create_task=create_task,
+            task_title=task_title,
+            task_due_days=task_due_days
+        )
 
-    return result
+        return result
+    except Exception as e:
+        logger.error(f"Error processing email {email_id} with intelligence: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/batch-process-with-intelligence")
