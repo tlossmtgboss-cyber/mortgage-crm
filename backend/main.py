@@ -6432,8 +6432,16 @@ The Team menu item appears for managers and management roles.
             # Get leads
             leads = db.query(Lead).filter(Lead.owner_id == current_user.id).all()
 
-            # Get loans
-            loans = db.query(Loan).filter(Loan.loan_officer_id == current_user.id).all()
+            # Get loans using raw SQL to avoid enum issues
+            try:
+                loan_rows = db.execute(
+                    text("""SELECT id, loan_number, borrower_name, stage, amount, processor, underwriter, days_in_stage, closing_date
+                            FROM loans WHERE loan_officer_id = :user_id"""),
+                    {"user_id": current_user.id}
+                ).fetchall()
+            except Exception as e:
+                logger.error(f"Error fetching loans for pipeline: {e}")
+                loan_rows = []
 
             # Lead stages
             lead_stages = {}
@@ -6447,7 +6455,7 @@ The Team menu item appears for managers and management roles.
 
             # Loan stages
             loan_stages = {}
-            for loan in loans:
+            for loan in loan_rows:
                 stage = str(loan.stage) if loan.stage else "Unknown"
                 if stage not in loan_stages:
                     loan_stages[stage] = {"count": 0, "items": []}
@@ -6460,17 +6468,17 @@ The Team menu item appears for managers and management roles.
                         "amount": float(loan.amount) if loan.amount else 0,
                         "processor": loan.processor,
                         "underwriter": loan.underwriter,
-                        "days_in_stage": loan.days_in_stage if hasattr(loan, 'days_in_stage') else None,
+                        "days_in_stage": loan.days_in_stage,
                         "closing_date": loan.closing_date.isoformat() if loan.closing_date else None,
                         "type": "loan"
                     })
 
             return {
                 "total_leads": len(leads),
-                "total_loans": len(loans),
+                "total_loans": len(loan_rows),
                 "lead_stages": lead_stages,
                 "loan_stages": loan_stages,
-                "summary": f"{len(leads)} leads, {len(loans)} active loans"
+                "summary": f"{len(leads)} leads, {len(loan_rows)} active loans"
             }
 
         async def execute_schedule_followup(args):
@@ -6717,17 +6725,38 @@ The Team menu item appears for managers and management roles.
             borrower_name = args.get("borrower_name")
             loan_number = args.get("loan_number")
 
+            # Use raw SQL to avoid enum deserialization issues
             loan = None
-            if loan_id:
-                loan = db.query(Loan).filter(Loan.id == loan_id).first()
-            elif loan_number:
-                loan = db.query(Loan).filter(Loan.loan_number == loan_number).first()
-            elif borrower_name:
-                search = f"%{borrower_name}%"
-                loan = db.query(Loan).filter(
-                    Loan.loan_officer_id == current_user.id,
-                    or_(Loan.borrower_name.ilike(search), Loan.coborrower_name.ilike(search))
-                ).first()
+            try:
+                if loan_id:
+                    loan = db.execute(
+                        text("""SELECT id, loan_number, borrower_name, coborrower_name, stage, program, amount, rate,
+                                       closing_date, days_in_stage, sla_status, property_address,
+                                       loan_officer_name, processor, underwriter, closer
+                                FROM loans WHERE id = :loan_id"""),
+                        {"loan_id": loan_id}
+                    ).fetchone()
+                elif loan_number:
+                    loan = db.execute(
+                        text("""SELECT id, loan_number, borrower_name, coborrower_name, stage, program, amount, rate,
+                                       closing_date, days_in_stage, sla_status, property_address,
+                                       loan_officer_name, processor, underwriter, closer
+                                FROM loans WHERE loan_number = :loan_number"""),
+                        {"loan_number": loan_number}
+                    ).fetchone()
+                elif borrower_name:
+                    loan = db.execute(
+                        text("""SELECT id, loan_number, borrower_name, coborrower_name, stage, program, amount, rate,
+                                       closing_date, days_in_stage, sla_status, property_address,
+                                       loan_officer_name, processor, underwriter, closer
+                                FROM loans WHERE loan_officer_id = :user_id
+                                AND (LOWER(borrower_name) LIKE LOWER(:search) OR LOWER(coborrower_name) LIKE LOWER(:search))
+                                LIMIT 1"""),
+                        {"user_id": current_user.id, "search": f"%{borrower_name}%"}
+                    ).fetchone()
+            except Exception as e:
+                logger.error(f"Error finding loan: {e}")
+                return {"success": False, "message": f"Error finding loan: {str(e)}"}
 
             if not loan:
                 return {"success": False, "message": "Loan not found. Please provide a valid loan ID, loan number, or borrower name."}
@@ -7075,7 +7104,14 @@ The Team menu item appears for managers and management roles.
 
                 if report_type == "pipeline_summary":
                     leads = db.query(Lead).filter(Lead.owner_id == current_user.id).all()
-                    loans = db.query(Loan).filter(Loan.loan_officer_id == current_user.id).all()
+                    # Use raw SQL for loans to avoid enum issues
+                    try:
+                        loan_rows = db.execute(
+                            text("SELECT id, stage, amount FROM loans WHERE loan_officer_id = :user_id"),
+                            {"user_id": current_user.id}
+                        ).fetchall()
+                    except:
+                        loan_rows = []
 
                     lead_stages = {}
                     for lead in leads:
@@ -7084,7 +7120,7 @@ The Team menu item appears for managers and management roles.
 
                     loan_stages = {}
                     total_volume = 0
-                    for loan in loans:
+                    for loan in loan_rows:
                         stage = str(loan.stage).replace("LoanStage.", "") if loan.stage else "Unknown"
                         loan_stages[stage] = loan_stages.get(stage, 0) + 1
                         if loan.amount:
@@ -7096,11 +7132,11 @@ The Team menu item appears for managers and management roles.
                         "period": period,
                         "metrics": {
                             "total_leads": len(leads),
-                            "total_loans": len(loans),
+                            "total_loans": len(loan_rows),
                             "total_volume": total_volume,
                             "lead_stages": lead_stages,
                             "loan_stages": loan_stages,
-                            "avg_loan_amount": total_volume / len(loans) if loans else 0
+                            "avg_loan_amount": total_volume / len(loan_rows) if loan_rows else 0
                         }
                     }
 
@@ -7588,7 +7624,47 @@ The Team menu item appears for managers and management roles.
         # Get user's actual data
         all_leads = db.query(Lead).filter(Lead.owner_id == current_user.id).all()
         all_tasks = db.query(Task).filter(Task.owner_id == current_user.id).all()
-        all_loans = db.query(Loan).filter(Loan.loan_officer_id == current_user.id).all()
+
+        # Get loans using raw SQL to avoid enum deserialization issues
+        try:
+            loan_rows = db.execute(
+                text("""
+                    SELECT id, loan_number, borrower_name, coborrower_name, stage, program, amount, rate,
+                           closing_date, days_in_stage, sla_status, created_at, updated_at,
+                           loan_officer_name, loan_officer_email, processor, processor_email,
+                           underwriter, underwriter_email, closer, closer_email, property_address
+                    FROM loans
+                    WHERE loan_officer_id = :user_id
+                    ORDER BY updated_at DESC
+                """),
+                {"user_id": current_user.id}
+            ).fetchall()
+
+            # Create simple loan objects for use in context
+            class SimpleLoan:
+                def __init__(self, row):
+                    self.id = row.id
+                    self.loan_number = row.loan_number
+                    self.borrower_name = row.borrower_name
+                    self.coborrower_name = row.coborrower_name
+                    self.stage = row.stage  # Keep as string
+                    self.program = row.program
+                    self.amount = row.amount
+                    self.rate = row.rate
+                    self.closing_date = row.closing_date
+                    self.days_in_stage = row.days_in_stage
+                    self.sla_status = row.sla_status
+                    self.loan_officer_name = row.loan_officer_name
+                    self.processor = row.processor
+                    self.underwriter = row.underwriter
+                    self.closer = row.closer
+                    self.property_address = row.property_address
+
+            all_loans = [SimpleLoan(row) for row in loan_rows]
+            logger.info(f"Loaded {len(all_loans)} loans for AI context using raw SQL")
+        except Exception as e:
+            logger.error(f"Error loading loans for AI context: {e}")
+            all_loans = []
 
         # Get pending reconciliation items that need review
         pending_reconciliation = db.query(ExtractedData).join(
