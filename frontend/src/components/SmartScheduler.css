@@ -1738,6 +1738,33 @@
   border-color: #d1d5db;
 }
 
+/* Booking Confirmation Card - Special styling */
+.reminder-card.booking-confirmation {
+  background: #f0fdf4;
+  border-color: #86efac;
+  border-left: 4px solid #22c55e;
+}
+
+.reminder-card.booking-confirmation .reminder-number {
+  color: #15803d;
+  font-weight: 700;
+}
+
+.reminder-card.booking-confirmation.disabled {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  border-left-color: #9ca3af;
+}
+
+.confirmation-timing {
+  font-weight: 500;
+  color: #15803d;
+  background: #dcfce7;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 0.8125rem;
+}
+
 .reminder-header {
   display: flex;
   justify-content: space-between;
