@@ -73,6 +73,32 @@ class AlertStatusEnum(str, Enum):
     SNOOZED = "snoozed"
 
 
+class TriggerFromEventEnum(str, Enum):
+    """Events that can trigger the SLA timer to start."""
+    LEAD_CREATED = "lead_created"
+    LEAD_RESPONSE = "lead_response"
+    INITIAL_CONSULTATION = "initial_consultation"
+    PREAPPROVAL = "preapproval"
+    APPLICATION_SUBMITTED = "application_submitted"
+    DOCUMENT_COLLECTION = "document_collection"
+    APPLICATION_COMPLETE = "application_complete"
+    PROCESSING_START = "processing_start"
+    APPRAISAL_ORDERED = "appraisal_ordered"
+    APPRAISAL_RECEIVED = "appraisal_received"
+    TITLE_ORDERED = "title_ordered"
+    TITLE_RECEIVED = "title_received"
+    SUBMITTED_TO_UW = "submitted_to_uw"
+    UW_DECISION = "uw_decision"
+    CONDITIONS_ISSUED = "conditions_issued"
+    CONDITIONS_CLEARED = "conditions_cleared"
+    CLEAR_TO_CLOSE = "clear_to_close"
+    CLOSING_DOCS_OUT = "closing_docs_out"
+    CLOSING_SCHEDULED = "closing_scheduled"
+    CLOSED = "closed"
+    LOAN_CREATED = "loan_created"
+    PREVIOUS_MILESTONE = "previous_milestone"
+
+
 # ============ SLA Measure Schemas ============
 
 class SLAMeasureBase(BaseModel):
@@ -82,6 +108,8 @@ class SLAMeasureBase(BaseModel):
     description: Optional[str] = None
     target_value: float = Field(..., gt=0)
     target_unit: TimeUnitEnum = TimeUnitEnum.HOURS
+    trigger_from: Optional[str] = "previous_milestone"  # What event triggers the SLA timer
+    trigger_from_is_default: bool = False  # If true, this trigger is the default for this milestone type
     warning_threshold_pct: float = Field(default=75, ge=0, le=100)
     critical_threshold_pct: float = Field(default=100, ge=0, le=200)
     applies_to_loan_types: Optional[List[str]] = None
@@ -101,6 +129,8 @@ class SLAMeasureUpdate(BaseModel):
     description: Optional[str] = None
     target_value: Optional[float] = None
     target_unit: Optional[TimeUnitEnum] = None
+    trigger_from: Optional[str] = None  # What event triggers the SLA timer
+    trigger_from_is_default: Optional[bool] = None  # Make this the default trigger
     warning_threshold_pct: Optional[float] = None
     critical_threshold_pct: Optional[float] = None
     applies_to_loan_types: Optional[List[str]] = None
@@ -113,6 +143,8 @@ class SLAMeasureResponse(SLAMeasureBase):
     """Schema for SLA Measure response."""
     id: int
     organization_id: int
+    trigger_from: Optional[str] = "previous_milestone"
+    trigger_from_is_default: bool = False
     created_at: datetime
     updated_at: datetime
 

@@ -449,6 +449,7 @@ const SLASettings = () => {
                 <tr>
                   <th>Milestone</th>
                   <th>Target</th>
+                  <th>Trigger From</th>
                   <th>Warning At</th>
                   <th>Status</th>
                   <th>Actions</th>
@@ -464,6 +465,23 @@ const SLASettings = () => {
                     <td>
                       <span className="target-badge">
                         {formatTargetUnit(measure.target_value, measure.target_unit)}
+                      </span>
+                    </td>
+                    <td>
+                      <span style={{ fontSize: '13px', color: '#4b5563' }}>
+                        {formatMilestoneType(measure.trigger_from || 'previous_milestone')}
+                        {measure.trigger_from_is_default && (
+                          <span style={{
+                            marginLeft: '6px',
+                            fontSize: '10px',
+                            padding: '2px 6px',
+                            background: '#dbeafe',
+                            color: '#1d4ed8',
+                            borderRadius: '10px'
+                          }}>
+                            Default
+                          </span>
+                        )}
                       </span>
                     </td>
                     <td>{measure.warning_threshold_pct}%</td>
@@ -1012,6 +1030,8 @@ const EditMeasureModal = ({ measure, onSave, onClose }) => {
     description: measure?.description || '',
     target_value: measure?.target_value || 4,
     target_unit: measure?.target_unit || 'hours',
+    trigger_from: measure?.trigger_from || 'previous_milestone',
+    trigger_from_is_default: measure?.trigger_from_is_default ?? false,
     warning_threshold_pct: measure?.warning_threshold_pct || 75,
     critical_threshold_pct: measure?.critical_threshold_pct || 100,
     business_hours_only: measure?.business_hours_only ?? true,
@@ -1025,6 +1045,32 @@ const EditMeasureModal = ({ measure, onSave, onClose }) => {
     'title_ordered', 'title_received', 'submitted_to_uw', 'uw_decision',
     'conditions_issued', 'conditions_cleared', 'clear_to_close',
     'closing_docs_out', 'closing_scheduled', 'closed', 'funded'
+  ];
+
+  // Trigger From options - what event starts the SLA timer
+  const triggerFromOptions = [
+    { value: 'lead_created', label: 'Lead Created' },
+    { value: 'loan_created', label: 'Loan Created' },
+    { value: 'previous_milestone', label: 'Previous Milestone Completed' },
+    { value: 'lead_response', label: 'Lead Response' },
+    { value: 'initial_consultation', label: 'Initial Consultation' },
+    { value: 'preapproval', label: 'Pre-Approval' },
+    { value: 'application_submitted', label: 'Application Submitted' },
+    { value: 'document_collection', label: 'Document Collection' },
+    { value: 'application_complete', label: 'Application Complete' },
+    { value: 'processing_start', label: 'Processing Start' },
+    { value: 'appraisal_ordered', label: 'Appraisal Ordered' },
+    { value: 'appraisal_received', label: 'Appraisal Received' },
+    { value: 'title_ordered', label: 'Title Ordered' },
+    { value: 'title_received', label: 'Title Received' },
+    { value: 'submitted_to_uw', label: 'Submitted to Underwriting' },
+    { value: 'uw_decision', label: 'Underwriting Decision' },
+    { value: 'conditions_issued', label: 'Conditions Issued' },
+    { value: 'conditions_cleared', label: 'Conditions Cleared' },
+    { value: 'clear_to_close', label: 'Clear to Close' },
+    { value: 'closing_docs_out', label: 'Closing Docs Out' },
+    { value: 'closing_scheduled', label: 'Closing Scheduled' },
+    { value: 'closed', label: 'Closed' }
   ];
 
   const handleSubmit = (e) => {
@@ -1095,6 +1141,36 @@ const EditMeasureModal = ({ measure, onSave, onClose }) => {
                   <option value="business_days">Business Days</option>
                 </select>
               </div>
+            </div>
+            <div className="form-group">
+              <label>Trigger From (SLA Timer Starts When)</label>
+              <select
+                value={formData.trigger_from}
+                onChange={e => setFormData({ ...formData, trigger_from: e.target.value })}
+                style={{ width: '100%' }}
+              >
+                {triggerFromOptions.map(opt => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                The SLA timer will start counting from this event
+              </p>
+            </div>
+            <div className="form-group">
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <input
+                  type="checkbox"
+                  checked={formData.trigger_from_is_default}
+                  onChange={e => setFormData({ ...formData, trigger_from_is_default: e.target.checked })}
+                />
+                Set as Default Trigger for this Milestone
+              </label>
+              <p style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>
+                If checked, this trigger will be the default for all "{formData.milestone_type.replace(/_/g, ' ')}" milestones
+              </p>
             </div>
             <div className="form-row">
               <div className="form-group">

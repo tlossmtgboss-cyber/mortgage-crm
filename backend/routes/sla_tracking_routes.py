@@ -291,6 +291,62 @@ async def run_sla_migration(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/migrate-trigger-from")
+async def add_trigger_from_columns(db: Session = Depends(get_db)):
+    """
+    Add trigger_from and trigger_from_is_default columns to sla_measures table.
+    This migration adds support for specifying what event triggers the SLA timer.
+    """
+    try:
+        with engine.connect() as conn:
+            # Check if trigger_from column exists
+            result = conn.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.columns
+                    WHERE table_name = 'sla_measures' AND column_name = 'trigger_from'
+                )
+            """))
+            trigger_from_exists = result.scalar()
+
+            columns_added = []
+
+            if not trigger_from_exists:
+                conn.execute(text("""
+                    ALTER TABLE sla_measures
+                    ADD COLUMN trigger_from VARCHAR(50) DEFAULT 'previous_milestone'
+                """))
+                columns_added.append("trigger_from")
+                logger.info("Added trigger_from column to sla_measures")
+
+            # Check if trigger_from_is_default column exists
+            result = conn.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.columns
+                    WHERE table_name = 'sla_measures' AND column_name = 'trigger_from_is_default'
+                )
+            """))
+            trigger_from_is_default_exists = result.scalar()
+
+            if not trigger_from_is_default_exists:
+                conn.execute(text("""
+                    ALTER TABLE sla_measures
+                    ADD COLUMN trigger_from_is_default BOOLEAN DEFAULT FALSE
+                """))
+                columns_added.append("trigger_from_is_default")
+                logger.info("Added trigger_from_is_default column to sla_measures")
+
+            conn.commit()
+
+            return {
+                "status": "success",
+                "message": f"Migration completed. Columns added: {columns_added}" if columns_added else "Columns already exist",
+                "columns_added": columns_added
+            }
+    except Exception as e:
+        logger.error(f"Migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ============================================================================
 # SLA Measure Configuration Routes
 # ============================================================================

@@ -49,6 +49,8 @@ def create_sla_measure(
         description=measure.description,
         target_value=measure.target_value,
         target_unit=measure.target_unit,
+        trigger_from=getattr(measure, 'trigger_from', 'previous_milestone') or 'previous_milestone',
+        trigger_from_is_default=getattr(measure, 'trigger_from_is_default', False) or False,
         warning_threshold_pct=measure.warning_threshold_pct,
         critical_threshold_pct=measure.critical_threshold_pct,
         applies_to_loan_types=measure.applies_to_loan_types,

@@ -80,6 +80,32 @@ class AlertStatus(str, enum.Enum):
 
 # ============ SLA Measure Configuration ============
 
+class TriggerFromEvent(str, enum.Enum):
+    """Events that can trigger the SLA timer to start."""
+    LEAD_CREATED = "lead_created"
+    LEAD_RESPONSE = "lead_response"
+    INITIAL_CONSULTATION = "initial_consultation"
+    PREAPPROVAL = "preapproval"
+    APPLICATION_SUBMITTED = "application_submitted"
+    DOCUMENT_COLLECTION = "document_collection"
+    APPLICATION_COMPLETE = "application_complete"
+    PROCESSING_START = "processing_start"
+    APPRAISAL_ORDERED = "appraisal_ordered"
+    APPRAISAL_RECEIVED = "appraisal_received"
+    TITLE_ORDERED = "title_ordered"
+    TITLE_RECEIVED = "title_received"
+    SUBMITTED_TO_UW = "submitted_to_uw"
+    UW_DECISION = "uw_decision"
+    CONDITIONS_ISSUED = "conditions_issued"
+    CONDITIONS_CLEARED = "conditions_cleared"
+    CLEAR_TO_CLOSE = "clear_to_close"
+    CLOSING_DOCS_OUT = "closing_docs_out"
+    CLOSING_SCHEDULED = "closing_scheduled"
+    CLOSED = "closed"
+    LOAN_CREATED = "loan_created"
+    PREVIOUS_MILESTONE = "previous_milestone"
+
+
 class SLAMeasure(Base):
     """
     Configuration for each SLA measure/milestone.
@@ -98,6 +124,10 @@ class SLAMeasure(Base):
     # Target configuration
     target_value = Column(Float, nullable=False)  # e.g., 4 hours, 2 days
     target_unit = Column(SQLEnum(TimeUnit), nullable=False, default=TimeUnit.HOURS)
+
+    # Trigger configuration - what event starts the timer for this milestone
+    trigger_from = Column(String(50), nullable=True, default="previous_milestone")  # What triggers the timer
+    trigger_from_is_default = Column(Boolean, default=False)  # If true, this trigger is the default for this milestone type
 
     # Thresholds (as percentage of target)
     warning_threshold_pct = Column(Float, default=75)  # At 75% of target = warning
