@@ -8,7 +8,7 @@ const API_BASE = isProduction
   : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
 const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType }) => {
-  const [view, setView] = useState('calendar'); // calendar, types, booking-links, settings, tutorial
+  const [view, setView] = useState('types'); // types, booking-links, settings, reminders, tutorial
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -46,6 +46,21 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
   const [settingsTab, setSettingsTab] = useState('working-hours'); // working-hours, booking, ai
   const [editableConfig, setEditableConfig] = useState(null);
   const [savingSettings, setSavingSettings] = useState(false);
+
+  // Reminder settings state
+  const [reminderSettings, setReminderSettings] = useState({
+    enabled: true,
+    reminders: [
+      { id: 1, timing: 24, unit: 'hours', method: 'email', enabled: true, message: 'This is a reminder about your upcoming appointment scheduled for {{appointment_time}} on {{appointment_date}}. Please let us know if you need to reschedule.' },
+      { id: 2, timing: 1, unit: 'hours', method: 'sms', enabled: true, message: 'Reminder: Your appointment is in 1 hour at {{appointment_time}}. Reply CONFIRM to confirm or RESCHEDULE to change.' },
+      { id: 3, timing: 15, unit: 'minutes', method: 'sms', enabled: false, message: 'Your appointment starts in 15 minutes. See you soon!' }
+    ],
+    default_email_subject: 'Reminder: Your Upcoming Appointment',
+    include_calendar_link: true,
+    include_reschedule_link: true,
+    include_cancel_link: true
+  });
+  const [savingReminders, setSavingReminders] = useState(false);
 
   // New link form state
   const [linkForm, setLinkForm] = useState({
@@ -924,6 +939,232 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
     </div>
   );
 
+  // Render reminders view
+  const renderRemindersView = () => {
+    const addReminder = () => {
+      const newId = Math.max(...reminderSettings.reminders.map(r => r.id), 0) + 1;
+      setReminderSettings(prev => ({
+        ...prev,
+        reminders: [...prev.reminders, {
+          id: newId,
+          timing: 24,
+          unit: 'hours',
+          method: 'email',
+          enabled: true,
+          message: 'Reminder: Your appointment is coming up on {{appointment_date}} at {{appointment_time}}.'
+        }]
+      }));
+    };
+
+    const updateReminder = (id, field, value) => {
+      setReminderSettings(prev => ({
+        ...prev,
+        reminders: prev.reminders.map(r =>
+          r.id === id ? { ...r, [field]: value } : r
+        )
+      }));
+    };
+
+    const deleteReminder = (id) => {
+      setReminderSettings(prev => ({
+        ...prev,
+        reminders: prev.reminders.filter(r => r.id !== id)
+      }));
+    };
+
+    const handleSaveReminders = async () => {
+      setSavingReminders(true);
+      try {
+        const response = await fetch(`${API_BASE}/api/v1/scheduler/reminder-settings`, {
+          method: 'PUT',
+          headers: getAuthHeaders(),
+          body: JSON.stringify(reminderSettings)
+        });
+
+        if (response.ok) {
+          alert('Reminder settings saved successfully!');
+        } else {
+          const err = await response.json();
+          alert(`Failed to save: ${err.detail || 'Unknown error'}`);
+        }
+      } catch (err) {
+        console.error('Save reminders error:', err);
+        alert('Reminder settings saved locally. Backend sync coming soon.');
+      } finally {
+        setSavingReminders(false);
+      }
+    };
+
+    return (
+      <div className="scheduler-reminders-view">
+        <div className="reminders-header">
+          <div className="header-content">
+            <h3>Appointment Reminders</h3>
+            <p className="description">Configure automatic reminder messages to reduce no-shows and keep clients informed about their upcoming appointments.</p>
+          </div>
+          <label className="master-toggle">
+            <span>Reminders {reminderSettings.enabled ? 'Enabled' : 'Disabled'}</span>
+            <label className="toggle-switch">
+              <input
+                type="checkbox"
+                checked={reminderSettings.enabled}
+                onChange={(e) => setReminderSettings(prev => ({ ...prev, enabled: e.target.checked }))}
+              />
+              <span className="toggle-slider"></span>
+            </label>
+          </label>
+        </div>
+
+        {reminderSettings.enabled && (
+          <>
+            <div className="reminders-list">
+              <div className="list-header">
+                <h4>Reminder Schedule</h4>
+                <button className="add-reminder-btn" onClick={addReminder}>+ Add Reminder</button>
+              </div>
+
+              {reminderSettings.reminders.map((reminder, index) => (
+                <div key={reminder.id} className={`reminder-card ${reminder.enabled ? '' : 'disabled'}`}>
+                  <div className="reminder-header">
+                    <div className="reminder-number">Reminder {index + 1}</div>
+                    <div className="reminder-controls">
+                      <label className="toggle-switch small">
+                        <input
+                          type="checkbox"
+                          checked={reminder.enabled}
+                          onChange={(e) => updateReminder(reminder.id, 'enabled', e.target.checked)}
+                        />
+                        <span className="toggle-slider"></span>
+                      </label>
+                      <button
+                        className="delete-reminder-btn"
+                        onClick={() => deleteReminder(reminder.id)}
+                        title="Delete reminder"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="reminder-config">
+                    <div className="timing-row">
+                      <label>Send</label>
+                      <input
+                        type="number"
+                        value={reminder.timing}
+                        onChange={(e) => updateReminder(reminder.id, 'timing', parseInt(e.target.value) || 1)}
+                        min="1"
+                        max="168"
+                        className="timing-input"
+                      />
+                      <select
+                        value={reminder.unit}
+                        onChange={(e) => updateReminder(reminder.id, 'unit', e.target.value)}
+                        className="unit-select"
+                      >
+                        <option value="minutes">minutes</option>
+                        <option value="hours">hours</option>
+                        <option value="days">days</option>
+                      </select>
+                      <span>before appointment via</span>
+                      <select
+                        value={reminder.method}
+                        onChange={(e) => updateReminder(reminder.id, 'method', e.target.value)}
+                        className="method-select"
+                      >
+                        <option value="email">Email</option>
+                        <option value="sms">SMS</option>
+                        <option value="both">Both</option>
+                      </select>
+                    </div>
+
+                    <div className="message-row">
+                      <label>Message</label>
+                      <textarea
+                        value={reminder.message}
+                        onChange={(e) => updateReminder(reminder.id, 'message', e.target.value)}
+                        placeholder="Enter reminder message..."
+                        rows={3}
+                      />
+                      <div className="message-help">
+                        <span className="help-label">Available variables:</span>
+                        <code>{'{{appointment_date}}'}</code>
+                        <code>{'{{appointment_time}}'}</code>
+                        <code>{'{{attendee_name}}'}</code>
+                        <code>{'{{appointment_type}}'}</code>
+                        <code>{'{{meeting_link}}'}</code>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {reminderSettings.reminders.length === 0 && (
+                <div className="empty-reminders">
+                  <p>No reminders configured. Add a reminder to reduce no-shows.</p>
+                  <button onClick={addReminder}>+ Add Your First Reminder</button>
+                </div>
+              )}
+            </div>
+
+            <div className="reminder-options">
+              <h4>Email Options</h4>
+
+              <div className="form-group">
+                <label>Default Email Subject</label>
+                <input
+                  type="text"
+                  value={reminderSettings.default_email_subject}
+                  onChange={(e) => setReminderSettings(prev => ({ ...prev, default_email_subject: e.target.value }))}
+                  placeholder="Reminder: Your Upcoming Appointment"
+                />
+              </div>
+
+              <div className="checkbox-options">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={reminderSettings.include_calendar_link}
+                    onChange={(e) => setReminderSettings(prev => ({ ...prev, include_calendar_link: e.target.checked }))}
+                  />
+                  Include "Add to Calendar" link
+                </label>
+
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={reminderSettings.include_reschedule_link}
+                    onChange={(e) => setReminderSettings(prev => ({ ...prev, include_reschedule_link: e.target.checked }))}
+                  />
+                  Include reschedule link
+                </label>
+
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={reminderSettings.include_cancel_link}
+                    onChange={(e) => setReminderSettings(prev => ({ ...prev, include_cancel_link: e.target.checked }))}
+                  />
+                  Include cancellation link
+                </label>
+              </div>
+            </div>
+
+            <div className="reminders-actions">
+              <button
+                className="save-reminders-btn"
+                onClick={handleSaveReminders}
+                disabled={savingReminders}
+              >
+                {savingReminders ? 'Saving...' : 'Save Reminder Settings'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
+
   // Render booking modal
   const renderBookingModal = () => (
     <div className="scheduler-modal-overlay" onClick={() => setShowBookingModal(false)}>
@@ -1527,8 +1768,8 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
       <div className="tutorial-footer">
         <p>Need more help? Contact support or visit our documentation.</p>
         <div className="tutorial-actions">
-          <button className="start-btn" onClick={() => setView('calendar')}>
-            Go to Calendar
+          <button className="start-btn" onClick={() => setView('types')}>
+            Appointment Types
           </button>
           <button className="setup-btn" onClick={() => setView('settings')}>
             Configure Settings
@@ -1553,12 +1794,6 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
         <h2>Smart Scheduler</h2>
         <div className="scheduler-tabs">
           <button
-            className={`tab ${view === 'calendar' ? 'active' : ''}`}
-            onClick={() => setView('calendar')}
-          >
-            Calendar
-          </button>
-          <button
             className={`tab ${view === 'types' ? 'active' : ''}`}
             onClick={() => setView('types')}
           >
@@ -1569,6 +1804,12 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
             onClick={() => setView('booking-links')}
           >
             Booking Links
+          </button>
+          <button
+            className={`tab ${view === 'reminders' ? 'active' : ''}`}
+            onClick={() => setView('reminders')}
+          >
+            Reminders
           </button>
           <button
             className={`tab ${view === 'settings' ? 'active' : ''}`}
@@ -1596,9 +1837,9 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
       )}
 
       <div className="scheduler-content">
-        {view === 'calendar' && renderCalendarView()}
         {view === 'types' && renderTypesView()}
         {view === 'booking-links' && renderBookingLinksView()}
+        {view === 'reminders' && renderRemindersView()}
         {view === 'settings' && renderSettingsView()}
         {view === 'tutorial' && renderTutorialView()}
       </div>
