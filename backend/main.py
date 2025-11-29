@@ -14958,7 +14958,6 @@ async def approve_reconciliation(
         if not extracted:
             raise HTTPException(status_code=404, detail="Extracted data not found")
 
-        logger.info(f"RECON_DEBUG_V4_START: Found extracted data {approval.extracted_data_id}, processing approval")
 
         # Apply corrections if provided
         if approval.corrections:
@@ -14996,7 +14995,6 @@ async def approve_reconciliation(
                 extracted.match_entity_id = approval.target_entity_id
 
         # Handle "Create New Loan" option
-        logger.info(f"RECON_DEBUG_V4: create_new_loan={approval.create_new_loan}")
         if approval.create_new_loan:
             # Create a new loan from the extracted data
             fields = extracted.fields or {}
@@ -15026,7 +15024,6 @@ async def approve_reconciliation(
             # If no loan number, generate one (skip searching for existing loans to avoid enum errors)
             # NOTE: Previously searched for existing loans, but this causes issues when DB has
             # loans with enum values that don't match the current enum definition
-            logger.info(f"RECON_DEBUG_V7: loan_number={loan_number}, borrower_name={borrower_name}")
             if not loan_number:
                 # Generate a loan number
                 import random
@@ -15079,7 +15076,6 @@ async def approve_reconciliation(
                 }
 
                 stage_upper = stage_str.upper()
-                logger.info(f"RECON_DEBUG_V5: stage_str={stage_str}, stage_upper={stage_upper}")
                 if stage_upper in lead_stage_map:
                     # This is a Lead stage - create a Lead instead
                     lead_stage_enum = lead_stage_map[stage_upper]
@@ -15116,13 +15112,10 @@ async def approve_reconciliation(
                         "message": f"Created new lead {borrower_name} in {lead_stage_enum.name} stage"
                     }
 
-                logger.info(f"RECON_DEBUG_V6: About to get loan stage from map")
                 stage = loan_stage_map.get(stage_upper, LoanStage.PROCESSING)
-                logger.info(f"RECON_DEBUG_V6: Got stage={stage}, name={stage.name}")
 
                 # Use raw SQL INSERT to bypass SQLAlchemy enum serialization completely
                 # This ensures we control exactly what gets sent to PostgreSQL
-                logger.info(f"RECONCILIATION V3: Starting raw SQL INSERT for loan. Stage will be: {stage.name}")
                 amount = float(get_val("amount", 0) or get_val("loan_amount", 0) or 0)
 
                 result = db.execute(
