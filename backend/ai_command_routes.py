@@ -3185,6 +3185,83 @@ def get_fallback_market_data() -> Dict[str, Any]:
     }
 
 
+def get_sla_turnaround_times(db: Session) -> Dict[str, Any]:
+    """Fetch SLA turnaround times from the SLA tracking system"""
+    try:
+        from crud.sla_tracking import get_all_sla_measures, get_dashboard_summary
+
+        # Get all active SLA measures
+        measures = get_all_sla_measures(db, organization_id=1, active_only=True)
+
+        # Format SLA measures for display
+        sla_list = []
+        for measure in measures:
+            # Convert target value to readable format
+            target_value = measure.target_value
+            target_unit = measure.target_unit if hasattr(measure, 'target_unit') else 'hours'
+
+            # Format milestone type for display
+            milestone_name = measure.milestone_type.value if hasattr(measure.milestone_type, 'value') else str(measure.milestone_type)
+            display_name = milestone_name.replace('_', ' ').title()
+
+            # Calculate display time (convert hours to days if > 24)
+            if target_unit == 'hours' and target_value >= 24:
+                display_time = f"{target_value / 24:.1f} business days"
+            elif target_unit == 'hours':
+                display_time = f"{target_value:.0f} hours"
+            elif target_unit == 'days':
+                display_time = f"{target_value:.0f} business days"
+            else:
+                display_time = f"{target_value} {target_unit}"
+
+            sla_list.append({
+                "milestone": display_name,
+                "name": measure.name,
+                "target": display_time,
+                "target_hours": target_value,
+                "description": measure.description,
+                "warning_threshold": f"{measure.warning_threshold_pct}%",
+                "business_hours_only": measure.business_hours_only if hasattr(measure, 'business_hours_only') else True
+            })
+
+        # Get dashboard summary for current performance
+        try:
+            summary = get_dashboard_summary(db, organization_id=1)
+        except Exception:
+            summary = {}
+
+        return {
+            "sla_measures": sla_list,
+            "total_measures": len(sla_list),
+            "current_performance": {
+                "on_time_rate": summary.get("on_time_rate", "N/A"),
+                "active_milestones": summary.get("active_milestones", 0),
+                "at_risk": summary.get("at_risk", 0),
+                "overdue": summary.get("overdue", 0)
+            },
+            "business_hours": {
+                "start": "9:00 AM",
+                "end": "5:00 PM",
+                "work_days": "Monday - Friday"
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error fetching SLA turnaround times: {e}")
+        # Return default SLA values if database fetch fails
+        return {
+            "sla_measures": [
+                {"milestone": "Application To Approval", "name": "Application to Approval", "target": "5-10 business days", "description": "Time from application submission to credit approval"},
+                {"milestone": "Processing", "name": "Initial Processing", "target": "1-3 business days", "description": "Initial document collection and review"},
+                {"milestone": "Underwriting", "name": "Underwriting Review", "target": "3-5 business days", "description": "Full underwriting analysis"},
+                {"milestone": "Clear To Close", "name": "Clear to Close", "target": "1-2 business days", "description": "Final approval after conditions cleared"},
+                {"milestone": "Funding", "name": "Funding", "target": "Same/next business day", "description": "Post-closing disbursement"}
+            ],
+            "total_measures": 5,
+            "is_default": True,
+            "note": "These are typical industry targets. Check /sla page for your organization's specific SLAs."
+        }
+
+
 async def process_with_claude(
     message: str,
     context: List[Dict[str, str]],
@@ -3229,8 +3306,55 @@ async def process_with_claude(
     is_tough_love = "tough love" in message_lower or "inefficiencies" in message_lower
     is_teach_process = "teach me the process" in message_lower or "systemic thinking" in message_lower
 
+    # SLA/Turnaround time detection
+    is_sla_question = any(phrase in message_lower for phrase in [
+        "sla", "turnaround", "turn time", "turntimes", "turn-time",
+        "how long", "timeline", "time frame", "timeframe",
+        "processing time", "expected time", "target time",
+        "service level", "service-level"
+    ])
+
     is_coaching_mode = any([is_daily_briefing, is_pipeline_audit, is_focus_reset, is_next_action,
                            is_accountability, is_tough_love, is_teach_process])
+
+    # INJECT SLA DATA for SLA-related questions
+    if is_sla_question:
+        sla_data = get_sla_turnaround_times(db)
+        sla_measures = sla_data.get("sla_measures", [])
+
+        # Format SLA measures for the system prompt
+        sla_text = "\n".join([
+            f"- **{m['milestone']}**: {m['target']}" + (f" - {m['description']}" if m.get('description') else "")
+            for m in sla_measures
+        ])
+
+        performance = sla_data.get("current_performance", {})
+        business_hours = sla_data.get("business_hours", {})
+
+        system += f"""
+
+=== SLA TURNAROUND TIMES (USE THIS DATA TO ANSWER THE USER'S QUESTION) ===
+
+YOUR ORGANIZATION'S SLA TARGETS:
+{sla_text}
+
+BUSINESS HOURS: {business_hours.get('start', '9 AM')} - {business_hours.get('end', '5 PM')}, {business_hours.get('work_days', 'Monday-Friday')}
+
+CURRENT PERFORMANCE:
+- On-Time Rate: {performance.get('on_time_rate', 'N/A')}
+- Active Milestones: {performance.get('active_milestones', 0)}
+- At Risk: {performance.get('at_risk', 0)}
+- Overdue: {performance.get('overdue', 0)}
+
+IMPORTANT: When answering questions about SLAs or turnaround times:
+1. Use the EXACT values from the SLA TARGETS above
+2. Reference specific milestones by name
+3. Mention that these are measured in business hours (Mon-Fri, 9-5)
+4. If asked about specific stages, provide the target time for that stage
+5. DO NOT give generic industry estimates - use YOUR organization's configured SLAs
+
+=== END SLA DATA ===
+"""
 
     if is_coaching_mode or any(phrase in message_lower for phrase in ["today", "daily", "morning", "need to do", "what should i", "my tasks", "what's on"]):
         # Fetch daily summary data to show exact numbers
