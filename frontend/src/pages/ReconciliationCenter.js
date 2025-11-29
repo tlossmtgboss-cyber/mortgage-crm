@@ -374,7 +374,7 @@ function ReconciliationCenter() {
 
         if (!silent) {
           const count = data.processed_count || data.synced_count || 0;
-          setSyncStatus(`✓ Synced ${count} emails successfully`);
+          setSyncStatus(`Synced ${count} emails successfully`);
           // Refresh both pending and completed items to show new data
           fetchPendingItems();
           fetchCompletedItems();
@@ -385,7 +385,7 @@ function ReconciliationCenter() {
       } else {
         if (!silent) {
           // Try to get specific error message
-          let errorMessage = '⚠ Sync failed - please try again';
+          let errorMessage = 'Sync failed - please try again';
           try {
             const errorData = await response.json();
             if (response.status === 404 && errorData.detail) {
@@ -1237,7 +1237,7 @@ function ReconciliationCenter() {
               )}
             </button>
             {syncStatus && (
-              <div className={`sync-status ${syncStatus.includes('✓') ? 'success' : 'error'}`}>
+              <div className={`sync-status ${syncStatus.includes('Synced') ? 'success' : 'error'}`}>
                 {syncStatus}
               </div>
             )}
@@ -1252,7 +1252,7 @@ function ReconciliationCenter() {
         {/* New Tab Content */}
         {activeTab === 'new' && newItems.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-icon">📬</div>
+            <div className="empty-icon"></div>
             <h2>No New Messages</h2>
             <p>New emails will appear here for processing. Click "Sync Emails Now" to check for new messages.</p>
           </div>
@@ -1301,7 +1301,6 @@ function ReconciliationCenter() {
                 <div className="detail-header">
                   <div className="detail-title-section">
                     <div className="detail-source">
-                      <span className="source-icon-large">📬</span>
                       <span className="source-name">NEW MESSAGE</span>
                     </div>
                     <h2 className="detail-title">{selectedItem.email_intent || 'New Email'}</h2>
@@ -1671,7 +1670,7 @@ function ReconciliationCenter() {
                                 }}
                                 title="Delete field"
                               >
-                                🗑️
+                                Delete
                               </button>
                             </div>
                           </div>
@@ -1729,7 +1728,7 @@ function ReconciliationCenter() {
                               }}
                               title="Remove field"
                             >
-                              🗑️
+                              Delete
                             </button>
                           </div>
                         </div>
@@ -1884,7 +1883,7 @@ function ReconciliationCenter() {
         {/* Auto-Processing Tab Content */}
         {activeTab === 'autoProcessing' && autoProcessingItems.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-icon">🤖</div>
+            <div className="empty-icon"></div>
             <h2>No Auto-Processing Items</h2>
             <p>Messages that AI handles automatically will appear here. Enable auto-processing by checking the box when approving similar messages.</p>
           </div>
@@ -1974,9 +1973,9 @@ function ReconciliationCenter() {
                     <h3>Matched Profile</h3>
                     <div className="entity-match-card">
                       <div className="entity-icon">
-                        {selectedItem.match_entity_type === 'lead' ? '👤' :
-                         selectedItem.match_entity_type === 'active_loan' ? '🏠' :
-                         selectedItem.match_entity_type === 'client' ? '👥' : '📋'}
+                        {selectedItem.match_entity_type === 'lead' ? 'Lead' :
+                         selectedItem.match_entity_type === 'active_loan' ? 'Loan' :
+                         selectedItem.match_entity_type === 'client' ? 'Client' : 'Item'}
                       </div>
                       <div className="entity-details">
                         <div className="entity-name">
@@ -2018,7 +2017,7 @@ function ReconciliationCenter() {
                   <div className="recommended-action-section">
                     <h3>AI Recommendation</h3>
                     <div className="recommendation-card">
-                      <div className="recommendation-icon">💡</div>
+                      <div className="recommendation-icon"></div>
                       <div className="recommendation-content">
                         <div className="recommendation-title">
                           {selectedItem.recommended_action.title || 'Suggested Action'}
@@ -2028,7 +2027,7 @@ function ReconciliationCenter() {
                         </div>
                         {selectedItem.recommended_action.learning_status && (
                           <div className="learning-status">
-                            🧠 AI Learning: {selectedItem.recommended_action.learning_status}
+                            AI Learning: {selectedItem.recommended_action.learning_status}
                           </div>
                         )}
                         <div className="ai-delegation-option">
@@ -2039,7 +2038,7 @@ function ReconciliationCenter() {
                               onChange={(e) => setDelegateToAI(e.target.checked)}
                             />
                             <span className="delegation-label">
-                              ✓ Let AI handle this task type automatically in the future
+                              Let AI handle this task type automatically in the future
                             </span>
                           </label>
                           {delegateToAI && (
@@ -2191,7 +2190,7 @@ function ReconciliationCenter() {
                               }}
                               title="Delete field"
                             >
-                              🗑️
+                              Delete
                             </button>
                           </div>
                         </div>
@@ -2259,7 +2258,7 @@ function ReconciliationCenter() {
         {/* Pending Review Tab Content */}
         {activeTab === 'pendingReview' && pendingReviewItems.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-icon">✓</div>
+            <div className="empty-icon"></div>
             <h2>All Reviewed!</h2>
             <p>No items pending review. Items flagged by AI for manual review will appear here.</p>
           </div>
@@ -2285,7 +2284,7 @@ function ReconciliationCenter() {
                 onClick={bulkApproveReviewItems}
                 disabled={selectedReviewItems.size === 0 || bulkProcessing}
               >
-                ✓ Approve ({selectedReviewItems.size})
+                Approve ({selectedReviewItems.size})
               </button>
               <button
                 className="btn-warning"
@@ -2299,7 +2298,7 @@ function ReconciliationCenter() {
                 onClick={bulkDeleteReviewItems}
                 disabled={selectedReviewItems.size === 0 || bulkProcessing}
               >
-                🗑️ Delete ({selectedReviewItems.size})
+                Delete ({selectedReviewItems.size})
               </button>
             </div>
           </div>
@@ -2346,7 +2345,7 @@ function ReconciliationCenter() {
                         {item.email_intent || 'UNKNOWN'}
                       </div>
                       <div className="status-badge warning">
-                        ⚠️ NEEDS REVIEW
+                        NEEDS REVIEW
                       </div>
                     </div>
                     <div className="item-subject">{item.email_subject}</div>
@@ -2380,7 +2379,6 @@ function ReconciliationCenter() {
                 <div className="detail-header">
                   <div className="detail-title-section">
                     <div className="detail-source">
-                      <span className="source-icon-large">🎯</span>
                       <span className="source-name">MANUAL PRIORITY</span>
                     </div>
                     <h2 className="detail-title">{selectedItem.email_intent || 'Review Required'}</h2>
@@ -2420,7 +2418,7 @@ function ReconciliationCenter() {
 
                   {selectedItem.review_reason && (
                     <div className="review-alert-banner">
-                      <div className="alert-icon">⚠️</div>
+                      <div className="alert-icon"></div>
                       <div className="alert-content">
                         <strong>Flagged for Review:</strong> {selectedItem.review_reason}
                         <br />
@@ -2566,9 +2564,9 @@ function ReconciliationCenter() {
                         fontSize: '12px',
                         fontWeight: '500'
                       }}>
-                        {createNewLoan ? '➕ New Loan' :
-                         (selectedEntityType || selectedItem.match_entity_type) === 'lead' ? '👤 Lead' :
-                         (selectedEntityType || selectedItem.match_entity_type) === 'loan' ? '📋 Loan' :
+                        {createNewLoan ? 'New Loan' :
+                         (selectedEntityType || selectedItem.match_entity_type) === 'lead' ? 'Lead' :
+                         (selectedEntityType || selectedItem.match_entity_type) === 'loan' ? 'Loan' :
                          selectedItem.match_entity_type}
                       </div>
                       <div className="entity-confidence">
@@ -2802,7 +2800,7 @@ function ReconciliationCenter() {
                                 }}
                                 title="Delete field"
                               >
-                                🗑️
+                                Delete
                               </button>
                             </div>
                           </div>
@@ -2860,7 +2858,7 @@ function ReconciliationCenter() {
                               }}
                               title="Remove field"
                             >
-                              🗑️
+                              Delete
                             </button>
                           </div>
                         </div>
@@ -2978,7 +2976,7 @@ function ReconciliationCenter() {
         {/* Completed Tab Content */}
         {activeTab === 'completed' && completedItems.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-icon">📋</div>
+            <div className="empty-icon"></div>
             <h2>No Completed Items</h2>
             <p>Approved and rejected reconciliation items will appear here.</p>
           </div>
@@ -2998,7 +2996,7 @@ function ReconciliationCenter() {
                         {item.category?.toUpperCase() || 'UNKNOWN'}
                       </div>
                       <div className={`status-badge ${item.status === 'rejected' ? 'rejected' : 'approved'}`}>
-                        {item.status === 'rejected' ? '✕ REJECTED' : '✓ APPROVED'}
+                        {item.status === 'rejected' ? 'REJECTED' : 'APPROVED'}
                       </div>
                     </div>
                     <div className="item-subject">{item.email?.subject}</div>
@@ -3334,7 +3332,7 @@ function ReconciliationCenter() {
                       fontSize: '13px',
                       color: '#059669'
                     }}>
-                      ✓ Selected: {selectedReferralPartner.name}
+                      Selected: {selectedReferralPartner.name}
                       {(selectedReferralPartner.company || selectedReferralPartner.company_name) && ` (${selectedReferralPartner.company || selectedReferralPartner.company_name})`}
                     </div>
                   )}
@@ -3496,7 +3494,6 @@ function ReconciliationCenter() {
           <div className="dialog-content" style={{ maxWidth: '550px' }}>
             <div className="dialog-header" style={{ background: '#fef3c7', borderBottom: '2px solid #f59e0b' }}>
               <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
-                <span style={{ fontSize: '24px' }}>⚠️</span>
                 Status Mismatch Detected
               </h3>
               <button className="dialog-close" onClick={handleStatusCorrectionCancel}>&times;</button>
@@ -3773,7 +3770,6 @@ function ReconciliationCenter() {
                     gap: '8px'
                   }}
                 >
-                  <span>👤</span>
                   View {appliedDataSummary.entityName}'s Profile
                 </button>
               )}
