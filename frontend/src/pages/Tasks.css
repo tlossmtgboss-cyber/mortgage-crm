@@ -2,6 +2,10 @@
   padding: var(--space-md) var(--space-xl);
   max-width: 1600px;
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 64px); /* Account for top nav */
+  overflow: hidden;
 }
 
 .page-header {
@@ -9,6 +13,7 @@
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: var(--space-md);
+  flex-shrink: 0;
 }
 
 .page-header h1 {
@@ -476,6 +481,7 @@
   gap: 8px;
   margin-bottom: 12px;
   border-bottom: 2px solid #e5e7eb;
+  flex-shrink: 0;
 }
 
 .tab-button {
@@ -504,6 +510,9 @@
 
 .tab-content {
   animation: fadeIn 0.3s ease;
+  flex: 1;
+  min-height: 0; /* Important for flexbox children to scroll */
+  overflow: hidden;
 }
 
 @keyframes fadeIn {
@@ -906,13 +915,12 @@
   grid-template-columns: 350px 1fr;
   grid-template-rows: 1fr; /* Explicit row sizing */
   gap: 0;
-  height: calc(100vh - 260px); /* Account for top nav, page header, tabs */
-  min-height: 600px;
+  height: 100%; /* Fill parent container */
+  min-height: 0; /* Allow shrinking in flex context */
   background: white;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   overflow: hidden;
-  margin-bottom: 16px;
 }
 
 /* Ensure grid children take full height */
@@ -1292,6 +1300,15 @@
 }
 
 @media (max-width: 768px) {
+  .tasks-page {
+    height: auto;
+    overflow: visible;
+  }
+
+  .tab-content {
+    overflow: visible;
+  }
+
   .email-layout {
     grid-template-columns: 1fr;
     height: auto;
