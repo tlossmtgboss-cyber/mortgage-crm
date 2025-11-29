@@ -11108,6 +11108,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Feature Flags routes not loaded: {e}")
 
+# Include Email Intelligence routes
+try:
+    from routes.email_intelligence_routes import router as email_intelligence_router
+    app.include_router(email_intelligence_router, tags=["Email Intelligence"])
+    logger.info("✅ Email Intelligence routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Email Intelligence routes not loaded: {e}")
+
 # Email Monitor Migration Endpoint
 @app.post("/api/v1/migrations/add-email-monitor")
 async def add_email_monitor_migration(db: Session = Depends(get_db)):
