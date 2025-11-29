@@ -15025,7 +15025,9 @@ async def approve_reconciliation(
 
             # If no loan number, try to find existing loan by borrower name first
             # IMPORTANT: Only search loans owned by the current user to prevent cross-user matching
+            logger.info(f"RECON_DEBUG_V7: loan_number={loan_number}, borrower_name={borrower_name}")
             if not loan_number:
+                logger.info("RECON_DEBUG_V7: Searching for existing loan by borrower name")
                 existing_by_name = db.query(Loan).filter(
                     Loan.borrower_name.ilike(f"%{borrower_name}%"),
                     Loan.loan_officer_id == current_user.id
@@ -15089,6 +15091,7 @@ async def approve_reconciliation(
                 }
 
                 stage_upper = stage_str.upper()
+                logger.info(f"RECON_DEBUG_V5: stage_str={stage_str}, stage_upper={stage_upper}")
                 if stage_upper in lead_stage_map:
                     # This is a Lead stage - create a Lead instead
                     lead_stage_enum = lead_stage_map[stage_upper]
@@ -15125,7 +15128,9 @@ async def approve_reconciliation(
                         "message": f"Created new lead {borrower_name} in {lead_stage_enum.name} stage"
                     }
 
+                logger.info(f"RECON_DEBUG_V6: About to get loan stage from map")
                 stage = loan_stage_map.get(stage_upper, LoanStage.PROCESSING)
+                logger.info(f"RECON_DEBUG_V6: Got stage={stage}, name={stage.name}")
 
                 # Use raw SQL INSERT to bypass SQLAlchemy enum serialization completely
                 # This ensures we control exactly what gets sent to PostgreSQL
