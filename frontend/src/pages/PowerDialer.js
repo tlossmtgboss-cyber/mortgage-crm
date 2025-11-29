@@ -10,6 +10,8 @@ const PowerDialer = () => {
   const [currentTask, setCurrentTask] = useState(null);
   const [callStatus, setCallStatus] = useState('idle'); // idle, dialing, ringing, in-progress, disposition
   const [tasks, setTasks] = useState([]);
+  const [contacts, setContacts] = useState([]);
+  const [activeTab, setActiveTab] = useState('tasks'); // 'tasks' or 'contacts'
   const [selectedTasks, setSelectedTasks] = useState([]);
   const [settings, setSettings] = useState(null);
   const [callLogs, setCallLogs] = useState([]);
@@ -46,19 +48,32 @@ const PowerDialer = () => {
   // Fetch available tasks for dialing
   const fetchTasks = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/v1/tasks/?status=pending&task_type=call`, {
+      // Use the dedicated call-tasks endpoint that returns tasks with phone numbers
+      const response = await fetch(`${API_BASE}/api/v1/dialer/call-tasks`, {
         headers: getAuthHeaders()
       });
       if (response.ok) {
         const data = await response.json();
-        // Filter tasks that have phone numbers
-        const callableTasks = (data.tasks || []).filter(t =>
-          t.lead_phone || t.loan_borrower_phone || t.contact_phone
-        );
-        setTasks(callableTasks);
+        // Tasks already filtered by backend to only include those with phone numbers
+        setTasks(data.tasks || []);
       }
     } catch (err) {
       console.error('Error fetching tasks:', err);
+    }
+  }, []);
+
+  // Fetch all callable contacts (leads and loans with phone numbers)
+  const fetchContacts = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/dialer/callable-contacts`, {
+        headers: getAuthHeaders()
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setContacts(data.contacts || []);
+      }
+    } catch (err) {
+      console.error('Error fetching contacts:', err);
     }
   }, []);
 
@@ -105,13 +120,14 @@ const PowerDialer = () => {
       await Promise.all([
         fetchSettings(),
         fetchTasks(),
+        fetchContacts(),
         checkActiveSession(),
         fetchCallLogs()
       ]);
       setLoading(false);
     };
     init();
-  }, [fetchSettings, fetchTasks, checkActiveSession, fetchCallLogs]);
+  }, [fetchSettings, fetchTasks, fetchContacts, checkActiveSession, fetchCallLogs]);
 
   // Create new dialer session
   const startSession = async () => {
@@ -383,12 +399,13 @@ const PowerDialer = () => {
     );
   };
 
-  // Select all tasks
+  // Select all tasks or contacts based on active tab
   const selectAllTasks = () => {
-    if (selectedTasks.length === tasks.length) {
+    const items = activeTab === 'tasks' ? tasks : contacts;
+    if (selectedTasks.length === items.length) {
       setSelectedTasks([]);
     } else {
-      setSelectedTasks(tasks.map(t => t.id));
+      setSelectedTasks(items.map(t => t.id));
     }
   };
 
@@ -446,45 +463,93 @@ const PowerDialer = () => {
         <div className="dialer-left-panel">
           {!session ? (
             <>
+              {/* Tab Navigation */}
+              <div className="dialer-tabs">
+                <button
+                  className={`dialer-tab ${activeTab === 'tasks' ? 'active' : ''}`}
+                  onClick={() => { setActiveTab('tasks'); setSelectedTasks([]); }}
+                >
+                  Call Tasks ({tasks.length})
+                </button>
+                <button
+                  className={`dialer-tab ${activeTab === 'contacts' ? 'active' : ''}`}
+                  onClick={() => { setActiveTab('contacts'); setSelectedTasks([]); }}
+                >
+                  All Contacts ({contacts.length})
+                </button>
+              </div>
+
               <div className="panel-header">
-                <h2>Select Tasks to Dial</h2>
+                <h2>{activeTab === 'tasks' ? 'Select Tasks to Dial' : 'Select Contacts to Dial'}</h2>
                 <button
                   className="select-all-btn"
                   onClick={selectAllTasks}
                 >
-                  {selectedTasks.length === tasks.length ? 'Deselect All' : 'Select All'}
+                  {selectedTasks.length === (activeTab === 'tasks' ? tasks : contacts).length ? 'Deselect All' : 'Select All'}
                 </button>
               </div>
 
               <div className="task-list">
-                {tasks.length === 0 ? (
-                  <div className="empty-state">
-                    <p>No call tasks available</p>
-                    <button onClick={() => navigate('/tasks')}>Go to Tasks</button>
-                  </div>
-                ) : (
-                  tasks.map(task => (
-                    <div
-                      key={task.id}
-                      className={`task-item ${selectedTasks.includes(task.id) ? 'selected' : ''}`}
-                      onClick={() => toggleTaskSelection(task.id)}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedTasks.includes(task.id)}
-                        onChange={() => {}}
-                      />
-                      <div className="task-info">
-                        <span className="task-title">{task.title}</span>
-                        <span className="task-contact">
-                          {task.lead_name || task.loan_borrower_name || 'Unknown'}
-                        </span>
-                        <span className="task-phone">
-                          {task.lead_phone || task.loan_borrower_phone || task.contact_phone}
-                        </span>
-                      </div>
+                {activeTab === 'tasks' ? (
+                  // Tasks tab
+                  tasks.length === 0 ? (
+                    <div className="empty-state">
+                      <p>No call tasks available</p>
+                      <p className="empty-hint">Switch to "All Contacts" to dial leads or borrowers directly</p>
                     </div>
-                  ))
+                  ) : (
+                    tasks.map(task => (
+                      <div
+                        key={task.id}
+                        className={`task-item ${selectedTasks.includes(task.id) ? 'selected' : ''}`}
+                        onClick={() => toggleTaskSelection(task.id)}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedTasks.includes(task.id)}
+                          onChange={() => {}}
+                        />
+                        <div className="task-info">
+                          <span className="task-title">{task.title}</span>
+                          <span className="task-contact">
+                            {task.contact_name || task.lead_name || task.loan_borrower_name || 'Unknown'}
+                          </span>
+                          <span className="task-phone">
+                            {task.contact_phone || task.lead_phone || task.loan_borrower_phone}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  )
+                ) : (
+                  // Contacts tab
+                  contacts.length === 0 ? (
+                    <div className="empty-state">
+                      <p>No contacts with phone numbers found</p>
+                    </div>
+                  ) : (
+                    contacts.map(contact => (
+                      <div
+                        key={contact.id}
+                        className={`task-item ${selectedTasks.includes(contact.id) ? 'selected' : ''}`}
+                        onClick={() => toggleTaskSelection(contact.id)}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedTasks.includes(contact.id)}
+                          onChange={() => {}}
+                        />
+                        <div className="task-info">
+                          <span className="task-title">{contact.contact_name}</span>
+                          <span className={`task-type-badge ${contact.entity_type}`}>
+                            {contact.entity_type === 'lead' ? 'Lead' : 'Loan'}
+                          </span>
+                          <span className="task-phone">{contact.contact_phone}</span>
+                          {contact.stage && <span className="task-stage">{contact.stage}</span>}
+                        </div>
+                      </div>
+                    ))
+                  )
                 )}
               </div>
 
@@ -494,7 +559,7 @@ const PowerDialer = () => {
                   onClick={startSession}
                   disabled={selectedTasks.length === 0 || !settings?.business_caller_id}
                 >
-                  Start Session ({selectedTasks.length} tasks)
+                  Start Power Dialer ({selectedTasks.length} {activeTab === 'tasks' ? 'tasks' : 'contacts'})
                 </button>
               </div>
             </>

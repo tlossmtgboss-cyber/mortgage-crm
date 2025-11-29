@@ -93,6 +93,240 @@ async def get_current_user(
 
 
 # =============================================================================
+# Call Tasks Endpoint - Tasks available for Power Dialer
+# =============================================================================
+
+@router.get("/call-tasks")
+async def get_call_tasks(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Get tasks that can be called via Power Dialer.
+
+    Returns tasks that:
+    1. Have call/phone-related titles or categories
+    2. Are pending/in-progress (not completed)
+    3. Have associated leads or loans with phone numbers
+
+    Response includes phone numbers from related Lead/Loan entities.
+    """
+    from main import Task, AITask, Lead, Loan, TaskType
+    from sqlalchemy import or_, and_
+
+    # Call-related keywords to identify phone tasks
+    call_keywords = ['call', 'phone', 'contact', 'dial', 'reach out', 'follow up', 'follow-up', 'callback', 'ring']
+
+    # Build case-insensitive search conditions for task titles
+    call_title_conditions = [Task.title.ilike(f'%{kw}%') for kw in call_keywords]
+    call_title_conditions.extend([Task.description.ilike(f'%{kw}%') for kw in call_keywords])
+
+    # Query Task model first (primary tasks)
+    tasks_query = db.query(Task).filter(
+        Task.owner_id == current_user.id,
+        Task.status.in_(['pending', 'in_progress', 'In Progress']),
+        or_(*call_title_conditions)
+    ).order_by(Task.due_date.asc().nullslast(), Task.created_at.desc())
+
+    # Also get AITask items that look like call tasks
+    ai_call_conditions = [AITask.title.ilike(f'%{kw}%') for kw in call_keywords]
+    ai_call_conditions.extend([AITask.description.ilike(f'%{kw}%') for kw in call_keywords])
+
+    ai_tasks_query = db.query(AITask).filter(
+        AITask.assigned_to_id == current_user.id,
+        AITask.type.in_([TaskType.HUMAN_NEEDED, TaskType.AWAITING_REVIEW, TaskType.IN_PROGRESS]),
+        or_(*ai_call_conditions)
+    ).order_by(AITask.due_date.asc().nullslast(), AITask.created_at.desc())
+
+    # Process tasks and add phone information
+    call_tasks = []
+
+    # Process regular tasks
+    for task in tasks_query.offset(skip).limit(limit).all():
+        phone = None
+        contact_name = None
+        entity_type = None
+        entity_id = None
+
+        # Get phone from Lead
+        if task.lead_id:
+            lead = db.query(Lead).filter(Lead.id == task.lead_id).first()
+            if lead and lead.phone:
+                phone = lead.phone
+                contact_name = lead.name
+                entity_type = 'lead'
+                entity_id = lead.id
+
+        # Get phone from Loan if not found in Lead
+        if not phone and task.loan_id:
+            loan = db.query(Loan).filter(Loan.id == task.loan_id).first()
+            if loan and loan.borrower_phone:
+                phone = loan.borrower_phone
+                contact_name = loan.borrower_name
+                entity_type = 'loan'
+                entity_id = loan.id
+
+        # Also check related_contact_name for phone hint
+        if not phone and task.related_contact_name:
+            contact_name = task.related_contact_name
+
+        # Only include if we have a phone number
+        if phone:
+            call_tasks.append({
+                'id': task.id,
+                'task_type': 'task',
+                'title': task.title,
+                'description': task.description,
+                'priority': task.priority,
+                'status': task.status,
+                'due_date': task.due_date.isoformat() if task.due_date else None,
+                'contact_name': contact_name,
+                'contact_phone': phone,
+                'lead_id': task.lead_id,
+                'loan_id': task.loan_id,
+                'lead_name': contact_name if entity_type == 'lead' else None,
+                'loan_borrower_name': contact_name if entity_type == 'loan' else None,
+                'lead_phone': phone if entity_type == 'lead' else None,
+                'loan_borrower_phone': phone if entity_type == 'loan' else None,
+                'entity_type': entity_type,
+                'entity_id': entity_id,
+                'created_at': task.created_at.isoformat() if task.created_at else None
+            })
+
+    # Process AI tasks if we need more
+    remaining_limit = limit - len(call_tasks)
+    if remaining_limit > 0:
+        for ai_task in ai_tasks_query.limit(remaining_limit).all():
+            phone = None
+            contact_name = ai_task.borrower_name
+            entity_type = None
+            entity_id = None
+
+            # Get phone from Lead
+            if ai_task.lead_id:
+                lead = db.query(Lead).filter(Lead.id == ai_task.lead_id).first()
+                if lead and lead.phone:
+                    phone = lead.phone
+                    contact_name = lead.name
+                    entity_type = 'lead'
+                    entity_id = lead.id
+
+            # Get phone from Loan
+            if not phone and ai_task.loan_id:
+                loan = db.query(Loan).filter(Loan.id == ai_task.loan_id).first()
+                if loan and loan.borrower_phone:
+                    phone = loan.borrower_phone
+                    contact_name = loan.borrower_name
+                    entity_type = 'loan'
+                    entity_id = loan.id
+
+            # Only include if we have a phone number
+            if phone:
+                call_tasks.append({
+                    'id': ai_task.id,
+                    'task_type': 'ai_task',
+                    'title': ai_task.title,
+                    'description': ai_task.description,
+                    'priority': ai_task.priority,
+                    'status': ai_task.type.value if ai_task.type else None,
+                    'due_date': ai_task.due_date.isoformat() if ai_task.due_date else None,
+                    'contact_name': contact_name,
+                    'contact_phone': phone,
+                    'lead_id': ai_task.lead_id,
+                    'loan_id': ai_task.loan_id,
+                    'lead_name': contact_name if entity_type == 'lead' else None,
+                    'loan_borrower_name': contact_name if entity_type == 'loan' else None,
+                    'lead_phone': phone if entity_type == 'lead' else None,
+                    'loan_borrower_phone': phone if entity_type == 'loan' else None,
+                    'entity_type': entity_type,
+                    'entity_id': entity_id,
+                    'created_at': ai_task.created_at.isoformat() if ai_task.created_at else None
+                })
+
+    return {
+        'tasks': call_tasks,
+        'total': len(call_tasks),
+        'skip': skip,
+        'limit': limit
+    }
+
+
+@router.get("/callable-contacts")
+async def get_callable_contacts(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    """
+    Get ALL contacts that can be called (leads and loans with phone numbers).
+
+    This is useful when there are no call-specific tasks but you want to
+    make outbound calls to leads/loans.
+
+    Returns leads and loan borrowers that have phone numbers.
+    """
+    from main import Lead, Loan
+
+    contacts = []
+
+    # Get leads with phone numbers assigned to current user
+    leads_query = db.query(Lead).filter(
+        Lead.owner_id == current_user.id,
+        Lead.phone.isnot(None),
+        Lead.phone != ''
+    ).order_by(Lead.last_contact.asc().nullslast(), Lead.created_at.desc())
+
+    for lead in leads_query.offset(skip).limit(limit).all():
+        contacts.append({
+            'id': f'lead-{lead.id}',
+            'entity_type': 'lead',
+            'entity_id': lead.id,
+            'contact_name': lead.name,
+            'contact_phone': lead.phone,
+            'contact_email': lead.email,
+            'stage': lead.stage.value if lead.stage else None,
+            'last_contact': lead.last_contact.isoformat() if lead.last_contact else None,
+            'source': lead.source,
+            'lead_id': lead.id,
+            'loan_id': None
+        })
+
+    # Get loans with borrower phone numbers if we need more
+    remaining = limit - len(contacts)
+    if remaining > 0:
+        loans_query = db.query(Loan).filter(
+            Loan.loan_officer_id == current_user.id,
+            Loan.borrower_phone.isnot(None),
+            Loan.borrower_phone != ''
+        ).order_by(Loan.created_at.desc())
+
+        for loan in loans_query.limit(remaining).all():
+            contacts.append({
+                'id': f'loan-{loan.id}',
+                'entity_type': 'loan',
+                'entity_id': loan.id,
+                'contact_name': loan.borrower_name,
+                'contact_phone': loan.borrower_phone,
+                'contact_email': loan.borrower_email,
+                'stage': loan.stage.value if loan.stage else None,
+                'last_contact': None,
+                'loan_number': loan.loan_number,
+                'lead_id': None,
+                'loan_id': loan.id
+            })
+
+    return {
+        'contacts': contacts,
+        'total': len(contacts),
+        'skip': skip,
+        'limit': limit
+    }
+
+
+# =============================================================================
 # Agent Settings Endpoints
 # =============================================================================
 

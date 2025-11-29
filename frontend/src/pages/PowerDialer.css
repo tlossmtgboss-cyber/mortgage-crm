@@ -124,6 +124,68 @@
   overflow: hidden;
 }
 
+/* Dialer Tabs */
+.dialer-tabs {
+  display: flex;
+  border-bottom: 1px solid #eee;
+}
+
+.dialer-tab {
+  flex: 1;
+  padding: 14px 16px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dialer-tab:hover {
+  background: #f9f9f9;
+  color: #333;
+}
+
+.dialer-tab.active {
+  color: #2196f3;
+  border-bottom-color: #2196f3;
+  background: #e3f2fd20;
+}
+
+/* Task type badge */
+.task-type-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  margin-left: 8px;
+}
+
+.task-type-badge.lead {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.task-type-badge.loan {
+  background: #f3e5f5;
+  color: #7b1fa2;
+}
+
+.task-stage {
+  font-size: 11px;
+  color: #888;
+  font-style: italic;
+}
+
+.empty-hint {
+  font-size: 12px;
+  color: #999;
+  margin-top: 8px;
+}
+
 .panel-header {
   display: flex;
   justify-content: space-between;
