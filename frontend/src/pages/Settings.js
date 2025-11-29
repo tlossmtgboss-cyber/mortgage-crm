@@ -1923,6 +1923,13 @@ const API_BASE_URL = isProduction
           )}
 
           <button
+            className={`sidebar-btn ${activeSection === 'sla-tracking' ? 'active' : ''}`}
+            onClick={() => navigate('/sla-tracking')}
+          >
+            <span>SLA Tracking</span>
+          </button>
+
+          <button
             className={`sidebar-btn ${activeSection === 'mission-control' ? 'active' : ''}`}
             onClick={() => setActiveSection('mission-control')}
           >
