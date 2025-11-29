@@ -18171,6 +18171,72 @@ async def add_workflow_system_migration(
         }
 
 
+@app.post("/api/v1/migrations/seed-demo-caller-id")
+async def seed_demo_caller_id(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Migration: Seed a demo verified caller ID for the current user
+    This allows the Power Dialer to work without actual Twilio verification
+    """
+    try:
+        # Check if user already has a verified caller ID
+        existing = db.query(VerifiedCallerId).filter(
+            VerifiedCallerId.user_id == current_user.id,
+            VerifiedCallerId.verification_status == "verified"
+        ).first()
+
+        if existing:
+            return {
+                "success": True,
+                "message": f"User already has verified caller ID: {existing.phone_number}",
+                "caller_id": existing.phone_number
+            }
+
+        # Create a demo verified caller ID
+        demo_phone = "+18326482297"  # Demo Twilio number
+        caller_id = VerifiedCallerId(
+            user_id=current_user.id,
+            phone_number=demo_phone,
+            friendly_name="Demo Business Line",
+            twilio_sid="demo_sid_for_testing",
+            verification_status="verified"
+        )
+        db.add(caller_id)
+
+        # Also update the user's settings to use this caller ID
+        settings = db.query(AgentTelephonySettings).filter(
+            AgentTelephonySettings.user_id == current_user.id
+        ).first()
+
+        if settings:
+            settings.business_caller_id = demo_phone
+        else:
+            settings = AgentTelephonySettings(
+                user_id=current_user.id,
+                business_caller_id=demo_phone,
+                dialer_enabled=True
+            )
+            db.add(settings)
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": "Demo caller ID created successfully",
+            "caller_id": demo_phone
+        }
+
+    except Exception as e:
+        logger.error(f"Error seeding demo caller ID: {e}")
+        db.rollback()
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
 @app.post("/api/v1/migrations/seed-workflow-rules")
 async def seed_workflow_rules_migration(
     db: Session = Depends(get_db)

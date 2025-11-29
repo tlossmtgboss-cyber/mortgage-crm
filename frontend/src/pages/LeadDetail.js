@@ -69,6 +69,16 @@ function LeadDetail() {
   const [isListening, setIsListening] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState('');
 
+  // Email drafts state
+  const [emailDrafts, setEmailDrafts] = useState([]);
+  const [selectedDraft, setSelectedDraft] = useState(null);
+  const [showDraftModal, setShowDraftModal] = useState(false);
+  const [draftLoading, setDraftLoading] = useState(false);
+  const [ccRecipients, setCcRecipients] = useState([]);
+  const [ccSearchQuery, setCcSearchQuery] = useState('');
+  const [ccSearchResults, setCcSearchResults] = useState([]);
+  const [ccSearchLoading, setCcSearchLoading] = useState(false);
+
   // Circle of Cashflow state
   const [cashflowOpportunities, setCashflowOpportunities] = useState([]);
   const [cashflowReferrals, setCashflowReferrals] = useState([]);
