@@ -40,6 +40,7 @@ stripe==7.8.0
 # Email Processing
 email-validator==2.1.0
 emails==0.6
+sendgrid==6.11.0
 
 # Background Tasks
 celery==5.3.4

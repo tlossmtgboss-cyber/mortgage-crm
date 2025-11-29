@@ -1,30 +1,57 @@
 """
 Email Service for sending reports and notifications
+Supports SendGrid (primary) with SMTP fallback
 """
 
 import os
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from email.mime.base import MIMEBase
-from email import encoders
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 import logging
 
 logger = logging.getLogger(__name__)
 
+# Try to import SendGrid
+try:
+    from sendgrid import SendGridAPIClient
+    from sendgrid.helpers.mail import Mail, Attachment, FileContent, FileName, FileType, Disposition
+    import base64
+    SENDGRID_AVAILABLE = True
+except ImportError:
+    SENDGRID_AVAILABLE = False
+    logger.warning("SendGrid not installed. Install with: pip install sendgrid")
+
+# SMTP fallback imports
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
+
 
 class EmailService:
-    """Service for sending emails via SMTP"""
+    """Service for sending emails via SendGrid (primary) or SMTP (fallback)"""
 
     def __init__(self):
+        # SendGrid configuration
+        self.sendgrid_api_key = os.getenv('SENDGRID_API_KEY', '')
+        self.use_sendgrid = bool(self.sendgrid_api_key) and SENDGRID_AVAILABLE
+
+        # SMTP fallback configuration
         self.smtp_host = os.getenv('SMTP_HOST', 'smtp.gmail.com')
         self.smtp_port = int(os.getenv('SMTP_PORT', '587'))
         self.smtp_user = os.getenv('SMTP_USER', '')
         self.smtp_password = os.getenv('SMTP_PASSWORD', '')
-        self.from_email = os.getenv('FROM_EMAIL', self.smtp_user)
+
+        # Common configuration
+        self.from_email = os.getenv('FROM_EMAIL', 'noreply@pipeline360.com')
         self.from_name = os.getenv('FROM_NAME', 'Pipeline 360 CRM')
+
+        if self.use_sendgrid:
+            logger.info("Email service initialized with SendGrid")
+        elif self.smtp_user:
+            logger.info("Email service initialized with SMTP fallback")
+        else:
+            logger.warning("No email credentials configured (SENDGRID_API_KEY or SMTP_USER)")
 
     def send_html_email(
         self,
@@ -35,6 +62,74 @@ class EmailService:
         attachments: Optional[List[Dict[str, Any]]] = None
     ) -> bool:
         """Send an HTML email with optional attachments"""
+        if self.use_sendgrid:
+            return self._send_via_sendgrid(to_email, subject, html_body, plain_text_body, attachments)
+        else:
+            return self._send_via_smtp(to_email, subject, html_body, plain_text_body, attachments)
+
+    def _send_via_sendgrid(
+        self,
+        to_email: str,
+        subject: str,
+        html_body: str,
+        plain_text_body: Optional[str] = None,
+        attachments: Optional[List[Dict[str, Any]]] = None
+    ) -> bool:
+        """Send email via SendGrid API"""
+        try:
+            message = Mail(
+                from_email=(self.from_email, self.from_name),
+                to_emails=to_email,
+                subject=subject,
+                html_content=html_body
+            )
+
+            if plain_text_body:
+                message.plain_text_content = plain_text_body
+
+            # Add attachments if any
+            if attachments:
+                for att in attachments:
+                    encoded_content = base64.b64encode(att['content']).decode() if isinstance(att['content'], bytes) else att['content']
+                    attachment = Attachment(
+                        FileContent(encoded_content),
+                        FileName(att['filename']),
+                        FileType(att.get('type', 'application/octet-stream')),
+                        Disposition('attachment')
+                    )
+                    message.add_attachment(attachment)
+
+            sg = SendGridAPIClient(self.sendgrid_api_key)
+            response = sg.send(message)
+
+            if response.status_code in [200, 201, 202]:
+                logger.info(f"Email sent successfully via SendGrid to {to_email} (status: {response.status_code})")
+                return True
+            else:
+                logger.error(f"SendGrid returned status {response.status_code}: {response.body}")
+                return False
+
+        except Exception as e:
+            logger.error(f"Failed to send email via SendGrid to {to_email}: {str(e)}")
+            # Try SMTP fallback if SendGrid fails
+            if self.smtp_user:
+                logger.info("Attempting SMTP fallback...")
+                return self._send_via_smtp(to_email, subject, html_body, plain_text_body, attachments)
+            return False
+
+    def _send_via_smtp(
+        self,
+        to_email: str,
+        subject: str,
+        html_body: str,
+        plain_text_body: Optional[str] = None,
+        attachments: Optional[List[Dict[str, Any]]] = None
+    ) -> bool:
+        """Send email via SMTP (fallback method)"""
+        if not self.smtp_user or not self.smtp_password:
+            logger.error("SMTP credentials not configured")
+            return False
+
         try:
             # Create message
             msg = MIMEMultipart('alternative')
@@ -70,11 +165,11 @@ class EmailService:
                 server.login(self.smtp_user, self.smtp_password)
                 server.send_message(msg)
 
-            logger.info(f"Email sent successfully to {to_email}")
+            logger.info(f"Email sent successfully via SMTP to {to_email}")
             return True
 
         except Exception as e:
-            logger.error(f"Failed to send email to {to_email}: {str(e)}")
+            logger.error(f"Failed to send email via SMTP to {to_email}: {str(e)}")
             return False
 
     def format_daily_priorities_email(

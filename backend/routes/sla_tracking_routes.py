@@ -889,10 +889,6 @@ async def send_sla_report_email(
     - Health score
     """
     from tasks.sla_tasks import calculate_run_rate, calculate_inventory_forecast, calculate_health_score
-    import smtplib
-    import os
-    from email.mime.text import MIMEText
-    from email.mime.multipart import MIMEMultipart
 
     # Get all active SLA measures
     measures = get_all_sla_measures(db, organization_id=1, active_only=True)
@@ -1091,19 +1087,9 @@ async def send_sla_report_email(
     </html>
     """
 
-    # Send email
+    # Send email using the email service (supports SendGrid + SMTP fallback)
     try:
-        smtp_host = os.getenv('SMTP_HOST', 'smtp.gmail.com')
-        smtp_port = int(os.getenv('SMTP_PORT', 587))
-        smtp_user = os.getenv('SMTP_USER')
-        smtp_password = os.getenv('SMTP_PASSWORD')
-        from_email = os.getenv('FROM_EMAIL', 'noreply@mortgagecrm.com')
-        from_name = os.getenv('FROM_NAME', 'Mortgage CRM')
-
-        msg = MIMEMultipart('alternative')
-        msg['Subject'] = f"SLA Run Rate Report - {report_time}"
-        msg['From'] = f"{from_name} <{from_email}>"
-        msg['To'] = request.email_address
+        from email_service import email_service
 
         # Plain text version
         text_content = f"""
@@ -1118,28 +1104,31 @@ Overdue: {total_overdue}
 View the full report in HTML format.
         """
 
-        msg.attach(MIMEText(text_content, 'plain'))
-        msg.attach(MIMEText(html_content, 'html'))
+        success = email_service.send_html_email(
+            to_email=request.email_address,
+            subject=f"SLA Run Rate Report - {report_time}",
+            html_body=html_content,
+            plain_text_body=text_content
+        )
 
-        with smtplib.SMTP(smtp_host, smtp_port) as server:
-            server.starttls()
-            if smtp_user and smtp_password:
-                server.login(smtp_user, smtp_password)
-            server.send_message(msg)
-
-        logger.info(f"SLA report email sent to {request.email_address}")
-        return {
-            "status": "success",
-            "message": f"Report sent to {request.email_address}",
-            "report_summary": {
-                "health_score": health_score,
-                "total_inventory": total_inventory,
-                "at_risk": total_at_risk,
-                "overdue": total_overdue,
-                "bottleneck_count": len(bottlenecks)
+        if success:
+            logger.info(f"SLA report email sent to {request.email_address}")
+            return {
+                "status": "success",
+                "message": f"Report sent to {request.email_address}",
+                "report_summary": {
+                    "health_score": health_score,
+                    "total_inventory": total_inventory,
+                    "at_risk": total_at_risk,
+                    "overdue": total_overdue,
+                    "bottleneck_count": len(bottlenecks)
+                }
             }
-        }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to send email - check email configuration")
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to send SLA report email: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
