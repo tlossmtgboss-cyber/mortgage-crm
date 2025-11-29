@@ -197,16 +197,27 @@ const SLASettings = () => {
   const deleteMeasure = async (measureId) => {
     try {
       const token = localStorage.getItem('token');
-      await fetch(`${API_BASE_URL}/api/v1/sla/measures/${measureId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/sla/measures/${measureId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         }
       });
-      fetchDashboard();
+
+      if (response.ok) {
+        // Immediately remove from local state for instant UI feedback
+        setMeasures(prev => prev.filter(m => m.id !== measureId));
+        // Then refresh from server to ensure consistency
+        fetchDashboard();
+      } else {
+        const error = await response.json().catch(() => ({}));
+        console.error('Error deleting measure:', error);
+        alert('Failed to delete measure. Please try again.');
+      }
     } catch (err) {
       console.error('Error deleting measure:', err);
+      alert('Failed to delete measure. Please try again.');
     }
   };
 
