@@ -14,6 +14,7 @@ import AppointmentModal from '../components/AppointmentModal';
 import TeamAssignment from '../components/TeamAssignment';
 import EmploymentTab from '../components/EmploymentTab';
 import VideoMeetings from '../components/VideoMeetings';
+import EmailComposerModal from '../components/EmailComposerModal';
 import './LeadDetail.css';
 
 // Mock lead data generator (same as Leads.js)
@@ -64,6 +65,7 @@ function LeadDetail() {
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [showEscalationModal, setShowEscalationModal] = useState(false);
   const [showVideoMeetings, setShowVideoMeetings] = useState(false);
+  const [showEmailComposer, setShowEmailComposer] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState('');
 
@@ -720,7 +722,7 @@ function LeadDetail() {
         setShowSMSModal(true);
         break;
       case 'email':
-        window.open(`mailto:${lead.email}`, '_blank');
+        setShowEmailComposer(true);
         break;
       case 'task':
         setShowTaskModal(true);
@@ -2076,6 +2078,23 @@ function LeadDetail() {
           </div>
         </div>
       )}
+
+      {/* Email Composer Modal */}
+      <EmailComposerModal
+        isOpen={showEmailComposer}
+        onClose={() => setShowEmailComposer(false)}
+        recipient={{
+          name: lead?.name,
+          email: lead?.email
+        }}
+        entityType="lead"
+        entityData={{
+          id: lead?.id,
+          stage: lead?.stage,
+          source: lead?.source,
+          loan_amount: lead?.loan_amount
+        }}
+      />
     </div>
   );
 }

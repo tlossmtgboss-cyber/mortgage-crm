@@ -12,6 +12,7 @@ import TeamAssignment from '../components/TeamAssignment';
 import EmploymentTab from '../components/EmploymentTab';
 import VideoMeetings from '../components/VideoMeetings';
 import AppointmentModal from '../components/AppointmentModal';
+import EmailComposerModal from '../components/EmailComposerModal';
 import './LeadDetail.css';
 
 // Mock lead data generator (same as Leads.js)
@@ -60,6 +61,7 @@ function MumClientDetail() {
   const [showVoicemailDrop, setShowVoicemailDrop] = useState(false);
   const [showVideoMeetings, setShowVideoMeetings] = useState(false);
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
+  const [showEmailComposer, setShowEmailComposer] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [customFields, setCustomFields] = useState([]);
@@ -554,7 +556,7 @@ function MumClientDetail() {
         setShowSMSModal(true);
         break;
       case 'email':
-        window.open(`mailto:${client.email}`, '_blank');
+        setShowEmailComposer(true);
         break;
       case 'task':
         navigate('/tasks');
@@ -1703,6 +1705,18 @@ function MumClientDetail() {
           </div>
         </div>
       )}
+
+      {/* Email Composer Modal */}
+      <EmailComposerModal
+        isOpen={showEmailComposer}
+        onClose={() => setShowEmailComposer(false)}
+        recipient={{
+          name: client?.name,
+          email: client?.email
+        }}
+        entityType="mum"
+        entityData={client}
+      />
     </div>
   );
 }

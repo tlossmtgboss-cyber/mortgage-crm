@@ -4491,3 +4491,286 @@ async def create_lead_from_screenshot(
         db.rollback()
         logger.error(f"Error creating lead from screenshot: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to create lead: {str(e)}")
+
+
+# ============================================================================
+# AI Email Generation & Sending
+# ============================================================================
+
+class EmailGenerateRequest(BaseModel):
+    """Request model for generating AI email content"""
+    template_id: str
+    template_name: str
+    recipient_name: str
+    recipient_email: Optional[str] = None
+    entity_type: str  # 'lead', 'loan', 'mum', 'contact'
+    entity_data: Optional[Dict[str, Any]] = {}
+
+
+class EmailSendRequest(BaseModel):
+    """Request model for sending composed email"""
+    to_email: str
+    to_name: Optional[str] = ""
+    subject: str
+    body: str
+    entity_type: Optional[str] = None
+    entity_id: Optional[int] = None
+    template_used: Optional[str] = None
+
+
+# Email template prompts for AI generation
+EMAIL_TEMPLATE_PROMPTS = {
+    # Lead Nurturing
+    "initial_followup": "Write a warm, professional initial follow-up email to a potential home buyer who just submitted their information. Thank them for their interest, briefly introduce yourself, and offer to answer any questions about the mortgage process.",
+    "rate_update": "Write an email notifying a lead about favorable rate changes in the market. Make it informative but not pushy, emphasizing the opportunity without pressure.",
+    "checking_in": "Write a friendly check-in email to a lead asking about their home search progress. Be warm and supportive, offering assistance without being salesy.",
+    "pre_approval_invitation": "Write an invitation email encouraging a lead to get pre-approved for a mortgage. Explain the benefits of pre-approval (stronger offers, knowing your budget) in a helpful way.",
+
+    # Application Process
+    "welcome_application": "Write a welcome email thanking the borrower for starting their mortgage application. Set expectations for the process and express excitement about helping them achieve homeownership.",
+    "documents_needed": "Write a professional email requesting required documents from a borrower. List the typical documents needed (pay stubs, W-2s, bank statements, ID) and explain why each is important.",
+    "documents_received": "Write a confirmation email acknowledging receipt of documents from a borrower. Thank them and let them know what happens next.",
+    "application_complete": "Write a congratulatory email informing the borrower that their application is complete and being submitted for processing.",
+
+    # Processing Updates
+    "processing_started": "Write an update email informing the borrower that their loan is now in processing. Explain what this stage involves and set timeline expectations.",
+    "appraisal_ordered": "Write an email notifying the borrower that their appraisal has been ordered. Explain what to expect and any preparation needed.",
+    "appraisal_complete": "Write an email sharing that the appraisal is complete. Be positive and note that the loan is progressing.",
+    "title_update": "Write a brief update email about title work progress on the loan.",
+
+    # Underwriting
+    "submitted_to_uw": "Write an email informing the borrower their loan has been submitted to underwriting. Explain this is a crucial review stage and what they can expect.",
+    "conditional_approval": "Write an exciting email sharing the great news of conditional approval! Explain what conditions might be needed while keeping the tone celebratory.",
+    "conditions_needed": "Write a professional email requesting additional items needed to satisfy underwriting conditions. Be clear about what's needed and why.",
+    "final_approval": "Write a celebratory email announcing full loan approval! This is exciting news - the borrower is cleared for closing.",
+
+    # Closing
+    "clear_to_close": "Write an exciting email announcing 'Clear to Close' status. Explain what this means and next steps for scheduling closing.",
+    "closing_scheduled": "Write a confirmation email with closing details - date, time, location, what to bring, and final preparation tips.",
+    "closing_reminder": "Write a friendly reminder email about upcoming closing. Include what to bring and any last-minute checklist items.",
+    "congratulations": "Write a warm congratulations email celebrating their successful closing! Welcome them to homeownership.",
+
+    # Post-Closing
+    "thank_you": "Write a heartfelt thank you email expressing gratitude for choosing to work with you. Offer to be a resource for future mortgage needs.",
+    "referral_request": "Write a friendly email asking for referrals. Mention how much you enjoyed working with them and would love to help their friends/family.",
+    "annual_review": "Write an email offering an annual mortgage checkup. Mention changes in rates or their equity situation that might benefit them.",
+    "refinance_opportunity": "Write an informative email about potential refinance opportunities. Be helpful, not pushy, focusing on their potential savings.",
+
+    # General
+    "market_update": "Write an informative email sharing current mortgage market insights. Include rate trends and what it means for borrowers.",
+    "holiday_greeting": "Write a warm holiday greeting email that's professional but personal. Express good wishes and gratitude.",
+    "birthday": "Write a friendly birthday wishes email. Keep it personal and warm without being overly promotional.",
+}
+
+
+@router.post("/generate-email")
+async def generate_ai_email(
+    request: EmailGenerateRequest,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Generate AI-powered email content based on template and recipient data"""
+    try:
+        # Get the base prompt for this template
+        template_prompt = EMAIL_TEMPLATE_PROMPTS.get(
+            request.template_id,
+            f"Write a professional mortgage-related email with the topic: {request.template_name}"
+        )
+
+        # Get user info for signature
+        user_name = current_user.get("name", current_user.get("email", "Your Loan Officer"))
+        user_email = current_user.get("email", "")
+        user_phone = current_user.get("phone", "")
+        user_title = current_user.get("title", "Loan Officer")
+        user_nmls = current_user.get("nmls_id", "")
+
+        # Build context about the recipient
+        recipient_context = f"Recipient Name: {request.recipient_name}"
+        if request.entity_data:
+            if request.entity_type == "loan":
+                if request.entity_data.get("amount"):
+                    recipient_context += f"\nLoan Amount: ${request.entity_data['amount']:,.0f}"
+                if request.entity_data.get("property_address"):
+                    recipient_context += f"\nProperty: {request.entity_data['property_address']}"
+                if request.entity_data.get("stage"):
+                    recipient_context += f"\nCurrent Stage: {request.entity_data['stage']}"
+                if request.entity_data.get("closing_date"):
+                    recipient_context += f"\nClosing Date: {request.entity_data['closing_date']}"
+            elif request.entity_type == "lead":
+                if request.entity_data.get("source"):
+                    recipient_context += f"\nLead Source: {request.entity_data['source']}"
+                if request.entity_data.get("stage"):
+                    recipient_context += f"\nLead Stage: {request.entity_data['stage']}"
+
+        # Build the full prompt for Claude
+        full_prompt = f"""You are a professional mortgage loan officer writing an email to a client/prospect.
+
+TASK: {template_prompt}
+
+RECIPIENT INFORMATION:
+{recipient_context}
+
+SENDER INFORMATION:
+Name: {user_name}
+Title: {user_title}
+Email: {user_email}
+Phone: {user_phone}
+NMLS#: {user_nmls if user_nmls else "N/A"}
+
+GUIDELINES:
+1. Be professional but warm and personable
+2. Use the recipient's first name if available
+3. Keep the email concise but complete
+4. Include a clear call-to-action when appropriate
+5. End with a professional signature block
+6. Do NOT include the subject line in the body
+7. Use proper paragraph breaks for readability
+
+OUTPUT FORMAT:
+Return ONLY a JSON object with exactly these two fields:
+{{"subject": "Email subject line here", "body": "Full email body here with proper formatting"}}
+
+Generate the email now:"""
+
+        # Call Claude API
+        client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1500,
+            temperature=0.7,  # Some creativity for email writing
+            messages=[
+                {"role": "user", "content": full_prompt}
+            ]
+        )
+
+        # Parse the response
+        response_text = response.content[0].text.strip()
+
+        # Try to parse as JSON
+        try:
+            # Clean up the response if it has markdown code blocks
+            if "```json" in response_text:
+                response_text = response_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in response_text:
+                response_text = response_text.split("```")[1].split("```")[0].strip()
+
+            email_data = json.loads(response_text)
+
+            return {
+                "success": True,
+                "subject": email_data.get("subject", request.template_name),
+                "body": email_data.get("body", "")
+            }
+        except json.JSONDecodeError:
+            # If JSON parsing fails, try to extract subject and body manually
+            logger.warning(f"Failed to parse email JSON, attempting manual extraction")
+
+            # Return the whole response as body with a default subject
+            return {
+                "success": True,
+                "subject": request.template_name,
+                "body": response_text
+            }
+
+    except Exception as e:
+        logger.error(f"Error generating email: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate email: {str(e)}")
+
+
+@router.post("/send-composed-email")
+async def send_composed_email(
+    request: EmailSendRequest,
+    current_user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Send a composed email via the email service"""
+    try:
+        from email_service import email_service
+
+        # Get sender info
+        sender_name = current_user.get("name", current_user.get("email", "Pipeline 360"))
+        sender_email = current_user.get("email", "")
+
+        # Format the email body as HTML
+        html_body = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }}
+        .email-content {{
+            white-space: pre-wrap;
+            font-size: 15px;
+        }}
+        .footer {{
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            font-size: 12px;
+            color: #888;
+        }}
+    </style>
+</head>
+<body>
+    <div class="email-content">{request.body.replace(chr(10), '<br>')}</div>
+    <div class="footer">
+        <p>Sent via Pipeline 360 CRM</p>
+    </div>
+</body>
+</html>
+"""
+
+        # Send the email
+        success = email_service.send_html_email(
+            to_email=request.to_email,
+            subject=request.subject,
+            html_body=html_body,
+            plain_text_body=request.body
+        )
+
+        if success:
+            # Log the email activity
+            try:
+                from models import Activity, Lead, Loan
+
+                activity_data = {
+                    "organization_id": 1,
+                    "activity_type": "email_sent",
+                    "subject": f"Email: {request.subject}",
+                    "description": f"Email sent to {request.to_name or request.to_email}: {request.subject}",
+                    "completed": True,
+                    "completed_at": datetime.utcnow(),
+                    "user_id": current_user.get("id"),
+                }
+
+                if request.entity_type == "lead" and request.entity_id:
+                    activity_data["lead_id"] = request.entity_id
+                elif request.entity_type == "loan" and request.entity_id:
+                    activity_data["loan_id"] = request.entity_id
+
+                activity = Activity(**activity_data)
+                db.add(activity)
+                db.commit()
+            except Exception as log_err:
+                logger.warning(f"Failed to log email activity: {log_err}")
+
+            return {
+                "success": True,
+                "message": f"Email sent successfully to {request.to_email}"
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to send email - email service returned error")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error sending email: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")

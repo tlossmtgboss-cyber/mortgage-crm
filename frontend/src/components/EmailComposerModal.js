@@ -1,0 +1,363 @@
+import React, { useState, useEffect } from 'react';
+import './EmailComposerModal.css';
+
+const API_BASE = process.env.REACT_APP_API_URL || 'https://mortgage-crm-production-7a9a.up.railway.app';
+
+// Email templates organized by category
+const EMAIL_TEMPLATES = {
+  'Lead Nurturing': [
+    { id: 'initial_followup', name: 'Initial Follow-Up', description: 'First contact after lead submission' },
+    { id: 'rate_update', name: 'Rate Update', description: 'Notify about favorable rate changes' },
+    { id: 'checking_in', name: 'Checking In', description: 'Friendly check-in on their home search' },
+    { id: 'pre_approval_invitation', name: 'Pre-Approval Invitation', description: 'Invite to get pre-approved' },
+  ],
+  'Application Process': [
+    { id: 'welcome_application', name: 'Welcome to Application', description: 'Thank them for starting application' },
+    { id: 'documents_needed', name: 'Documents Needed', description: 'Request required documents' },
+    { id: 'documents_received', name: 'Documents Received', description: 'Confirm document receipt' },
+    { id: 'application_complete', name: 'Application Complete', description: 'Confirm application is complete' },
+  ],
+  'Processing Updates': [
+    { id: 'processing_started', name: 'Processing Started', description: 'Loan is now in processing' },
+    { id: 'appraisal_ordered', name: 'Appraisal Ordered', description: 'Appraisal has been scheduled' },
+    { id: 'appraisal_complete', name: 'Appraisal Complete', description: 'Appraisal results are in' },
+    { id: 'title_update', name: 'Title Update', description: 'Title work status update' },
+  ],
+  'Underwriting': [
+    { id: 'submitted_to_uw', name: 'Submitted to Underwriting', description: 'Loan submitted for review' },
+    { id: 'conditional_approval', name: 'Conditional Approval', description: 'Great news - conditionally approved!' },
+    { id: 'conditions_needed', name: 'Conditions Needed', description: 'Additional items needed for approval' },
+    { id: 'final_approval', name: 'Final Approval', description: 'Celebrate full approval!' },
+  ],
+  'Closing': [
+    { id: 'clear_to_close', name: 'Clear to Close', description: 'Ready to schedule closing' },
+    { id: 'closing_scheduled', name: 'Closing Scheduled', description: 'Confirm closing date/time' },
+    { id: 'closing_reminder', name: 'Closing Reminder', description: 'Reminder about upcoming closing' },
+    { id: 'congratulations', name: 'Congratulations!', description: 'Celebrate successful closing' },
+  ],
+  'Post-Closing': [
+    { id: 'thank_you', name: 'Thank You', description: 'Express gratitude for their business' },
+    { id: 'referral_request', name: 'Referral Request', description: 'Ask for referrals' },
+    { id: 'annual_review', name: 'Annual Review', description: 'Yearly mortgage checkup' },
+    { id: 'refinance_opportunity', name: 'Refinance Opportunity', description: 'Alert about refinance options' },
+  ],
+  'General': [
+    { id: 'custom', name: 'Custom Email', description: 'Write your own message' },
+    { id: 'market_update', name: 'Market Update', description: 'Share market insights' },
+    { id: 'holiday_greeting', name: 'Holiday Greeting', description: 'Seasonal well wishes' },
+    { id: 'birthday', name: 'Birthday Wishes', description: 'Happy birthday message' },
+  ],
+};
+
+function EmailComposerModal({ isOpen, onClose, recipient, entityType, entityData }) {
+  const [step, setStep] = useState(1); // 1: Select Template, 2: Review/Edit, 3: Sending
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [subject, setSubject] = useState('');
+  const [emailBody, setEmailBody] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isSending, setIsSending] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
+
+  // Reset state when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setStep(1);
+      setSelectedCategory(null);
+      setSelectedTemplate(null);
+      setSubject('');
+      setEmailBody('');
+      setError(null);
+      setSuccess(false);
+    }
+  }, [isOpen]);
+
+  const getToken = () => {
+    return localStorage.getItem('token');
+  };
+
+  const handleTemplateSelect = async (template) => {
+    setSelectedTemplate(template);
+    setError(null);
+
+    if (template.id === 'custom') {
+      // For custom, just show empty form
+      setSubject('');
+      setEmailBody('');
+      setStep(2);
+      return;
+    }
+
+    // Generate AI email based on template
+    setIsGenerating(true);
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/ai/generate-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getToken()}`
+        },
+        body: JSON.stringify({
+          template_id: template.id,
+          template_name: template.name,
+          recipient_name: recipient?.name || 'Valued Client',
+          recipient_email: recipient?.email || '',
+          entity_type: entityType, // 'lead', 'loan', 'mum'
+          entity_data: entityData || {},
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate email');
+      }
+
+      const data = await response.json();
+      setSubject(data.subject || `${template.name}`);
+      setEmailBody(data.body || '');
+      setStep(2);
+    } catch (err) {
+      console.error('Error generating email:', err);
+      setError('Failed to generate email. Please try again.');
+      // Still allow them to proceed with empty form
+      setSubject(template.name);
+      setEmailBody('');
+      setStep(2);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleSendEmail = async () => {
+    if (!recipient?.email) {
+      setError('No recipient email address');
+      return;
+    }
+
+    if (!subject.trim() || !emailBody.trim()) {
+      setError('Please enter both subject and email body');
+      return;
+    }
+
+    setIsSending(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/ai/send-composed-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${getToken()}`
+        },
+        body: JSON.stringify({
+          to_email: recipient.email,
+          to_name: recipient.name || '',
+          subject: subject,
+          body: emailBody,
+          entity_type: entityType,
+          entity_id: entityData?.id,
+          template_used: selectedTemplate?.id || 'custom',
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to send email');
+      }
+
+      setSuccess(true);
+      setStep(3);
+
+      // Auto close after success
+      setTimeout(() => {
+        onClose();
+      }, 3000);
+    } catch (err) {
+      console.error('Error sending email:', err);
+      setError(err.message || 'Failed to send email. Please try again.');
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleRegenerateEmail = async () => {
+    if (selectedTemplate && selectedTemplate.id !== 'custom') {
+      await handleTemplateSelect(selectedTemplate);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="email-composer-overlay" onClick={onClose}>
+      <div className="email-composer-modal" onClick={e => e.stopPropagation()}>
+        <button className="email-composer-close" onClick={onClose}>×</button>
+
+        <div className="email-composer-header">
+          <h2>✉️ Compose Email</h2>
+          <p className="recipient-info">
+            To: <strong>{recipient?.name || 'Unknown'}</strong>
+            {recipient?.email && <span className="recipient-email">&lt;{recipient.email}&gt;</span>}
+          </p>
+        </div>
+
+        {/* Step Indicator */}
+        <div className="email-steps">
+          <div className={`step ${step >= 1 ? 'active' : ''} ${step > 1 ? 'completed' : ''}`}>
+            <span className="step-number">1</span>
+            <span className="step-label">Choose Template</span>
+          </div>
+          <div className={`step ${step >= 2 ? 'active' : ''} ${step > 2 ? 'completed' : ''}`}>
+            <span className="step-number">2</span>
+            <span className="step-label">Review & Edit</span>
+          </div>
+          <div className={`step ${step >= 3 ? 'active' : ''}`}>
+            <span className="step-number">3</span>
+            <span className="step-label">Send</span>
+          </div>
+        </div>
+
+        {error && (
+          <div className="email-error">
+            <span>⚠️ {error}</span>
+            <button onClick={() => setError(null)}>×</button>
+          </div>
+        )}
+
+        {/* Step 1: Template Selection */}
+        {step === 1 && (
+          <div className="template-selection">
+            {isGenerating ? (
+              <div className="generating-email">
+                <div className="spinner"></div>
+                <p>AI is crafting your email...</p>
+              </div>
+            ) : (
+              <>
+                <div className="template-categories">
+                  {Object.keys(EMAIL_TEMPLATES).map(category => (
+                    <button
+                      key={category}
+                      className={`category-btn ${selectedCategory === category ? 'active' : ''}`}
+                      onClick={() => setSelectedCategory(category)}
+                    >
+                      {category}
+                    </button>
+                  ))}
+                </div>
+
+                {selectedCategory && (
+                  <div className="template-list">
+                    <h3>{selectedCategory}</h3>
+                    <div className="templates-grid">
+                      {EMAIL_TEMPLATES[selectedCategory].map(template => (
+                        <button
+                          key={template.id}
+                          className="template-card"
+                          onClick={() => handleTemplateSelect(template)}
+                        >
+                          <span className="template-name">{template.name}</span>
+                          <span className="template-desc">{template.description}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {!selectedCategory && (
+                  <div className="template-hint">
+                    <p>👆 Select a category above to see available email templates</p>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Step 2: Review & Edit */}
+        {step === 2 && (
+          <div className="email-editor">
+            <div className="editor-toolbar">
+              <button
+                className="btn-back"
+                onClick={() => setStep(1)}
+              >
+                ← Back to Templates
+              </button>
+              {selectedTemplate?.id !== 'custom' && (
+                <button
+                  className="btn-regenerate"
+                  onClick={handleRegenerateEmail}
+                  disabled={isGenerating}
+                >
+                  🔄 Regenerate
+                </button>
+              )}
+            </div>
+
+            <div className="editor-form">
+              <div className="form-group">
+                <label>Subject Line</label>
+                <input
+                  type="text"
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  placeholder="Enter email subject..."
+                  className="subject-input"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Email Body</label>
+                <textarea
+                  value={emailBody}
+                  onChange={(e) => setEmailBody(e.target.value)}
+                  placeholder="Compose your email message..."
+                  className="body-textarea"
+                  rows={12}
+                />
+              </div>
+            </div>
+
+            <div className="editor-actions">
+              <button
+                className="btn-cancel"
+                onClick={onClose}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-send"
+                onClick={handleSendEmail}
+                disabled={isSending || !subject.trim() || !emailBody.trim()}
+              >
+                {isSending ? (
+                  <>
+                    <span className="btn-spinner"></span>
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    📤 Send Email
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3: Success */}
+        {step === 3 && success && (
+          <div className="email-success">
+            <div className="success-icon">✅</div>
+            <h3>Email Sent Successfully!</h3>
+            <p>Your email has been delivered to <strong>{recipient?.email}</strong></p>
+            <p className="auto-close">This window will close automatically...</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default EmailComposerModal;

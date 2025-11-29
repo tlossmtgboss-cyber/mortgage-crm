@@ -14,6 +14,7 @@ import TeamAssignment from '../components/TeamAssignment';
 import EmploymentTab from '../components/EmploymentTab';
 import RateLockRecommendation from '../components/RateLockRecommendation';
 import VideoMeetings from '../components/VideoMeetings';
+import EmailComposerModal from '../components/EmailComposerModal';
 import './LeadDetail.css';
 
 // Mock loans data (same as Loans.js)
@@ -71,6 +72,7 @@ function LoanDetail() {
   const [showAppointmentModal, setShowAppointmentModal] = useState(false);
   const [showEscalationModal, setShowEscalationModal] = useState(false);
   const [showVideoMeetings, setShowVideoMeetings] = useState(false);
+  const [showEmailComposer, setShowEmailComposer] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [emailHistory, setEmailHistory] = useState([]);
   const [selectedEmail, setSelectedEmail] = useState(null);
@@ -638,7 +640,7 @@ function LoanDetail() {
         setShowSMSModal(true);
         break;
       case 'email':
-        window.open(`mailto:${borrowerEmail}`, '_blank');
+        setShowEmailComposer(true);
         break;
       case 'task':
         setShowTaskModal(true);
@@ -2466,6 +2468,24 @@ function LoanDetail() {
           </div>
         </div>
       )}
+
+      {/* Email Composer Modal */}
+      <EmailComposerModal
+        isOpen={showEmailComposer}
+        onClose={() => setShowEmailComposer(false)}
+        recipient={{
+          name: loan?.borrower_name || loan?.borrower,
+          email: loan?.borrower_email || formData.borrower_email
+        }}
+        entityType="loan"
+        entityData={{
+          id: loan?.id,
+          amount: loan?.amount,
+          property_address: loan?.property_address,
+          stage: loan?.stage,
+          closing_date: loan?.closing_date
+        }}
+      />
     </div>
   );
 }
