@@ -15145,16 +15145,16 @@ async def approve_reconciliation(
                 db.flush()  # Get the ID
 
                 # Update stage using raw SQL to ensure correct enum value is used
-                # PostgreSQL enum expects values like 'Processing', not names like 'PROCESSING'
+                # PostgreSQL enum expects names like 'PROCESSING', not values like 'Processing'
                 db.execute(text("UPDATE loans SET stage = :stage WHERE id = :id"),
-                           {"stage": stage.value, "id": new_loan.id})
+                           {"stage": stage.name, "id": new_loan.id})
                 db.flush()
 
                 # Update extracted data to point to new loan
                 extracted.match_entity_type = "loan"
                 extracted.match_entity_id = new_loan.id
 
-                logger.info(f"Created new loan {loan_number} (ID: {new_loan.id}) in {stage.value} stage")
+                logger.info(f"Created new loan {loan_number} (ID: {new_loan.id}) in {stage.name} stage")
 
         # Handle status update if requested
         status_updated = False
@@ -15217,7 +15217,7 @@ async def approve_reconciliation(
                     if approval.update_status_to.upper() in loan_stage_map:
                         new_stage = loan_stage_map[approval.update_status_to.upper()]
                         db.execute(text("UPDATE loans SET stage = :stage WHERE id = :id"),
-                                   {"stage": new_stage.value, "id": loan.id})
+                                   {"stage": new_stage.name, "id": loan.id})
                         new_status = new_stage.name
                         status_updated = True
                         logger.info(f"Updated loan {loan.id} stage from {old_status} to {new_status}")
