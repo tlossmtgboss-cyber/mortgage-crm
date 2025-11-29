@@ -451,6 +451,27 @@ export const aiAPI = {
     });
     return response.data;
   },
+  // AI Feedback methods
+  submitFeedback: async (feedbackData) => {
+    const response = await api.post('/api/v1/ai-feedback/', feedbackData);
+    return response.data;
+  },
+  getFeedbackLogs: async (params = {}) => {
+    const response = await api.get('/api/v1/ai-feedback/', { params });
+    return response.data;
+  },
+  getFeedbackStats: async () => {
+    const response = await api.get('/api/v1/ai-feedback/stats');
+    return response.data;
+  },
+  updateFeedback: async (feedbackId, updateData) => {
+    const response = await api.patch(`/api/v1/ai-feedback/${feedbackId}`, updateData);
+    return response.data;
+  },
+  deleteFeedback: async (feedbackId) => {
+    const response = await api.delete(`/api/v1/ai-feedback/${feedbackId}`);
+    return response.data;
+  },
 };
 
 export const conversationsAPI = {

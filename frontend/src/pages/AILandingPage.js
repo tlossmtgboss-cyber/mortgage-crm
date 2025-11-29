@@ -76,6 +76,13 @@ function AILandingPage() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingMessageId, setStreamingMessageId] = useState(null);
 
+  // AI Feedback state
+  const [feedbackModal, setFeedbackModal] = useState({ visible: false, messageId: null, userQuestion: '', aiResponse: '' });
+  const [feedbackType, setFeedbackType] = useState('');
+  const [feedbackText, setFeedbackText] = useState('');
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
+  const [messageFeedback, setMessageFeedback] = useState({}); // Track feedback per message: { messageId: 'positive' | 'negative' | 'submitted' }
+
   const chatAreaRef = useRef(null);
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -229,6 +236,73 @@ function AILandingPage() {
 
   const handleDeleteMessage = (messageId) => {
     setMessages(prev => prev.filter(m => m.id !== messageId));
+  };
+
+  // AI Feedback handlers
+  const handlePositiveFeedback = (messageId) => {
+    setMessageFeedback(prev => ({ ...prev, [messageId]: 'positive' }));
+    // Positive feedback doesn't need a form - just record it silently
+    console.log('Positive feedback for message:', messageId);
+  };
+
+  const handleNegativeFeedback = (messageId) => {
+    // Find the AI message and the preceding user question
+    const msgIndex = messages.findIndex(m => m.id === messageId);
+    const aiMessage = messages[msgIndex];
+    let userQuestion = '';
+
+    // Look backward to find the user's question
+    for (let i = msgIndex - 1; i >= 0; i--) {
+      if (messages[i].type === 'user') {
+        userQuestion = messages[i].content;
+        break;
+      }
+    }
+
+    setFeedbackModal({
+      visible: true,
+      messageId,
+      userQuestion,
+      aiResponse: aiMessage?.content || ''
+    });
+    setMessageFeedback(prev => ({ ...prev, [messageId]: 'negative' }));
+  };
+
+  const handleSubmitFeedback = async () => {
+    if (!feedbackType) {
+      alert('Please select a feedback type');
+      return;
+    }
+
+    setFeedbackSubmitting(true);
+    try {
+      await aiAPI.submitFeedback({
+        user_question: feedbackModal.userQuestion,
+        ai_response: feedbackModal.aiResponse,
+        feedback_type: feedbackType,
+        user_feedback: feedbackText || null,
+        session_id: sessionId
+      });
+
+      setMessageFeedback(prev => ({ ...prev, [feedbackModal.messageId]: 'submitted' }));
+      setFeedbackModal({ visible: false, messageId: null, userQuestion: '', aiResponse: '' });
+      setFeedbackType('');
+      setFeedbackText('');
+
+      // Show a brief confirmation
+      addMessage('Thank you for your feedback! We\'ll use it to improve the AI.', 'assistant');
+    } catch (error) {
+      console.error('Failed to submit feedback:', error);
+      alert('Failed to submit feedback. Please try again.');
+    } finally {
+      setFeedbackSubmitting(false);
+    }
+  };
+
+  const closeFeedbackModal = () => {
+    setFeedbackModal({ visible: false, messageId: null, userQuestion: '', aiResponse: '' });
+    setFeedbackType('');
+    setFeedbackText('');
   };
 
   // Load contacts for email autocomplete
@@ -2138,6 +2212,33 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
                                 <p key={i}>{line || '\u00A0'}</p>
                               ))}
                             </div>
+                            {/* Feedback buttons for assistant messages */}
+                            {msg.type === 'assistant' && !msg.isStreaming && msg.content && (
+                              <div className="ai-feedback-buttons">
+                                {messageFeedback[msg.id] === 'submitted' ? (
+                                  <span className="ai-feedback-thanks">Thanks for the feedback!</span>
+                                ) : messageFeedback[msg.id] === 'positive' ? (
+                                  <span className="ai-feedback-thanks">Thanks!</span>
+                                ) : (
+                                  <>
+                                    <button
+                                      className={`ai-feedback-btn ${messageFeedback[msg.id] === 'positive' ? 'active' : ''}`}
+                                      onClick={() => handlePositiveFeedback(msg.id)}
+                                      title="Good response"
+                                    >
+                                      👍
+                                    </button>
+                                    <button
+                                      className={`ai-feedback-btn ${messageFeedback[msg.id] === 'negative' ? 'active' : ''}`}
+                                      onClick={() => handleNegativeFeedback(msg.id)}
+                                      title="Report issue with this response"
+                                    >
+                                      👎
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            )}
                           </>
                         )}
                       </div>
@@ -2283,6 +2384,86 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
         >
           <button onClick={handleSaveAsProject}>Save as Project</button>
           <button onClick={handleDeleteChat}>Delete Chat</button>
+        </div>
+      )}
+
+      {/* AI Feedback Modal */}
+      {feedbackModal.visible && (
+        <div className="ai-feedback-modal-overlay" onClick={closeFeedbackModal}>
+          <div className="ai-feedback-modal" onClick={e => e.stopPropagation()}>
+            <div className="ai-feedback-modal-header">
+              <h3>Report Issue with AI Response</h3>
+              <button className="ai-feedback-modal-close" onClick={closeFeedbackModal}>x</button>
+            </div>
+            <div className="ai-feedback-modal-body">
+              <div className="ai-feedback-context">
+                <div className="ai-feedback-question">
+                  <strong>Your question:</strong>
+                  <p>{feedbackModal.userQuestion}</p>
+                </div>
+                <div className="ai-feedback-response">
+                  <strong>AI response:</strong>
+                  <p>{feedbackModal.aiResponse?.substring(0, 200)}{feedbackModal.aiResponse?.length > 200 ? '...' : ''}</p>
+                </div>
+              </div>
+
+              <div className="ai-feedback-type-selector">
+                <label>What was wrong with this response?</label>
+                <div className="ai-feedback-type-options">
+                  <button
+                    className={`ai-feedback-type-btn ${feedbackType === 'wrong_answer' ? 'active' : ''}`}
+                    onClick={() => setFeedbackType('wrong_answer')}
+                  >
+                    Wrong Answer
+                  </button>
+                  <button
+                    className={`ai-feedback-type-btn ${feedbackType === 'incomplete' ? 'active' : ''}`}
+                    onClick={() => setFeedbackType('incomplete')}
+                  >
+                    Incomplete
+                  </button>
+                  <button
+                    className={`ai-feedback-type-btn ${feedbackType === 'outdated' ? 'active' : ''}`}
+                    onClick={() => setFeedbackType('outdated')}
+                  >
+                    Outdated Info
+                  </button>
+                  <button
+                    className={`ai-feedback-type-btn ${feedbackType === 'irrelevant' ? 'active' : ''}`}
+                    onClick={() => setFeedbackType('irrelevant')}
+                  >
+                    Irrelevant
+                  </button>
+                  <button
+                    className={`ai-feedback-type-btn ${feedbackType === 'other' ? 'active' : ''}`}
+                    onClick={() => setFeedbackType('other')}
+                  >
+                    Other
+                  </button>
+                </div>
+              </div>
+
+              <div className="ai-feedback-text-input">
+                <label>Additional details (optional):</label>
+                <textarea
+                  value={feedbackText}
+                  onChange={e => setFeedbackText(e.target.value)}
+                  placeholder="What answer were you expecting? Any additional context..."
+                  rows={3}
+                />
+              </div>
+            </div>
+            <div className="ai-feedback-modal-footer">
+              <button className="ai-feedback-cancel-btn" onClick={closeFeedbackModal}>Cancel</button>
+              <button
+                className="ai-feedback-submit-btn"
+                onClick={handleSubmitFeedback}
+                disabled={!feedbackType || feedbackSubmitting}
+              >
+                {feedbackSubmitting ? 'Submitting...' : 'Submit Feedback'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

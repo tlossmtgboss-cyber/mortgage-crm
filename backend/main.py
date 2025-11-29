@@ -1043,6 +1043,53 @@ class AIDelegatedTask(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     is_active = Column(Boolean, default=True)  # Can be revoked by setting to False
 
+
+class AIFeedbackLog(Base):
+    """Tracks user feedback on AI responses for continuous improvement"""
+    __tablename__ = "ai_feedback_logs"
+    __table_args__ = (
+        Index('ix_ai_feedback_user_id', 'user_id'),
+        Index('ix_ai_feedback_created_at', 'created_at'),
+        Index('ix_ai_feedback_status', 'status'),
+        Index('ix_ai_feedback_category', 'category'),
+    )
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+
+    # The original question/prompt from the user
+    user_question = Column(Text, nullable=False)
+
+    # The AI's response that was unsatisfactory
+    ai_response = Column(Text, nullable=False)
+
+    # User's feedback on why it was wrong
+    feedback_type = Column(String, nullable=False)  # 'wrong_answer', 'incomplete', 'outdated', 'irrelevant', 'other'
+    user_feedback = Column(Text)  # Optional detailed feedback from user
+
+    # Category for organizing feedback
+    category = Column(String)  # 'sla', 'pipeline', 'tasks', 'loans', 'leads', 'general', etc.
+
+    # Status for tracking resolution
+    status = Column(String, default='pending')  # 'pending', 'reviewed', 'fixed', 'dismissed'
+
+    # Resolution notes from admin
+    resolution_notes = Column(Text)
+    resolved_by = Column(Integer, ForeignKey("users.id"))
+    resolved_at = Column(DateTime)
+
+    # Metadata
+    session_id = Column(String)  # Link to chat session
+    tools_used = Column(JSON)  # Which AI tools were invoked
+    request_id = Column(String)  # For debugging
+
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    user = relationship("User", foreign_keys=[user_id])
+    resolver = relationship("User", foreign_keys=[resolved_by])
+
+
 class Conversation(Base):
     __tablename__ = "conversations"
     id = Column(Integer, primary_key=True, index=True)
@@ -12355,6 +12402,17 @@ try:
     logger.info("✅ SLA Tracking routes loaded")
 except Exception as e:
     logger.warning(f"⚠️ SLA Tracking routes not loaded: {e}")
+
+# Include AI Feedback routes
+try:
+    from routes.ai_feedback_routes import router as ai_feedback_router
+    from routes import ai_feedback_routes
+    ai_feedback_routes.set_dependencies(get_db, get_current_active_user)
+    ai_feedback_routes.ensure_tables_exist(engine)
+    app.include_router(ai_feedback_router, prefix="/api/v1/ai-feedback", tags=["AI Feedback"])
+    logger.info("✅ AI Feedback routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ AI Feedback routes not loaded: {e}")
 
 # Email Monitor Migration Endpoint
 @app.post("/api/v1/migrations/add-email-monitor")

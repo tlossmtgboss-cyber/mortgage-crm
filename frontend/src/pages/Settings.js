@@ -9,6 +9,7 @@ import EmailMonitorDashboard from './EmailMonitorDashboard';
 import EmailSignatureTab from '../components/EmailSignatureTab';
 import SmartScheduler from '../components/SmartScheduler';
 import VideoMeetings from '../components/VideoMeetings';
+import AIFeedbackLog from '../components/AIFeedbackLog';
 import './Settings.css';
 
 // Use HTTPS Railway URL in production, localhost for development
@@ -2145,6 +2146,12 @@ const API_BASE_URL = isProduction
               >
                 <span>Clear Dummy Data</span>
               </button>
+              <button
+                className={`sidebar-btn child ${activeSection === 'ai-feedback-log' ? 'active' : ''}`}
+                onClick={() => setActiveSection('ai-feedback-log')}
+              >
+                <span>AI Feedback Log</span>
+              </button>
             </div>
           )}
         </div>
@@ -2169,6 +2176,10 @@ const API_BASE_URL = isProduction
 
           {activeSection === 'document-intake' && (
             <DocumentIntakeManager />
+          )}
+
+          {activeSection === 'ai-feedback-log' && (
+            <AIFeedbackLog />
           )}
 
           {/* MARKETING */}

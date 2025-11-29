@@ -1,0 +1,419 @@
+.ai-feedback-log-container {
+  padding: 24px;
+  max-width: 1200px;
+}
+
+.ai-feedback-header h2 {
+  margin: 0 0 8px 0;
+  font-size: 24px;
+  color: #1f2937;
+}
+
+.ai-feedback-header p {
+  margin: 0 0 24px 0;
+  color: #6b7280;
+}
+
+/* Stats Cards */
+.ai-feedback-stats {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.stat-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px 24px;
+  min-width: 120px;
+  text-align: center;
+}
+
+.stat-card.pending {
+  border-left: 4px solid #f59e0b;
+}
+
+.stat-card.reviewed {
+  border-left: 4px solid #3b82f6;
+}
+
+.stat-card.fixed {
+  border-left: 4px solid #10b981;
+}
+
+.stat-card.dismissed {
+  border-left: 4px solid #6b7280;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+/* Filters */
+.ai-feedback-filters {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.ai-feedback-filters select {
+  padding: 10px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 14px;
+  background: white;
+  min-width: 150px;
+  cursor: pointer;
+}
+
+.ai-feedback-filters select:focus {
+  outline: none;
+  border-color: #217F8D;
+}
+
+.refresh-btn {
+  padding: 10px 20px;
+  background: #217F8D;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.refresh-btn:hover {
+  background: #1a6570;
+}
+
+/* Table */
+.ai-feedback-table-container {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.ai-feedback-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ai-feedback-table th {
+  background: #f9fafb;
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.ai-feedback-table td {
+  padding: 12px 16px;
+  font-size: 14px;
+  color: #4b5563;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.ai-feedback-table tr:hover {
+  background: #f9fafb;
+}
+
+.ai-feedback-table tr.selected {
+  background: #f0fdfa;
+}
+
+.question-cell {
+  max-width: 200px;
+}
+
+.question-cell span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Status Badges */
+.status-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.badge-pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.badge-reviewed {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.badge-fixed {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.badge-dismissed {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+/* View Button */
+.view-btn {
+  padding: 6px 14px;
+  background: #f3f4f6;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #374151;
+}
+
+.view-btn:hover {
+  background: #e5e7eb;
+}
+
+/* Loading & Empty States */
+.loading-state,
+.empty-state {
+  padding: 48px;
+  text-align: center;
+  color: #6b7280;
+}
+
+.empty-hint {
+  font-size: 13px;
+  color: #9ca3af;
+  margin-top: 8px;
+}
+
+/* Detail Modal */
+.ai-feedback-detail-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.ai-feedback-detail-modal {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 700px;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #1f2937;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #6b7280;
+  padding: 0;
+  line-height: 1;
+}
+
+.close-btn:hover {
+  color: #1f2937;
+}
+
+.modal-body {
+  padding: 24px;
+}
+
+.detail-section {
+  margin-bottom: 16px;
+}
+
+.detail-section label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.detail-section p {
+  margin: 0;
+  color: #1f2937;
+}
+
+.question-box,
+.response-box,
+.feedback-box,
+.resolution-box {
+  background: #f9fafb;
+  padding: 12px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #374151;
+  white-space: pre-wrap;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.response-box {
+  background: #f0f9ff;
+}
+
+.feedback-box {
+  background: #fef3c7;
+}
+
+.resolution-box {
+  background: #d1fae5;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.status-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-actions span {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.status-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.status-btn.reviewed {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.status-btn.reviewed:hover {
+  background: #bfdbfe;
+}
+
+.status-btn.fixed {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-btn.fixed:hover {
+  background: #a7f3d0;
+}
+
+.status-btn.dismissed {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.status-btn.dismissed:hover {
+  background: #e5e7eb;
+}
+
+.status-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.delete-btn {
+  padding: 8px 16px;
+  background: #fef2f2;
+  color: #dc2626;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.delete-btn:hover {
+  background: #fee2e2;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .ai-feedback-stats {
+    flex-direction: column;
+  }
+
+  .stat-card {
+    width: 100%;
+  }
+
+  .ai-feedback-filters {
+    flex-direction: column;
+  }
+
+  .ai-feedback-filters select {
+    width: 100%;
+  }
+
+  .ai-feedback-table {
+    font-size: 12px;
+  }
+
+  .ai-feedback-table th,
+  .ai-feedback-table td {
+    padding: 8px 12px;
+  }
+
+  .modal-footer {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .status-actions {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}

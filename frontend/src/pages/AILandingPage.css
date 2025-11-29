@@ -2896,3 +2896,235 @@
   }
 }
 
+/* ========================================
+   AI Feedback Buttons & Modal
+   ======================================== */
+
+.ai-feedback-buttons {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(0,0,0,0.05);
+}
+
+.ai-feedback-btn {
+  background: transparent;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+  opacity: 0.6;
+}
+
+.ai-feedback-btn:hover {
+  opacity: 1;
+  background: #f3f4f6;
+}
+
+.ai-feedback-btn.active {
+  opacity: 1;
+  background: #f0f0f0;
+}
+
+.ai-feedback-thanks {
+  font-size: 12px;
+  color: #10b981;
+  font-style: italic;
+}
+
+/* Feedback Modal Overlay */
+.ai-feedback-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+/* Feedback Modal */
+.ai-feedback-modal {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+}
+
+.ai-feedback-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.ai-feedback-modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #1f2937;
+}
+
+.ai-feedback-modal-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: #6b7280;
+  padding: 4px 8px;
+}
+
+.ai-feedback-modal-close:hover {
+  color: #1f2937;
+}
+
+.ai-feedback-modal-body {
+  padding: 20px;
+}
+
+.ai-feedback-context {
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+
+.ai-feedback-question,
+.ai-feedback-response {
+  margin-bottom: 8px;
+}
+
+.ai-feedback-question:last-child,
+.ai-feedback-response:last-child {
+  margin-bottom: 0;
+}
+
+.ai-feedback-context strong {
+  color: #374151;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.ai-feedback-context p {
+  margin: 0;
+  color: #6b7280;
+}
+
+.ai-feedback-type-selector {
+  margin-bottom: 16px;
+}
+
+.ai-feedback-type-selector label {
+  display: block;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+.ai-feedback-type-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ai-feedback-type-btn {
+  padding: 8px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  font-size: 13px;
+  color: #4b5563;
+  transition: all 0.2s;
+}
+
+.ai-feedback-type-btn:hover {
+  border-color: #217F8D;
+  color: #217F8D;
+}
+
+.ai-feedback-type-btn.active {
+  background: #217F8D;
+  color: white;
+  border-color: #217F8D;
+}
+
+.ai-feedback-text-input {
+  margin-bottom: 16px;
+}
+
+.ai-feedback-text-input label {
+  display: block;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 8px;
+}
+
+.ai-feedback-text-input textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.ai-feedback-text-input textarea:focus {
+  outline: none;
+  border-color: #217F8D;
+}
+
+.ai-feedback-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.ai-feedback-cancel-btn {
+  padding: 10px 20px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  font-size: 14px;
+  color: #4b5563;
+}
+
+.ai-feedback-cancel-btn:hover {
+  background: #f3f4f6;
+}
+
+.ai-feedback-submit-btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  background: #217F8D;
+  color: white;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.ai-feedback-submit-btn:hover {
+  background: #1a6570;
+}
+
+.ai-feedback-submit-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
