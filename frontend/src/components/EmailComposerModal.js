@@ -197,7 +197,6 @@ function EmailComposerModal({ isOpen, onClose, recipient, entityType, entityData
           <h2>✉️ Compose Email</h2>
           <p className="recipient-info">
             To: <strong>{recipient?.name || 'Unknown'}</strong>
-            {recipient?.email && <span className="recipient-email">&lt;{recipient.email}&gt;</span>}
           </p>
         </div>
 
@@ -351,7 +350,7 @@ function EmailComposerModal({ isOpen, onClose, recipient, entityType, entityData
           <div className="email-success">
             <div className="success-icon">✅</div>
             <h3>Email Sent Successfully!</h3>
-            <p>Your email has been delivered to <strong>{recipient?.email}</strong></p>
+            <p>Your email has been delivered to <strong>{recipient?.name || 'the recipient'}</strong></p>
             <p className="auto-close">This window will close automatically...</p>
           </div>
         )}
