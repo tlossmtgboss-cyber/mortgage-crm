@@ -7026,7 +7026,7 @@ The Team menu item appears for managers and management roles.
                             SELECT stage::text as stage, days_in_stage, sla_status, borrower_name, id
                             FROM loans
                             WHERE loan_officer_id = :user_id
-                            AND stage::text NOT IN ('FUNDED', 'WITHDRAWN', 'CLOSED')
+                            AND stage::text NOT IN ('Funded', 'Withdrawn', 'Closed', 'FUNDED', 'WITHDRAWN', 'CLOSED')
                         """),
                         {"user_id": current_user.id}
                     ).fetchall()
