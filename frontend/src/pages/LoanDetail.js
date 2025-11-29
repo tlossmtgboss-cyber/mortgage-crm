@@ -731,11 +731,21 @@ function LoanDetail() {
       </div>
 
       {/* Loan Information Toolbar */}
-      <div className="loan-toolbar">
+      <div className="loan-toolbar compact">
         <div className="toolbar-header">
           <h3>Loan Details</h3>
         </div>
-        <div className="loan-fields-grid">
+        <div className="loan-fields-grid compact">
+          <div className="loan-field">
+            <label>Loan Number</label>
+            <input
+              type="text"
+              value={formData.loan_number || loan?.loan_number || ''}
+              onChange={(e) => handleFieldChange('loan_number', e.target.value)}
+              placeholder="Enter loan number"
+            />
+          </div>
+
           <div className="loan-field">
             <label>Loan Amount</label>
             <input
@@ -920,6 +930,22 @@ function LoanDetail() {
             {borrower.type === 'primary' && <span className="borrower-badge">Primary</span>}
           </button>
         ))}
+        <button
+          className="borrower-btn add-borrower-btn"
+          onClick={() => {
+            const newBorrower = {
+              id: Date.now(),
+              name: 'New Borrower',
+              type: 'co_borrower',
+              email: '',
+              phone: ''
+            };
+            setBorrowers([...borrowers, newBorrower]);
+            setActiveBorrower(borrowers.length);
+          }}
+        >
+          + Add Borrower
+        </button>
       </div>
 
       {/* Tab Navigation */}

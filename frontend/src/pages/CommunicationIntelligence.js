@@ -173,8 +173,13 @@ function CommunicationIntelligence() {
       const response = await fetch(url, { headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
-        setEmailQueue(data.emails || []);
+        const emails = data.emails || [];
+        setEmailQueue(emails);
         setEmailQueueTotal(data.total || 0);
+        // Auto-select first item if none selected and items exist
+        if (emails.length > 0 && !selectedEmail) {
+          setSelectedEmail(emails[0]);
+        }
       }
     } catch (error) {
       console.error('Error loading email queue:', error);
@@ -261,8 +266,13 @@ function CommunicationIntelligence() {
       const response = await fetch(url, { headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
-        setSmsQueue(data.items || []);
+        const items = data.items || [];
+        setSmsQueue(items);
         setSmsQueueTotal(data.total || 0);
+        // Auto-select first item if none selected and items exist
+        if (items.length > 0 && !selectedSms) {
+          setSelectedSms(items[0]);
+        }
       }
     } catch (error) {
       console.error('Error loading SMS queue:', error);

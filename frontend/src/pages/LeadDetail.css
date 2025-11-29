@@ -222,7 +222,8 @@
   background: rgba(255, 255, 255, 0.25);
 }
 
-.borrower-add-btn {
+.borrower-add-btn,
+.add-borrower-btn {
   padding: 10px 16px;
   background: transparent;
   border: 2px dashed #218D8D;
@@ -235,11 +236,67 @@
   margin-left: auto;
 }
 
-.borrower-add-btn:hover {
+.borrower-add-btn:hover,
+.add-borrower-btn:hover {
   background: #e9f5f5;
   border-color: #1a7070;
   color: #1a7070;
   transform: translateY(-2px);
+}
+
+/* Compact Loan Toolbar */
+.loan-toolbar.compact {
+  padding: 8px 12px;
+  margin-bottom: 12px;
+}
+
+.loan-toolbar.compact .toolbar-header {
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+}
+
+.loan-toolbar.compact .toolbar-header h3 {
+  font-size: 11px;
+}
+
+/* Compact Loan Fields Grid */
+.loan-fields-grid.compact {
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+
+.loan-fields-grid.compact .loan-field {
+  gap: 1px;
+}
+
+.loan-fields-grid.compact .loan-field label {
+  font-size: 9px;
+}
+
+.loan-fields-grid.compact .loan-field .value,
+.loan-fields-grid.compact .loan-field input,
+.loan-fields-grid.compact .loan-field select {
+  font-size: 11px;
+  padding: 3px 6px;
+  min-height: 24px;
+}
+
+@media (max-width: 1200px) {
+  .loan-fields-grid.compact {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .loan-fields-grid.compact {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .loan-fields-grid.compact {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 
 /* Profile Tabs */
