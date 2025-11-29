@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import WorkflowConfigEditor from '../components/WorkflowConfigEditor';
+import WorkflowUpcomingTasks from '../components/WorkflowUpcomingTasks';
 import WorkflowScorecard from '../components/WorkflowScorecard';
 import './WorkflowDashboard.css';
 
@@ -22,6 +23,7 @@ const WORKFLOW_TABS = [
 // View mode tabs
 const VIEW_MODES = [
   { key: 'configuration', name: 'Configuration', icon: '⚙️' },
+  { key: 'upcoming', name: 'Upcoming Tasks', icon: '📅' },
   { key: 'scorecard', name: 'Scorecard', icon: '📊' }
 ];
 
@@ -116,7 +118,7 @@ function WorkflowDashboard() {
         ))}
       </div>
 
-      {/* Content Area - Configuration or Scorecard */}
+      {/* Content Area - Configuration, Upcoming Tasks, or Scorecard */}
       <div className="workflow-content embedded-config">
         {viewMode === 'configuration' ? (
           <WorkflowConfigEditor
@@ -125,6 +127,13 @@ function WorkflowDashboard() {
             workflowName={activeWorkflow.name}
             workflowColor={activeWorkflow.color}
             embedded={true}
+          />
+        ) : viewMode === 'upcoming' ? (
+          <WorkflowUpcomingTasks
+            key={`${activeTab}-upcoming`}
+            workflowKey={activeWorkflow.key}
+            workflowName={activeWorkflow.name}
+            workflowColor={activeWorkflow.color}
           />
         ) : (
           <WorkflowScorecard

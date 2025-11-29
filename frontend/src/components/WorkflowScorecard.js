@@ -32,6 +32,11 @@ function WorkflowScorecard({ workflowKey, workflowName, workflowColor }) {
     avgCompletionTime: 0
   });
   const [timeRange, setTimeRange] = useState('30d');
+  const [capacityMetrics, setCapacityMetrics] = useState({
+    avgTasksPerDay: 0,
+    topPerformers: [],
+    capacityLeaderboard: []
+  });
 
   const fetchScorecardData = useCallback(async () => {
     setLoading(true);
@@ -98,6 +103,24 @@ function WorkflowScorecard({ workflowKey, workflowName, workflowColor }) {
       completedLate: mockRoleMetrics.reduce((sum, r) => sum + r.completedLate, 0),
       overdue: mockRoleMetrics.reduce((sum, r) => sum + r.overdue, 0),
       avgCompletionTime: Math.floor(mockRoleMetrics.reduce((sum, r) => sum + r.avgCompletionHours, 0) / mockRoleMetrics.length)
+    });
+
+    // Generate capacity metrics for daily task completion
+    const allEmployees = mockRoleMetrics.flatMap(r => r.employees || []);
+    const capacityLeaderboard = allEmployees
+      .map(emp => ({
+        ...emp,
+        avgTasksPerDay: Math.round((emp.tasksCompleted / (timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : timeRange === '90d' ? 90 : 365)) * 10) / 10 || Math.floor(Math.random() * 8) + 5,
+        peakDay: Math.floor(Math.random() * 15) + 10,
+        consistencyScore: Math.floor(Math.random() * 30) + 70,
+        totalDaysActive: timeRange === '7d' ? 5 : timeRange === '30d' ? 22 : timeRange === '90d' ? 65 : 250
+      }))
+      .sort((a, b) => b.avgTasksPerDay - a.avgTasksPerDay);
+
+    setCapacityMetrics({
+      avgTasksPerDay: Math.round(capacityLeaderboard.reduce((sum, e) => sum + e.avgTasksPerDay, 0) / capacityLeaderboard.length * 10) / 10,
+      topPerformers: capacityLeaderboard.slice(0, 3),
+      capacityLeaderboard
     });
   };
 
@@ -427,6 +450,106 @@ function WorkflowScorecard({ workflowKey, workflowName, workflowColor }) {
                 <div className="kpi-value">{overallStats.avgCompletionTime}h</div>
                 <div className="kpi-label">Avg Completion</div>
               </div>
+            </div>
+          </div>
+
+          {/* Daily Capacity Leaderboard */}
+          <div className="capacity-leaderboard-section">
+            <div className="section-header-row">
+              <h4 className="section-title">📊 Daily Task Capacity Leaderboard</h4>
+              <div className="capacity-avg">
+                Team Avg: <strong>{capacityMetrics.avgTasksPerDay}</strong> tasks/day
+              </div>
+            </div>
+            <p className="section-description">
+              Track how many tasks each team member completes per day to measure and optimize capacity.
+            </p>
+
+            {/* Top 3 Performers */}
+            <div className="top-performers">
+              {capacityMetrics.topPerformers.map((performer, idx) => (
+                <div key={performer.id} className={`performer-card rank-${idx + 1}`}>
+                  <div className="rank-badge">#{idx + 1}</div>
+                  <div className="performer-avatar">
+                    {performer.name.split(' ').map(n => n[0]).join('')}
+                  </div>
+                  <div className="performer-info">
+                    <span className="performer-name">{performer.name}</span>
+                    <span className="performer-role">{performer.role}</span>
+                  </div>
+                  <div className="performer-stats">
+                    <div className="stat-main">
+                      <span className="stat-value">{performer.avgTasksPerDay}</span>
+                      <span className="stat-label">tasks/day</span>
+                    </div>
+                    <div className="stat-secondary">
+                      <span>Peak: {performer.peakDay}</span>
+                      <span>Consistency: {performer.consistencyScore}%</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Full Leaderboard Table */}
+            <div className="capacity-table-wrapper">
+              <table className="capacity-leaderboard-table">
+                <thead>
+                  <tr>
+                    <th>Rank</th>
+                    <th>Team Member</th>
+                    <th>Role</th>
+                    <th>Avg Tasks/Day</th>
+                    <th>Peak Day</th>
+                    <th>Days Active</th>
+                    <th>Consistency</th>
+                    <th>vs Team Avg</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {capacityMetrics.capacityLeaderboard.map((employee, idx) => {
+                    const vsAvg = capacityMetrics.avgTasksPerDay > 0
+                      ? Math.round(((employee.avgTasksPerDay - capacityMetrics.avgTasksPerDay) / capacityMetrics.avgTasksPerDay) * 100)
+                      : 0;
+
+                    return (
+                      <tr
+                        key={employee.id}
+                        className={idx < 3 ? `top-rank top-${idx + 1}` : ''}
+                        onClick={() => handleEmployeeClick(employee)}
+                      >
+                        <td className="rank-cell">{idx + 1}</td>
+                        <td>
+                          <div className="employee-cell">
+                            <span className="employee-avatar-sm">
+                              {employee.name.split(' ').map(n => n[0]).join('')}
+                            </span>
+                            {employee.name}
+                          </div>
+                        </td>
+                        <td>{employee.role}</td>
+                        <td className="tasks-cell">
+                          <strong>{employee.avgTasksPerDay}</strong>
+                        </td>
+                        <td>{employee.peakDay}</td>
+                        <td>{employee.totalDaysActive}</td>
+                        <td>
+                          <div className="consistency-bar">
+                            <div
+                              className="consistency-fill"
+                              style={{ width: `${employee.consistencyScore}%` }}
+                            />
+                            <span>{employee.consistencyScore}%</span>
+                          </div>
+                        </td>
+                        <td className={vsAvg >= 0 ? 'positive' : 'negative'}>
+                          {vsAvg >= 0 ? '+' : ''}{vsAvg}%
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
 

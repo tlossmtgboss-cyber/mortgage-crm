@@ -279,6 +279,8 @@
   font-size: 11px;
   padding: 3px 6px;
   min-height: 24px;
+  font-weight: 600;
+  color: #1a202c;
 }
 
 @media (max-width: 1200px) {
