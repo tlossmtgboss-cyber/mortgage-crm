@@ -5862,6 +5862,11 @@ async def orchestrator_chat(
             logger.info(f"Loaded user context: {user_context_summary[:100]}...")
         except Exception as ctx_err:
             logger.warning(f"Failed to load user context: {ctx_err}")
+            # Rollback to clear any failed transaction state
+            try:
+                db.rollback()
+            except Exception:
+                pass
             user_context = {}
             user_context_summary = ''
             user_preferences = {}

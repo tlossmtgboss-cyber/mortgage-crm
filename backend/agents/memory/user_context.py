@@ -83,6 +83,11 @@ class UserContextManager:
 
         except Exception as e:
             logger.error(f"Error getting user context: {e}")
+            # Rollback to clear any failed transaction state
+            try:
+                db.rollback()
+            except Exception:
+                pass
             return {
                 'profile': {'role': 'loan_officer', 'name': 'User'},
                 'summary': 'User context unavailable.',
@@ -140,6 +145,10 @@ class UserContextManager:
 
         except Exception as e:
             logger.error(f"Error getting user profile: {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
             return {'role': 'loan_officer', 'name': 'User'}
 
     @staticmethod
@@ -224,6 +233,10 @@ class UserContextManager:
 
         except Exception as e:
             logger.error(f"Error getting performance metrics: {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
             return {
                 'performance_tier': 'unknown',
                 'active_loans': 0,
@@ -262,6 +275,10 @@ class UserContextManager:
 
         except Exception as e:
             logger.error(f"Error getting preferences: {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
             return UserContextManager.DEFAULT_PREFERENCES.copy()
 
     @staticmethod
@@ -330,6 +347,10 @@ class UserContextManager:
 
         except Exception as e:
             logger.error(f"Error learning preferences: {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
             return {}
 
     @staticmethod
@@ -415,6 +436,10 @@ class UserContextManager:
 
         except Exception as e:
             logger.error(f"Error getting behavioral patterns: {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
             return {
                 'work_pattern': 'unknown',
                 'common_topics': [],
