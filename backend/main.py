@@ -42000,7 +42000,7 @@ async def create_sms_conversation_tables_migration(
         logger.info(f"Running migration: create SMS conversation tables (user: {current_user.id})")
         tables_created = []
 
-        # Create sms_conversations table
+        # Create sms_conversations table (contact_id is nullable without FK since contacts table may not exist)
         db.execute(text("""
             CREATE TABLE IF NOT EXISTS sms_conversations (
                 id SERIAL PRIMARY KEY,
@@ -42008,7 +42008,7 @@ async def create_sms_conversation_tables_migration(
                 user_id INTEGER REFERENCES users(id),
                 lead_id INTEGER REFERENCES leads(id),
                 loan_id INTEGER REFERENCES loans(id),
-                contact_id INTEGER REFERENCES contacts(id),
+                contact_id INTEGER,
                 contact_name VARCHAR(255),
                 is_active BOOLEAN DEFAULT TRUE,
                 ai_enabled BOOLEAN DEFAULT TRUE,
@@ -43937,16 +43937,18 @@ async def get_dialer_call_tasks(
 
         # Query tasks with call-related titles
         tasks_query = db.execute(text("""
-            SELECT t.id, t.title, t.description, t.priority, t.status, t.due_date,
-                   t.entity_type, t.entity_id, t.source, t.created_at,
+            SELECT t.id, t.title, t.description, t.priority,
+                   CAST(t.status AS TEXT) as status, t.due_date,
+                   t.entity_type, CAST(t.entity_id AS TEXT) as entity_id,
+                   t.source, t.created_at,
                    COALESCE(l.borrower_name, ld.name, 'Unknown') as contact_name,
                    COALESCE(l.borrower_phone, ld.phone, '') as phone_number,
-                   COALESCE(l.id, NULL) as loan_id,
-                   COALESCE(ld.id, NULL) as lead_id
+                   l.id as loan_id,
+                   ld.id as lead_id
             FROM tasks t
-            LEFT JOIN loans l ON t.entity_type = 'loan' AND t.entity_id = l.id
-            LEFT JOIN leads ld ON t.entity_type = 'lead' AND t.entity_id = ld.id
-            WHERE t.status NOT IN ('completed', 'cancelled', 'skipped')
+            LEFT JOIN loans l ON t.entity_type = 'loan' AND CAST(t.entity_id AS INTEGER) = l.id
+            LEFT JOIN leads ld ON t.entity_type = 'lead' AND CAST(t.entity_id AS INTEGER) = ld.id
+            WHERE CAST(t.status AS TEXT) NOT IN ('completed', 'cancelled', 'skipped')
             AND (
                 LOWER(t.title) LIKE '%call%'
                 OR LOWER(t.title) LIKE '%phone%'
@@ -43965,28 +43967,30 @@ async def get_dialer_call_tasks(
                 t.due_date ASC NULLS LAST,
                 t.created_at DESC
             LIMIT 100
-        """))
+        """)).mappings().all()
 
         tasks = []
         for row in tasks_query:
             # Only include tasks with valid phone numbers
-            phone = row.phone_number if row.phone_number else ''
+            phone = row.get('phone_number') or ''
             if phone and len(phone) >= 10:
+                due_date = row.get('due_date')
+                created_at = row.get('created_at')
                 tasks.append({
-                    "id": row.id,
-                    "title": row.title,
-                    "description": row.description,
-                    "priority": row.priority,
-                    "status": row.status,
-                    "due_date": row.due_date.isoformat() if row.due_date else None,
-                    "entity_type": row.entity_type,
-                    "entity_id": row.entity_id,
-                    "source": row.source,
-                    "created_at": row.created_at.isoformat() if row.created_at else None,
-                    "contact_name": row.contact_name,
+                    "id": row.get('id'),
+                    "title": row.get('title'),
+                    "description": row.get('description'),
+                    "priority": row.get('priority'),
+                    "status": row.get('status'),
+                    "due_date": due_date.isoformat() if due_date else None,
+                    "entity_type": row.get('entity_type'),
+                    "entity_id": row.get('entity_id'),
+                    "source": row.get('source'),
+                    "created_at": created_at.isoformat() if created_at else None,
+                    "contact_name": row.get('contact_name'),
                     "phone_number": phone,
-                    "loan_id": row.loan_id,
-                    "lead_id": row.lead_id
+                    "loan_id": row.get('loan_id'),
+                    "lead_id": row.get('lead_id')
                 })
 
         return {"tasks": tasks, "total": len(tasks)}
