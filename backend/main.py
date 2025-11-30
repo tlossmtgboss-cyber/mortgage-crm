@@ -366,7 +366,8 @@ class User(Base):
     business_hours = Column(JSON)
     email_verified_at = Column(DateTime)
     phone_verified_at = Column(DateTime)
-    timezone = Column(String, default="America/Chicago")  # User's timezone for AI and display
+    # Note: timezone column added via migration - use getattr() to safely access
+    # timezone = Column(String, default="America/Chicago")  # User's timezone for AI and display
     branch = relationship("Branch", back_populates="users")
     leads = relationship("Lead", back_populates="owner")
     loans = relationship("Loan", back_populates="loan_officer")
