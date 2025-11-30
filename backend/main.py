@@ -41168,81 +41168,156 @@ async def clear_sample_data(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Clear all sample/dummy data from the CRM to prepare for workflow-based tasks.
-    This deletes: tasks, reconciliation events, messages, loans, leads, activities, and more.
+    Clear ALL sample/demo data from the CRM.
+    This deletes: tasks, reconciliation events, messages, loans, leads, activities, documents,
+    voicemails, calendar events, email drafts, SLA history, and more.
+
+    KEEPS: User accounts, organization settings, OAuth tokens, system configurations.
     """
     try:
-        # Delete in order (dependencies first):
-
-        # 0. Task approvals (references ai_tasks) - delete via raw SQL if table exists
         from sqlalchemy import text
-        try:
-            result = db.execute(text("DELETE FROM task_approvals"))
-            deleted_task_approvals = result.rowcount
-        except Exception as e:
-            logger.warning(f"Could not delete task_approvals: {e}")
-            deleted_task_approvals = 0  # Table might not exist
+        results = {}
 
-        # 1. Activities and Conversations (reference leads/loans)
-        deleted_activities = db.query(Activity).delete()
-        deleted_conversations = db.query(Conversation).delete()
+        # Helper to safely delete from a table
+        def safe_delete(table_name: str) -> int:
+            try:
+                result = db.execute(text(f"DELETE FROM {table_name}"))
+                return result.rowcount
+            except Exception as e:
+                logger.warning(f"Could not delete from {table_name}: {e}")
+                return 0
 
-        # 2. Tasks (reference loans/leads)
-        deleted_ai_tasks = db.query(AITask).delete()
-        deleted_tasks = db.query(Task).delete()
-        deleted_process_tasks = db.query(ProcessTask).delete()
+        logger.info(f"Starting comprehensive demo data cleanup for user {current_user.email}")
 
-        # 3. Reconciliation events (pending approvals)
-        # deleted_reconciliation = db.query(ReconciliationEvent).delete()  # ReconciliationEvent class not defined
-        deleted_reconciliation = 0
+        # ===== DELETE IN ORDER (foreign key dependencies first) =====
 
-        # 4. Unified messages
-        deleted_sms = db.query(SMSMessage).delete()
-        deleted_emails = db.query(EmailMessage).delete()
-        deleted_teams = db.query(TeamsMessage).delete()
+        # 1. Task-related tables (reference tasks/loans/leads)
+        results["task_approvals"] = safe_delete("task_approvals")
+        results["loan_workflow_tasks"] = safe_delete("loan_workflow_tasks")
+        results["workflow_task_instances"] = safe_delete("workflow_task_instances")
+        results["broken_task_alerts"] = safe_delete("broken_task_alerts")
 
-        # 5. Loans (no dependencies on them now)
-        deleted_loans = db.query(Loan).filter(Loan.loan_officer_id == current_user.id).delete()
+        # 2. Activities, Conversations, AI logs (reference loans/leads)
+        results["activities"] = db.query(Activity).delete()
+        results["conversations"] = db.query(Conversation).delete()
+        results["conversation_memory"] = db.query(ConversationMemory).delete()
+        results["ai_audit_logs"] = db.query(AIAuditLog).delete()
+        results["ai_learning_metrics"] = db.query(AILearningMetric).delete()
+        results["ai_colleague_actions"] = db.query(AIColleagueAction).delete()
 
-        # 6. Leads (no dependencies on them now)
-        deleted_leads = db.query(Lead).filter(Lead.owner_id == current_user.id).delete()
+        # 3. Tasks (reference loans/leads)
+        results["ai_tasks"] = db.query(AITask).delete()
+        results["tasks"] = db.query(Task).delete()
+        results["process_tasks"] = db.query(ProcessTask).delete()
+        results["ai_delegated_tasks"] = db.query(AIDelegatedTask).delete()
+        results["recurring_tasks"] = safe_delete("recurring_tasks")
 
-        # 7. Referral partners and MUM clients (delete all - may be shared)
-        # These might be referenced by other users' data, so wrap in try/except
-        try:
-            deleted_partners = db.query(ReferralPartner).delete()
-        except Exception as e:
-            logger.warning(f"Could not delete all referral partners (may be in use): {e}")
-            deleted_partners = 0
+        # 4. Email-related tables
+        results["email_drafts"] = db.query(EmailDraft).delete()
+        results["email_messages"] = db.query(EmailMessage).delete()
+        results["email_intakes"] = db.query(EmailIntake).delete()
+        results["emails"] = db.query(Email).delete()
+        results["email_monitor_captured"] = safe_delete("email_monitor_captured")
+        results["email_relevance_analysis"] = safe_delete("email_relevance_analysis")
+        results["email_crm_links"] = safe_delete("email_crm_links")
 
-        try:
-            deleted_mum = db.query(MUMClient).delete()
-        except Exception as e:
-            logger.warning(f"Could not delete all MUM clients (may be in use): {e}")
-            deleted_mum = 0
+        # 5. SMS and messaging
+        results["sms_messages"] = db.query(SMSMessage).delete()
+        results["sms_conversations"] = db.query(SMSConversation).delete()
+        results["teams_messages"] = db.query(TeamsMessage).delete()
+
+        # 6. Calendar and scheduling
+        results["calendar_events"] = db.query(CalendarEvent).delete()
+        results["appointments"] = safe_delete("appointments")
+        results["appointment_reminders"] = safe_delete("appointment_reminders")
+        results["blocked_times"] = safe_delete("blocked_times")
+
+        # 7. Voicemail and telephony
+        results["voicemail_events"] = db.query(VoicemailEvent).delete()
+        results["voicemail_drops"] = db.query(VoicemailDrop).delete()
+        results["voicemail_campaigns"] = db.query(VoicemailCampaign).delete()
+        results["call_logs"] = safe_delete("call_logs")
+        results["active_calls"] = safe_delete("active_calls")
+        results["dialer_session_tasks"] = safe_delete("dialer_session_tasks")
+        results["dialer_sessions"] = safe_delete("dialer_sessions")
+
+        # 8. Documents and attachments
+        results["documents"] = db.query(Document).delete()
+        results["attachment_intakes"] = db.query(AttachmentIntake).delete()
+
+        # 9. SLA tracking history
+        results["sla_alerts"] = safe_delete("sla_alerts")
+        results["loan_milestone_history"] = safe_delete("loan_milestone_history")
+        results["sla_performance_snapshots"] = safe_delete("sla_performance_snapshots")
+        results["sla_efficiency_reports"] = safe_delete("sla_efficiency_reports")
+
+        # 10. Data reconciliation events (pending approvals)
+        results["incoming_data_events"] = db.query(IncomingDataEvent).delete()
+        results["extracted_data"] = db.query(ExtractedData).delete()
+        results["data_conflicts"] = safe_delete("data_conflicts")
+
+        # 11. Loan team members (reference loans)
+        results["loan_team_members"] = db.query(LoanTeamMember).delete()
+
+        # 12. Workflow executions
+        results["workflow_executions"] = db.query(WorkflowExecution).delete()
+
+        # 13. Integration logs
+        results["integration_logs"] = db.query(IntegrationLog).delete()
+
+        # 14. AI Training and feedback
+        results["ai_training_events"] = db.query(AITrainingEvent).delete()
+        results["ai_feedback_logs"] = db.query(AIFeedbackLog).delete()
+        results["merge_training_events"] = db.query(MergeTrainingEvent).delete()
+
+        # 15. Duplicate handling
+        results["duplicate_pairs"] = db.query(DuplicatePair).delete()
+
+        # 16. Profiles (reference loans/leads)
+        results["active_loan_profiles"] = safe_delete("active_loan_profiles")
+        results["lead_profiles"] = safe_delete("lead_profiles")
+        results["client_profiles"] = db.query(ClientProfile).delete()
+        results["mum_client_profiles"] = safe_delete("mum_client_profiles")
+
+        # 17. Analytics events
+        results["analytics_events"] = safe_delete("analytics_events")
+
+        # 18. MAIN DATA: Loans (no dependencies now)
+        results["loans"] = db.query(Loan).delete()
+
+        # 19. MAIN DATA: Leads (no dependencies now)
+        results["leads"] = db.query(Lead).delete()
+
+        # 20. Referral partners and MUM clients
+        results["referral_partners"] = db.query(ReferralPartner).delete()
+        results["mum_clients"] = db.query(MUMClient).delete()
+        results["mum_transactions"] = safe_delete("mum_transactions")
+
+        # 21. IT Helpdesk tickets
+        results["helpdesk_tickets"] = db.query(ITHelpdeskTicket).delete()
+
+        # 22. Opportunities
+        results["opportunities"] = safe_delete("opportunities")
+
+        # 23. Video clips and related
+        results["video_clip_views"] = safe_delete("clip_views")
+        results["video_clip_comments"] = safe_delete("clip_comments")
+        results["video_clip_shares"] = safe_delete("clip_shares")
+        results["video_clips"] = safe_delete("video_clips")
 
         # Commit all deletions
         db.commit()
 
-        logger.info(f"Successfully cleared all sample data for user {current_user.email}")
+        # Count total deleted
+        total_deleted = sum(v for v in results.values() if isinstance(v, int))
+
+        logger.info(f"Successfully cleared ALL demo data. Total records deleted: {total_deleted}")
 
         return {
             "success": True,
-            "message": "Successfully cleared all dummy data",
-            "deleted_task_approvals": deleted_task_approvals,
-            "deleted_activities": deleted_activities,
-            "deleted_conversations": deleted_conversations,
-            "deleted_ai_tasks": deleted_ai_tasks,
-            "deleted_tasks": deleted_tasks,
-            "deleted_process_tasks": deleted_process_tasks,
-            "deleted_reconciliation": deleted_reconciliation,
-            "deleted_sms": deleted_sms,
-            "deleted_emails": deleted_emails,
-            "deleted_teams": deleted_teams,
-            "deleted_loans": deleted_loans,
-            "deleted_leads": deleted_leads,
-            "deleted_partners": deleted_partners,
-            "deleted_mum": deleted_mum
+            "message": f"Successfully cleared ALL demo data from CRM. Total records deleted: {total_deleted}",
+            "total_deleted": total_deleted,
+            "details": results
         }
     except Exception as e:
         db.rollback()
