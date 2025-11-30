@@ -20423,15 +20423,24 @@ async def connect_microsoft365(
 ):
     """Exchange authorization code for access token and store"""
     try:
-        # Microsoft token endpoint
-        token_url = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
+        # First check for database config
+        db_config = db.query(MicrosoftAppConfig).first()
 
-        # Get client credentials from environment
-        client_id = os.getenv("MICROSOFT_CLIENT_ID")
-        client_secret = os.getenv("MICROSOFT_CLIENT_SECRET")
+        if db_config and db_config.client_id and db_config.client_secret:
+            client_id = db_config.client_id
+            client_secret = decrypt_token(db_config.client_secret)
+            tenant_id = db_config.tenant_id or "common"
+        else:
+            # Fall back to environment variables
+            client_id = os.getenv("MICROSOFT_CLIENT_ID")
+            client_secret = os.getenv("MICROSOFT_CLIENT_SECRET")
+            tenant_id = os.getenv("MICROSOFT_TENANT_ID", "common")
 
         if not client_id or not client_secret:
-            raise HTTPException(status_code=500, detail="Microsoft OAuth not configured. Contact administrator.")
+            raise HTTPException(status_code=500, detail="Microsoft OAuth not configured. Please configure in Settings > Outlook Email.")
+
+        # Microsoft token endpoint
+        token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
 
         # Exchange authorization code for tokens
         data = {
