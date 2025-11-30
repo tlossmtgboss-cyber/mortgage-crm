@@ -43978,6 +43978,18 @@ async def remove_from_dnc(
     return {"success": success, "message": f"{phone_number} removed from DNC list" if success else "Number not found in DNC list"}
 
 
+@app.get("/api/v1/dialer/call-tasks-debug")
+async def get_dialer_call_tasks_debug(
+    db: Session = Depends(get_db)
+):
+    """Debug endpoint to test AITask query without auth."""
+    try:
+        count = db.query(AITask).count()
+        return {"debug": True, "total_aitasks": count}
+    except Exception as e:
+        return {"debug": True, "error": str(e), "error_type": type(e).__name__}
+
+
 @app.get("/api/v1/dialer/call-tasks")
 async def get_dialer_call_tasks(
     db: Session = Depends(get_db),
