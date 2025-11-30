@@ -25329,6 +25329,67 @@ async def cache_health():
     except Exception as e:
         return {"status": "error", "error": str(e)}
 
+@app.get("/api/v1/cache/status")
+async def cache_status():
+    """Get cache status and statistics"""
+    try:
+        from core.cache import cache
+        stats = await cache.get_stats()
+        return {
+            "cache": stats,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    except ImportError:
+        return {"cache": {"enabled": False}, "timestamp": datetime.now(timezone.utc).isoformat()}
+    except Exception as e:
+        return {"error": str(e), "timestamp": datetime.now(timezone.utc).isoformat()}
+
+@app.post("/api/v1/cache/clear")
+async def clear_cache_endpoint(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Clear all AI Agent cache (admin only)
+
+    Use with caution - will slow down queries until cache rebuilds
+    """
+    if current_user.role != 'admin':
+        raise HTTPException(status_code=403, detail="Admin only")
+
+    try:
+        from core.cache import clear_all_cache
+        await clear_all_cache()
+        return {
+            "success": True,
+            "message": "All AI Agent cache cleared"
+        }
+    except ImportError:
+        return {"success": False, "message": "Cache module not available"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/cache/invalidate/user/{user_id}")
+async def invalidate_user_cache_endpoint(
+    user_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Invalidate cache for a specific user"""
+    # Only allow users to invalidate their own cache (or admins)
+    if str(current_user.id) != user_id and current_user.role != 'admin':
+        raise HTTPException(status_code=403, detail="Cannot invalidate other user's cache")
+
+    try:
+        from core.cache import invalidate_user_cache
+        await invalidate_user_cache(user_id)
+        return {
+            "success": True,
+            "message": f"Cache invalidated for user {user_id}"
+        }
+    except ImportError:
+        return {"success": False, "message": "Cache module not available"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/authentication/test")
 async def authentication_test_post(current_user: User = Depends(get_current_user_flexible)):
     """
