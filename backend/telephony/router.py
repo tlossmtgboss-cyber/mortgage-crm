@@ -152,21 +152,29 @@ async def get_call_tasks(
 
         # Get phone from Lead
         if task.lead_id:
-            lead = db.query(Lead).filter(Lead.id == task.lead_id).first()
-            if lead and lead.phone:
-                phone = lead.phone
-                contact_name = lead.name
-                entity_type = 'lead'
-                entity_id = lead.id
+            try:
+                lead = db.query(Lead).filter(Lead.id == task.lead_id).first()
+                if lead and lead.phone:
+                    phone = lead.phone
+                    contact_name = lead.name
+                    entity_type = 'lead'
+                    entity_id = lead.id
+            except LookupError:
+                # Handle enum mismatch errors gracefully
+                pass
 
         # Get phone from Loan if not found in Lead
         if not phone and task.loan_id:
-            loan = db.query(Loan).filter(Loan.id == task.loan_id).first()
-            if loan and loan.borrower_phone:
-                phone = loan.borrower_phone
-                contact_name = loan.borrower_name
-                entity_type = 'loan'
-                entity_id = loan.id
+            try:
+                loan = db.query(Loan).filter(Loan.id == task.loan_id).first()
+                if loan and loan.borrower_phone:
+                    phone = loan.borrower_phone
+                    contact_name = loan.borrower_name
+                    entity_type = 'loan'
+                    entity_id = loan.id
+            except LookupError:
+                # Handle enum mismatch errors (e.g., 'Processing' vs 'PROCESSING')
+                pass
 
         # Also check related_contact_name for phone hint
         if not phone and task.related_contact_name:
@@ -206,21 +214,29 @@ async def get_call_tasks(
 
             # Get phone from Lead
             if ai_task.lead_id:
-                lead = db.query(Lead).filter(Lead.id == ai_task.lead_id).first()
-                if lead and lead.phone:
-                    phone = lead.phone
-                    contact_name = lead.name
-                    entity_type = 'lead'
-                    entity_id = lead.id
+                try:
+                    lead = db.query(Lead).filter(Lead.id == ai_task.lead_id).first()
+                    if lead and lead.phone:
+                        phone = lead.phone
+                        contact_name = lead.name
+                        entity_type = 'lead'
+                        entity_id = lead.id
+                except LookupError:
+                    # Handle enum mismatch errors gracefully
+                    pass
 
             # Get phone from Loan
             if not phone and ai_task.loan_id:
-                loan = db.query(Loan).filter(Loan.id == ai_task.loan_id).first()
-                if loan and loan.borrower_phone:
-                    phone = loan.borrower_phone
-                    contact_name = loan.borrower_name
-                    entity_type = 'loan'
-                    entity_id = loan.id
+                try:
+                    loan = db.query(Loan).filter(Loan.id == ai_task.loan_id).first()
+                    if loan and loan.borrower_phone:
+                        phone = loan.borrower_phone
+                        contact_name = loan.borrower_name
+                        entity_type = 'loan'
+                        entity_id = loan.id
+                except LookupError:
+                    # Handle enum mismatch errors (e.g., 'Processing' vs 'PROCESSING')
+                    pass
 
             # Only include if we have a phone number
             if phone:
