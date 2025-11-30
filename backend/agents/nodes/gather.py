@@ -266,7 +266,15 @@ async def gather_data(
             "missing_data": missing_data
         })
 
-        logger.info(f"Data gathering complete: {successful_tools}/{total_tools} tools succeeded")
+        logger.info(f"[GATHER] Data gathering complete: {successful_tools}/{total_tools} tools succeeded")
+        logger.info(f"[GATHER] Gathered data keys: {list(gathered_data.keys())}")
+        for key, val in gathered_data.items():
+            if isinstance(val, dict):
+                logger.info(f"[GATHER] {key} sample: {str(val)[:200]}")
+            elif isinstance(val, list):
+                logger.info(f"[GATHER] {key} count: {len(val)} items")
+            else:
+                logger.info(f"[GATHER] {key}: {str(val)[:100]}")
 
         return state
 

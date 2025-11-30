@@ -116,8 +116,9 @@ async def reason_and_analyze(
         data_quality = state.get("data_quality", "insufficient")
         gathered_data = state.get("gathered_data", {})
 
+        logger.info(f"[REASON] Data quality: {data_quality}, gathered_data keys: {list(gathered_data.keys())}")
         if data_quality == "insufficient" or not gathered_data:
-            logger.warning("Insufficient data for reasoning")
+            logger.warning("[REASON] Insufficient data for reasoning")
             return update_state(state, {
                 "analysis": "Unable to complete analysis due to insufficient data.",
                 "insights": ["Data gathering encountered issues"],
