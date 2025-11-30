@@ -8023,9 +8023,15 @@ CRITICAL RULES:
             agent_context = coaching_instructions
             agent_name = f"{coaching_mode} Coach"
 
-        # Get user's local time
-        user_tz = pytz.timezone(current_user.timezone or "America/Chicago")
-        user_local_time = datetime.now(pytz.UTC).astimezone(user_tz)
+        # Get user's local time (safely handle missing timezone column)
+        user_timezone = getattr(current_user, 'timezone', None) or "America/Chicago"
+        try:
+            user_tz = pytz.timezone(user_timezone)
+            user_local_time = datetime.now(pytz.UTC).astimezone(user_tz)
+        except Exception:
+            user_timezone = "America/Chicago"
+            user_tz = pytz.timezone(user_timezone)
+            user_local_time = datetime.now(pytz.UTC).astimezone(user_tz)
 
         system_prompt = f"""# IDENTITY
 You are the Agentic AI powering the Pipeline 360 Mortgage CRM Ecosystem.
@@ -8033,7 +8039,7 @@ You operate as the brain of the entire platform: decision-making, orchestration,
 
 {"" if not selected_agent and not coaching_mode else f"**Active Agent: {agent_name}**"}
 User: {current_user.full_name or current_user.email}
-Current date/time: {user_local_time.strftime('%A, %B %d, %Y at %I:%M %p')} ({current_user.timezone or 'America/Chicago'}){agent_context}
+Current date/time: {user_local_time.strftime('%A, %B %d, %Y at %I:%M %p')} ({user_timezone}){agent_context}
 
 You support:
 - Loan officers
@@ -9755,15 +9761,21 @@ Your lead nurturing tasks - I'd batch these after handling the urgent items abov
 I'd suggest starting with Sarah's appraisal review since it directly impacts her closing timeline. Would you like me to pull up her file?"
 """
 
-    # Get user's local time
-    user_tz = pytz.timezone(current_user.timezone or "America/Chicago")
-    user_local_time = datetime.now(pytz.UTC).astimezone(user_tz)
+    # Get user's local time (safely handle missing timezone column)
+    user_timezone = getattr(current_user, 'timezone', None) or "America/Chicago"
+    try:
+        user_tz = pytz.timezone(user_timezone)
+        user_local_time = datetime.now(pytz.UTC).astimezone(user_tz)
+    except Exception:
+        user_timezone = "America/Chicago"
+        user_tz = pytz.timezone(user_timezone)
+        user_local_time = datetime.now(pytz.UTC).astimezone(user_tz)
 
     # Build comprehensive system prompt
     system_prompt = f"""# IDENTITY
 You are the AI Assistant for Pipeline 360 Mortgage CRM - a confident, expert mortgage industry copilot.
 User: {current_user.full_name or current_user.email}
-Current date/time: {user_local_time.strftime('%A, %B %d, %Y at %I:%M %p')} ({current_user.timezone or 'America/Chicago'})
+Current date/time: {user_local_time.strftime('%A, %B %d, %Y at %I:%M %p')} ({user_timezone})
 
 # VOICE & TONE
 - Confident, expert, and decisive
@@ -10145,9 +10157,15 @@ async def voice_chat(
         all_leads = db.query(Lead).filter(Lead.owner_id == current_user.id).all()
         all_tasks = db.query(Task).filter(Task.owner_id == current_user.id).all()
 
-        # Get user's local time
-        user_tz = pytz.timezone(current_user.timezone or "America/Chicago")
-        user_local_time = datetime.now(pytz.UTC).astimezone(user_tz)
+        # Get user's local time (safely handle missing timezone column)
+        user_timezone = getattr(current_user, 'timezone', None) or "America/Chicago"
+        try:
+            user_tz = pytz.timezone(user_timezone)
+            user_local_time = datetime.now(pytz.UTC).astimezone(user_tz)
+        except Exception:
+            user_timezone = "America/Chicago"
+            user_tz = pytz.timezone(user_timezone)
+            user_local_time = datetime.now(pytz.UTC).astimezone(user_tz)
         today = user_local_time.date()
 
         tasks_today = [t for t in all_tasks if t.due_date and t.due_date.date() == today and t.status != "completed"]
