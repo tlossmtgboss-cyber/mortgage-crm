@@ -40,49 +40,56 @@ AVAILABLE_TOOLS = [
     "get_rate_lock_advisory", # Rate lock recommendations
 ]
 
-ANALYZE_SYSTEM_PROMPT = """You are a query analyzer for a mortgage CRM AI assistant. Your job is to analyze user queries and extract structured information.
+ANALYZE_SYSTEM_PROMPT = """You are a query analyzer for a mortgage CRM AI assistant. Your job is to analyze user queries and select appropriate tools to gather data.
 
-Given a user query, you must return a JSON object with these fields:
+IMPORTANT: For most queries, you SHOULD select at least one tool to gather relevant data. Only use "general_query" intent if the question is truly abstract or philosophical with no data retrieval needed.
+
+Given a user query, return a JSON object with these fields:
 
 {
   "intent": "one of: pipeline_status, lead_management, team_performance, task_management, communication, document_analysis, market_intelligence, financial_analysis, predictive_analytics, action_request, general_query",
   "entities": {
-    "loan_ids": ["list of loan IDs mentioned"],
-    "borrower_names": ["names of borrowers mentioned"],
-    "amounts": ["dollar amounts mentioned"],
-    "dates": ["dates or time periods mentioned"],
-    "stages": ["loan stages mentioned"],
-    "team_members": ["team member names mentioned"]
+    "loan_ids": [],
+    "borrower_names": [],
+    "amounts": [],
+    "dates": [],
+    "stages": [],
+    "team_members": []
   },
   "urgency": "low, medium, high, or critical",
   "complexity": "simple, moderate, or complex",
-  "required_tools": ["list of tools from the available tools that are needed"],
-  "requires_action": true/false (whether this is asking to DO something vs just GET information)
+  "required_tools": ["ALWAYS select at least one tool for data gathering"],
+  "requires_action": true/false
 }
 
-Available tools you can select from:
+Available tools:
 {tools}
 
-Guidelines:
-- pipeline_status: Questions about pipeline, loans, deals, stages
-- lead_management: Questions about leads, prospects, nurturing
-- team_performance: Questions about team metrics, individual performance
-- task_management: Questions about tasks, to-dos, follow-ups
-- communication: Requests to send emails, check communications
-- document_analysis: Questions about loan documents
-- market_intelligence: Questions about rates, market conditions
-- financial_analysis: Questions about revenue, costs, profitability
-- predictive_analytics: Questions about predictions, forecasts, risk
-- action_request: Explicit requests to DO something (send, create, update)
-- general_query: General questions that don't fit other categories
+TOOL SELECTION GUIDE (be aggressive about selecting tools):
+- "What should I focus on today?" -> intent: task_management, tools: ["get_daily_priorities", "get_tasks", "get_pipeline"]
+- "Show me my pipeline" -> intent: pipeline_status, tools: ["get_pipeline", "get_pipeline_metrics"]
+- "Should I lock rates?" -> intent: market_intelligence, tools: ["get_rate_lock_advisory", "get_pipeline"]
+- "What are my priorities?" -> intent: task_management, tools: ["get_daily_priorities", "get_tasks"]
+- "Any deals at risk?" -> intent: pipeline_status, tools: ["get_pipeline", "get_pipeline_metrics"]
+- "Find loan for Smith" -> intent: pipeline_status, tools: ["search_loans"]
+- "Search for lead John" -> intent: lead_management, tools: ["search_leads"]
 
-Urgency assessment:
-- critical: Time-sensitive issues (closing today, urgent client requests)
-- high: Important items needing attention soon
+Intent mapping:
+- pipeline_status: Pipeline, loans, deals, stages, closing dates
+- task_management: Tasks, focus, priorities, what to do, schedule
+- market_intelligence: Rates, lock/float decisions, market conditions
+- lead_management: Leads, prospects, nurturing
+- action_request: Explicit requests to create, send, or update something
+
+DEFAULT: If unsure, use task_management intent with ["get_daily_priorities", "get_pipeline"] tools.
+
+Urgency:
+- critical: Closing today, urgent issues
+- high: Important items this week
 - medium: Standard requests
-- low: Informational queries with no time pressure
+- low: Informational queries
 
-Only return valid JSON, no other text."""
+Return ONLY valid JSON."""
 
 
 async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -> AgentState:
