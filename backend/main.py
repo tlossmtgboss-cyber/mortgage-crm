@@ -43939,88 +43939,50 @@ async def get_dialer_call_tasks(
 ):
     """
     Get all call-related tasks for the Power Dialer.
-    These are tasks that involve phone calls - identified by:
-    - Title containing 'call', 'phone', 'contact', or 'voicemail'
-    - Or tasks that have associated phone numbers from leads/loans
+    Returns tasks with 'call', 'phone', 'contact', etc. in the title.
     """
     try:
-        # Get tasks from unified-tasks that are call-related
-        # Simple query - get tasks first, then look up contact info
-        # Note: tasks table uses 'type' column (not 'status') with values like 'In Progress', 'Completed'
-        tasks_query = db.execute(text("""
-            SELECT id, title, description, priority,
-                   type, due_date, entity_type, entity_name,
-                   lead_id, loan_id, borrower_name, created_at
-            FROM tasks
-            WHERE type NOT IN ('Completed', 'Cancelled', 'Skipped')
-            AND (
-                LOWER(title) LIKE '%call%'
-                OR LOWER(title) LIKE '%phone%'
-                OR LOWER(title) LIKE '%contact%'
-                OR LOWER(title) LIKE '%voicemail%'
-                OR LOWER(title) LIKE '%dial%'
-                OR LOWER(title) LIKE '%reach out%'
+        # Query tasks using ORM to avoid raw SQL issues
+        call_tasks = db.query(Task).filter(
+            Task.type != 'Completed',
+            or_(
+                Task.title.ilike('%call%'),
+                Task.title.ilike('%phone%'),
+                Task.title.ilike('%contact%'),
+                Task.title.ilike('%voicemail%'),
+                Task.title.ilike('%dial%'),
+                Task.title.ilike('%reach out%')
             )
-            ORDER BY
-                CASE priority
-                    WHEN 'urgent' THEN 1
-                    WHEN 'high' THEN 2
-                    WHEN 'medium' THEN 3
-                    ELSE 4
-                END,
-                due_date ASC NULLS LAST,
-                created_at DESC
-            LIMIT 100
-        """)).mappings().all()
+        ).order_by(Task.due_date.asc().nulls_last(), Task.created_at.desc()).limit(100).all()
 
         tasks = []
-        for row in tasks_query:
-            due_date = row.get('due_date')
-            created_at = row.get('created_at')
-            entity_type = row.get('entity_type')
-            loan_id = row.get('loan_id')
-            lead_id = row.get('lead_id')
-
-            # Use entity_name or borrower_name directly from task if available
-            contact_name = row.get('entity_name') or row.get('borrower_name') or 'Unknown'
+        for task in call_tasks:
+            # Get contact info and phone
+            contact_name = task.entity_name or task.borrower_name or 'Unknown'
             phone_number = ''
 
-            # Look up phone number from loan or lead
-            if loan_id:
-                try:
-                    loan = db.execute(text(
-                        "SELECT borrower_name, borrower_phone FROM loans WHERE id = :id"
-                    ), {"id": loan_id}).mappings().first()
-                    if loan:
-                        if contact_name == 'Unknown':
-                            contact_name = loan.get('borrower_name') or 'Unknown'
-                        phone_number = loan.get('borrower_phone') or ''
-                except Exception:
-                    pass
-            elif lead_id:
-                try:
-                    lead = db.execute(text(
-                        "SELECT name, phone FROM leads WHERE id = :id"
-                    ), {"id": lead_id}).mappings().first()
-                    if lead:
-                        if contact_name == 'Unknown':
-                            contact_name = lead.get('name') or 'Unknown'
-                        phone_number = lead.get('phone') or ''
-                except Exception:
-                    pass
+            if task.loan_id:
+                loan = db.query(Loan).filter(Loan.id == task.loan_id).first()
+                if loan:
+                    contact_name = contact_name if contact_name != 'Unknown' else (loan.borrower_name or 'Unknown')
+                    phone_number = loan.borrower_phone or ''
+            elif task.lead_id:
+                lead = db.query(Lead).filter(Lead.id == task.lead_id).first()
+                if lead:
+                    contact_name = contact_name if contact_name != 'Unknown' else (lead.name or 'Unknown')
+                    phone_number = lead.phone or ''
 
-            # Include task even without phone - user can see what needs attention
             tasks.append({
-                "id": row.get('id'),
-                "title": row.get('title'),
-                "description": row.get('description'),
-                "priority": row.get('priority'),
-                "status": row.get('type'),  # 'type' column holds status like 'In Progress'
-                "due_date": due_date.isoformat() if due_date else None,
-                "entity_type": entity_type,
-                "loan_id": loan_id,
-                "lead_id": lead_id,
-                "created_at": created_at.isoformat() if created_at else None,
+                "id": task.id,
+                "title": task.title,
+                "description": task.description,
+                "priority": task.priority,
+                "status": task.type,
+                "due_date": task.due_date.isoformat() if task.due_date else None,
+                "entity_type": task.entity_type,
+                "loan_id": task.loan_id,
+                "lead_id": task.lead_id,
+                "created_at": task.created_at.isoformat() if task.created_at else None,
                 "contact_name": contact_name,
                 "phone_number": phone_number
             })
@@ -44028,6 +43990,8 @@ async def get_dialer_call_tasks(
         return {"tasks": tasks, "total": len(tasks)}
     except Exception as e:
         logger.error(f"Error fetching call tasks: {e}")
+        import traceback
+        traceback.print_exc()
         return {"tasks": [], "total": 0, "error": str(e)}
 
 
