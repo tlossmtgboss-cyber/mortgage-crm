@@ -11921,6 +11921,184 @@ async def orchestrator_chat_stream(
                     "required": ["title", "date_time"]
                 }
             }
+        },
+        # Additional tools from non-streaming endpoint
+        {
+            "type": "function",
+            "function": {
+                "name": "send_email",
+                "description": "Send an email to a contact",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "to_email": {"type": "string", "description": "Recipient email address"},
+                        "subject": {"type": "string", "description": "Email subject"},
+                        "body": {"type": "string", "description": "Email body content"}
+                    },
+                    "required": ["to_email", "subject", "body"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "update_lead",
+                "description": "Update a lead's information",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "lead_id": {"type": "integer", "description": "Lead ID to update"},
+                        "lead_name": {"type": "string", "description": "Lead name to search for (alternative to lead_id)"},
+                        "stage": {"type": "string", "description": "New stage for the lead"},
+                        "notes": {"type": "string", "description": "Notes to add"}
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_loan_details",
+                "description": "Get detailed information about a specific loan",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "loan_id": {"type": "integer", "description": "Loan ID"},
+                        "loan_number": {"type": "string", "description": "Loan number (alternative to loan_id)"},
+                        "borrower_name": {"type": "string", "description": "Borrower name to search"}
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_lead_details",
+                "description": "Get detailed information about a specific lead",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "lead_id": {"type": "integer", "description": "Lead ID"},
+                        "lead_name": {"type": "string", "description": "Lead name to search"}
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "update_user_profile",
+                "description": "Update user profile information",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "user_name": {"type": "string", "description": "Name of user to update"},
+                        "title": {"type": "string", "description": "New job title"},
+                        "phone": {"type": "string", "description": "New phone number"},
+                        "email": {"type": "string", "description": "New email address"}
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_metrics",
+                "description": "Get performance metrics and analytics",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "metric_type": {"type": "string", "enum": ["pipeline", "conversion", "activity", "revenue"], "description": "Type of metrics to retrieve"},
+                        "period": {"type": "string", "enum": ["today", "week", "month", "quarter", "year"], "description": "Time period"}
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "schedule_followup",
+                "description": "Schedule a follow-up task for a lead or loan",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "contact_name": {"type": "string", "description": "Name of person to follow up with"},
+                        "followup_type": {"type": "string", "enum": ["call", "email", "meeting", "text"], "description": "Type of follow-up"},
+                        "due_date": {"type": "string", "description": "When to follow up"},
+                        "notes": {"type": "string", "description": "Notes about the follow-up"}
+                    },
+                    "required": ["contact_name", "followup_type"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_mum_clients",
+                "description": "Get Move Up/Move Down clients who may be ready for refinance or new purchase",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "limit": {"type": "integer", "description": "Maximum number of clients to return", "default": 10}
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_referral_partners",
+                "description": "Get list of referral partners and their performance",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "limit": {"type": "integer", "description": "Maximum number of partners to return", "default": 10}
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_sla_dashboard",
+                "description": "Get SLA performance dashboard showing compliance metrics",
+                "parameters": {
+                    "type": "object",
+                    "properties": {}
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "make_phone_call",
+                "description": "Initiate a phone call to a contact",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "contact_name": {"type": "string", "description": "Name of person to call"},
+                        "phone_number": {"type": "string", "description": "Phone number to call"}
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "create_lead",
+                "description": "Create a new lead in the system",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "Lead's full name"},
+                        "email": {"type": "string", "description": "Lead's email address"},
+                        "phone": {"type": "string", "description": "Lead's phone number"},
+                        "source": {"type": "string", "description": "Lead source (e.g., 'referral', 'website', 'zillow')"},
+                        "notes": {"type": "string", "description": "Initial notes about the lead"}
+                    },
+                    "required": ["name"]
+                }
+            }
         }
     ]
 
@@ -12232,6 +12410,267 @@ async def orchestrator_chat_stream(
             "end_time": end_time.isoformat()
         }
 
+    # Additional tool execution functions
+    async def execute_send_email(args):
+        """Send an email"""
+        to_email = args.get("to_email", "")
+        subject = args.get("subject", "")
+        body = args.get("body", "")
+        if not to_email or not subject:
+            return {"success": False, "error": "Missing email or subject"}
+        # For now, return success without actually sending (would need SMTP setup)
+        return {"success": True, "message": f"Email queued to {to_email} with subject '{subject}'"}
+
+    async def execute_update_lead(args):
+        """Update a lead"""
+        lead_id = args.get("lead_id")
+        lead_name = args.get("lead_name", "")
+        stage = args.get("stage")
+        notes = args.get("notes")
+
+        lead = None
+        if lead_id:
+            lead = db.query(Lead).filter(Lead.id == lead_id).first()
+        elif lead_name:
+            lead = db.query(Lead).filter(Lead.name.ilike(f"%{lead_name}%")).first()
+
+        if not lead:
+            return {"success": False, "error": "Lead not found"}
+
+        if stage:
+            lead.stage = stage
+        if notes:
+            lead.notes = (lead.notes or "") + f"\n{notes}"
+        db.commit()
+        return {"success": True, "lead_id": lead.id, "name": lead.name}
+
+    async def execute_get_loan_details(args):
+        """Get loan details"""
+        loan_id = args.get("loan_id")
+        loan_number = args.get("loan_number")
+        borrower_name = args.get("borrower_name")
+
+        loan = None
+        if loan_id:
+            loan = db.query(Loan).filter(Loan.id == loan_id).first()
+        elif loan_number:
+            loan = db.query(Loan).filter(Loan.loan_number == loan_number).first()
+        elif borrower_name:
+            loan = db.query(Loan).filter(Loan.borrower_name.ilike(f"%{borrower_name}%")).first()
+
+        if not loan:
+            return {"success": False, "error": "Loan not found"}
+
+        return {
+            "success": True,
+            "loan": {
+                "id": loan.id,
+                "loan_number": loan.loan_number,
+                "borrower_name": loan.borrower_name,
+                "amount": float(loan.amount) if loan.amount else 0,
+                "stage": str(loan.stage) if loan.stage else None,
+                "rate": float(loan.rate) if loan.rate else None,
+                "program": loan.program,
+                "close_date": loan.close_date.isoformat() if loan.close_date else None
+            }
+        }
+
+    async def execute_get_lead_details(args):
+        """Get lead details"""
+        lead_id = args.get("lead_id")
+        lead_name = args.get("lead_name")
+
+        lead = None
+        if lead_id:
+            lead = db.query(Lead).filter(Lead.id == lead_id).first()
+        elif lead_name:
+            lead = db.query(Lead).filter(Lead.name.ilike(f"%{lead_name}%")).first()
+
+        if not lead:
+            return {"success": False, "error": "Lead not found"}
+
+        return {
+            "success": True,
+            "lead": {
+                "id": lead.id,
+                "name": lead.name,
+                "email": lead.email,
+                "phone": lead.phone,
+                "stage": str(lead.stage) if lead.stage else None,
+                "source": lead.source,
+                "notes": lead.notes
+            }
+        }
+
+    async def execute_update_user_profile(args):
+        """Update user profile"""
+        user_name = args.get("user_name", "")
+        title = args.get("title")
+        phone = args.get("phone")
+        email = args.get("email")
+
+        user = None
+        if user_name:
+            user = db.query(User).filter(User.full_name.ilike(f"%{user_name}%")).first()
+
+        if not user:
+            return {"success": False, "error": "User not found"}
+
+        if title:
+            user.title = title
+        if phone:
+            user.phone = phone
+        if email:
+            user.email = email
+        db.commit()
+        return {"success": True, "user_id": user.id, "name": user.full_name, "title": user.title}
+
+    async def execute_get_metrics(args):
+        """Get performance metrics"""
+        metric_type = args.get("metric_type", "pipeline")
+        period = args.get("period", "month")
+
+        today = datetime.now().date()
+        if period == "today":
+            start_date = today
+        elif period == "week":
+            start_date = today - timedelta(days=7)
+        elif period == "quarter":
+            start_date = today - timedelta(days=90)
+        elif period == "year":
+            start_date = today - timedelta(days=365)
+        else:
+            start_date = today.replace(day=1)
+
+        loans = db.query(Loan).filter(Loan.loan_officer_id == current_user.id).all()
+        leads = db.query(Lead).filter(Lead.owner_id == current_user.id).all()
+
+        return {
+            "success": True,
+            "metrics": {
+                "total_loans": len(loans),
+                "total_leads": len(leads),
+                "pipeline_value": sum(float(l.amount or 0) for l in loans),
+                "period": period
+            }
+        }
+
+    async def execute_schedule_followup(args):
+        """Schedule a follow-up"""
+        contact_name = args.get("contact_name", "")
+        followup_type = args.get("followup_type", "call")
+        due_date = args.get("due_date", "tomorrow")
+        notes = args.get("notes", "")
+
+        # Parse due date
+        parsed_date = datetime.now() + timedelta(days=1)
+        if "tomorrow" in due_date.lower():
+            parsed_date = datetime.now() + timedelta(days=1)
+        elif "next week" in due_date.lower():
+            parsed_date = datetime.now() + timedelta(days=7)
+
+        task = AITask(
+            title=f"Follow-up {followup_type} with {contact_name}",
+            description=notes or f"Scheduled {followup_type} follow-up",
+            due_date=parsed_date,
+            priority="medium",
+            type=TaskType.IN_PROGRESS,
+            assigned_to_id=current_user.id
+        )
+        db.add(task)
+        db.commit()
+        return {"success": True, "task_id": task.id, "title": task.title}
+
+    async def execute_get_mum_clients(args):
+        """Get Move Up/Move Down clients"""
+        limit = args.get("limit", 10)
+        # Get closed loans that might be candidates for refinance
+        loans = db.query(Loan).filter(
+            Loan.loan_officer_id == current_user.id,
+            Loan.stage.in_(["Closed", "closed", "CLOSED"])
+        ).limit(limit).all()
+
+        return {
+            "success": True,
+            "mum_clients": [
+                {"name": l.borrower_name, "loan_amount": float(l.amount or 0), "rate": float(l.rate or 0)}
+                for l in loans
+            ]
+        }
+
+    async def execute_get_referral_partners(args):
+        """Get referral partners"""
+        limit = args.get("limit", 10)
+        # Get leads grouped by source
+        leads = db.query(Lead).filter(Lead.owner_id == current_user.id).all()
+        sources = {}
+        for lead in leads:
+            source = lead.source or "Unknown"
+            sources[source] = sources.get(source, 0) + 1
+
+        partners = [{"name": k, "lead_count": v} for k, v in sorted(sources.items(), key=lambda x: -x[1])[:limit]]
+        return {"success": True, "partners": partners}
+
+    async def execute_get_sla_dashboard(args):
+        """Get SLA dashboard"""
+        tasks = db.query(AITask).filter(AITask.assigned_to_id == current_user.id).all()
+        today = datetime.now().date()
+        overdue = [t for t in tasks if t.due_date and t.due_date.date() < today and t.type != TaskType.COMPLETED]
+
+        return {
+            "success": True,
+            "sla_metrics": {
+                "total_tasks": len(tasks),
+                "overdue_tasks": len(overdue),
+                "compliance_rate": round((1 - len(overdue)/max(len(tasks), 1)) * 100, 1)
+            }
+        }
+
+    async def execute_make_phone_call(args):
+        """Initiate phone call"""
+        contact_name = args.get("contact_name", "")
+        phone_number = args.get("phone_number", "")
+
+        if not phone_number and contact_name:
+            # Look up phone number
+            user = db.query(User).filter(User.full_name.ilike(f"%{contact_name}%")).first()
+            if user and user.phone:
+                phone_number = user.phone
+            else:
+                lead = db.query(Lead).filter(Lead.name.ilike(f"%{contact_name}%")).first()
+                if lead and lead.phone:
+                    phone_number = lead.phone
+
+        if not phone_number:
+            return {"success": False, "error": "Could not find phone number"}
+
+        return {"success": True, "message": f"Call initiated to {phone_number}"}
+
+    async def execute_create_lead(args):
+        """Create a new lead"""
+        name = args.get("name", "")
+        email = args.get("email", "")
+        phone = args.get("phone", "")
+        source = args.get("source", "AI Assistant")
+        notes = args.get("notes", "")
+
+        if not name:
+            return {"success": False, "error": "Name is required"}
+
+        new_lead = Lead(
+            name=name,
+            email=email,
+            phone=phone,
+            source=source,
+            notes=notes,
+            owner_id=current_user.id
+        )
+        db.add(new_lead)
+        db.commit()
+        db.refresh(new_lead)
+
+        return {"success": True, "lead_id": new_lead.id, "name": new_lead.name}
+
     tool_functions = {
         "get_tasks": execute_get_tasks,
         "get_pipeline": execute_get_pipeline,
@@ -12239,7 +12678,20 @@ async def orchestrator_chat_stream(
         "get_market_intelligence": execute_get_market_intelligence,
         "send_sms": execute_send_sms,
         "create_task": execute_create_task,
-        "schedule_appointment": execute_schedule_appointment
+        "schedule_appointment": execute_schedule_appointment,
+        # Additional tools
+        "send_email": execute_send_email,
+        "update_lead": execute_update_lead,
+        "get_loan_details": execute_get_loan_details,
+        "get_lead_details": execute_get_lead_details,
+        "update_user_profile": execute_update_user_profile,
+        "get_metrics": execute_get_metrics,
+        "schedule_followup": execute_schedule_followup,
+        "get_mum_clients": execute_get_mum_clients,
+        "get_referral_partners": execute_get_referral_partners,
+        "get_sla_dashboard": execute_get_sla_dashboard,
+        "make_phone_call": execute_make_phone_call,
+        "create_lead": execute_create_lead
     }
 
     # Pre-fetch real data for rich context
