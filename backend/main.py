@@ -31984,7 +31984,7 @@ async def execute_ai_function(
             lead_id = function_args.get("lead_id") or (context_lead.id if context_lead else None)
             loan_id = function_args.get("loan_id") or (context_loan.id if context_loan else None)
 
-            task_type = TaskType.LEAD if lead_id else (TaskType.LOAN if loan_id else TaskType.GENERAL)
+            task_type = TaskType.IN_PROGRESS  # Default to in progress for new tasks
 
             new_task = AITask(
                 type=task_type,
@@ -32208,22 +32208,15 @@ async def execute_ai_function(
                     recipient_phone = lead.phone
                     lead_id = lead.id
                 else:
-                    # Search contacts
-                    contact = db.query(Contact).filter(
-                        Contact.name.ilike(f"%{recipient_name}%")
+                    # Search users
+                    user = db.query(User).filter(
+                        User.full_name.ilike(f"%{recipient_name}%")
                     ).first()
-                    if contact and contact.phone:
-                        recipient_phone = contact.phone
-                    else:
-                        # Search users
-                        user = db.query(User).filter(
-                            User.full_name.ilike(f"%{recipient_name}%")
-                        ).first()
-                        if user and user.phone:
-                            recipient_phone = user.phone
-                        elif user and user.user_metadata:
-                            profile = user.user_metadata if isinstance(user.user_metadata, dict) else {}
-                            recipient_phone = profile.get('phone')
+                    if user and user.phone:
+                        recipient_phone = user.phone
+                    elif user and user.user_metadata:
+                        profile = user.user_metadata if isinstance(user.user_metadata, dict) else {}
+                        recipient_phone = profile.get('phone')
 
             if not recipient_phone:
                 return {"success": False, "error": f"Could not find phone number for {recipient_name or 'recipient'}"}
@@ -32364,7 +32357,7 @@ async def execute_ai_function(
             task_description = f"Duration: {duration} minutes\n{notes}" if notes else f"Duration: {duration} minutes"
 
             new_task = AITask(
-                type=TaskType.LEAD if lead_id else TaskType.GENERAL,
+                type=TaskType.IN_PROGRESS,  # Default to in progress for new tasks
                 title=task_title,
                 description=task_description,
                 assigned_to_id=current_user.id,
