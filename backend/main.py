@@ -17475,8 +17475,8 @@ async def list_sms_conversations(
     active_only: bool = True,
     include_all: bool = False,
     limit: int = 50,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """List SMS conversations. Use include_all=true to see all conversations (admin only)"""
     query = db.query(SMSConversation)
@@ -17515,8 +17515,8 @@ async def list_sms_conversations(
 async def get_sms_conversation_messages(
     conversation_id: int,
     limit: int = 50,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Get messages for a specific SMS conversation"""
     conversation = db.query(SMSConversation).filter(
@@ -17556,8 +17556,8 @@ async def get_sms_conversation_messages(
 async def send_sms_in_conversation(
     conversation_id: int,
     message: str = Body(..., embed=True),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Send a manual SMS message in a conversation"""
     conversation = db.query(SMSConversation).filter(
@@ -17617,8 +17617,8 @@ async def send_sms_in_conversation(
 async def toggle_ai_for_conversation(
     conversation_id: int,
     enabled: bool = Body(..., embed=True),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     """Enable or disable AI auto-responses for a conversation"""
     conversation = db.query(SMSConversation).filter(
@@ -39389,6 +39389,12 @@ async def startup_event():
     try:
         # Initialize database with retry logic
         if init_db_with_retry():
+            # Run multi-tenant organization migration (add organization_id columns)
+            try:
+                run_organization_migration()
+            except Exception as org_e:
+                logger.warning(f"⚠️ Organization migration skipped: {org_e}")
+
             # Run Phase 2 permission migration
             run_phase2_permission_migration()
 
