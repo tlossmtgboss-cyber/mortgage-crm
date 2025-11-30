@@ -140,6 +140,7 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
 
         # Parse the response
         response_text = response.content[0].text.strip()
+        logger.info(f"[ANALYZE] Raw response (first 200 chars): {response_text[:200]}")
 
         # Handle potential JSON wrapped in markdown code blocks
         if response_text.startswith("```"):
@@ -147,6 +148,12 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
             if response_text.startswith("json"):
                 response_text = response_text[4:]
             response_text = response_text.strip()
+
+        # Try to extract JSON from the response if it's mixed with text
+        import re
+        json_match = re.search(r'\{[\s\S]*\}', response_text)
+        if json_match:
+            response_text = json_match.group()
 
         analysis = json.loads(response_text)
 
@@ -190,13 +197,13 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
     except json.JSONDecodeError as e:
         logger.error(f"Failed to parse analysis response: {e}")
         state = add_error(state, f"Query analysis JSON parse error: {str(e)}")
-        # Fall back to general query
+        # Fall back to task management with actual tool names
         return update_state(state, {
-            "query_intent": QueryIntent.GENERAL_QUERY,
+            "query_intent": QueryIntent.TASK_MANAGEMENT,
             "query_entities": {},
             "query_urgency": "medium",
             "query_complexity": "moderate",
-            "required_tools": ["get_pipeline_summary"],  # Safe default
+            "required_tools": ["get_daily_priorities", "get_tasks", "get_pipeline"],  # Actual tool names
             "requires_action": False
         })
 
@@ -204,7 +211,7 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
         logger.error(f"Query analysis failed: {e}")
         state = add_error(state, f"Query analysis error: {str(e)}")
         return update_state(state, {
-            "query_intent": QueryIntent.GENERAL_QUERY,
-            "required_tools": ["get_pipeline_summary"],
+            "query_intent": QueryIntent.TASK_MANAGEMENT,
+            "required_tools": ["get_daily_priorities", "get_tasks", "get_pipeline"],
             "requires_action": False
         })
