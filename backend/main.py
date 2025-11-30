@@ -2142,6 +2142,18 @@ class MicrosoftOAuthToken(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
+class MicrosoftAppConfig(Base):
+    """Stores Microsoft Azure App Registration credentials for the organization"""
+    __tablename__ = "microsoft_app_config"
+    id = Column(Integer, primary_key=True, index=True)
+    client_id = Column(String)  # Azure App Client ID
+    client_secret = Column(Text)  # Encrypted client secret
+    tenant_id = Column(String, default="common")  # Azure Tenant ID or 'common'
+    redirect_uri = Column(String)  # OAuth redirect URI
+    created_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
 class ITHelpdeskTicket(Base):
     __tablename__ = "it_helpdesk_tickets"
     id = Column(Integer, primary_key=True, index=True)
@@ -3798,6 +3810,20 @@ class MicrosoftSyncSettings(BaseModel):
     sync_enabled: Optional[bool] = None
     sync_folder: Optional[str] = None
     sync_frequency_minutes: Optional[int] = None
+
+class MicrosoftAppConfigRequest(BaseModel):
+    """Request schema for saving Microsoft App configuration"""
+    client_id: str
+    client_secret: Optional[str] = None  # Optional when updating (won't change if not provided)
+    tenant_id: str = "common"
+
+class MicrosoftAppConfigResponse(BaseModel):
+    """Response schema for Microsoft App configuration"""
+    client_id: Optional[str] = None
+    tenant_id: Optional[str] = None
+    redirect_uri: Optional[str] = None
+    configured: bool = False
+    has_client_secret: bool = False
 
 # ============================================================================
 # AUDIT & ACCESS SCHEMAS (Tab 6)
