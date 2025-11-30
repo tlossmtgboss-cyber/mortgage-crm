@@ -32190,6 +32190,201 @@ async def execute_ai_function(
                 "summary": f"You have {total} total leads" + (f" across {len(stage_counts)} stages" if stage_counts else "")
             }
 
+        elif function_name == "send_sms":
+            # Send SMS using the execute_send_sms function
+            recipient_phone = function_args.get("recipient_phone")
+            recipient_name = function_args.get("recipient_name")
+            message_text = function_args.get("message", "")
+            lead_id = function_args.get("lead_id") or (context_lead.id if context_lead else None)
+
+            # Look up phone number if recipient_name provided
+            if not recipient_phone and recipient_name:
+                # Search leads
+                lead = db.query(Lead).filter(
+                    Lead.owner_id == current_user.id,
+                    Lead.name.ilike(f"%{recipient_name}%")
+                ).first()
+                if lead and lead.phone:
+                    recipient_phone = lead.phone
+                    lead_id = lead.id
+                else:
+                    # Search contacts
+                    contact = db.query(Contact).filter(
+                        Contact.name.ilike(f"%{recipient_name}%")
+                    ).first()
+                    if contact and contact.phone:
+                        recipient_phone = contact.phone
+                    else:
+                        # Search users
+                        user = db.query(User).filter(
+                            User.full_name.ilike(f"%{recipient_name}%")
+                        ).first()
+                        if user and user.phone:
+                            recipient_phone = user.phone
+                        elif user and user.user_metadata:
+                            profile = user.user_metadata if isinstance(user.user_metadata, dict) else {}
+                            recipient_phone = profile.get('phone')
+
+            if not recipient_phone:
+                return {"success": False, "error": f"Could not find phone number for {recipient_name or 'recipient'}"}
+
+            # Format phone number
+            phone_digits = ''.join(filter(str.isdigit, recipient_phone))
+            if len(phone_digits) == 10:
+                recipient_phone = f"+1{phone_digits}"
+            elif len(phone_digits) == 11 and phone_digits.startswith('1'):
+                recipient_phone = f"+{phone_digits}"
+
+            # Send the SMS via Twilio
+            if not twilio_client:
+                return {"success": False, "error": "Twilio not configured"}
+
+            try:
+                twilio_message = twilio_client.messages.create(
+                    body=message_text,
+                    from_=TWILIO_PHONE_NUMBER,
+                    to=recipient_phone
+                )
+
+                # Log activity
+                if lead_id:
+                    activity = Activity(
+                        type=ActivityType.SMS,
+                        description=f"SMS sent: {message_text[:100]}...",
+                        lead_id=lead_id,
+                        user_id=current_user.id
+                    )
+                    db.add(activity)
+                    db.commit()
+
+                return {
+                    "success": True,
+                    "message_sid": twilio_message.sid,
+                    "recipient": recipient_name or recipient_phone,
+                    "result": f"SMS sent successfully to {recipient_name or recipient_phone}"
+                }
+            except Exception as sms_error:
+                return {"success": False, "error": f"SMS failed: {str(sms_error)}"}
+
+        elif function_name == "update_user_profile":
+            # Update user profile
+            user_name = function_args.get("user_name")
+            user_email = function_args.get("user_email")
+            phone = function_args.get("phone")
+            title = function_args.get("title")
+            nmls_number = function_args.get("nmls_number")
+
+            # Find the user
+            target_user = None
+            if user_email:
+                target_user = db.query(User).filter(User.email == user_email).first()
+            elif user_name:
+                target_user = db.query(User).filter(User.full_name.ilike(f"%{user_name}%")).first()
+
+            if not target_user:
+                return {"success": False, "error": f"User not found: {user_name or user_email}"}
+
+            updates = []
+
+            # Update phone
+            if phone:
+                target_user.phone = phone
+                updates.append(f"phone: {phone}")
+
+            # Update title (in user_metadata)
+            if title:
+                if not target_user.user_metadata:
+                    target_user.user_metadata = {}
+                target_user.user_metadata['title'] = title
+                updates.append(f"title: {title}")
+
+            # Update NMLS
+            if nmls_number:
+                if hasattr(target_user, 'nmls_number'):
+                    target_user.nmls_number = nmls_number
+                else:
+                    if not target_user.user_metadata:
+                        target_user.user_metadata = {}
+                    target_user.user_metadata['nmls_number'] = nmls_number
+                updates.append(f"NMLS: {nmls_number}")
+
+            db.commit()
+
+            return {
+                "success": True,
+                "user": target_user.full_name or target_user.email,
+                "updates": updates,
+                "result": f"Updated profile for {target_user.full_name or target_user.email}: {', '.join(updates)}"
+            }
+
+        elif function_name == "schedule_appointment":
+            # Create an appointment/task for scheduling
+            title = function_args.get("title", "Meeting")
+            attendee_name = function_args.get("attendee_name", "")
+            date_time_str = function_args.get("date_time", "")
+            duration = function_args.get("duration_minutes", 30)
+            notes = function_args.get("notes", "")
+
+            # Parse the date_time (handle relative dates like "tomorrow")
+            from dateutil import parser as date_parser
+            from dateutil.relativedelta import relativedelta
+
+            try:
+                if "tomorrow" in date_time_str.lower():
+                    scheduled_time = datetime.now(timezone.utc) + timedelta(days=1)
+                    # Parse time if included
+                    time_match = date_time_str.lower().replace("tomorrow", "").strip()
+                    if time_match:
+                        try:
+                            time_parsed = date_parser.parse(time_match)
+                            scheduled_time = scheduled_time.replace(
+                                hour=time_parsed.hour,
+                                minute=time_parsed.minute
+                            )
+                        except:
+                            scheduled_time = scheduled_time.replace(hour=10, minute=0)  # Default 10am
+                else:
+                    scheduled_time = date_parser.parse(date_time_str)
+            except:
+                scheduled_time = datetime.now(timezone.utc) + timedelta(days=1)
+                scheduled_time = scheduled_time.replace(hour=10, minute=0)
+
+            # Find lead if attendee_name provided
+            lead_id = context_lead.id if context_lead else None
+            if attendee_name and not lead_id:
+                lead = db.query(Lead).filter(
+                    Lead.owner_id == current_user.id,
+                    Lead.name.ilike(f"%{attendee_name}%")
+                ).first()
+                if lead:
+                    lead_id = lead.id
+
+            # Create task for the appointment
+            task_title = f"{title} with {attendee_name}" if attendee_name else title
+            task_description = f"Duration: {duration} minutes\n{notes}" if notes else f"Duration: {duration} minutes"
+
+            new_task = AITask(
+                type=TaskType.LEAD if lead_id else TaskType.GENERAL,
+                title=task_title,
+                description=task_description,
+                assigned_to_id=current_user.id,
+                lead_id=lead_id,
+                priority="high",
+                due_date=scheduled_time,
+                status="pending",
+                created_by_ai=True
+            )
+            db.add(new_task)
+            db.commit()
+            db.refresh(new_task)
+
+            return {
+                "success": True,
+                "task_id": new_task.id,
+                "scheduled_time": scheduled_time.isoformat(),
+                "result": f"Appointment scheduled: {task_title} for {scheduled_time.strftime('%B %d, %Y at %I:%M %p')}"
+            }
+
         else:
             return {"success": False, "error": f"Unknown function: {function_name}"}
 
@@ -32385,6 +32580,100 @@ async def ai_chat(
                     "properties": {}
                 }
             }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "send_sms",
+                "description": "Send an SMS text message to a contact, lead, or user. YOU MUST CALL THIS TOOL when user asks to 'send a text', 'text them', 'SMS someone', etc. You can look up phone by recipient name.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "recipient_phone": {
+                            "type": "string",
+                            "description": "Phone number to send SMS to (E.164 format preferred, e.g., +18005551234)"
+                        },
+                        "recipient_name": {
+                            "type": "string",
+                            "description": "Name of person to send SMS to - system will look up their phone number from leads, contacts, or users"
+                        },
+                        "message": {
+                            "type": "string",
+                            "description": "The text message content to send"
+                        },
+                        "lead_id": {
+                            "type": "integer",
+                            "description": "Optional lead ID to associate the SMS with"
+                        }
+                    },
+                    "required": ["message"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "update_user_profile",
+                "description": "Update a user's profile information including phone number, title, or NMLS number. Call this when asked to update someone's profile, add a phone number, or change user details.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "user_name": {
+                            "type": "string",
+                            "description": "Name of user to update (will search by name)"
+                        },
+                        "user_email": {
+                            "type": "string",
+                            "description": "Email of user to update"
+                        },
+                        "phone": {
+                            "type": "string",
+                            "description": "New phone number to set"
+                        },
+                        "title": {
+                            "type": "string",
+                            "description": "New title to set (e.g., 'Senior Loan Officer')"
+                        },
+                        "nmls_number": {
+                            "type": "string",
+                            "description": "NMLS number to set"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "schedule_appointment",
+                "description": "Schedule a meeting or appointment. Call this when user asks to 'schedule a call', 'set up a meeting', 'book an appointment', etc.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "title": {
+                            "type": "string",
+                            "description": "Title of the appointment"
+                        },
+                        "attendee_name": {
+                            "type": "string",
+                            "description": "Name of the person to meet with"
+                        },
+                        "date_time": {
+                            "type": "string",
+                            "description": "Date and time for the appointment (e.g., 'tomorrow at 2pm', '2025-12-01T14:00:00')"
+                        },
+                        "duration_minutes": {
+                            "type": "integer",
+                            "description": "Duration in minutes (default 30)"
+                        },
+                        "notes": {
+                            "type": "string",
+                            "description": "Additional notes for the appointment"
+                        }
+                    },
+                    "required": ["title", "date_time"]
+                }
+            }
         }
     ]
 
@@ -32402,17 +32691,31 @@ async def ai_chat(
 Current user: {current_user.full_name or current_user.email}
 {f'Context: {context_info}' if context_info else ''}
 
-You have the ability to:
-- Create tasks and reminders
-- Update lead stages
-- Add notes and activities
-- Retrieve lead information
-- Search for leads
-- Analyze priorities
+## ACTION TOOLS - YOU MUST CALL THESE WHEN REQUESTED
+CRITICAL: When a user asks you to SEND a text, SEND an email, SCHEDULE a meeting, or PERFORM any action - YOU MUST CALL THE APPROPRIATE TOOL AND EXECUTE IT. DO NOT tell them how to do it manually. YOU HAVE THE CAPABILITY.
 
-When a user asks you to do something, use the available functions to actually perform the action. Don't just suggest - DO IT.
+Available action tools:
+- **send_sms**: Send SMS text messages. Call this when user says "send a text", "text them", "SMS", etc. You can look up phone by name.
+- **update_user_profile**: Update user profile info (phone, title, NMLS). Call this when user says "update profile", "add phone number", etc.
+- **schedule_appointment**: Schedule meetings/calls. Call this when user says "schedule a call", "set up a meeting", "book appointment".
+- **create_task**: Create tasks and reminders
+- **update_lead_stage**: Update a lead's pipeline stage
+- **add_activity**: Add notes and activities
 
-Be proactive, professional, and action-oriented. Always confirm what you've done."""
+## INFORMATION TOOLS
+- **get_lead_details**: Get detailed lead information
+- **get_high_priority_leads**: Get priority leads
+- **search_leads**: Search for leads by name/email
+- **get_lead_stats**: Get pipeline statistics
+
+## CRITICAL RULES
+1. When user says "send a text to [name]" → CALL send_sms with recipient_name and message
+2. When user says "schedule a call with [name]" → CALL schedule_appointment
+3. When user says "update [name]'s profile" → CALL update_user_profile
+4. NEVER say "I can't send texts" or "I don't have that capability" - YOU DO. USE THE TOOLS.
+5. ALWAYS execute the action, then confirm what you did.
+
+Be proactive, professional, and action-oriented. When asked to perform an action, DO IT immediately."""
         }
     ]
 
