@@ -39129,6 +39129,129 @@ def init_db_with_retry(max_retries=5, initial_delay=2):
                 raise
     return False
 
+
+def run_organization_migration():
+    """Run multi-tenant organization migration on startup - adds organizations table and organization_id columns"""
+    db = SessionLocal()
+    try:
+        logger.info("🏢 Running Multi-Tenant Organization Migration...")
+
+        # Step 1: Create organizations table
+        try:
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS organizations (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    slug VARCHAR(100) UNIQUE,
+                    domain VARCHAR(255),
+                    settings JSONB DEFAULT '{}',
+                    subscription_tier VARCHAR(50) DEFAULT 'lead_management',
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """))
+            db.commit()
+            logger.info("   ✅ Created organizations table")
+        except Exception as e:
+            logger.warning(f"   ⚠️  organizations table: {str(e)}")
+            db.rollback()
+
+        # Step 2: Create default organization
+        try:
+            db.execute(text("""
+                INSERT INTO organizations (name, slug, subscription_tier)
+                VALUES ('Default Organization', 'default', 'full_pipeline')
+                ON CONFLICT (slug) DO NOTHING
+            """))
+            db.commit()
+            logger.info("   ✅ Created default organization")
+        except Exception as e:
+            logger.warning(f"   ⚠️  default organization: {str(e)}")
+            db.rollback()
+
+        # Step 3: Add organization_id to users table
+        try:
+            db.execute(text("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)
+            """))
+            db.commit()
+            logger.info("   ✅ Added organization_id to users table")
+        except Exception as e:
+            logger.warning(f"   ⚠️  users.organization_id: {str(e)}")
+            db.rollback()
+
+        # Step 4: Add organization_id to branches table
+        try:
+            db.execute(text("""
+                ALTER TABLE branches ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)
+            """))
+            db.commit()
+            logger.info("   ✅ Added organization_id to branches table")
+        except Exception as e:
+            logger.warning(f"   ⚠️  branches.organization_id: {str(e)}")
+            db.rollback()
+
+        # Step 5: Add organization_id to microsoft_app_config table
+        try:
+            db.execute(text("""
+                ALTER TABLE microsoft_app_config ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)
+            """))
+            db.commit()
+            logger.info("   ✅ Added organization_id to microsoft_app_config table")
+        except Exception as e:
+            logger.warning(f"   ⚠️  microsoft_app_config.organization_id: {str(e)}")
+            db.rollback()
+
+        # Step 6: Assign existing users to default organization
+        try:
+            db.execute(text("""
+                UPDATE users
+                SET organization_id = (SELECT id FROM organizations WHERE slug = 'default')
+                WHERE organization_id IS NULL
+            """))
+            db.commit()
+            logger.info("   ✅ Assigned existing users to default organization")
+        except Exception as e:
+            logger.warning(f"   ⚠️  user assignment: {str(e)}")
+            db.rollback()
+
+        # Step 7: Assign existing microsoft_app_config to default organization
+        try:
+            db.execute(text("""
+                UPDATE microsoft_app_config
+                SET organization_id = (SELECT id FROM organizations WHERE slug = 'default')
+                WHERE organization_id IS NULL
+            """))
+            db.commit()
+            logger.info("   ✅ Assigned existing Microsoft config to default organization")
+        except Exception as e:
+            logger.warning(f"   ⚠️  microsoft config assignment: {str(e)}")
+            db.rollback()
+
+        # Step 8: Create indexes
+        try:
+            db.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_users_organization_id ON users(organization_id)
+            """))
+            db.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_microsoft_app_config_organization_id ON microsoft_app_config(organization_id)
+            """))
+            db.commit()
+            logger.info("   ✅ Created organization indexes")
+        except Exception as e:
+            logger.warning(f"   ⚠️  indexes: {str(e)}")
+            db.rollback()
+
+        logger.info("🏢 Multi-Tenant Organization Migration complete!")
+
+    except Exception as e:
+        logger.error(f"❌ Organization migration failed: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
 def run_phase2_permission_migration():
     """Run Phase 2 permission system migration on startup"""
     db = SessionLocal()
