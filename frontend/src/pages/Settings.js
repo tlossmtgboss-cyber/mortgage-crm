@@ -1886,7 +1886,7 @@ const API_BASE_URL = isProduction
           </button>
 
           {/* Integrations - Conditionally Expandable based on connected apps */}
-          {(calendlyEventTypes.length > 0 || twilioStatus.configured) ? (
+          {(microsoftStatus.connected || calendlyEventTypes.length > 0 || twilioStatus.configured) ? (
             <>
               <button
                 className={`sidebar-btn parent ${expandedSections.integrations ? 'expanded' : ''}`}
@@ -1897,6 +1897,22 @@ const API_BASE_URL = isProduction
               </button>
               {expandedSections.integrations && (
                 <div className="sidebar-children">
+                  {microsoftStatus.connected && (
+                    <>
+                      <button
+                        className={`sidebar-btn child ${activeSection === 'outlook-email' ? 'active' : ''}`}
+                        onClick={() => setActiveSection('outlook-email')}
+                      >
+                        <span>Outlook Email</span>
+                      </button>
+                      <button
+                        className={`sidebar-btn child ${activeSection === 'outlook-calendar' ? 'active' : ''}`}
+                        onClick={() => setActiveSection('outlook-calendar')}
+                      >
+                        <span>Outlook Calendar</span>
+                      </button>
+                    </>
+                  )}
                   {calendlyEventTypes.length > 0 && (
                     <button
                       className={`sidebar-btn child ${activeSection === 'calendly' ? 'active' : ''}`}
@@ -2296,6 +2312,104 @@ const API_BASE_URL = isProduction
                   <li>AI-powered lead extraction</li>
                   <li>Mortgage-related email detection</li>
                   <li>Auto-link to existing leads and loans</li>
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {/* OUTLOOK EMAIL */}
+          {activeSection === 'outlook-email' && (
+            <div className="integration-detail-section">
+              <h2>Outlook Email Integration</h2>
+              <p className="section-description">
+                Sync your Microsoft 365 / Outlook emails and automatically link them to loan files
+              </p>
+
+              {microsoftStatus.connected ? (
+                <div className="connection-status-card connected outlook">
+                  <div className="connection-status-header">
+                    <div className="connection-status-indicator"></div>
+                    <div className="connection-status-info">
+                      <h3>Outlook Connected</h3>
+                      <p className="connection-email">{microsoftStatus.email}</p>
+                    </div>
+                    <div className="connection-actions">
+                      <button className="btn-sync" onClick={syncMicrosoftNow} disabled={syncingMicrosoft}>
+                        {syncingMicrosoft ? 'Syncing...' : 'Sync Now'}
+                      </button>
+                      <button className="btn-disconnect" onClick={disconnectMicrosoft} disabled={loadingMicrosoft}>
+                        Disconnect
+                      </button>
+                    </div>
+                  </div>
+                  {microsoftStatus.last_sync_at && (
+                    <div className="connection-meta">Last Sync: {new Date(microsoftStatus.last_sync_at).toLocaleString()}</div>
+                  )}
+                  {microsoftStatus.connected_at && (
+                    <div className="connection-meta">Connected: {new Date(microsoftStatus.connected_at).toLocaleString()}</div>
+                  )}
+                </div>
+              ) : (
+                <div className="connection-prompt-card">
+                  <h3>Connect Outlook</h3>
+                  <p>Connect your Microsoft 365 / Outlook account to sync emails with loan files automatically</p>
+                  <button className="btn-connect" onClick={connectMicrosoft365} disabled={loadingMicrosoft}>
+                    {loadingMicrosoft ? 'Connecting...' : 'Connect Microsoft 365'}
+                  </button>
+                </div>
+              )}
+
+              <div className="integration-features" style={{marginTop: '24px'}}>
+                <h4>Features</h4>
+                <ul>
+                  <li>Automatic email sync with loan files</li>
+                  <li>AI-powered lead extraction</li>
+                  <li>Auto-link emails to existing loans</li>
+                  <li>Two-way email sync</li>
+                </ul>
+              </div>
+            </div>
+          )}
+
+          {/* OUTLOOK CALENDAR */}
+          {activeSection === 'outlook-calendar' && (
+            <div className="integration-detail-section">
+              <h2>Outlook Calendar Integration</h2>
+              <p className="section-description">
+                Sync your Microsoft 365 / Outlook calendar events
+              </p>
+
+              {microsoftStatus.connected ? (
+                <div className="connection-status-card connected outlook">
+                  <div className="connection-status-header">
+                    <div className="connection-status-indicator"></div>
+                    <div className="connection-status-info">
+                      <h3>Calendar Connected</h3>
+                      <p className="connection-email">{microsoftStatus.email}</p>
+                    </div>
+                    <div className="connection-actions">
+                      <button className="btn-sync" onClick={syncMicrosoftCalendar} disabled={syncingCalendar}>
+                        {syncingCalendar ? 'Syncing...' : 'Sync Calendar'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="connection-prompt-card">
+                  <h3>Connect Outlook Calendar</h3>
+                  <p>Connect your Microsoft 365 / Outlook account to sync calendar events</p>
+                  <button className="btn-connect" onClick={connectMicrosoft365} disabled={loadingMicrosoft}>
+                    {loadingMicrosoft ? 'Connecting...' : 'Connect Microsoft 365'}
+                  </button>
+                </div>
+              )}
+
+              <div className="integration-features" style={{marginTop: '24px'}}>
+                <h4>Features</h4>
+                <ul>
+                  <li>Sync calendar events with CRM</li>
+                  <li>Schedule appointments with borrowers</li>
+                  <li>Automatic reminders</li>
                 </ul>
               </div>
             </div>
