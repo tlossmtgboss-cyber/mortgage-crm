@@ -1027,6 +1027,13 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             db.commit()
             row = result.fetchone()
 
+            # Invalidate task-related caches for this user
+            try:
+                from core.cache import invalidate_user_cache
+                await invalidate_user_cache(str(current_user.id))
+            except Exception as cache_e:
+                logger.debug(f"Cache invalidation skipped: {cache_e}")
+
             return {
                 "success": True,
                 "task_id": row.id,
