@@ -25314,6 +25314,21 @@ async def liveness_check():
     """Kubernetes liveness probe - is process alive?"""
     return {"status": "alive"}
 
+@app.get("/health/cache")
+async def cache_health():
+    """Check Redis cache status for AI Agent tools"""
+    try:
+        from core.cache import cache
+        stats = await cache.get_stats()
+        return {
+            "status": "healthy" if stats.get("connected") else "degraded",
+            "cache": stats
+        }
+    except ImportError:
+        return {"status": "disabled", "message": "Cache module not available"}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
 @app.post("/authentication/test")
 async def authentication_test_post(current_user: User = Depends(get_current_user_flexible)):
     """
@@ -40347,6 +40362,15 @@ async def startup_event():
     """Initialize database on startup"""
     logger.info("🚀 Starting Agentic AI Mortgage CRM...")
 
+    # Initialize Redis cache for AI Agent tools
+    try:
+        from core.cache import cache
+        await cache.connect()
+    except ImportError:
+        logger.info("ℹ️ Redis cache module not available - caching disabled")
+    except Exception as cache_e:
+        logger.warning(f"⚠️ Redis cache initialization skipped: {cache_e}")
+
     try:
         # Initialize database with retry logic
         if init_db_with_retry():
@@ -45847,6 +45871,15 @@ async def shutdown_event():
         logger.info("✅ Auto-sync scheduler stopped")
     except Exception as e:
         logger.error(f"Error stopping scheduler: {e}")
+
+    # Disconnect Redis cache
+    try:
+        from core.cache import cache
+        await cache.disconnect()
+    except ImportError:
+        pass
+    except Exception as e:
+        logger.warning(f"Error disconnecting cache: {e}")
 
 
 # ============================================================================
