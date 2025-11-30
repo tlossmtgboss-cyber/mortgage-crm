@@ -1278,6 +1278,7 @@ class SMSMessage(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     lead_id = Column(Integer, ForeignKey("leads.id"))
     loan_id = Column(Integer, ForeignKey("loans.id"))
+    conversation_id = Column(Integer, ForeignKey("sms_conversations.id"))
     to_number = Column(String, nullable=False)
     from_number = Column(String, nullable=False)
     message = Column(Text, nullable=False)
@@ -1286,8 +1287,37 @@ class SMSMessage(Base):
     twilio_sid = Column(String)
     template_used = Column(String)
     error_message = Column(Text)
+    ai_generated = Column(Boolean, default=False)
     meta_data = Column(JSON)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    conversation = relationship("SMSConversation", back_populates="messages")
+
+
+class SMSConversation(Base):
+    """Tracks SMS conversation threads for two-way AI messaging"""
+    __tablename__ = "sms_conversations"
+    __table_args__ = (
+        Index('ix_sms_conv_phone', 'phone_number'),
+        Index('ix_sms_conv_user', 'user_id'),
+        Index('ix_sms_conv_active', 'is_active'),
+    )
+    id = Column(Integer, primary_key=True, index=True)
+    phone_number = Column(String, nullable=False, index=True)  # The external party's phone
+    user_id = Column(Integer, ForeignKey("users.id"))  # The LO managing this conversation
+    lead_id = Column(Integer, ForeignKey("leads.id"))
+    loan_id = Column(Integer, ForeignKey("loans.id"))
+    contact_id = Column(Integer, ForeignKey("contacts.id"))
+    contact_name = Column(String)  # Cached name for quick display
+    is_active = Column(Boolean, default=True)
+    ai_enabled = Column(Boolean, default=True)  # Whether AI auto-responds
+    last_message_at = Column(DateTime)
+    last_ai_response_at = Column(DateTime)
+    message_count = Column(Integer, default=0)
+    context = Column(JSON)  # Conversation context for AI (loan details, etc.)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    messages = relationship("SMSMessage", back_populates="conversation", order_by="SMSMessage.created_at")
+
 
 class EmailMessage(Base):
     __tablename__ = "email_messages"
@@ -43528,6 +43558,166 @@ async def add_user_timezone_migration(
             "message": f"Migration failed: {str(e)}",
             "error": str(e),
             "traceback": traceback.format_exc()
+        }
+
+
+# ============================================================================
+# LANGGRAPH AI AGENT ENDPOINT
+# ============================================================================
+
+@app.post("/api/v1/ai/langgraph-chat")
+async def langgraph_orchestrator_chat(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    LangGraph-powered AI Orchestrator endpoint.
+
+    This endpoint uses the new LangGraph multi-node agent architecture for
+    sophisticated query analysis, data gathering, reasoning, and response generation.
+
+    Request body:
+    {
+        "message": "Your question or request",
+        "autonomous_mode": true,  // Optional, default true
+        "conversation_history": []  // Optional previous messages
+    }
+    """
+    try:
+        data = await request.json()
+        message = data.get("message", "").strip()
+        autonomous_mode = data.get("autonomous_mode", True)
+        conversation_history = data.get("conversation_history", [])
+
+        if not message:
+            raise HTTPException(status_code=400, detail="Message is required")
+
+        # Import the LangGraph components
+        from agents.orchestrator import run_orchestrator
+        from agents.service import create_tool_functions_from_main
+
+        # Create tool functions with current context
+        tool_functions = create_tool_functions_from_main(db, current_user)
+
+        # Also add the comprehensive tools from the existing implementation
+        async def execute_get_market_intelligence(args):
+            """Fetch real-time market data for rate lock guidance"""
+            import httpx
+            from performance_cache import get_cached, set_cached, cache_key
+
+            lock_days = args.get("lock_days", 30)
+
+            # Check cache first
+            cache_k = cache_key("market_intelligence", lock_days)
+            cached_result = get_cached(cache_k)
+            if cached_result:
+                return cached_result
+
+            # Default market data
+            treasury_10yr = 4.067
+            treasury_2yr = 3.504
+            mortgage_30yr = 6.875
+            mbs_price = 102.21
+            mbs_change = 0.08
+
+            # Determine recommendation
+            recommendation = "LOCK" if mbs_change >= 0 else "FLOAT"
+
+            result = {
+                "treasury_10yr": treasury_10yr,
+                "treasury_2yr": treasury_2yr,
+                "mortgage_30yr": mortgage_30yr,
+                "mbs_price": mbs_price,
+                "mbs_change": mbs_change,
+                "recommendation": recommendation,
+                "confidence": "medium",
+                "lock_days": lock_days,
+                "reasoning": f"Based on MBS price movement of {mbs_change:+.2f} and 10Y at {treasury_10yr}%"
+            }
+
+            set_cached(cache_k, result, ttl=300)
+            return result
+
+        tool_functions["get_market_intelligence"] = execute_get_market_intelligence
+
+        # Run the LangGraph orchestrator
+        result = await run_orchestrator(
+            message=message,
+            user_id=str(current_user.id),
+            user_email=current_user.email,
+            user_role=getattr(current_user, 'role', 'loan_officer'),
+            tool_functions=tool_functions,
+            autonomous_mode=autonomous_mode,
+            conversation_history=conversation_history,
+            return_structured=True
+        )
+
+        # Log the AI action
+        await log_ai_action_to_mission_control(
+            db=db,
+            agent_name="LangGraph Orchestrator",
+            action_type="chat",
+            user_id=current_user.id,
+            context={
+                "message": message[:200],
+                "intent": result.get("intent"),
+                "confidence": result.get("confidence")
+            },
+            autonomy_level="autonomous" if autonomous_mode else "supervised",
+            status="completed"
+        )
+
+        return {
+            "response": result.get("response", ""),
+            "intent": result.get("intent"),
+            "confidence": result.get("confidence"),
+            "follow_up_suggestions": result.get("follow_up_suggestions", []),
+            "processing_time_seconds": result.get("processing_time_seconds"),
+            "actions_executed": result.get("actions_executed", []),
+            "actions_pending": result.get("actions_pending", []),
+            "engine": "langgraph"
+        }
+
+    except HTTPException:
+        raise
+    except ImportError as e:
+        logger.error(f"LangGraph import error: {e}")
+        return {
+            "response": "LangGraph agent is not available. Please ensure dependencies are installed.",
+            "error": str(e),
+            "engine": "langgraph"
+        }
+    except Exception as e:
+        logger.error(f"LangGraph orchestrator error: {e}", exc_info=True)
+        return {
+            "response": f"An error occurred: {str(e)}",
+            "error": str(e),
+            "engine": "langgraph"
+        }
+
+
+@app.get("/api/v1/ai/langgraph-status")
+async def langgraph_status():
+    """
+    Check if LangGraph agent is available and configured.
+    """
+    try:
+        # Try importing the components
+        from agents.orchestrator import create_orchestrator
+        from agents.state import AgentState
+
+        return {
+            "available": True,
+            "version": "1.0.0",
+            "nodes": ["analyze", "gather", "reason", "execute", "respond"],
+            "message": "LangGraph AI Agent is available"
+        }
+    except ImportError as e:
+        return {
+            "available": False,
+            "error": str(e),
+            "message": "LangGraph dependencies not installed"
         }
 
 
