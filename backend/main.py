@@ -17025,6 +17025,466 @@ async def vapi_voicemail_status_webhook(
         return {"status": "error", "message": str(e)}
 
 
+# ============================================================================
+# TWO-WAY SMS MESSAGING FOR AI CONVERSATIONS
+# ============================================================================
+
+@app.post("/api/v1/webhooks/twilio/sms")
+async def twilio_sms_webhook(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """
+    Twilio webhook for incoming SMS messages.
+    Processes incoming texts, identifies the sender, and generates AI responses.
+
+    Configure in Twilio Console:
+    - Messaging > Services > [Your Service] > Integration
+    - Set webhook URL: https://your-domain.com/api/v1/webhooks/twilio/sms
+    """
+    try:
+        # Parse Twilio webhook payload (form-encoded)
+        form_data = await request.form()
+
+        from_number = form_data.get("From", "")
+        to_number = form_data.get("To", "")
+        message_body = form_data.get("Body", "")
+        message_sid = form_data.get("MessageSid", "")
+        num_media = int(form_data.get("NumMedia", 0))
+
+        logger.info(f"Incoming SMS from {from_number}: {message_body[:100]}...")
+
+        # Normalize phone numbers
+        def normalize_phone(phone):
+            if not phone:
+                return ""
+            cleaned = ''.join(c for c in phone if c.isdigit())
+            if len(cleaned) == 11 and cleaned.startswith('1'):
+                cleaned = cleaned[1:]
+            return cleaned
+
+        normalized_from = normalize_phone(from_number)
+
+        # Look up contact/lead by phone number
+        contact = None
+        lead = None
+        loan = None
+        user = None
+        contact_name = "Unknown Contact"
+
+        # Search contacts table
+        contact_row = db.execute(text("""
+            SELECT c.id, c.first_name, c.last_name, c.owner_id
+            FROM contacts c
+            WHERE REPLACE(REPLACE(REPLACE(c.phone, '-', ''), ' ', ''), '+1', '') LIKE :phone
+            LIMIT 1
+        """), {"phone": f"%{normalized_from[-10:]}"}).fetchone()
+
+        if contact_row:
+            contact_name = f"{contact_row.first_name or ''} {contact_row.last_name or ''}".strip() or "Contact"
+            contact = contact_row
+            if contact_row.owner_id:
+                user = db.query(User).filter(User.id == contact_row.owner_id).first()
+
+        # Search leads table if no contact found
+        if not contact_row:
+            lead_row = db.execute(text("""
+                SELECT l.id, l.name, l.owner_id
+                FROM leads l
+                WHERE REPLACE(REPLACE(REPLACE(l.phone, '-', ''), ' ', ''), '+1', '') LIKE :phone
+                LIMIT 1
+            """), {"phone": f"%{normalized_from[-10:]}"}).fetchone()
+
+            if lead_row:
+                contact_name = lead_row.name or "Lead"
+                lead = lead_row
+                if lead_row.owner_id:
+                    user = db.query(User).filter(User.id == lead_row.owner_id).first()
+
+        # Search loans table for borrower phone
+        if not contact_row and not lead:
+            loan_row = db.execute(text("""
+                SELECT l.id, l.borrower_name, l.loan_officer_id
+                FROM loans l
+                WHERE l.borrower_phone IS NOT NULL
+                AND REPLACE(REPLACE(REPLACE(l.borrower_phone, '-', ''), ' ', ''), '+1', '') LIKE :phone
+                LIMIT 1
+            """), {"phone": f"%{normalized_from[-10:]}"}).fetchone()
+
+            if loan_row:
+                loan = loan_row
+                contact_name = loan_row.borrower_name or "Borrower"
+                if loan_row.loan_officer_id:
+                    user = db.query(User).filter(User.id == loan_row.loan_officer_id).first()
+
+        # Find or create SMS conversation
+        conversation = db.query(SMSConversation).filter(
+            SMSConversation.phone_number == from_number,
+            SMSConversation.is_active == True
+        ).first()
+
+        if not conversation:
+            conversation = SMSConversation(
+                phone_number=from_number,
+                user_id=user.id if user else None,
+                lead_id=lead.id if lead else None,
+                loan_id=loan.id if loan else None,
+                contact_id=contact.id if contact else None,
+                contact_name=contact_name,
+                is_active=True,
+                ai_enabled=True,
+                context={"contact_name": contact_name}
+            )
+            db.add(conversation)
+            db.flush()
+
+        # Store inbound message
+        sms_message = SMSMessage(
+            user_id=user.id if user else None,
+            lead_id=lead.id if lead else None,
+            loan_id=loan.id if loan else None,
+            conversation_id=conversation.id,
+            to_number=to_number,
+            from_number=from_number,
+            message=message_body,
+            direction="inbound",
+            status="received",
+            twilio_sid=message_sid,
+            meta_data={"num_media": num_media, "contact_name": contact_name}
+        )
+        db.add(sms_message)
+
+        # Update conversation stats
+        conversation.last_message_at = datetime.now(timezone.utc)
+        conversation.message_count = (conversation.message_count or 0) + 1
+
+        db.commit()
+
+        # Log activity
+        try:
+            activity = Activity(
+                type=ActivityType.SMS,
+                content=f"Inbound SMS from {contact_name}: {message_body[:200]}",
+                lead_id=lead.id if lead else None,
+                loan_id=loan.id if loan else None,
+                user_id=user.id if user else None
+            )
+            db.add(activity)
+            db.commit()
+        except Exception as e:
+            logger.error(f"Failed to log SMS activity: {e}")
+
+        # Generate AI response in background if enabled
+        if conversation.ai_enabled:
+            background_tasks.add_task(
+                generate_ai_sms_response,
+                conversation_id=conversation.id,
+                inbound_message=message_body,
+                contact_name=contact_name,
+                from_number=from_number,
+                user_id=user.id if user else None,
+                lead_id=lead.id if lead else None,
+                loan_id=loan.id if loan else None
+            )
+
+        # Return TwiML response (empty - we send reply via API)
+        from twilio.twiml.messaging_response import MessagingResponse
+        response = MessagingResponse()
+        return Response(content=str(response), media_type="application/xml")
+
+    except Exception as e:
+        logger.error(f"Error processing inbound SMS: {e}", exc_info=True)
+        from twilio.twiml.messaging_response import MessagingResponse
+        response = MessagingResponse()
+        return Response(content=str(response), media_type="application/xml")
+
+
+async def generate_ai_sms_response(
+    conversation_id: int,
+    inbound_message: str,
+    contact_name: str,
+    from_number: str,
+    user_id: int = None,
+    lead_id: int = None,
+    loan_id: int = None
+):
+    """Generate and send AI response to SMS message"""
+    db = SessionLocal()
+    try:
+        import openai
+        from twilio.rest import Client as TwilioClient
+
+        conversation = db.query(SMSConversation).filter(SMSConversation.id == conversation_id).first()
+        if not conversation:
+            return
+
+        # Get recent message history
+        recent_messages = db.query(SMSMessage).filter(
+            SMSMessage.conversation_id == conversation_id
+        ).order_by(SMSMessage.created_at.desc()).limit(10).all()
+
+        message_history = []
+        for msg in reversed(recent_messages):
+            role = "user" if msg.direction == "inbound" else "assistant"
+            message_history.append({"role": role, "content": msg.message})
+
+        # Get loan context if available
+        loan_context = ""
+        if loan_id or conversation.loan_id:
+            lid = loan_id or conversation.loan_id
+            loan = db.execute(text("""
+                SELECT borrower_name, stage, closing_date, amount, rate,
+                       loan_officer_name, processor
+                FROM loans WHERE id = :id
+            """), {"id": lid}).fetchone()
+            if loan:
+                loan_context = f"""
+Loan Info: {loan.borrower_name}, Stage: {loan.stage}, Closing: {loan.closing_date}, Amount: ${loan.amount:,.0f if loan.amount else 'N/A'}
+"""
+
+        # Get LO name
+        lo_name = "your loan officer"
+        if user_id:
+            user = db.query(User).filter(User.id == user_id).first()
+            if user:
+                lo_name = user.full_name or "your loan officer"
+
+        system_prompt = f"""You are an AI assistant for mortgage loan officer {lo_name}. You're responding to SMS texts from borrowers.
+
+RULES:
+1. Keep responses SHORT - under 160 chars when possible
+2. Be friendly and professional
+3. Don't make up specific dates/rates/amounts - offer to have LO confirm
+4. For urgent matters, say the LO will call ASAP
+5. Casual but professional tone for texting
+6. Max 1 emoji per message
+
+Contact: {contact_name}
+{loan_context}
+
+Be concise - you're texting!"""
+
+        openai_client = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+        messages = [{"role": "system", "content": system_prompt}]
+        messages.extend(message_history[-6:])
+
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            max_tokens=200,
+            temperature=0.7
+        )
+
+        ai_response = response.choices[0].message.content.strip()
+        if len(ai_response) > 300:
+            ai_response = ai_response[:297] + "..."
+
+        # Send SMS via Twilio
+        twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
+        twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
+        twilio_phone = os.getenv("TWILIO_PHONE_NUMBER")
+
+        if not all([twilio_sid, twilio_token, twilio_phone]):
+            logger.error("Twilio credentials not configured")
+            return
+
+        twilio_client = TwilioClient(twilio_sid, twilio_token)
+
+        sent_message = twilio_client.messages.create(
+            body=ai_response,
+            from_=twilio_phone,
+            to=from_number
+        )
+
+        # Store outbound message
+        outbound_sms = SMSMessage(
+            user_id=user_id,
+            lead_id=lead_id or conversation.lead_id,
+            loan_id=loan_id or conversation.loan_id,
+            conversation_id=conversation_id,
+            to_number=from_number,
+            from_number=twilio_phone,
+            message=ai_response,
+            direction="outbound",
+            status="sent",
+            twilio_sid=sent_message.sid,
+            ai_generated=True,
+            meta_data={"model": "gpt-4o-mini", "in_response_to": inbound_message[:100]}
+        )
+        db.add(outbound_sms)
+
+        conversation.last_ai_response_at = datetime.now(timezone.utc)
+        conversation.message_count = (conversation.message_count or 0) + 1
+
+        db.commit()
+        logger.info(f"AI SMS response sent to {from_number}: {ai_response[:50]}...")
+
+    except Exception as e:
+        logger.error(f"Error generating AI SMS response: {e}", exc_info=True)
+    finally:
+        db.close()
+
+
+@app.get("/api/v1/sms/conversations")
+async def list_sms_conversations(
+    active_only: bool = True,
+    limit: int = 50,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """List SMS conversations for the current user"""
+    query = db.query(SMSConversation).filter(
+        SMSConversation.user_id == current_user.id
+    )
+    if active_only:
+        query = query.filter(SMSConversation.is_active == True)
+
+    conversations = query.order_by(SMSConversation.last_message_at.desc()).limit(limit).all()
+
+    return {
+        "conversations": [
+            {
+                "id": c.id,
+                "phone_number": c.phone_number,
+                "contact_name": c.contact_name,
+                "is_active": c.is_active,
+                "ai_enabled": c.ai_enabled,
+                "message_count": c.message_count,
+                "last_message_at": c.last_message_at.isoformat() if c.last_message_at else None,
+                "lead_id": c.lead_id,
+                "loan_id": c.loan_id
+            }
+            for c in conversations
+        ]
+    }
+
+
+@app.get("/api/v1/sms/conversations/{conversation_id}/messages")
+async def get_sms_conversation_messages(
+    conversation_id: int,
+    limit: int = 50,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get messages for a specific SMS conversation"""
+    conversation = db.query(SMSConversation).filter(
+        SMSConversation.id == conversation_id,
+        SMSConversation.user_id == current_user.id
+    ).first()
+
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    messages = db.query(SMSMessage).filter(
+        SMSMessage.conversation_id == conversation_id
+    ).order_by(SMSMessage.created_at.desc()).limit(limit).all()
+
+    return {
+        "conversation": {
+            "id": conversation.id,
+            "phone_number": conversation.phone_number,
+            "contact_name": conversation.contact_name,
+            "ai_enabled": conversation.ai_enabled
+        },
+        "messages": [
+            {
+                "id": m.id,
+                "message": m.message,
+                "direction": m.direction,
+                "status": m.status,
+                "ai_generated": m.ai_generated,
+                "created_at": m.created_at.isoformat()
+            }
+            for m in reversed(messages)
+        ]
+    }
+
+
+@app.post("/api/v1/sms/conversations/{conversation_id}/send")
+async def send_sms_in_conversation(
+    conversation_id: int,
+    message: str = Body(..., embed=True),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Send a manual SMS message in a conversation"""
+    conversation = db.query(SMSConversation).filter(
+        SMSConversation.id == conversation_id,
+        SMSConversation.user_id == current_user.id
+    ).first()
+
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    try:
+        from twilio.rest import Client as TwilioClient
+
+        twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
+        twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
+        twilio_phone = os.getenv("TWILIO_PHONE_NUMBER")
+
+        if not all([twilio_sid, twilio_token, twilio_phone]):
+            raise HTTPException(status_code=500, detail="SMS service not configured")
+
+        twilio_client = TwilioClient(twilio_sid, twilio_token)
+
+        sent_message = twilio_client.messages.create(
+            body=message,
+            from_=twilio_phone,
+            to=conversation.phone_number
+        )
+
+        sms_message = SMSMessage(
+            user_id=current_user.id,
+            lead_id=conversation.lead_id,
+            loan_id=conversation.loan_id,
+            conversation_id=conversation_id,
+            to_number=conversation.phone_number,
+            from_number=twilio_phone,
+            message=message,
+            direction="outbound",
+            status="sent",
+            twilio_sid=sent_message.sid,
+            ai_generated=False
+        )
+        db.add(sms_message)
+
+        conversation.last_message_at = datetime.now(timezone.utc)
+        conversation.message_count = (conversation.message_count or 0) + 1
+
+        db.commit()
+
+        return {"success": True, "message_id": sms_message.id, "twilio_sid": sent_message.sid}
+
+    except Exception as e:
+        logger.error(f"Error sending SMS: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/v1/sms/conversations/{conversation_id}/ai-toggle")
+async def toggle_ai_for_conversation(
+    conversation_id: int,
+    enabled: bool = Body(..., embed=True),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Enable or disable AI auto-responses for a conversation"""
+    conversation = db.query(SMSConversation).filter(
+        SMSConversation.id == conversation_id,
+        SMSConversation.user_id == current_user.id
+    ).first()
+
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    conversation.ai_enabled = enabled
+    db.commit()
+
+    return {"success": True, "conversation_id": conversation_id, "ai_enabled": enabled}
+
+
 @app.post("/api/v1/voice/amd-callback")
 async def amd_callback(request: Request):
     """Handle AMD (Answering Machine Detection) callback (legacy Twilio)"""
@@ -41480,6 +41940,85 @@ async def create_email_drafts_table_migration(
 
     except Exception as e:
         logger.error(f"Email drafts table migration failed: {e}")
+        db.rollback()
+        import traceback
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+
+@app.post("/api/v1/migrations/create-sms-conversation-tables", response_model=None)
+async def create_sms_conversation_tables_migration(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Create SMS conversation tables for two-way AI messaging.
+    """
+    try:
+        logger.info(f"Running migration: create SMS conversation tables (user: {current_user.id})")
+        tables_created = []
+
+        # Create sms_conversations table
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS sms_conversations (
+                id SERIAL PRIMARY KEY,
+                phone_number VARCHAR(50) NOT NULL,
+                user_id INTEGER REFERENCES users(id),
+                lead_id INTEGER REFERENCES leads(id),
+                loan_id INTEGER REFERENCES loans(id),
+                contact_id INTEGER REFERENCES contacts(id),
+                contact_name VARCHAR(255),
+                is_active BOOLEAN DEFAULT TRUE,
+                ai_enabled BOOLEAN DEFAULT TRUE,
+                last_message_at TIMESTAMP,
+                last_ai_response_at TIMESTAMP,
+                message_count INTEGER DEFAULT 0,
+                context JSONB,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        tables_created.append("sms_conversations")
+
+        # Create indexes for sms_conversations
+        try:
+            db.execute(text("CREATE INDEX IF NOT EXISTS ix_sms_conv_phone ON sms_conversations(phone_number)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS ix_sms_conv_user ON sms_conversations(user_id)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS ix_sms_conv_active ON sms_conversations(is_active)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS ix_sms_conv_last_msg ON sms_conversations(last_message_at)"))
+        except Exception:
+            pass
+
+        # Add conversation_id and ai_generated columns to sms_messages if they don't exist
+        try:
+            db.execute(text("""
+                ALTER TABLE sms_messages
+                ADD COLUMN IF NOT EXISTS conversation_id INTEGER REFERENCES sms_conversations(id)
+            """))
+            db.execute(text("""
+                ALTER TABLE sms_messages
+                ADD COLUMN IF NOT EXISTS ai_generated BOOLEAN DEFAULT FALSE
+            """))
+            db.execute(text("CREATE INDEX IF NOT EXISTS ix_sms_msg_conv ON sms_messages(conversation_id)"))
+        except Exception as e:
+            logger.warning(f"Could not add columns to sms_messages: {e}")
+
+        db.commit()
+
+        logger.info(f"SMS conversation tables migration completed: {tables_created}")
+
+        return {
+            "success": True,
+            "message": "SMS conversation tables created successfully",
+            "tables_created": tables_created
+        }
+
+    except Exception as e:
+        logger.error(f"SMS conversation tables migration failed: {e}")
         db.rollback()
         import traceback
         return {

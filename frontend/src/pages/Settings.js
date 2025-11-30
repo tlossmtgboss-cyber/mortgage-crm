@@ -906,56 +906,6 @@ const API_BASE_URL = isProduction
     }
   };
 
-  const reprocessFailedEmails = async () => {
-    setReprocessing(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/reprocess-emails`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        alert(`Found ${data.total_found} unextracted emails\nReprocessed ${data.reprocessed_count} successfully!\n\nGo to Tasks → Reconciliation to see them!`);
-      } else {
-        const error = await response.json();
-        alert(`Failed to reprocess: ${error.detail || 'Unknown error'}`);
-      }
-    } catch (error) {
-      console.error('Reprocessing error:', error);
-      alert(`Error: ${error.message}`);
-    } finally {
-      setReprocessing(false);
-    }
-  };
-
-  const syncMicrosoftCalendar = async () => {
-    setSyncingCalendar(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/sync-calendar`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        alert(`Synced ${data.synced_count} calendar events successfully!\n\nGo to Calendar page to see them!`);
-      } else {
-        const error = await response.json();
-        alert(`Failed to sync calendar: ${error.detail || 'Unknown error'}`);
-      }
-    } catch (error) {
-      console.error('Calendar sync error:', error);
-      alert(`Error: ${error.message}`);
-    } finally {
-      setSyncingCalendar(false);
-    }
-  };
-
   // User Management Functions
   const loadUsers = async () => {
     setLoadingUsers(true);
