@@ -128,7 +128,7 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
 
         # Parse the response
         response_text = response.content[0].text.strip()
-        logger.info(f"[ANALYZE] Raw response (first 200 chars): {response_text[:200]}")
+        logger.info(f"[ANALYZE] Raw response: {repr(response_text[:300])}")
 
         # Handle potential JSON wrapped in markdown code blocks
         if response_text.startswith("```"):
@@ -138,12 +138,17 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
             response_text = response_text.strip()
 
         # Try to extract JSON from the response if it's mixed with text
-        import re
-        json_match = re.search(r'\{[\s\S]*\}', response_text)
-        if json_match:
-            response_text = json_match.group()
+        # Use a more robust approach: find first { and last }
+        first_brace = response_text.find('{')
+        last_brace = response_text.rfind('}')
+        if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+            response_text = response_text[first_brace:last_brace + 1]
+            logger.info(f"[ANALYZE] Extracted JSON: {repr(response_text[:200])}")
+        else:
+            logger.warning(f"[ANALYZE] No JSON object found in response")
 
         analysis = json.loads(response_text)
+        logger.info(f"[ANALYZE] Parsed successfully: intent={analysis.get('intent')}, tools={analysis.get('required_tools')}")
 
         # Map intent string to enum
         intent_map = {

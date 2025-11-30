@@ -17043,7 +17043,18 @@ async def twilio_sms_webhook(
     - Messaging > Services > [Your Service] > Integration
     - Set webhook URL: https://your-domain.com/api/v1/webhooks/twilio/sms
     """
+    logger.info("TWILIO_SMS_WEBHOOK: Request received")
     try:
+        # Parse Twilio webhook payload FIRST (form-encoded)
+        form_data = await request.form()
+        from_number = form_data.get("From", "")
+        to_number = form_data.get("To", "")
+        message_body = form_data.get("Body", "")
+        message_sid = form_data.get("MessageSid", "")
+        num_media = int(form_data.get("NumMedia", 0))
+
+        logger.info(f"TWILIO_SMS_WEBHOOK: From={from_number}, Body={message_body[:50]}...")
+
         # Auto-create sms_conversations table if it doesn't exist
         try:
             db.execute(text("""
@@ -17085,17 +17096,6 @@ async def twilio_sms_webhook(
             db.commit()
         except Exception:
             db.rollback()
-
-        # Parse Twilio webhook payload (form-encoded)
-        form_data = await request.form()
-
-        from_number = form_data.get("From", "")
-        to_number = form_data.get("To", "")
-        message_body = form_data.get("Body", "")
-        message_sid = form_data.get("MessageSid", "")
-        num_media = int(form_data.get("NumMedia", 0))
-
-        logger.info(f"TWILIO WEBHOOK: Incoming SMS from {from_number}: {message_body[:100]}...")
 
         # Normalize phone numbers
         def normalize_phone(phone):
