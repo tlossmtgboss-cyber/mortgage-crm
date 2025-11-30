@@ -43,11 +43,17 @@ LEAD_STAGE_TO_MILESTONE = {
     "consultation_scheduled": MilestoneType.INITIAL_CONSULTATION,
     "pre_approved": MilestoneType.PREAPPROVAL,
     "pre-approved": MilestoneType.PREAPPROVAL,
-    "application_started": MilestoneType.APPLICATION_SUBMITTED,
+    "documents_requested": MilestoneType.DOCUMENTS_REQUESTED,
+    "documents_received": MilestoneType.DOCUMENTS_RECEIVED,
+    "application_complete": MilestoneType.APPLICATION_COMPLETE,
+    "application_completed": MilestoneType.APPLICATION_COMPLETE,
 }
 
 LOAN_STAGE_TO_MILESTONE = {
     "application": MilestoneType.APPLICATION_SUBMITTED,
+    "application_submitted": MilestoneType.APPLICATION_SUBMITTED,
+    "le_pending": MilestoneType.LE_PENDING,
+    "le_disclosed": MilestoneType.LE_DISCLOSED,
     "processing": MilestoneType.PROCESSING_START,
     "submitted_to_uw": MilestoneType.SUBMITTED_TO_UW,
     "underwriting": MilestoneType.UW_DECISION,
@@ -62,10 +68,17 @@ LOAN_STAGE_TO_MILESTONE = {
 
 # Milestone completion triggers (when entering these stages, complete previous milestone)
 MILESTONE_COMPLETION_MAP = {
+    # Lead Stage progression
     MilestoneType.INITIAL_CONSULTATION: MilestoneType.LEAD_RESPONSE,
     MilestoneType.PREAPPROVAL: MilestoneType.INITIAL_CONSULTATION,
-    MilestoneType.APPLICATION_SUBMITTED: MilestoneType.PREAPPROVAL,
-    MilestoneType.PROCESSING_START: MilestoneType.APPLICATION_COMPLETE,
+    MilestoneType.DOCUMENTS_REQUESTED: MilestoneType.PREAPPROVAL,
+    MilestoneType.DOCUMENTS_RECEIVED: MilestoneType.DOCUMENTS_REQUESTED,
+    MilestoneType.APPLICATION_COMPLETE: MilestoneType.DOCUMENTS_RECEIVED,
+    # Active Loan Stage progression
+    MilestoneType.APPLICATION_SUBMITTED: MilestoneType.APPLICATION_COMPLETE,
+    MilestoneType.LE_PENDING: MilestoneType.APPLICATION_SUBMITTED,
+    MilestoneType.LE_DISCLOSED: MilestoneType.LE_PENDING,
+    MilestoneType.PROCESSING_START: MilestoneType.LE_DISCLOSED,
     MilestoneType.SUBMITTED_TO_UW: MilestoneType.PROCESSING_START,
     MilestoneType.UW_DECISION: MilestoneType.SUBMITTED_TO_UW,
     MilestoneType.CONDITIONS_CLEARED: MilestoneType.CONDITIONS_ISSUED,

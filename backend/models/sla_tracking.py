@@ -38,18 +38,20 @@ class SLAStatus(str, enum.Enum):
 
 class MilestoneType(str, enum.Enum):
     """Types of loan lifecycle milestones."""
-    # Lead Stage
+    # Lead Stage Milestones
     LEAD_RESPONSE = "lead_response"
     INITIAL_CONSULTATION = "initial_consultation"
     PRE_QUALIFIED = "pre_qualified"
     PREAPPROVAL = "preapproval"
-
-    # Application Stage
-    APPLICATION_SUBMITTED = "application_submitted"
     DOCUMENTS_REQUESTED = "documents_requested"
     DOCUMENTS_RECEIVED = "documents_received"
-    DOCUMENT_COLLECTION = "document_collection"
     APPLICATION_COMPLETE = "application_complete"
+
+    # Active Loan Stage Milestones
+    APPLICATION_SUBMITTED = "application_submitted"
+    LE_PENDING = "le_pending"
+    LE_DISCLOSED = "le_disclosed"
+    DOCUMENT_COLLECTION = "document_collection"
 
     # Processing Stage
     SUBMITTED_TO_PROCESSING = "submitted_to_processing"
@@ -89,16 +91,20 @@ class AlertStatus(str, enum.Enum):
 
 class TriggerFromEvent(str, enum.Enum):
     """Events that can trigger the SLA timer to start."""
+    # Lead Stage Events
     LEAD_CREATED = "lead_created"
     LEAD_RESPONSE = "lead_response"
     INITIAL_CONSULTATION = "initial_consultation"
     PRE_QUALIFIED = "pre_qualified"
     PREAPPROVAL = "preapproval"
-    APPLICATION_SUBMITTED = "application_submitted"
     DOCUMENTS_REQUESTED = "documents_requested"
     DOCUMENTS_RECEIVED = "documents_received"
-    DOCUMENT_COLLECTION = "document_collection"
     APPLICATION_COMPLETE = "application_complete"
+    # Active Loan Stage Events
+    APPLICATION_SUBMITTED = "application_submitted"
+    LE_PENDING = "le_pending"
+    LE_DISCLOSED = "le_disclosed"
+    DOCUMENT_COLLECTION = "document_collection"
     SUBMITTED_TO_PROCESSING = "submitted_to_processing"
     PROCESSING_START = "processing_start"
     APPRAISAL_ORDERED = "appraisal_ordered"
