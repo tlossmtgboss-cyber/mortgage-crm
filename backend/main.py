@@ -40,6 +40,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 import asyncio
 import time
+import pytz  # For timezone support
 
 # Import security middleware
 from security_middleware import (
@@ -365,6 +366,7 @@ class User(Base):
     business_hours = Column(JSON)
     email_verified_at = Column(DateTime)
     phone_verified_at = Column(DateTime)
+    timezone = Column(String, default="America/Chicago")  # User's timezone for AI and display
     branch = relationship("Branch", back_populates="users")
     leads = relationship("Lead", back_populates="owner")
     loans = relationship("Loan", back_populates="loan_officer")
@@ -8021,13 +8023,17 @@ CRITICAL RULES:
             agent_context = coaching_instructions
             agent_name = f"{coaching_mode} Coach"
 
+        # Get user's local time
+        user_tz = pytz.timezone(current_user.timezone or "America/Chicago")
+        user_local_time = datetime.now(pytz.UTC).astimezone(user_tz)
+
         system_prompt = f"""# IDENTITY
 You are the Agentic AI powering the Pipeline 360 Mortgage CRM Ecosystem.
 You operate as the brain of the entire platform: decision-making, orchestration, reasoning, communication, and workflow execution.
 
 {"" if not selected_agent and not coaching_mode else f"**Active Agent: {agent_name}**"}
 User: {current_user.full_name or current_user.email}
-Current date: {datetime.now().strftime('%Y-%m-%d %H:%M')}{agent_context}
+Current date/time: {user_local_time.strftime('%A, %B %d, %Y at %I:%M %p')} ({current_user.timezone or 'America/Chicago'}){agent_context}
 
 You support:
 - Loan officers
@@ -9749,11 +9755,15 @@ Your lead nurturing tasks - I'd batch these after handling the urgent items abov
 I'd suggest starting with Sarah's appraisal review since it directly impacts her closing timeline. Would you like me to pull up her file?"
 """
 
+    # Get user's local time
+    user_tz = pytz.timezone(current_user.timezone or "America/Chicago")
+    user_local_time = datetime.now(pytz.UTC).astimezone(user_tz)
+
     # Build comprehensive system prompt
     system_prompt = f"""# IDENTITY
 You are the AI Assistant for Pipeline 360 Mortgage CRM - a confident, expert mortgage industry copilot.
 User: {current_user.full_name or current_user.email}
-Current date: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+Current date/time: {user_local_time.strftime('%A, %B %d, %Y at %I:%M %p')} ({current_user.timezone or 'America/Chicago'})
 
 # VOICE & TONE
 - Confident, expert, and decisive
@@ -10134,14 +10144,18 @@ async def voice_chat(
         # Get user data for context
         all_leads = db.query(Lead).filter(Lead.owner_id == current_user.id).all()
         all_tasks = db.query(Task).filter(Task.owner_id == current_user.id).all()
-        today = datetime.now().date()
+
+        # Get user's local time
+        user_tz = pytz.timezone(current_user.timezone or "America/Chicago")
+        user_local_time = datetime.now(pytz.UTC).astimezone(user_tz)
+        today = user_local_time.date()
 
         tasks_today = [t for t in all_tasks if t.due_date and t.due_date.date() == today and t.status != "completed"]
 
         # Simple AI response for voice
         voice_prompt = f"""You are a helpful voice assistant for a mortgage CRM.
 User: {current_user.full_name or current_user.email}
-Today: {datetime.now().strftime('%A, %B %d')}
+Today: {user_local_time.strftime('%A, %B %d at %I:%M %p')}
 
 Quick stats:
 - {len(tasks_today)} tasks due today
@@ -41840,6 +41854,45 @@ async def add_dynamic_role_columns_migration(
 
     except Exception as e:
         logger.error(f"Dynamic role columns migration failed: {e}")
+        db.rollback()
+        import traceback
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+
+@app.post("/api/v1/migrations/add-user-timezone", response_model=None)
+async def add_user_timezone_migration(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Add timezone column to users table for local time display.
+    Default is 'America/Chicago' (Central Time).
+    """
+    try:
+        logger.info(f"Running migration: add user timezone column (user: {current_user.id})")
+
+        # Add timezone column to users table
+        db.execute(text("""
+            ALTER TABLE users
+            ADD COLUMN IF NOT EXISTS timezone VARCHAR(50) DEFAULT 'America/Chicago'
+        """))
+
+        db.commit()
+        logger.info("Successfully added timezone column to users table")
+
+        return {
+            "success": True,
+            "message": "User timezone migration completed successfully",
+            "column_added": "users.timezone"
+        }
+
+    except Exception as e:
+        logger.error(f"User timezone migration failed: {e}")
         db.rollback()
         import traceback
         return {
