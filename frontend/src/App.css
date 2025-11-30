@@ -4,21 +4,15 @@
 }
 
 .app-layout {
-  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  position: relative;
+  min-height: 100vh;
 }
 
 .app-main {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
+  flex: 1;
   background: var(--color-bg-base);
   transition: margin-right 250ms ease;
-  overflow-y: auto; /* Allow vertical scrolling */
-  overflow-x: hidden; /* Prevent horizontal overflow */
 }
 
 .app-main.with-assistant {

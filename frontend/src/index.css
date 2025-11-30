@@ -91,8 +91,12 @@
   box-sizing: border-box;
 }
 
-body {
+html, body {
+  height: 100%;
   margin: 0;
+}
+
+body {
   font-family: var(--font-family);
   font-size: var(--font-base);
   line-height: var(--line-normal);
@@ -100,6 +104,10 @@ body {
   background: var(--color-bg-base);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100%;
 }
 
 code {

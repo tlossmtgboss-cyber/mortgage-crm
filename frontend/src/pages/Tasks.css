@@ -5,7 +5,7 @@
   display: flex;
   flex-direction: column;
   /* Fixed height layout for email-style split view */
-  height: calc(100vh - 64px);
+  height: calc(100vh - 60px); /* 60px for navigation */
   min-height: 0;
   overflow: hidden; /* Tasks page manages its own internal scrolling */
   box-sizing: border-box;
