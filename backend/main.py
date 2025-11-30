@@ -6358,6 +6358,74 @@ The Team menu item appears for managers and management roles.
                         "properties": {}
                     }
                 }
+            },
+            # PREDICTIVE ANALYTICS TOOLS
+            {
+                "type": "function",
+                "function": {
+                    "name": "predict_borrower_ghosting",
+                    "description": "Predict which borrowers are at risk of disengaging/ghosting based on communication patterns, response times, email opens, and behavioral signals. Returns risk scores with intervention recommendations. Use when asked about borrower engagement, communication health, or ghosting risk.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "loan_id": {"type": "integer", "description": "Specific loan ID to analyze (optional, analyzes all if not provided)"},
+                            "threshold": {"type": "number", "description": "Risk threshold (0.0-1.0) to filter results. Default 0.5"}
+                        }
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "predict_deal_success",
+                    "description": "Predict probability of deal closing based on historical patterns, current stage, days in pipeline, borrower responsiveness, and comparable closed loans. Returns success probability with key risk/strength factors. Use when asked about deal chances, close probability, or pipeline health predictions.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "loan_id": {"type": "integer", "description": "Specific loan ID to predict (optional, predicts all active if not provided)"}
+                        }
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "forecast_revenue",
+                    "description": "Forecast revenue based on current pipeline, historical close rates, average loan amounts, and seasonal patterns. Returns base/optimistic/pessimistic scenarios. Use when asked about revenue projections, expected closings, or financial forecasts.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "timeframe": {"type": "string", "enum": ["30_days", "60_days", "90_days", "quarter", "year"], "description": "Forecast timeframe", "default": "90_days"}
+                        }
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_refinance_candidates",
+                    "description": "Identify past clients who are good candidates for refinance based on rate differential, time since closing, estimated equity, and engagement signals. Returns prioritized list with outreach recommendations. Use when asked about refi opportunities, past client mining, or database marketing.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "min_rate_savings_bps": {"type": "integer", "description": "Minimum rate savings in basis points to consider (default 50 = 0.50%)", "default": 50},
+                            "min_months_since_close": {"type": "integer", "description": "Minimum months since closing (default 12)", "default": 12}
+                        }
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "analyze_conversion_patterns",
+                    "description": "Analyze what makes deals succeed or fail by comparing closed vs dead loans. Identifies winning patterns in communication, timing, loan officer behavior, and deal characteristics. Use when asked about success factors, why deals fail, or best practices.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "period": {"type": "string", "enum": ["90_days", "180_days", "year"], "description": "Analysis period", "default": "180_days"}
+                        }
+                    }
+                }
             }
         ]
 
@@ -8172,7 +8240,7 @@ The Team menu item appears for managers and management roles.
                     # Count active loans assigned to this user
                     active_loans = db.execute(text("""
                         SELECT COUNT(*) FROM loans
-                        WHERE assigned_lo_id = :user_id
+                        WHERE loan_officer_id = :user_id
                         AND stage NOT IN ('closed', 'dead', 'Closed', 'Dead')
                     """), {"user_id": member.id}).scalar() or 0
 
@@ -8259,7 +8327,7 @@ The Team menu item appears for managers and management roles.
                         u.name as lo_name,
                         (SELECT MAX(created_at) FROM activities WHERE loan_id = l.id) as last_activity
                     FROM loans l
-                    LEFT JOIN users u ON l.assigned_lo_id = u.id
+                    LEFT JOIN users u ON l.loan_officer_id = u.id
                     WHERE l.stage NOT IN ('closed', 'dead', 'Closed', 'Dead')
                     ORDER BY l.closing_date ASC
                 """)).fetchall()
@@ -8400,7 +8468,7 @@ The Team menu item appears for managers and management roles.
                     # Count closings
                     closings = db.execute(text("""
                         SELECT COUNT(*) FROM loans
-                        WHERE assigned_lo_id = :user_id
+                        WHERE loan_officer_id = :user_id
                         AND stage IN ('closed', 'Closed')
                         AND updated_at >= :start_date
                     """), {"user_id": member.id, "start_date": start_date}).scalar() or 0
@@ -8453,7 +8521,7 @@ The Team menu item appears for managers and management roles.
                         l.id, l.borrower_name, l.stage, l.closing_date,
                         u.name as lo_name
                     FROM loans l
-                    LEFT JOIN users u ON l.assigned_lo_id = u.id
+                    LEFT JOIN users u ON l.loan_officer_id = u.id
                     WHERE l.stage NOT IN ('closed', 'dead', 'Closed', 'Dead')
                 """)).fetchall()
 
