@@ -12077,19 +12077,15 @@ async def orchestrator_chat_stream(
 
         # If we have a name but no phone, look it up
         if recipient_name and not phone_number:
-            # Search in leads, contacts, and users
+            # Search in leads and users (no Contact model in this scope)
             search = f"%{recipient_name}%"
             lead = db.query(Lead).filter(Lead.name.ilike(search)).first()
             if lead and lead.phone:
                 phone_number = lead.phone
             else:
-                contact = db.query(Contact).filter(Contact.name.ilike(search)).first()
-                if contact and contact.phone:
-                    phone_number = contact.phone
-                else:
-                    user = db.query(User).filter(User.full_name.ilike(search)).first()
-                    if user and user.phone:
-                        phone_number = user.phone
+                user = db.query(User).filter(User.full_name.ilike(search)).first()
+                if user and user.phone:
+                    phone_number = user.phone
 
         if not phone_number:
             return {"success": False, "error": f"Could not find phone number for {recipient_name}"}
@@ -12124,7 +12120,7 @@ async def orchestrator_chat_stream(
         """Create a new task"""
         title = args.get("title", "New Task")
         due_date_str = args.get("due_date", "")
-        priority = args.get("priority", "MEDIUM")
+        priority = args.get("priority", "medium")
 
         # Parse due date
         due_date = None
@@ -12146,14 +12142,10 @@ async def orchestrator_chat_stream(
         else:
             due_date = datetime.now() + timedelta(days=1)
 
-        # Map priority string to TaskPriority enum
-        priority_map = {
-            "LOW": TaskPriority.LOW,
-            "MEDIUM": TaskPriority.MEDIUM,
-            "HIGH": TaskPriority.HIGH,
-            "URGENT": TaskPriority.URGENT
-        }
-        task_priority = priority_map.get(priority.upper(), TaskPriority.MEDIUM)
+        # Normalize priority to lowercase string
+        task_priority = priority.lower() if priority else "medium"
+        if task_priority not in ["low", "medium", "high", "urgent"]:
+            task_priority = "medium"
 
         new_task = AITask(
             title=title,
@@ -12224,7 +12216,7 @@ async def orchestrator_chat_stream(
             title=f"{title} with {attendee_name}" if attendee_name else title,
             description=f"Scheduled meeting: {title}",
             due_date=start_time,
-            priority=TaskPriority.MEDIUM,
+            priority="medium",
             type=TaskType.APPOINTMENT,
             assigned_to_id=current_user.id
         )
