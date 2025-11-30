@@ -5836,11 +5836,22 @@ async def orchestrator_chat(
         data = await request.json()
         message = data.get("message", "")
         context = data.get("context", {})
+        session_id = data.get("session_id")  # Frontend can pass session_id for continuity
 
         if not message:
             raise HTTPException(status_code=400, detail="Message is required")
 
+        # Import conversation memory service
+        from conversation_memory_service import ConversationMemory as ConvMemory
+
+        # Generate session_id if not provided (new conversation)
+        if not session_id:
+            session_id = str(uuid.uuid4())
+
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+        # Load conversation history for this session
+        conversation_history = ConvMemory.get_session_messages(db, session_id)
 
         # Specialized Agent Registry
         specialized_agents = {
@@ -10640,11 +10651,22 @@ When acting autonomously:
 - Be proactive: if user mentions needing a reminder, create the task
 - If they discuss a lead, schedule appropriate follow-ups"""
 
-        # Initialize conversation
+        # Initialize conversation with history from session
         messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": message}
+            {"role": "system", "content": system_prompt}
         ]
+
+        # Add conversation history from this session (for multi-turn context)
+        if conversation_history:
+            for hist_msg in conversation_history[-10:]:  # Last 10 messages for context
+                if hist_msg.get('role') in ['user', 'assistant']:
+                    messages.append({
+                        "role": hist_msg['role'],
+                        "content": hist_msg['content']
+                    })
+
+        # Add current user message
+        messages.append({"role": "user", "content": message})
 
         # Multi-step workflow loop (up to 3 iterations for complex chains)
         all_tool_results = []
@@ -20700,12 +20722,12 @@ async def get_microsoft_auth_url(
 
         if db_config and db_config.client_id:
             client_id = db_config.client_id
-            redirect_uri = db_config.redirect_uri or "https://perenniaai.com/oauth/callback"
+            redirect_uri = db_config.redirect_uri or os.getenv("MICROSOFT_REDIRECT_URI", "https://frontend-tim-loss-projects.vercel.app/oauth/callback")
             tenant_id = db_config.tenant_id or "common"
         else:
             # Fall back to environment variables (default/system config)
             client_id = os.getenv("MICROSOFT_CLIENT_ID")
-            redirect_uri = os.getenv("MICROSOFT_REDIRECT_URI", "https://perenniaai.com/oauth/callback")
+            redirect_uri = os.getenv("MICROSOFT_REDIRECT_URI", "https://frontend-tim-loss-projects.vercel.app/oauth/callback")
             tenant_id = os.getenv("MICROSOFT_TENANT_ID", "common")
 
         if not client_id:
@@ -20971,7 +20993,7 @@ async def get_microsoft_oauth_config(
                 return MicrosoftAppConfigResponse(
                     client_id=env_client_id[:8] + "..." if env_client_id else None,  # Mask for security
                     tenant_id=env_tenant_id,
-                    redirect_uri=os.getenv("MICROSOFT_REDIRECT_URI", "https://perenniaai.com/oauth/callback"),
+                    redirect_uri=os.getenv("MICROSOFT_REDIRECT_URI", "https://frontend-tim-loss-projects.vercel.app/oauth/callback"),
                     configured=True,
                     has_client_secret=bool(os.getenv("MICROSOFT_CLIENT_SECRET"))
                 )
@@ -21009,7 +21031,7 @@ async def save_microsoft_oauth_config(
                 MicrosoftAppConfig.organization_id == org_id
             ).first()
 
-        redirect_uri = "https://perenniaai.com/oauth/callback"
+        redirect_uri = os.getenv("MICROSOFT_REDIRECT_URI", "https://frontend-tim-loss-projects.vercel.app/oauth/callback")
 
         if not config:
             # Create new config for this organization
