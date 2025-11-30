@@ -43936,18 +43936,25 @@ async def get_dialer_call_tasks(
         call_keywords = ['call', 'phone', 'contact', 'voicemail', 'dial', 'reach out']
 
         # Query tasks with call-related titles
+        # Use safe integer casting with regex check to avoid errors on non-numeric entity_ids
         tasks_query = db.execute(text("""
             SELECT t.id, t.title, t.description, t.priority,
                    CAST(t.status AS TEXT) as status, t.due_date,
-                   t.entity_type, CAST(t.entity_id AS TEXT) as entity_id,
+                   t.entity_type, t.entity_id,
                    t.source, t.created_at,
                    COALESCE(l.borrower_name, ld.name, 'Unknown') as contact_name,
                    COALESCE(l.borrower_phone, ld.phone, '') as phone_number,
                    l.id as loan_id,
                    ld.id as lead_id
             FROM tasks t
-            LEFT JOIN loans l ON t.entity_type = 'loan' AND CAST(t.entity_id AS INTEGER) = l.id
-            LEFT JOIN leads ld ON t.entity_type = 'lead' AND CAST(t.entity_id AS INTEGER) = ld.id
+            LEFT JOIN loans l ON t.entity_type = 'loan'
+                AND t.entity_id IS NOT NULL
+                AND t.entity_id ~ '^[0-9]+$'
+                AND CAST(t.entity_id AS INTEGER) = l.id
+            LEFT JOIN leads ld ON t.entity_type = 'lead'
+                AND t.entity_id IS NOT NULL
+                AND t.entity_id ~ '^[0-9]+$'
+                AND CAST(t.entity_id AS INTEGER) = ld.id
             WHERE CAST(t.status AS TEXT) NOT IN ('completed', 'cancelled', 'skipped')
             AND (
                 LOWER(t.title) LIKE '%call%'
