@@ -2524,7 +2524,7 @@ const API_BASE_URL = isProduction
                         Add this redirect URI to your Azure App:
                       </p>
                       <code style={{display: 'block', marginTop: '8px', padding: '8px', backgroundColor: '#fff', borderRadius: '4px', fontSize: '12px'}}>
-                        https://perenniaai.com/oauth/callback
+                        {window.location.origin}/oauth/callback
                       </code>
                     </div>
 
