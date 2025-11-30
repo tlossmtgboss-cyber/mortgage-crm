@@ -44012,24 +44012,25 @@ async def get_callable_contacts(
 
         # Get leads with phone numbers
         leads_query = db.execute(text("""
-            SELECT id, name, phone, email, status, created_at
+            SELECT id, name, phone, email, CAST(status AS TEXT) as status, created_at
             FROM leads
             WHERE phone IS NOT NULL AND phone != ''
             AND CAST(status AS TEXT) NOT IN ('closed', 'dead', 'withdrawn', 'converted')
             ORDER BY created_at DESC
             LIMIT 100
-        """))
+        """)).mappings().all()
 
         for row in leads_query:
-            if row.phone and len(row.phone) >= 10:
+            phone = row.get('phone') or ''
+            if phone and len(phone) >= 10:
                 contacts.append({
-                    "id": f"lead_{row.id}",
+                    "id": f"lead_{row.get('id')}",
                     "type": "lead",
-                    "name": row.name or "Unknown Lead",
-                    "phone_number": row.phone,
-                    "email": row.email,
-                    "status": row.status,
-                    "entity_id": row.id
+                    "name": row.get('name') or "Unknown Lead",
+                    "phone_number": phone,
+                    "email": row.get('email'),
+                    "status": row.get('status'),
+                    "entity_id": row.get('id')
                 })
 
         # Get loans with borrower phone numbers
@@ -44041,18 +44042,19 @@ async def get_callable_contacts(
             AND CAST(stage AS TEXT) NOT IN ('funded', 'withdrawn', 'dead', 'closed')
             ORDER BY created_at DESC
             LIMIT 100
-        """))
+        """)).mappings().all()
 
         for row in loans_query:
-            if row.borrower_phone and len(row.borrower_phone) >= 10:
+            phone = row.get('borrower_phone') or ''
+            if phone and len(phone) >= 10:
                 contacts.append({
-                    "id": f"loan_{row.id}",
+                    "id": f"loan_{row.get('id')}",
                     "type": "loan",
-                    "name": row.borrower_name or "Unknown Borrower",
-                    "phone_number": row.borrower_phone,
-                    "email": row.borrower_email,
-                    "status": row.stage,
-                    "entity_id": row.id
+                    "name": row.get('borrower_name') or "Unknown Borrower",
+                    "phone_number": phone,
+                    "email": row.get('borrower_email'),
+                    "status": row.get('stage'),
+                    "entity_id": row.get('id')
                 })
 
         return {"contacts": contacts, "total": len(contacts)}
