@@ -31995,8 +31995,7 @@ async def execute_ai_function(
                 loan_id=loan_id,
                 priority=function_args.get("priority", "medium"),
                 due_date=datetime.fromisoformat(function_args["due_date"]) if function_args.get("due_date") else None,
-                status="pending",
-                created_by_ai=True
+                ai_reasoning="Created by AI assistant"
             )
             db.add(new_task)
             db.commit()
@@ -32364,8 +32363,7 @@ async def execute_ai_function(
                 lead_id=lead_id,
                 priority="high",
                 due_date=scheduled_time,
-                status="pending",
-                created_by_ai=True
+                ai_reasoning="Scheduled by AI assistant"
             )
             db.add(new_task)
             db.commit()
