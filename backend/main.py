@@ -8324,7 +8324,7 @@ The Team menu item appears for managers and management roles.
                     SELECT
                         l.id, l.borrower_name, l.loan_amount, l.stage, l.closing_date,
                         l.rate_lock_expiration, l.created_at,
-                        u.name as lo_name,
+                        u.full_name as lo_name,
                         (SELECT MAX(created_at) FROM activities WHERE loan_id = l.id) as last_activity
                     FROM loans l
                     LEFT JOIN users u ON l.loan_officer_id = u.id
@@ -8519,7 +8519,7 @@ The Team menu item appears for managers and management roles.
                 loans = db.execute(text("""
                     SELECT
                         l.id, l.borrower_name, l.stage, l.closing_date,
-                        u.name as lo_name
+                        u.full_name as lo_name
                     FROM loans l
                     LEFT JOIN users u ON l.loan_officer_id = u.id
                     WHERE l.stage NOT IN ('closed', 'dead', 'Closed', 'Dead')
@@ -8604,7 +8604,7 @@ The Team menu item appears for managers and management roles.
                 query = """
                     SELECT
                         l.id, l.borrower_name, l.stage, l.closing_date, l.created_at,
-                        u.name as lo_name,
+                        u.full_name as lo_name,
                         (SELECT COUNT(*) FROM activities WHERE loan_id = l.id) as total_activities,
                         (SELECT MAX(created_at) FROM activities WHERE loan_id = l.id) as last_activity_date,
                         (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND activity_type = 'email' AND direction = 'inbound') as inbound_emails,
@@ -8725,7 +8725,7 @@ The Team menu item appears for managers and management roles.
                     SELECT
                         l.id, l.borrower_name, l.stage, l.closing_date, l.amount, l.rate,
                         l.created_at, l.days_in_stage,
-                        u.name as lo_name,
+                        u.full_name as lo_name,
                         (SELECT COUNT(*) FROM activities WHERE loan_id = l.id) as activity_count,
                         (SELECT MAX(created_at) FROM activities WHERE loan_id = l.id) as last_activity
                     FROM loans l
@@ -8985,7 +8985,7 @@ The Team menu item appears for managers and management roles.
                     SELECT
                         l.id, l.borrower_name, l.rate, l.amount, l.program,
                         l.updated_at as close_date, l.property_address,
-                        u.name as lo_name,
+                        u.full_name as lo_name,
                         c.phone, c.email
                     FROM loans l
                     LEFT JOIN users u ON l.loan_officer_id = u.id
@@ -9108,7 +9108,7 @@ The Team menu item appears for managers and management roles.
                     SELECT
                         l.id, l.stage, l.amount, l.program, l.created_at, l.updated_at,
                         EXTRACT(EPOCH FROM (l.updated_at - l.created_at))/86400 as days_to_close,
-                        u.name as lo_name,
+                        u.full_name as lo_name,
                         (SELECT COUNT(*) FROM activities WHERE loan_id = l.id) as activity_count,
                         (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND activity_type = 'email') as email_count,
                         (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND activity_type = 'call') as call_count,
@@ -9124,7 +9124,7 @@ The Team menu item appears for managers and management roles.
                     SELECT
                         l.id, l.stage, l.amount, l.program, l.created_at, l.updated_at,
                         EXTRACT(EPOCH FROM (l.updated_at - l.created_at))/86400 as days_to_death,
-                        u.name as lo_name,
+                        u.full_name as lo_name,
                         (SELECT COUNT(*) FROM activities WHERE loan_id = l.id) as activity_count,
                         (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND activity_type = 'email') as email_count,
                         (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND activity_type = 'call') as call_count,
