@@ -10,6 +10,8 @@
   overflow: hidden;
   /* Fallback for when parent doesn't have explicit height */
   min-height: calc(100vh - 64px);
+  box-sizing: border-box;
+  width: 100%;
 }
 
 .page-header {
@@ -919,7 +921,7 @@
 /* Email-Style Layout */
 .email-layout {
   display: grid;
-  grid-template-columns: 350px 1fr;
+  grid-template-columns: 350px minmax(0, 1fr);
   grid-template-rows: 1fr; /* Explicit row sizing */
   gap: 0;
   flex: 1 1 auto; /* Take all available space in flex parent */
@@ -928,11 +930,14 @@
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   overflow: hidden;
+  max-width: 100%;
 }
 
-/* Ensure grid children take full height */
+/* Ensure grid children take full height and don't overflow */
 .email-layout > * {
   min-height: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
 /* Task Inbox (Left Side) */
@@ -1039,9 +1044,11 @@
   display: flex;
   flex-direction: column;
   background: white;
-  overflow-y: auto;
+  overflow: hidden;
   height: 100%;
   min-height: 0; /* Important for flexbox scrolling */
+  min-width: 0; /* Prevent overflow in grid */
+  max-width: 100%;
 }
 
 .detail-header {
@@ -1203,27 +1210,30 @@
 
 .detail-footer {
   display: flex;
-  gap: 12px;
-  padding: 24px 32px;
+  gap: 10px;
+  padding: 20px 24px;
   border-top: 1px solid #e5e7eb;
   background: #f9fafb;
   flex-wrap: wrap;
   flex-shrink: 0; /* Prevent footer from being cut off */
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .btn-detail-complete {
-  padding: 12px 24px;
+  padding: 10px 16px;
   background: #10b981;
   color: white;
   border: none;
   border-radius: 8px;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .btn-detail-complete:hover {
@@ -1233,15 +1243,16 @@
 }
 
 .btn-detail-approve {
-  padding: 12px 24px;
+  padding: 10px 16px;
   background: #3b82f6;
   color: white;
   border: none;
   border-radius: 8px;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
+  white-space: nowrap;
 }
 
 .btn-detail-approve:hover {
@@ -1251,15 +1262,16 @@
 }
 
 .btn-detail-action {
-  padding: 12px 24px;
+  padding: 10px 16px;
   background: #f59e0b;
   color: white;
   border: none;
   border-radius: 8px;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
+  white-space: nowrap;
 }
 
 .btn-detail-action:hover {
@@ -1269,15 +1281,16 @@
 }
 
 .btn-detail-secondary {
-  padding: 12px 24px;
+  padding: 10px 16px;
   background: white;
   color: #6b7280;
   border: 1px solid #d1d5db;
   border-radius: 8px;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
+  white-space: nowrap;
 }
 
 .btn-detail-secondary:hover {
@@ -1298,11 +1311,16 @@
 /* Responsive Email Layout */
 @media (max-width: 1024px) {
   .email-layout {
-    grid-template-columns: 300px 1fr;
+    grid-template-columns: 280px minmax(0, 1fr);
   }
 
   .detail-info-grid {
     grid-template-columns: 1fr;
+  }
+
+  .detail-footer {
+    padding: 16px 20px;
+    gap: 8px;
   }
 }
 
@@ -2125,13 +2143,14 @@
   background: linear-gradient(135deg, #18a0a6 0%, #136b6f 100%);
   color: white;
   border: none;
-  padding: 12px 24px;
+  padding: 10px 16px;
   border-radius: 8px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
   box-shadow: 0 2px 4px rgba(24, 160, 166, 0.2);
+  white-space: nowrap;
 }
 
 .btn-detail-send:hover {
@@ -2142,13 +2161,14 @@
 .btn-detail-danger {
   background: white;
   color: #dc2626;
-  border: 2px solid #dc2626;
-  padding: 12px 24px;
+  border: 1px solid #dc2626;
+  padding: 10px 16px;
   border-radius: 8px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
+  white-space: nowrap;
 }
 
 .btn-detail-danger:hover {
