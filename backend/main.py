@@ -8593,6 +8593,663 @@ The Team menu item appears for managers and management roles.
             except Exception as e:
                 return {"success": False, "error": str(e)}
 
+        # PREDICTIVE ANALYTICS EXECUTION FUNCTIONS
+        async def execute_predict_borrower_ghosting(args):
+            """Predict which borrowers are at risk of disengaging/ghosting"""
+            try:
+                loan_id = args.get("loan_id")
+                threshold = args.get("threshold", 0.5)
+
+                # Get active loans with activity data
+                query = """
+                    SELECT
+                        l.id, l.borrower_name, l.stage, l.closing_date, l.created_at,
+                        u.name as lo_name,
+                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id) as total_activities,
+                        (SELECT MAX(created_at) FROM activities WHERE loan_id = l.id) as last_activity_date,
+                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND activity_type = 'email' AND direction = 'inbound') as inbound_emails,
+                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND activity_type = 'email' AND direction = 'outbound') as outbound_emails,
+                        (SELECT COUNT(*) FROM tasks WHERE loan_id = l.id AND status = 'completed') as completed_tasks,
+                        (SELECT COUNT(*) FROM tasks WHERE loan_id = l.id AND status != 'completed') as pending_tasks
+                    FROM loans l
+                    LEFT JOIN users u ON l.loan_officer_id = u.id
+                    WHERE l.stage NOT IN ('closed', 'dead', 'Closed', 'Dead')
+                """
+                if loan_id:
+                    query += " AND l.id = :loan_id"
+
+                loans = db.execute(text(query), {"loan_id": loan_id} if loan_id else {}).fetchall()
+
+                results = []
+                today = datetime.now()
+
+                for loan in loans:
+                    # Calculate ghosting risk score (0.0 - 1.0)
+                    risk_score = 0.0
+                    risk_factors = []
+
+                    # Factor 1: Days since last activity (max 0.4)
+                    if loan.last_activity_date:
+                        last_activity = loan.last_activity_date
+                        if hasattr(last_activity, 'timestamp'):
+                            days_silent = (today - last_activity).days
+                        else:
+                            days_silent = (today.date() - last_activity.date()).days if hasattr(last_activity, 'date') else 30
+                    else:
+                        days_silent = 30
+
+                    if days_silent > 14:
+                        risk_score += 0.4
+                        risk_factors.append(f"No activity in {days_silent} days")
+                    elif days_silent > 7:
+                        risk_score += 0.25
+                        risk_factors.append(f"Quiet for {days_silent} days")
+                    elif days_silent > 3:
+                        risk_score += 0.1
+
+                    # Factor 2: Response ratio (max 0.3)
+                    outbound = loan.outbound_emails or 0
+                    inbound = loan.inbound_emails or 0
+                    if outbound > 0:
+                        response_ratio = inbound / outbound
+                        if response_ratio < 0.2:
+                            risk_score += 0.3
+                            risk_factors.append(f"Very low response rate ({int(response_ratio*100)}%)")
+                        elif response_ratio < 0.5:
+                            risk_score += 0.15
+                            risk_factors.append(f"Low response rate ({int(response_ratio*100)}%)")
+
+                    # Factor 3: Stalled pipeline (max 0.2)
+                    days_in_pipeline = (today.date() - loan.created_at.date()).days if hasattr(loan.created_at, 'date') else 30
+                    stage_lower = (loan.stage or "").lower()
+                    if stage_lower in ['application', 'processing'] and days_in_pipeline > 21:
+                        risk_score += 0.2
+                        risk_factors.append(f"Stalled in early stage ({days_in_pipeline} days)")
+                    elif days_in_pipeline > 45:
+                        risk_score += 0.1
+                        risk_factors.append(f"Long time in pipeline ({days_in_pipeline} days)")
+
+                    # Factor 4: Task completion (max 0.1)
+                    completed = loan.completed_tasks or 0
+                    pending = loan.pending_tasks or 0
+                    if pending > 3 and completed == 0:
+                        risk_score += 0.1
+                        risk_factors.append(f"{pending} pending tasks, none completed")
+
+                    # Cap at 1.0
+                    risk_score = min(risk_score, 1.0)
+
+                    if risk_score >= threshold:
+                        # Generate intervention recommendation
+                        if risk_score >= 0.7:
+                            intervention = "URGENT: Personal phone call required. Consider offering to simplify process."
+                        elif risk_score >= 0.5:
+                            intervention = "Schedule a check-in call. Send simplified status update email."
+                        else:
+                            intervention = "Send friendly follow-up email with clear next steps."
+
+                        results.append({
+                            "loan_id": loan.id,
+                            "borrower_name": loan.borrower_name,
+                            "lo_name": loan.lo_name or "Unassigned",
+                            "stage": loan.stage,
+                            "risk_score": round(risk_score, 2),
+                            "risk_level": "HIGH" if risk_score >= 0.7 else "MEDIUM" if risk_score >= 0.5 else "ELEVATED",
+                            "risk_factors": risk_factors,
+                            "days_since_activity": days_silent,
+                            "intervention_recommendation": intervention
+                        })
+
+                results.sort(key=lambda x: x["risk_score"], reverse=True)
+
+                return {
+                    "success": True,
+                    "at_risk_borrowers": results[:15],
+                    "summary": {
+                        "total_at_risk": len(results),
+                        "high_risk": len([r for r in results if r["risk_level"] == "HIGH"]),
+                        "medium_risk": len([r for r in results if r["risk_level"] == "MEDIUM"]),
+                        "threshold_used": threshold
+                    }
+                }
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+
+        async def execute_predict_deal_success(args):
+            """Predict probability of deal closing"""
+            try:
+                loan_id = args.get("loan_id")
+
+                # Get active loans with historical context
+                query = """
+                    SELECT
+                        l.id, l.borrower_name, l.stage, l.closing_date, l.amount, l.rate,
+                        l.created_at, l.days_in_stage,
+                        u.name as lo_name,
+                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id) as activity_count,
+                        (SELECT MAX(created_at) FROM activities WHERE loan_id = l.id) as last_activity
+                    FROM loans l
+                    LEFT JOIN users u ON l.loan_officer_id = u.id
+                    WHERE l.stage NOT IN ('closed', 'dead', 'Closed', 'Dead')
+                """
+                if loan_id:
+                    query += " AND l.id = :loan_id"
+
+                loans = db.execute(text(query), {"loan_id": loan_id} if loan_id else {}).fetchall()
+
+                # Get historical close rates by stage
+                stage_close_rates = {}
+                stage_stats = db.execute(text("""
+                    SELECT
+                        stage,
+                        COUNT(*) as total,
+                        SUM(CASE WHEN stage IN ('closed', 'Closed') THEN 1 ELSE 0 END) as closed_count
+                    FROM loans
+                    WHERE created_at > NOW() - INTERVAL '365 days'
+                    GROUP BY stage
+                """)).fetchall()
+
+                for stat in stage_stats:
+                    if stat.total > 0:
+                        stage_close_rates[stat.stage.lower() if stat.stage else ""] = stat.closed_count / stat.total
+
+                results = []
+                today = datetime.now()
+
+                for loan in loans:
+                    # Base probability by stage
+                    stage_lower = (loan.stage or "").lower().replace(" ", "_").replace("-", "_")
+                    stage_probs = {
+                        "application": 0.35,
+                        "processing": 0.55,
+                        "submitted": 0.65,
+                        "underwriting": 0.70,
+                        "conditional": 0.80,
+                        "clear_to_close": 0.92,
+                        "docs_out": 0.95,
+                        "funding": 0.98
+                    }
+                    base_prob = stage_probs.get(stage_lower, 0.50)
+
+                    # Adjust based on factors
+                    adjustments = []
+
+                    # Factor 1: Days in stage
+                    days_in = loan.days_in_stage or 0
+                    if days_in > 14:
+                        base_prob *= 0.85
+                        adjustments.append(f"-15% for {days_in} days in stage")
+                    elif days_in > 7:
+                        base_prob *= 0.95
+                        adjustments.append(f"-5% for {days_in} days in stage")
+
+                    # Factor 2: Activity level
+                    activities = loan.activity_count or 0
+                    days_in_pipeline = (today.date() - loan.created_at.date()).days if hasattr(loan.created_at, 'date') else 30
+                    activity_rate = activities / max(days_in_pipeline, 1)
+
+                    if activity_rate > 0.5:
+                        base_prob *= 1.1
+                        adjustments.append("+10% for high activity rate")
+                    elif activity_rate < 0.1:
+                        base_prob *= 0.85
+                        adjustments.append("-15% for low activity rate")
+
+                    # Factor 3: Closing date proximity
+                    if loan.closing_date:
+                        closing = loan.closing_date.date() if hasattr(loan.closing_date, 'date') else loan.closing_date
+                        days_to_close = (closing - today.date()).days
+                        if 0 < days_to_close <= 14:
+                            base_prob *= 1.05
+                            adjustments.append("+5% for imminent closing")
+                        elif days_to_close < 0:
+                            base_prob *= 0.90
+                            adjustments.append("-10% for past closing date")
+
+                    # Cap probability
+                    success_prob = min(max(base_prob, 0.05), 0.99)
+
+                    # Identify key factors
+                    risk_factors = []
+                    strength_factors = []
+
+                    if days_in > 10:
+                        risk_factors.append(f"Extended time in {loan.stage} stage")
+                    if activities < 5:
+                        risk_factors.append("Low engagement activity")
+
+                    if stage_lower in ['clear_to_close', 'docs_out', 'funding']:
+                        strength_factors.append("Advanced pipeline stage")
+                    if activity_rate > 0.3:
+                        strength_factors.append("Good communication cadence")
+
+                    results.append({
+                        "loan_id": loan.id,
+                        "borrower_name": loan.borrower_name,
+                        "lo_name": loan.lo_name or "Unassigned",
+                        "stage": loan.stage,
+                        "amount": float(loan.amount) if loan.amount else None,
+                        "success_probability": round(success_prob, 2),
+                        "probability_label": "HIGH" if success_prob >= 0.75 else "MEDIUM" if success_prob >= 0.50 else "LOW",
+                        "adjustments_applied": adjustments,
+                        "risk_factors": risk_factors,
+                        "strength_factors": strength_factors,
+                        "closing_date": str(loan.closing_date) if loan.closing_date else None
+                    })
+
+                results.sort(key=lambda x: x["success_probability"], reverse=True)
+
+                # Calculate expected value
+                total_expected = sum(
+                    (r["amount"] or 0) * r["success_probability"]
+                    for r in results
+                )
+
+                return {
+                    "success": True,
+                    "predictions": results[:15],
+                    "summary": {
+                        "high_probability_count": len([r for r in results if r["probability_label"] == "HIGH"]),
+                        "medium_probability_count": len([r for r in results if r["probability_label"] == "MEDIUM"]),
+                        "low_probability_count": len([r for r in results if r["probability_label"] == "LOW"]),
+                        "total_pipeline_value": sum((r["amount"] or 0) for r in results),
+                        "expected_close_value": round(total_expected, 2)
+                    }
+                }
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+
+        async def execute_forecast_revenue(args):
+            """Forecast revenue based on pipeline and historical data"""
+            try:
+                timeframe = args.get("timeframe", "90_days")
+
+                # Map timeframe to days
+                timeframe_days = {
+                    "30_days": 30,
+                    "60_days": 60,
+                    "90_days": 90,
+                    "quarter": 90,
+                    "year": 365
+                }
+                forecast_days = timeframe_days.get(timeframe, 90)
+
+                # Get historical close rates and average amounts
+                historical = db.execute(text("""
+                    SELECT
+                        COUNT(*) FILTER (WHERE stage IN ('closed', 'Closed')) as closed_count,
+                        COUNT(*) FILTER (WHERE stage IN ('dead', 'Dead')) as dead_count,
+                        AVG(amount) FILTER (WHERE stage IN ('closed', 'Closed')) as avg_closed_amount,
+                        AVG(EXTRACT(EPOCH FROM (updated_at - created_at))/86400) FILTER (WHERE stage IN ('closed', 'Closed')) as avg_days_to_close
+                    FROM loans
+                    WHERE created_at > NOW() - INTERVAL '180 days'
+                """)).fetchone()
+
+                total_historical = (historical.closed_count or 0) + (historical.dead_count or 0)
+                historical_close_rate = historical.closed_count / total_historical if total_historical > 0 else 0.40
+                avg_loan_amount = float(historical.avg_closed_amount or 350000)
+                avg_days_to_close = float(historical.avg_days_to_close or 35)
+
+                # Get current pipeline by stage
+                pipeline = db.execute(text("""
+                    SELECT
+                        stage,
+                        COUNT(*) as count,
+                        SUM(amount) as total_amount,
+                        AVG(amount) as avg_amount
+                    FROM loans
+                    WHERE stage NOT IN ('closed', 'dead', 'Closed', 'Dead')
+                    GROUP BY stage
+                """)).fetchall()
+
+                # Stage probability multipliers
+                stage_probs = {
+                    "application": 0.35,
+                    "processing": 0.55,
+                    "submitted": 0.65,
+                    "underwriting": 0.70,
+                    "conditional": 0.80,
+                    "clear_to_close": 0.92,
+                    "docs_out": 0.95,
+                    "funding": 0.98
+                }
+
+                # Calculate expected closings
+                base_forecast = 0
+                optimistic_forecast = 0
+                pessimistic_forecast = 0
+                stage_breakdown = []
+
+                for stage_row in pipeline:
+                    stage_lower = (stage_row.stage or "").lower().replace(" ", "_").replace("-", "_")
+                    prob = stage_probs.get(stage_lower, 0.50)
+                    stage_amount = float(stage_row.total_amount or 0)
+                    count = stage_row.count or 0
+
+                    # Only include loans likely to close within timeframe
+                    # Assume deals in later stages close faster
+                    stage_close_days = avg_days_to_close * (1.0 - prob * 0.5)
+                    if stage_close_days <= forecast_days:
+                        expected = stage_amount * prob
+                        base_forecast += expected
+                        optimistic_forecast += stage_amount * min(prob * 1.2, 0.99)
+                        pessimistic_forecast += stage_amount * prob * 0.7
+
+                        stage_breakdown.append({
+                            "stage": stage_row.stage,
+                            "loan_count": count,
+                            "total_value": stage_amount,
+                            "close_probability": prob,
+                            "expected_value": round(expected, 2)
+                        })
+
+                # Estimate commission/revenue (typically 0.5-1% of loan amount)
+                commission_rate = 0.0075  # 75 bps average
+                base_revenue = base_forecast * commission_rate
+                optimistic_revenue = optimistic_forecast * commission_rate
+                pessimistic_revenue = pessimistic_forecast * commission_rate
+
+                return {
+                    "success": True,
+                    "forecast_timeframe": timeframe,
+                    "forecast_days": forecast_days,
+                    "loan_volume_forecast": {
+                        "base_scenario": round(base_forecast, 2),
+                        "optimistic_scenario": round(optimistic_forecast, 2),
+                        "pessimistic_scenario": round(pessimistic_forecast, 2)
+                    },
+                    "revenue_forecast": {
+                        "base_scenario": round(base_revenue, 2),
+                        "optimistic_scenario": round(optimistic_revenue, 2),
+                        "pessimistic_scenario": round(pessimistic_revenue, 2),
+                        "assumed_commission_rate": f"{commission_rate * 100}%"
+                    },
+                    "by_stage": stage_breakdown,
+                    "historical_context": {
+                        "historical_close_rate": round(historical_close_rate, 2),
+                        "avg_loan_amount": round(avg_loan_amount, 2),
+                        "avg_days_to_close": round(avg_days_to_close, 1)
+                    }
+                }
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+
+        async def execute_get_refinance_candidates(args):
+            """Identify past clients who are good candidates for refinance"""
+            try:
+                min_rate_savings_bps = args.get("min_rate_savings_bps", 50)
+                min_months_since_close = args.get("min_months_since_close", 12)
+
+                # Get closed loans that meet the criteria
+                closed_loans = db.execute(text("""
+                    SELECT
+                        l.id, l.borrower_name, l.rate, l.amount, l.program,
+                        l.updated_at as close_date, l.property_address,
+                        u.name as lo_name,
+                        c.phone, c.email
+                    FROM loans l
+                    LEFT JOIN users u ON l.loan_officer_id = u.id
+                    LEFT JOIN contacts c ON l.contact_id = c.id
+                    WHERE l.stage IN ('closed', 'Closed')
+                    AND l.updated_at < NOW() - INTERVAL ':months months'
+                    AND l.rate IS NOT NULL
+                    ORDER BY l.rate DESC
+                """.replace(":months", str(min_months_since_close)))).fetchall()
+
+                # Current market rates (simulated - in production would fetch from rate API)
+                current_rates = {
+                    "conventional_30": 6.75,
+                    "conventional_15": 6.25,
+                    "fha_30": 6.50,
+                    "va_30": 6.25,
+                    "jumbo_30": 7.00
+                }
+                default_current_rate = 6.75
+
+                candidates = []
+                min_savings_rate = min_rate_savings_bps / 100  # Convert bps to percentage
+
+                for loan in closed_loans:
+                    if not loan.rate:
+                        continue
+
+                    original_rate = float(loan.rate)
+
+                    # Determine applicable current rate
+                    program_lower = (loan.program or "").lower()
+                    if "va" in program_lower:
+                        current_rate = current_rates["va_30"]
+                    elif "fha" in program_lower:
+                        current_rate = current_rates["fha_30"]
+                    elif "jumbo" in program_lower:
+                        current_rate = current_rates["jumbo_30"]
+                    else:
+                        current_rate = current_rates["conventional_30"]
+
+                    rate_savings = original_rate - current_rate
+
+                    if rate_savings >= min_savings_rate:
+                        # Calculate potential monthly savings
+                        loan_amount = float(loan.amount) if loan.amount else 350000
+                        # Simplified monthly payment calculation
+                        old_monthly = loan_amount * (original_rate / 100 / 12)
+                        new_monthly = loan_amount * (current_rate / 100 / 12)
+                        monthly_savings = old_monthly - new_monthly
+
+                        # Calculate months since close
+                        close_date = loan.close_date
+                        if hasattr(close_date, 'date'):
+                            months_since = (datetime.now().date() - close_date.date()).days // 30
+                        else:
+                            months_since = min_months_since_close
+
+                        # Priority score based on savings potential and recency
+                        priority_score = rate_savings * 10 + (monthly_savings / 100)
+
+                        # Outreach recommendation
+                        if rate_savings >= 1.0:
+                            outreach = "HIGH PRIORITY: Call immediately - significant savings available"
+                        elif rate_savings >= 0.75:
+                            outreach = "Send personalized email with savings calculation"
+                        else:
+                            outreach = "Add to drip campaign for rate monitoring"
+
+                        candidates.append({
+                            "loan_id": loan.id,
+                            "borrower_name": loan.borrower_name,
+                            "lo_name": loan.lo_name or "Unassigned",
+                            "original_rate": original_rate,
+                            "current_market_rate": current_rate,
+                            "rate_savings_bps": int(rate_savings * 100),
+                            "estimated_monthly_savings": round(monthly_savings, 2),
+                            "loan_amount": loan_amount,
+                            "months_since_close": months_since,
+                            "program": loan.program,
+                            "priority_score": round(priority_score, 2),
+                            "outreach_recommendation": outreach,
+                            "contact_phone": loan.phone,
+                            "contact_email": loan.email
+                        })
+
+                candidates.sort(key=lambda x: x["priority_score"], reverse=True)
+
+                return {
+                    "success": True,
+                    "refinance_candidates": candidates[:20],
+                    "summary": {
+                        "total_candidates": len(candidates),
+                        "high_priority": len([c for c in candidates if c["rate_savings_bps"] >= 100]),
+                        "total_potential_monthly_savings": round(sum(c["estimated_monthly_savings"] for c in candidates), 2),
+                        "criteria_used": {
+                            "min_rate_savings_bps": min_rate_savings_bps,
+                            "min_months_since_close": min_months_since_close
+                        }
+                    },
+                    "current_market_rates": current_rates
+                }
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+
+        async def execute_analyze_conversion_patterns(args):
+            """Analyze what makes deals succeed or fail"""
+            try:
+                period = args.get("period", "180_days")
+
+                # Map period to interval
+                period_intervals = {
+                    "90_days": "90 days",
+                    "180_days": "180 days",
+                    "year": "365 days"
+                }
+                interval = period_intervals.get(period, "180 days")
+
+                # Get closed (won) loans with metrics
+                closed_loans = db.execute(text(f"""
+                    SELECT
+                        l.id, l.stage, l.amount, l.program, l.created_at, l.updated_at,
+                        EXTRACT(EPOCH FROM (l.updated_at - l.created_at))/86400 as days_to_close,
+                        u.name as lo_name,
+                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id) as activity_count,
+                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND activity_type = 'email') as email_count,
+                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND activity_type = 'call') as call_count,
+                        (SELECT COUNT(*) FROM tasks WHERE loan_id = l.id AND status = 'completed') as completed_tasks
+                    FROM loans l
+                    LEFT JOIN users u ON l.loan_officer_id = u.id
+                    WHERE l.stage IN ('closed', 'Closed')
+                    AND l.created_at > NOW() - INTERVAL '{interval}'
+                """)).fetchall()
+
+                # Get dead (lost) loans with metrics
+                dead_loans = db.execute(text(f"""
+                    SELECT
+                        l.id, l.stage, l.amount, l.program, l.created_at, l.updated_at,
+                        EXTRACT(EPOCH FROM (l.updated_at - l.created_at))/86400 as days_to_death,
+                        u.name as lo_name,
+                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id) as activity_count,
+                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND activity_type = 'email') as email_count,
+                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND activity_type = 'call') as call_count,
+                        (SELECT COUNT(*) FROM tasks WHERE loan_id = l.id AND status = 'completed') as completed_tasks
+                    FROM loans l
+                    LEFT JOIN users u ON l.loan_officer_id = u.id
+                    WHERE l.stage IN ('dead', 'Dead')
+                    AND l.created_at > NOW() - INTERVAL '{interval}'
+                """)).fetchall()
+
+                # Calculate averages for closed deals
+                closed_count = len(closed_loans)
+                if closed_count > 0:
+                    avg_closed_days = sum(l.days_to_close or 0 for l in closed_loans) / closed_count
+                    avg_closed_activities = sum(l.activity_count or 0 for l in closed_loans) / closed_count
+                    avg_closed_emails = sum(l.email_count or 0 for l in closed_loans) / closed_count
+                    avg_closed_calls = sum(l.call_count or 0 for l in closed_loans) / closed_count
+                    avg_closed_tasks = sum(l.completed_tasks or 0 for l in closed_loans) / closed_count
+                else:
+                    avg_closed_days = avg_closed_activities = avg_closed_emails = avg_closed_calls = avg_closed_tasks = 0
+
+                # Calculate averages for dead deals
+                dead_count = len(dead_loans)
+                if dead_count > 0:
+                    avg_dead_days = sum(l.days_to_death or 0 for l in dead_loans) / dead_count
+                    avg_dead_activities = sum(l.activity_count or 0 for l in dead_loans) / dead_count
+                    avg_dead_emails = sum(l.email_count or 0 for l in dead_loans) / dead_count
+                    avg_dead_calls = sum(l.call_count or 0 for l in dead_loans) / dead_count
+                    avg_dead_tasks = sum(l.completed_tasks or 0 for l in dead_loans) / dead_count
+                else:
+                    avg_dead_days = avg_dead_activities = avg_dead_emails = avg_dead_calls = avg_dead_tasks = 0
+
+                # Identify winning patterns
+                winning_patterns = []
+                losing_patterns = []
+
+                if avg_closed_activities > avg_dead_activities * 1.2:
+                    winning_patterns.append({
+                        "pattern": "Higher activity volume",
+                        "detail": f"Closed deals avg {avg_closed_activities:.1f} activities vs {avg_dead_activities:.1f} for dead deals",
+                        "recommendation": "Maintain consistent touchpoints throughout the loan process"
+                    })
+                elif avg_dead_activities > avg_closed_activities * 1.2:
+                    losing_patterns.append({
+                        "pattern": "Activity doesn't correlate with success",
+                        "detail": "Dead deals had more activity - quality over quantity matters",
+                        "recommendation": "Focus on meaningful interactions, not just volume"
+                    })
+
+                if avg_closed_calls > avg_dead_calls * 1.3:
+                    winning_patterns.append({
+                        "pattern": "Phone calls drive success",
+                        "detail": f"Closed deals avg {avg_closed_calls:.1f} calls vs {avg_dead_calls:.1f} for dead",
+                        "recommendation": "Prioritize phone conversations over email for key milestones"
+                    })
+
+                if avg_closed_days < avg_dead_days * 0.8:
+                    winning_patterns.append({
+                        "pattern": "Speed matters",
+                        "detail": f"Closed deals finished in {avg_closed_days:.0f} days vs {avg_dead_days:.0f} for dead",
+                        "recommendation": "Reduce cycle time - faster deals are more likely to close"
+                    })
+
+                # LO performance analysis
+                lo_stats = {}
+                for loan in closed_loans:
+                    lo = loan.lo_name or "Unassigned"
+                    if lo not in lo_stats:
+                        lo_stats[lo] = {"closed": 0, "dead": 0}
+                    lo_stats[lo]["closed"] += 1
+
+                for loan in dead_loans:
+                    lo = loan.lo_name or "Unassigned"
+                    if lo not in lo_stats:
+                        lo_stats[lo] = {"closed": 0, "dead": 0}
+                    lo_stats[lo]["dead"] += 1
+
+                top_performers = []
+                for lo, stats in lo_stats.items():
+                    total = stats["closed"] + stats["dead"]
+                    if total >= 3:  # Minimum sample size
+                        close_rate = stats["closed"] / total
+                        top_performers.append({
+                            "lo_name": lo,
+                            "close_rate": round(close_rate, 2),
+                            "closed_count": stats["closed"],
+                            "dead_count": stats["dead"]
+                        })
+
+                top_performers.sort(key=lambda x: x["close_rate"], reverse=True)
+
+                return {
+                    "success": True,
+                    "analysis_period": period,
+                    "overall_stats": {
+                        "total_closed": closed_count,
+                        "total_dead": dead_count,
+                        "overall_close_rate": round(closed_count / (closed_count + dead_count), 2) if (closed_count + dead_count) > 0 else 0
+                    },
+                    "closed_deal_profile": {
+                        "avg_days_to_close": round(avg_closed_days, 1),
+                        "avg_total_activities": round(avg_closed_activities, 1),
+                        "avg_emails": round(avg_closed_emails, 1),
+                        "avg_calls": round(avg_closed_calls, 1),
+                        "avg_completed_tasks": round(avg_closed_tasks, 1)
+                    },
+                    "dead_deal_profile": {
+                        "avg_days_to_death": round(avg_dead_days, 1),
+                        "avg_total_activities": round(avg_dead_activities, 1),
+                        "avg_emails": round(avg_dead_emails, 1),
+                        "avg_calls": round(avg_dead_calls, 1),
+                        "avg_completed_tasks": round(avg_dead_tasks, 1)
+                    },
+                    "winning_patterns": winning_patterns,
+                    "losing_patterns": losing_patterns,
+                    "top_performers": top_performers[:5],
+                    "key_insights": [
+                        f"Closed deals complete {((avg_closed_activities - avg_dead_activities) / max(avg_dead_activities, 1) * 100):.0f}% more activities" if avg_closed_activities > avg_dead_activities else "Activity levels similar between won/lost",
+                        f"Phone calls are {(avg_closed_calls / max(avg_dead_calls, 0.1)):.1f}x more common in closed deals" if avg_closed_calls > avg_dead_calls else "Phone calls similar between won/lost",
+                        f"Speed advantage: closed deals are {((avg_dead_days - avg_closed_days) / max(avg_closed_days, 1) * 100):.0f}% faster" if avg_closed_days < avg_dead_days else "Timeline similar between won/lost"
+                    ]
+                }
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+
         tool_functions = {
             "send_email": execute_send_email,
             "get_tasks": execute_get_tasks,
@@ -8622,7 +9279,13 @@ The Team menu item appears for managers and management roles.
             "get_employee_capacity": execute_get_employee_capacity,
             "get_at_risk_deals": execute_get_at_risk_deals,
             "get_activity_metrics": execute_get_activity_metrics,
-            "get_document_status": execute_get_document_status
+            "get_document_status": execute_get_document_status,
+            # PREDICTIVE ANALYTICS tools
+            "predict_borrower_ghosting": execute_predict_borrower_ghosting,
+            "predict_deal_success": execute_predict_deal_success,
+            "forecast_revenue": execute_forecast_revenue,
+            "get_refinance_candidates": execute_get_refinance_candidates,
+            "analyze_conversion_patterns": execute_analyze_conversion_patterns
         }
 
         # Pre-fetch real data context for personalized responses
