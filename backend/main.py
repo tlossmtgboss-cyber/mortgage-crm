@@ -8283,7 +8283,7 @@ The Team menu item appears for managers and management roles.
 
                     # Factor 2: Closing date pressure
                     if loan.closing_date:
-                        closing_date = loan.closing_date if isinstance(loan.closing_date, date) else loan.closing_date.date()
+                        closing_date = loan.closing_date.date() if hasattr(loan.closing_date, 'date') else loan.closing_date
                         days_to_close = (closing_date - today).days
                         if days_to_close < 0:
                             risk_score += 40
@@ -8297,7 +8297,7 @@ The Team menu item appears for managers and management roles.
 
                     # Factor 3: Rate lock expiration
                     if loan.rate_lock_expiration:
-                        lock_date = loan.rate_lock_expiration if isinstance(loan.rate_lock_expiration, date) else loan.rate_lock_expiration.date()
+                        lock_date = loan.rate_lock_expiration.date() if hasattr(loan.rate_lock_expiration, 'date') else loan.rate_lock_expiration
                         days_to_lock_expire = (lock_date - today).days
                         if days_to_lock_expire < 0:
                             risk_score += 35
@@ -8489,7 +8489,7 @@ The Team menu item appears for managers and management roles.
                     # Determine urgency based on closing date
                     urgency = "LOW"
                     if loan.closing_date:
-                        closing_date = loan.closing_date if isinstance(loan.closing_date, date) else loan.closing_date.date()
+                        closing_date = loan.closing_date.date() if hasattr(loan.closing_date, 'date') else loan.closing_date
                         days_to_close = (closing_date - today).days
                         if days_to_close < 0:
                             urgency = "CRITICAL"
