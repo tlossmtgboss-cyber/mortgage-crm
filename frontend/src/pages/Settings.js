@@ -1804,16 +1804,27 @@ const API_BASE_URL = isProduction
         }
       });
 
+      const data = await response.json();
+
       if (response.ok) {
-        const data = await response.json();
         alert(`Sync complete! ${data.emails_synced || 0} emails processed.`);
         checkMicrosoftStatus();
       } else {
-        throw new Error('Sync failed');
+        // Show the actual error from backend
+        const errorMsg = data.error || data.detail || 'Sync failed';
+        if (errorMsg.includes('not connected')) {
+          alert('Microsoft 365 is not connected. Please connect your account first.');
+          checkMicrosoftStatus(); // Refresh status to update UI
+        } else if (errorMsg.includes('token') || errorMsg.includes('expired')) {
+          alert('Your Microsoft session has expired. Please reconnect your account.');
+          checkMicrosoftStatus();
+        } else {
+          alert(`Sync failed: ${errorMsg}`);
+        }
       }
     } catch (error) {
       console.error('Error syncing Microsoft:', error);
-      alert('Failed to sync Microsoft emails');
+      alert('Failed to sync Microsoft emails. Please check your connection and try again.');
     } finally {
       setSyncingMicrosoft(false);
     }
@@ -1829,15 +1840,26 @@ const API_BASE_URL = isProduction
         }
       });
 
+      const data = await response.json();
+
       if (response.ok) {
-        const data = await response.json();
         alert(`Calendar sync complete! ${data.events_synced || 0} events processed.`);
       } else {
-        throw new Error('Calendar sync failed');
+        // Show the actual error from backend
+        const errorMsg = data.error || data.detail || 'Calendar sync failed';
+        if (errorMsg.includes('not connected')) {
+          alert('Microsoft 365 is not connected. Please connect your account first.');
+          checkMicrosoftStatus();
+        } else if (errorMsg.includes('token') || errorMsg.includes('expired')) {
+          alert('Your Microsoft session has expired. Please reconnect your account.');
+          checkMicrosoftStatus();
+        } else {
+          alert(`Calendar sync failed: ${errorMsg}`);
+        }
       }
     } catch (error) {
       console.error('Error syncing calendar:', error);
-      alert('Failed to sync Outlook calendar');
+      alert('Failed to sync Outlook calendar. Please check your connection and try again.');
     } finally {
       setSyncingCalendar(false);
     }
