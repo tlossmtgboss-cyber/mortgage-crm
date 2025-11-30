@@ -43937,9 +43937,8 @@ async def get_dialer_call_tasks(
         # Note: tasks table uses 'type' column (not 'status') with values like 'In Progress', 'Completed'
         tasks_query = db.execute(text("""
             SELECT id, title, description, priority,
-                   type, due_date,
-                   entity_type, entity_id,
-                   lead_id, loan_id, created_at
+                   type, due_date, entity_type, entity_name,
+                   lead_id, loan_id, borrower_name, created_at
             FROM tasks
             WHERE type NOT IN ('Completed', 'Cancelled', 'Skipped')
             AND (
@@ -43970,17 +43969,19 @@ async def get_dialer_call_tasks(
             loan_id = row.get('loan_id')
             lead_id = row.get('lead_id')
 
-            # Look up contact info using direct loan_id or lead_id
-            contact_name = 'Unknown'
+            # Use entity_name or borrower_name directly from task if available
+            contact_name = row.get('entity_name') or row.get('borrower_name') or 'Unknown'
             phone_number = ''
 
+            # Look up phone number from loan or lead
             if loan_id:
                 try:
                     loan = db.execute(text(
                         "SELECT borrower_name, borrower_phone FROM loans WHERE id = :id"
                     ), {"id": loan_id}).mappings().first()
                     if loan:
-                        contact_name = loan.get('borrower_name') or 'Unknown'
+                        if contact_name == 'Unknown':
+                            contact_name = loan.get('borrower_name') or 'Unknown'
                         phone_number = loan.get('borrower_phone') or ''
                 except Exception:
                     pass
@@ -43990,7 +43991,8 @@ async def get_dialer_call_tasks(
                         "SELECT name, phone FROM leads WHERE id = :id"
                     ), {"id": lead_id}).mappings().first()
                     if lead:
-                        contact_name = lead.get('name') or 'Unknown'
+                        if contact_name == 'Unknown':
+                            contact_name = lead.get('name') or 'Unknown'
                         phone_number = lead.get('phone') or ''
                 except Exception:
                     pass
