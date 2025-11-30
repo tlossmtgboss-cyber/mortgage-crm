@@ -242,6 +242,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             }
         except Exception as e:
             logger.error(f"Error in get_pipeline: {e}")
+            db.rollback()
             return {"error": str(e), "total_leads": 0, "total_loans": 0}
 
     tools["get_pipeline"] = execute_get_pipeline
@@ -345,6 +346,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             }
         except Exception as e:
             logger.error(f"Error in search_leads: {e}")
+            db.rollback()
             return {"count": 0, "leads": [], "error": str(e)}
 
     tools["search_leads"] = execute_search_leads
@@ -393,6 +395,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             }
         except Exception as e:
             logger.error(f"Error in search_loans: {e}")
+            db.rollback()
             return {"count": 0, "loans": [], "error": str(e)}
 
     tools["search_loans"] = execute_search_loans
@@ -484,6 +487,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             }
         except Exception as e:
             logger.error(f"Error in get_pipeline_metrics: {e}")
+            db.rollback()
             return {"error": str(e)}
 
     tools["get_pipeline_metrics"] = execute_get_pipeline_metrics
@@ -526,6 +530,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             return advisory
         except Exception as e:
             logger.error(f"Error in get_rate_lock_advisory: {e}")
+            db.rollback()
             return {"error": str(e), "recommendation": "consult_manager"}
 
     tools["get_rate_lock_advisory"] = execute_get_rate_lock_advisory
@@ -537,7 +542,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
         try:
             # Get overdue tasks
             overdue_tasks = db.execute(
-                text("""SELECT id, title, due_date, priority,
+                text("""SELECT t.id, t.title, t.due_date, t.priority,
                        COALESCE(ln.borrower_name, ld.name) as contact_name
                        FROM tasks t
                        LEFT JOIN loans ln ON t.loan_id = ln.id
@@ -552,7 +557,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
 
             # Get today's tasks
             today_tasks = db.execute(
-                text("""SELECT id, title, due_date, priority,
+                text("""SELECT t.id, t.title, t.due_date, t.priority,
                        COALESCE(ln.borrower_name, ld.name) as contact_name
                        FROM tasks t
                        LEFT JOIN loans ln ON t.loan_id = ln.id
@@ -602,6 +607,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             }
         except Exception as e:
             logger.error(f"Error in get_daily_priorities: {e}")
+            db.rollback()  # Roll back to allow subsequent queries
             return {"error": str(e)}
 
     tools["get_daily_priorities"] = execute_get_daily_priorities

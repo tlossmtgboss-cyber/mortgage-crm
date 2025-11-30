@@ -370,6 +370,16 @@ function Settings() {
   const [syncingMicrosoft, setSyncingMicrosoft] = useState(false);
   const [syncingCalendar, setSyncingCalendar] = useState(false);
 
+  // Microsoft OAuth Configuration state
+  const [microsoftOAuthConfig, setMicrosoftOAuthConfig] = useState({
+    client_id: '',
+    client_secret: '',
+    tenant_id: 'common'
+  });
+  const [showMicrosoftConfig, setShowMicrosoftConfig] = useState(false);
+  const [savingMicrosoftConfig, setSavingMicrosoftConfig] = useState(false);
+  const [microsoftConfigMessage, setMicrosoftConfigMessage] = useState({ type: '', text: '' });
+
   // Team members state
   const [teamMembers, setTeamMembers] = useState([]);
   const [availableRoles, setAvailableRoles] = useState([]);
@@ -1685,6 +1695,67 @@ const API_BASE_URL = isProduction
     }
   };
 
+  // Microsoft OAuth Configuration functions
+  const fetchMicrosoftOAuthConfig = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/oauth-config`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setMicrosoftOAuthConfig({
+          client_id: data.client_id || '',
+          client_secret: '', // Never returned from server for security
+          tenant_id: data.tenant_id || 'common'
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching Microsoft OAuth config:', error);
+    }
+  };
+
+  const saveMicrosoftOAuthConfig = async () => {
+    setSavingMicrosoftConfig(true);
+    setMicrosoftConfigMessage({ type: '', text: '' });
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/oauth-config`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(microsoftOAuthConfig)
+      });
+
+      if (response.ok) {
+        setMicrosoftConfigMessage({
+          type: 'success',
+          text: 'Microsoft OAuth configuration saved! You can now connect your Outlook account.'
+        });
+        setShowMicrosoftConfig(false);
+        // Re-fetch the config to show updated client_id
+        await fetchMicrosoftOAuthConfig();
+      } else {
+        const error = await response.json();
+        setMicrosoftConfigMessage({
+          type: 'error',
+          text: error.detail || 'Failed to save configuration'
+        });
+      }
+    } catch (error) {
+      console.error('Error saving Microsoft OAuth config:', error);
+      setMicrosoftConfigMessage({
+        type: 'error',
+        text: 'Error saving configuration: ' + error.message
+      });
+    } finally {
+      setSavingMicrosoftConfig(false);
+    }
+  };
+
   const toggleIntegration = (integrationId) => {
     // Navigate to the individual integration detail page
     // Map integration IDs to their detail page section names
@@ -1732,6 +1803,7 @@ const API_BASE_URL = isProduction
     }
     if (activeSection === 'outlook-email' || activeSection === 'outlook-calendar') {
       checkMicrosoftStatus();
+      fetchMicrosoftOAuthConfig();
     }
     if (activeSection === 'calendly') {
       fetchCalendlyEventTypes();
@@ -2325,6 +2397,102 @@ const API_BASE_URL = isProduction
                 Sync your Microsoft 365 / Outlook emails and automatically link them to loan files
               </p>
 
+              {/* Microsoft OAuth Configuration Section */}
+              <div className="settings-card" style={{marginBottom: '24px'}}>
+                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px'}}>
+                  <h3 style={{margin: 0}}>Microsoft Azure App Configuration</h3>
+                  <button
+                    className="btn-secondary"
+                    onClick={() => setShowMicrosoftConfig(!showMicrosoftConfig)}
+                  >
+                    {showMicrosoftConfig ? 'Hide Configuration' : 'Configure Azure App'}
+                  </button>
+                </div>
+
+                {microsoftOAuthConfig.client_id && !showMicrosoftConfig && (
+                  <div style={{color: '#22c55e', fontSize: '14px'}}>
+                    App configured (Client ID: {microsoftOAuthConfig.client_id.substring(0, 8)}...)
+                  </div>
+                )}
+
+                {showMicrosoftConfig && (
+                  <div className="oauth-config-form">
+                    {microsoftConfigMessage.text && (
+                      <div className={`message-banner ${microsoftConfigMessage.type}`} style={{marginBottom: '16px'}}>
+                        {microsoftConfigMessage.text}
+                      </div>
+                    )}
+
+                    <p style={{fontSize: '14px', color: '#666', marginBottom: '16px'}}>
+                      Enter your Microsoft Azure App credentials. You can get these from the
+                      <a href="https://portal.azure.com/#blade/Microsoft_AAD_RegisteredApps/ApplicationsListBlade"
+                         target="_blank" rel="noopener noreferrer" style={{marginLeft: '4px'}}>
+                        Azure Portal App Registrations
+                      </a>
+                    </p>
+
+                    <div className="form-group">
+                      <label>Application (Client) ID *</label>
+                      <input
+                        type="text"
+                        value={microsoftOAuthConfig.client_id}
+                        onChange={(e) => setMicrosoftOAuthConfig({...microsoftOAuthConfig, client_id: e.target.value})}
+                        placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                      />
+                      <small>Found in Azure Portal &gt; App registrations &gt; Your App &gt; Overview</small>
+                    </div>
+
+                    <div className="form-group">
+                      <label>Client Secret *</label>
+                      <input
+                        type="password"
+                        value={microsoftOAuthConfig.client_secret}
+                        onChange={(e) => setMicrosoftOAuthConfig({...microsoftOAuthConfig, client_secret: e.target.value})}
+                        placeholder="Enter client secret (or leave blank to keep existing)"
+                      />
+                      <small>Found in Azure Portal &gt; App registrations &gt; Your App &gt; Certificates & secrets</small>
+                    </div>
+
+                    <div className="form-group">
+                      <label>Tenant ID</label>
+                      <input
+                        type="text"
+                        value={microsoftOAuthConfig.tenant_id}
+                        onChange={(e) => setMicrosoftOAuthConfig({...microsoftOAuthConfig, tenant_id: e.target.value})}
+                        placeholder="common (for multi-tenant apps)"
+                      />
+                      <small>Use "common" for multi-tenant apps, or your specific tenant ID</small>
+                    </div>
+
+                    <div style={{marginTop: '16px', padding: '12px', backgroundColor: '#f0f9ff', borderRadius: '8px', border: '1px solid #bae6fd'}}>
+                      <h4 style={{margin: '0 0 8px 0', fontSize: '14px', color: '#0369a1'}}>Required Redirect URI</h4>
+                      <p style={{margin: 0, fontSize: '13px', color: '#0c4a6e'}}>
+                        Add this redirect URI to your Azure App:
+                      </p>
+                      <code style={{display: 'block', marginTop: '8px', padding: '8px', backgroundColor: '#fff', borderRadius: '4px', fontSize: '12px'}}>
+                        https://perenniaai.com/oauth/callback
+                      </code>
+                    </div>
+
+                    <div style={{marginTop: '16px', display: 'flex', gap: '12px'}}>
+                      <button
+                        className="btn-primary"
+                        onClick={saveMicrosoftOAuthConfig}
+                        disabled={savingMicrosoftConfig || !microsoftOAuthConfig.client_id}
+                      >
+                        {savingMicrosoftConfig ? 'Saving...' : 'Save Configuration'}
+                      </button>
+                      <button
+                        className="btn-secondary"
+                        onClick={() => setShowMicrosoftConfig(false)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {microsoftStatus.connected ? (
                 <div className="connection-status-card connected outlook">
                   <div className="connection-status-header">
@@ -2353,7 +2521,16 @@ const API_BASE_URL = isProduction
                 <div className="connection-prompt-card">
                   <h3>Connect Outlook</h3>
                   <p>Connect your Microsoft 365 / Outlook account to sync emails with loan files automatically</p>
-                  <button className="btn-connect" onClick={connectMicrosoft365} disabled={loadingMicrosoft}>
+                  {!microsoftOAuthConfig.client_id && (
+                    <p style={{color: '#f59e0b', fontSize: '14px', marginBottom: '12px'}}>
+                      Please configure your Azure App credentials above before connecting.
+                    </p>
+                  )}
+                  <button
+                    className="btn-connect"
+                    onClick={connectMicrosoft365}
+                    disabled={loadingMicrosoft || !microsoftOAuthConfig.client_id}
+                  >
                     {loadingMicrosoft ? 'Connecting...' : 'Connect Microsoft 365'}
                   </button>
                 </div>

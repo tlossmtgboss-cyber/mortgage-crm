@@ -20375,20 +20375,31 @@ async def submit_merge_feedback(
 
 @app.get("/api/v1/microsoft/auth-url")
 async def get_microsoft_auth_url(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """Get Microsoft OAuth authorization URL for the frontend to redirect to"""
     try:
-        client_id = os.getenv("MICROSOFT_CLIENT_ID")
-        redirect_uri = os.getenv("MICROSOFT_REDIRECT_URI", "https://cmgmortgagecrm.com/oauth/microsoft/callback")
+        # First check for database config
+        db_config = db.query(MicrosoftAppConfig).first()
+
+        if db_config and db_config.client_id:
+            client_id = db_config.client_id
+            redirect_uri = db_config.redirect_uri or "https://perenniaai.com/oauth/callback"
+            tenant_id = db_config.tenant_id or "common"
+        else:
+            # Fall back to environment variables
+            client_id = os.getenv("MICROSOFT_CLIENT_ID")
+            redirect_uri = os.getenv("MICROSOFT_REDIRECT_URI", "https://perenniaai.com/oauth/callback")
+            tenant_id = os.getenv("MICROSOFT_TENANT_ID", "common")
 
         if not client_id:
-            raise HTTPException(status_code=500, detail="Microsoft OAuth not configured. Contact administrator.")
+            raise HTTPException(status_code=500, detail="Microsoft OAuth not configured. Please configure in Settings > Outlook Email.")
 
         # Build the authorization URL
         scopes = "https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/Calendars.Read offline_access"
         auth_url = (
-            f"https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
+            f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/authorize"
             f"?client_id={client_id}"
             f"&response_type=code"
             f"&redirect_uri={redirect_uri}"
