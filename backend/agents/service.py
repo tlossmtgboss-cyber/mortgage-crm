@@ -184,12 +184,12 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
         """Get pipeline summary with leads and loans by stage."""
         include_details = args.get("include_details", True)
 
-        # Import Lead model
+        # Import Lead model from main.py where it's defined
         try:
-            from models import Lead, Loan
+            from main import Lead, Loan
         except ImportError:
-            # Handle different import paths
-            pass
+            logger.warning("Could not import Lead/Loan models")
+            return {"error": "Model import failed", "total_leads": 0, "total_loans": 0}
 
         try:
             # Get leads
@@ -315,9 +315,10 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
     async def execute_search_leads(args):
         """Search for leads by name, email, or phone."""
         try:
-            from models import Lead
+            from main import Lead
         except ImportError:
-            pass
+            logger.warning("Could not import Lead model")
+            return {"count": 0, "leads": [], "error": "Model import failed"}
 
         query_str = args.get("query", "")
         limit = args.get("limit", 10)
