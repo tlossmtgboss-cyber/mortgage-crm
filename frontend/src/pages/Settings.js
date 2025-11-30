@@ -350,19 +350,6 @@ function Settings() {
   const [usersError, setUsersError] = useState(null);
   const [editingUser, setEditingUser] = useState(null);
 
-  // Microsoft 365 integration state
-  const [microsoftStatus, setMicrosoftStatus] = useState({
-    connected: false,
-    email_address: null,
-    sync_enabled: false,
-    last_sync_at: null
-  });
-  const [loadingMicrosoft, setLoadingMicrosoft] = useState(false);
-  const [syncCompleted, setSyncCompleted] = useState(false);
-  const [syncProgress, setSyncProgress] = useState({ current: 0, total: 0 });
-  const [reprocessing, setReprocessing] = useState(false);
-  const [syncingCalendar, setSyncingCalendar] = useState(false);
-
   // Gmail integration state
   const [gmailStatus, setGmailStatus] = useState({
     connected: false,
@@ -858,226 +845,12 @@ function Settings() {
     }
   };
 
-  // Microsoft 365 Integration Functions
+  // API Base URL
   // Use HTTPS Railway URL in production, localhost for development
 const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
 const API_BASE_URL = isProduction
   ? 'https://mortgage-crm-production-7a9a.up.railway.app'
   : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
-  const MICROSOFT_CLIENT_ID = process.env.REACT_APP_MICROSOFT_CLIENT_ID || 'YOUR_MICROSOFT_CLIENT_ID'; // Replace with actual client ID
-  const MICROSOFT_REDIRECT_URI = `${window.location.origin}/oauth/callback`; // OAuth callback
-
-  const checkMicrosoftStatus = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/status`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setMicrosoftStatus(data);
-
-        // Update connected integrations
-        const newConnected = new Set(connectedIntegrations);
-        if (data.connected) {
-          newConnected.add('outlook');
-        } else {
-          newConnected.delete('outlook');
-        }
-        setConnectedIntegrations(newConnected);
-      }
-    } catch (error) {
-      console.error('Error checking Microsoft status:', error);
-    }
-  };
-
-  const connectMicrosoft365 = () => {
-    // Check if Microsoft Client ID is configured
-    if (!MICROSOFT_CLIENT_ID || MICROSOFT_CLIENT_ID === 'YOUR_MICROSOFT_CLIENT_ID') {
-      alert('Microsoft 365 integration is not configured yet. Please set up your Azure App Registration and add the MICROSOFT_CLIENT_ID to your environment variables in Vercel.\n\nSee the console for setup instructions.');
-      console.log('%c🔧 Microsoft 365 Setup Required', 'color: #0078d4; font-size: 16px; font-weight: bold;');
-      console.log('1. Create an Azure App Registration at https://portal.azure.com');
-      console.log('2. Add REACT_APP_MICROSOFT_CLIENT_ID to Vercel environment variables');
-      console.log('3. Add MICROSOFT_CLIENT_ID and MICROSOFT_CLIENT_SECRET to Railway environment variables');
-      console.log('4. Redeploy both frontend and backend');
-      return;
-    }
-
-    // Microsoft OAuth URL
-    const scopes = 'https://graph.microsoft.com/Mail.Read offline_access';
-    const authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${MICROSOFT_CLIENT_ID}&response_type=code&redirect_uri=${encodeURIComponent(MICROSOFT_REDIRECT_URI)}&response_mode=query&scope=${encodeURIComponent(scopes)}&state=12345`;
-
-    console.log('Opening Microsoft login popup...');
-    console.log('Redirect URI:', MICROSOFT_REDIRECT_URI);
-
-    // Open OAuth popup
-    const width = 600;
-    const height = 700;
-    const left = (window.screen.width / 2) - (width / 2);
-    const top = (window.screen.height / 2) - (height / 2);
-
-    const popup = window.open(
-      authUrl,
-      'Microsoft 365 Login',
-      `width=${width},height=${height},top=${top},left=${left}`
-    );
-
-    if (!popup) {
-      alert('Popup was blocked! Please allow popups for this site and try again.');
-      return;
-    }
-
-    // Listen for the callback
-    const checkPopup = setInterval(() => {
-      try {
-        if (popup.closed) {
-          clearInterval(checkPopup);
-          checkMicrosoftStatus(); // Refresh status after popup closes
-        }
-
-        // Check if popup redirected back with code
-        if (popup.location.href.includes(window.location.origin)) {
-          const urlParams = new URLSearchParams(popup.location.search);
-          const code = urlParams.get('code');
-
-          if (code) {
-            clearInterval(checkPopup);
-            popup.close();
-            handleMicrosoftCallback(code);
-          }
-        }
-      } catch (e) {
-        // Ignore cross-origin errors
-      }
-    }, 500);
-  };
-
-  const handleMicrosoftCallback = async (authorizationCode) => {
-    setLoadingMicrosoft(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/connect`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          authorization_code: authorizationCode,
-          redirect_uri: MICROSOFT_REDIRECT_URI
-        })
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        alert(`Microsoft 365 connected successfully! ${data.email_address}`);
-        await checkMicrosoftStatus();
-      } else {
-        const error = await response.json();
-        alert(`Failed to connect Microsoft 365: ${error.detail}`);
-      }
-    } catch (error) {
-      console.error('Error connecting Microsoft 365:', error);
-      alert('Error connecting to Microsoft 365');
-    } finally {
-      setLoadingMicrosoft(false);
-    }
-  };
-
-  const disconnectMicrosoft365 = async () => {
-    if (!window.confirm('Are you sure you want to disconnect Microsoft 365?')) {
-      return;
-    }
-
-    setLoadingMicrosoft(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/disconnect`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      if (response.ok) {
-        alert('Microsoft 365 disconnected successfully');
-        await checkMicrosoftStatus();
-      } else {
-        alert('Failed to disconnect Microsoft 365');
-      }
-    } catch (error) {
-      console.error('Error disconnecting Microsoft 365:', error);
-      alert('Error disconnecting Microsoft 365');
-    } finally {
-      setLoadingMicrosoft(false);
-    }
-  };
-
-  const syncMicrosoftNow = async () => {
-    setLoadingMicrosoft(true);
-    setSyncCompleted(false);
-    setSyncProgress({ current: 0, total: 50 }); // Show immediately with expected total
-
-    // Simulate progress animation during sync (visual feedback)
-    let simulatedProgress = 0;
-    const progressInterval = setInterval(() => {
-      simulatedProgress += Math.random() * 8;
-      if (simulatedProgress < 45) { // Cap at 90% until real result
-        setSyncProgress(prev => ({
-          current: Math.floor(simulatedProgress),
-          total: prev.total
-        }));
-      }
-    }, 300);
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/sync-now`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      clearInterval(progressInterval); // Stop simulation
-
-      if (response.ok) {
-        const data = await response.json();
-
-        // Update with actual final counts
-        setSyncProgress({ current: data.processed_count, total: data.fetched_count });
-
-        alert(`Synced ${data.processed_count}/${data.fetched_count} emails successfully!`);
-        await checkMicrosoftStatus();
-
-        // Show "Synced" status for 3 seconds
-        setLoadingMicrosoft(false);
-        setSyncCompleted(true);
-        setTimeout(() => {
-          setSyncCompleted(false);
-          setSyncProgress({ current: 0, total: 0 });
-        }, 3000);
-      } else {
-        clearInterval(progressInterval);
-        let errorMessage = 'Failed to sync emails';
-        try {
-          const error = await response.json();
-          errorMessage = error.detail || error.message || errorMessage;
-        } catch (e) {
-          errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-        }
-        console.error('Sync error response:', errorMessage);
-        alert(`Failed to sync emails: ${errorMessage}`);
-        setLoadingMicrosoft(false);
-        setSyncProgress({ current: 0, total: 0 });
-      }
-    } catch (error) {
-      clearInterval(progressInterval);
-      console.error('Error syncing emails:', error);
-      alert(`Error syncing emails: ${error.message || 'Network error'}`);
-      setLoadingMicrosoft(false);
-      setSyncProgress({ current: 0, total: 0 });
-    }
-  };
 
   const runDatabaseMigration = async () => {
     if (!window.confirm('Run database migration to fix email sync?\n\nThis will add the missing external_message_id column.')) {
@@ -1539,22 +1312,6 @@ const API_BASE_URL = isProduction
       category: 'Email'
     },
     {
-      id: 'outlook',
-      name: 'Outlook Email',
-      description: 'Sync emails and automatically extract lead information with AI',
-      icon: '',
-      color: '#0078d4',
-      category: 'Email'
-    },
-    {
-      id: 'outlook-calendar',
-      name: 'Outlook Calendar',
-      description: 'Sync calendar events and schedule appointments',
-      icon: '',
-      color: '#0078d4',
-      category: 'Calendar'
-    },
-    {
       id: 'teams',
       name: 'Microsoft Teams',
       description: 'Send messages, make calls, and collaborate with your team',
@@ -1821,8 +1578,6 @@ const API_BASE_URL = isProduction
     // Map integration IDs to their detail page section names
     const sectionMapping = {
       'gmail': 'gmail',
-      'outlook': 'outlook-email',
-      'outlook-calendar': 'outlook-calendar',
       'teams': 'teams',
       'zoom': 'zoom',
       'calendly': 'calendly',
@@ -1853,12 +1608,11 @@ const API_BASE_URL = isProduction
   );
 
   const featuredIntegrations = filteredIntegrations.filter(i =>
-    ['gmail', 'outlook', 'outlook-calendar', 'teams', 'zoom', 'docusign', 'calendly'].includes(i.id)
+    ['gmail', 'teams', 'zoom', 'docusign', 'calendly'].includes(i.id)
   );
 
   useEffect(() => {
-    if (activeSection === 'integration-marketplace' || activeSection === 'outlook-email' || activeSection === 'outlook-calendar') {
-      checkMicrosoftStatus();
+    if (activeSection === 'integration-marketplace') {
       checkGmailStatus();
     }
     if (activeSection === 'calendly') {
@@ -2014,7 +1768,7 @@ const API_BASE_URL = isProduction
           </button>
 
           {/* Integrations - Conditionally Expandable based on connected apps */}
-          {(microsoftStatus.connected || calendlyEventTypes.length > 0 || twilioStatus.configured) ? (
+          {(calendlyEventTypes.length > 0 || twilioStatus.configured) ? (
             <>
               <button
                 className={`sidebar-btn parent ${expandedSections.integrations ? 'expanded' : ''}`}
@@ -2025,22 +1779,6 @@ const API_BASE_URL = isProduction
               </button>
               {expandedSections.integrations && (
                 <div className="sidebar-children">
-                  {microsoftStatus.connected && (
-                    <>
-                      <button
-                        className={`sidebar-btn child ${activeSection === 'outlook-email' ? 'active' : ''}`}
-                        onClick={() => setActiveSection('outlook-email')}
-                      >
-                        <span>Outlook Email</span>
-                      </button>
-                      <button
-                        className={`sidebar-btn child ${activeSection === 'outlook-calendar' ? 'active' : ''}`}
-                        onClick={() => setActiveSection('outlook-calendar')}
-                      >
-                        <span>Outlook Calendar</span>
-                      </button>
-                    </>
-                  )}
                   {calendlyEventTypes.length > 0 && (
                     <button
                       className={`sidebar-btn child ${activeSection === 'calendly' ? 'active' : ''}`}
@@ -2370,76 +2108,6 @@ const API_BASE_URL = isProduction
                       + Record Voicemail
                     </button>
                   </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* OUTLOOK EMAIL */}
-          {activeSection === 'outlook-email' && (
-            <div className="integration-detail-section">
-              <h2>Outlook Email Integration</h2>
-              <p className="section-description">
-                Sync emails and automatically extract lead information with AI
-              </p>
-
-              {microsoftStatus.connected ? (
-                <div className="connection-status-card connected">
-                  <div className="connection-status-header">
-                    <div className="connection-status-indicator"></div>
-                    <div className="connection-status-info">
-                      <h3>Microsoft 365 Connected</h3>
-                      <p className="connection-email">{microsoftStatus.email_address}</p>
-                    </div>
-                    <button className="btn-disconnect" onClick={(e) => { e.stopPropagation(); disconnectMicrosoft365(); }}>
-                      Disconnect
-                    </button>
-                  </div>
-                  {microsoftStatus.last_sync_at && (
-                    <div className="status-meta">
-                      Last synced: {(() => {
-                        const syncDate = new Date(microsoftStatus.last_sync_at);
-                        const now = new Date();
-                        // If the sync date is in the future, show "Just now" instead
-                        if (syncDate > now) {
-                          return 'Just now';
-                        }
-                        return syncDate.toLocaleString();
-                      })()}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className="connection-prompt-card">
-                  <h3>Connect Outlook Email</h3>
-                  <p>Connect your Microsoft 365 account to sync emails and extract lead information automatically</p>
-                  <button className="btn-connect" onClick={() => connectMicrosoft365()}>Connect Outlook Email</button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* OUTLOOK CALENDAR */}
-          {activeSection === 'outlook-calendar' && (
-            <div className="integration-detail-section">
-              <h2>Outlook Calendar Integration</h2>
-              <p className="section-description">Sync calendar events and schedule appointments</p>
-              {microsoftStatus.connected ? (
-                <div className="connection-status-card connected">
-                  <div className="connection-status-header">
-                    <div className="connection-status-indicator"></div>
-                    <div className="connection-status-info">
-                      <h3>Calendar Connected</h3>
-                      <p>Your Outlook Calendar is connected and syncing</p>
-                      <p className="connection-email">Account: {microsoftStatus.email_address}</p>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="connection-prompt-card">
-                  <h3>Connect Outlook Calendar</h3>
-                  <p>Connect your Microsoft 365 account to sync calendar events</p>
-                  <button className="btn-connect" onClick={() => connectMicrosoft365()}>Connect Outlook Calendar</button>
                 </div>
               )}
             </div>
