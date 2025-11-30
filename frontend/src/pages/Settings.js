@@ -1592,8 +1592,9 @@ const API_BASE_URL = isProduction
   const connectMicrosoft365 = async () => {
     setLoadingMicrosoft(true);
     try {
-      // Get the OAuth authorization URL
-      const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/auth-url`, {
+      // Get the OAuth authorization URL - pass current origin for dynamic redirect URI
+      const currentOrigin = window.location.origin;
+      const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/auth-url?origin=${encodeURIComponent(currentOrigin)}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }

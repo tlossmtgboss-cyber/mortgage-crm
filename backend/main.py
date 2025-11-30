@@ -21229,6 +21229,7 @@ async def assign_user_to_organization(
 
 @app.get("/api/v1/microsoft/auth-url")
 async def get_microsoft_auth_url(
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -21249,13 +21250,26 @@ async def get_microsoft_auth_url(
 
         if db_config and db_config.client_id:
             client_id = db_config.client_id
-            redirect_uri = db_config.redirect_uri or os.getenv("MICROSOFT_REDIRECT_URI", "https://frontend-liard-eight-80.vercel.app/oauth/callback")
             tenant_id = db_config.tenant_id or "common"
         else:
             # Fall back to environment variables (default/system config)
             client_id = os.getenv("MICROSOFT_CLIENT_ID")
-            redirect_uri = os.getenv("MICROSOFT_REDIRECT_URI", "https://frontend-liard-eight-80.vercel.app/oauth/callback")
             tenant_id = os.getenv("MICROSOFT_TENANT_ID", "common")
+
+        # Dynamic redirect URI: Use frontend origin from query param or Referer header
+        frontend_origin = request.query_params.get('origin')
+        if not frontend_origin:
+            referer = request.headers.get('referer', '')
+            if referer:
+                from urllib.parse import urlparse
+                parsed = urlparse(referer)
+                frontend_origin = f"{parsed.scheme}://{parsed.netloc}"
+
+        # Construct redirect URI from frontend origin, or fall back to default
+        if frontend_origin:
+            redirect_uri = f"{frontend_origin}/oauth/callback"
+        else:
+            redirect_uri = os.getenv("MICROSOFT_REDIRECT_URI", "https://frontend-liard-eight-80.vercel.app/oauth/callback")
 
         if not client_id:
             raise HTTPException(status_code=500, detail="Microsoft OAuth not configured. Please configure in Settings > Outlook Email.")
