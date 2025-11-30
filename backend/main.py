@@ -8050,8 +8050,8 @@ The Team menu item appears for managers and management roles.
 
                 # Log the activity
                 activity = Activity(
-                    activity_type="sms_sent",
-                    description=f"SMS sent: {message[:100]}...",
+                    type=ActivityType.SMS,
+                    content=f"SMS sent to {phone}: {message[:100]}{'...' if len(message) > 100 else ''}",
                     user_id=current_user.id,
                     lead_id=lead_id,
                     loan_id=loan_id
