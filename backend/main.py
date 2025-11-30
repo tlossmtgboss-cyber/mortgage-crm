@@ -5853,6 +5853,19 @@ async def orchestrator_chat(
         # Load conversation history for this session
         conversation_history = ConvMemory.get_session_messages(db, session_id)
 
+        # Load personalized user context for AI customization
+        from agents.memory.user_context import UserContextManager
+        try:
+            user_context = await UserContextManager.get_context(db, current_user.id)
+            user_context_summary = user_context.get('summary', '')
+            user_preferences = user_context.get('preferences', {})
+            logger.info(f"Loaded user context: {user_context_summary[:100]}...")
+        except Exception as ctx_err:
+            logger.warning(f"Failed to load user context: {ctx_err}")
+            user_context = {}
+            user_context_summary = ''
+            user_preferences = {}
+
         # Specialized Agent Registry
         specialized_agents = {
             "lead_nurturing": {
@@ -9716,13 +9729,30 @@ CRITICAL RULES:
             user_tz = pytz.timezone(user_timezone)
             user_local_time = datetime.now(pytz.UTC).astimezone(user_tz)
 
+        # Build personalized context string
+        personalization_context = ""
+        if user_context_summary:
+            personalization_context = f"""
+
+# USER PROFILE & PERSONALIZATION
+{user_context_summary}
+
+Communication preferences:
+- Detail level: {user_preferences.get('detail_level', 'moderate')} (adjust response length accordingly)
+- Tone: {user_preferences.get('tone', 'professional')}
+- Focus areas: {', '.join(user_preferences.get('focus_areas', [])) or 'general'}
+- Proactive suggestions: {'enabled' if user_preferences.get('proactive_suggestions', True) else 'disabled'}
+
+Adapt your responses based on this profile. {'Keep responses concise and bullet-pointed.' if user_preferences.get('detail_level') == 'concise' else 'Provide comprehensive explanations.' if user_preferences.get('detail_level') == 'detailed' else ''}
+"""
+
         system_prompt = f"""# IDENTITY
 You are the Agentic AI powering the Pipeline 360 Mortgage CRM Ecosystem.
 You operate as the brain of the entire platform: decision-making, orchestration, reasoning, communication, and workflow execution.
 
 {"" if not selected_agent and not coaching_mode else f"**Active Agent: {agent_name}**"}
 User: {current_user.full_name or current_user.email}
-Current date/time: {user_local_time.strftime('%A, %B %d, %Y at %I:%M %p')} ({user_timezone}){agent_context}
+Current date/time: {user_local_time.strftime('%A, %B %d, %Y at %I:%M %p')} ({user_timezone}){agent_context}{personalization_context}
 
 You support:
 - Loan officers
@@ -10812,6 +10842,120 @@ When acting autonomously:
     except Exception as e:
         logger.error(f"Orchestrator chat error: {e}")
         db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# AI USER PREFERENCES ENDPOINTS
+# =============================================================================
+
+class AIPreferencesUpdate(BaseModel):
+    """Schema for updating AI preferences"""
+    detail_level: Optional[str] = None  # 'concise', 'moderate', 'detailed'
+    tone: Optional[str] = None  # 'casual', 'professional', 'formal'
+    focus_areas: Optional[List[str]] = None  # ['revenue', 'compliance', 'efficiency', 'client_satisfaction']
+    proactive_suggestions: Optional[bool] = None
+    include_metrics: Optional[bool] = None
+    preferred_greeting: Optional[str] = None  # 'standard', 'brief', 'personalized'
+
+
+@app.get("/api/v1/ai/user-context")
+async def get_ai_user_context(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Get the current user's AI personalization context and preferences.
+    Returns profile, performance metrics, learned preferences, and behavioral patterns.
+    """
+    try:
+        from agents.memory.user_context import UserContextManager
+
+        context = await UserContextManager.get_context(
+            db,
+            current_user.id,
+            include_performance=True,
+            include_preferences=True,
+            include_behavior=True
+        )
+
+        return {
+            "success": True,
+            "context": context
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting AI user context: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/v1/ai/preferences")
+async def update_ai_preferences(
+    preferences: AIPreferencesUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Update user's AI interaction preferences.
+    These preferences customize how the AI responds to the user.
+    """
+    try:
+        from agents.memory.user_context import UserContextManager
+
+        updated = []
+        prefs_dict = preferences.model_dump(exclude_none=True)
+
+        for key, value in prefs_dict.items():
+            success = await UserContextManager.save_preference(db, current_user.id, key, value)
+            if success:
+                updated.append(key)
+
+        if not updated:
+            return {
+                "success": True,
+                "message": "No preferences to update",
+                "updated": []
+            }
+
+        return {
+            "success": True,
+            "message": f"Updated {len(updated)} preference(s)",
+            "updated": updated
+        }
+
+    except Exception as e:
+        logger.error(f"Error updating AI preferences: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/ai/preferences")
+async def get_ai_preferences(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Get user's current AI interaction preferences.
+    """
+    try:
+        from agents.memory.user_context import UserContextManager
+
+        context = await UserContextManager.get_context(
+            db,
+            current_user.id,
+            include_performance=False,
+            include_preferences=True,
+            include_behavior=False
+        )
+
+        return {
+            "success": True,
+            "preferences": context.get('preferences', {}),
+            "defaults": UserContextManager.DEFAULT_PREFERENCES
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting AI preferences: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
