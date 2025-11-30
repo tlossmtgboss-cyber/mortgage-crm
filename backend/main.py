@@ -25344,6 +25344,25 @@ async def cache_status():
     except Exception as e:
         return {"error": str(e), "timestamp": datetime.now(timezone.utc).isoformat()}
 
+@app.get("/api/v1/cache/metrics")
+async def cache_metrics_endpoint():
+    """Get cache performance metrics (hit/miss rates, speedup)"""
+    try:
+        from agents.tools.metrics import cache_metrics
+        return {
+            "metrics": cache_metrics.get_stats(),
+            "by_tool": cache_metrics.get_stats_by_tool(),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    except ImportError:
+        return {
+            "metrics": {"total_queries": 0, "hit_rate": 0},
+            "by_tool": {},
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    except Exception as e:
+        return {"error": str(e), "timestamp": datetime.now(timezone.utc).isoformat()}
+
 @app.post("/api/v1/cache/clear")
 async def clear_cache_endpoint(
     current_user: User = Depends(get_current_user)

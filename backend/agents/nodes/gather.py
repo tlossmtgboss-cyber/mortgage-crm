@@ -29,6 +29,14 @@ except ImportError:
     cache = None
     CACHE_AVAILABLE = False
 
+# Import metrics tracker
+try:
+    from agents.tools.metrics import cache_metrics
+    METRICS_AVAILABLE = True
+except ImportError:
+    cache_metrics = None
+    METRICS_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -135,6 +143,11 @@ async def execute_tool(
                 tool_call.result = cached_result
                 tool_call.execution_time_ms = (time.time() - start_time) * 1000
                 logger.info(f"Tool {tool_name} CACHE HIT in {tool_call.execution_time_ms:.1f}ms")
+
+                # Record cache hit metric
+                if METRICS_AVAILABLE and cache_metrics:
+                    cache_metrics.record(tool_name, hit=True, execution_time_ms=tool_call.execution_time_ms)
+
                 return tool_call
 
         # Execute the tool (handle both sync and async)
@@ -154,6 +167,10 @@ async def execute_tool(
             logger.info(f"Tool {tool_name} executed in {tool_call.execution_time_ms:.1f}ms (cached for {ttl}s)")
         else:
             logger.info(f"Tool {tool_name} executed in {tool_call.execution_time_ms:.1f}ms")
+
+        # Record cache miss metric (actual execution)
+        if METRICS_AVAILABLE and cache_metrics:
+            cache_metrics.record(tool_name, hit=False, execution_time_ms=tool_call.execution_time_ms)
 
     except Exception as e:
         tool_call.error = str(e)
