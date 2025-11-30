@@ -13122,6 +13122,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ AI Feedback routes not loaded: {e}")
 
+# AI Email Conversations (Two-Way AI Communication)
+try:
+    from routes.ai_email_conversation_routes import router as ai_email_conv_router
+    app.include_router(ai_email_conv_router, prefix="/api/v1/ai-email", tags=["AI Email Conversations"])
+    logger.info("✅ AI Email Conversation routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ AI Email Conversation routes not loaded: {e}")
+
 # Email Monitor Migration Endpoint
 @app.post("/api/v1/migrations/add-email-monitor")
 async def add_email_monitor_migration(db: Session = Depends(get_db)):
