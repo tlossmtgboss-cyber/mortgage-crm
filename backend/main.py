@@ -3828,6 +3828,37 @@ class CreateLeadFromExtracted(BaseModel):
     referral_partner_id: Optional[int] = None
 
 # ============================================================================
+# ORGANIZATION SCHEMAS (Multi-Tenant)
+# ============================================================================
+
+class OrganizationCreate(BaseModel):
+    """Request schema for creating an organization"""
+    name: str
+    slug: Optional[str] = None  # Auto-generated from name if not provided
+    domain: Optional[str] = None  # Email domain for auto-assignment
+
+class OrganizationUpdate(BaseModel):
+    """Request schema for updating an organization"""
+    name: Optional[str] = None
+    domain: Optional[str] = None
+    settings: Optional[dict] = None
+
+class OrganizationResponse(BaseModel):
+    """Response schema for organization data"""
+    id: int
+    name: str
+    slug: str
+    domain: Optional[str] = None
+    subscription_tier: str
+    is_active: bool
+    user_count: Optional[int] = None
+    has_microsoft_config: bool = False
+
+    class Config:
+        from_attributes = True
+
+
+# ============================================================================
 # MICROSOFT OAUTH SCHEMAS
 # ============================================================================
 
@@ -20403,6 +20434,243 @@ async def submit_merge_feedback(
     except Exception as e:
         logger.error(f"Error submitting feedback: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# ============================================================================
+# ORGANIZATION MANAGEMENT ENDPOINTS (Multi-Tenant)
+# ============================================================================
+
+@app.get("/api/v1/organizations")
+async def list_organizations(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """List all organizations (admin only)"""
+    try:
+        # Check if user is admin
+        if current_user.permission_role not in ['admin', 'leadership']:
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        orgs = db.query(Organization).filter(Organization.is_active == True).all()
+
+        result = []
+        for org in orgs:
+            user_count = db.query(User).filter(User.organization_id == org.id).count()
+            has_ms_config = db.query(MicrosoftAppConfig).filter(
+                MicrosoftAppConfig.organization_id == org.id
+            ).first() is not None
+
+            result.append({
+                "id": org.id,
+                "name": org.name,
+                "slug": org.slug,
+                "domain": org.domain,
+                "subscription_tier": org.subscription_tier,
+                "is_active": org.is_active,
+                "user_count": user_count,
+                "has_microsoft_config": has_ms_config
+            })
+
+        return {"organizations": result}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error listing organizations: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/organizations/current")
+async def get_current_organization(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get the current user's organization"""
+    try:
+        org_id = getattr(current_user, 'organization_id', None)
+
+        if not org_id:
+            return {
+                "organization": None,
+                "message": "User is not assigned to an organization"
+            }
+
+        org = db.query(Organization).filter(Organization.id == org_id).first()
+
+        if not org:
+            return {
+                "organization": None,
+                "message": "Organization not found"
+            }
+
+        user_count = db.query(User).filter(User.organization_id == org.id).count()
+        has_ms_config = db.query(MicrosoftAppConfig).filter(
+            MicrosoftAppConfig.organization_id == org.id
+        ).first() is not None
+
+        return {
+            "organization": {
+                "id": org.id,
+                "name": org.name,
+                "slug": org.slug,
+                "domain": org.domain,
+                "subscription_tier": org.subscription_tier,
+                "is_active": org.is_active,
+                "user_count": user_count,
+                "has_microsoft_config": has_ms_config
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error getting current organization: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/organizations")
+async def create_organization(
+    org_data: OrganizationCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new organization (admin only)"""
+    try:
+        # Check if user is admin
+        if current_user.permission_role not in ['admin', 'leadership']:
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        # Generate slug from name if not provided
+        import re
+        slug = org_data.slug or re.sub(r'[^a-z0-9]+', '-', org_data.name.lower()).strip('-')
+
+        # Check if slug already exists
+        existing = db.query(Organization).filter(Organization.slug == slug).first()
+        if existing:
+            raise HTTPException(status_code=400, detail=f"Organization with slug '{slug}' already exists")
+
+        # Check if domain already exists (if provided)
+        if org_data.domain:
+            existing_domain = db.query(Organization).filter(Organization.domain == org_data.domain).first()
+            if existing_domain:
+                raise HTTPException(status_code=400, detail=f"Organization with domain '{org_data.domain}' already exists")
+
+        org = Organization(
+            name=org_data.name,
+            slug=slug,
+            domain=org_data.domain,
+            subscription_tier='lead_management'
+        )
+        db.add(org)
+        db.commit()
+        db.refresh(org)
+
+        logger.info(f"Created organization {org.id} ({org.name}) by user {current_user.id}")
+
+        return {
+            "status": "success",
+            "organization": {
+                "id": org.id,
+                "name": org.name,
+                "slug": org.slug,
+                "domain": org.domain,
+                "subscription_tier": org.subscription_tier
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating organization: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.patch("/api/v1/organizations/{org_id}")
+async def update_organization(
+    org_id: int,
+    org_data: OrganizationUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update an organization (admin only)"""
+    try:
+        # Check if user is admin
+        if current_user.permission_role not in ['admin', 'leadership']:
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        org = db.query(Organization).filter(Organization.id == org_id).first()
+        if not org:
+            raise HTTPException(status_code=404, detail="Organization not found")
+
+        if org_data.name is not None:
+            org.name = org_data.name
+        if org_data.domain is not None:
+            # Check if domain already exists
+            existing_domain = db.query(Organization).filter(
+                Organization.domain == org_data.domain,
+                Organization.id != org_id
+            ).first()
+            if existing_domain:
+                raise HTTPException(status_code=400, detail=f"Domain '{org_data.domain}' already in use")
+            org.domain = org_data.domain
+        if org_data.settings is not None:
+            org.settings = org_data.settings
+
+        org.updated_at = datetime.now(timezone.utc)
+        db.commit()
+
+        logger.info(f"Updated organization {org_id} by user {current_user.id}")
+
+        return {
+            "status": "success",
+            "organization": {
+                "id": org.id,
+                "name": org.name,
+                "slug": org.slug,
+                "domain": org.domain,
+                "subscription_tier": org.subscription_tier
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating organization: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/organizations/{org_id}/assign-user")
+async def assign_user_to_organization(
+    org_id: int,
+    user_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Assign a user to an organization (admin only)"""
+    try:
+        # Check if user is admin
+        if current_user.permission_role not in ['admin', 'leadership']:
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        org = db.query(Organization).filter(Organization.id == org_id).first()
+        if not org:
+            raise HTTPException(status_code=404, detail="Organization not found")
+
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        user.organization_id = org_id
+        db.commit()
+
+        logger.info(f"Assigned user {user_id} to organization {org_id} by user {current_user.id}")
+
+        return {
+            "status": "success",
+            "message": f"User {user.email} assigned to {org.name}"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error assigning user to organization: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 # ============================================================================
 # MICROSOFT 365 OAUTH ENDPOINTS
