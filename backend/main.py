@@ -1,7 +1,7 @@
 
 # ============================================================================
 # COMPLETE AGENTIC AI MORTGAGE CRM - FULLY FUNCTIONAL
-# Force Railway redeploy - 2025-11-15
+# Force Railway redeploy - 2025-11-30 (LangGraph AI Agent)
 # ============================================================================
 # All features implemented:
 # ✅ Complete CRUD for all entities
@@ -20288,6 +20288,37 @@ async def submit_merge_feedback(
 # ============================================================================
 # MICROSOFT 365 OAUTH ENDPOINTS
 # ============================================================================
+
+@app.get("/api/v1/microsoft/auth-url")
+async def get_microsoft_auth_url(
+    current_user: User = Depends(get_current_user)
+):
+    """Get Microsoft OAuth authorization URL for the frontend to redirect to"""
+    try:
+        client_id = os.getenv("MICROSOFT_CLIENT_ID")
+        redirect_uri = os.getenv("MICROSOFT_REDIRECT_URI", "https://cmgmortgagecrm.com/oauth/microsoft/callback")
+
+        if not client_id:
+            raise HTTPException(status_code=500, detail="Microsoft OAuth not configured. Contact administrator.")
+
+        # Build the authorization URL
+        scopes = "https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/Calendars.Read offline_access"
+        auth_url = (
+            f"https://login.microsoftonline.com/common/oauth2/v2.0/authorize"
+            f"?client_id={client_id}"
+            f"&response_type=code"
+            f"&redirect_uri={redirect_uri}"
+            f"&scope={scopes}"
+            f"&response_mode=query"
+            f"&prompt=select_account"
+        )
+
+        return {"auth_url": auth_url}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating Microsoft auth URL: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/v1/microsoft/connect")
 async def connect_microsoft365(
