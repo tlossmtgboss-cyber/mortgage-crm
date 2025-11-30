@@ -8328,7 +8328,7 @@ The Team menu item appears for managers and management roles.
                         (SELECT MAX(created_at) FROM activities WHERE loan_id = l.id) as last_activity
                     FROM loans l
                     LEFT JOIN users u ON l.loan_officer_id = u.id
-                    WHERE l.stage NOT IN ('closed', 'dead', 'Closed', 'Dead')
+                    WHERE CAST(l.stage AS TEXT) NOT ILIKE ANY(ARRAY['closed', 'dead'])
                     ORDER BY l.closing_date ASC
                 """)).fetchall()
 
@@ -8522,7 +8522,7 @@ The Team menu item appears for managers and management roles.
                         u.full_name as lo_name
                     FROM loans l
                     LEFT JOIN users u ON l.loan_officer_id = u.id
-                    WHERE l.stage NOT IN ('closed', 'dead', 'Closed', 'Dead')
+                    WHERE CAST(l.stage AS TEXT) NOT ILIKE ANY(ARRAY['closed', 'dead'])
                 """)).fetchall()
 
                 # Standard required documents by stage
@@ -8607,12 +8607,11 @@ The Team menu item appears for managers and management roles.
                         u.full_name as lo_name,
                         (SELECT COUNT(*) FROM activities WHERE loan_id = l.id) as total_activities,
                         (SELECT MAX(created_at) FROM activities WHERE loan_id = l.id) as last_activity_date,
-                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND CAST(type AS TEXT) ILIKE 'email') as email_count,
                         (SELECT COUNT(*) FROM tasks WHERE loan_id = l.id AND status = 'completed') as completed_tasks,
                         (SELECT COUNT(*) FROM tasks WHERE loan_id = l.id AND status != 'completed') as pending_tasks
                     FROM loans l
                     LEFT JOIN users u ON l.loan_officer_id = u.id
-                    WHERE l.stage NOT IN ('closed', 'dead', 'Closed', 'Dead')
+                    WHERE CAST(l.stage AS TEXT) NOT ILIKE ANY(ARRAY['closed', 'dead'])
                 """
                 if loan_id:
                     query += " AND l.id = :loan_id"
@@ -8646,17 +8645,14 @@ The Team menu item appears for managers and management roles.
                     elif days_silent > 3:
                         risk_score += 0.1
 
-                    # Factor 2: Low email engagement (max 0.3)
+                    # Factor 2: Low activity volume (max 0.3)
                     total_activities = loan.total_activities or 0
-                    email_count = loan.email_count or 0
-                    if total_activities > 0:
-                        email_ratio = email_count / total_activities
-                        if email_ratio < 0.1 and total_activities >= 3:
-                            risk_score += 0.3
-                            risk_factors.append(f"Very low email engagement ({email_count} emails)")
-                        elif email_count == 0:
-                            risk_score += 0.2
-                            risk_factors.append("No email communication recorded")
+                    if total_activities == 0:
+                        risk_score += 0.3
+                        risk_factors.append("No activities recorded")
+                    elif total_activities < 3:
+                        risk_score += 0.15
+                        risk_factors.append(f"Very few activities ({total_activities})")
 
                     # Factor 3: Stalled pipeline (max 0.2)
                     days_in_pipeline = (today.date() - loan.created_at.date()).days if hasattr(loan.created_at, 'date') else 30
@@ -8729,7 +8725,7 @@ The Team menu item appears for managers and management roles.
                         (SELECT MAX(created_at) FROM activities WHERE loan_id = l.id) as last_activity
                     FROM loans l
                     LEFT JOIN users u ON l.loan_officer_id = u.id
-                    WHERE l.stage NOT IN ('closed', 'dead', 'Closed', 'Dead')
+                    WHERE CAST(l.stage AS TEXT) NOT ILIKE ANY(ARRAY['closed', 'dead'])
                 """
                 if loan_id:
                     query += " AND l.id = :loan_id"
@@ -8989,7 +8985,7 @@ The Team menu item appears for managers and management roles.
                     FROM loans l
                     LEFT JOIN users u ON l.loan_officer_id = u.id
                     LEFT JOIN contacts c ON l.contact_id = c.id
-                    WHERE l.stage IN ('closed', 'Closed')
+                    WHERE CAST(l.stage AS TEXT) ILIKE 'closed'
                     AND l.updated_at < NOW() - INTERVAL ':months months'
                     AND l.rate IS NOT NULL
                     ORDER BY l.rate DESC
@@ -9109,12 +9105,10 @@ The Team menu item appears for managers and management roles.
                         EXTRACT(EPOCH FROM (l.updated_at - l.created_at))/86400 as days_to_close,
                         u.full_name as lo_name,
                         (SELECT COUNT(*) FROM activities WHERE loan_id = l.id) as activity_count,
-                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND CAST(type AS TEXT) ILIKE 'email') as email_count,
-                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND CAST(type AS TEXT) ILIKE 'call') as call_count,
                         (SELECT COUNT(*) FROM tasks WHERE loan_id = l.id AND status = 'completed') as completed_tasks
                     FROM loans l
                     LEFT JOIN users u ON l.loan_officer_id = u.id
-                    WHERE l.stage IN ('closed', 'Closed')
+                    WHERE CAST(l.stage AS TEXT) ILIKE 'closed'
                     AND l.created_at > NOW() - INTERVAL '{interval}'
                 """)).fetchall()
 
@@ -9125,12 +9119,10 @@ The Team menu item appears for managers and management roles.
                         EXTRACT(EPOCH FROM (l.updated_at - l.created_at))/86400 as days_to_death,
                         u.full_name as lo_name,
                         (SELECT COUNT(*) FROM activities WHERE loan_id = l.id) as activity_count,
-                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND CAST(type AS TEXT) ILIKE 'email') as email_count,
-                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND CAST(type AS TEXT) ILIKE 'call') as call_count,
                         (SELECT COUNT(*) FROM tasks WHERE loan_id = l.id AND status = 'completed') as completed_tasks
                     FROM loans l
                     LEFT JOIN users u ON l.loan_officer_id = u.id
-                    WHERE l.stage IN ('dead', 'Dead')
+                    WHERE CAST(l.stage AS TEXT) ILIKE 'dead'
                     AND l.created_at > NOW() - INTERVAL '{interval}'
                 """)).fetchall()
 
@@ -9139,22 +9131,18 @@ The Team menu item appears for managers and management roles.
                 if closed_count > 0:
                     avg_closed_days = sum(l.days_to_close or 0 for l in closed_loans) / closed_count
                     avg_closed_activities = sum(l.activity_count or 0 for l in closed_loans) / closed_count
-                    avg_closed_emails = sum(l.email_count or 0 for l in closed_loans) / closed_count
-                    avg_closed_calls = sum(l.call_count or 0 for l in closed_loans) / closed_count
                     avg_closed_tasks = sum(l.completed_tasks or 0 for l in closed_loans) / closed_count
                 else:
-                    avg_closed_days = avg_closed_activities = avg_closed_emails = avg_closed_calls = avg_closed_tasks = 0
+                    avg_closed_days = avg_closed_activities = avg_closed_tasks = 0
 
                 # Calculate averages for dead deals
                 dead_count = len(dead_loans)
                 if dead_count > 0:
                     avg_dead_days = sum(l.days_to_death or 0 for l in dead_loans) / dead_count
                     avg_dead_activities = sum(l.activity_count or 0 for l in dead_loans) / dead_count
-                    avg_dead_emails = sum(l.email_count or 0 for l in dead_loans) / dead_count
-                    avg_dead_calls = sum(l.call_count or 0 for l in dead_loans) / dead_count
                     avg_dead_tasks = sum(l.completed_tasks or 0 for l in dead_loans) / dead_count
                 else:
-                    avg_dead_days = avg_dead_activities = avg_dead_emails = avg_dead_calls = avg_dead_tasks = 0
+                    avg_dead_days = avg_dead_activities = avg_dead_tasks = 0
 
                 # Identify winning patterns
                 winning_patterns = []
@@ -9173,11 +9161,11 @@ The Team menu item appears for managers and management roles.
                         "recommendation": "Focus on meaningful interactions, not just volume"
                     })
 
-                if avg_closed_calls > avg_dead_calls * 1.3:
+                if avg_closed_tasks > avg_dead_tasks * 1.3:
                     winning_patterns.append({
-                        "pattern": "Phone calls drive success",
-                        "detail": f"Closed deals avg {avg_closed_calls:.1f} calls vs {avg_dead_calls:.1f} for dead",
-                        "recommendation": "Prioritize phone conversations over email for key milestones"
+                        "pattern": "Task completion drives success",
+                        "detail": f"Closed deals avg {avg_closed_tasks:.1f} completed tasks vs {avg_dead_tasks:.1f} for dead",
+                        "recommendation": "Ensure borrower tasks are completed promptly"
                     })
 
                 if avg_closed_days < avg_dead_days * 0.8:
