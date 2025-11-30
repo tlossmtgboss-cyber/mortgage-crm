@@ -8607,7 +8607,7 @@ The Team menu item appears for managers and management roles.
                         u.full_name as lo_name,
                         (SELECT COUNT(*) FROM activities WHERE loan_id = l.id) as total_activities,
                         (SELECT MAX(created_at) FROM activities WHERE loan_id = l.id) as last_activity_date,
-                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND type = 'email') as email_count,
+                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND type = 'Email') as email_count,
                         (SELECT COUNT(*) FROM tasks WHERE loan_id = l.id AND status = 'completed') as completed_tasks,
                         (SELECT COUNT(*) FROM tasks WHERE loan_id = l.id AND status != 'completed') as pending_tasks
                     FROM loans l
@@ -9109,8 +9109,8 @@ The Team menu item appears for managers and management roles.
                         EXTRACT(EPOCH FROM (l.updated_at - l.created_at))/86400 as days_to_close,
                         u.full_name as lo_name,
                         (SELECT COUNT(*) FROM activities WHERE loan_id = l.id) as activity_count,
-                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND type = 'email') as email_count,
-                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND type = 'call') as call_count,
+                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND type = 'Email') as email_count,
+                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND type = 'Call') as call_count,
                         (SELECT COUNT(*) FROM tasks WHERE loan_id = l.id AND status = 'completed') as completed_tasks
                     FROM loans l
                     LEFT JOIN users u ON l.loan_officer_id = u.id
@@ -9125,8 +9125,8 @@ The Team menu item appears for managers and management roles.
                         EXTRACT(EPOCH FROM (l.updated_at - l.created_at))/86400 as days_to_death,
                         u.full_name as lo_name,
                         (SELECT COUNT(*) FROM activities WHERE loan_id = l.id) as activity_count,
-                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND type = 'email') as email_count,
-                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND type = 'call') as call_count,
+                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND type = 'Email') as email_count,
+                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND type = 'Call') as call_count,
                         (SELECT COUNT(*) FROM tasks WHERE loan_id = l.id AND status = 'completed') as completed_tasks
                     FROM loans l
                     LEFT JOIN users u ON l.loan_officer_id = u.id
