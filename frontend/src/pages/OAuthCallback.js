@@ -4,6 +4,23 @@ import './OAuthCallback.css';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://mortgage-crm-production-7a9a.up.railway.app';
 
+// Helper to notify parent - uses localStorage as fallback when window.opener is blocked by COOP
+const notifyParent = (type, data) => {
+  // Store result in localStorage for parent to poll (works even when COOP blocks window.opener)
+  const result = { type, ...data, timestamp: Date.now() };
+  localStorage.setItem('oauth_result', JSON.stringify(result));
+
+  // Also try postMessage if window.opener is available
+  try {
+    if (window.opener && !window.opener.closed) {
+      window.opener.postMessage({ type, ...data }, window.location.origin);
+    }
+  } catch (e) {
+    // COOP policy may block this - that's okay, localStorage fallback will work
+    console.log('postMessage blocked by COOP, using localStorage fallback');
+  }
+};
+
 function OAuthCallback() {
   const location = useLocation();
   const [status, setStatus] = useState('processing'); // processing, success, error
@@ -22,28 +39,22 @@ function OAuthCallback() {
       const providerName = state?.includes('gmail') ? 'Gmail' : 'Microsoft 365';
       setProvider(providerName);
 
+      const errorType = providerName === 'Gmail' ? 'GMAIL_OAUTH_ERROR' : 'MICROSOFT_OAUTH_ERROR';
+      const successType = providerName === 'Gmail' ? 'GMAIL_OAUTH_SUCCESS' : 'MICROSOFT_OAUTH_SUCCESS';
+
       if (error) {
         setStatus('error');
-        setMessage(errorDescription || `Failed to connect ${providerName}. Please try again.`);
-        // Notify parent window of error
-        if (window.opener) {
-          window.opener.postMessage({
-            type: providerName === 'Gmail' ? 'GMAIL_OAUTH_ERROR' : 'MICROSOFT_OAUTH_ERROR',
-            error: errorDescription || error
-          }, '*');
-        }
+        const errorMsg = errorDescription || `Failed to connect ${providerName}. Please try again.`;
+        setMessage(errorMsg);
+        notifyParent(errorType, { error: errorMsg });
         return;
       }
 
       if (!code) {
         setStatus('error');
-        setMessage('No authorization code received. Please try again.');
-        if (window.opener) {
-          window.opener.postMessage({
-            type: providerName === 'Gmail' ? 'GMAIL_OAUTH_ERROR' : 'MICROSOFT_OAUTH_ERROR',
-            error: 'No authorization code received'
-          }, '*');
-        }
+        const errorMsg = 'No authorization code received. Please try again.';
+        setMessage(errorMsg);
+        notifyParent(errorType, { error: errorMsg });
         return;
       }
 
@@ -72,43 +83,25 @@ function OAuthCallback() {
         if (response.ok) {
           setStatus('success');
           setMessage(`${providerName} connected successfully!`);
+          notifyParent(successType, { provider: providerName.toLowerCase() });
 
-          // Notify parent window if this is a popup
-          if (window.opener) {
-            window.opener.postMessage({
-              type: providerName === 'Gmail' ? 'GMAIL_OAUTH_SUCCESS' : 'MICROSOFT_OAUTH_SUCCESS',
-              provider: providerName.toLowerCase()
-            }, '*');
-
-            // Auto-close after a brief delay to show success message
-            setTimeout(() => {
-              window.close();
-            }, 1500);
-          }
+          // Auto-close after a brief delay to show success message
+          setTimeout(() => {
+            window.close();
+          }, 1500);
         } else {
           const errorData = await response.json();
           setStatus('error');
-          setMessage(errorData.detail || `Failed to connect ${providerName}. Please try again.`);
-
-          // Notify parent window of error
-          if (window.opener) {
-            window.opener.postMessage({
-              type: providerName === 'Gmail' ? 'GMAIL_OAUTH_ERROR' : 'MICROSOFT_OAUTH_ERROR',
-              error: errorData.detail || 'Connection failed'
-            }, '*');
-          }
+          const errorMsg = errorData.detail || `Failed to connect ${providerName}. Please try again.`;
+          setMessage(errorMsg);
+          notifyParent(errorType, { error: errorMsg });
         }
       } catch (err) {
         console.error('OAuth callback error:', err);
+        const errorMsg = 'An error occurred while connecting. Please try again.';
         setStatus('error');
-        setMessage('An error occurred while connecting. Please try again.');
-
-        if (window.opener) {
-          window.opener.postMessage({
-            type: 'MICROSOFT_OAUTH_ERROR',
-            error: err.message || 'Connection error'
-          }, '*');
-        }
+        setMessage(errorMsg);
+        notifyParent(errorType, { error: err.message || errorMsg });
       }
     };
 

@@ -1498,10 +1498,17 @@ const API_BASE_URL = isProduction
         return;
       }
 
-      // Listen for message from popup
+      // Clear any previous OAuth result
+      localStorage.removeItem('oauth_result');
+
+      // Listen for message from popup - may be blocked by COOP
       const handleMessage = (event) => {
-        if (event.data && event.data.type === 'gmail_connected') {
+        if (event.origin !== window.location.origin) return;
+
+        if (event.data && (event.data.type === 'gmail_connected' || event.data.type === 'GMAIL_OAUTH_SUCCESS')) {
+          clearInterval(checkPopup);
           window.removeEventListener('message', handleMessage);
+          localStorage.removeItem('oauth_result');
           setGmailStatus({
             connected: true,
             email: event.data.email,
@@ -1512,15 +1519,57 @@ const API_BASE_URL = isProduction
           newConnected.add('gmail');
           setConnectedIntegrations(newConnected);
           setLoadingGmail(false);
+          if (popup && !popup.closed) {
+            popup.close();
+          }
+          alert('Gmail connected successfully!');
+        } else if (event.data && event.data.type === 'GMAIL_OAUTH_ERROR') {
+          clearInterval(checkPopup);
+          window.removeEventListener('message', handleMessage);
+          localStorage.removeItem('oauth_result');
+          setLoadingGmail(false);
+          if (popup && !popup.closed) {
+            popup.close();
+          }
+          alert('Failed to connect Gmail: ' + (event.data.error || 'Unknown error'));
         }
       };
 
       window.addEventListener('message', handleMessage);
 
-      // Fallback check for popup close
-      const checkPopup = setInterval(() => {
+      // Poll for popup close AND localStorage result (fallback when COOP blocks postMessage)
+      const checkPopup = setInterval(async () => {
+        // Check localStorage for OAuth result
+        const storedResult = localStorage.getItem('oauth_result');
+        if (storedResult) {
+          try {
+            const result = JSON.parse(storedResult);
+            // Only process recent results (within last 30 seconds)
+            if (Date.now() - result.timestamp < 30000) {
+              clearInterval(checkPopup);
+              localStorage.removeItem('oauth_result');
+              window.removeEventListener('message', handleMessage);
+              if (popup && !popup.closed) {
+                popup.close();
+              }
+              setLoadingGmail(false);
+
+              if (result.type === 'GMAIL_OAUTH_SUCCESS') {
+                await checkGmailStatus();
+                alert('Gmail connected successfully!');
+              } else if (result.type === 'GMAIL_OAUTH_ERROR') {
+                alert('Failed to connect Gmail: ' + (result.error || 'Unknown error'));
+              }
+              return;
+            }
+          } catch (e) {
+            console.error('Error parsing OAuth result:', e);
+          }
+        }
+
         if (popup.closed) {
           clearInterval(checkPopup);
+          window.removeEventListener('message', handleMessage);
           setLoadingGmail(false);
           checkGmailStatus();
         }
@@ -1622,21 +1671,57 @@ const API_BASE_URL = isProduction
           return;
         }
 
-        // Poll for popup closure and check for OAuth completion
+        // Clear any previous OAuth result
+        localStorage.removeItem('oauth_result');
+
+        // Poll for popup closure AND localStorage result (fallback when COOP blocks postMessage)
         const pollTimer = setInterval(async () => {
+          // Check localStorage for OAuth result (works even when COOP blocks window.opener)
+          const storedResult = localStorage.getItem('oauth_result');
+          if (storedResult) {
+            try {
+              const result = JSON.parse(storedResult);
+              // Only process recent results (within last 30 seconds)
+              if (Date.now() - result.timestamp < 30000) {
+                clearInterval(pollTimer);
+                localStorage.removeItem('oauth_result');
+                window.removeEventListener('message', handleMessage);
+                if (popup && !popup.closed) {
+                  popup.close();
+                }
+                setLoadingMicrosoft(false);
+
+                if (result.type === 'MICROSOFT_OAUTH_SUCCESS') {
+                  await checkMicrosoftStatus();
+                  alert('Microsoft 365 connected successfully!');
+                } else if (result.type === 'MICROSOFT_OAUTH_ERROR') {
+                  alert('Failed to connect Microsoft 365: ' + (result.error || 'Unknown error'));
+                }
+                return;
+              }
+            } catch (e) {
+              console.error('Error parsing OAuth result:', e);
+            }
+          }
+
+          // Also check if popup was closed without result
           if (popup.closed) {
             clearInterval(pollTimer);
+            window.removeEventListener('message', handleMessage);
             setLoadingMicrosoft(false);
             // Check if connection was successful
             await checkMicrosoftStatus();
           }
         }, 500);
 
-        // Listen for message from popup (OAuth callback page)
+        // Listen for message from popup (OAuth callback page) - may be blocked by COOP
         const handleMessage = async (event) => {
+          if (event.origin !== window.location.origin) return;
+
           if (event.data?.type === 'MICROSOFT_OAUTH_SUCCESS') {
             clearInterval(pollTimer);
             window.removeEventListener('message', handleMessage);
+            localStorage.removeItem('oauth_result');
             if (popup && !popup.closed) {
               popup.close();
             }
@@ -1646,6 +1731,7 @@ const API_BASE_URL = isProduction
           } else if (event.data?.type === 'MICROSOFT_OAUTH_ERROR') {
             clearInterval(pollTimer);
             window.removeEventListener('message', handleMessage);
+            localStorage.removeItem('oauth_result');
             if (popup && !popup.closed) {
               popup.close();
             }
@@ -1660,6 +1746,7 @@ const API_BASE_URL = isProduction
         setTimeout(() => {
           clearInterval(pollTimer);
           window.removeEventListener('message', handleMessage);
+          localStorage.removeItem('oauth_result');
           if (popup && !popup.closed) {
             popup.close();
           }
