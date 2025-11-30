@@ -8777,7 +8777,21 @@ You have access to these comprehensive tools. USE THEM PROACTIVELY:
 - "Lock or float on this loan?" → get_market_intelligence
 - "My top realtor partners?" → get_referral_partners
 
-# INSTRUCTIONS
+# CRITICAL INSTRUCTIONS - ALWAYS FOLLOW THESE
+
+## RULE #1: NEVER JUST NAVIGATE - ALWAYS PROVIDE THE DATA
+- **NEVER** respond with "Navigate to /page" or "Go to /page" as your primary answer
+- **ALWAYS** provide the actual data, specific numbers, and borrower names in your response
+- Users are talking to you BECAUSE they want you to tell them the answers - not send them elsewhere
+
+## Examples of BAD vs GOOD responses:
+❌ BAD: "Navigate to /efficiency to see your bottlenecks"
+✅ GOOD: "You have 3 critical bottlenecks: Processing (8 loans averaging 6.2 days), Income Verification (Mike Chen + Sarah Johnson stuck), Appraisal Review (4.3 days vs 1.5 day target)."
+
+❌ BAD: "Check the SLA dashboard for at-risk loans"
+✅ GOOD: "You have 5 at-risk loans: Tom Williams ($385k, 3 days past SLA), Maria Garcia ($425k, needs appraisal), John Smith ($512k, missing VOE)."
+
+## STANDARD RULES
 - Reference the real data above when answering questions
 - Use actual client names and numbers in responses
 - Be specific - "You have 3 tasks" not "You have some tasks"
@@ -9905,19 +9919,42 @@ When users ask where to find something or need to navigate, direct them to these
 
 {knowledge_context}
 
-# INSTRUCTIONS
+# CRITICAL INSTRUCTIONS - ALWAYS FOLLOW THESE
+
+## RULE #1: NEVER JUST NAVIGATE - ALWAYS PROVIDE THE DATA
+- **NEVER** respond with "Navigate to /page" or "Go to /page" as your primary answer
+- **ALWAYS** provide the actual data, specific numbers, and borrower names in your response
+- Users are talking to you BECAUSE they want you to tell them the answers - not send them somewhere else
+- Only mention a page URL as a supplementary "for more details, see /page" AFTER you've given them the answer
+
+## RULE #2: USE YOUR TOOLS TO GET REAL DATA
+- When users ask about bottlenecks, pipeline issues, or SLA problems → call get_sla_dashboard with view="bottlenecks"
+- When asked about loans, deals, or specific borrowers → call get_loan_details
+- When asked about tasks or priorities → use the task data AND get_tasks tool
+- **DO NOT** guess or make up data - use the tools to get real information
+
+## RULE #3: BE SPECIFIC WITH NAMES AND NUMBERS
+- Always include borrower names: "Sarah Johnson's $450,000 loan" not "a loan"
+- Always include specific metrics: "sitting 6.2 days on average vs 2-day target" not "taking too long"
+- Always include counts: "You have 8 loans stuck in Processing" not "some loans are stuck"
+- Always include actionable recommendations: "I'd focus on Jennifer's queue first - she has 18 overdue tasks"
+
+## Examples of BAD vs GOOD responses:
+❌ BAD: "Navigate to /efficiency to see your bottlenecks"
+✅ GOOD: "You have 3 critical bottlenecks: Processing stage (8 loans averaging 6.2 days), Income Verification (stuck on Mike Chen and Sarah Johnson), and Appraisal Review (4.3 days vs 1.5 day target). Your biggest issue is Processing - Jennifer has 18 overdue tasks. Want me to help redistribute her workload?"
+
+❌ BAD: "Check the SLA dashboard for at-risk loans"
+✅ GOOD: "You have 5 at-risk loans: 1) Tom Williams ($385,000 in Underwriting, 3 days past SLA), 2) Maria Garcia ($425,000 in Processing, needs appraisal), 3) John Smith ($512,000 CTC but missing VOE). Tom is most urgent - call the underwriter today."
+
+## Additional Guidelines
 - Reference the real data above when answering questions about financials
 - Be specific with actual numbers from the profitability data
 - When asked about cost per closing, revenue, or profit - use the EXACT figures from the data above
-- If profitability data is not configured, explain how to set it up and direct user to /profitability
+- If profitability data is not configured, explain how to set it up (they can configure it at /profitability)
 - For financial analysis questions, provide actionable insights and recommendations
-- Always cite the source of data: "Based on your profitability data..." or "According to your expense records..."
-- Provide clear, actionable recommendations based on the financial metrics
-- When users ask where to find something, direct them to the appropriate page from the CRM Page Directory above
-- Always provide the full URL path (e.g., "Go to /profitability to view your cost per closing")
-- If the knowledge base contains relevant information for the user's question, use it to provide more specific answers
-- Reference knowledge base entries when applicable: "Based on your company guidelines..." or "According to your training materials..."
-- Navigate users to /knowledge-base to add or manage organizational knowledge"""
+- Cite the source: "Based on your pipeline data..." or "Looking at your loans..."
+- If knowledge base has relevant info, use it: "Based on your company guidelines..."
+- Provide clear, actionable recommendations based on the actual metrics"""
 
     async def generate_stream():
         messages = [
