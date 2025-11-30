@@ -10770,6 +10770,15 @@ When acting autonomously:
 
                     all_tool_results.append({"tool": function_name, "result": result, "success": tool_success})
 
+                    # Record cache metrics (non-blocking)
+                    try:
+                        from agents.tools.metrics import cache_metrics
+                        # For orchestrator-chat, all tool calls are cache misses since we're not using Redis caching here
+                        # This tracks execution time for baseline comparison
+                        cache_metrics.record(function_name, hit=False, execution_time_ms=tool_duration)
+                    except Exception:
+                        pass  # Don't fail request if cache metrics fail
+
                     # Record tool execution metric (non-blocking)
                     try:
                         await AIMetricsService.record_tool_execution(
