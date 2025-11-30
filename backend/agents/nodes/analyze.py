@@ -23,61 +23,21 @@ from ..state import (
 
 logger = logging.getLogger(__name__)
 
-# Available tools that can be selected
+# Available tools that can be selected - MUST match names in service.py
 AVAILABLE_TOOLS = [
-    # Pipeline & Loan Tools
-    "get_pipeline_summary",
-    "get_loan_details",
-    "search_loans",
-    "get_pipeline_bottlenecks",
-    "get_loan_stage_distribution",
-
-    # Team & Performance Tools
-    "get_team_performance",
-    "get_employee_performance",
-    "get_sla_metrics",
-    "get_capacity_analysis",
+    # Pipeline & Loan Tools (service.py names)
+    "get_pipeline",          # Gets leads/loans by stage
+    "search_loans",          # Search loans by name/number
+    "search_leads",          # Search leads by name/email/phone
+    "get_pipeline_metrics",  # Pipeline analytics
 
     # Task Management
-    "get_unified_tasks",
-    "get_overdue_tasks",
-    "create_task",
-    "complete_task",
-
-    # Communication
-    "send_email",
-    "get_email_threads",
-    "generate_email",
-    "get_recent_communications",
-
-    # Analytics
-    "get_financial_metrics",
-    "get_revenue_analytics",
-    "get_conversion_metrics",
-    "get_lead_source_performance",
-
-    # Predictive Analytics
-    "predict_borrower_ghosting",
-    "predict_deal_success",
-    "forecast_revenue",
-    "get_refinance_candidates",
-    "analyze_conversion_patterns",
+    "get_tasks",             # Get tasks by timeframe
+    "create_task",           # Create a new task
+    "get_daily_priorities",  # Get prioritized daily actions
 
     # Market Intelligence
-    "get_rate_lock_advice",
-    "get_market_conditions",
-    "compare_rate_scenarios",
-
-    # Document Analysis
-    "analyze_document",
-    "get_missing_documents",
-    "get_document_status",
-
-    # Action Tools
-    "schedule_meeting",
-    "update_loan_status",
-    "assign_task",
-    "create_follow_up"
+    "get_rate_lock_advisory", # Rate lock recommendations
 ]
 
 ANALYZE_SYSTEM_PROMPT = """You are a query analyzer for a mortgage CRM AI assistant. Your job is to analyze user queries and extract structured information.

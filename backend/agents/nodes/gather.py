@@ -123,11 +123,17 @@ def determine_tool_arguments(
     args = {}
 
     # Map entities to tool arguments based on tool type
-    if tool_name in ["get_loan_details", "search_loans"]:
+    if tool_name == "search_loans":
         if entities.get("loan_ids"):
-            args["loan_id"] = entities["loan_ids"][0]
+            args["query"] = entities["loan_ids"][0]
+        elif entities.get("borrower_names"):
+            args["query"] = entities["borrower_names"][0]
+        args["limit"] = 10
+
+    elif tool_name == "search_leads":
         if entities.get("borrower_names"):
-            args["borrower_name"] = entities["borrower_names"][0]
+            args["query"] = entities["borrower_names"][0]
+        args["limit"] = 10
 
     elif tool_name == "get_tasks":
         args["timeframe"] = "today"  # Default to today
@@ -143,25 +149,29 @@ def determine_tool_arguments(
     elif tool_name == "get_pipeline":
         args["include_details"] = True  # Always include details for better analysis
 
-    elif tool_name == "get_team_performance":
-        if entities.get("team_members"):
-            args["employee_name"] = entities["team_members"][0]
+    elif tool_name == "get_pipeline_metrics":
+        pass  # No arguments needed
 
-    elif tool_name == "get_market_intelligence":
-        args["lock_days"] = 30  # Default lock period
+    elif tool_name == "get_daily_priorities":
+        pass  # No arguments needed
 
-    elif tool_name == "search_leads":
-        if entities.get("borrower_names"):
-            args["query"] = entities["borrower_names"][0]
-        args["limit"] = 10
+    elif tool_name == "get_rate_lock_advisory":
+        # Extract days to close from entities
+        args["days_to_close"] = 30  # Default to 30 days
+        if entities.get("dates"):
+            date_ref = entities["dates"][0].lower()
+            if "7" in date_ref or "week" in date_ref:
+                args["days_to_close"] = 7
+            elif "14" in date_ref or "two week" in date_ref:
+                args["days_to_close"] = 14
+            elif "45" in date_ref:
+                args["days_to_close"] = 45
+            elif "60" in date_ref:
+                args["days_to_close"] = 60
 
-    elif tool_name in ["predict_deal_success", "forecast_revenue"]:
-        args["include_details"] = True
-
-    elif tool_name == "get_refinance_candidates":
-        args["rate_threshold"] = 1.0  # Default 100 bps improvement threshold
-
-    # Add more tool-specific argument mappings as needed
+    elif tool_name == "create_task":
+        args["title"] = entities.get("task_title", "Follow up")
+        args["priority"] = "medium"
 
     return args
 
