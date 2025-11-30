@@ -335,14 +335,43 @@ class PermissionLevel(str, enum.Enum):
 # DATABASE MODELS (ALL TABLES)
 # ============================================================================
 
+class Organization(Base):
+    """Multi-tenant organization model - each company/team has their own organization"""
+    __tablename__ = "organizations"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    slug = Column(String, unique=True, index=True)  # URL-friendly identifier
+    domain = Column(String, unique=True, index=True)  # Email domain for auto-assignment
+
+    # Organization settings
+    settings = Column(JSON, default=dict)  # General org settings
+
+    # Subscription info (links to organization_subscriptions table)
+    subscription_tier = Column(String, default="lead_management")
+
+    # Status
+    is_active = Column(Boolean, default=True)
+
+    # Timestamps
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    users = relationship("User", back_populates="organization")
+    branches = relationship("Branch", back_populates="organization")
+    microsoft_config = relationship("MicrosoftAppConfig", back_populates="organization", uselist=False)
+
+
 class Branch(Base):
     __tablename__ = "branches"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     company = Column(String)
     nmls_id = Column(String)
+    organization_id = Column(Integer, ForeignKey("organizations.id"))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     users = relationship("User", back_populates="branch")
+    organization = relationship("Organization", back_populates="branches")
 
 class User(Base):
     __tablename__ = "users"
@@ -353,6 +382,7 @@ class User(Base):
     role = Column(String, default="loan_officer")  # Legacy role field
     permission_role = Column(String, default="sales")  # Phase 2: 'admin', 'leadership', 'management', 'sales', 'processing', or 'operations'
     branch_id = Column(Integer, ForeignKey("branches.id"))
+    organization_id = Column(Integer, ForeignKey("organizations.id"))  # Multi-tenant: user's organization
     is_active = Column(Boolean, default=True)
     email_verified = Column(Boolean, default=False)
     onboarding_completed = Column(Boolean, default=False)
@@ -369,6 +399,7 @@ class User(Base):
     # Note: timezone column added via migration - use getattr() to safely access
     # timezone = Column(String, default="America/Chicago")  # User's timezone for AI and display
     branch = relationship("Branch", back_populates="users")
+    organization = relationship("Organization", back_populates="users")
     leads = relationship("Lead", back_populates="owner")
     loans = relationship("Loan", back_populates="loan_officer")
 
@@ -2143,9 +2174,10 @@ class MicrosoftOAuthToken(Base):
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 class MicrosoftAppConfig(Base):
-    """Stores Microsoft Azure App Registration credentials for the organization"""
+    """Stores Microsoft Azure App Registration credentials per organization (multi-tenant)"""
     __tablename__ = "microsoft_app_config"
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), unique=True, index=True)  # One config per org
     client_id = Column(String)  # Azure App Client ID
     client_secret = Column(Text)  # Encrypted client secret
     tenant_id = Column(String, default="common")  # Azure Tenant ID or 'common'
@@ -2153,6 +2185,9 @@ class MicrosoftAppConfig(Base):
     created_by = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    organization = relationship("Organization", back_populates="microsoft_config")
 
 class ITHelpdeskTicket(Base):
     __tablename__ = "it_helpdesk_tickets"
@@ -20378,17 +20413,27 @@ async def get_microsoft_auth_url(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get Microsoft OAuth authorization URL for the frontend to redirect to"""
+    """Get Microsoft OAuth authorization URL for the frontend to redirect to (multi-tenant)"""
     try:
-        # First check for database config
-        db_config = db.query(MicrosoftAppConfig).first()
+        # Multi-tenant: Get config for user's organization
+        org_id = getattr(current_user, 'organization_id', None)
+
+        db_config = None
+        if org_id:
+            db_config = db.query(MicrosoftAppConfig).filter(
+                MicrosoftAppConfig.organization_id == org_id
+            ).first()
+
+        # Fallback: check for any config (legacy single-tenant mode)
+        if not db_config:
+            db_config = db.query(MicrosoftAppConfig).first()
 
         if db_config and db_config.client_id:
             client_id = db_config.client_id
             redirect_uri = db_config.redirect_uri or "https://perenniaai.com/oauth/callback"
             tenant_id = db_config.tenant_id or "common"
         else:
-            # Fall back to environment variables
+            # Fall back to environment variables (default/system config)
             client_id = os.getenv("MICROSOFT_CLIENT_ID")
             redirect_uri = os.getenv("MICROSOFT_REDIRECT_URI", "https://perenniaai.com/oauth/callback")
             tenant_id = os.getenv("MICROSOFT_TENANT_ID", "common")
@@ -20421,17 +20466,27 @@ async def connect_microsoft365(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Exchange authorization code for access token and store"""
+    """Exchange authorization code for access token and store (multi-tenant)"""
     try:
-        # First check for database config
-        db_config = db.query(MicrosoftAppConfig).first()
+        # Multi-tenant: Get config for user's organization
+        org_id = getattr(current_user, 'organization_id', None)
+
+        db_config = None
+        if org_id:
+            db_config = db.query(MicrosoftAppConfig).filter(
+                MicrosoftAppConfig.organization_id == org_id
+            ).first()
+
+        # Fallback: check for any config (legacy single-tenant mode)
+        if not db_config:
+            db_config = db.query(MicrosoftAppConfig).first()
 
         if db_config and db_config.client_id and db_config.client_secret:
             client_id = db_config.client_id
             client_secret = decrypt_token(db_config.client_secret)
             tenant_id = db_config.tenant_id or "common"
         else:
-            # Fall back to environment variables
+            # Fall back to environment variables (default/system config)
             client_id = os.getenv("MICROSOFT_CLIENT_ID")
             client_secret = os.getenv("MICROSOFT_CLIENT_SECRET")
             tenant_id = os.getenv("MICROSOFT_TENANT_ID", "common")
@@ -20622,13 +20677,23 @@ async def get_microsoft_oauth_config(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Get the current Microsoft OAuth configuration (admin only)"""
+    """Get the current Microsoft OAuth configuration for user's organization (multi-tenant)"""
     try:
-        # Get existing config
-        config = db.query(MicrosoftAppConfig).first()
+        # Multi-tenant: Get config for user's organization
+        org_id = getattr(current_user, 'organization_id', None)
+
+        config = None
+        if org_id:
+            config = db.query(MicrosoftAppConfig).filter(
+                MicrosoftAppConfig.organization_id == org_id
+            ).first()
+
+        # Fallback: check for any config (legacy single-tenant mode)
+        if not config:
+            config = db.query(MicrosoftAppConfig).first()
 
         if not config:
-            # Check if there are environment variables configured
+            # Check if there are environment variables configured (system default)
             env_client_id = os.getenv("MICROSOFT_CLIENT_ID")
             env_tenant_id = os.getenv("MICROSOFT_TENANT_ID", "common")
 
@@ -20663,16 +20728,23 @@ async def save_microsoft_oauth_config(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Save Microsoft OAuth configuration (admin only)"""
+    """Save Microsoft OAuth configuration for user's organization (multi-tenant)"""
     try:
-        # Get or create config record
-        config = db.query(MicrosoftAppConfig).first()
+        # Multi-tenant: Get or create config for user's organization
+        org_id = getattr(current_user, 'organization_id', None)
+
+        config = None
+        if org_id:
+            config = db.query(MicrosoftAppConfig).filter(
+                MicrosoftAppConfig.organization_id == org_id
+            ).first()
 
         redirect_uri = "https://perenniaai.com/oauth/callback"
 
         if not config:
-            # Create new config
+            # Create new config for this organization
             config = MicrosoftAppConfig(
+                organization_id=org_id,  # Link to user's organization
                 client_id=config_data.client_id,
                 tenant_id=config_data.tenant_id,
                 redirect_uri=redirect_uri,
@@ -20692,7 +20764,7 @@ async def save_microsoft_oauth_config(
         db.commit()
         db.refresh(config)
 
-        logger.info(f"Microsoft OAuth config saved by user {current_user.id}")
+        logger.info(f"Microsoft OAuth config saved by user {current_user.id} for org {org_id}")
 
         return MicrosoftAppConfigResponse(
             client_id=config.client_id,
@@ -20730,6 +20802,107 @@ async def create_microsoft_app_config_table(
     except Exception as e:
         db.rollback()
         logger.error(f"Error creating microsoft_app_config table: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/migrations/create-organizations-table")
+async def create_organizations_table(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create the organizations table and add organization_id columns for multi-tenant support"""
+    try:
+        results = []
+
+        # 1. Create organizations table
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS organizations (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                slug VARCHAR(100) UNIQUE,
+                domain VARCHAR(255) UNIQUE,
+                settings JSONB DEFAULT '{}',
+                subscription_tier VARCHAR(50) DEFAULT 'lead_management',
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+            )
+        """))
+        results.append("Created organizations table")
+
+        # 2. Create default organization for existing users
+        db.execute(text("""
+            INSERT INTO organizations (name, slug, subscription_tier)
+            VALUES ('Default Organization', 'default', 'full_pipeline')
+            ON CONFLICT (slug) DO NOTHING
+        """))
+        results.append("Created default organization")
+
+        # 3. Add organization_id to users table if it doesn't exist
+        try:
+            db.execute(text("""
+                ALTER TABLE users ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)
+            """))
+            results.append("Added organization_id to users table")
+        except Exception as e:
+            results.append(f"users.organization_id: {str(e)[:50]}")
+
+        # 4. Add organization_id to branches table if it doesn't exist
+        try:
+            db.execute(text("""
+                ALTER TABLE branches ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id)
+            """))
+            results.append("Added organization_id to branches table")
+        except Exception as e:
+            results.append(f"branches.organization_id: {str(e)[:50]}")
+
+        # 5. Add organization_id to microsoft_app_config table if it doesn't exist
+        try:
+            db.execute(text("""
+                ALTER TABLE microsoft_app_config ADD COLUMN IF NOT EXISTS organization_id INTEGER REFERENCES organizations(id) UNIQUE
+            """))
+            results.append("Added organization_id to microsoft_app_config table")
+        except Exception as e:
+            results.append(f"microsoft_app_config.organization_id: {str(e)[:50]}")
+
+        # 6. Assign all existing users to the default organization
+        db.execute(text("""
+            UPDATE users
+            SET organization_id = (SELECT id FROM organizations WHERE slug = 'default')
+            WHERE organization_id IS NULL
+        """))
+        results.append("Assigned existing users to default organization")
+
+        # 7. Assign existing microsoft_app_config to default organization
+        db.execute(text("""
+            UPDATE microsoft_app_config
+            SET organization_id = (SELECT id FROM organizations WHERE slug = 'default')
+            WHERE organization_id IS NULL
+        """))
+        results.append("Assigned existing Microsoft config to default organization")
+
+        # 8. Create index for faster lookups
+        try:
+            db.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_users_organization_id ON users(organization_id)
+            """))
+            db.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_microsoft_app_config_organization_id ON microsoft_app_config(organization_id)
+            """))
+            results.append("Created indexes")
+        except Exception as e:
+            results.append(f"Indexes: {str(e)[:50]}")
+
+        db.commit()
+
+        return {
+            "status": "success",
+            "message": "Multi-tenant organizations setup complete",
+            "results": results
+        }
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating organizations table: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/v1/microsoft/sync-diagnostics")

@@ -254,15 +254,16 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
         timeframe = args.get("timeframe", "today")
         today = datetime.now().date()
 
+        # Query ai_tasks table (the active task table) instead of tasks
         task_query = text("""
-            SELECT t.id, t.title, t.due_date, t.status, t.priority, t.description,
-                   COALESCE(ln.borrower_name, ld.name, t.related_contact_name) as borrower_name,
+            SELECT t.id, t.title, t.due_date, t.type as status, t.priority, t.description,
+                   COALESCE(t.borrower_name, ln.borrower_name, ld.name) as borrower_name,
                    ln.amount as loan_amount, ln.stage as loan_stage, ln.loan_number,
                    t.loan_id, t.lead_id
-            FROM tasks t
+            FROM ai_tasks t
             LEFT JOIN loans ln ON t.loan_id = ln.id
             LEFT JOIN leads ld ON t.lead_id = ld.id
-            WHERE t.owner_id = :user_id AND t.status != 'completed'
+            WHERE t.assigned_to_id = :user_id AND t.type != 'Completed'
             ORDER BY
                 CASE WHEN t.priority = 'high' THEN 1 WHEN t.priority = 'medium' THEN 2 ELSE 3 END,
                 t.due_date ASC NULLS LAST
@@ -420,18 +421,19 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                 except:
                     due_datetime = datetime.now() + timedelta(days=1)
 
+            # Insert into ai_tasks table (the active task table)
             result = db.execute(
-                text("""INSERT INTO tasks (title, description, due_date, priority, status,
-                       owner_id, loan_id, lead_id, created_at, updated_at)
-                       VALUES (:title, :description, :due_date, :priority, 'pending',
-                       :owner_id, :loan_id, :lead_id, NOW(), NOW())
+                text("""INSERT INTO ai_tasks (title, description, due_date, priority, type,
+                       assigned_to_id, loan_id, lead_id, created_at, updated_at)
+                       VALUES (:title, :description, :due_date, :priority, 'In Progress',
+                       :assigned_to_id, :loan_id, :lead_id, NOW(), NOW())
                        RETURNING id, title"""),
                 {
                     "title": title,
                     "description": description,
                     "due_date": due_datetime,
                     "priority": priority,
-                    "owner_id": current_user.id,
+                    "assigned_to_id": current_user.id,
                     "loan_id": loan_id,
                     "lead_id": lead_id
                 }
@@ -540,17 +542,21 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
     async def execute_get_daily_priorities(args):
         """Get prioritized list of actions for today."""
         try:
-            # Get overdue tasks
+            # Get overdue tasks from ai_tasks table (the active task table)
             overdue_tasks = db.execute(
                 text("""SELECT t.id, t.title, t.due_date, t.priority,
-                       COALESCE(ln.borrower_name, ld.name) as contact_name
-                       FROM tasks t
+                       COALESCE(t.borrower_name, ln.borrower_name, ld.name) as contact_name
+                       FROM ai_tasks t
                        LEFT JOIN loans ln ON t.loan_id = ln.id
                        LEFT JOIN leads ld ON t.lead_id = ld.id
-                       WHERE t.owner_id = :user_id
-                       AND t.status != 'completed'
+                       WHERE t.assigned_to_id = :user_id
+                       AND t.type != 'Completed'
                        AND t.due_date < CURRENT_DATE
-                       ORDER BY t.priority DESC, t.due_date ASC
+                       ORDER BY
+                           CASE WHEN t.priority = 'high' THEN 1
+                                WHEN t.priority = 'medium' THEN 2
+                                ELSE 3 END,
+                           t.due_date ASC
                        LIMIT 5"""),
                 {"user_id": current_user.id}
             ).fetchall()
@@ -558,15 +564,36 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             # Get today's tasks
             today_tasks = db.execute(
                 text("""SELECT t.id, t.title, t.due_date, t.priority,
-                       COALESCE(ln.borrower_name, ld.name) as contact_name
-                       FROM tasks t
+                       COALESCE(t.borrower_name, ln.borrower_name, ld.name) as contact_name
+                       FROM ai_tasks t
                        LEFT JOIN loans ln ON t.loan_id = ln.id
                        LEFT JOIN leads ld ON t.lead_id = ld.id
-                       WHERE t.owner_id = :user_id
-                       AND t.status != 'completed'
+                       WHERE t.assigned_to_id = :user_id
+                       AND t.type != 'Completed'
                        AND t.due_date::date = CURRENT_DATE
-                       ORDER BY t.priority DESC
+                       ORDER BY
+                           CASE WHEN t.priority = 'high' THEN 1
+                                WHEN t.priority = 'medium' THEN 2
+                                ELSE 3 END
                        LIMIT 10"""),
+                {"user_id": current_user.id}
+            ).fetchall()
+
+            # Also get tomorrow's tasks
+            tomorrow_tasks = db.execute(
+                text("""SELECT t.id, t.title, t.due_date, t.priority,
+                       COALESCE(t.borrower_name, ln.borrower_name, ld.name) as contact_name
+                       FROM ai_tasks t
+                       LEFT JOIN loans ln ON t.loan_id = ln.id
+                       LEFT JOIN leads ld ON t.lead_id = ld.id
+                       WHERE t.assigned_to_id = :user_id
+                       AND t.type != 'Completed'
+                       AND t.due_date::date = CURRENT_DATE + INTERVAL '1 day'
+                       ORDER BY
+                           CASE WHEN t.priority = 'high' THEN 1
+                                WHEN t.priority = 'medium' THEN 2
+                                ELSE 3 END
+                       LIMIT 5"""),
                 {"user_id": current_user.id}
             ).fetchall()
 
@@ -593,9 +620,17 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                 "today_tasks": [{
                     "id": t.id,
                     "title": t.title,
+                    "due_date": t.due_date.isoformat() if t.due_date else None,
                     "priority": t.priority,
                     "contact_name": t.contact_name
                 } for t in today_tasks],
+                "tomorrow_tasks": [{
+                    "id": t.id,
+                    "title": t.title,
+                    "due_date": t.due_date.isoformat() if t.due_date else None,
+                    "priority": t.priority,
+                    "contact_name": t.contact_name
+                } for t in tomorrow_tasks],
                 "closing_soon": [{
                     "loan_number": l.loan_number,
                     "borrower_name": l.borrower_name,
@@ -603,7 +638,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                     "stage": str(l.stage) if l.stage else None,
                     "amount": float(l.amount) if l.amount else 0
                 } for l in closing_soon],
-                "summary": f"{len(overdue_tasks)} overdue, {len(today_tasks)} due today, {len(closing_soon)} closing within 7 days"
+                "summary": f"{len(overdue_tasks)} overdue, {len(today_tasks)} due today, {len(tomorrow_tasks)} due tomorrow, {len(closing_soon)} closing within 7 days"
             }
         except Exception as e:
             logger.error(f"Error in get_daily_priorities: {e}")
