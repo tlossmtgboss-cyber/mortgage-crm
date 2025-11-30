@@ -8046,9 +8046,9 @@ The Team menu item appears for managers and management roles.
                     ).first()
                     if user and hasattr(user, 'phone') and user.phone:
                         recipient_phone = user.phone
-                    elif user and user.user_profile:
-                        # Check user_profile JSON for phone
-                        profile = user.user_profile if isinstance(user.user_profile, dict) else {}
+                    elif user and user.user_metadata:
+                        # Check user_metadata JSON for phone
+                        profile = user.user_metadata if isinstance(user.user_metadata, dict) else {}
                         recipient_phone = profile.get('phone')
 
             if not recipient_phone:
@@ -8220,11 +8220,11 @@ The Team menu item appears for managers and management roles.
                 target_user.full_name = full_name
                 updates.append(f"name: {full_name}")
 
-            # Set title (in user_profile JSON)
+            # Set title (in user_metadata JSON)
             if title:
-                if not target_user.user_profile:
-                    target_user.user_profile = {}
-                target_user.user_profile['title'] = title
+                if not target_user.user_metadata:
+                    target_user.user_metadata = {}
+                target_user.user_metadata['title'] = title
                 updates.append(f"title: {title}")
 
             # Set NMLS number
@@ -8232,9 +8232,9 @@ The Team menu item appears for managers and management roles.
                 if hasattr(target_user, 'nmls_number'):
                     target_user.nmls_number = nmls_number
                 else:
-                    if not target_user.user_profile:
-                        target_user.user_profile = {}
-                    target_user.user_profile['nmls_number'] = nmls_number
+                    if not target_user.user_metadata:
+                        target_user.user_metadata = {}
+                    target_user.user_metadata['nmls_number'] = nmls_number
                 updates.append(f"NMLS: {nmls_number}")
 
             if not updates:
