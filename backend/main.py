@@ -12581,72 +12581,85 @@ async def chat_stream(
                 context=context,
                 session_id=request.session_id
             ):
-                chunk_type = chunk.get("type")
+                # chat_streaming yields {"event": "...", "data": {...}}
+                event_type = chunk.get("event")
+                event_data = chunk.get("data", {})
 
-                if chunk_type == "status":
-                    # Status updates (loading_context, analyzing, gathering, reasoning, executing, responding)
+                if event_type == "status":
+                    # Status updates (loading, analyzing, gathering, reasoning, executing, responding)
+                    status = event_data.get("status", "thinking")
+                    # Map to user-friendly event names
+                    sse_event = "thinking"
+                    if status in ["gathering"]:
+                        sse_event = "tool_start"
+                    elif status in ["reasoning", "responding"]:
+                        sse_event = "thinking"
+
                     yield {
-                        "event": "status",
+                        "event": sse_event,
                         "data": json.dumps({
-                            "status": chunk.get("status"),
-                            "message": chunk.get("message")
+                            "status": status,
+                            "message": event_data.get("message", ""),
+                            "tools": event_data.get("tools", [])
                         })
                     }
 
-                elif chunk_type == "tool_call":
-                    # Tool being called
+                elif event_type == "tool":
+                    # Tool execution status
+                    tool_status = event_data.get("status", "executing")
+                    sse_event = "tool_start" if tool_status == "executing" else "tool_end"
+
                     yield {
-                        "event": "tool",
+                        "event": sse_event,
                         "data": json.dumps({
-                            "tool": chunk.get("tool_name"),
-                            "status": "executing"
+                            "tool": event_data.get("tool_name", "unknown"),
+                            "status": tool_status,
+                            "success": event_data.get("success", True),
+                            "execution_time_ms": event_data.get("execution_time_ms", 0)
                         })
                     }
 
-                elif chunk_type == "tool_result":
-                    # Tool completed
-                    yield {
-                        "event": "tool",
-                        "data": json.dumps({
-                            "tool": chunk.get("tool_name"),
-                            "status": "completed",
-                            "success": chunk.get("success", False),
-                            "execution_time_ms": chunk.get("execution_time_ms", 0)
-                        })
-                    }
-
-                elif chunk_type == "action_result":
+                elif event_type == "action":
                     # Action executed
                     yield {
                         "event": "action",
                         "data": json.dumps({
-                            "action_type": chunk.get("action_type"),
-                            "success": chunk.get("success"),
-                            "message": chunk.get("message")
+                            "action_type": event_data.get("action_type"),
+                            "success": event_data.get("success"),
+                            "message": event_data.get("message")
                         })
                     }
 
-                elif chunk_type == "content":
+                elif event_type == "content":
                     # Actual response content - stream to client
-                    full_response += chunk.get("content", "")
+                    content = event_data.get("content", "")
+                    full_response += content
                     yield {
-                        "event": "message",
+                        "event": "content",
                         "data": json.dumps({
-                            "content": chunk.get("content")
+                            "chunk": content
                         })
                     }
 
-                elif chunk_type == "complete":
+                elif event_type == "complete":
                     # Store metadata for final event
-                    final_metadata = chunk.get("metadata", {})
+                    final_metadata = {
+                        "session_id": event_data.get("session_id"),
+                        "tools_used": event_data.get("tools_used", []),
+                        "insights": event_data.get("insights", []),
+                        "follow_up_suggestions": event_data.get("follow_up_suggestions", []),
+                        "execution_time_ms": event_data.get("execution_time_ms", 0),
+                        "query_intent": event_data.get("query_intent", "unknown"),
+                        "data_quality": event_data.get("data_quality", "unknown")
+                    }
 
-                elif chunk_type == "error":
+                elif event_type == "error":
                     # Error occurred
                     yield {
                         "event": "error",
                         "data": json.dumps({
-                            "error": chunk.get("error"),
-                            "message": chunk.get("message", "An error occurred")
+                            "error": event_data.get("error", "Unknown error"),
+                            "message": event_data.get("message", "An error occurred")
                         })
                     }
                     return
