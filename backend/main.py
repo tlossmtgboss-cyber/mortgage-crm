@@ -41180,155 +41180,165 @@ async def clear_sample_data(
 
     Note: Moved from /admin/ path to avoid IP whitelist restriction during data cleanup.
     """
-    try:
-        from sqlalchemy import text
-        results = {}
+    from sqlalchemy import text
 
-        # Helper to safely delete from a table
-        def safe_delete(table_name: str) -> int:
-            try:
-                result = db.execute(text(f"DELETE FROM {table_name}"))
-                return result.rowcount
-            except Exception as e:
-                logger.warning(f"Could not delete from {table_name}: {e}")
-                return 0
+    results = {}
+    errors = []
 
-        logger.info(f"Starting comprehensive demo data cleanup for user {current_user.email}")
+    # Helper to safely delete from a table using raw SQL
+    def safe_delete(table_name: str) -> int:
+        try:
+            result = db.execute(text(f"DELETE FROM {table_name}"))
+            db.commit()  # Commit after each successful delete
+            return result.rowcount
+        except Exception as e:
+            db.rollback()  # Rollback failed transaction to continue
+            errors.append(f"{table_name}: {str(e)[:50]}")
+            return 0
 
-        # ===== DELETE IN ORDER (foreign key dependencies first) =====
+    logger.info(f"Starting comprehensive demo data cleanup for user {current_user.email}")
 
-        # 1. Task-related tables (reference tasks/loans/leads)
-        results["task_approvals"] = safe_delete("task_approvals")
-        results["loan_workflow_tasks"] = safe_delete("loan_workflow_tasks")
-        results["workflow_task_instances"] = safe_delete("workflow_task_instances")
-        results["broken_task_alerts"] = safe_delete("broken_task_alerts")
+    # ===== DELETE IN ORDER (foreign key dependencies first) =====
+    # All deletes use raw SQL with individual commits for transaction safety
 
-        # 2. Activities, Conversations, AI logs (reference loans/leads)
-        results["activities"] = db.query(Activity).delete()
-        results["conversations"] = db.query(Conversation).delete()
-        results["conversation_memory"] = db.query(ConversationMemory).delete()
-        results["ai_audit_logs"] = db.query(AIAuditLog).delete()
-        results["ai_learning_metrics"] = db.query(AILearningMetric).delete()
-        results["ai_colleague_actions"] = db.query(AIColleagueAction).delete()
+    # 1. Task-related tables (reference tasks/loans/leads)
+    results["task_approvals"] = safe_delete("task_approvals")
+    results["loan_workflow_tasks"] = safe_delete("loan_workflow_tasks")
+    results["workflow_task_instances"] = safe_delete("workflow_task_instances")
+    results["broken_task_alerts"] = safe_delete("broken_task_alerts")
 
-        # 3. Tasks (reference loans/leads)
-        results["ai_tasks"] = db.query(AITask).delete()
-        results["tasks"] = db.query(Task).delete()
-        results["process_tasks"] = db.query(ProcessTask).delete()
-        results["ai_delegated_tasks"] = db.query(AIDelegatedTask).delete()
-        results["recurring_tasks"] = safe_delete("recurring_tasks")
+    # 2. Activities, Conversations, AI logs (reference loans/leads)
+    results["activities"] = safe_delete("activities")
+    results["conversations"] = safe_delete("conversations")
+    results["conversation_memory"] = safe_delete("conversation_memory")
+    results["ai_audit_logs"] = safe_delete("ai_audit_logs")
+    results["ai_learning_metrics"] = safe_delete("ai_learning_metrics")
+    results["ai_colleague_actions"] = safe_delete("ai_colleague_actions")
+    results["ai_colleague_learning_metrics"] = safe_delete("ai_colleague_learning_metrics")
+    results["ai_performance_daily"] = safe_delete("ai_performance_daily")
+    results["ai_journey_insights"] = safe_delete("ai_journey_insights")
+    results["ai_health_scores"] = safe_delete("ai_health_scores")
 
-        # 4. Email-related tables
-        results["email_drafts"] = db.query(EmailDraft).delete()
-        results["email_messages"] = db.query(EmailMessage).delete()
-        results["email_intakes"] = db.query(EmailIntake).delete()
-        results["emails"] = db.query(Email).delete()
-        results["email_monitor_captured"] = safe_delete("email_monitor_captured")
-        results["email_relevance_analysis"] = safe_delete("email_relevance_analysis")
-        results["email_crm_links"] = safe_delete("email_crm_links")
+    # 3. Tasks (reference loans/leads)
+    results["ai_tasks"] = safe_delete("ai_tasks")
+    results["tasks"] = safe_delete("tasks")
+    results["process_tasks"] = safe_delete("process_tasks")
+    results["ai_delegated_tasks"] = safe_delete("ai_delegated_tasks")
+    results["recurring_tasks"] = safe_delete("recurring_tasks")
 
-        # 5. SMS and messaging
-        results["sms_messages"] = db.query(SMSMessage).delete()
-        results["sms_conversations"] = db.query(SMSConversation).delete()
-        results["teams_messages"] = db.query(TeamsMessage).delete()
+    # 4. Email-related tables
+    results["email_drafts"] = safe_delete("email_drafts")
+    results["email_messages"] = safe_delete("email_messages")
+    results["email_intakes"] = safe_delete("email_intakes")
+    results["emails"] = safe_delete("emails")
+    results["email_monitor_captured"] = safe_delete("email_monitor_captured")
+    results["email_relevance_analysis"] = safe_delete("email_relevance_analysis")
+    results["email_crm_links"] = safe_delete("email_crm_links")
+    results["email_interactions"] = safe_delete("email_interactions")
 
-        # 6. Calendar and scheduling
-        results["calendar_events"] = db.query(CalendarEvent).delete()
-        results["appointments"] = safe_delete("appointments")
-        results["appointment_reminders"] = safe_delete("appointment_reminders")
-        results["blocked_times"] = safe_delete("blocked_times")
+    # 5. SMS and messaging
+    results["sms_messages"] = safe_delete("sms_messages")
+    results["sms_conversations"] = safe_delete("sms_conversations")
+    results["teams_messages"] = safe_delete("teams_messages")
 
-        # 7. Voicemail and telephony
-        results["voicemail_events"] = db.query(VoicemailEvent).delete()
-        results["voicemail_drops"] = db.query(VoicemailDrop).delete()
-        results["voicemail_campaigns"] = db.query(VoicemailCampaign).delete()
-        results["call_logs"] = safe_delete("call_logs")
-        results["active_calls"] = safe_delete("active_calls")
-        results["dialer_session_tasks"] = safe_delete("dialer_session_tasks")
-        results["dialer_sessions"] = safe_delete("dialer_sessions")
+    # 6. Calendar and scheduling
+    results["calendar_events"] = safe_delete("calendar_events")
+    results["appointments"] = safe_delete("appointments")
+    results["appointment_reminders"] = safe_delete("appointment_reminders")
+    results["blocked_times"] = safe_delete("blocked_times")
+    results["calendar_mappings"] = safe_delete("calendar_mappings")
 
-        # 8. Documents and attachments
-        results["documents"] = db.query(Document).delete()
-        results["attachment_intakes"] = db.query(AttachmentIntake).delete()
+    # 7. Voicemail and telephony
+    results["voicemail_events"] = safe_delete("voicemail_events")
+    results["voicemail_drops"] = safe_delete("voicemail_drops")
+    results["voicemail_campaigns"] = safe_delete("voicemail_campaigns")
+    results["call_logs"] = safe_delete("call_logs")
+    results["active_calls"] = safe_delete("active_calls")
+    results["dialer_session_tasks"] = safe_delete("dialer_session_tasks")
+    results["dialer_sessions"] = safe_delete("dialer_sessions")
 
-        # 9. SLA tracking history
-        results["sla_alerts"] = safe_delete("sla_alerts")
-        results["loan_milestone_history"] = safe_delete("loan_milestone_history")
-        results["sla_performance_snapshots"] = safe_delete("sla_performance_snapshots")
-        results["sla_efficiency_reports"] = safe_delete("sla_efficiency_reports")
+    # 8. Documents and attachments
+    results["documents"] = safe_delete("documents")
+    results["attachment_intakes"] = safe_delete("attachment_intakes")
 
-        # 10. Data reconciliation events (pending approvals)
-        results["incoming_data_events"] = db.query(IncomingDataEvent).delete()
-        results["extracted_data"] = db.query(ExtractedData).delete()
-        results["data_conflicts"] = safe_delete("data_conflicts")
+    # 9. SLA tracking history
+    results["sla_alerts"] = safe_delete("sla_alerts")
+    results["loan_milestone_history"] = safe_delete("loan_milestone_history")
+    results["sla_performance_snapshots"] = safe_delete("sla_performance_snapshots")
+    results["sla_efficiency_reports"] = safe_delete("sla_efficiency_reports")
 
-        # 11. Loan team members (reference loans)
-        results["loan_team_members"] = db.query(LoanTeamMember).delete()
+    # 10. Data reconciliation events (pending approvals)
+    results["incoming_data_events"] = safe_delete("incoming_data_events")
+    results["extracted_data"] = safe_delete("extracted_data")
+    results["data_conflicts"] = safe_delete("data_conflicts")
 
-        # 12. Workflow executions
-        results["workflow_executions"] = db.query(WorkflowExecution).delete()
+    # 11. Loan team members (reference loans)
+    results["loan_team_members"] = safe_delete("loan_team_members")
 
-        # 13. Integration logs
-        results["integration_logs"] = db.query(IntegrationLog).delete()
+    # 12. Workflow executions
+    results["workflow_executions"] = safe_delete("workflow_executions")
 
-        # 14. AI Training and feedback
-        results["ai_training_events"] = db.query(AITrainingEvent).delete()
-        results["ai_feedback_logs"] = db.query(AIFeedbackLog).delete()
-        results["merge_training_events"] = db.query(MergeTrainingEvent).delete()
+    # 13. Integration logs
+    results["integration_logs"] = safe_delete("integration_logs")
 
-        # 15. Duplicate handling
-        results["duplicate_pairs"] = db.query(DuplicatePair).delete()
+    # 14. AI Training and feedback
+    results["ai_training_events"] = safe_delete("ai_training_events")
+    results["ai_feedback_logs"] = safe_delete("ai_feedback_logs")
+    results["merge_training_events"] = safe_delete("merge_training_events")
+    results["ai_actions"] = safe_delete("ai_actions")
+    results["ai_quick_actions"] = safe_delete("ai_quick_actions")
 
-        # 16. Profiles (reference loans/leads)
-        results["active_loan_profiles"] = safe_delete("active_loan_profiles")
-        results["lead_profiles"] = safe_delete("lead_profiles")
-        results["client_profiles"] = db.query(ClientProfile).delete()
-        results["mum_client_profiles"] = safe_delete("mum_client_profiles")
+    # 15. Duplicate handling
+    results["duplicate_pairs"] = safe_delete("duplicate_pairs")
+    results["blocked_senders"] = safe_delete("blocked_senders")
 
-        # 17. Analytics events
-        results["analytics_events"] = safe_delete("analytics_events")
+    # 16. Profiles (reference loans/leads)
+    results["active_loan_profiles"] = safe_delete("active_loan_profiles")
+    results["lead_profiles"] = safe_delete("lead_profiles")
+    results["client_profiles"] = safe_delete("client_profiles")
+    results["mum_client_profiles"] = safe_delete("mum_client_profiles")
+    results["team_member_profiles"] = safe_delete("team_member_profiles")
 
-        # 18. MAIN DATA: Loans (no dependencies now)
-        results["loans"] = db.query(Loan).delete()
+    # 17. Analytics events
+    results["analytics_events"] = safe_delete("analytics_events")
 
-        # 19. MAIN DATA: Leads (no dependencies now)
-        results["leads"] = db.query(Lead).delete()
+    # 18. MAIN DATA: Loans (no dependencies now)
+    results["loans"] = safe_delete("loans")
 
-        # 20. Referral partners and MUM clients
-        results["referral_partners"] = db.query(ReferralPartner).delete()
-        results["mum_clients"] = db.query(MUMClient).delete()
-        results["mum_transactions"] = safe_delete("mum_transactions")
+    # 19. MAIN DATA: Leads (no dependencies now)
+    results["leads"] = safe_delete("leads")
 
-        # 21. IT Helpdesk tickets
-        results["helpdesk_tickets"] = db.query(ITHelpdeskTicket).delete()
+    # 20. Referral partners and MUM clients
+    results["referral_partners"] = safe_delete("referral_partners")
+    results["mum_clients"] = safe_delete("mum_clients")
+    results["mum_transactions"] = safe_delete("mum_transactions")
 
-        # 22. Opportunities
-        results["opportunities"] = safe_delete("opportunities")
+    # 21. IT Helpdesk tickets
+    results["helpdesk_tickets"] = safe_delete("it_helpdesk_tickets")
 
-        # 23. Video clips and related
-        results["video_clip_views"] = safe_delete("clip_views")
-        results["video_clip_comments"] = safe_delete("clip_comments")
-        results["video_clip_shares"] = safe_delete("clip_shares")
-        results["video_clips"] = safe_delete("video_clips")
+    # 22. Opportunities
+    results["opportunities"] = safe_delete("opportunities")
+    results["employer_records"] = safe_delete("employer_records")
 
-        # Commit all deletions
-        db.commit()
+    # 23. Video clips and related
+    results["video_clip_views"] = safe_delete("clip_views")
+    results["video_clip_comments"] = safe_delete("clip_comments")
+    results["video_clip_shares"] = safe_delete("clip_shares")
+    results["video_clip_notifications"] = safe_delete("clip_notifications")
+    results["video_clips"] = safe_delete("video_clips")
 
-        # Count total deleted
-        total_deleted = sum(v for v in results.values() if isinstance(v, int))
+    # Count total deleted
+    total_deleted = sum(v for v in results.values() if isinstance(v, int))
 
-        logger.info(f"Successfully cleared ALL demo data. Total records deleted: {total_deleted}")
+    logger.info(f"Successfully cleared ALL demo data. Total records deleted: {total_deleted}")
 
-        return {
-            "success": True,
-            "message": f"Successfully cleared ALL demo data from CRM. Total records deleted: {total_deleted}",
-            "total_deleted": total_deleted,
-            "details": results
-        }
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Error clearing sample data: {e}")
-        raise HTTPException(status_code=500, detail=f"Error clearing data: {str(e)}")
+    return {
+        "success": True,
+        "message": f"Successfully cleared ALL demo data from CRM. Total records deleted: {total_deleted}",
+        "total_deleted": total_deleted,
+        "details": results,
+        "errors": errors if errors else None
+    }
 
 
 @app.post("/api/v1/admin/seed-demo-people")
