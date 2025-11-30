@@ -1615,6 +1615,13 @@ const API_BASE_URL = isProduction
           `width=${width},height=${height},left=${left},top=${top},scrollbars=yes,resizable=yes`
         );
 
+        // Check if popup was blocked
+        if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+          setLoadingMicrosoft(false);
+          alert('Popup was blocked! Please allow popups for this site and try again.\n\nLook for a popup blocker icon in your browser\'s address bar.');
+          return;
+        }
+
         // Poll for popup closure and check for OAuth completion
         const pollTimer = setInterval(async () => {
           if (popup.closed) {
