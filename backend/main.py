@@ -12152,7 +12152,7 @@ async def orchestrator_chat_stream(
             description=f"AI-created task: {title}",
             due_date=due_date,
             priority=task_priority,
-            type=TaskType.TODO,
+            type=TaskType.IN_PROGRESS,
             assigned_to_id=current_user.id
         )
         db.add(new_task)
@@ -12217,7 +12217,7 @@ async def orchestrator_chat_stream(
             description=f"Scheduled meeting: {title}",
             due_date=start_time,
             priority="medium",
-            type=TaskType.APPOINTMENT,
+            type=TaskType.IN_PROGRESS,  # Using IN_PROGRESS since APPOINTMENT doesn't exist
             assigned_to_id=current_user.id
         )
         db.add(appointment)
