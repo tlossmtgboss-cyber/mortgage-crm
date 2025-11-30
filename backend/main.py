@@ -10760,12 +10760,64 @@ When acting autonomously:
                     tool_start = time.time()
                     tool_success = True
                     tool_error = None
+                    cache_hit = False
+
+                    # Tools that can be safely cached (read-only)
+                    CACHEABLE_TOOLS = {
+                        "get_pipeline": 300,          # 5 minutes
+                        "get_pipeline_metrics": 300,  # 5 minutes
+                        "get_daily_priorities": 120,  # 2 minutes
+                        "get_rate_lock_advisory": 60, # 1 minute
+                        "search_loans": 180,          # 3 minutes
+                        "search_leads": 180,          # 3 minutes
+                        "get_tasks": 60,              # 1 minute
+                    }
+
+                    # Try cache first for cacheable tools
+                    result = None
                     try:
-                        result = await tool_functions[function_name](function_args)
-                    except Exception as tool_err:
-                        tool_success = False
-                        tool_error = str(tool_err)
-                        result = {"error": tool_error}
+                        from core.cache import cache
+                        if cache._enabled and cache._connected and function_name in CACHEABLE_TOOLS:
+                            cache_key = cache._generate_key(
+                                f"tool:{function_name}",
+                                str(current_user.id),
+                                **function_args
+                            )
+                            cached_result = await cache.get(cache_key)
+                            if cached_result is not None:
+                                result = cached_result
+                                cache_hit = True
+                                logger.info(f"✅ CACHE HIT: {function_name}")
+                    except Exception as cache_err:
+                        logger.debug(f"Cache check failed: {cache_err}")
+
+                    # Execute tool if not cached
+                    if result is None:
+                        try:
+                            result = await tool_functions[function_name](function_args)
+
+                            # Cache the result for cacheable tools
+                            try:
+                                from core.cache import cache
+                                if (cache._enabled and cache._connected and
+                                    function_name in CACHEABLE_TOOLS and
+                                    result is not None and "error" not in result):
+                                    ttl = CACHEABLE_TOOLS[function_name]
+                                    cache_key = cache._generate_key(
+                                        f"tool:{function_name}",
+                                        str(current_user.id),
+                                        **function_args
+                                    )
+                                    await cache.set(cache_key, result, ttl)
+                                    logger.info(f"💾 CACHED: {function_name} (TTL: {ttl}s)")
+                            except Exception as cache_err:
+                                logger.debug(f"Cache set failed: {cache_err}")
+
+                        except Exception as tool_err:
+                            tool_success = False
+                            tool_error = str(tool_err)
+                            result = {"error": tool_error}
+
                     tool_duration = (time.time() - tool_start) * 1000  # Convert to ms
 
                     all_tool_results.append({"tool": function_name, "result": result, "success": tool_success})
@@ -10773,9 +10825,7 @@ When acting autonomously:
                     # Record cache metrics (non-blocking)
                     try:
                         from agents.tools.metrics import cache_metrics
-                        # For orchestrator-chat, all tool calls are cache misses since we're not using Redis caching here
-                        # This tracks execution time for baseline comparison
-                        cache_metrics.record(function_name, hit=False, execution_time_ms=tool_duration)
+                        cache_metrics.record(function_name, hit=cache_hit, execution_time_ms=tool_duration)
                     except Exception:
                         pass  # Don't fail request if cache metrics fail
 
