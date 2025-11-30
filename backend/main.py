@@ -17,8 +17,15 @@ from fastapi import FastAPI, Depends, HTTPException, status, Request, Query, Upl
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from fastapi.responses import JSONResponse, RedirectResponse, Response
-from sse_starlette.sse import EventSourceResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response, StreamingResponse
+
+# Try to import SSE support - fall back to StreamingResponse if not available
+try:
+    from sse_starlette.sse import EventSourceResponse
+    SSE_AVAILABLE = True
+except ImportError:
+    EventSourceResponse = None
+    SSE_AVAILABLE = False
 from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, DateTime, Date, Text, ForeignKey, JSON, Enum as SQLEnum, func, text, or_, UniqueConstraint, Numeric, Index
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship, selectinload, joinedload
@@ -12735,7 +12742,26 @@ async def chat_stream(
                 })
             }
 
-    return EventSourceResponse(generate_stream())
+    # Use EventSourceResponse if available, otherwise fall back to StreamingResponse
+    if SSE_AVAILABLE and EventSourceResponse:
+        return EventSourceResponse(generate_stream())
+    else:
+        # Fallback to StreamingResponse with SSE-like format
+        async def sse_generator():
+            async for event in generate_stream():
+                event_type = event.get("event", "message")
+                data = event.get("data", "{}")
+                yield f"event: {event_type}\ndata: {data}\n\n"
+
+        return StreamingResponse(
+            sse_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"
+            }
+        )
 
 
 # ============================================================================
