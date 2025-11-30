@@ -3694,6 +3694,14 @@ class ConversationCreate(BaseModel):
     loan_id: Optional[int] = None
     context: Optional[Dict[str, Any]] = None
 
+class ChatStreamRequest(BaseModel):
+    """Request model for streaming chat endpoint"""
+    message: str
+    session_id: Optional[str] = None
+    context: Optional[Dict[str, Any]] = None
+    lead_id: Optional[int] = None
+    loan_id: Optional[int] = None
+
 class ConversationResponse(BaseModel):
     id: int
     message: str
@@ -16728,7 +16736,7 @@ async def refresh_microsoft_token(oauth_record: MicrosoftOAuthToken, db: Session
             "client_secret": client_secret,
             "refresh_token": refresh_token,
             "grant_type": "refresh_token",
-            "scope": "https://graph.microsoft.com/Mail.Read offline_access"
+            "scope": "https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/Calendars.Read offline_access"
         }
 
         response = requests.post(token_url, data=data)
@@ -21331,13 +21339,14 @@ async def connect_microsoft365(
         token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
 
         # Exchange authorization code for tokens
+        # Scopes must match what was requested in auth-url
         data = {
             "client_id": client_id,
             "client_secret": client_secret,
             "code": auth_data.authorization_code,
             "redirect_uri": auth_data.redirect_uri,
             "grant_type": "authorization_code",
-            "scope": "https://graph.microsoft.com/Mail.Read offline_access"
+            "scope": "https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/Calendars.Read offline_access"
         }
 
         response = requests.post(token_url, data=data)
