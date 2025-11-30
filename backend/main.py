@@ -43993,7 +43993,7 @@ async def get_dialer_call_tasks_debug(
 @app.get("/api/v1/dialer/call-tasks")
 async def get_dialer_call_tasks(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user_flexible)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Get all call-related tasks for the Power Dialer.
