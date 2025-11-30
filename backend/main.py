@@ -9214,15 +9214,11 @@ The Team menu item appears for managers and management roles.
                     "closed_deal_profile": {
                         "avg_days_to_close": round(avg_closed_days, 1),
                         "avg_total_activities": round(avg_closed_activities, 1),
-                        "avg_emails": round(avg_closed_emails, 1),
-                        "avg_calls": round(avg_closed_calls, 1),
                         "avg_completed_tasks": round(avg_closed_tasks, 1)
                     },
                     "dead_deal_profile": {
                         "avg_days_to_death": round(avg_dead_days, 1),
                         "avg_total_activities": round(avg_dead_activities, 1),
-                        "avg_emails": round(avg_dead_emails, 1),
-                        "avg_calls": round(avg_dead_calls, 1),
                         "avg_completed_tasks": round(avg_dead_tasks, 1)
                     },
                     "winning_patterns": winning_patterns,
@@ -9230,7 +9226,7 @@ The Team menu item appears for managers and management roles.
                     "top_performers": top_performers[:5],
                     "key_insights": [
                         f"Closed deals complete {((avg_closed_activities - avg_dead_activities) / max(avg_dead_activities, 1) * 100):.0f}% more activities" if avg_closed_activities > avg_dead_activities else "Activity levels similar between won/lost",
-                        f"Phone calls are {(avg_closed_calls / max(avg_dead_calls, 0.1)):.1f}x more common in closed deals" if avg_closed_calls > avg_dead_calls else "Phone calls similar between won/lost",
+                        f"Task completion: closed deals complete {((avg_closed_tasks - avg_dead_tasks) / max(avg_dead_tasks, 1) * 100):.0f}% more tasks" if avg_closed_tasks > avg_dead_tasks else "Task completion similar between won/lost",
                         f"Speed advantage: closed deals are {((avg_dead_days - avg_closed_days) / max(avg_closed_days, 1) * 100):.0f}% faster" if avg_closed_days < avg_dead_days else "Timeline similar between won/lost"
                     ]
                 }
