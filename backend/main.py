@@ -8115,6 +8115,370 @@ The Team menu item appears for managers and management roles.
                 "note": "A team member will review and respond to this question."
             }
 
+        async def execute_get_employee_capacity(args):
+            """Get team capacity with workload analysis and redistribution recommendations"""
+            try:
+                # Get all team members
+                team_members = db.query(User).filter(User.is_active == True).all()
+
+                results = []
+                for member in team_members:
+                    # Count active loans assigned to this user
+                    active_loans = db.execute(text("""
+                        SELECT COUNT(*) FROM loans
+                        WHERE assigned_lo_id = :user_id
+                        AND stage NOT IN ('closed', 'dead', 'Closed', 'Dead')
+                    """), {"user_id": member.id}).scalar() or 0
+
+                    # Count pending tasks
+                    pending_tasks = db.execute(text("""
+                        SELECT COUNT(*) FROM tasks
+                        WHERE owner_id = :user_id
+                        AND status IN ('pending', 'in_progress')
+                    """), {"user_id": member.id}).scalar() or 0
+
+                    # Count overdue tasks
+                    overdue_tasks = db.execute(text("""
+                        SELECT COUNT(*) FROM tasks
+                        WHERE owner_id = :user_id
+                        AND status = 'pending'
+                        AND due_date < CURRENT_DATE
+                    """), {"user_id": member.id}).scalar() or 0
+
+                    # Calculate capacity (assume 15 loans = 100% capacity)
+                    max_loans = 15
+                    capacity_pct = min(round((active_loans / max_loans) * 100), 150)
+
+                    # Determine status and indicator
+                    if capacity_pct > 120:
+                        status = "OVERLOADED"
+                        indicator = "🔴"
+                    elif capacity_pct > 90:
+                        status = "AT_CAPACITY"
+                        indicator = "🟠"
+                    elif capacity_pct > 50:
+                        status = "HEALTHY"
+                        indicator = "🟢"
+                    else:
+                        status = "AVAILABLE"
+                        indicator = "⚪"
+
+                    results.append({
+                        "name": member.name or member.email,
+                        "role": member.role or "LO",
+                        "active_loans": active_loans,
+                        "pending_tasks": pending_tasks,
+                        "overdue_tasks": overdue_tasks,
+                        "capacity_percentage": capacity_pct,
+                        "status": status,
+                        "indicator": indicator
+                    })
+
+                # Sort by capacity (highest first)
+                results.sort(key=lambda x: x["capacity_percentage"], reverse=True)
+
+                # Generate redistribution recommendations
+                overloaded = [r for r in results if r["status"] == "OVERLOADED"]
+                available = [r for r in results if r["status"] in ["AVAILABLE", "HEALTHY"]]
+
+                recommendations = []
+                for ol in overloaded:
+                    if available:
+                        best_candidate = available[0]
+                        recommendations.append({
+                            "action": f"Move 3-5 files from {ol['name']} ({ol['capacity_percentage']}%) to {best_candidate['name']} ({best_candidate['capacity_percentage']}%)",
+                            "priority": "HIGH" if ol["overdue_tasks"] > 5 else "MEDIUM"
+                        })
+
+                return {
+                    "success": True,
+                    "team_capacity": results,
+                    "recommendations": recommendations,
+                    "summary": {
+                        "overloaded_count": len(overloaded),
+                        "available_count": len(available)
+                    }
+                }
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+
+        async def execute_get_at_risk_deals(args):
+            """Get deals at risk with risk scores and recommended actions"""
+            try:
+                # Get all active loans with key dates
+                loans = db.execute(text("""
+                    SELECT
+                        l.id, l.borrower_name, l.loan_amount, l.stage, l.closing_date,
+                        l.rate_lock_expiration, l.created_at,
+                        u.name as lo_name,
+                        (SELECT MAX(created_at) FROM activities WHERE loan_id = l.id) as last_activity
+                    FROM loans l
+                    LEFT JOIN users u ON l.assigned_lo_id = u.id
+                    WHERE l.stage NOT IN ('closed', 'dead', 'Closed', 'Dead')
+                    ORDER BY l.closing_date ASC
+                """)).fetchall()
+
+                at_risk_deals = []
+                today = datetime.now().date()
+
+                for loan in loans:
+                    risk_score = 0
+                    risk_factors = []
+
+                    # Factor 1: Days in current stage (assume stages should complete in 3-5 days)
+                    if loan.last_activity:
+                        days_since_activity = (today - loan.last_activity.date()).days if isinstance(loan.last_activity, datetime) else 0
+                        if days_since_activity > 7:
+                            risk_score += 30
+                            risk_factors.append(f"No activity for {days_since_activity} days")
+                        elif days_since_activity > 3:
+                            risk_score += 15
+                            risk_factors.append(f"Limited recent activity ({days_since_activity} days)")
+
+                    # Factor 2: Closing date pressure
+                    if loan.closing_date:
+                        closing_date = loan.closing_date if isinstance(loan.closing_date, date) else loan.closing_date.date()
+                        days_to_close = (closing_date - today).days
+                        if days_to_close < 0:
+                            risk_score += 40
+                            risk_factors.append(f"PAST closing date by {abs(days_to_close)} days")
+                        elif days_to_close < 7:
+                            risk_score += 25
+                            risk_factors.append(f"Only {days_to_close} days to close")
+                        elif days_to_close < 14:
+                            risk_score += 10
+                            risk_factors.append(f"{days_to_close} days to close")
+
+                    # Factor 3: Rate lock expiration
+                    if loan.rate_lock_expiration:
+                        lock_date = loan.rate_lock_expiration if isinstance(loan.rate_lock_expiration, date) else loan.rate_lock_expiration.date()
+                        days_to_lock_expire = (lock_date - today).days
+                        if days_to_lock_expire < 0:
+                            risk_score += 35
+                            risk_factors.append(f"Rate lock EXPIRED {abs(days_to_lock_expire)} days ago")
+                        elif days_to_lock_expire < 5:
+                            risk_score += 20
+                            risk_factors.append(f"Rate lock expires in {days_to_lock_expire} days")
+
+                    # Determine risk indicator
+                    if risk_score >= 60:
+                        indicator = "🔴"
+                        urgency = "CRITICAL"
+                    elif risk_score >= 40:
+                        indicator = "🟠"
+                        urgency = "HIGH"
+                    elif risk_score >= 20:
+                        indicator = "🟡"
+                        urgency = "MEDIUM"
+                    else:
+                        continue  # Skip low-risk loans
+
+                    # Generate recommended action
+                    if "Rate lock EXPIRED" in str(risk_factors):
+                        action = "Contact pricing desk immediately for lock extension or new lock"
+                    elif "PAST closing date" in str(risk_factors):
+                        action = "Escalate to management - determine new closing timeline"
+                    elif "No activity" in str(risk_factors):
+                        action = f"Call {loan.borrower_name} TODAY to get update on status"
+                    else:
+                        action = "Review file and ensure all parties are aligned on timeline"
+
+                    at_risk_deals.append({
+                        "loan_id": loan.id,
+                        "borrower_name": loan.borrower_name,
+                        "loan_amount": float(loan.loan_amount) if loan.loan_amount else 0,
+                        "stage": loan.stage,
+                        "lo_name": loan.lo_name or "Unassigned",
+                        "risk_score": risk_score,
+                        "indicator": indicator,
+                        "urgency": urgency,
+                        "risk_factors": risk_factors,
+                        "recommended_action": action,
+                        "closing_date": str(loan.closing_date) if loan.closing_date else None
+                    })
+
+                # Sort by risk score descending
+                at_risk_deals.sort(key=lambda x: x["risk_score"], reverse=True)
+
+                return {
+                    "success": True,
+                    "at_risk_deals": at_risk_deals[:10],  # Top 10 at-risk
+                    "summary": {
+                        "critical_count": len([d for d in at_risk_deals if d["urgency"] == "CRITICAL"]),
+                        "high_count": len([d for d in at_risk_deals if d["urgency"] == "HIGH"]),
+                        "medium_count": len([d for d in at_risk_deals if d["urgency"] == "MEDIUM"]),
+                        "total_at_risk_volume": sum(d["loan_amount"] for d in at_risk_deals)
+                    }
+                }
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+
+        async def execute_get_activity_metrics(args):
+            """Get activity metrics by team member for performance analysis"""
+            period = args.get("period", "week")  # week, month, quarter
+
+            try:
+                # Calculate date range
+                today = datetime.now().date()
+                if period == "week":
+                    start_date = today - timedelta(days=7)
+                elif period == "month":
+                    start_date = today - timedelta(days=30)
+                else:  # quarter
+                    start_date = today - timedelta(days=90)
+
+                # Get team members
+                team_members = db.query(User).filter(User.is_active == True).all()
+
+                results = []
+                for member in team_members:
+                    # Count activities by type
+                    activities = db.execute(text("""
+                        SELECT activity_type, COUNT(*) as count
+                        FROM activities
+                        WHERE created_by = :user_id
+                        AND created_at >= :start_date
+                        GROUP BY activity_type
+                    """), {"user_id": member.id, "start_date": start_date}).fetchall()
+
+                    activity_counts = {a.activity_type: a.count for a in activities}
+
+                    # Count completed tasks
+                    completed_tasks = db.execute(text("""
+                        SELECT COUNT(*) FROM tasks
+                        WHERE owner_id = :user_id
+                        AND status = 'completed'
+                        AND updated_at >= :start_date
+                    """), {"user_id": member.id, "start_date": start_date}).scalar() or 0
+
+                    # Count closings
+                    closings = db.execute(text("""
+                        SELECT COUNT(*) FROM loans
+                        WHERE assigned_lo_id = :user_id
+                        AND stage IN ('closed', 'Closed')
+                        AND updated_at >= :start_date
+                    """), {"user_id": member.id, "start_date": start_date}).scalar() or 0
+
+                    total_activities = sum(activity_counts.values())
+
+                    results.append({
+                        "name": member.name or member.email,
+                        "role": member.role or "LO",
+                        "calls": activity_counts.get("call", 0) + activity_counts.get("phone", 0),
+                        "emails": activity_counts.get("email", 0),
+                        "texts": activity_counts.get("sms", 0) + activity_counts.get("text", 0),
+                        "meetings": activity_counts.get("meeting", 0),
+                        "tasks_completed": completed_tasks,
+                        "closings": closings,
+                        "total_activities": total_activities
+                    })
+
+                # Sort by total activities
+                results.sort(key=lambda x: x["total_activities"], reverse=True)
+
+                # Calculate team averages
+                if results:
+                    avg_calls = sum(r["calls"] for r in results) / len(results)
+                    avg_emails = sum(r["emails"] for r in results) / len(results)
+                    avg_closings = sum(r["closings"] for r in results) / len(results)
+                else:
+                    avg_calls = avg_emails = avg_closings = 0
+
+                return {
+                    "success": True,
+                    "period": period,
+                    "team_metrics": results,
+                    "team_averages": {
+                        "avg_calls": round(avg_calls, 1),
+                        "avg_emails": round(avg_emails, 1),
+                        "avg_closings": round(avg_closings, 1)
+                    },
+                    "top_performer": results[0]["name"] if results else None
+                }
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+
+        async def execute_get_document_status(args):
+            """Get missing documents per loan with urgency levels"""
+            try:
+                # Get active loans
+                loans = db.execute(text("""
+                    SELECT
+                        l.id, l.borrower_name, l.stage, l.closing_date,
+                        u.name as lo_name
+                    FROM loans l
+                    LEFT JOIN users u ON l.assigned_lo_id = u.id
+                    WHERE l.stage NOT IN ('closed', 'dead', 'Closed', 'Dead')
+                """)).fetchall()
+
+                # Standard required documents by stage
+                required_docs_by_stage = {
+                    "application": ["ID", "Pay stubs", "W2s", "Bank statements", "Tax returns"],
+                    "processing": ["Signed disclosures", "Employment verification", "Asset verification"],
+                    "underwriting": ["All conditions from initial UW review"],
+                    "conditional": ["All prior-to-doc conditions"],
+                    "clear_to_close": ["Final signed disclosures", "Proof of insurance", "Wire instructions"]
+                }
+
+                results = []
+                today = datetime.now().date()
+
+                for loan in loans:
+                    stage_lower = (loan.stage or "").lower().replace(" ", "_").replace("-", "_")
+
+                    # Get uploaded documents for this loan
+                    uploaded = db.execute(text("""
+                        SELECT document_type FROM documents
+                        WHERE loan_id = :loan_id
+                    """), {"loan_id": loan.id}).fetchall()
+                    uploaded_types = {d.document_type.lower() for d in uploaded if d.document_type}
+
+                    # Find missing based on stage
+                    required = required_docs_by_stage.get(stage_lower, [])
+                    missing = [doc for doc in required if doc.lower() not in uploaded_types]
+
+                    if not missing:
+                        continue
+
+                    # Determine urgency based on closing date
+                    urgency = "LOW"
+                    if loan.closing_date:
+                        closing_date = loan.closing_date if isinstance(loan.closing_date, date) else loan.closing_date.date()
+                        days_to_close = (closing_date - today).days
+                        if days_to_close < 0:
+                            urgency = "CRITICAL"
+                        elif days_to_close < 7:
+                            urgency = "HIGH"
+                        elif days_to_close < 14:
+                            urgency = "MEDIUM"
+
+                    results.append({
+                        "loan_id": loan.id,
+                        "borrower_name": loan.borrower_name,
+                        "stage": loan.stage,
+                        "lo_name": loan.lo_name or "Unassigned",
+                        "missing_documents": missing,
+                        "missing_count": len(missing),
+                        "urgency": urgency,
+                        "closing_date": str(loan.closing_date) if loan.closing_date else None
+                    })
+
+                # Sort by urgency
+                urgency_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+                results.sort(key=lambda x: urgency_order.get(x["urgency"], 4))
+
+                return {
+                    "success": True,
+                    "loans_with_missing_docs": results[:15],
+                    "summary": {
+                        "critical_count": len([r for r in results if r["urgency"] == "CRITICAL"]),
+                        "high_count": len([r for r in results if r["urgency"] == "HIGH"]),
+                        "total_missing_docs": sum(r["missing_count"] for r in results)
+                    }
+                }
+            except Exception as e:
+                return {"success": False, "error": str(e)}
+
         tool_functions = {
             "send_email": execute_send_email,
             "get_tasks": execute_get_tasks,
@@ -8139,7 +8503,12 @@ The Team menu item appears for managers and management roles.
             "create_lead": execute_create_lead,
             "send_email_to_contact": execute_send_email_to_contact,
             "search_knowledge_base": execute_search_knowledge_base,
-            "escalate_to_human": execute_escalate_to_human
+            "escalate_to_human": execute_escalate_to_human,
+            # NEW: Intelligence/Analytics tools for detailed responses
+            "get_employee_capacity": execute_get_employee_capacity,
+            "get_at_risk_deals": execute_get_at_risk_deals,
+            "get_activity_metrics": execute_get_activity_metrics,
+            "get_document_status": execute_get_document_status
         }
 
         # Pre-fetch real data context for personalized responses

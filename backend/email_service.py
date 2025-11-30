@@ -59,13 +59,15 @@ class EmailService:
         subject: str,
         html_body: str,
         plain_text_body: Optional[str] = None,
-        attachments: Optional[List[Dict[str, Any]]] = None
+        attachments: Optional[List[Dict[str, Any]]] = None,
+        headers: Optional[Dict[str, str]] = None,
+        reply_to: Optional[str] = None
     ) -> bool:
-        """Send an HTML email with optional attachments"""
+        """Send an HTML email with optional attachments and custom headers"""
         if self.use_sendgrid:
-            return self._send_via_sendgrid(to_email, subject, html_body, plain_text_body, attachments)
+            return self._send_via_sendgrid(to_email, subject, html_body, plain_text_body, attachments, headers, reply_to)
         else:
-            return self._send_via_smtp(to_email, subject, html_body, plain_text_body, attachments)
+            return self._send_via_smtp(to_email, subject, html_body, plain_text_body, attachments, headers, reply_to)
 
     def _send_via_sendgrid(
         self,
@@ -73,10 +75,14 @@ class EmailService:
         subject: str,
         html_body: str,
         plain_text_body: Optional[str] = None,
-        attachments: Optional[List[Dict[str, Any]]] = None
+        attachments: Optional[List[Dict[str, Any]]] = None,
+        headers: Optional[Dict[str, str]] = None,
+        reply_to: Optional[str] = None
     ) -> bool:
         """Send email via SendGrid API"""
         try:
+            from sendgrid.helpers.mail import ReplyTo, Header
+
             message = Mail(
                 from_email=(self.from_email, self.from_name),
                 to_emails=to_email,
@@ -86,6 +92,15 @@ class EmailService:
 
             if plain_text_body:
                 message.plain_text_content = plain_text_body
+
+            # Add reply-to address if specified
+            if reply_to:
+                message.reply_to = ReplyTo(reply_to)
+
+            # Add custom headers (Message-ID, In-Reply-To, References, etc.)
+            if headers:
+                for key, value in headers.items():
+                    message.add_header(Header(key, value))
 
             # Add attachments if any
             if attachments:
@@ -114,7 +129,7 @@ class EmailService:
             # Try SMTP fallback if SendGrid fails
             if self.smtp_user:
                 logger.info("Attempting SMTP fallback...")
-                return self._send_via_smtp(to_email, subject, html_body, plain_text_body, attachments)
+                return self._send_via_smtp(to_email, subject, html_body, plain_text_body, attachments, headers, reply_to)
             return False
 
     def _send_via_smtp(
@@ -123,7 +138,9 @@ class EmailService:
         subject: str,
         html_body: str,
         plain_text_body: Optional[str] = None,
-        attachments: Optional[List[Dict[str, Any]]] = None
+        attachments: Optional[List[Dict[str, Any]]] = None,
+        headers: Optional[Dict[str, str]] = None,
+        reply_to: Optional[str] = None
     ) -> bool:
         """Send email via SMTP (fallback method)"""
         if not self.smtp_user or not self.smtp_password:
@@ -137,6 +154,15 @@ class EmailService:
             msg['To'] = to_email
             msg['Subject'] = subject
             msg['Date'] = datetime.now().strftime('%a, %d %b %Y %H:%M:%S %z')
+
+            # Add reply-to header if specified
+            if reply_to:
+                msg['Reply-To'] = reply_to
+
+            # Add custom headers
+            if headers:
+                for key, value in headers.items():
+                    msg[key] = value
 
             # Add plain text version if provided
             if plain_text_body:
