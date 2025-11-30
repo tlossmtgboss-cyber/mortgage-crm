@@ -6312,6 +6312,52 @@ The Team menu item appears for managers and management roles.
                         "required": ["reason", "question_or_request"]
                     }
                 }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_employee_capacity",
+                    "description": "Get team capacity analysis showing workload distribution, who is overloaded vs available, and redistribution recommendations. Use when asked about team bandwidth, capacity planning, or workload balancing.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {}
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_at_risk_deals",
+                    "description": "Get loans at risk with risk scores based on closing dates, rate lock expirations, activity gaps, and stage bottlenecks. Returns prioritized list with recommended actions. Use when asked about at-risk deals, problem loans, or pipeline risks.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {}
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_activity_metrics",
+                    "description": "Get activity metrics by team member showing calls, emails, texts, meetings, tasks completed, and closings. Use for performance analysis and identifying top/bottom performers.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "period": {"type": "string", "enum": ["week", "month", "quarter"], "description": "Time period for metrics", "default": "week"}
+                        }
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_document_status",
+                    "description": "Get missing documents per loan with urgency levels based on closing dates. Shows what docs are needed at each stage. Use when asked about document status, missing items, or compliance gaps.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {}
+                    }
+                }
             }
         ]
 
