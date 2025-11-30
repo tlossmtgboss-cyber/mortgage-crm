@@ -17335,14 +17335,21 @@ Be concise - you're texting!"""
 @app.get("/api/v1/sms/conversations")
 async def list_sms_conversations(
     active_only: bool = True,
+    include_all: bool = False,
     limit: int = 50,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """List SMS conversations for the current user"""
-    query = db.query(SMSConversation).filter(
-        SMSConversation.user_id == current_user.id
-    )
+    """List SMS conversations. Use include_all=true to see all conversations (admin only)"""
+    query = db.query(SMSConversation)
+
+    # If not including all, filter by user or show unassigned
+    if not include_all:
+        query = query.filter(
+            (SMSConversation.user_id == current_user.id) |
+            (SMSConversation.user_id == None)
+        )
+
     if active_only:
         query = query.filter(SMSConversation.is_active == True)
 
