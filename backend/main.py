@@ -43933,72 +43933,81 @@ async def get_dialer_call_tasks(
     """
     try:
         # Get tasks from unified-tasks that are call-related
-        call_keywords = ['call', 'phone', 'contact', 'voicemail', 'dial', 'reach out']
-
-        # Query tasks with call-related titles
-        # Use safe integer casting with regex check to avoid errors on non-numeric entity_ids
+        # Simple query - get tasks first, then look up contact info
         tasks_query = db.execute(text("""
-            SELECT t.id, t.title, t.description, t.priority,
-                   CAST(t.status AS TEXT) as status, t.due_date,
-                   t.entity_type, t.entity_id,
-                   t.source, t.created_at,
-                   COALESCE(l.borrower_name, ld.name, 'Unknown') as contact_name,
-                   COALESCE(l.borrower_phone, ld.phone, '') as phone_number,
-                   l.id as loan_id,
-                   ld.id as lead_id
-            FROM tasks t
-            LEFT JOIN loans l ON t.entity_type = 'loan'
-                AND t.entity_id IS NOT NULL
-                AND t.entity_id ~ '^[0-9]+$'
-                AND CAST(t.entity_id AS INTEGER) = l.id
-            LEFT JOIN leads ld ON t.entity_type = 'lead'
-                AND t.entity_id IS NOT NULL
-                AND t.entity_id ~ '^[0-9]+$'
-                AND CAST(t.entity_id AS INTEGER) = ld.id
-            WHERE CAST(t.status AS TEXT) NOT IN ('completed', 'cancelled', 'skipped')
+            SELECT id, title, description, priority,
+                   CAST(status AS TEXT) as status, due_date,
+                   entity_type, entity_id,
+                   source, created_at
+            FROM tasks
+            WHERE CAST(status AS TEXT) NOT IN ('completed', 'cancelled', 'skipped')
             AND (
-                LOWER(t.title) LIKE '%call%'
-                OR LOWER(t.title) LIKE '%phone%'
-                OR LOWER(t.title) LIKE '%contact%'
-                OR LOWER(t.title) LIKE '%voicemail%'
-                OR LOWER(t.title) LIKE '%dial%'
-                OR LOWER(t.title) LIKE '%reach out%'
+                LOWER(title) LIKE '%call%'
+                OR LOWER(title) LIKE '%phone%'
+                OR LOWER(title) LIKE '%contact%'
+                OR LOWER(title) LIKE '%voicemail%'
+                OR LOWER(title) LIKE '%dial%'
+                OR LOWER(title) LIKE '%reach out%'
             )
             ORDER BY
-                CASE t.priority
+                CASE priority
                     WHEN 'urgent' THEN 1
                     WHEN 'high' THEN 2
                     WHEN 'medium' THEN 3
                     ELSE 4
                 END,
-                t.due_date ASC NULLS LAST,
-                t.created_at DESC
+                due_date ASC NULLS LAST,
+                created_at DESC
             LIMIT 100
         """)).mappings().all()
 
         tasks = []
         for row in tasks_query:
-            # Only include tasks with valid phone numbers
-            phone = row.get('phone_number') or ''
-            if phone and len(phone) >= 10:
-                due_date = row.get('due_date')
-                created_at = row.get('created_at')
-                tasks.append({
-                    "id": row.get('id'),
-                    "title": row.get('title'),
-                    "description": row.get('description'),
-                    "priority": row.get('priority'),
-                    "status": row.get('status'),
-                    "due_date": due_date.isoformat() if due_date else None,
-                    "entity_type": row.get('entity_type'),
-                    "entity_id": row.get('entity_id'),
-                    "source": row.get('source'),
-                    "created_at": created_at.isoformat() if created_at else None,
-                    "contact_name": row.get('contact_name'),
-                    "phone_number": phone,
-                    "loan_id": row.get('loan_id'),
-                    "lead_id": row.get('lead_id')
-                })
+            due_date = row.get('due_date')
+            created_at = row.get('created_at')
+            entity_type = row.get('entity_type')
+            entity_id = row.get('entity_id')
+
+            # Look up contact info based on entity_type
+            contact_name = 'Unknown'
+            phone_number = ''
+
+            if entity_type == 'loan' and entity_id:
+                try:
+                    loan = db.execute(text(
+                        "SELECT borrower_name, borrower_phone FROM loans WHERE id = :id"
+                    ), {"id": int(entity_id)}).mappings().first()
+                    if loan:
+                        contact_name = loan.get('borrower_name') or 'Unknown'
+                        phone_number = loan.get('borrower_phone') or ''
+                except (ValueError, TypeError):
+                    pass
+            elif entity_type == 'lead' and entity_id:
+                try:
+                    lead = db.execute(text(
+                        "SELECT name, phone FROM leads WHERE id = :id"
+                    ), {"id": int(entity_id)}).mappings().first()
+                    if lead:
+                        contact_name = lead.get('name') or 'Unknown'
+                        phone_number = lead.get('phone') or ''
+                except (ValueError, TypeError):
+                    pass
+
+            # Include task even without phone - user can see what needs attention
+            tasks.append({
+                "id": row.get('id'),
+                "title": row.get('title'),
+                "description": row.get('description'),
+                "priority": row.get('priority'),
+                "status": row.get('status'),
+                "due_date": due_date.isoformat() if due_date else None,
+                "entity_type": entity_type,
+                "entity_id": str(entity_id) if entity_id else None,
+                "source": row.get('source'),
+                "created_at": created_at.isoformat() if created_at else None,
+                "contact_name": contact_name,
+                "phone_number": phone_number
+            })
 
         return {"tasks": tasks, "total": len(tasks)}
     except Exception as e:
