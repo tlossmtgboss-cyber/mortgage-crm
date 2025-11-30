@@ -6159,6 +6159,19 @@ The Team menu item appears for managers and management roles.
             {
                 "type": "function",
                 "function": {
+                    "name": "get_efficiency_metrics",
+                    "description": "Get real-time pipeline efficiency metrics including bottleneck root cause analysis, team capacity, velocity metrics, and specific recommendations. Use this for deep pipeline analysis.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "metric_type": {"type": "string", "enum": ["bottlenecks", "velocity", "stage_performance", "team_capacity", "full_analysis"], "description": "Type of efficiency metric to analyze"}
+                        }
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
                     "name": "get_analytics_report",
                     "description": "Generate comprehensive analytics report on any data in the system. Use for performance numbers, conversion rates, volume metrics, and projections.",
                     "parameters": {
@@ -7281,6 +7294,237 @@ The Team menu item appears for managers and management roles.
                 import traceback
                 return {"success": False, "message": f"Error loading SLA data: {str(e)}", "traceback": traceback.format_exc()}
 
+        async def execute_get_efficiency_metrics(args):
+            """Get deep pipeline efficiency metrics with root cause analysis"""
+            metric_type = args.get("metric_type", "full_analysis")
+
+            # SLA target days by stage
+            SLA_TARGETS = {
+                "Application": 2, "APPLICATION": 2,
+                "Disclosed": 3, "DISCLOSED": 3,
+                "Processing": 5, "PROCESSING": 5,
+                "Submitted": 2, "SUBMITTED": 2,
+                "Conditional": 3, "CONDITIONAL": 3,
+                "CTC": 2, "Clear to Close": 2, "CLEAR_TO_CLOSE": 2,
+                "Docs": 2, "DOCS": 2,
+                "Funding": 1, "FUNDING": 1
+            }
+
+            try:
+                # Get comprehensive data for analysis
+                loan_data = db.execute(
+                    text("""
+                        SELECT
+                            l.id, l.loan_number, l.borrower_name, l.coborrower_name,
+                            l.stage::text as stage, l.amount, l.days_in_stage,
+                            l.processor, l.underwriter, l.closer,
+                            l.closing_date, l.updated_at, l.sla_status
+                        FROM loans l
+                        WHERE l.loan_officer_id = :user_id
+                        AND l.stage::text NOT IN ('Funded', 'Withdrawn', 'Closed', 'FUNDED', 'WITHDRAWN', 'CLOSED')
+                    """),
+                    {"user_id": current_user.id}
+                ).fetchall()
+
+                # Get task data for root cause analysis
+                task_data = db.execute(
+                    text("""
+                        SELECT
+                            t.id, t.title, t.status, t.priority, t.due_date,
+                            t.loan_id, t.lead_id, t.owner_id,
+                            u.full_name as assignee_name,
+                            u.email as assignee_email
+                        FROM tasks t
+                        LEFT JOIN users u ON t.owner_id = u.id
+                        WHERE t.status NOT IN ('completed', 'cancelled')
+                        AND (t.loan_id IN (SELECT id FROM loans WHERE loan_officer_id = :user_id)
+                             OR t.owner_id = :user_id)
+                    """),
+                    {"user_id": current_user.id}
+                ).fetchall()
+
+                # Analyze bottlenecks with root causes
+                stage_metrics = {}
+                team_workload = {}
+                stuck_deals = []
+                total_pipeline_value = 0
+
+                for loan in loan_data:
+                    stage = str(loan.stage) if loan.stage else "Unknown"
+                    days = loan.days_in_stage or 0
+                    amount = float(loan.amount) if loan.amount else 0
+                    target = SLA_TARGETS.get(stage, 5)
+                    total_pipeline_value += amount
+
+                    # Track stage metrics
+                    if stage not in stage_metrics:
+                        stage_metrics[stage] = {
+                            "count": 0, "total_days": 0, "total_volume": 0,
+                            "target_days": target, "stuck_count": 0, "loans": []
+                        }
+                    stage_metrics[stage]["count"] += 1
+                    stage_metrics[stage]["total_days"] += days
+                    stage_metrics[stage]["total_volume"] += amount
+                    stage_metrics[stage]["loans"].append({
+                        "borrower_name": loan.borrower_name,
+                        "amount": amount,
+                        "days_in_stage": days,
+                        "processor": loan.processor,
+                        "underwriter": loan.underwriter
+                    })
+
+                    # Track team workload
+                    for role, name in [("processor", loan.processor), ("underwriter", loan.underwriter), ("closer", loan.closer)]:
+                        if name:
+                            if name not in team_workload:
+                                team_workload[name] = {"role": role, "loan_count": 0, "stuck_count": 0, "overdue_tasks": 0, "loans": []}
+                            team_workload[name]["loan_count"] += 1
+                            team_workload[name]["loans"].append(loan.borrower_name)
+
+                    # Identify stuck deals
+                    if days > target * 1.5:
+                        stage_metrics[stage]["stuck_count"] += 1
+                        # Determine root cause
+                        root_cause = "Unknown"
+                        if loan.processor and loan.processor in team_workload:
+                            root_cause = f"{loan.processor} may be overloaded"
+                        elif not loan.processor:
+                            root_cause = "No processor assigned"
+
+                        stuck_deals.append({
+                            "borrower_name": loan.borrower_name,
+                            "amount": amount,
+                            "stage": stage,
+                            "days_in_stage": days,
+                            "target_days": target,
+                            "days_over": days - target,
+                            "processor": loan.processor,
+                            "underwriter": loan.underwriter,
+                            "root_cause": root_cause,
+                            "closing_date": loan.closing_date.isoformat() if loan.closing_date else None
+                        })
+                        if loan.processor and loan.processor in team_workload:
+                            team_workload[loan.processor]["stuck_count"] += 1
+
+                # Count overdue tasks per team member
+                for task in task_data:
+                    if task.assignee_name and task.due_date:
+                        if task.due_date.date() < datetime.now().date():
+                            if task.assignee_name in team_workload:
+                                team_workload[task.assignee_name]["overdue_tasks"] += 1
+
+                # Calculate stage bottlenecks with severity
+                bottlenecks = []
+                for stage, data in stage_metrics.items():
+                    if data["count"] > 0:
+                        avg_days = data["total_days"] / data["count"]
+                        variance = avg_days - data["target_days"]
+                        if variance > 0:
+                            severity = "critical" if variance > data["target_days"] else ("warning" if variance > data["target_days"] * 0.5 else "minor")
+
+                            # Find root cause
+                            root_cause = "Multiple factors"
+                            recommendation = "Review individual loans"
+
+                            # Check if one person is overloaded
+                            stuck_loans = [l for l in data["loans"] if l["days_in_stage"] > data["target_days"] * 1.5]
+                            if stuck_loans:
+                                processors = [l["processor"] for l in stuck_loans if l.get("processor")]
+                                if processors:
+                                    from collections import Counter
+                                    most_common = Counter(processors).most_common(1)
+                                    if most_common:
+                                        overloaded_person = most_common[0][0]
+                                        overloaded_count = most_common[0][1]
+                                        if overloaded_count >= 2:
+                                            overdue_count = team_workload.get(overloaded_person, {}).get("overdue_tasks", 0)
+                                            root_cause = f"{overloaded_person} overloaded ({overloaded_count} stuck files, {overdue_count} overdue tasks)"
+                                            # Find who to redistribute to
+                                            other_processors = [n for n, d in team_workload.items() if d["role"] == "processor" and n != overloaded_person]
+                                            if other_processors:
+                                                lightest = min(other_processors, key=lambda x: team_workload[x]["loan_count"])
+                                                recommendation = f"Redistribute {min(overloaded_count, 3)} files from {overloaded_person} to {lightest}"
+
+                            bottlenecks.append({
+                                "stage": stage,
+                                "avg_days": round(avg_days, 1),
+                                "target_days": data["target_days"],
+                                "variance": round(variance, 1),
+                                "severity": severity,
+                                "affected_deals": data["stuck_count"],
+                                "total_volume": data["total_volume"],
+                                "root_cause": root_cause,
+                                "recommendation": recommendation
+                            })
+
+                bottlenecks = sorted(bottlenecks, key=lambda x: x["variance"], reverse=True)
+
+                # Calculate velocity (avg days to close by stage)
+                velocity = {stage: round(data["total_days"] / data["count"], 1) if data["count"] > 0 else 0 for stage, data in stage_metrics.items()}
+
+                # Team capacity analysis
+                team_capacity = []
+                for name, data in team_workload.items():
+                    capacity_status = "available" if data["loan_count"] < 8 else ("at_capacity" if data["loan_count"] < 12 else "overloaded")
+                    team_capacity.append({
+                        "name": name,
+                        "role": data["role"],
+                        "active_loans": data["loan_count"],
+                        "stuck_loans": data["stuck_count"],
+                        "overdue_tasks": data["overdue_tasks"],
+                        "capacity_status": capacity_status,
+                        "recommendation": f"Can take {max(0, 10 - data['loan_count'])} more files" if capacity_status != "overloaded" else "Needs files redistributed"
+                    })
+
+                team_capacity = sorted(team_capacity, key=lambda x: x["stuck_loans"], reverse=True)
+
+                # Build response based on metric_type
+                response = {
+                    "success": True,
+                    "metric_type": metric_type,
+                    "summary": {
+                        "total_active_loans": len(loan_data),
+                        "total_pipeline_value": total_pipeline_value,
+                        "bottleneck_stages": len([b for b in bottlenecks if b["severity"] == "critical"]),
+                        "stuck_deals": len(stuck_deals),
+                        "team_members_overloaded": len([t for t in team_capacity if t["capacity_status"] == "overloaded"])
+                    }
+                }
+
+                if metric_type in ["bottlenecks", "full_analysis"]:
+                    response["bottlenecks"] = bottlenecks[:5]
+                    response["stuck_deals"] = sorted(stuck_deals, key=lambda x: x["days_over"], reverse=True)[:10]
+
+                if metric_type in ["velocity", "stage_performance", "full_analysis"]:
+                    response["velocity_by_stage"] = velocity
+                    response["stage_performance"] = [
+                        {"stage": s, "count": d["count"], "avg_days": round(d["total_days"]/d["count"], 1) if d["count"] > 0 else 0, "target": d["target_days"], "volume": d["total_volume"]}
+                        for s, d in stage_metrics.items()
+                    ]
+
+                if metric_type in ["team_capacity", "full_analysis"]:
+                    response["team_capacity"] = team_capacity
+
+                # Generate actionable guidance
+                guidance = []
+                if bottlenecks and bottlenecks[0]["severity"] == "critical":
+                    b = bottlenecks[0]
+                    guidance.append(f"CRITICAL: {b['stage']} stage is bottlenecked at {b['avg_days']} days (target: {b['target_days']}). {b['root_cause']}. {b['recommendation']}.")
+                if stuck_deals:
+                    worst = stuck_deals[0]
+                    guidance.append(f"Priority: {worst['borrower_name']}'s ${worst['amount']:,.0f} loan is {worst['days_over']} days over SLA in {worst['stage']}.")
+                if not guidance:
+                    guidance.append("Pipeline efficiency is healthy. No critical bottlenecks detected.")
+
+                response["guidance"] = " ".join(guidance)
+
+                return response
+
+            except Exception as e:
+                logger.error(f"Error fetching efficiency metrics: {e}")
+                import traceback
+                return {"success": False, "message": f"Error: {str(e)}", "traceback": traceback.format_exc()}
+
         async def execute_get_analytics_report(args):
             """Generate comprehensive analytics report"""
             report_type = args.get("report_type", "pipeline_summary")
@@ -7807,6 +8051,7 @@ The Team menu item appears for managers and management roles.
             "get_mum_clients": execute_get_mum_clients,
             "get_referral_partners": execute_get_referral_partners,
             "get_sla_dashboard": execute_get_sla_dashboard,
+            "get_efficiency_metrics": execute_get_efficiency_metrics,
             "get_analytics_report": execute_get_analytics_report,
             "send_sms": execute_send_sms,
             "make_phone_call": execute_make_phone_call,
