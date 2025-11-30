@@ -129,7 +129,7 @@ class DialerEngine:
             Dict with session info or error
         """
         from main import (
-            DialerSession, DialerSessionTask, Task, Lead, Loan,
+            DialerSession, DialerSessionTask, AITask, Lead, Loan,
             DialerSessionStatus, DialerTaskStatus
         )
 
@@ -168,13 +168,15 @@ class DialerEngine:
         # Add tasks to session
         position = 0
         for task_id in task_ids:
-            task = self.db.query(Task).filter(Task.id == task_id).first()
+            # AITask is the model used by the call-tasks endpoint
+            task = self.db.query(AITask).filter(AITask.id == task_id).first()
             if not task:
+                logger.warning(f"AITask {task_id} not found, skipping")
                 continue
 
             # Get contact info from lead or loan
             contact_phone = None
-            contact_name = None
+            contact_name = task.borrower_name or None
             lead_id = None
             loan_id = None
 
@@ -182,17 +184,17 @@ class DialerEngine:
                 lead = self.db.query(Lead).filter(Lead.id == task.lead_id).first()
                 if lead:
                     contact_phone = lead.phone
-                    contact_name = lead.name
+                    contact_name = contact_name or lead.name
                     lead_id = lead.id
             elif task.loan_id:
                 loan = self.db.query(Loan).filter(Loan.id == task.loan_id).first()
                 if loan:
                     contact_phone = loan.borrower_phone
-                    contact_name = loan.borrower_name
+                    contact_name = contact_name or loan.borrower_name
                     loan_id = loan.id
 
             if not contact_phone:
-                logger.warning(f"Task {task_id} has no contact phone, skipping")
+                logger.warning(f"AITask {task_id} has no contact phone (lead_id={task.lead_id}, loan_id={task.loan_id}), skipping")
                 continue
 
             session_task = DialerSessionTask(
@@ -668,22 +670,21 @@ class DialerEngine:
 
         # Handle callback scheduling
         if schedule_callback and disposition == "callback_scheduled":
-            # Create a new task for the callback
-            from main import Task
+            # Create a new AITask for the callback (same model as source tasks)
+            from main import AITask
 
-            original_task = self.db.query(Task).filter(Task.id == task.original_task_id).first()
-            if original_task:
-                callback_task = Task(
-                    user_id=self.agent_id,
-                    title=f"Callback: {task.contact_name}",
-                    description=f"Scheduled callback from dialer session. Notes: {notes or 'None'}",
-                    due_date=schedule_callback,
-                    priority="high",
-                    lead_id=task.lead_id,
-                    loan_id=task.loan_id,
-                    task_type="follow_up"
-                )
-                self.db.add(callback_task)
+            # Create callback task linked to same lead/loan
+            callback_task = AITask(
+                assigned_to_id=self.agent_id,
+                title=f"Callback: {task.contact_name}",
+                description=f"Scheduled callback from dialer session. Notes: {notes or 'None'}",
+                due_date=schedule_callback,
+                priority="high",
+                lead_id=task.lead_id,
+                loan_id=task.loan_id,
+                borrower_name=task.contact_name
+            )
+            self.db.add(callback_task)
 
         self.db.commit()
 
