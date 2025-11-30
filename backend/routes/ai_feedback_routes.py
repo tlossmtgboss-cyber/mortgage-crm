@@ -77,24 +77,21 @@ class AIFeedbackStats(BaseModel):
 
 
 # =============================================================================
-# Dependency Injection
+# Dependencies - Import from shared modules
 # =============================================================================
 
-def get_db():
-    """Database session - to be set by main app"""
-    raise NotImplementedError("get_db must be overridden")
+from database import get_db
 
-
-def get_current_user():
-    """Current user - to be set by main app"""
-    raise NotImplementedError("get_current_user must be overridden")
+# For user authentication, we import from main at runtime to avoid circular imports
+def get_current_user_dep():
+    """Get current user - imports from main at runtime"""
+    import main
+    return main.get_current_user
 
 
 def set_dependencies(db_dependency, user_dependency):
-    """Set the dependency functions from the main app"""
-    global get_db, get_current_user
-    get_db = db_dependency
-    get_current_user = user_dependency
+    """Legacy function for backwards compatibility - no longer needed"""
+    pass  # Dependencies are now imported directly
 
 
 # =============================================================================
@@ -105,7 +102,7 @@ def set_dependencies(db_dependency, user_dependency):
 def create_feedback(
     feedback: AIFeedbackCreate,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user_dep())
 ):
     """
     Submit feedback about an unsatisfactory AI response.
@@ -177,7 +174,7 @@ def get_feedback_logs(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user_dep())
 ):
     """
     Get AI feedback logs with optional filters.
@@ -243,7 +240,7 @@ def get_feedback_logs(
 @router.get("/stats", response_model=AIFeedbackStats)
 def get_feedback_stats(
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user_dep())
 ):
     """
     Get statistics about AI feedback for the dashboard.
@@ -313,7 +310,7 @@ def update_feedback_status(
     feedback_id: int,
     update: AIFeedbackUpdate,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user_dep())
 ):
     """
     Update the status of a feedback log (for admins to mark as reviewed/fixed).
@@ -357,7 +354,7 @@ def update_feedback_status(
 def delete_feedback(
     feedback_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user_dep())
 ):
     """
     Delete a feedback log entry.
