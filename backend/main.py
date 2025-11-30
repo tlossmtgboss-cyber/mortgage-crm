@@ -8241,7 +8241,7 @@ The Team menu item appears for managers and management roles.
                     active_loans = db.execute(text("""
                         SELECT COUNT(*) FROM loans
                         WHERE loan_officer_id = :user_id
-                        AND stage NOT IN ('closed', 'dead', 'Closed', 'Dead')
+                        AND CAST(stage AS TEXT) NOT ILIKE ANY(ARRAY['funded', 'withdrawn', 'closed', 'dead'])
                     """), {"user_id": member.id}).scalar() or 0
 
                     # Count pending tasks
@@ -8465,11 +8465,11 @@ The Team menu item appears for managers and management roles.
                         AND updated_at >= :start_date
                     """), {"user_id": member.id, "start_date": start_date}).scalar() or 0
 
-                    # Count closings
+                    # Count closings (Funded = closed/funded loans)
                     closings = db.execute(text("""
                         SELECT COUNT(*) FROM loans
                         WHERE loan_officer_id = :user_id
-                        AND stage IN ('closed', 'Closed')
+                        AND CAST(stage AS TEXT) ILIKE ANY(ARRAY['funded', 'closed'])
                         AND updated_at >= :start_date
                     """), {"user_id": member.id, "start_date": start_date}).scalar() or 0
 
@@ -8738,7 +8738,7 @@ The Team menu item appears for managers and management roles.
                     SELECT
                         stage,
                         COUNT(*) as total,
-                        SUM(CASE WHEN stage IN ('closed', 'Closed') THEN 1 ELSE 0 END) as closed_count
+                        SUM(CASE WHEN CAST(stage AS TEXT) ILIKE ANY(ARRAY['funded', 'closed']) THEN 1 ELSE 0 END) as closed_count
                     FROM loans
                     WHERE created_at > NOW() - INTERVAL '365 days'
                     GROUP BY stage
@@ -8872,10 +8872,10 @@ The Team menu item appears for managers and management roles.
                 # Get historical close rates and average amounts
                 historical = db.execute(text("""
                     SELECT
-                        COUNT(*) FILTER (WHERE stage IN ('closed', 'Closed')) as closed_count,
-                        COUNT(*) FILTER (WHERE stage IN ('dead', 'Dead')) as dead_count,
-                        AVG(amount) FILTER (WHERE stage IN ('closed', 'Closed')) as avg_closed_amount,
-                        AVG(EXTRACT(EPOCH FROM (updated_at - created_at))/86400) FILTER (WHERE stage IN ('closed', 'Closed')) as avg_days_to_close
+                        COUNT(*) FILTER (WHERE CAST(stage AS TEXT) ILIKE ANY(ARRAY['funded', 'closed'])) as closed_count,
+                        COUNT(*) FILTER (WHERE CAST(stage AS TEXT) ILIKE ANY(ARRAY['withdrawn', 'dead'])) as dead_count,
+                        AVG(amount) FILTER (WHERE CAST(stage AS TEXT) ILIKE ANY(ARRAY['funded', 'closed'])) as avg_closed_amount,
+                        AVG(EXTRACT(EPOCH FROM (updated_at - created_at))/86400) FILTER (WHERE CAST(stage AS TEXT) ILIKE ANY(ARRAY['funded', 'closed'])) as avg_days_to_close
                     FROM loans
                     WHERE created_at > NOW() - INTERVAL '180 days'
                 """)).fetchone()
@@ -8893,7 +8893,7 @@ The Team menu item appears for managers and management roles.
                         SUM(amount) as total_amount,
                         AVG(amount) as avg_amount
                     FROM loans
-                    WHERE stage NOT IN ('closed', 'dead', 'Closed', 'Dead')
+                    WHERE CAST(stage AS TEXT) NOT ILIKE ANY(ARRAY['funded', 'withdrawn', 'closed', 'dead'])
                     GROUP BY stage
                 """)).fetchall()
 
