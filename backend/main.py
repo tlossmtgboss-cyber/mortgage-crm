@@ -8607,8 +8607,7 @@ The Team menu item appears for managers and management roles.
                         u.full_name as lo_name,
                         (SELECT COUNT(*) FROM activities WHERE loan_id = l.id) as total_activities,
                         (SELECT MAX(created_at) FROM activities WHERE loan_id = l.id) as last_activity_date,
-                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND activity_type = 'email' AND direction = 'inbound') as inbound_emails,
-                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND activity_type = 'email' AND direction = 'outbound') as outbound_emails,
+                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND type = 'email') as email_count,
                         (SELECT COUNT(*) FROM tasks WHERE loan_id = l.id AND status = 'completed') as completed_tasks,
                         (SELECT COUNT(*) FROM tasks WHERE loan_id = l.id AND status != 'completed') as pending_tasks
                     FROM loans l
@@ -8647,17 +8646,17 @@ The Team menu item appears for managers and management roles.
                     elif days_silent > 3:
                         risk_score += 0.1
 
-                    # Factor 2: Response ratio (max 0.3)
-                    outbound = loan.outbound_emails or 0
-                    inbound = loan.inbound_emails or 0
-                    if outbound > 0:
-                        response_ratio = inbound / outbound
-                        if response_ratio < 0.2:
+                    # Factor 2: Low email engagement (max 0.3)
+                    total_activities = loan.total_activities or 0
+                    email_count = loan.email_count or 0
+                    if total_activities > 0:
+                        email_ratio = email_count / total_activities
+                        if email_ratio < 0.1 and total_activities >= 3:
                             risk_score += 0.3
-                            risk_factors.append(f"Very low response rate ({int(response_ratio*100)}%)")
-                        elif response_ratio < 0.5:
-                            risk_score += 0.15
-                            risk_factors.append(f"Low response rate ({int(response_ratio*100)}%)")
+                            risk_factors.append(f"Very low email engagement ({email_count} emails)")
+                        elif email_count == 0:
+                            risk_score += 0.2
+                            risk_factors.append("No email communication recorded")
 
                     # Factor 3: Stalled pipeline (max 0.2)
                     days_in_pipeline = (today.date() - loan.created_at.date()).days if hasattr(loan.created_at, 'date') else 30
@@ -9110,8 +9109,8 @@ The Team menu item appears for managers and management roles.
                         EXTRACT(EPOCH FROM (l.updated_at - l.created_at))/86400 as days_to_close,
                         u.full_name as lo_name,
                         (SELECT COUNT(*) FROM activities WHERE loan_id = l.id) as activity_count,
-                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND activity_type = 'email') as email_count,
-                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND activity_type = 'call') as call_count,
+                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND type = 'email') as email_count,
+                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND type = 'call') as call_count,
                         (SELECT COUNT(*) FROM tasks WHERE loan_id = l.id AND status = 'completed') as completed_tasks
                     FROM loans l
                     LEFT JOIN users u ON l.loan_officer_id = u.id
@@ -9126,8 +9125,8 @@ The Team menu item appears for managers and management roles.
                         EXTRACT(EPOCH FROM (l.updated_at - l.created_at))/86400 as days_to_death,
                         u.full_name as lo_name,
                         (SELECT COUNT(*) FROM activities WHERE loan_id = l.id) as activity_count,
-                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND activity_type = 'email') as email_count,
-                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND activity_type = 'call') as call_count,
+                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND type = 'email') as email_count,
+                        (SELECT COUNT(*) FROM activities WHERE loan_id = l.id AND type = 'call') as call_count,
                         (SELECT COUNT(*) FROM tasks WHERE loan_id = l.id AND status = 'completed') as completed_tasks
                     FROM loans l
                     LEFT JOIN users u ON l.loan_officer_id = u.id
