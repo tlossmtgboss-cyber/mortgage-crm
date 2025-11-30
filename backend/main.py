@@ -17684,6 +17684,37 @@ async def toggle_ai_for_conversation(
     return {"success": True, "conversation_id": conversation_id, "ai_enabled": enabled}
 
 
+@app.get("/api/v1/debug/sms-messages")
+async def debug_sms_messages(
+    limit: int = 20,
+    db: Session = Depends(get_db)
+):
+    """Debug endpoint to view all SMS messages in the database"""
+    try:
+        messages = db.query(SMSMessage).order_by(SMSMessage.created_at.desc()).limit(limit).all()
+        return {
+            "total_count": db.query(SMSMessage).count(),
+            "messages": [
+                {
+                    "id": m.id,
+                    "conversation_id": m.conversation_id,
+                    "direction": m.direction,
+                    "from_number": m.from_number,
+                    "to_number": m.to_number,
+                    "message": m.message[:100] + "..." if len(m.message) > 100 else m.message,
+                    "status": m.status,
+                    "ai_generated": getattr(m, 'ai_generated', None),
+                    "created_at": m.created_at.isoformat() if m.created_at else None,
+                    "user_id": m.user_id
+                }
+                for m in messages
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Debug SMS error: {e}")
+        return {"error": str(e)}
+
+
 @app.post("/api/v1/voice/amd-callback")
 async def amd_callback(request: Request):
     """Handle AMD (Answering Machine Detection) callback (legacy Twilio)"""
