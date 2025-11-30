@@ -6684,17 +6684,17 @@ The Team menu item appears for managers and management roles.
             status_filter = args.get("status", "all")
             today = datetime.now().date()
 
-            # Query tasks WITH related loan and lead info for borrower context
+            # Query ai_tasks table (the active task table) with assigned_to_id
             task_query = text("""
-                SELECT t.id, t.title, t.due_date, t.status, t.priority, t.description,
-                       COALESCE(ln.borrower_name, ld.name, t.related_contact_name) as borrower_name,
+                SELECT t.id, t.title, t.due_date, t.type as status, t.priority, t.description,
+                       COALESCE(t.borrower_name, ln.borrower_name, ld.name) as borrower_name,
                        ln.amount as loan_amount, ln.stage as loan_stage, ln.loan_number,
                        t.loan_id, t.lead_id
-                FROM tasks t
+                FROM ai_tasks t
                 LEFT JOIN loans ln ON t.loan_id = ln.id
                 LEFT JOIN leads ld ON t.lead_id = ld.id
-                WHERE t.owner_id = :user_id
-                AND t.status != 'completed'
+                WHERE t.assigned_to_id = :user_id
+                AND t.type != 'Completed'
                 ORDER BY
                     CASE WHEN t.priority = 'high' THEN 1 WHEN t.priority = 'medium' THEN 2 ELSE 3 END,
                     t.due_date ASC NULLS LAST
@@ -11173,18 +11173,19 @@ async def orchestrator_chat_stream(
         tomorrow = today + timedelta(days=1)
         week_end = today + timedelta(days=7)
 
-        all_tasks = db.query(Task).filter(Task.owner_id == current_user.id).all()
+        # Query ai_tasks table (the active task table) with assigned_to_id
+        all_tasks = db.query(AITask).filter(AITask.assigned_to_id == current_user.id).all()
 
         if filter_type == "today":
-            tasks = [t for t in all_tasks if t.due_date and t.due_date.date() == today and t.status != "completed"]
+            tasks = [t for t in all_tasks if t.due_date and t.due_date.date() == today and t.type != TaskType.COMPLETED]
         elif filter_type == "tomorrow":
-            tasks = [t for t in all_tasks if t.due_date and t.due_date.date() == tomorrow and t.status != "completed"]
+            tasks = [t for t in all_tasks if t.due_date and t.due_date.date() == tomorrow and t.type != TaskType.COMPLETED]
         elif filter_type == "this_week":
-            tasks = [t for t in all_tasks if t.due_date and today <= t.due_date.date() <= week_end and t.status != "completed"]
+            tasks = [t for t in all_tasks if t.due_date and today <= t.due_date.date() <= week_end and t.type != TaskType.COMPLETED]
         elif filter_type == "overdue":
-            tasks = [t for t in all_tasks if t.due_date and t.due_date.date() < today and t.status != "completed"]
+            tasks = [t for t in all_tasks if t.due_date and t.due_date.date() < today and t.type != TaskType.COMPLETED]
         else:
-            tasks = [t for t in all_tasks if t.status != "completed"]
+            tasks = [t for t in all_tasks if t.type != TaskType.COMPLETED]
 
         return {
             "count": len(tasks),
