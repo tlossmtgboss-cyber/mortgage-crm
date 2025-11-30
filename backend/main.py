@@ -8014,6 +8014,7 @@ The Team menu item appears for managers and management roles.
 
             # Look up phone number if not provided
             if not recipient_phone and recipient_name:
+                # First, search leads
                 lead = db.query(Lead).filter(
                     Lead.owner_id == current_user.id,
                     Lead.name.ilike(f"%{recipient_name}%")
@@ -8021,9 +8022,20 @@ The Team menu item appears for managers and management roles.
                 if lead and lead.phone:
                     recipient_phone = lead.phone
                     lead_id = lead.id
+                else:
+                    # Then search team members/users (colleagues)
+                    user = db.query(User).filter(
+                        User.full_name.ilike(f"%{recipient_name}%")
+                    ).first()
+                    if user and hasattr(user, 'phone') and user.phone:
+                        recipient_phone = user.phone
+                    elif user and user.user_profile:
+                        # Check user_profile JSON for phone
+                        profile = user.user_profile if isinstance(user.user_profile, dict) else {}
+                        recipient_phone = profile.get('phone')
 
             if not recipient_phone:
-                return {"success": False, "message": "Phone number required. Provide recipient_phone or a valid recipient_name."}
+                return {"success": False, "message": f"Could not find phone number for '{recipient_name}'. Please provide recipient_phone directly or ensure the contact has a phone number on file."}
 
             # Format phone number
             phone = recipient_phone.replace("-", "").replace(" ", "").replace("(", "").replace(")", "")
