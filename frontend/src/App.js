@@ -5,7 +5,6 @@ import { ImpersonationProvider } from './contexts/ImpersonationContext';
 import { PermissionProvider } from './contexts/PermissionContext';
 import Navigation from './components/Navigation';
 import AIAssistant from './components/AIAssistant';
-import SmartAIChat from './components/SmartAIChat';
 import CoachCorner from './components/CoachCorner';
 import OnboardingPrompt from './components/OnboardingPrompt';
 import ImpersonationBanner from './components/ImpersonationBanner';
@@ -118,16 +117,6 @@ function LazyPage({ children }) {
       {children}
     </Suspense>
   );
-}
-
-// Wrapper to hide SmartAIChat on AI landing page (fixes gray overlay)
-function ConditionalSmartAIChat() {
-  const location = useLocation();
-  // Hide on /ai route since it has its own chat interface
-  if (location.pathname === '/ai') {
-    return null;
-  }
-  return <SmartAIChat />;
 }
 
 function App() {
@@ -1637,7 +1626,6 @@ function App() {
         </Routes>
         {/* Global AI Assistant */}
         <AIAssistant isOpen={assistantOpen} onClose={() => setAssistantOpen(false)} />
-        <ConditionalSmartAIChat />
         {/* Unified Task Sidebar */}
         <UnifiedTaskSidebar
           isOpen={taskSidebarOpen}

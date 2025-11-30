@@ -1516,10 +1516,6 @@ button.borrower-btn.add-borrower-btn:hover {
   overflow: hidden;
 }
 
-.smart-chat-card .smart-ai-chat {
-  box-shadow: none;
-  border-radius: 0;
-}
 
 /* Smart AI Section */
 .smart-ai-section {
