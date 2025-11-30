@@ -12,6 +12,8 @@
   min-height: calc(100vh - 64px);
   box-sizing: border-box;
   width: 100%;
+  /* Prevent layout shift on initial load */
+  contain: layout style;
 }
 
 .page-header {
@@ -515,13 +517,15 @@
 }
 
 .tab-content {
-  animation: fadeIn 0.3s ease;
   flex: 1 1 auto; /* Grow and shrink to fill available space */
   min-height: 0; /* Important for flexbox children to scroll */
   overflow: hidden;
   /* Use flex to fill remaining space instead of fixed calc */
   display: flex;
   flex-direction: column;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 @keyframes fadeIn {
@@ -930,7 +934,9 @@
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   overflow: hidden;
+  width: 100%;
   max-width: 100%;
+  box-sizing: border-box;
 }
 
 /* Ensure grid children take full height and don't overflow */
@@ -938,6 +944,7 @@
   min-height: 0;
   min-width: 0;
   overflow: hidden;
+  max-width: 100%;
 }
 
 /* Task Inbox (Left Side) */
