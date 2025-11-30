@@ -43934,13 +43934,14 @@ async def get_dialer_call_tasks(
     try:
         # Get tasks from unified-tasks that are call-related
         # Simple query - get tasks first, then look up contact info
+        # Note: tasks table uses 'type' column (not 'status') with values like 'In Progress', 'Completed'
         tasks_query = db.execute(text("""
             SELECT id, title, description, priority,
-                   CAST(status AS TEXT) as status, due_date,
+                   type, due_date,
                    entity_type, entity_id,
-                   source, created_at
+                   lead_id, loan_id, created_at
             FROM tasks
-            WHERE CAST(status AS TEXT) NOT IN ('completed', 'cancelled', 'skipped')
+            WHERE type NOT IN ('Completed', 'Cancelled', 'Skipped')
             AND (
                 LOWER(title) LIKE '%call%'
                 OR LOWER(title) LIKE '%phone%'
@@ -43966,31 +43967,32 @@ async def get_dialer_call_tasks(
             due_date = row.get('due_date')
             created_at = row.get('created_at')
             entity_type = row.get('entity_type')
-            entity_id = row.get('entity_id')
+            loan_id = row.get('loan_id')
+            lead_id = row.get('lead_id')
 
-            # Look up contact info based on entity_type
+            # Look up contact info using direct loan_id or lead_id
             contact_name = 'Unknown'
             phone_number = ''
 
-            if entity_type == 'loan' and entity_id:
+            if loan_id:
                 try:
                     loan = db.execute(text(
                         "SELECT borrower_name, borrower_phone FROM loans WHERE id = :id"
-                    ), {"id": int(entity_id)}).mappings().first()
+                    ), {"id": loan_id}).mappings().first()
                     if loan:
                         contact_name = loan.get('borrower_name') or 'Unknown'
                         phone_number = loan.get('borrower_phone') or ''
-                except (ValueError, TypeError):
+                except Exception:
                     pass
-            elif entity_type == 'lead' and entity_id:
+            elif lead_id:
                 try:
                     lead = db.execute(text(
                         "SELECT name, phone FROM leads WHERE id = :id"
-                    ), {"id": int(entity_id)}).mappings().first()
+                    ), {"id": lead_id}).mappings().first()
                     if lead:
                         contact_name = lead.get('name') or 'Unknown'
                         phone_number = lead.get('phone') or ''
-                except (ValueError, TypeError):
+                except Exception:
                     pass
 
             # Include task even without phone - user can see what needs attention
@@ -43999,11 +44001,11 @@ async def get_dialer_call_tasks(
                 "title": row.get('title'),
                 "description": row.get('description'),
                 "priority": row.get('priority'),
-                "status": row.get('status'),
+                "status": row.get('type'),  # 'type' column holds status like 'In Progress'
                 "due_date": due_date.isoformat() if due_date else None,
                 "entity_type": entity_type,
-                "entity_id": str(entity_id) if entity_id else None,
-                "source": row.get('source'),
+                "loan_id": loan_id,
+                "lead_id": lead_id,
                 "created_at": created_at.isoformat() if created_at else None,
                 "contact_name": contact_name,
                 "phone_number": phone_number
