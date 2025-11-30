@@ -27,10 +27,10 @@ requests==2.31.0
 
 # LangGraph & LangChain
 langgraph==0.2.0
-langchain==0.3.0
-langchain-anthropic==0.2.0
-langchain-openai==0.2.0
-langchain-core==0.3.0
+langchain>=0.2.0,<0.3.0
+langchain-anthropic>=0.1.0,<0.2.0
+langchain-openai>=0.1.0,<0.2.0
+langchain-core>=0.2.27,<0.3.0
 
 # Microsoft Graph API Integration
 msal==1.24.1
