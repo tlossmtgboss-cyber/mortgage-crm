@@ -9399,7 +9399,8 @@ The Team menu item appears for managers and management roles.
 
         # Get user's actual data
         all_leads = db.query(Lead).filter(Lead.owner_id == current_user.id).all()
-        all_tasks = db.query(Task).filter(Task.owner_id == current_user.id).all()
+        # Query ai_tasks table (the active task table) instead of tasks
+        all_tasks = db.query(AITask).filter(AITask.assigned_to_id == current_user.id).all()
 
         # Get loans using raw SQL to avoid enum deserialization issues
         try:
@@ -9454,11 +9455,11 @@ The Team menu item appears for managers and management roles.
             )
         ).all()
 
-        # Tasks breakdown
-        tasks_today = [t for t in all_tasks if t.due_date and t.due_date.date() == today and t.status != "completed"]
-        tasks_tomorrow = [t for t in all_tasks if t.due_date and t.due_date.date() == tomorrow and t.status != "completed"]
-        tasks_overdue = [t for t in all_tasks if t.due_date and t.due_date.date() < today and t.status != "completed"]
-        tasks_this_week = [t for t in all_tasks if t.due_date and today <= t.due_date.date() <= week_end and t.status != "completed"]
+        # Tasks breakdown (using type field from ai_tasks table)
+        tasks_today = [t for t in all_tasks if t.due_date and t.due_date.date() == today and t.type != TaskType.COMPLETED]
+        tasks_tomorrow = [t for t in all_tasks if t.due_date and t.due_date.date() == tomorrow and t.type != TaskType.COMPLETED]
+        tasks_overdue = [t for t in all_tasks if t.due_date and t.due_date.date() < today and t.type != TaskType.COMPLETED]
+        tasks_this_week = [t for t in all_tasks if t.due_date and today <= t.due_date.date() <= week_end and t.type != TaskType.COMPLETED]
 
         # Pipeline breakdown
         pipeline_stages = {}
@@ -9521,8 +9522,8 @@ The Team menu item appears for managers and management roles.
                 details.append(f"Due: {task.due_date.strftime('%m/%d/%Y %I:%M %p')}")
             if task.description:
                 details.append(f"Description: {task.description[:100]}{'...' if len(task.description or '') > 100 else ''}")
-            if task.status:
-                details.append(f"Status: {task.status}")
+            if task.type:
+                details.append(f"Status: {task.type.value if hasattr(task.type, 'value') else task.type}")
             # Get related loan name and details (check loan first, then lead)
             if task.loan_id:
                 related_loan = next((ln for ln in all_loans if ln.id == task.loan_id), None)
@@ -9537,12 +9538,12 @@ The Team menu item appears for managers and management roles.
                 related_lead = next((l for l in all_leads if l.id == task.lead_id), None)
                 if related_lead:
                     details.append(f"FOR: {related_lead.name}")
-            elif task.related_contact_name:
-                details.append(f"FOR: {task.related_contact_name}")
+            elif task.borrower_name:
+                details.append(f"FOR: {task.borrower_name}")
             return " | ".join(details)
 
-        # Get all outstanding tasks (not completed)
-        outstanding_tasks = [t for t in all_tasks if t.status != "completed"]
+        # Get all outstanding tasks (not completed) - using type field from ai_tasks
+        outstanding_tasks = [t for t in all_tasks if t.type != TaskType.COMPLETED]
 
         # Build context string
         data_context = f"""
