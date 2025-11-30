@@ -195,9 +195,15 @@ async def gather_data(
     if tool_functions is None:
         tool_functions = {}
 
+    # Debug: Log available tools
+    available_tool_names = list(tool_functions.keys())
+    logger.info(f"[GATHER] Available tool functions: {available_tool_names}")
+
     required_tools = state.get("required_tools", [])
+    logger.info(f"[GATHER] Required tools from analyzer: {required_tools}")
+
     if not required_tools:
-        logger.warning("No tools required, using default pipeline summary")
+        logger.warning("[GATHER] No tools required, using default pipeline summary")
         required_tools = ["get_pipeline"]
 
     # Limit concurrent tool calls to avoid overwhelming the system
@@ -216,11 +222,12 @@ async def gather_data(
             for tool_name in batch:
                 # Skip tools not in the provided functions
                 if tool_name not in tool_functions:
-                    logger.warning(f"Tool {tool_name} not available, skipping")
+                    logger.warning(f"[GATHER] Tool {tool_name} not available, skipping. Available: {list(tool_functions.keys())}")
                     missing_data.append(f"Tool not available: {tool_name}")
                     continue
 
                 args = determine_tool_arguments(tool_name, state)
+                logger.info(f"[GATHER] Executing tool {tool_name} with args: {args}")
                 tasks.append(execute_tool(tool_name, args, tool_functions))
 
             # Execute batch in parallel
