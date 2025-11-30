@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
+import PowerDialer from './PowerDialer';
 import './CommunicationIntelligence.css';
 
 function CommunicationIntelligence() {
@@ -949,9 +950,21 @@ function CommunicationIntelligence() {
             <span className="mode-badge">{smsStats.totals.pending}</span>
           )}
         </button>
+        <button
+          className={`mode-btn ${commMode === 'dialer' ? 'active' : ''}`}
+          onClick={() => setCommMode('dialer')}
+        >
+          <span className="mode-label">Power Dialer</span>
+        </button>
       </div>
 
-      {/* Stats Grid */}
+      {/* Power Dialer Mode */}
+      {commMode === 'dialer' && (
+        <PowerDialer />
+      )}
+
+      {/* Stats Grid - only show for email/sms modes */}
+      {commMode !== 'dialer' && (
       <div className="stats-grid">
         {commMode === 'email' ? (
           <>
@@ -993,8 +1006,10 @@ function CommunicationIntelligence() {
           </>
         )}
       </div>
+      )}
 
-      {/* Tabs */}
+      {/* Tabs - only show for email/sms modes */}
+      {commMode !== 'dialer' && (
       <div className="tabs-container">
         {commMode === 'email' ? (
           <>
@@ -1037,9 +1052,10 @@ function CommunicationIntelligence() {
           </>
         )}
       </div>
+      )}
 
-      {/* Split Panel Layout for Queue */}
-      {activeTab === 'queue' && (
+      {/* Split Panel Layout for Queue - only show for email/sms modes */}
+      {commMode !== 'dialer' && activeTab === 'queue' && (
         <div className={`split-panel-layout ${hasDetailPanel ? 'has-detail' : ''}`}>
           {/* Left Panel - List */}
           <div className="list-panel">
@@ -1178,8 +1194,8 @@ function CommunicationIntelligence() {
         </div>
       )}
 
-      {/* Non-queue tabs content */}
-      {activeTab !== 'queue' && (
+      {/* Non-queue tabs content - only show for email/sms modes */}
+      {commMode !== 'dialer' && activeTab !== 'queue' && (
         <div className="tab-content">
           {/* Email Conversations */}
           {commMode === 'email' && activeTab === 'conversations' && (

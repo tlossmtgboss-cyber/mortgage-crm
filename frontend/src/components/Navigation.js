@@ -65,12 +65,6 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
             Tasks {taskCounts.urgentTasks > 0 && <span className="nav-badge urgent">({taskCounts.urgentTasks})</span>}
           </Link>
           <Link
-            to="/dialer"
-            className={`nav-link ${isActive('/dialer') ? 'active' : ''}`}
-          >
-            Dialer
-          </Link>
-          <Link
             to="/reconciliation"
             className={`nav-link ${isActive('/reconciliation') ? 'active' : ''}`}
           >
@@ -80,7 +74,7 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
             to="/communication-intelligence"
             className={`nav-link ${isActive('/communication-intelligence') || isActive('/email-intelligence') ? 'active' : ''}`}
           >
-            Comm Intel
+            Communication
           </Link>
           <Link
             to="/calendar"
