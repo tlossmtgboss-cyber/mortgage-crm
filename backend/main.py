@@ -17044,6 +17044,48 @@ async def twilio_sms_webhook(
     - Set webhook URL: https://your-domain.com/api/v1/webhooks/twilio/sms
     """
     try:
+        # Auto-create sms_conversations table if it doesn't exist
+        try:
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS sms_conversations (
+                    id SERIAL PRIMARY KEY,
+                    phone_number VARCHAR(50) NOT NULL,
+                    user_id INTEGER REFERENCES users(id),
+                    lead_id INTEGER REFERENCES leads(id),
+                    loan_id INTEGER REFERENCES loans(id),
+                    contact_id INTEGER,
+                    contact_name VARCHAR(255),
+                    is_active BOOLEAN DEFAULT TRUE,
+                    ai_enabled BOOLEAN DEFAULT TRUE,
+                    last_message_at TIMESTAMP,
+                    last_ai_response_at TIMESTAMP,
+                    message_count INTEGER DEFAULT 0,
+                    context JSONB,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            db.execute(text("CREATE INDEX IF NOT EXISTS ix_sms_conv_phone ON sms_conversations(phone_number)"))
+            db.commit()
+            logger.info("SMS conversations table ensured to exist")
+        except Exception as table_err:
+            logger.warning(f"Table creation check: {table_err}")
+            db.rollback()
+
+        # Also ensure sms_messages has conversation_id column
+        try:
+            db.execute(text("""
+                ALTER TABLE sms_messages
+                ADD COLUMN IF NOT EXISTS conversation_id INTEGER REFERENCES sms_conversations(id)
+            """))
+            db.execute(text("""
+                ALTER TABLE sms_messages
+                ADD COLUMN IF NOT EXISTS ai_generated BOOLEAN DEFAULT FALSE
+            """))
+            db.commit()
+        except Exception:
+            db.rollback()
+
         # Parse Twilio webhook payload (form-encoded)
         form_data = await request.form()
 
@@ -17053,7 +17095,7 @@ async def twilio_sms_webhook(
         message_sid = form_data.get("MessageSid", "")
         num_media = int(form_data.get("NumMedia", 0))
 
-        logger.info(f"Incoming SMS from {from_number}: {message_body[:100]}...")
+        logger.info(f"TWILIO WEBHOOK: Incoming SMS from {from_number}: {message_body[:100]}...")
 
         # Normalize phone numbers
         def normalize_phone(phone):
@@ -17199,7 +17241,11 @@ async def twilio_sms_webhook(
         return Response(content=str(response), media_type="application/xml")
 
     except Exception as e:
-        logger.error(f"Error processing inbound SMS: {e}", exc_info=True)
+        import traceback
+        error_details = traceback.format_exc()
+        logger.error(f"TWILIO WEBHOOK ERROR: {e}")
+        logger.error(f"TWILIO WEBHOOK TRACEBACK: {error_details}")
+        # Still return TwiML response to prevent Twilio retry
         from twilio.twiml.messaging_response import MessagingResponse
         response = MessagingResponse()
         return Response(content=str(response), media_type="application/xml")
