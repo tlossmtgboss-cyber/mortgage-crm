@@ -44449,6 +44449,8 @@ async def langgraph_orchestrator_chat(
             "confidence": result.get("confidence"),
             "follow_up_suggestions": result.get("follow_up_suggestions", []),
             "processing_time_seconds": result.get("processing_time_seconds"),
+            "data_quality": result.get("data_quality"),
+            "warnings": result.get("warnings", []),
             "actions_executed": result.get("actions_executed", []),
             "actions_pending": result.get("actions_pending", []),
             "engine": "langgraph"
