@@ -43984,10 +43984,37 @@ async def get_dialer_call_tasks_debug(
 ):
     """Debug endpoint to test AITask query without auth."""
     try:
+        # Test basic count
         count = db.query(AITask).count()
-        return {"debug": True, "total_aitasks": count}
+
+        # Test the exact filter query used in call-tasks
+        call_tasks = db.query(AITask).filter(
+            or_(
+                AITask.type == None,
+                AITask.type != TaskType.COMPLETED
+            ),
+            or_(
+                AITask.title.ilike('%call%'),
+                AITask.title.ilike('%phone%'),
+                AITask.title.ilike('%contact%'),
+                AITask.title.ilike('%voicemail%'),
+                AITask.title.ilike('%dial%'),
+                AITask.title.ilike('%reach out%')
+            )
+        ).limit(5).all()
+
+        results = []
+        for t in call_tasks:
+            results.append({
+                "id": t.id,
+                "title": t.title,
+                "type": t.type.value if t.type else None
+            })
+
+        return {"debug": True, "total_aitasks": count, "filtered_count": len(call_tasks), "sample": results}
     except Exception as e:
-        return {"debug": True, "error": str(e), "error_type": type(e).__name__}
+        import traceback
+        return {"debug": True, "error": str(e), "error_type": type(e).__name__, "traceback": traceback.format_exc()}
 
 
 @app.get("/api/v1/dialer/call-tasks")
