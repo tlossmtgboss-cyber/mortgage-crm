@@ -1,7 +1,7 @@
 
 # ============================================================================
 # COMPLETE AGENTIC AI MORTGAGE CRM - FULLY FUNCTIONAL
-# Force Railway redeploy - 2025-11-30 (Two-Way AI SMS + LangGraph)
+# Force Railway redeploy - 2025-11-30 v2 (Two-Way AI SMS + LangGraph + Body fix)
 # ============================================================================
 # All features implemented:
 # ✅ Complete CRUD for all entities
