@@ -20778,12 +20778,12 @@ async def get_microsoft_auth_url(
 
         if db_config and db_config.client_id:
             client_id = db_config.client_id
-            redirect_uri = db_config.redirect_uri or os.getenv("MICROSOFT_REDIRECT_URI", "https://frontend-tim-loss-projects.vercel.app/oauth/callback")
+            redirect_uri = db_config.redirect_uri or os.getenv("MICROSOFT_REDIRECT_URI", "https://frontend-liard-eight-80.vercel.app/oauth/callback")
             tenant_id = db_config.tenant_id or "common"
         else:
             # Fall back to environment variables (default/system config)
             client_id = os.getenv("MICROSOFT_CLIENT_ID")
-            redirect_uri = os.getenv("MICROSOFT_REDIRECT_URI", "https://frontend-tim-loss-projects.vercel.app/oauth/callback")
+            redirect_uri = os.getenv("MICROSOFT_REDIRECT_URI", "https://frontend-liard-eight-80.vercel.app/oauth/callback")
             tenant_id = os.getenv("MICROSOFT_TENANT_ID", "common")
 
         if not client_id:
@@ -21049,7 +21049,7 @@ async def get_microsoft_oauth_config(
                 return MicrosoftAppConfigResponse(
                     client_id=env_client_id[:8] + "..." if env_client_id else None,  # Mask for security
                     tenant_id=env_tenant_id,
-                    redirect_uri=os.getenv("MICROSOFT_REDIRECT_URI", "https://frontend-tim-loss-projects.vercel.app/oauth/callback"),
+                    redirect_uri=os.getenv("MICROSOFT_REDIRECT_URI", "https://frontend-liard-eight-80.vercel.app/oauth/callback"),
                     configured=True,
                     has_client_secret=bool(os.getenv("MICROSOFT_CLIENT_SECRET"))
                 )
@@ -21087,7 +21087,7 @@ async def save_microsoft_oauth_config(
                 MicrosoftAppConfig.organization_id == org_id
             ).first()
 
-        redirect_uri = os.getenv("MICROSOFT_REDIRECT_URI", "https://frontend-tim-loss-projects.vercel.app/oauth/callback")
+        redirect_uri = os.getenv("MICROSOFT_REDIRECT_URI", "https://frontend-liard-eight-80.vercel.app/oauth/callback")
 
         if not config:
             # Create new config for this organization
