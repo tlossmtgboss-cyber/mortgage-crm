@@ -41952,12 +41952,19 @@ async def create_email_drafts_table_migration(
 
 @app.post("/api/v1/migrations/create-sms-conversation-tables", response_model=None)
 async def create_sms_conversation_tables_migration(
+    migration_key: str = "",
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Migration: Create SMS conversation tables for two-way AI messaging.
     """
+    # Allow with migration key for remote access
+    if migration_key != "sms-conv-tables-2025":
+        # Check admin access if no key
+        if not current_user.is_admin:
+            raise HTTPException(status_code=403, detail="Admin access or migration key required")
+
     try:
         logger.info(f"Running migration: create SMS conversation tables (user: {current_user.id})")
         tables_created = []

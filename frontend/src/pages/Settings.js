@@ -358,6 +358,18 @@ function Settings() {
   });
   const [loadingGmail, setLoadingGmail] = useState(false);
 
+  // Microsoft/Outlook integration state
+  const [microsoftStatus, setMicrosoftStatus] = useState({
+    connected: false,
+    email: null,
+    connected_at: null,
+    sync_enabled: false,
+    last_sync_at: null
+  });
+  const [loadingMicrosoft, setLoadingMicrosoft] = useState(false);
+  const [syncingMicrosoft, setSyncingMicrosoft] = useState(false);
+  const [syncingCalendar, setSyncingCalendar] = useState(false);
+
   // Team members state
   const [teamMembers, setTeamMembers] = useState([]);
   const [availableRoles, setAvailableRoles] = useState([]);
@@ -1262,6 +1274,22 @@ const API_BASE_URL = isProduction
       category: 'Email'
     },
     {
+      id: 'outlook-email',
+      name: 'Outlook Email',
+      description: 'Sync your Microsoft 365 / Outlook emails with loan files',
+      icon: '📧',
+      color: '#0078d4',
+      category: 'Email'
+    },
+    {
+      id: 'outlook-calendar',
+      name: 'Outlook Calendar',
+      description: 'Sync your Microsoft 365 / Outlook calendar events',
+      icon: '📅',
+      color: '#0078d4',
+      category: 'Calendar'
+    },
+    {
       id: 'teams',
       name: 'Microsoft Teams',
       description: 'Send messages, make calls, and collaborate with your team',
@@ -1523,11 +1551,147 @@ const API_BASE_URL = isProduction
     }
   };
 
+  // Microsoft/Outlook connection functions
+  const checkMicrosoftStatus = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/status`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setMicrosoftStatus(data);
+
+        const newConnected = new Set(connectedIntegrations);
+        if (data.connected) {
+          newConnected.add('outlook-email');
+          newConnected.add('outlook-calendar');
+        } else {
+          newConnected.delete('outlook-email');
+          newConnected.delete('outlook-calendar');
+        }
+        setConnectedIntegrations(newConnected);
+      }
+    } catch (error) {
+      console.error('Error checking Microsoft status:', error);
+    }
+  };
+
+  const connectMicrosoft365 = async () => {
+    setLoadingMicrosoft(true);
+    try {
+      // Get the OAuth authorization URL
+      const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/auth-url`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Store the current URL for redirect after OAuth
+        sessionStorage.setItem('microsoftOAuthRedirect', window.location.href);
+        // Redirect to Microsoft OAuth
+        window.location.href = data.auth_url;
+      } else {
+        throw new Error('Failed to get Microsoft auth URL');
+      }
+    } catch (error) {
+      console.error('Error connecting Microsoft:', error);
+      alert('Failed to connect Microsoft 365: ' + error.message);
+      setLoadingMicrosoft(false);
+    }
+  };
+
+  const disconnectMicrosoft = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/disconnect`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        setMicrosoftStatus({
+          connected: false,
+          email: null,
+          connected_at: null,
+          sync_enabled: false,
+          last_sync_at: null
+        });
+
+        const newConnected = new Set(connectedIntegrations);
+        newConnected.delete('outlook-email');
+        newConnected.delete('outlook-calendar');
+        setConnectedIntegrations(newConnected);
+      } else {
+        throw new Error('Failed to disconnect Microsoft');
+      }
+    } catch (error) {
+      console.error('Error disconnecting Microsoft:', error);
+      alert('Failed to disconnect Microsoft 365');
+    }
+  };
+
+  const syncMicrosoftNow = async () => {
+    setSyncingMicrosoft(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/sync-now`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(`Sync complete! ${data.emails_synced || 0} emails processed.`);
+        checkMicrosoftStatus();
+      } else {
+        throw new Error('Sync failed');
+      }
+    } catch (error) {
+      console.error('Error syncing Microsoft:', error);
+      alert('Failed to sync Microsoft emails');
+    } finally {
+      setSyncingMicrosoft(false);
+    }
+  };
+
+  const syncMicrosoftCalendar = async () => {
+    setSyncingCalendar(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/sync-calendar`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        alert(`Calendar sync complete! ${data.events_synced || 0} events processed.`);
+      } else {
+        throw new Error('Calendar sync failed');
+      }
+    } catch (error) {
+      console.error('Error syncing calendar:', error);
+      alert('Failed to sync Outlook calendar');
+    } finally {
+      setSyncingCalendar(false);
+    }
+  };
+
   const toggleIntegration = (integrationId) => {
     // Navigate to the individual integration detail page
     // Map integration IDs to their detail page section names
     const sectionMapping = {
       'gmail': 'gmail',
+      'outlook-email': 'outlook-email',
+      'outlook-calendar': 'outlook-calendar',
       'teams': 'teams',
       'zoom': 'zoom',
       'calendly': 'calendly',
@@ -1558,12 +1722,16 @@ const API_BASE_URL = isProduction
   );
 
   const featuredIntegrations = filteredIntegrations.filter(i =>
-    ['gmail', 'teams', 'zoom', 'docusign', 'calendly'].includes(i.id)
+    ['gmail', 'outlook-email', 'teams', 'zoom', 'docusign', 'calendly'].includes(i.id)
   );
 
   useEffect(() => {
     if (activeSection === 'integration-marketplace') {
       checkGmailStatus();
+      checkMicrosoftStatus();
+    }
+    if (activeSection === 'outlook-email' || activeSection === 'outlook-calendar') {
+      checkMicrosoftStatus();
     }
     if (activeSection === 'calendly') {
       fetchCalendlyEventTypes();
