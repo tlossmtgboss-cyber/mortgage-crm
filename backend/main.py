@@ -11871,6 +11871,56 @@ async def orchestrator_chat_stream(
                     }
                 }
             }
+        },
+        # Action tools - allow AI to take actions on behalf of user
+        {
+            "type": "function",
+            "function": {
+                "name": "send_sms",
+                "description": "Send an SMS text message to a contact by name or phone number",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "recipient_name": {"type": "string", "description": "Name of the person to text (will look up phone)"},
+                        "phone_number": {"type": "string", "description": "Phone number to send to (if known)"},
+                        "message": {"type": "string", "description": "The SMS message to send"}
+                    },
+                    "required": ["message"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "create_task",
+                "description": "Create a new task for the user",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string", "description": "Task title/description"},
+                        "due_date": {"type": "string", "description": "Due date (e.g., 'tomorrow', '2024-01-15')"},
+                        "priority": {"type": "string", "enum": ["LOW", "MEDIUM", "HIGH", "URGENT"], "description": "Task priority"}
+                    },
+                    "required": ["title"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "schedule_appointment",
+                "description": "Schedule a meeting or appointment",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string", "description": "Meeting title"},
+                        "attendee_name": {"type": "string", "description": "Name of person to meet with"},
+                        "date_time": {"type": "string", "description": "Date and time (e.g., 'next Tuesday at 2pm')"},
+                        "duration_minutes": {"type": "integer", "description": "Meeting duration in minutes", "default": 30}
+                    },
+                    "required": ["title", "date_time"]
+                }
+            }
         }
     ]
 
@@ -12013,11 +12063,191 @@ async def orchestrator_chat_stream(
             "guidance": f"**{action}** (Score: {lock_score}/100) - 30Y: {mortgage_30yr}%, 10Y Treasury: {treasury_10yr}%, MBS: {mbs_price}. {reason}"
         }
 
+    # Action tool execution functions
+    async def execute_send_sms(args):
+        """Send SMS via Twilio"""
+        from twilio.rest import Client as TwilioClient
+
+        recipient_name = args.get("recipient_name", "")
+        phone_number = args.get("phone_number", "")
+        sms_message = args.get("message", "")
+
+        if not sms_message:
+            return {"success": False, "error": "Message is required"}
+
+        # If we have a name but no phone, look it up
+        if recipient_name and not phone_number:
+            # Search in leads, contacts, and users
+            search = f"%{recipient_name}%"
+            lead = db.query(Lead).filter(Lead.name.ilike(search)).first()
+            if lead and lead.phone:
+                phone_number = lead.phone
+            else:
+                contact = db.query(Contact).filter(Contact.name.ilike(search)).first()
+                if contact and contact.phone:
+                    phone_number = contact.phone
+                else:
+                    user = db.query(User).filter(User.full_name.ilike(search)).first()
+                    if user and user.phone:
+                        phone_number = user.phone
+
+        if not phone_number:
+            return {"success": False, "error": f"Could not find phone number for {recipient_name}"}
+
+        # Format phone number
+        phone = ''.join(filter(str.isdigit, phone_number))
+        if len(phone) == 10:
+            phone = f"+1{phone}"
+        elif not phone.startswith('+'):
+            phone = f"+{phone}"
+
+        # Send via Twilio
+        twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
+        twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
+        twilio_from = os.getenv("TWILIO_PHONE_NUMBER")
+
+        if not all([twilio_sid, twilio_token, twilio_from]):
+            return {"success": False, "error": "Twilio not configured"}
+
+        try:
+            twilio_client = TwilioClient(twilio_sid, twilio_token)
+            msg = twilio_client.messages.create(
+                body=sms_message,
+                from_=twilio_from,
+                to=phone
+            )
+            return {"success": True, "message_sid": msg.sid, "sent_to": phone}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def execute_create_task(args):
+        """Create a new task"""
+        title = args.get("title", "New Task")
+        due_date_str = args.get("due_date", "")
+        priority = args.get("priority", "MEDIUM")
+
+        # Parse due date
+        due_date = None
+        if due_date_str:
+            due_date_lower = due_date_str.lower()
+            today = datetime.now()
+            if "tomorrow" in due_date_lower:
+                due_date = today + timedelta(days=1)
+            elif "today" in due_date_lower:
+                due_date = today
+            elif "next week" in due_date_lower:
+                due_date = today + timedelta(days=7)
+            else:
+                try:
+                    from dateutil import parser
+                    due_date = parser.parse(due_date_str)
+                except:
+                    due_date = today + timedelta(days=1)
+        else:
+            due_date = datetime.now() + timedelta(days=1)
+
+        # Map priority string to TaskPriority enum
+        priority_map = {
+            "LOW": TaskPriority.LOW,
+            "MEDIUM": TaskPriority.MEDIUM,
+            "HIGH": TaskPriority.HIGH,
+            "URGENT": TaskPriority.URGENT
+        }
+        task_priority = priority_map.get(priority.upper(), TaskPriority.MEDIUM)
+
+        new_task = AITask(
+            title=title,
+            description=f"AI-created task: {title}",
+            due_date=due_date,
+            priority=task_priority,
+            type=TaskType.TODO,
+            assigned_to_id=current_user.id
+        )
+        db.add(new_task)
+        db.commit()
+        db.refresh(new_task)
+
+        return {
+            "success": True,
+            "task_id": new_task.id,
+            "title": new_task.title,
+            "due_date": new_task.due_date.isoformat() if new_task.due_date else None
+        }
+
+    async def execute_schedule_appointment(args):
+        """Schedule an appointment"""
+        title = args.get("title", "Meeting")
+        attendee_name = args.get("attendee_name", "")
+        date_time_str = args.get("date_time", "")
+        duration_minutes = args.get("duration_minutes", 30)
+
+        # Parse date/time
+        start_time = None
+        if date_time_str:
+            dt_lower = date_time_str.lower()
+            today = datetime.now()
+
+            # Handle relative dates
+            if "tomorrow" in dt_lower:
+                start_time = today.replace(hour=9, minute=0, second=0) + timedelta(days=1)
+            elif "today" in dt_lower:
+                start_time = today.replace(hour=9, minute=0, second=0)
+            elif "next tuesday" in dt_lower:
+                days_ahead = (1 - today.weekday()) % 7
+                if days_ahead == 0:
+                    days_ahead = 7
+                start_time = today + timedelta(days=days_ahead)
+                start_time = start_time.replace(hour=14, minute=0, second=0)
+            else:
+                try:
+                    from dateutil import parser
+                    start_time = parser.parse(date_time_str)
+                except:
+                    start_time = today + timedelta(days=1)
+                    start_time = start_time.replace(hour=10, minute=0, second=0)
+
+            # Handle time component
+            if "2pm" in dt_lower or "2 pm" in dt_lower:
+                start_time = start_time.replace(hour=14, minute=0)
+            elif "3pm" in dt_lower or "3 pm" in dt_lower:
+                start_time = start_time.replace(hour=15, minute=0)
+            elif "10am" in dt_lower or "10 am" in dt_lower:
+                start_time = start_time.replace(hour=10, minute=0)
+        else:
+            start_time = datetime.now() + timedelta(days=1)
+            start_time = start_time.replace(hour=10, minute=0, second=0)
+
+        end_time = start_time + timedelta(minutes=duration_minutes)
+
+        # Create appointment as a task (or could be a calendar entry)
+        appointment = AITask(
+            title=f"{title} with {attendee_name}" if attendee_name else title,
+            description=f"Scheduled meeting: {title}",
+            due_date=start_time,
+            priority=TaskPriority.MEDIUM,
+            type=TaskType.APPOINTMENT,
+            assigned_to_id=current_user.id
+        )
+        db.add(appointment)
+        db.commit()
+        db.refresh(appointment)
+
+        return {
+            "success": True,
+            "appointment_id": appointment.id,
+            "title": appointment.title,
+            "start_time": start_time.isoformat(),
+            "end_time": end_time.isoformat()
+        }
+
     tool_functions = {
         "get_tasks": execute_get_tasks,
         "get_pipeline": execute_get_pipeline,
         "search_leads": execute_search_leads,
-        "get_market_intelligence": execute_get_market_intelligence
+        "get_market_intelligence": execute_get_market_intelligence,
+        "send_sms": execute_send_sms,
+        "create_task": execute_create_task,
+        "schedule_appointment": execute_schedule_appointment
     }
 
     # Pre-fetch real data for rich context
