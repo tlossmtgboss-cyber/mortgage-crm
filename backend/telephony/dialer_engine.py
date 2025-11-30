@@ -197,14 +197,13 @@ class DialerEngine:
 
             session_task = DialerSessionTask(
                 session_id=session.id,
-                task_id=task_id,
+                original_task_id=task_id,
                 contact_phone=contact_phone,
                 contact_name=contact_name or "Unknown",
                 lead_id=lead_id,
                 loan_id=loan_id,
                 status=DialerTaskStatus.PENDING,
-                position=position,
-                attempts=0
+                task_order=position
             )
             self.db.add(session_task)
             position += 1
@@ -288,13 +287,13 @@ class DialerEngine:
 
         return {
             "id": task.id,
-            "task_id": task.task_id,
+            "task_id": task.original_task_id,
             "contact_phone": task.contact_phone,
             "contact_name": task.contact_name,
             "lead_id": task.lead_id,
             "loan_id": task.loan_id,
             "position": task.task_order,
-            "attempts": task.attempts
+            "attempts": 0  # Track attempts separately if needed
         }
 
     def initiate_call(
@@ -391,8 +390,7 @@ class DialerEngine:
             # Update task
             task.status = DialerTaskStatus.IN_PROGRESS
             task.call_sid = result.call_sid
-            task.attempts += 1
-            task.last_attempt_at = datetime.utcnow()
+            task.updated_at = datetime.utcnow()
 
             # Update soft lock with real call SID
             self.compliance.acquire_soft_lock(
@@ -435,7 +433,7 @@ class DialerEngine:
             task.status = DialerTaskStatus.FAILED
             task.disposition = "call_failed"
             task.notes = result.error_message
-            task.attempts += 1
+            task.updated_at = datetime.utcnow()
             self.db.commit()
 
             # Send failure event via WebSocket
@@ -559,7 +557,7 @@ class DialerEngine:
             call_sid=call_sid,
             duration_seconds=duration,
             outcome=call_outcome,
-            start_time=task.last_attempt_at,
+            start_time=task.created_at,  # Use created_at as start time
             end_time=datetime.utcnow()
         )
         self.db.add(call_log)
@@ -673,7 +671,7 @@ class DialerEngine:
             # Create a new task for the callback
             from main import Task
 
-            original_task = self.db.query(Task).filter(Task.id == task.task_id).first()
+            original_task = self.db.query(Task).filter(Task.id == task.original_task_id).first()
             if original_task:
                 callback_task = Task(
                     user_id=self.agent_id,
