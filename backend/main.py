@@ -6415,6 +6415,23 @@ The Team menu item appears for managers and management roles.
             {
                 "type": "function",
                 "function": {
+                    "name": "update_user_profile",
+                    "description": "Update a user's profile information including phone number, name, title, etc. Can update the current user or another team member by name.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "user_name": {"type": "string", "description": "Name of user to update (searches by full_name). If not provided, updates current user."},
+                            "phone": {"type": "string", "description": "Phone number to set (10 digits, will be formatted automatically)"},
+                            "full_name": {"type": "string", "description": "Full name to set"},
+                            "title": {"type": "string", "description": "Job title to set"},
+                            "nmls_number": {"type": "string", "description": "NMLS number to set"}
+                        }
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
                     "name": "create_lead",
                     "description": "Create a new lead in the system. Use when user mentions a new potential borrower.",
                     "parameters": {
@@ -8166,6 +8183,78 @@ The Team menu item appears for managers and management roles.
                 "note": "Voicemail will be delivered via the Vapi voicemail drop service"
             }
 
+        async def execute_update_user_profile(args):
+            """Update a user's profile information"""
+            user_name = args.get("user_name")
+            phone = args.get("phone")
+            full_name = args.get("full_name")
+            title = args.get("title")
+            nmls_number = args.get("nmls_number")
+
+            # Determine which user to update
+            if user_name:
+                # Search for user by name
+                target_user = db.query(User).filter(
+                    User.full_name.ilike(f"%{user_name}%")
+                ).first()
+                if not target_user:
+                    return {"success": False, "message": f"Could not find user '{user_name}'"}
+            else:
+                # Update current user
+                target_user = current_user
+
+            updates = []
+
+            # Format and set phone number
+            if phone:
+                clean_phone = phone.replace("-", "").replace(" ", "").replace("(", "").replace(")", "")
+                if len(clean_phone) == 10:
+                    clean_phone = f"+1{clean_phone}"
+                elif not clean_phone.startswith("+"):
+                    clean_phone = f"+{clean_phone}"
+                target_user.phone = clean_phone
+                updates.append(f"phone: {clean_phone}")
+
+            # Set full name
+            if full_name:
+                target_user.full_name = full_name
+                updates.append(f"name: {full_name}")
+
+            # Set title (in user_profile JSON)
+            if title:
+                if not target_user.user_profile:
+                    target_user.user_profile = {}
+                target_user.user_profile['title'] = title
+                updates.append(f"title: {title}")
+
+            # Set NMLS number
+            if nmls_number:
+                if hasattr(target_user, 'nmls_number'):
+                    target_user.nmls_number = nmls_number
+                else:
+                    if not target_user.user_profile:
+                        target_user.user_profile = {}
+                    target_user.user_profile['nmls_number'] = nmls_number
+                updates.append(f"NMLS: {nmls_number}")
+
+            if not updates:
+                return {"success": False, "message": "No fields to update. Provide phone, full_name, title, or nmls_number."}
+
+            try:
+                db.commit()
+                db.refresh(target_user)
+
+                return {
+                    "success": True,
+                    "message": f"Updated profile for {target_user.full_name or target_user.email}",
+                    "updates": updates,
+                    "user_id": target_user.id
+                }
+            except Exception as e:
+                db.rollback()
+                logger.error(f"Error updating user profile: {e}")
+                return {"success": False, "message": f"Error updating profile: {str(e)}"}
+
         async def execute_create_lead(args):
             """Create a new lead in the system"""
             name = args.get("name")
@@ -9439,6 +9528,7 @@ The Team menu item appears for managers and management roles.
             "send_sms": execute_send_sms,
             "make_phone_call": execute_make_phone_call,
             "drop_voicemail": execute_drop_voicemail,
+            "update_user_profile": execute_update_user_profile,
             "create_lead": execute_create_lead,
             "send_email_to_contact": execute_send_email_to_contact,
             "search_knowledge_base": execute_search_knowledge_base,
