@@ -1306,7 +1306,7 @@ class SMSConversation(Base):
     user_id = Column(Integer, ForeignKey("users.id"))  # The LO managing this conversation
     lead_id = Column(Integer, ForeignKey("leads.id"))
     loan_id = Column(Integer, ForeignKey("loans.id"))
-    contact_id = Column(Integer, ForeignKey("contacts.id"))
+    contact_id = Column(Integer)  # No FK - contacts table may not exist in all deployments
     contact_name = Column(String)  # Cached name for quick display
     is_active = Column(Boolean, default=True)
     ai_enabled = Column(Boolean, default=True)  # Whether AI auto-responds
@@ -20595,6 +20595,121 @@ async def cleanup_microsoft_oauth_by_email(
     except Exception as e:
         logger.error(f"Cleanup Microsoft OAuth error: {e}")
         db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/microsoft/oauth-config", response_model=MicrosoftAppConfigResponse)
+async def get_microsoft_oauth_config(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get the current Microsoft OAuth configuration (admin only)"""
+    try:
+        # Get existing config
+        config = db.query(MicrosoftAppConfig).first()
+
+        if not config:
+            # Check if there are environment variables configured
+            env_client_id = os.getenv("MICROSOFT_CLIENT_ID")
+            env_tenant_id = os.getenv("MICROSOFT_TENANT_ID", "common")
+
+            if env_client_id:
+                return MicrosoftAppConfigResponse(
+                    client_id=env_client_id[:8] + "..." if env_client_id else None,  # Mask for security
+                    tenant_id=env_tenant_id,
+                    redirect_uri=os.getenv("MICROSOFT_REDIRECT_URI", "https://perenniaai.com/oauth/callback"),
+                    configured=True,
+                    has_client_secret=bool(os.getenv("MICROSOFT_CLIENT_SECRET"))
+                )
+
+            return MicrosoftAppConfigResponse(
+                configured=False,
+                has_client_secret=False
+            )
+
+        return MicrosoftAppConfigResponse(
+            client_id=config.client_id,
+            tenant_id=config.tenant_id,
+            redirect_uri=config.redirect_uri,
+            configured=True,
+            has_client_secret=bool(config.client_secret)
+        )
+    except Exception as e:
+        logger.error(f"Error getting Microsoft OAuth config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/microsoft/oauth-config", response_model=MicrosoftAppConfigResponse)
+async def save_microsoft_oauth_config(
+    config_data: MicrosoftAppConfigRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Save Microsoft OAuth configuration (admin only)"""
+    try:
+        # Get or create config record
+        config = db.query(MicrosoftAppConfig).first()
+
+        redirect_uri = "https://perenniaai.com/oauth/callback"
+
+        if not config:
+            # Create new config
+            config = MicrosoftAppConfig(
+                client_id=config_data.client_id,
+                tenant_id=config_data.tenant_id,
+                redirect_uri=redirect_uri,
+                created_by=current_user.id
+            )
+            if config_data.client_secret:
+                config.client_secret = encrypt_token(config_data.client_secret)
+            db.add(config)
+        else:
+            # Update existing config
+            config.client_id = config_data.client_id
+            config.tenant_id = config_data.tenant_id
+            config.redirect_uri = redirect_uri
+            if config_data.client_secret:  # Only update secret if provided
+                config.client_secret = encrypt_token(config_data.client_secret)
+
+        db.commit()
+        db.refresh(config)
+
+        logger.info(f"Microsoft OAuth config saved by user {current_user.id}")
+
+        return MicrosoftAppConfigResponse(
+            client_id=config.client_id,
+            tenant_id=config.tenant_id,
+            redirect_uri=config.redirect_uri,
+            configured=True,
+            has_client_secret=bool(config.client_secret)
+        )
+    except Exception as e:
+        logger.error(f"Error saving Microsoft OAuth config: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/migrations/create-microsoft-app-config-table")
+async def create_microsoft_app_config_table(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create the microsoft_app_config table"""
+    try:
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS microsoft_app_config (
+                id SERIAL PRIMARY KEY,
+                client_id VARCHAR(255),
+                client_secret TEXT,
+                tenant_id VARCHAR(255) DEFAULT 'common',
+                redirect_uri VARCHAR(500),
+                created_by INTEGER REFERENCES users(id),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        db.commit()
+        return {"status": "success", "message": "microsoft_app_config table created"}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error creating microsoft_app_config table: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/v1/microsoft/sync-diagnostics")
