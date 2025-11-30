@@ -8980,12 +8980,11 @@ The Team menu item appears for managers and management roles.
                     SELECT
                         l.id, l.borrower_name, l.rate, l.amount, l.program,
                         l.updated_at as close_date, l.property_address,
-                        u.full_name as lo_name,
-                        c.phone, c.email
+                        l.borrower_phone as phone, l.borrower_email as email,
+                        u.full_name as lo_name
                     FROM loans l
                     LEFT JOIN users u ON l.loan_officer_id = u.id
-                    LEFT JOIN contacts c ON l.contact_id = c.id
-                    WHERE CAST(l.stage AS TEXT) ILIKE 'closed'
+                    WHERE CAST(l.stage AS TEXT) ILIKE ANY(ARRAY['closed', 'funded'])
                     AND l.updated_at < NOW() - INTERVAL ':months months'
                     AND l.rate IS NOT NULL
                     ORDER BY l.rate DESC
