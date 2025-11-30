@@ -43990,8 +43990,12 @@ async def get_dialer_call_tasks(
     """
     try:
         # Query AITask model (not Task) which has the correct fields
+        # Handle null type values by using or_ with is_(None)
         call_tasks = db.query(AITask).filter(
-            AITask.type != TaskType.COMPLETED,
+            or_(
+                AITask.type == None,
+                AITask.type != TaskType.COMPLETED
+            ),
             or_(
                 AITask.title.ilike('%call%'),
                 AITask.title.ilike('%phone%'),
@@ -44004,45 +44008,50 @@ async def get_dialer_call_tasks(
 
         tasks = []
         for task in call_tasks:
-            # Get contact info and phone
-            contact_name = task.borrower_name or 'Unknown'
-            phone_number = ''
-            entity_type = None
+            try:
+                # Get contact info and phone
+                contact_name = task.borrower_name or 'Unknown'
+                phone_number = ''
+                entity_type = None
 
-            if task.loan_id:
-                entity_type = "loan"
-                loan = db.query(Loan).filter(Loan.id == task.loan_id).first()
-                if loan:
-                    contact_name = contact_name if contact_name != 'Unknown' else (loan.borrower_name or 'Unknown')
-                    phone_number = loan.borrower_phone or ''
-            elif task.lead_id:
-                entity_type = "lead"
-                lead = db.query(Lead).filter(Lead.id == task.lead_id).first()
-                if lead:
-                    contact_name = contact_name if contact_name != 'Unknown' else (lead.name or 'Unknown')
-                    phone_number = lead.phone or ''
+                if task.loan_id:
+                    entity_type = "loan"
+                    loan = db.query(Loan).filter(Loan.id == task.loan_id).first()
+                    if loan:
+                        contact_name = contact_name if contact_name != 'Unknown' else (loan.borrower_name or 'Unknown')
+                        phone_number = loan.borrower_phone or ''
+                elif task.lead_id:
+                    entity_type = "lead"
+                    lead = db.query(Lead).filter(Lead.id == task.lead_id).first()
+                    if lead:
+                        contact_name = contact_name if contact_name != 'Unknown' else (lead.name or 'Unknown')
+                        phone_number = lead.phone or ''
 
-            tasks.append({
-                "id": task.id,
-                "title": task.title,
-                "description": task.description,
-                "priority": task.priority,
-                "status": task.type.value if task.type else None,
-                "due_date": task.due_date.isoformat() if task.due_date else None,
-                "entity_type": entity_type,
-                "loan_id": task.loan_id,
-                "lead_id": task.lead_id,
-                "created_at": task.created_at.isoformat() if task.created_at else None,
-                "contact_name": contact_name,
-                "phone_number": phone_number
-            })
+                tasks.append({
+                    "id": task.id,
+                    "title": task.title,
+                    "description": task.description,
+                    "priority": task.priority,
+                    "status": task.type.value if task.type else "In Progress",
+                    "due_date": task.due_date.isoformat() if task.due_date else None,
+                    "entity_type": entity_type,
+                    "loan_id": task.loan_id,
+                    "lead_id": task.lead_id,
+                    "created_at": task.created_at.isoformat() if task.created_at else None,
+                    "contact_name": contact_name,
+                    "phone_number": phone_number
+                })
+            except Exception as task_err:
+                logger.warning(f"Error processing task {task.id}: {task_err}")
+                continue
 
         return {"tasks": tasks, "total": len(tasks)}
     except Exception as e:
         logger.error(f"Error fetching call tasks: {e}")
         import traceback
         traceback.print_exc()
-        return {"tasks": [], "total": 0, "error": str(e)}
+        # Return 200 with error info so we can debug
+        return {"tasks": [], "total": 0, "error": str(e), "error_type": type(e).__name__}
 
 
 @app.get("/api/v1/dialer/callable-contacts")
