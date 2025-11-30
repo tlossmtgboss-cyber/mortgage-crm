@@ -4,16 +4,12 @@
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  /* Use 100% height to fill the available space from parent container */
-  height: 100%;
-  min-height: 0; /* Allow flexbox shrinking */
-  overflow: hidden;
-  /* Fallback for when parent doesn't have explicit height */
-  min-height: calc(100vh - 64px);
+  /* Fixed height layout for email-style split view */
+  height: calc(100vh - 64px);
+  min-height: 0;
+  overflow: hidden; /* Tasks page manages its own internal scrolling */
   box-sizing: border-box;
   width: 100%;
-  /* Prevent layout shift on initial load */
-  contain: layout style;
 }
 
 .page-header {
