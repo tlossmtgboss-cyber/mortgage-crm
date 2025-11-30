@@ -44027,7 +44027,10 @@ async def get_dialer_call_tasks(
     Returns tasks with 'call', 'phone', 'contact', etc. in the title.
     Uses AITask model which has type, borrower_name fields.
     """
+    # Immediate logging to confirm we entered the endpoint
+    logger.info(f"[CALL-TASKS] Endpoint entered, user_id={current_user.id if current_user else 'None'}")
     try:
+        logger.info("[CALL-TASKS] Starting query...")
         # Query AITask model (not Task) which has the correct fields
         # Handle null type values by using or_ with is_(None)
         call_tasks = db.query(AITask).filter(
@@ -44044,6 +44047,8 @@ async def get_dialer_call_tasks(
                 AITask.title.ilike('%reach out%')
             )
         ).order_by(AITask.due_date.asc().nulls_last(), AITask.created_at.desc()).limit(100).all()
+
+        logger.info(f"[CALL-TASKS] Query returned {len(call_tasks)} tasks")
 
         tasks = []
         for task in call_tasks:
@@ -44084,6 +44089,7 @@ async def get_dialer_call_tasks(
                 logger.warning(f"Error processing task {task.id}: {task_err}")
                 continue
 
+        logger.info(f"[CALL-TASKS] Returning {len(tasks)} processed tasks")
         return {"tasks": tasks, "total": len(tasks)}
     except Exception as e:
         logger.error(f"Error fetching call tasks: {e}")
