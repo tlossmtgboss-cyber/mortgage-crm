@@ -1601,10 +1601,63 @@ const API_BASE_URL = isProduction
 
       if (response.ok) {
         const data = await response.json();
-        // Store the current URL for redirect after OAuth
-        sessionStorage.setItem('microsoftOAuthRedirect', window.location.href);
-        // Redirect to Microsoft OAuth
-        window.location.href = data.auth_url;
+
+        // Open OAuth in a popup window instead of redirecting
+        const width = 600;
+        const height = 700;
+        const left = window.screenX + (window.outerWidth - width) / 2;
+        const top = window.screenY + (window.outerHeight - height) / 2;
+
+        const popup = window.open(
+          data.auth_url,
+          'Microsoft365OAuth',
+          `width=${width},height=${height},left=${left},top=${top},scrollbars=yes,resizable=yes`
+        );
+
+        // Poll for popup closure and check for OAuth completion
+        const pollTimer = setInterval(async () => {
+          if (popup.closed) {
+            clearInterval(pollTimer);
+            setLoadingMicrosoft(false);
+            // Check if connection was successful
+            await checkMicrosoftStatus();
+          }
+        }, 500);
+
+        // Listen for message from popup (OAuth callback page)
+        const handleMessage = async (event) => {
+          if (event.data?.type === 'MICROSOFT_OAUTH_SUCCESS') {
+            clearInterval(pollTimer);
+            window.removeEventListener('message', handleMessage);
+            if (popup && !popup.closed) {
+              popup.close();
+            }
+            setLoadingMicrosoft(false);
+            await checkMicrosoftStatus();
+            alert('Microsoft 365 connected successfully!');
+          } else if (event.data?.type === 'MICROSOFT_OAUTH_ERROR') {
+            clearInterval(pollTimer);
+            window.removeEventListener('message', handleMessage);
+            if (popup && !popup.closed) {
+              popup.close();
+            }
+            setLoadingMicrosoft(false);
+            alert('Failed to connect Microsoft 365: ' + (event.data.error || 'Unknown error'));
+          }
+        };
+
+        window.addEventListener('message', handleMessage);
+
+        // Timeout after 5 minutes
+        setTimeout(() => {
+          clearInterval(pollTimer);
+          window.removeEventListener('message', handleMessage);
+          if (popup && !popup.closed) {
+            popup.close();
+          }
+          setLoadingMicrosoft(false);
+        }, 300000);
+
       } else {
         throw new Error('Failed to get Microsoft auth URL');
       }

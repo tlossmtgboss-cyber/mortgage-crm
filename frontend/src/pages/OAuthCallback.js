@@ -19,18 +19,31 @@ function OAuthCallback() {
       const errorDescription = params.get('error_description');
 
       // Determine provider from state or URL
-      const providerName = state?.includes('gmail') ? 'Gmail' : 'Outlook';
+      const providerName = state?.includes('gmail') ? 'Gmail' : 'Microsoft 365';
       setProvider(providerName);
 
       if (error) {
         setStatus('error');
         setMessage(errorDescription || `Failed to connect ${providerName}. Please try again.`);
+        // Notify parent window of error
+        if (window.opener) {
+          window.opener.postMessage({
+            type: providerName === 'Gmail' ? 'GMAIL_OAUTH_ERROR' : 'MICROSOFT_OAUTH_ERROR',
+            error: errorDescription || error
+          }, '*');
+        }
         return;
       }
 
       if (!code) {
         setStatus('error');
         setMessage('No authorization code received. Please try again.');
+        if (window.opener) {
+          window.opener.postMessage({
+            type: providerName === 'Gmail' ? 'GMAIL_OAUTH_ERROR' : 'MICROSOFT_OAUTH_ERROR',
+            error: 'No authorization code received'
+          }, '*');
+        }
         return;
       }
 
@@ -42,16 +55,18 @@ function OAuthCallback() {
           ? `${API_BASE_URL}/api/v1/gmail/callback`
           : `${API_BASE_URL}/api/v1/microsoft/connect`;
 
+        // Build request body - Microsoft expects authorization_code, Gmail expects code
+        const requestBody = providerName === 'Gmail'
+          ? { code, redirect_uri: `${window.location.origin}/oauth/callback` }
+          : { authorization_code: code, redirect_uri: `${window.location.origin}/oauth/callback` };
+
         const response = await fetch(endpoint, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({
-            code,
-            redirect_uri: `${window.location.origin}/oauth/callback`
-          })
+          body: JSON.stringify(requestBody)
         });
 
         if (response.ok) {
@@ -60,17 +75,40 @@ function OAuthCallback() {
 
           // Notify parent window if this is a popup
           if (window.opener) {
-            window.opener.postMessage({ type: 'oauth_success', provider: providerName.toLowerCase() }, window.location.origin);
+            window.opener.postMessage({
+              type: providerName === 'Gmail' ? 'GMAIL_OAUTH_SUCCESS' : 'MICROSOFT_OAUTH_SUCCESS',
+              provider: providerName.toLowerCase()
+            }, '*');
+
+            // Auto-close after a brief delay to show success message
+            setTimeout(() => {
+              window.close();
+            }, 1500);
           }
         } else {
           const errorData = await response.json();
           setStatus('error');
           setMessage(errorData.detail || `Failed to connect ${providerName}. Please try again.`);
+
+          // Notify parent window of error
+          if (window.opener) {
+            window.opener.postMessage({
+              type: providerName === 'Gmail' ? 'GMAIL_OAUTH_ERROR' : 'MICROSOFT_OAUTH_ERROR',
+              error: errorData.detail || 'Connection failed'
+            }, '*');
+          }
         }
       } catch (err) {
         console.error('OAuth callback error:', err);
         setStatus('error');
         setMessage('An error occurred while connecting. Please try again.');
+
+        if (window.opener) {
+          window.opener.postMessage({
+            type: 'MICROSOFT_OAUTH_ERROR',
+            error: err.message || 'Connection error'
+          }, '*');
+        }
       }
     };
 
