@@ -32228,13 +32228,19 @@ async def execute_ai_function(
                 recipient_phone = f"+{phone_digits}"
 
             # Send the SMS via Twilio
-            if not twilio_client:
+            twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
+            twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
+            twilio_phone = os.getenv("TWILIO_PHONE_NUMBER")
+
+            if not all([twilio_sid, twilio_token, twilio_phone]):
                 return {"success": False, "error": "Twilio not configured"}
 
             try:
-                twilio_message = twilio_client.messages.create(
+                from twilio.rest import Client as TwilioClient
+                sms_client = TwilioClient(twilio_sid, twilio_token)
+                twilio_message = sms_client.messages.create(
                     body=message_text,
-                    from_=TWILIO_PHONE_NUMBER,
+                    from_=twilio_phone,
                     to=recipient_phone
                 )
 
