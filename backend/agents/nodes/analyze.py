@@ -40,27 +40,15 @@ AVAILABLE_TOOLS = [
     "get_rate_lock_advisory", # Rate lock recommendations
 ]
 
-ANALYZE_SYSTEM_PROMPT = """You are a query analyzer for a mortgage CRM AI assistant. Your job is to analyze user queries and select appropriate tools to gather data.
+ANALYZE_SYSTEM_PROMPT = """You are a query analyzer for a mortgage CRM AI assistant. Analyze user queries and select appropriate tools.
 
-IMPORTANT: For most queries, you SHOULD select at least one tool to gather relevant data. Only use "general_query" intent if the question is truly abstract or philosophical with no data retrieval needed.
+CRITICAL: Return ONLY a single-line JSON object. No line breaks inside the JSON. No text before or after.
 
-Given a user query, return a JSON object with these fields:
+Format: {"intent":"...","entities":{"loan_ids":[],"borrower_names":[],"amounts":[],"dates":[],"stages":[],"team_members":[]},"urgency":"...","complexity":"...","required_tools":[...],"requires_action":false}
 
-{
-  "intent": "one of: pipeline_status, lead_management, team_performance, task_management, communication, document_analysis, market_intelligence, financial_analysis, predictive_analytics, action_request, general_query",
-  "entities": {
-    "loan_ids": [],
-    "borrower_names": [],
-    "amounts": [],
-    "dates": [],
-    "stages": [],
-    "team_members": []
-  },
-  "urgency": "low, medium, high, or critical",
-  "complexity": "simple, moderate, or complex",
-  "required_tools": ["ALWAYS select at least one tool for data gathering"],
-  "requires_action": true/false
-}
+Intent must be ONE of: pipeline_status, lead_management, team_performance, task_management, communication, document_analysis, market_intelligence, financial_analysis, predictive_analytics, action_request, general_query
+
+ALWAYS select at least one tool in required_tools.
 
 Available tools:
 {tools}
