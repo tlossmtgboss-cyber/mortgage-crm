@@ -5638,6 +5638,61 @@ async def send_task_summary_email(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+class GenericEmailRequest(BaseModel):
+    """Request model for generic email sending"""
+    to_email: str
+    subject: str
+    body_html: str
+    body_text: Optional[str] = None
+
+
+@app.post("/api/v1/email/send")
+async def send_generic_email(
+    request: GenericEmailRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Send a generic email using the email service (SendGrid/SMTP).
+    This endpoint can be used for weekly updates, notifications, etc.
+    """
+    try:
+        from email_service import email_service
+
+        # Generate plain text from HTML if not provided
+        plain_text = request.body_text
+        if not plain_text:
+            # Simple HTML strip for fallback
+            import re
+            plain_text = re.sub('<[^<]+?>', '', request.body_html)
+
+        success = email_service.send_html_email(
+            to_email=request.to_email,
+            subject=request.subject,
+            html_body=request.body_html,
+            plain_text_body=plain_text
+        )
+
+        if success:
+            logger.info(f"Email sent successfully to {request.to_email}")
+            return {
+                "success": True,
+                "message": f"Email sent to {request.to_email}",
+                "recipient": request.to_email,
+                "subject": request.subject
+            }
+        else:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to send email - check email service configuration"
+            )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error sending email: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/v1/ai/orchestrator-chat")
 async def orchestrator_chat(
     request: Request,
