@@ -721,11 +721,19 @@ function Tasks() {
       // - ONLY Workflow and Manual tasks go to the Tasks page
       // - Reconciliation items (AI Engine from email parsing) go ONLY to Reconciliation page
       // - NO emails should appear on the Tasks page at all
+      // - Call-related tasks go to the Power Dialer page, NOT here
+      const callKeywords = ['call', 'phone', 'contact', 'voicemail', 'dial', 'reach out'];
+      const isCallTask = (title) => {
+        const lowerTitle = (title || '').toLowerCase();
+        return callKeywords.some(keyword => lowerTitle.includes(keyword));
+      };
+
       const workflowAndManualTasks = transformedTasks.filter(t =>
         (t.source === 'Workflow' || t.source === 'Manual') &&
         t.source !== 'AI Engine' &&
         !t.email_from &&
-        !t.email_subject
+        !t.email_subject &&
+        !isCallTask(t.title)  // Exclude call-related tasks - they go to Power Dialer
       );
 
       // Deduplicate tasks by title + borrower (keep the most recent one)

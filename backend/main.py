@@ -1,7 +1,7 @@
 
 # ============================================================================
 # COMPLETE AGENTIC AI MORTGAGE CRM - FULLY FUNCTIONAL
-# Force Railway redeploy - 2025-11-30 (LangGraph AI Agent)
+# Force Railway redeploy - 2025-11-30 (Two-Way AI SMS + LangGraph)
 # ============================================================================
 # All features implemented:
 # ✅ Complete CRUD for all entities
@@ -43918,6 +43918,143 @@ async def remove_from_dnc(
     success = compliance.remove_from_dnc(phone_number)
 
     return {"success": success, "message": f"{phone_number} removed from DNC list" if success else "Number not found in DNC list"}
+
+
+@app.get("/api/v1/dialer/call-tasks")
+async def get_dialer_call_tasks(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Get all call-related tasks for the Power Dialer.
+    These are tasks that involve phone calls - identified by:
+    - Title containing 'call', 'phone', 'contact', or 'voicemail'
+    - Or tasks that have associated phone numbers from leads/loans
+    """
+    try:
+        # Get tasks from unified-tasks that are call-related
+        call_keywords = ['call', 'phone', 'contact', 'voicemail', 'dial', 'reach out']
+
+        # Query tasks with call-related titles
+        tasks_query = db.execute(text("""
+            SELECT t.id, t.title, t.description, t.priority, t.status, t.due_date,
+                   t.entity_type, t.entity_id, t.source, t.created_at,
+                   COALESCE(l.borrower_name, ld.name, 'Unknown') as contact_name,
+                   COALESCE(l.borrower_phone, ld.phone, '') as phone_number,
+                   COALESCE(l.id, NULL) as loan_id,
+                   COALESCE(ld.id, NULL) as lead_id
+            FROM tasks t
+            LEFT JOIN loans l ON t.entity_type = 'loan' AND t.entity_id = l.id
+            LEFT JOIN leads ld ON t.entity_type = 'lead' AND t.entity_id = ld.id
+            WHERE t.status NOT IN ('completed', 'cancelled', 'skipped')
+            AND (
+                LOWER(t.title) LIKE '%call%'
+                OR LOWER(t.title) LIKE '%phone%'
+                OR LOWER(t.title) LIKE '%contact%'
+                OR LOWER(t.title) LIKE '%voicemail%'
+                OR LOWER(t.title) LIKE '%dial%'
+                OR LOWER(t.title) LIKE '%reach out%'
+            )
+            ORDER BY
+                CASE t.priority
+                    WHEN 'urgent' THEN 1
+                    WHEN 'high' THEN 2
+                    WHEN 'medium' THEN 3
+                    ELSE 4
+                END,
+                t.due_date ASC NULLS LAST,
+                t.created_at DESC
+            LIMIT 100
+        """))
+
+        tasks = []
+        for row in tasks_query:
+            # Only include tasks with valid phone numbers
+            phone = row.phone_number if row.phone_number else ''
+            if phone and len(phone) >= 10:
+                tasks.append({
+                    "id": row.id,
+                    "title": row.title,
+                    "description": row.description,
+                    "priority": row.priority,
+                    "status": row.status,
+                    "due_date": row.due_date.isoformat() if row.due_date else None,
+                    "entity_type": row.entity_type,
+                    "entity_id": row.entity_id,
+                    "source": row.source,
+                    "created_at": row.created_at.isoformat() if row.created_at else None,
+                    "contact_name": row.contact_name,
+                    "phone_number": phone,
+                    "loan_id": row.loan_id,
+                    "lead_id": row.lead_id
+                })
+
+        return {"tasks": tasks, "total": len(tasks)}
+    except Exception as e:
+        logger.error(f"Error fetching call tasks: {e}")
+        return {"tasks": [], "total": 0, "error": str(e)}
+
+
+@app.get("/api/v1/dialer/callable-contacts")
+async def get_callable_contacts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Get all contacts (leads and loans) that have phone numbers for dialing.
+    """
+    try:
+        contacts = []
+
+        # Get leads with phone numbers
+        leads_query = db.execute(text("""
+            SELECT id, name, phone, email, status, created_at
+            FROM leads
+            WHERE phone IS NOT NULL AND phone != ''
+            AND CAST(status AS TEXT) NOT IN ('closed', 'dead', 'withdrawn', 'converted')
+            ORDER BY created_at DESC
+            LIMIT 100
+        """))
+
+        for row in leads_query:
+            if row.phone and len(row.phone) >= 10:
+                contacts.append({
+                    "id": f"lead_{row.id}",
+                    "type": "lead",
+                    "name": row.name or "Unknown Lead",
+                    "phone_number": row.phone,
+                    "email": row.email,
+                    "status": row.status,
+                    "entity_id": row.id
+                })
+
+        # Get loans with borrower phone numbers
+        loans_query = db.execute(text("""
+            SELECT id, borrower_name, borrower_phone, borrower_email,
+                   CAST(stage AS TEXT) as stage, created_at
+            FROM loans
+            WHERE borrower_phone IS NOT NULL AND borrower_phone != ''
+            AND CAST(stage AS TEXT) NOT IN ('funded', 'withdrawn', 'dead', 'closed')
+            ORDER BY created_at DESC
+            LIMIT 100
+        """))
+
+        for row in loans_query:
+            if row.borrower_phone and len(row.borrower_phone) >= 10:
+                contacts.append({
+                    "id": f"loan_{row.id}",
+                    "type": "loan",
+                    "name": row.borrower_name or "Unknown Borrower",
+                    "phone_number": row.borrower_phone,
+                    "email": row.borrower_email,
+                    "status": row.stage,
+                    "entity_id": row.id
+                })
+
+        return {"contacts": contacts, "total": len(contacts)}
+    except Exception as e:
+        logger.error(f"Error fetching callable contacts: {e}")
+        return {"contacts": [], "total": 0, "error": str(e)}
 
 
 @app.get("/api/v1/dialer/call-logs")
