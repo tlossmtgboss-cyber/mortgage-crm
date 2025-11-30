@@ -7118,73 +7118,168 @@ The Team menu item appears for managers and management roles.
                 return {"success": False, "message": f"Referral partners data not available: {str(e)}"}
 
         async def execute_get_sla_dashboard(args):
-            """Get SLA tracking dashboard"""
+            """Get SLA tracking dashboard with detailed bottleneck analysis"""
             view = args.get("view", "summary")
 
+            # SLA target days by stage (industry standards)
+            SLA_TARGETS = {
+                "Application": 2,
+                "APPLICATION": 2,
+                "Disclosed": 3,
+                "DISCLOSED": 3,
+                "Processing": 5,
+                "PROCESSING": 5,
+                "Submitted": 2,
+                "SUBMITTED": 2,
+                "Conditional": 3,
+                "CONDITIONAL": 3,
+                "CTC": 2,
+                "Clear to Close": 2,
+                "CLEAR_TO_CLOSE": 2,
+                "Docs": 2,
+                "DOCS": 2,
+                "Funding": 1,
+                "FUNDING": 1
+            }
+
             try:
-                # Get SLA data from the sla endpoints
-                if view == "bottlenecks" or view == "summary":
-                    # Analyze loans by stage and days in stage
-                    # Cast stage to text to avoid enum comparison issues
-                    loan_data = db.execute(
-                        text("""
-                            SELECT stage::text as stage, days_in_stage, sla_status, borrower_name, id
-                            FROM loans
-                            WHERE loan_officer_id = :user_id
-                            AND stage::text NOT IN ('Funded', 'Withdrawn', 'Closed', 'FUNDED', 'WITHDRAWN', 'CLOSED')
-                        """),
-                        {"user_id": current_user.id}
-                    ).fetchall()
+                # Get comprehensive loan data with all relevant fields
+                loan_data = db.execute(
+                    text("""
+                        SELECT
+                            id,
+                            loan_number,
+                            borrower_name,
+                            coborrower_name,
+                            stage::text as stage,
+                            amount,
+                            rate,
+                            days_in_stage,
+                            sla_status,
+                            closing_date,
+                            processor,
+                            underwriter,
+                            closer,
+                            property_address,
+                            updated_at
+                        FROM loans
+                        WHERE loan_officer_id = :user_id
+                        AND stage::text NOT IN ('Funded', 'Withdrawn', 'Closed', 'FUNDED', 'WITHDRAWN', 'CLOSED')
+                        ORDER BY days_in_stage DESC NULLS LAST
+                    """),
+                    {"user_id": current_user.id}
+                ).fetchall()
 
-                    bottlenecks = []
-                    at_risk = []
-                    stage_counts = {}
+                bottlenecks = []
+                at_risk = []
+                stage_analysis = {}
+                total_stuck_volume = 0
 
-                    for loan in loan_data:
-                        stage = str(loan.stage) if loan.stage else "Unknown"
-                        stage_counts[stage] = stage_counts.get(stage, 0) + 1
+                for loan in loan_data:
+                    stage = str(loan.stage) if loan.stage else "Unknown"
+                    days = loan.days_in_stage or 0
+                    amount = float(loan.amount) if loan.amount else 0
+                    target_days = SLA_TARGETS.get(stage, 5)
+                    variance = days - target_days
 
-                        if loan.days_in_stage and loan.days_in_stage > 5:
-                            bottlenecks.append({
-                                "loan_id": loan.id,
-                                "borrower": loan.borrower_name,
-                                "stage": stage,
-                                "days": loan.days_in_stage
-                            })
+                    # Track stage metrics
+                    if stage not in stage_analysis:
+                        stage_analysis[stage] = {
+                            "count": 0,
+                            "total_days": 0,
+                            "total_volume": 0,
+                            "target_days": target_days,
+                            "stuck_loans": []
+                        }
+                    stage_analysis[stage]["count"] += 1
+                    stage_analysis[stage]["total_days"] += days
+                    stage_analysis[stage]["total_volume"] += amount
 
-                        if loan.sla_status in ["at_risk", "breached"]:
-                            at_risk.append({
-                                "loan_id": loan.id,
-                                "borrower": loan.borrower_name,
-                                "stage": stage,
-                                "status": loan.sla_status
-                            })
+                    # Identify bottlenecks (loans exceeding SLA target by 50%+)
+                    if days > target_days * 1.5:
+                        loan_detail = {
+                            "loan_id": loan.id,
+                            "loan_number": loan.loan_number,
+                            "borrower_name": loan.borrower_name,
+                            "coborrower_name": loan.coborrower_name,
+                            "amount": amount,
+                            "stage": stage,
+                            "days_in_stage": days,
+                            "target_days": target_days,
+                            "days_over_sla": days - target_days,
+                            "processor": loan.processor,
+                            "underwriter": loan.underwriter,
+                            "closer": loan.closer,
+                            "closing_date": loan.closing_date.isoformat() if loan.closing_date else None,
+                            "last_updated": loan.updated_at.isoformat() if loan.updated_at else None
+                        }
+                        bottlenecks.append(loan_detail)
+                        stage_analysis[stage]["stuck_loans"].append(loan_detail)
+                        total_stuck_volume += amount
 
-                    return {
-                        "success": True,
-                        "view": view,
-                        "summary": {
-                            "total_active_loans": len(loan_data),
-                            "bottlenecks_count": len(bottlenecks),
-                            "at_risk_count": len(at_risk),
-                            "stage_distribution": stage_counts
-                        },
-                        "bottlenecks": sorted(bottlenecks, key=lambda x: x["days"], reverse=True)[:10],
-                        "at_risk_loans": at_risk[:10],
-                        "guidance": f"You have {len(bottlenecks)} loans that may be bottlenecked and {len(at_risk)} loans at risk of SLA breach."
-                    }
+                    # Identify at-risk loans
+                    if loan.sla_status in ["at_risk", "breached"] or variance > 0:
+                        at_risk.append({
+                            "loan_id": loan.id,
+                            "loan_number": loan.loan_number,
+                            "borrower_name": loan.borrower_name,
+                            "amount": amount,
+                            "stage": stage,
+                            "days_in_stage": days,
+                            "sla_status": loan.sla_status or ("breached" if variance > 2 else "at_risk"),
+                            "days_over_target": variance if variance > 0 else 0,
+                            "closing_date": loan.closing_date.isoformat() if loan.closing_date else None
+                        })
 
-                elif view == "team_performance":
-                    # Get team performance metrics
-                    return {
-                        "success": True,
-                        "view": "team_performance",
-                        "message": "Use get_analytics_report with report_type='employee_performance' for detailed team metrics"
-                    }
+                # Calculate stage averages and identify worst stages
+                stage_bottlenecks = []
+                for stage, data in stage_analysis.items():
+                    avg_days = data["total_days"] / data["count"] if data["count"] > 0 else 0
+                    variance = avg_days - data["target_days"]
+                    if variance > 0:
+                        stage_bottlenecks.append({
+                            "stage": stage,
+                            "loan_count": data["count"],
+                            "avg_days": round(avg_days, 1),
+                            "target_days": data["target_days"],
+                            "variance_days": round(variance, 1),
+                            "total_volume": data["total_volume"],
+                            "stuck_loans": data["stuck_loans"][:5]  # Top 5 stuck in this stage
+                        })
+
+                stage_bottlenecks = sorted(stage_bottlenecks, key=lambda x: x["variance_days"], reverse=True)
+
+                # Generate specific guidance
+                guidance_parts = []
+                if bottlenecks:
+                    worst = bottlenecks[0]
+                    guidance_parts.append(f"CRITICAL: {worst['borrower_name']}'s ${worst['amount']:,.0f} loan is {worst['days_in_stage']} days in {worst['stage']} ({worst['days_over_sla']} days over SLA).")
+                if stage_bottlenecks:
+                    worst_stage = stage_bottlenecks[0]
+                    guidance_parts.append(f"Stage bottleneck: {worst_stage['stage']} averaging {worst_stage['avg_days']} days vs {worst_stage['target_days']}-day target.")
+                if not bottlenecks and not at_risk:
+                    guidance_parts.append("Pipeline is healthy - no SLA issues detected.")
+
+                return {
+                    "success": True,
+                    "view": view,
+                    "summary": {
+                        "total_active_loans": len(loan_data),
+                        "bottlenecks_count": len(bottlenecks),
+                        "at_risk_count": len(at_risk),
+                        "stuck_volume": total_stuck_volume,
+                        "stage_distribution": {s: d["count"] for s, d in stage_analysis.items()}
+                    },
+                    "stage_bottlenecks": stage_bottlenecks[:5],  # Top 5 problem stages
+                    "stuck_deals": sorted(bottlenecks, key=lambda x: x["days_in_stage"], reverse=True)[:10],
+                    "at_risk_loans": sorted(at_risk, key=lambda x: x.get("days_over_target", 0), reverse=True)[:10],
+                    "guidance": " ".join(guidance_parts)
+                }
 
             except Exception as e:
                 logger.error(f"Error fetching SLA dashboard: {e}")
-                return {"success": False, "message": f"Error loading SLA data: {str(e)}"}
+                import traceback
+                return {"success": False, "message": f"Error loading SLA data: {str(e)}", "traceback": traceback.format_exc()}
 
         async def execute_get_analytics_report(args):
             """Generate comprehensive analytics report"""
