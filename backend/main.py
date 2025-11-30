@@ -17073,19 +17073,24 @@ async def twilio_sms_webhook(
         user = None
         contact_name = "Unknown Contact"
 
-        # Search contacts table
-        contact_row = db.execute(text("""
-            SELECT c.id, c.first_name, c.last_name, c.owner_id
-            FROM contacts c
-            WHERE REPLACE(REPLACE(REPLACE(c.phone, '-', ''), ' ', ''), '+1', '') LIKE :phone
-            LIMIT 1
-        """), {"phone": f"%{normalized_from[-10:]}"}).fetchone()
+        # Search contacts table (may not exist in all deployments)
+        contact_row = None
+        try:
+            contact_row = db.execute(text("""
+                SELECT c.id, c.first_name, c.last_name, c.owner_id
+                FROM contacts c
+                WHERE REPLACE(REPLACE(REPLACE(c.phone, '-', ''), ' ', ''), '+1', '') LIKE :phone
+                LIMIT 1
+            """), {"phone": f"%{normalized_from[-10:]}"}).fetchone()
 
-        if contact_row:
-            contact_name = f"{contact_row.first_name or ''} {contact_row.last_name or ''}".strip() or "Contact"
-            contact = contact_row
-            if contact_row.owner_id:
-                user = db.query(User).filter(User.id == contact_row.owner_id).first()
+            if contact_row:
+                contact_name = f"{contact_row.first_name or ''} {contact_row.last_name or ''}".strip() or "Contact"
+                contact = contact_row
+                if contact_row.owner_id:
+                    user = db.query(User).filter(User.id == contact_row.owner_id).first()
+        except Exception as e:
+            logger.warning(f"Contacts table lookup failed (table may not exist): {e}")
+            db.rollback()  # Clear the failed transaction
 
         # Search leads table if no contact found
         if not contact_row:
