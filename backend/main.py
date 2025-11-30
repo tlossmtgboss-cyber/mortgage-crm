@@ -5830,8 +5830,13 @@ async def orchestrator_chat(
     """
     try:
         import uuid
+        import time
         from openai import OpenAI
         from datetime import datetime, timedelta
+
+        # Start timing for metrics
+        request_start_time = time.time()
+        phase_times = {}
 
         data = await request.json()
         message = data.get("message", "")
@@ -5841,8 +5846,10 @@ async def orchestrator_chat(
         if not message:
             raise HTTPException(status_code=400, detail="Message is required")
 
-        # Import conversation memory service
+        # Import services
         from conversation_memory_service import ConversationMemory as ConvMemory
+        from agents.metrics import AIMetricsService
+        from agents.metrics.models import ResponseTimeMetric, ToolExecutionMetric, IntentClassificationMetric
 
         # Generate session_id if not provided (new conversation)
         if not session_id:
@@ -10733,8 +10740,36 @@ When acting autonomously:
                 logger.info(f"Executing tool (iteration {iteration + 1}): {function_name} with args: {function_args}")
 
                 if function_name in tool_functions:
-                    result = await tool_functions[function_name](function_args)
-                    all_tool_results.append({"tool": function_name, "result": result})
+                    # Time tool execution for metrics
+                    tool_start = time.time()
+                    tool_success = True
+                    tool_error = None
+                    try:
+                        result = await tool_functions[function_name](function_args)
+                    except Exception as tool_err:
+                        tool_success = False
+                        tool_error = str(tool_err)
+                        result = {"error": tool_error}
+                    tool_duration = (time.time() - tool_start) * 1000  # Convert to ms
+
+                    all_tool_results.append({"tool": function_name, "result": result, "success": tool_success})
+
+                    # Record tool execution metric (non-blocking)
+                    try:
+                        await AIMetricsService.record_tool_execution(
+                            db=db,
+                            user_id=current_user.id,
+                            session_id=session_id,
+                            tool_metric=ToolExecutionMetric(
+                                tool_name=function_name,
+                                success=tool_success,
+                                execution_time_ms=tool_duration,
+                                error_message=tool_error,
+                                input_summary=str(function_args)[:200]
+                            )
+                        )
+                    except Exception:
+                        pass  # Don't fail request if metrics fail
 
                     messages.append({
                         "role": "tool",
@@ -10831,6 +10866,47 @@ When acting autonomously:
             logger.warning(f"Failed to save conversation memory: {mem_error}")
             # Don't fail the request if memory save fails
 
+        # Record comprehensive metrics (non-blocking)
+        total_duration_ms = (time.time() - request_start_time) * 1000
+        try:
+            # Ensure metrics table exists
+            await AIMetricsService.ensure_table_exists(db)
+
+            # Record response time
+            await AIMetricsService.record_response_time(
+                db=db,
+                user_id=current_user.id,
+                session_id=session_id,
+                response_time=ResponseTimeMetric(
+                    total_ms=total_duration_ms,
+                    query_type=coaching_mode or agent_name or "general",
+                    tools_used=[t["tool"] for t in tool_results]
+                )
+            )
+
+            # Record query type for analytics
+            await AIMetricsService.record_query(
+                db=db,
+                user_id=current_user.id,
+                session_id=session_id,
+                query_type=coaching_mode or agent_name or "general",
+                query_text=message
+            )
+
+            # Record tool usage
+            if tool_results:
+                await AIMetricsService.record_tool_usage(
+                    db=db,
+                    user_id=current_user.id,
+                    session_id=session_id,
+                    tools_used=[t["tool"] for t in tool_results]
+                )
+
+            logger.info(f"Recorded metrics for session {session_id}: {total_duration_ms:.0f}ms, {len(tool_results)} tools")
+        except Exception as metrics_err:
+            logger.warning(f"Failed to record metrics: {metrics_err}")
+            # Don't fail request if metrics fail
+
         return {
             "response": ai_response,
             "tools_executed": [t["tool"] for t in tool_results],
@@ -10841,11 +10917,28 @@ When acting autonomously:
             "autonomous_actions": autonomous_actions,
             "coaching_mode": coaching_mode,
             "prioritized_tasks": prioritized_tasks_data if prioritized_tasks_data else None,
-            "session_id": session_id  # Return session_id for frontend to use in subsequent requests
+            "session_id": session_id,  # Return session_id for frontend to use in subsequent requests
+            "metrics": {
+                "response_time_ms": round(total_duration_ms, 2),
+                "tools_executed_count": len(tool_results)
+            }
         }
 
     except Exception as e:
         logger.error(f"Orchestrator chat error: {e}")
+        # Record error metric
+        try:
+            from agents.metrics import AIMetricsService
+            await AIMetricsService.record_node_error(
+                db=db,
+                user_id=current_user.id if current_user else 0,
+                session_id=session_id if 'session_id' in dir() else None,
+                node_name="orchestrator_chat",
+                error_message=str(e),
+                error_type=type(e).__name__
+            )
+        except Exception:
+            pass
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -10961,6 +11054,235 @@ async def get_ai_preferences(
 
     except Exception as e:
         logger.error(f"Error getting AI preferences: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# AI METRICS DASHBOARD ENDPOINTS
+# =============================================================================
+
+class UserFeedbackRequest(BaseModel):
+    """Schema for submitting user feedback"""
+    session_id: str
+    feedback_type: str  # 'thumbs_up', 'thumbs_down', 'helpful', 'not_helpful', 'accurate', 'inaccurate'
+    message_id: Optional[str] = None
+    rating: Optional[int] = None  # 1-5
+    comment: Optional[str] = None
+    query_type: Optional[str] = None
+
+
+@app.get("/api/v1/ai/metrics/dashboard")
+async def get_ai_metrics_dashboard(
+    days: int = 7,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Get comprehensive AI metrics dashboard.
+    Returns agent performance, business metrics, and AI quality metrics.
+    """
+    try:
+        from agents.metrics import AIMetricsService
+
+        # Ensure metrics table exists
+        await AIMetricsService.ensure_table_exists(db)
+
+        dashboard = await AIMetricsService.get_dashboard_summary(db, days)
+
+        return {
+            "success": True,
+            "dashboard": dashboard
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting AI metrics dashboard: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/ai/metrics/performance")
+async def get_ai_performance_metrics(
+    days: int = 7,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Get agent performance metrics: response times, error rates, user satisfaction.
+    """
+    try:
+        from agents.metrics import AIMetricsService
+
+        await AIMetricsService.ensure_table_exists(db)
+        metrics = await AIMetricsService.get_agent_performance(db, days)
+
+        return {
+            "success": True,
+            "metrics": metrics.model_dump()
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting performance metrics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/ai/metrics/business")
+async def get_ai_business_metrics(
+    days: int = 7,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Get business metrics: query patterns, tool usage, actions executed.
+    """
+    try:
+        from agents.metrics import AIMetricsService
+
+        await AIMetricsService.ensure_table_exists(db)
+        metrics = await AIMetricsService.get_business_metrics(db, days)
+
+        return {
+            "success": True,
+            "metrics": metrics.model_dump()
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting business metrics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/ai/metrics/quality")
+async def get_ai_quality_metrics(
+    days: int = 7,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Get AI quality metrics: intent accuracy, tool selection, response quality.
+    """
+    try:
+        from agents.metrics import AIMetricsService
+
+        await AIMetricsService.ensure_table_exists(db)
+        metrics = await AIMetricsService.get_ai_quality_metrics(db, days)
+
+        return {
+            "success": True,
+            "metrics": metrics.model_dump()
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting quality metrics: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/v1/ai/metrics/response-times")
+async def get_ai_response_time_breakdown(
+    days: int = 7,
+    query_type: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Get detailed response time breakdown by query type.
+    """
+    try:
+        from agents.metrics import AIMetricsService
+
+        await AIMetricsService.ensure_table_exists(db)
+        breakdown = await AIMetricsService.get_response_time_breakdown(db, days, query_type)
+
+        return {
+            "success": True,
+            "breakdown": breakdown
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting response time breakdown: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/ai/metrics/feedback")
+async def submit_ai_feedback(
+    feedback: UserFeedbackRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Submit user feedback on AI response (thumbs up/down, rating, comment).
+    """
+    try:
+        from agents.metrics import AIMetricsService
+        from agents.metrics.models import UserFeedbackMetric, FeedbackType
+
+        await AIMetricsService.ensure_table_exists(db)
+
+        # Map feedback type string to enum
+        feedback_type_map = {
+            'thumbs_up': FeedbackType.THUMBS_UP,
+            'thumbs_down': FeedbackType.THUMBS_DOWN,
+            'helpful': FeedbackType.HELPFUL,
+            'not_helpful': FeedbackType.NOT_HELPFUL,
+            'accurate': FeedbackType.ACCURATE,
+            'inaccurate': FeedbackType.INACCURATE
+        }
+
+        fb_type = feedback_type_map.get(feedback.feedback_type.lower())
+        if not fb_type:
+            raise HTTPException(status_code=400, detail=f"Invalid feedback type: {feedback.feedback_type}")
+
+        success = await AIMetricsService.record_user_feedback(
+            db=db,
+            user_id=current_user.id,
+            feedback=UserFeedbackMetric(
+                session_id=feedback.session_id,
+                message_id=feedback.message_id,
+                feedback_type=fb_type,
+                rating=feedback.rating,
+                comment=feedback.comment,
+                query_type=feedback.query_type
+            )
+        )
+
+        return {
+            "success": success,
+            "message": "Feedback recorded" if success else "Failed to record feedback"
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error submitting feedback: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/v1/ai/metrics/followup-click")
+async def record_followup_click(
+    session_id: str,
+    suggestion_text: str,
+    suggestion_index: int = 0,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Record when user clicks a follow-up suggestion.
+    """
+    try:
+        from agents.metrics import AIMetricsService
+
+        await AIMetricsService.ensure_table_exists(db)
+        success = await AIMetricsService.record_followup_click(
+            db=db,
+            user_id=current_user.id,
+            session_id=session_id,
+            suggestion_text=suggestion_text,
+            suggestion_index=suggestion_index
+        )
+
+        return {
+            "success": success
+        }
+
+    except Exception as e:
+        logger.error(f"Error recording followup click: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
