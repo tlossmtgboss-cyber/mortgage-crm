@@ -10772,6 +10772,30 @@ When acting autonomously:
                     "status": task.status
                 })
 
+        # Save conversation to memory for multi-turn context
+        try:
+            # Save user message
+            ConvMemory.save_message(
+                db=db,
+                user_id=current_user.id,
+                session_id=session_id,
+                role="user",
+                content=message
+            )
+            # Save AI response
+            ConvMemory.save_message(
+                db=db,
+                user_id=current_user.id,
+                session_id=session_id,
+                role="assistant",
+                content=ai_response,
+                action_data={"tools_executed": [t["tool"] for t in tool_results]} if tool_results else None
+            )
+            logger.info(f"Saved conversation to memory for session {session_id}")
+        except Exception as mem_error:
+            logger.warning(f"Failed to save conversation memory: {mem_error}")
+            # Don't fail the request if memory save fails
+
         return {
             "response": ai_response,
             "tools_executed": [t["tool"] for t in tool_results],
@@ -10781,7 +10805,8 @@ When acting autonomously:
             "autonomous_mode": autonomous_mode,
             "autonomous_actions": autonomous_actions,
             "coaching_mode": coaching_mode,
-            "prioritized_tasks": prioritized_tasks_data if prioritized_tasks_data else None
+            "prioritized_tasks": prioritized_tasks_data if prioritized_tasks_data else None,
+            "session_id": session_id  # Return session_id for frontend to use in subsequent requests
         }
 
     except Exception as e:
@@ -39567,6 +39592,38 @@ async def startup_event():
                     logger.info("✅ User Onboarding seed data loaded")
                 except Exception as onboard_e:
                     logger.warning(f"⚠️ User Onboarding seed skipped: {onboard_e}")
+
+                # Create permanent AI conversation memory tables
+                try:
+                    # Check if ai_conversation_memory exists
+                    result = db.execute(text("""
+                        SELECT table_name FROM information_schema.tables
+                        WHERE table_schema = 'public' AND table_name = 'ai_conversation_memory'
+                    """))
+                    if not result.fetchone():
+                        db.execute(text("""
+                            CREATE TABLE ai_conversation_memory (
+                                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                                session_id UUID NOT NULL,
+                                message_index INTEGER NOT NULL,
+                                role VARCHAR(20) NOT NULL,
+                                content TEXT NOT NULL,
+                                action_id UUID,
+                                action_data JSONB,
+                                created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+                            )
+                        """))
+                        db.execute(text("CREATE INDEX idx_conv_user_date ON ai_conversation_memory(user_id, created_at)"))
+                        db.execute(text("CREATE INDEX idx_conv_session ON ai_conversation_memory(session_id, message_index)"))
+                        db.execute(text("CREATE INDEX idx_conv_search ON ai_conversation_memory USING gin(to_tsvector('english', content))"))
+                        db.commit()
+                        logger.info("✅ Created ai_conversation_memory table with indexes")
+                    else:
+                        logger.info("✅ ai_conversation_memory table already exists")
+                except Exception as mem_e:
+                    logger.warning(f"⚠️ Conversation memory table creation skipped: {mem_e}")
+
             except Exception as e:
                 logger.warning(f"⚠️ Sample data/permission seeding skipped: {e}")
             finally:
