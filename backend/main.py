@@ -43940,33 +43940,37 @@ async def get_dialer_call_tasks(
     """
     Get all call-related tasks for the Power Dialer.
     Returns tasks with 'call', 'phone', 'contact', etc. in the title.
+    Uses AITask model which has type, borrower_name fields.
     """
     try:
-        # Query tasks using ORM to avoid raw SQL issues
-        call_tasks = db.query(Task).filter(
-            Task.type != 'Completed',
+        # Query AITask model (not Task) which has the correct fields
+        call_tasks = db.query(AITask).filter(
+            AITask.type != TaskType.COMPLETED,
             or_(
-                Task.title.ilike('%call%'),
-                Task.title.ilike('%phone%'),
-                Task.title.ilike('%contact%'),
-                Task.title.ilike('%voicemail%'),
-                Task.title.ilike('%dial%'),
-                Task.title.ilike('%reach out%')
+                AITask.title.ilike('%call%'),
+                AITask.title.ilike('%phone%'),
+                AITask.title.ilike('%contact%'),
+                AITask.title.ilike('%voicemail%'),
+                AITask.title.ilike('%dial%'),
+                AITask.title.ilike('%reach out%')
             )
-        ).order_by(Task.due_date.asc().nulls_last(), Task.created_at.desc()).limit(100).all()
+        ).order_by(AITask.due_date.asc().nulls_last(), AITask.created_at.desc()).limit(100).all()
 
         tasks = []
         for task in call_tasks:
             # Get contact info and phone
-            contact_name = task.entity_name or task.borrower_name or 'Unknown'
+            contact_name = task.borrower_name or 'Unknown'
             phone_number = ''
+            entity_type = None
 
             if task.loan_id:
+                entity_type = "loan"
                 loan = db.query(Loan).filter(Loan.id == task.loan_id).first()
                 if loan:
                     contact_name = contact_name if contact_name != 'Unknown' else (loan.borrower_name or 'Unknown')
                     phone_number = loan.borrower_phone or ''
             elif task.lead_id:
+                entity_type = "lead"
                 lead = db.query(Lead).filter(Lead.id == task.lead_id).first()
                 if lead:
                     contact_name = contact_name if contact_name != 'Unknown' else (lead.name or 'Unknown')
@@ -43977,9 +43981,9 @@ async def get_dialer_call_tasks(
                 "title": task.title,
                 "description": task.description,
                 "priority": task.priority,
-                "status": task.type,
+                "status": task.type.value if task.type else None,
                 "due_date": task.due_date.isoformat() if task.due_date else None,
-                "entity_type": task.entity_type,
+                "entity_type": entity_type,
                 "loan_id": task.loan_id,
                 "lead_id": task.lead_id,
                 "created_at": task.created_at.isoformat() if task.created_at else None,
