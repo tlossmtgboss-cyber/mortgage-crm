@@ -4,9 +4,12 @@
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  min-height: calc(100vh - 64px); /* Account for top nav - use min-height for initial render */
-  height: calc(100vh - 64px);
+  /* Use 100% height to fill the available space from parent container */
+  height: 100%;
+  min-height: 0; /* Allow flexbox shrinking */
   overflow: hidden;
+  /* Fallback for when parent doesn't have explicit height */
+  min-height: calc(100vh - 64px);
 }
 
 .page-header {
@@ -511,11 +514,12 @@
 
 .tab-content {
   animation: fadeIn 0.3s ease;
-  flex: 1;
+  flex: 1 1 auto; /* Grow and shrink to fill available space */
   min-height: 0; /* Important for flexbox children to scroll */
   overflow: hidden;
-  /* Explicit height calculation to prevent cut-off on initial navigation */
-  height: calc(100vh - 200px); /* Account for header, tabs, and padding */
+  /* Use flex to fill remaining space instead of fixed calc */
+  display: flex;
+  flex-direction: column;
 }
 
 @keyframes fadeIn {
@@ -918,7 +922,7 @@
   grid-template-columns: 350px 1fr;
   grid-template-rows: 1fr; /* Explicit row sizing */
   gap: 0;
-  height: 100%; /* Fill parent container */
+  flex: 1 1 auto; /* Take all available space in flex parent */
   min-height: 0; /* Allow shrinking in flex context */
   background: white;
   border: 1px solid #e5e7eb;
@@ -1305,15 +1309,18 @@
 @media (max-width: 768px) {
   .tasks-page {
     height: auto;
-    overflow: visible;
+    min-height: auto;
+    overflow: auto;
   }
 
   .tab-content {
+    flex: none;
     overflow: visible;
   }
 
   .email-layout {
     grid-template-columns: 1fr;
+    flex: none;
     height: auto;
   }
 
@@ -1321,6 +1328,12 @@
     border-right: none;
     border-bottom: 1px solid #e5e7eb;
     max-height: 400px;
+    height: auto;
+  }
+
+  .task-detail-pane {
+    height: auto;
+    min-height: 400px;
   }
 
   .detail-footer {

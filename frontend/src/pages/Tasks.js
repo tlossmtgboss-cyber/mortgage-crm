@@ -633,24 +633,6 @@ function Tasks() {
     // Load delete confirmation preference from localStorage
     const skipConfirm = localStorage.getItem('skipDeleteConfirmation') === 'true';
     setDontAskAgainDelete(skipConfirm);
-
-    // Force a layout recalculation after mount to fix height issues on navigation
-    // This resolves the "cut-off" issue when navigating to this page
-    const forceLayoutRecalc = () => {
-      const tasksPage = document.querySelector('.tasks-page');
-      if (tasksPage) {
-        // Force reflow by reading and writing a layout property
-        void tasksPage.offsetHeight;
-        tasksPage.style.opacity = '0.99';
-        requestAnimationFrame(() => {
-          tasksPage.style.opacity = '1';
-        });
-      }
-    };
-
-    // Run after a small delay to ensure DOM is ready
-    const timeoutId = setTimeout(forceLayoutRecalc, 50);
-    return () => clearTimeout(timeoutId);
   }, []);
 
   // Auto-select first task when tasks load or tab changes
