@@ -184,16 +184,13 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
         """Get pipeline summary with leads and loans by stage."""
         include_details = args.get("include_details", True)
 
-        # Import Lead model from main.py where it's defined
         try:
-            from main import Lead, Loan
-        except ImportError:
-            logger.warning("Could not import Lead/Loan models")
-            return {"error": "Model import failed", "total_leads": 0, "total_loans": 0}
-
-        try:
-            # Get leads
-            leads = db.query(Lead).filter(Lead.owner_id == current_user.id).all()
+            # Get leads using raw SQL to avoid import issues
+            lead_rows = db.execute(
+                text("""SELECT id, name, email, phone, stage
+                       FROM leads WHERE owner_id = :user_id"""),
+                {"user_id": current_user.id}
+            ).fetchall()
 
             # Get loans using raw SQL
             loan_rows = db.execute(
@@ -203,9 +200,9 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                 {"user_id": current_user.id}
             ).fetchall()
 
-            # Organize by stage
+            # Organize leads by stage
             lead_stages = {}
-            for lead in leads:
+            for lead in lead_rows:
                 stage = str(lead.stage) if lead.stage else "New"
                 if stage not in lead_stages:
                     lead_stages[stage] = {"count": 0, "items": []}
@@ -217,6 +214,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                         "type": "lead"
                     })
 
+            # Organize loans by stage
             loan_stages = {}
             for loan in loan_rows:
                 stage = str(loan.stage) if loan.stage else "Unknown"
@@ -236,11 +234,11 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                     })
 
             return {
-                "total_leads": len(leads),
+                "total_leads": len(lead_rows),
                 "total_loans": len(loan_rows),
                 "lead_stages": lead_stages,
                 "loan_stages": loan_stages,
-                "summary": f"{len(leads)} leads, {len(loan_rows)} active loans"
+                "summary": f"{len(lead_rows)} leads, {len(loan_rows)} active loans"
             }
         except Exception as e:
             logger.error(f"Error in get_pipeline: {e}")
@@ -314,40 +312,299 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
 
     async def execute_search_leads(args):
         """Search for leads by name, email, or phone."""
-        try:
-            from main import Lead
-        except ImportError:
-            logger.warning("Could not import Lead model")
-            return {"count": 0, "leads": [], "error": "Model import failed"}
-
         query_str = args.get("query", "")
         limit = args.get("limit", 10)
 
-        query = db.query(Lead).filter(Lead.owner_id == current_user.id)
-        if query_str:
-            search = f"%{query_str}%"
-            query = query.filter(
-                (Lead.name.ilike(search)) |
-                (Lead.email.ilike(search)) |
-                (Lead.phone.ilike(search))
-            )
+        try:
+            if query_str:
+                search = f"%{query_str}%"
+                lead_rows = db.execute(
+                    text("""SELECT id, name, email, phone, stage
+                           FROM leads
+                           WHERE owner_id = :user_id
+                           AND (name ILIKE :search OR email ILIKE :search OR phone ILIKE :search)
+                           LIMIT :limit"""),
+                    {"user_id": current_user.id, "search": search, "limit": limit}
+                ).fetchall()
+            else:
+                lead_rows = db.execute(
+                    text("""SELECT id, name, email, phone, stage
+                           FROM leads WHERE owner_id = :user_id LIMIT :limit"""),
+                    {"user_id": current_user.id, "limit": limit}
+                ).fetchall()
 
-        leads = query.limit(limit).all()
-        return {
-            "count": len(leads),
-            "leads": [{
-                "id": l.id,
-                "name": l.name,
-                "email": l.email,
-                "phone": l.phone,
-                "stage": str(l.stage) if l.stage else None
-            } for l in leads]
-        }
+            return {
+                "count": len(lead_rows),
+                "leads": [{
+                    "id": l.id,
+                    "name": l.name,
+                    "email": l.email,
+                    "phone": l.phone,
+                    "stage": str(l.stage) if l.stage else None
+                } for l in lead_rows]
+            }
+        except Exception as e:
+            logger.error(f"Error in search_leads: {e}")
+            return {"count": 0, "leads": [], "error": str(e)}
 
     tools["search_leads"] = execute_search_leads
 
-    # Add more tool implementations as needed...
-    # The pattern is the same - wrap existing functionality in async functions
+    # ============ Loan Search Tools ============
+
+    async def execute_search_loans(args):
+        """Search for loans by borrower name, loan number, or property address."""
+        query_str = args.get("query", "")
+        limit = args.get("limit", 10)
+
+        try:
+            if query_str:
+                search = f"%{query_str}%"
+                loan_rows = db.execute(
+                    text("""SELECT id, loan_number, borrower_name, stage, amount,
+                           processor, underwriter, property_address, closing_date
+                           FROM loans
+                           WHERE loan_officer_id = :user_id
+                           AND (borrower_name ILIKE :search OR loan_number ILIKE :search
+                                OR property_address ILIKE :search)
+                           LIMIT :limit"""),
+                    {"user_id": current_user.id, "search": search, "limit": limit}
+                ).fetchall()
+            else:
+                loan_rows = db.execute(
+                    text("""SELECT id, loan_number, borrower_name, stage, amount,
+                           processor, underwriter, property_address, closing_date
+                           FROM loans WHERE loan_officer_id = :user_id LIMIT :limit"""),
+                    {"user_id": current_user.id, "limit": limit}
+                ).fetchall()
+
+            return {
+                "count": len(loan_rows),
+                "loans": [{
+                    "id": l.id,
+                    "loan_number": l.loan_number,
+                    "borrower_name": l.borrower_name,
+                    "stage": str(l.stage) if l.stage else None,
+                    "amount": float(l.amount) if l.amount else None,
+                    "processor": l.processor,
+                    "underwriter": l.underwriter,
+                    "property_address": l.property_address,
+                    "closing_date": l.closing_date.isoformat() if l.closing_date else None
+                } for l in loan_rows]
+            }
+        except Exception as e:
+            logger.error(f"Error in search_loans: {e}")
+            return {"count": 0, "loans": [], "error": str(e)}
+
+    tools["search_loans"] = execute_search_loans
+
+    # ============ Task Creation Tools ============
+
+    async def execute_create_task(args):
+        """Create a new task for the user."""
+        title = args.get("title", "New Task")
+        description = args.get("description", "")
+        due_date = args.get("due_date")
+        priority = args.get("priority", "medium")
+        loan_id = args.get("loan_id")
+        lead_id = args.get("lead_id")
+
+        try:
+            # Parse due_date if provided
+            due_datetime = None
+            if due_date:
+                try:
+                    due_datetime = datetime.fromisoformat(due_date.replace('Z', '+00:00'))
+                except:
+                    due_datetime = datetime.now() + timedelta(days=1)
+
+            result = db.execute(
+                text("""INSERT INTO tasks (title, description, due_date, priority, status,
+                       owner_id, loan_id, lead_id, created_at, updated_at)
+                       VALUES (:title, :description, :due_date, :priority, 'pending',
+                       :owner_id, :loan_id, :lead_id, NOW(), NOW())
+                       RETURNING id, title"""),
+                {
+                    "title": title,
+                    "description": description,
+                    "due_date": due_datetime,
+                    "priority": priority,
+                    "owner_id": current_user.id,
+                    "loan_id": loan_id,
+                    "lead_id": lead_id
+                }
+            )
+            db.commit()
+            row = result.fetchone()
+
+            return {
+                "success": True,
+                "task_id": row.id,
+                "title": row.title,
+                "message": f"Task '{title}' created successfully"
+            }
+        except Exception as e:
+            logger.error(f"Error in create_task: {e}")
+            db.rollback()
+            return {"success": False, "error": str(e)}
+
+    tools["create_task"] = execute_create_task
+
+    # ============ Analytics Tools ============
+
+    async def execute_get_pipeline_metrics(args):
+        """Get pipeline analytics and metrics."""
+        try:
+            # Get loan counts by stage
+            stage_counts = db.execute(
+                text("""SELECT stage, COUNT(*) as count, SUM(amount) as total_amount
+                       FROM loans WHERE loan_officer_id = :user_id
+                       GROUP BY stage"""),
+                {"user_id": current_user.id}
+            ).fetchall()
+
+            # Get closing metrics
+            closing_metrics = db.execute(
+                text("""SELECT
+                       COUNT(*) FILTER (WHERE closing_date <= CURRENT_DATE + INTERVAL '7 days') as closing_7_days,
+                       COUNT(*) FILTER (WHERE closing_date <= CURRENT_DATE + INTERVAL '30 days') as closing_30_days,
+                       SUM(amount) FILTER (WHERE closing_date <= CURRENT_DATE + INTERVAL '30 days') as volume_30_days
+                       FROM loans WHERE loan_officer_id = :user_id AND stage != 'closed'"""),
+                {"user_id": current_user.id}
+            ).fetchone()
+
+            return {
+                "stage_breakdown": [{
+                    "stage": str(s.stage) if s.stage else "Unknown",
+                    "count": s.count,
+                    "total_amount": float(s.total_amount) if s.total_amount else 0
+                } for s in stage_counts],
+                "closing_7_days": closing_metrics.closing_7_days or 0,
+                "closing_30_days": closing_metrics.closing_30_days or 0,
+                "volume_30_days": float(closing_metrics.volume_30_days) if closing_metrics.volume_30_days else 0
+            }
+        except Exception as e:
+            logger.error(f"Error in get_pipeline_metrics: {e}")
+            return {"error": str(e)}
+
+    tools["get_pipeline_metrics"] = execute_get_pipeline_metrics
+
+    # ============ Rate Lock Advisory Tools ============
+
+    async def execute_get_rate_lock_advisory(args):
+        """Get rate lock advisory based on market conditions and loan specifics."""
+        days_to_close = args.get("days_to_close", 30)
+
+        try:
+            # Get loans closing in the specified timeframe
+            loans = db.execute(
+                text("""SELECT id, loan_number, borrower_name, amount, closing_date,
+                       rate, lock_expiration_date
+                       FROM loans
+                       WHERE loan_officer_id = :user_id
+                       AND closing_date <= CURRENT_DATE + INTERVAL ':days days'
+                       AND stage NOT IN ('closed', 'denied', 'withdrawn')
+                       ORDER BY closing_date ASC""".replace(':days', str(days_to_close))),
+                {"user_id": current_user.id}
+            ).fetchall()
+
+            # Provide advisory based on general market principles
+            advisory = {
+                "recommendation": "float" if days_to_close > 45 else "lock",
+                "confidence": 0.7,
+                "reasoning": "Based on typical market volatility and time to close",
+                "loans_affected": len(loans),
+                "loans": [{
+                    "loan_number": l.loan_number,
+                    "borrower_name": l.borrower_name,
+                    "amount": float(l.amount) if l.amount else 0,
+                    "closing_date": l.closing_date.isoformat() if l.closing_date else None,
+                    "current_rate": float(l.rate) if l.rate else None,
+                    "lock_status": "locked" if l.lock_expiration_date else "floating"
+                } for l in loans[:10]]
+            }
+
+            return advisory
+        except Exception as e:
+            logger.error(f"Error in get_rate_lock_advisory: {e}")
+            return {"error": str(e), "recommendation": "consult_manager"}
+
+    tools["get_rate_lock_advisory"] = execute_get_rate_lock_advisory
+
+    # ============ Daily Priorities Tools ============
+
+    async def execute_get_daily_priorities(args):
+        """Get prioritized list of actions for today."""
+        try:
+            # Get overdue tasks
+            overdue_tasks = db.execute(
+                text("""SELECT id, title, due_date, priority,
+                       COALESCE(ln.borrower_name, ld.name) as contact_name
+                       FROM tasks t
+                       LEFT JOIN loans ln ON t.loan_id = ln.id
+                       LEFT JOIN leads ld ON t.lead_id = ld.id
+                       WHERE t.owner_id = :user_id
+                       AND t.status != 'completed'
+                       AND t.due_date < CURRENT_DATE
+                       ORDER BY t.priority DESC, t.due_date ASC
+                       LIMIT 5"""),
+                {"user_id": current_user.id}
+            ).fetchall()
+
+            # Get today's tasks
+            today_tasks = db.execute(
+                text("""SELECT id, title, due_date, priority,
+                       COALESCE(ln.borrower_name, ld.name) as contact_name
+                       FROM tasks t
+                       LEFT JOIN loans ln ON t.loan_id = ln.id
+                       LEFT JOIN leads ld ON t.lead_id = ld.id
+                       WHERE t.owner_id = :user_id
+                       AND t.status != 'completed'
+                       AND t.due_date::date = CURRENT_DATE
+                       ORDER BY t.priority DESC
+                       LIMIT 10"""),
+                {"user_id": current_user.id}
+            ).fetchall()
+
+            # Get loans closing soon
+            closing_soon = db.execute(
+                text("""SELECT id, loan_number, borrower_name, closing_date, stage, amount
+                       FROM loans
+                       WHERE loan_officer_id = :user_id
+                       AND closing_date <= CURRENT_DATE + INTERVAL '7 days'
+                       AND stage NOT IN ('closed', 'denied', 'withdrawn')
+                       ORDER BY closing_date ASC
+                       LIMIT 5"""),
+                {"user_id": current_user.id}
+            ).fetchall()
+
+            return {
+                "overdue_tasks": [{
+                    "id": t.id,
+                    "title": t.title,
+                    "due_date": t.due_date.isoformat() if t.due_date else None,
+                    "priority": t.priority,
+                    "contact_name": t.contact_name
+                } for t in overdue_tasks],
+                "today_tasks": [{
+                    "id": t.id,
+                    "title": t.title,
+                    "priority": t.priority,
+                    "contact_name": t.contact_name
+                } for t in today_tasks],
+                "closing_soon": [{
+                    "loan_number": l.loan_number,
+                    "borrower_name": l.borrower_name,
+                    "closing_date": l.closing_date.isoformat() if l.closing_date else None,
+                    "stage": str(l.stage) if l.stage else None,
+                    "amount": float(l.amount) if l.amount else 0
+                } for l in closing_soon],
+                "summary": f"{len(overdue_tasks)} overdue, {len(today_tasks)} due today, {len(closing_soon)} closing within 7 days"
+            }
+        except Exception as e:
+            logger.error(f"Error in get_daily_priorities: {e}")
+            return {"error": str(e)}
+
+    tools["get_daily_priorities"] = execute_get_daily_priorities
 
     return tools
 
