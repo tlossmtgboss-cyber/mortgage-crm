@@ -7622,6 +7622,86 @@ The Team menu item appears for managers and management roles.
                         "by_type": activity_types
                     }
 
+                elif report_type == "employee_performance":
+                    # Get team members (users) and their loan data
+                    try:
+                        # Get loans with processor/closer data
+                        loan_rows = db.execute(
+                            text("""
+                                SELECT
+                                    l.loan_officer_id,
+                                    l.processor,
+                                    l.stage,
+                                    l.amount,
+                                    l.borrower_name,
+                                    l.created_at,
+                                    l.close_date
+                                FROM loans l
+                                WHERE l.created_at >= :start_date
+                                OR l.close_date >= :start_date
+                            """),
+                            {"start_date": start_date}
+                        ).fetchall()
+
+                        # Aggregate by loan officer
+                        lo_stats = {}
+                        for row in loan_rows:
+                            lo_id = row.loan_officer_id
+                            if lo_id not in lo_stats:
+                                lo_stats[lo_id] = {
+                                    "total_loans": 0,
+                                    "total_volume": 0,
+                                    "closed": 0,
+                                    "processing": 0,
+                                    "by_stage": {}
+                                }
+
+                            lo_stats[lo_id]["total_loans"] += 1
+                            if row.amount:
+                                lo_stats[lo_id]["total_volume"] += float(row.amount)
+
+                            stage = str(row.stage).replace("LoanStage.", "") if row.stage else "Unknown"
+                            lo_stats[lo_id]["by_stage"][stage] = lo_stats[lo_id]["by_stage"].get(stage, 0) + 1
+
+                            if stage in ["FUNDED", "CLOSED", "CTC"]:
+                                lo_stats[lo_id]["closed"] += 1
+                            elif stage in ["PROCESSING", "UNDERWRITING", "SUBMITTED"]:
+                                lo_stats[lo_id]["processing"] += 1
+
+                        # Get user names
+                        team_performance = []
+                        for lo_id, stats in lo_stats.items():
+                            user = db.query(User).filter(User.id == lo_id).first()
+                            team_performance.append({
+                                "name": user.full_name if user else f"User {lo_id}",
+                                "email": user.email if user else None,
+                                "loans": stats["total_loans"],
+                                "volume": stats["total_volume"],
+                                "closed": stats["closed"],
+                                "in_progress": stats["processing"],
+                                "by_stage": stats["by_stage"],
+                                "conversion_rate": round(stats["closed"] / stats["total_loans"] * 100, 1) if stats["total_loans"] > 0 else 0
+                            })
+
+                        # Sort by volume
+                        team_performance.sort(key=lambda x: x["volume"], reverse=True)
+
+                        return {
+                            "success": True,
+                            "report_type": "employee_performance",
+                            "period": period,
+                            "team": team_performance,
+                            "summary": {
+                                "total_team_volume": sum(t["volume"] for t in team_performance),
+                                "total_loans": sum(t["loans"] for t in team_performance),
+                                "total_closed": sum(t["closed"] for t in team_performance),
+                                "top_performer": team_performance[0]["name"] if team_performance else "N/A"
+                            }
+                        }
+                    except Exception as e:
+                        logger.error(f"Error in employee_performance report: {e}")
+                        return {"success": False, "message": f"Error: {str(e)}"}
+
                 else:
                     return {
                         "success": True,
@@ -9245,11 +9325,14 @@ Tool Selection Guide:
 - "At-risk deals?" → get_sla_dashboard with view="at_risk"
 - "Loan details?" → get_loan_details
 - "Lead info?" → get_lead_details
-- "Pipeline status?" → get_pipeline
-- "Team performance?" → get_efficiency_metrics with metric_type="team_capacity"
+- "Pipeline status?" → get_pipeline (includes total value, deal counts by stage)
+- "Pipeline value/worth?" → get_pipeline OR get_analytics_report(report_type="pipeline_summary")
+- "Team performance?" → get_efficiency_metrics with metric_type="team_capacity" OR get_analytics_report(report_type="employee_performance")
+- "Time/efficiency?" → get_efficiency_metrics with metric_type="velocity" (avg days per stage)
 - "MUM clients?" → get_mum_clients
 - "Market conditions?" → get_market_intelligence
 - "Tasks/priorities?" → get_tasks
+- "Conversion rates?" → get_analytics_report(report_type="conversion_funnel")
 
 ## Step 3: Analyze The Results
 Process the tool results and extract key insights.
