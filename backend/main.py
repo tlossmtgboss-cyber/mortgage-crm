@@ -12521,6 +12521,211 @@ Want me to draft the communications for each?"
 
 
 # ============================================================================
+# SSE STREAMING CHAT ENDPOINT (Using Anthropic with Full Tool Support)
+# ============================================================================
+
+@app.post("/api/v1/ai/chat-stream")
+async def chat_stream(
+    request: ChatStreamRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Streaming chat endpoint - responses arrive in real-time via Server-Sent Events (SSE)
+
+    This endpoint uses the AIAgentService with AsyncAnthropic for true token streaming,
+    reducing perceived latency from ~28s to <2s.
+
+    Returns:
+        EventSourceResponse with SSE events:
+        - event: status - thinking/gathering/reasoning status updates
+        - event: tool - tool execution notifications
+        - event: message - actual response content chunks
+        - event: done - completion signal with metadata
+        - event: error - error notifications
+    """
+    from sse_starlette.sse import EventSourceResponse
+    from agents.service import create_ai_agent_service
+
+    message = request.message
+    if not message:
+        raise HTTPException(status_code=400, detail="Message is required")
+
+    async def generate_stream():
+        """Generate SSE stream of AI responses using full LangGraph pipeline"""
+        try:
+            # Initialize the agent service with full tool support
+            agent_service = await create_ai_agent_service(
+                db=db,
+                current_user=current_user,
+                autonomous_mode=True
+            )
+
+            # Prepare context from request
+            context = request.context or {}
+
+            # Add loan/lead context if provided
+            if request.loan_id:
+                context["loan_id"] = request.loan_id
+            if request.lead_id:
+                context["lead_id"] = request.lead_id
+
+            # Track full response and metadata for final event
+            full_response = ""
+            final_metadata = {}
+
+            # Stream using the full LangGraph pipeline
+            async for chunk in agent_service.chat_streaming(
+                message=message,
+                context=context,
+                session_id=request.session_id
+            ):
+                chunk_type = chunk.get("type")
+
+                if chunk_type == "status":
+                    # Status updates (loading_context, analyzing, gathering, reasoning, executing, responding)
+                    yield {
+                        "event": "status",
+                        "data": json.dumps({
+                            "status": chunk.get("status"),
+                            "message": chunk.get("message")
+                        })
+                    }
+
+                elif chunk_type == "tool_call":
+                    # Tool being called
+                    yield {
+                        "event": "tool",
+                        "data": json.dumps({
+                            "tool": chunk.get("tool_name"),
+                            "status": "executing"
+                        })
+                    }
+
+                elif chunk_type == "tool_result":
+                    # Tool completed
+                    yield {
+                        "event": "tool",
+                        "data": json.dumps({
+                            "tool": chunk.get("tool_name"),
+                            "status": "completed",
+                            "success": chunk.get("success", False),
+                            "execution_time_ms": chunk.get("execution_time_ms", 0)
+                        })
+                    }
+
+                elif chunk_type == "action_result":
+                    # Action executed
+                    yield {
+                        "event": "action",
+                        "data": json.dumps({
+                            "action_type": chunk.get("action_type"),
+                            "success": chunk.get("success"),
+                            "message": chunk.get("message")
+                        })
+                    }
+
+                elif chunk_type == "content":
+                    # Actual response content - stream to client
+                    full_response += chunk.get("content", "")
+                    yield {
+                        "event": "message",
+                        "data": json.dumps({
+                            "content": chunk.get("content")
+                        })
+                    }
+
+                elif chunk_type == "complete":
+                    # Store metadata for final event
+                    final_metadata = chunk.get("metadata", {})
+
+                elif chunk_type == "error":
+                    # Error occurred
+                    yield {
+                        "event": "error",
+                        "data": json.dumps({
+                            "error": chunk.get("error"),
+                            "message": chunk.get("message", "An error occurred")
+                        })
+                    }
+                    return
+
+            # Get prioritized tasks for sidebar (if relevant)
+            message_lower = message.lower()
+            is_task_question = any(keyword in message_lower for keyword in [
+                'task', 'priority', 'priorities', 'briefing', 'what should i do',
+                'outstanding', 'overdue', 'due today', 'pipeline', 'bottleneck'
+            ])
+
+            prioritized_tasks_data = []
+            if is_task_question:
+                # Fetch tasks for sidebar
+                all_tasks = db.query(AITask).filter(
+                    AITask.assigned_to_id == current_user.id,
+                    AITask.type != TaskType.COMPLETED
+                ).all()
+                all_loans = db.query(Loan).filter(Loan.loan_officer_id == current_user.id).all()
+
+                priority_tasks = sorted(
+                    all_tasks,
+                    key=lambda x: (
+                        0 if x.priority == "urgent" else 1 if x.priority == "high" else 2 if x.priority == "medium" else 3,
+                        x.due_date or datetime.max
+                    )
+                )[:10]
+
+                for task in priority_tasks:
+                    loan_info = None
+                    if task.loan_id:
+                        loan = next((l for l in all_loans if l.id == task.loan_id), None)
+                        if loan:
+                            loan_info = {
+                                "borrower": loan.borrower_name,
+                                "amount": f"${loan.amount:,.0f}" if loan.amount else None
+                            }
+
+                    prioritized_tasks_data.append({
+                        "id": task.id,
+                        "title": task.title,
+                        "priority": task.priority.upper() if task.priority else "MEDIUM",
+                        "due_date": task.due_date.strftime("%m/%d/%Y") if task.due_date else None,
+                        "client": loan_info["borrower"] if loan_info else (task.borrower_name or "")
+                    })
+
+            # Send completion signal with all metadata
+            yield {
+                "event": "done",
+                "data": json.dumps({
+                    "session_id": request.session_id or final_metadata.get("session_id"),
+                    "full_response": full_response,
+                    "prioritized_tasks": prioritized_tasks_data if prioritized_tasks_data else None,
+                    "metadata": {
+                        "model": "claude-sonnet-4-20250514",
+                        "streaming": True,
+                        "tools_used": final_metadata.get("tools_used", []),
+                        "insights": final_metadata.get("insights", []),
+                        "follow_up_suggestions": final_metadata.get("follow_up_suggestions", []),
+                        "execution_time_ms": final_metadata.get("execution_time_ms", 0),
+                        "query_intent": final_metadata.get("query_intent", "unknown"),
+                        "data_quality": final_metadata.get("data_quality", "unknown")
+                    }
+                })
+            }
+
+        except Exception as e:
+            logger.error(f"SSE Streaming error: {str(e)}", exc_info=True)
+            yield {
+                "event": "error",
+                "data": json.dumps({
+                    "error": str(e)
+                })
+            }
+
+    return EventSourceResponse(generate_stream())
+
+
+# ============================================================================
 # VOICE INTEGRATION ENDPOINTS
 # ============================================================================
 
@@ -21352,8 +21557,28 @@ async def connect_microsoft365(
         response = requests.post(token_url, data=data)
 
         if response.status_code != 200:
-            logger.error(f"Microsoft token exchange failed: {response.text}")
-            raise HTTPException(status_code=400, detail="Failed to connect to Microsoft 365")
+            error_detail = "Failed to connect to Microsoft 365"
+            try:
+                error_data = response.json()
+                error_desc = error_data.get("error_description", error_data.get("error", ""))
+                logger.error(f"Microsoft token exchange failed: {error_desc} - Full response: {response.text}")
+                if "AADSTS" in str(error_desc):
+                    # Extract user-friendly message from Azure AD error
+                    if "AADSTS65001" in str(error_desc):
+                        error_detail = "Admin consent required. Please have an administrator approve this app in Azure AD."
+                    elif "AADSTS50011" in str(error_desc):
+                        error_detail = "Redirect URI mismatch. The redirect URI in Azure AD doesn't match the app configuration."
+                    elif "AADSTS70008" in str(error_desc):
+                        error_detail = "Authorization code expired. Please try connecting again."
+                    elif "AADSTS54005" in str(error_desc):
+                        error_detail = "Authorization code already used. Please try connecting again."
+                    else:
+                        error_detail = f"Microsoft error: {error_desc[:200]}"
+                else:
+                    error_detail = f"Microsoft error: {error_desc[:200]}" if error_desc else "Failed to connect to Microsoft 365"
+            except Exception as parse_err:
+                logger.error(f"Microsoft token exchange failed (non-JSON): {response.text}")
+            raise HTTPException(status_code=400, detail=error_detail)
 
         token_data = response.json()
 
