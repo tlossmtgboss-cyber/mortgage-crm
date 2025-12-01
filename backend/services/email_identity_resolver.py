@@ -199,7 +199,8 @@ class EmailIdentityResolver:
             logger.info(f"Loaded {len(result)} custom domain mappings")
         except Exception:
             # Table doesn't exist, use defaults only
-            pass
+            # Must rollback to clear the failed transaction state in PostgreSQL
+            self.db.rollback()
 
         return self._custom_domain_cache
 
