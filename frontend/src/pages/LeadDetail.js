@@ -648,25 +648,47 @@ function LeadDetail() {
       // Map lead stage to workflow key
       const stageToWorkflowMap = {
         'New': 'lead_intake',
+        'new': 'lead_intake',
         'Attempted Contact': 'lead_intake',
+        'attempted_contact': 'lead_intake',
         'Prospect': 'lead_intake',
+        'prospect': 'lead_intake',
         'Pre-Qualified': 'lead_intake',
+        'pre_qualified': 'lead_intake',
         'Application': 'application',
+        'application': 'application',
         'Pre-Approved': 'pre_approval',
+        'pre_approved': 'pre_approval',
         'Under Contract': 'processing',
+        'under_contract': 'processing',
         'Processing': 'processing',
+        'processing': 'processing',
         'Underwriting': 'underwriting',
+        'underwriting': 'underwriting',
         'Conditional Approval': 'underwriting',
+        'conditional_approval': 'underwriting',
         'Clear to Close': 'closing',
+        'clear_to_close': 'closing',
         'Closing': 'closing',
+        'closing': 'closing',
         'Funded': 'post_closing',
+        'funded': 'post_closing',
         'Closed': 'post_closing',
+        'closed': 'post_closing',
         'Credit Repair': 'credit_repair',
+        'credit_repair': 'credit_repair',
         'Nurture': 'nurture',
-        'Not Ready': 'nurture'
+        'nurture': 'nurture',
+        'Not Ready': 'nurture',
+        'not_ready': 'nurture'
       };
 
       const workflowKey = stageToWorkflowMap[lead.stage] || 'lead_intake';
+
+      // Calculate days since lead entered current status (or created)
+      const statusDate = lead.status_changed_at || lead.created_at || new Date().toISOString();
+      const daysSinceStatus = Math.floor((new Date() - new Date(statusDate)) / (1000 * 60 * 60 * 24));
+      const currentWorkflowDay = daysSinceStatus + 1; // Day 1 is the first day
 
       // Fetch workflow configuration for this stage
       const response = await fetch(`/api/v1/workflow-config/workflows/${workflowKey}`, {
@@ -677,20 +699,40 @@ function LeadDetail() {
 
       if (response.ok) {
         const workflowData = await response.json();
-        // Extract tasks from workflow days
-        const tasks = (workflowData.days || []).map((day, index) => ({
-          id: day.id || index,
-          dayLabel: day.day_label,
-          dayValue: day.day_value,
-          taskDescription: day.task_description || `Day ${day.day_value} tasks`,
-          phoneEnabled: day.phone_enabled,
-          textEnabled: day.text_enabled,
-          emailEnabled: day.email_enabled,
-          referralPartnerEnabled: day.referral_partner_enabled,
-          roleResponsibilities: day.role_responsibilities || {},
-          status: 'pending'
-        }));
-        setWorkflowTasks(tasks);
+        const allDays = workflowData.days || [];
+
+        // Filter to show tasks for the next 14 days from current workflow position
+        const maxDay = currentWorkflowDay + 14;
+        const upcomingTasks = allDays
+          .filter(day => day.day_value >= currentWorkflowDay && day.day_value <= maxDay)
+          .map((day) => {
+            // Calculate the actual date this task is due
+            const daysFromNow = day.day_value - currentWorkflowDay;
+            const dueDate = new Date();
+            dueDate.setDate(dueDate.getDate() + daysFromNow);
+
+            return {
+              id: day.id,
+              dayLabel: day.day_label,
+              dayValue: day.day_value,
+              dueDate: dueDate.toISOString(),
+              dueDateFormatted: dueDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+              daysFromNow: daysFromNow,
+              taskDescription: day.task_description || `Day ${day.day_value} tasks`,
+              phoneEnabled: day.phone_enabled,
+              phoneAmEnabled: day.phone_am_enabled,
+              phonePmEnabled: day.phone_pm_enabled,
+              textEnabled: day.text_enabled,
+              textAmEnabled: day.text_am_enabled,
+              textPmEnabled: day.text_pm_enabled,
+              emailEnabled: day.email_enabled,
+              referralPartnerEnabled: day.referral_partner_enabled,
+              roleResponsibilities: day.role_responsibilities || {},
+              status: daysFromNow < 0 ? 'overdue' : daysFromNow === 0 ? 'due_today' : 'upcoming'
+            };
+          });
+
+        setWorkflowTasks(upcomingTasks);
       } else {
         setWorkflowTasks([]);
       }
@@ -1618,7 +1660,7 @@ function LeadDetail() {
             <h2>Tasks</h2>
             <div className="tasks-content">
               <p className="section-description" style={{ color: '#666', marginBottom: '20px' }}>
-                Upcoming tasks based on the current lead status: <strong>{lead?.stage || 'Unknown'}</strong>
+                Upcoming tasks for the next 2 weeks based on status: <strong>{lead?.stage || 'Unknown'}</strong>
               </p>
 
               {workflowTasksLoading ? (
@@ -1627,7 +1669,8 @@ function LeadDetail() {
                 </div>
               ) : workflowTasks.length === 0 ? (
                 <div style={{ backgroundColor: '#f8f9fa', borderRadius: '8px', padding: '40px', textAlign: 'center', color: '#666' }}>
-                  No workflow tasks configured for this stage. Configure workflows in the Workflow Settings page.
+                  <p style={{ marginBottom: '12px' }}>No upcoming tasks for this stage.</p>
+                  <p style={{ fontSize: '13px' }}>Configure workflows in <strong>Settings &gt; Workflow Configuration</strong></p>
                 </div>
               ) : (
                 <div className="workflow-tasks-list">
@@ -1635,8 +1678,8 @@ function LeadDetail() {
                     <div
                       key={task.id}
                       style={{
-                        backgroundColor: '#fff',
-                        border: '1px solid #e0e0e0',
+                        backgroundColor: task.status === 'due_today' ? '#fff8e1' : task.status === 'overdue' ? '#ffebee' : '#fff',
+                        border: `1px solid ${task.status === 'due_today' ? '#ffca28' : task.status === 'overdue' ? '#ef5350' : '#e0e0e0'}`,
                         borderRadius: '8px',
                         padding: '16px',
                         marginBottom: '12px',
@@ -1644,28 +1687,34 @@ function LeadDetail() {
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
-                        <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <span style={{
+                            backgroundColor: task.status === 'due_today' ? '#ff9800' : task.status === 'overdue' ? '#f44336' : '#1976d2',
+                            color: '#fff',
+                            padding: '4px 10px',
+                            borderRadius: '12px',
+                            fontSize: '12px',
+                            fontWeight: '600'
+                          }}>
+                            {task.status === 'due_today' ? 'Due Today' : task.status === 'overdue' ? 'Overdue' : task.dueDateFormatted}
+                          </span>
                           <span style={{
                             backgroundColor: '#e3f2fd',
                             color: '#1976d2',
                             padding: '4px 10px',
                             borderRadius: '12px',
                             fontSize: '12px',
-                            fontWeight: '600',
-                            marginRight: '8px'
+                            fontWeight: '600'
                           }}>
                             {task.dayLabel}
                           </span>
-                          <span style={{ color: '#666', fontSize: '13px' }}>
-                            Day {task.dayValue}
-                          </span>
                         </div>
-                        <div style={{ display: 'flex', gap: '6px' }}>
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
                           {task.phoneEnabled && (
-                            <span title="Phone call" style={{ fontSize: '16px' }}>📞</span>
+                            <span title={`Phone call${task.phoneAmEnabled ? ' (AM)' : ''}${task.phonePmEnabled ? ' (PM)' : ''}`} style={{ fontSize: '16px' }}>📞</span>
                           )}
                           {task.textEnabled && (
-                            <span title="Text message" style={{ fontSize: '16px' }}>💬</span>
+                            <span title={`Text message${task.textAmEnabled ? ' (AM)' : ''}${task.textPmEnabled ? ' (PM)' : ''}`} style={{ fontSize: '16px' }}>💬</span>
                           )}
                           {task.emailEnabled && (
                             <span title="Email" style={{ fontSize: '16px' }}>📧</span>
