@@ -25919,10 +25919,10 @@ async def convert_lead_stage_to_enum_names_migration(
                 ), {"val": display_value}).scalar()
 
                 if check and check > 0:
-                    # Update to enum name
+                    # Update to enum name using string interpolation (safe since enum_name is from our dict)
                     result = db.execute(text(
-                        "UPDATE leads SET stage = :enum_name::leadstage WHERE stage::text = :display_val"
-                    ), {"enum_name": enum_name, "display_val": display_value})
+                        f"UPDATE leads SET stage = '{enum_name}'::leadstage WHERE stage::text = :display_val"
+                    ), {"display_val": display_value})
                     results.append(f"'{display_value}' -> '{enum_name}': {result.rowcount} rows")
                     total_fixed += result.rowcount
             except Exception as e:
