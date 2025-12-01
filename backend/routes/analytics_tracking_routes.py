@@ -1,26 +1,35 @@
 """
 Analytics Tracking API Routes
-Tracks user behavior and feature usage for beta metrics
+Perennia AI - IBMA
+
+Tracks user behavior and feature usage for beta metrics.
+Provides insights into feature adoption, user engagement,
+and onboarding completion rates.
 """
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from sqlalchemy import Column, Integer, String, Text, DateTime, JSON, func, text
-from pydantic import BaseModel
-from typing import Optional, Dict, Any, List
-from datetime import datetime, timedelta
+
 import logging
+from datetime import datetime, timedelta, timezone
+from typing import Optional, Dict, Any, List
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
+from sqlalchemy import Column, Integer, String, DateTime, JSON, func, text
+from sqlalchemy.orm import Session
 
 from database import get_db, Base, engine
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/v1/analytics", tags=["analytics-tracking"])
+router = APIRouter(prefix="/api/v1/analytics", tags=["Analytics Tracking"])
 
+
+# ============================================================================
+# Database Initialization
+# ============================================================================
 
 def ensure_analytics_tables_exist():
-    """Create analytics tables if they don't exist - called on module load"""
+    """Create analytics tables if they don't exist."""
     try:
         with engine.connect() as conn:
-            # Create analytics_events table
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS analytics_events (
                     id SERIAL PRIMARY KEY,
@@ -32,13 +41,17 @@ def ensure_analytics_tables_exist():
                     user_agent VARCHAR(500),
                     screen_width INTEGER,
                     screen_height INTEGER,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_analytics_event_name ON analytics_events(event_name);
+                CREATE INDEX IF NOT EXISTS idx_analytics_user_id ON analytics_events(user_id);
+                CREATE INDEX IF NOT EXISTS idx_analytics_created_at ON analytics_events(created_at DESC);
             """))
             conn.commit()
             logger.info("Analytics tables ensured to exist")
     except Exception as e:
-        logger.warning(f"Analytics tables check warning (may be using SQLite): {e}")
+        logger.warning(f"Analytics tables check warning: {e}")
 
 
 # Auto-create tables on module load
@@ -49,11 +62,11 @@ except Exception as e:
 
 
 # ============================================================================
-# Models
+# SQLAlchemy Model
 # ============================================================================
 
 class AnalyticsEvent(Base):
-    """Analytics event model for tracking user behavior"""
+    """Analytics event model for tracking user behavior."""
     __tablename__ = "analytics_events"
     __table_args__ = {'extend_existing': True}
 
@@ -66,39 +79,99 @@ class AnalyticsEvent(Base):
     user_agent = Column(String(500))
     screen_width = Column(Integer)
     screen_height = Column(Integer)
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
 
 
 # ============================================================================
-# Schemas
+# Pydantic Schemas - Requests
 # ============================================================================
 
 class EventTrackRequest(BaseModel):
-    """Schema for tracking an event"""
-    event: str
-    properties: Optional[Dict[str, Any]] = None
-
-
-class EventStats(BaseModel):
-    """Schema for event statistics"""
-    event_name: str
-    count: int
-    unique_users: int
+    """Request schema for tracking an event."""
+    event: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Event name (e.g., 'page_view', 'feature_usage')"
+    )
+    properties: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Additional event properties"
+    )
 
 
 # ============================================================================
-# Routes
+# Pydantic Schemas - Responses
+# ============================================================================
+
+class EventCountResponse(BaseModel):
+    """Response for event counts."""
+    event: str = Field(..., description="Event name")
+    count: int = Field(..., description="Total event count")
+    unique_users: int = Field(..., description="Unique users who triggered this event")
+
+
+class DailyUsersResponse(BaseModel):
+    """Response for daily active users."""
+    date: str = Field(..., description="Date (YYYY-MM-DD)")
+    users: int = Field(..., description="Number of unique users")
+
+
+class FeatureUsageResponse(BaseModel):
+    """Response for feature usage breakdown."""
+    feature: str = Field(..., description="Feature name")
+    action: str = Field(..., description="Action performed")
+    count: int = Field(..., description="Number of times performed")
+
+
+class EventsSummaryResponse(BaseModel):
+    """Response for events summary."""
+    period_days: int = Field(..., description="Number of days in the period")
+    events: List[EventCountResponse] = Field(default=[], description="Event counts")
+    daily_active_users: List[DailyUsersResponse] = Field(default=[], description="Daily user counts")
+    feature_usage: List[FeatureUsageResponse] = Field(default=[], description="Feature usage breakdown")
+    generated_at: str = Field(..., description="Report generation timestamp")
+
+
+class FeatureStatsResponse(BaseModel):
+    """Response for feature-specific stats."""
+    feature: str = Field(..., description="Feature name")
+    period_days: int = Field(..., description="Number of days in the period")
+    actions: List[dict] = Field(default=[], description="Actions performed on this feature")
+    daily_trend: List[dict] = Field(default=[], description="Daily usage trend")
+
+
+class BetaMetricsResponse(BaseModel):
+    """Response for beta program metrics."""
+    total_events: int = Field(..., description="Total events tracked")
+    events_last_7_days: int = Field(..., description="Events in last 7 days")
+    unique_users_last_7_days: int = Field(..., description="Unique users in last 7 days")
+    feature_adoption_30d: Dict[str, int] = Field(..., description="Feature adoption counts")
+    onboarding: Dict[str, Any] = Field(..., description="Onboarding metrics")
+    generated_at: str = Field(..., description="Report generation timestamp")
+
+
+# ============================================================================
+# API Routes
 # ============================================================================
 
 @router.post("/track")
 async def track_event(
     event_data: EventTrackRequest,
-    db: Session = Depends(get_db),
-    # Note: Remove auth requirement for tracking to work without login
+    db: Session = Depends(get_db)
 ):
     """
     Track a user event.
+
     Used for analytics and beta program metrics.
+    This endpoint does not require authentication to support
+    tracking before/during login flows.
+
+    **Common Events:**
+    - `page_view`: User viewed a page
+    - `feature_usage`: User interacted with a feature
+    - `button_click`: User clicked a button
+    - `form_submit`: User submitted a form
     """
     try:
         properties = event_data.properties or {}
@@ -132,16 +205,17 @@ async def track_event(
         return {"success": False, "error": "Failed to track event"}
 
 
-@router.get("/events/summary")
+@router.get("/events/summary", response_model=EventsSummaryResponse)
 async def get_events_summary(
-    days: int = 7,
+    days: int = Query(7, ge=1, le=90, description="Number of days to analyze"),
     db: Session = Depends(get_db)
 ):
     """
     Get summary of events for the last N days.
-    Used for beta metrics dashboard.
+
+    Used for beta metrics dashboard and overall analytics.
     """
-    since = datetime.utcnow() - timedelta(days=days)
+    since = datetime.now(timezone.utc) - timedelta(days=days)
 
     # Get event counts
     event_counts = db.query(
@@ -177,34 +251,36 @@ async def get_events_summary(
         AnalyticsEvent.properties['action'].astext
     ).all()
 
-    return {
-        "period_days": days,
-        "events": [
-            {"event": e[0], "count": e[1], "unique_users": e[2]}
+    return EventsSummaryResponse(
+        period_days=days,
+        events=[
+            EventCountResponse(event=e[0], count=e[1], unique_users=e[2])
             for e in event_counts
         ],
-        "daily_active_users": [
-            {"date": str(d[0]), "users": d[1]}
+        daily_active_users=[
+            DailyUsersResponse(date=str(d[0]), users=d[1])
             for d in daily_users
         ],
-        "feature_usage": [
-            {"feature": f[0], "action": f[1], "count": f[2]}
+        feature_usage=[
+            FeatureUsageResponse(feature=f[0], action=f[1], count=f[2])
             for f in feature_usage if f[0]
         ],
-        "generated_at": datetime.utcnow().isoformat()
-    }
+        generated_at=datetime.now(timezone.utc).isoformat()
+    )
 
 
-@router.get("/events/feature/{feature_name}")
+@router.get("/events/feature/{feature_name}", response_model=FeatureStatsResponse)
 async def get_feature_stats(
     feature_name: str,
-    days: int = 30,
+    days: int = Query(30, ge=1, le=90, description="Number of days to analyze"),
     db: Session = Depends(get_db)
 ):
     """
     Get detailed stats for a specific feature.
+
+    Useful for understanding feature adoption and usage patterns.
     """
-    since = datetime.utcnow() - timedelta(days=days)
+    since = datetime.now(timezone.utc) - timedelta(days=days)
 
     # Get actions for this feature
     actions = db.query(
@@ -231,89 +307,104 @@ async def get_feature_stats(
         func.date(AnalyticsEvent.created_at)
     ).all()
 
-    return {
-        "feature": feature_name,
-        "period_days": days,
-        "actions": [
+    return FeatureStatsResponse(
+        feature=feature_name,
+        period_days=days,
+        actions=[
             {"action": a[0], "count": a[1], "unique_users": a[2]}
             for a in actions if a[0]
         ],
-        "daily_trend": [
+        daily_trend=[
             {"date": str(d[0]), "count": d[1]}
             for d in daily_trend
         ]
-    }
+    )
 
 
-@router.get("/beta/metrics")
-async def get_beta_metrics(
-    db: Session = Depends(get_db)
-):
+@router.get("/beta/metrics", response_model=BetaMetricsResponse)
+async def get_beta_metrics(db: Session = Depends(get_db)):
     """
     Get key metrics for beta program monitoring.
+
+    Returns comprehensive metrics including:
+    - Total event counts
+    - Feature adoption rates
+    - Onboarding completion rates
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     last_7_days = now - timedelta(days=7)
     last_30_days = now - timedelta(days=30)
 
     # Total events
-    total_events = db.query(func.count(AnalyticsEvent.id)).scalar()
+    total_events = db.query(func.count(AnalyticsEvent.id)).scalar() or 0
 
     # Events last 7 days
     events_7d = db.query(func.count(AnalyticsEvent.id)).filter(
         AnalyticsEvent.created_at >= last_7_days
-    ).scalar()
+    ).scalar() or 0
 
     # Unique users last 7 days
     users_7d = db.query(func.count(func.distinct(AnalyticsEvent.user_id))).filter(
         AnalyticsEvent.created_at >= last_7_days
-    ).scalar()
+    ).scalar() or 0
 
     # Feature adoption rates
     clip_users = db.query(func.count(func.distinct(AnalyticsEvent.user_id))).filter(
         AnalyticsEvent.event_name == 'feature_usage',
         AnalyticsEvent.properties['feature'].astext == 'video_clip',
         AnalyticsEvent.created_at >= last_30_days
-    ).scalar()
+    ).scalar() or 0
 
     meeting_users = db.query(func.count(func.distinct(AnalyticsEvent.user_id))).filter(
         AnalyticsEvent.event_name == 'feature_usage',
         AnalyticsEvent.properties['feature'].astext == 'meeting',
         AnalyticsEvent.created_at >= last_30_days
-    ).scalar()
+    ).scalar() or 0
 
     ai_users = db.query(func.count(func.distinct(AnalyticsEvent.user_id))).filter(
         AnalyticsEvent.event_name == 'feature_usage',
         AnalyticsEvent.properties['feature'].astext == 'ai_assistant',
         AnalyticsEvent.created_at >= last_30_days
-    ).scalar()
+    ).scalar() or 0
 
     # Onboarding completion
     onboarding_started = db.query(func.count(AnalyticsEvent.id)).filter(
         AnalyticsEvent.event_name == 'feature_usage',
         AnalyticsEvent.properties['feature'].astext == 'onboarding',
         AnalyticsEvent.properties['action'].astext == 'started'
-    ).scalar()
+    ).scalar() or 0
 
     onboarding_completed = db.query(func.count(AnalyticsEvent.id)).filter(
         AnalyticsEvent.event_name == 'feature_usage',
         AnalyticsEvent.properties['feature'].astext == 'onboarding',
         AnalyticsEvent.properties['action'].astext == 'completed'
-    ).scalar()
+    ).scalar() or 0
 
-    return {
-        "total_events": total_events,
-        "events_last_7_days": events_7d,
-        "unique_users_last_7_days": users_7d,
-        "feature_adoption_30d": {
+    completion_rate = (onboarding_completed / onboarding_started * 100) if onboarding_started > 0 else 0
+
+    return BetaMetricsResponse(
+        total_events=total_events,
+        events_last_7_days=events_7d,
+        unique_users_last_7_days=users_7d,
+        feature_adoption_30d={
             "video_clips": clip_users,
             "meetings": meeting_users,
             "ai_assistant": ai_users
         },
-        "onboarding": {
+        onboarding={
             "started": onboarding_started,
             "completed": onboarding_completed,
-            "completion_rate": (onboarding_completed / onboarding_started * 100) if onboarding_started > 0 else 0
+            "completion_rate": round(completion_rate, 1)
         },
-        "generated_at": now.isoformat()
+        generated_at=now.isoformat()
+    )
+
+
+@router.get("/health")
+async def health_check():
+    """Health check endpoint for analytics service."""
+    return {
+        "status": "healthy",
+        "service": "analytics-tracking",
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }

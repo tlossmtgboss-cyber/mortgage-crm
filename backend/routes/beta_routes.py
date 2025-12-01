@@ -1,27 +1,35 @@
 """
 Beta Application API Routes
-Handles beta program applications and tracking
+Perennia AI - IBMA
+
+Handles beta program applications, tracking, and user onboarding
+for the Pipeline 360 UVIP beta program.
 """
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-from sqlalchemy.orm import Session
-from sqlalchemy import Column, Integer, String, Text, DateTime, Enum, text
-from pydantic import BaseModel, EmailStr
-from typing import Optional
-from datetime import datetime
-import logging
+
 import enum
+import logging
+from datetime import datetime, timezone
+from typing import Optional, List, Dict, Any
+
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
+from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy import Column, Integer, String, Text, DateTime, func, text
+from sqlalchemy.orm import Session
 
 from database import get_db, Base, engine
 
 logger = logging.getLogger(__name__)
-router = APIRouter(prefix="/api/v1/beta", tags=["beta"])
+router = APIRouter(prefix="/api/v1/beta", tags=["Beta Program"])
 
+
+# ================================================================
+# DATABASE INITIALIZATION
+# ================================================================
 
 def ensure_beta_tables_exist():
-    """Create beta tables if they don't exist - called on module load"""
+    """Create beta tables if they don't exist."""
     try:
         with engine.connect() as conn:
-            # Create beta_applications table
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS beta_applications (
                     id SERIAL PRIMARY KEY,
@@ -37,16 +45,20 @@ def ensure_beta_tables_exist():
                     referral_source VARCHAR(100),
                     status VARCHAR(50) DEFAULT 'pending',
                     notes TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    contacted_at TIMESTAMP,
-                    activated_at TIMESTAMP
-                )
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    contacted_at TIMESTAMP WITH TIME ZONE,
+                    activated_at TIMESTAMP WITH TIME ZONE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_beta_email ON beta_applications(email);
+                CREATE INDEX IF NOT EXISTS idx_beta_status ON beta_applications(status);
+                CREATE INDEX IF NOT EXISTS idx_beta_created ON beta_applications(created_at DESC);
             """))
             conn.commit()
-            logger.info("Beta tables ensured to exist")
+            logger.info("Beta tables initialized")
     except Exception as e:
-        logger.warning(f"Beta tables check warning (may be using SQLite): {e}")
+        logger.warning(f"Beta tables initialization note: {e}")
 
 
 # Auto-create tables on module load
@@ -56,11 +68,12 @@ except Exception as e:
     logger.warning(f"Could not auto-create beta tables: {e}")
 
 
-# ============================================================================
-# Models
-# ============================================================================
+# ================================================================
+# ENUMS
+# ================================================================
 
 class BetaApplicationStatus(str, enum.Enum):
+    """Status values for beta applications."""
     PENDING = "pending"
     CONTACTED = "contacted"
     SCHEDULED = "scheduled"
@@ -69,8 +82,12 @@ class BetaApplicationStatus(str, enum.Enum):
     CHURNED = "churned"
 
 
+# ================================================================
+# SQLAlchemy MODEL
+# ================================================================
+
 class BetaApplication(Base):
-    """Beta program application model"""
+    """Beta program application database model."""
     __tablename__ = "beta_applications"
     __table_args__ = {'extend_existing': True}
 
@@ -87,58 +104,123 @@ class BetaApplication(Base):
     referral_source = Column(String(100))
     status = Column(String(50), default=BetaApplicationStatus.PENDING.value)
     notes = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    contacted_at = Column(DateTime)
-    activated_at = Column(DateTime)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    contacted_at = Column(DateTime(timezone=True))
+    activated_at = Column(DateTime(timezone=True))
 
 
-# ============================================================================
-# Schemas
-# ============================================================================
+# ================================================================
+# PYDANTIC MODELS - Requests
+# ================================================================
 
 class BetaApplicationCreate(BaseModel):
-    """Schema for creating a beta application"""
-    company_name: str
-    contact_name: str
-    email: EmailStr
-    phone: Optional[str] = None
-    team_size: str
-    current_crm: Optional[str] = None
-    monthly_loans: Optional[str] = None
-    pain_points: Optional[str] = None
-    use_cases: Optional[str] = None
-    referral_source: Optional[str] = None
+    """Request model for creating a beta application."""
+    company_name: str = Field(
+        ...,
+        min_length=1,
+        max_length=255,
+        description="Company name"
+    )
+    contact_name: str = Field(
+        ...,
+        min_length=1,
+        max_length=255,
+        description="Primary contact name"
+    )
+    email: EmailStr = Field(..., description="Contact email address")
+    phone: Optional[str] = Field(
+        None,
+        max_length=50,
+        description="Contact phone number"
+    )
+    team_size: str = Field(
+        ...,
+        description="Team size range (e.g., '1-5', '6-20', '21-50', '50+')"
+    )
+    current_crm: Optional[str] = Field(
+        None,
+        max_length=255,
+        description="Current CRM system in use"
+    )
+    monthly_loans: Optional[str] = Field(
+        None,
+        description="Monthly loan volume range"
+    )
+    pain_points: Optional[str] = Field(
+        None,
+        max_length=2000,
+        description="Current pain points with existing systems"
+    )
+    use_cases: Optional[str] = Field(
+        None,
+        max_length=2000,
+        description="Intended use cases for Pipeline 360"
+    )
+    referral_source: Optional[str] = Field(
+        None,
+        max_length=100,
+        description="How they heard about us"
+    )
 
+
+class BetaStatusUpdate(BaseModel):
+    """Request model for updating application status."""
+    status: BetaApplicationStatus = Field(..., description="New status")
+    notes: Optional[str] = Field(
+        None,
+        max_length=2000,
+        description="Notes about the status change"
+    )
+
+
+# ================================================================
+# PYDANTIC MODELS - Responses
+# ================================================================
 
 class BetaApplicationResponse(BaseModel):
-    """Schema for beta application response"""
-    id: int
-    company_name: str
-    contact_name: str
-    email: str
-    phone: Optional[str]
-    team_size: str
-    current_crm: Optional[str]
-    monthly_loans: Optional[str]
-    pain_points: Optional[str]
-    use_cases: Optional[str]
-    referral_source: Optional[str]
-    status: str
-    created_at: datetime
+    """Response model for a beta application."""
+    id: int = Field(..., description="Application ID")
+    company_name: str = Field(..., description="Company name")
+    contact_name: str = Field(..., description="Primary contact name")
+    email: str = Field(..., description="Contact email")
+    phone: Optional[str] = Field(None, description="Contact phone")
+    team_size: str = Field(..., description="Team size range")
+    current_crm: Optional[str] = Field(None, description="Current CRM")
+    monthly_loans: Optional[str] = Field(None, description="Monthly loan volume")
+    pain_points: Optional[str] = Field(None, description="Pain points")
+    use_cases: Optional[str] = Field(None, description="Use cases")
+    referral_source: Optional[str] = Field(None, description="Referral source")
+    status: str = Field(..., description="Application status")
+    created_at: datetime = Field(..., description="Submission timestamp")
 
     class Config:
         from_attributes = True
 
 
-# ============================================================================
-# Email Notifications
-# ============================================================================
+class SubmitApplicationResponse(BaseModel):
+    """Response model for submitting an application."""
+    success: bool = Field(..., description="Whether submission succeeded")
+    message: str = Field(..., description="Response message")
+    application_id: Optional[int] = Field(None, description="ID of created application")
+
+
+class BetaStatsResponse(BaseModel):
+    """Response model for beta program statistics."""
+    total_applications: int = Field(..., description="Total applications received")
+    pending: int = Field(..., description="Applications pending review")
+    active: int = Field(..., description="Active beta users")
+    by_referral_source: Dict[str, int] = Field(default={}, description="Applications by referral source")
+    by_team_size: Dict[str, int] = Field(default={}, description="Applications by team size")
+
+
+# ================================================================
+# EMAIL NOTIFICATIONS
+# ================================================================
 
 async def send_application_confirmation(email: str, contact_name: str, company_name: str):
-    """Send confirmation email to applicant"""
+    """Send confirmation email to applicant."""
     try:
-        # Import email service
         from email_service import send_email
 
         html_body = f"""
@@ -169,13 +251,15 @@ async def send_application_confirmation(email: str, contact_name: str, company_n
         logger.info(f"Sent beta confirmation email to {email}")
 
     except Exception as e:
-        logger.error(f"Failed to send confirmation email: {str(e)}")
+        logger.error(f"Failed to send confirmation email: {e}")
 
 
 async def send_internal_notification(application: BetaApplication):
-    """Notify internal team of new application"""
+    """Notify internal team of new application."""
     try:
         from email_service import send_email
+
+        created_str = application.created_at.strftime('%Y-%m-%d %H:%M UTC') if application.created_at else 'Unknown'
 
         html_body = f"""
         <h2>New Beta Application</h2>
@@ -197,26 +281,25 @@ async def send_internal_notification(application: BetaApplication):
         <p><strong>Referral Source:</strong> {application.referral_source or 'Not provided'}</p>
 
         <hr>
-        <p><em>Submitted: {application.created_at.strftime('%Y-%m-%d %H:%M UTC')}</em></p>
+        <p><em>Submitted: {created_str}</em></p>
         """
 
-        # Send to internal team email
         await send_email(
-            to_email="beta@pipeline360.com",  # Configure this
+            to_email="beta@pipeline360.com",
             subject=f"New Beta Application: {application.company_name}",
             html_body=html_body
         )
         logger.info(f"Sent internal notification for {application.company_name}")
 
     except Exception as e:
-        logger.error(f"Failed to send internal notification: {str(e)}")
+        logger.error(f"Failed to send internal notification: {e}")
 
 
-# ============================================================================
-# Routes
-# ============================================================================
+# ================================================================
+# API ENDPOINTS
+# ================================================================
 
-@router.post("/apply", response_model=dict)
+@router.post("/apply", response_model=SubmitApplicationResponse)
 async def submit_beta_application(
     application: BetaApplicationCreate,
     background_tasks: BackgroundTasks,
@@ -224,7 +307,9 @@ async def submit_beta_application(
 ):
     """
     Submit a beta program application.
-    Sends confirmation email and notifies internal team.
+
+    Creates the application record and sends confirmation email
+    to the applicant and notification to the internal team.
     """
     try:
         # Check for duplicate application
@@ -234,11 +319,11 @@ async def submit_beta_application(
 
         if existing:
             logger.info(f"Duplicate beta application from {application.email}")
-            # Still return success to not reveal if email exists
-            return {
-                "success": True,
-                "message": "Application submitted successfully"
-            }
+            # Return success to not reveal if email exists (privacy)
+            return SubmitApplicationResponse(
+                success=True,
+                message="Application submitted successfully"
+            )
 
         # Create application record
         db_application = BetaApplication(
@@ -273,14 +358,14 @@ async def submit_beta_application(
             db_application
         )
 
-        return {
-            "success": True,
-            "message": "Application submitted successfully",
-            "application_id": db_application.id
-        }
+        return SubmitApplicationResponse(
+            success=True,
+            message="Application submitted successfully",
+            application_id=db_application.id
+        )
 
     except Exception as e:
-        logger.error(f"Error creating beta application: {str(e)}")
+        logger.error(f"Error creating beta application: {e}")
         db.rollback()
         raise HTTPException(
             status_code=500,
@@ -288,22 +373,23 @@ async def submit_beta_application(
         )
 
 
-@router.get("/applications", response_model=list[BetaApplicationResponse])
+@router.get("/applications", response_model=List[BetaApplicationResponse])
 async def list_beta_applications(
-    status: Optional[str] = None,
-    skip: int = 0,
-    limit: int = 100,
+    status: Optional[BetaApplicationStatus] = Query(None, description="Filter by status"),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: Session = Depends(get_db)
 ):
     """
-    List all beta applications (admin only).
-    Filter by status optionally.
+    List all beta applications.
+
+    **Note:** This endpoint should be protected with admin authentication.
     """
     # TODO: Add admin authentication check
     query = db.query(BetaApplication)
 
     if status:
-        query = query.filter(BetaApplication.status == status)
+        query = query.filter(BetaApplication.status == status.value)
 
     applications = query.order_by(
         BetaApplication.created_at.desc()
@@ -317,7 +403,11 @@ async def get_beta_application(
     application_id: int,
     db: Session = Depends(get_db)
 ):
-    """Get a specific beta application by ID"""
+    """
+    Get a specific beta application by ID.
+
+    **Note:** This endpoint should be protected with admin authentication.
+    """
     application = db.query(BetaApplication).filter(
         BetaApplication.id == application_id
     ).first()
@@ -331,11 +421,16 @@ async def get_beta_application(
 @router.patch("/applications/{application_id}/status")
 async def update_application_status(
     application_id: int,
-    status: str,
-    notes: Optional[str] = None,
+    status_update: BetaStatusUpdate,
     db: Session = Depends(get_db)
 ):
-    """Update beta application status"""
+    """
+    Update beta application status.
+
+    **Note:** This endpoint should be protected with admin authentication.
+
+    Automatically tracks when applications are contacted or activated.
+    """
     application = db.query(BetaApplication).filter(
         BetaApplication.id == application_id
     ).first()
@@ -343,41 +438,43 @@ async def update_application_status(
     if not application:
         raise HTTPException(status_code=404, detail="Application not found")
 
-    # Validate status
-    try:
-        BetaApplicationStatus(status)
-    except ValueError:
-        raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
+    application.status = status_update.status.value
+    application.updated_at = datetime.now(timezone.utc)
 
-    application.status = status
-    if notes:
-        application.notes = notes
+    if status_update.notes:
+        application.notes = status_update.notes
 
-    # Track status changes
-    if status == BetaApplicationStatus.CONTACTED.value:
-        application.contacted_at = datetime.utcnow()
-    elif status == BetaApplicationStatus.ACTIVE.value:
-        application.activated_at = datetime.utcnow()
+    # Track status change timestamps
+    if status_update.status == BetaApplicationStatus.CONTACTED:
+        application.contacted_at = datetime.now(timezone.utc)
+    elif status_update.status == BetaApplicationStatus.ACTIVE:
+        application.activated_at = datetime.now(timezone.utc)
 
     db.commit()
 
-    logger.info(f"Beta application {application_id} status updated to {status}")
+    logger.info(f"Beta application {application_id} status updated to {status_update.status.value}")
 
-    return {"success": True, "status": status}
+    return {
+        "success": True,
+        "status": status_update.status.value,
+        "updated_at": application.updated_at.isoformat()
+    }
 
 
-@router.get("/stats")
+@router.get("/stats", response_model=BetaStatsResponse)
 async def get_beta_stats(db: Session = Depends(get_db)):
-    """Get beta program statistics"""
-    from sqlalchemy import func
+    """
+    Get beta program statistics.
 
-    total = db.query(func.count(BetaApplication.id)).scalar()
+    Returns counts by status, referral source, and team size.
+    """
+    total = db.query(func.count(BetaApplication.id)).scalar() or 0
     pending = db.query(func.count(BetaApplication.id)).filter(
         BetaApplication.status == BetaApplicationStatus.PENDING.value
-    ).scalar()
+    ).scalar() or 0
     active = db.query(func.count(BetaApplication.id)).filter(
         BetaApplication.status == BetaApplicationStatus.ACTIVE.value
-    ).scalar()
+    ).scalar() or 0
 
     # Get applications by referral source
     by_source = db.query(
@@ -391,10 +488,20 @@ async def get_beta_stats(db: Session = Depends(get_db)):
         func.count(BetaApplication.id)
     ).group_by(BetaApplication.team_size).all()
 
+    return BetaStatsResponse(
+        total_applications=total,
+        pending=pending,
+        active=active,
+        by_referral_source={source or 'unknown': count for source, count in by_source},
+        by_team_size={size: count for size, count in by_team_size if size}
+    )
+
+
+@router.get("/health")
+async def health_check():
+    """Health check endpoint for beta program service."""
     return {
-        "total_applications": total,
-        "pending": pending,
-        "active": active,
-        "by_referral_source": {source or 'unknown': count for source, count in by_source},
-        "by_team_size": {size: count for size, count in by_team_size if size}
+        "status": "healthy",
+        "service": "beta-program",
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }

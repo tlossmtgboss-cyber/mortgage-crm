@@ -1,5 +1,6 @@
 """
 SLA Tracking API Routes
+Perennia AI - IBMA
 
 Provides endpoints for:
 - SLA Measure configuration (CRUD)
@@ -7,9 +8,11 @@ Provides endpoints for:
 - Performance dashboards and trending
 - Alert management
 - Efficiency reports
+- Run rate analysis and forecasting
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import Optional, List
@@ -921,13 +924,12 @@ async def trigger_status_update(
 # Email Report Endpoint
 # ============================================================================
 
-from pydantic import BaseModel, EmailStr
-
 class SLAReportEmailRequest(BaseModel):
-    email_address: str
-    include_run_rates: bool = True
-    include_forecasts: bool = True
-    include_bottlenecks: bool = True
+    """Request model for sending SLA report via email."""
+    email_address: str = Field(..., description="Email address to send report to")
+    include_run_rates: bool = Field(True, description="Include run rates section")
+    include_forecasts: bool = Field(True, description="Include inventory forecasts section")
+    include_bottlenecks: bool = Field(True, description="Include bottlenecks section")
 
 
 @router.post("/reports/send-email")

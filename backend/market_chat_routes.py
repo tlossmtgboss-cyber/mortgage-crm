@@ -1,210 +1,307 @@
 """
 Market Chat Routes
+Perennia AI - IBMA
 
 API endpoints for team chat on the Market Dashboard.
+Enables real-time team communication about market conditions.
 """
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+import logging
+from datetime import datetime, timezone
 from typing import List, Optional
-from datetime import datetime
-import sqlite3
-import os
 
-router = APIRouter(prefix="/api/v1/market-chat", tags=["market-chat"])
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+from sqlalchemy import text
 
-# Database setup
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:RzXRIwJsZINuRwMQybbbZYqYFoHBaxRw@postgres.railway.internal:5432/railway")
+from database import get_db, engine
 
-
-def get_db_connection():
-    """Get database connection - uses PostgreSQL in production."""
-    if "postgresql" in DATABASE_URL:
-        import psycopg2
-        from psycopg2.extras import RealDictCursor
-        conn = psycopg2.connect(DATABASE_URL)
-        return conn
-    else:
-        # SQLite fallback for local dev
-        conn = sqlite3.connect("mortgage_crm.db")
-        conn.row_factory = sqlite3.Row
-        return conn
+logger = logging.getLogger(__name__)
+router = APIRouter(prefix="/api/v1/market-chat", tags=["Market Chat"])
+security = HTTPBearer(auto_error=False)
 
 
-def init_chat_table():
-    """Initialize the market_chat_messages table."""
-    conn = get_db_connection()
-    cursor = conn.cursor()
+# ================================================================
+# DATABASE TABLE INITIALIZATION
+# ================================================================
 
-    if "postgresql" in DATABASE_URL:
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS market_chat_messages (
-                id SERIAL PRIMARY KEY,
-                user_id INTEGER,
-                user_name VARCHAR(255),
-                message TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-    else:
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS market_chat_messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER,
-                user_name TEXT,
-                message TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
+def ensure_chat_table_exists():
+    """Create market_chat_messages table if it doesn't exist."""
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS market_chat_messages (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER REFERENCES users(id),
+                    user_name VARCHAR(255),
+                    message TEXT NOT NULL,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                );
 
-    conn.commit()
-    conn.close()
+                CREATE INDEX IF NOT EXISTS idx_chat_created_at
+                ON market_chat_messages(created_at DESC);
+
+                CREATE INDEX IF NOT EXISTS idx_chat_user_id
+                ON market_chat_messages(user_id);
+            """))
+            conn.commit()
+            logger.info("Market chat table initialized")
+    except Exception as e:
+        logger.warning(f"Chat table initialization note: {e}")
 
 
 # Initialize table on module load
 try:
-    init_chat_table()
+    ensure_chat_table_exists()
 except Exception as e:
-    print(f"Warning: Could not initialize chat table: {e}")
+    logger.warning(f"Could not auto-initialize chat table: {e}")
 
 
-class ChatMessage(BaseModel):
-    message: str
+# ================================================================
+# AUTHENTICATION
+# ================================================================
+
+class UserProxy:
+    """Simple user proxy for authentication."""
+    def __init__(self, id: int, email: str, name: Optional[str] = None):
+        self.id = id
+        self.email = email
+        self.name = name or email.split("@")[0]
+
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    db: Session = Depends(get_db)
+) -> UserProxy:
+    """
+    Get current user from JWT token.
+    Falls back to demo user for development.
+    """
+    import os
+    from jose import jwt
+
+    # Fallback for no credentials
+    if not credentials:
+        result = db.execute(
+            text("SELECT id, email, full_name FROM users WHERE email = :email"),
+            {"email": "demo@example.com"}
+        )
+        row = result.fetchone()
+        if row:
+            return UserProxy(id=row[0], email=row[1], name=row[2])
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    try:
+        token = credentials.credentials
+        secret = os.getenv("SECRET_KEY", "09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7")
+        payload = jwt.decode(token, secret, algorithms=["HS256"])
+        email = payload.get("sub")
+
+        if not email:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        result = db.execute(
+            text("SELECT id, email, full_name FROM users WHERE email = :email"),
+            {"email": email}
+        )
+        row = result.fetchone()
+        if row:
+            return UserProxy(id=row[0], email=row[1], name=row[2])
+
+        raise HTTPException(status_code=401, detail="User not found")
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning(f"Auth error: {e}")
+        # Fallback to demo user for development
+        result = db.execute(
+            text("SELECT id, email, full_name FROM users WHERE email = :email"),
+            {"email": "demo@example.com"}
+        )
+        row = result.fetchone()
+        if row:
+            return UserProxy(id=row[0], email=row[1], name=row[2])
+        raise HTTPException(status_code=401, detail="Authentication failed")
+
+
+# ================================================================
+# PYDANTIC MODELS
+# ================================================================
+
+class ChatMessageCreate(BaseModel):
+    """Request model for creating a chat message."""
+    message: str = Field(
+        ...,
+        min_length=1,
+        max_length=2000,
+        description="Chat message content"
+    )
 
 
 class ChatMessageResponse(BaseModel):
-    id: int
-    user_id: Optional[int]
-    user_name: str
-    message: str
-    created_at: str
+    """Response model for a single chat message."""
+    id: int = Field(..., description="Message ID")
+    user_id: Optional[int] = Field(None, description="User ID who sent the message")
+    user_name: str = Field(..., description="Display name of sender")
+    message: str = Field(..., description="Message content")
+    created_at: str = Field(..., description="ISO timestamp when message was sent")
+
+    class Config:
+        from_attributes = True
 
 
-# Auth dependency (simplified - in production use proper auth)
-async def get_current_user(authorization: str = None):
-    """Get current user from token."""
-    from jose import jwt
+class ChatMessagesResponse(BaseModel):
+    """Response model for listing chat messages."""
+    messages: List[ChatMessageResponse] = Field(default=[], description="List of chat messages")
+    total: int = Field(0, description="Total number of messages returned")
 
-    if not authorization:
-        return {"id": 1, "name": "Demo User", "email": "demo@example.com"}
 
+class SendMessageResponse(BaseModel):
+    """Response model for sending a message."""
+    success: bool = Field(..., description="Whether the message was sent successfully")
+    message_id: int = Field(..., description="ID of the created message")
+    user_name: str = Field(..., description="Display name of sender")
+
+
+# ================================================================
+# API ENDPOINTS
+# ================================================================
+
+@router.get("/messages", response_model=ChatMessagesResponse)
+async def get_messages(
+    limit: int = Query(50, ge=1, le=200, description="Maximum messages to return"),
+    db: Session = Depends(get_db),
+    current_user: UserProxy = Depends(get_current_user)
+):
+    """
+    Get recent chat messages for the market dashboard.
+
+    Returns messages in chronological order (oldest first).
+    """
     try:
-        token = authorization.replace("Bearer ", "")
-        secret = os.getenv("JWT_SECRET", "your-secret-key")
-        payload = jwt.decode(token, secret, algorithms=["HS256"])
+        result = db.execute(text("""
+            SELECT id, user_id, user_name, message, created_at
+            FROM market_chat_messages
+            ORDER BY created_at DESC
+            LIMIT :limit
+        """), {"limit": limit})
 
-        # Get user from database
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        rows = result.fetchall()
 
-        if "postgresql" in DATABASE_URL:
-            from psycopg2.extras import RealDictCursor
-            cursor = conn.cursor(cursor_factory=RealDictCursor)
-            cursor.execute("SELECT id, name, email FROM users WHERE email = %s", (payload.get("sub"),))
-        else:
-            cursor.execute("SELECT id, name, email FROM users WHERE email = ?", (payload.get("sub"),))
-
-        user = cursor.fetchone()
-        conn.close()
-
-        if user:
-            if isinstance(user, dict):
-                return user
-            return {"id": user[0], "name": user[1] or user[2].split("@")[0], "email": user[2]}
-
-        return {"id": 1, "name": payload.get("sub", "User").split("@")[0], "email": payload.get("sub")}
-    except Exception as e:
-        print(f"Auth error: {e}")
-        return {"id": 1, "name": "User", "email": "user@example.com"}
-
-
-@router.get("/messages")
-async def get_messages(limit: int = 50, authorization: str = None):
-    """Get recent chat messages."""
-    try:
-        conn = get_db_connection()
-
-        if "postgresql" in DATABASE_URL:
-            from psycopg2.extras import RealDictCursor
-            cursor = conn.cursor(cursor_factory=RealDictCursor)
-            cursor.execute("""
-                SELECT id, user_id, user_name, message, created_at
-                FROM market_chat_messages
-                ORDER BY created_at DESC
-                LIMIT %s
-            """, (limit,))
-        else:
-            cursor = conn.cursor()
-            cursor.execute("""
-                SELECT id, user_id, user_name, message, created_at
-                FROM market_chat_messages
-                ORDER BY created_at DESC
-                LIMIT ?
-            """, (limit,))
-
-        rows = cursor.fetchall()
-        conn.close()
-
+        # Reverse to show oldest first (chronological order)
         messages = []
-        for row in reversed(rows):  # Reverse to show oldest first
-            if isinstance(row, dict):
-                messages.append({
-                    "id": row["id"],
-                    "user_id": row["user_id"],
-                    "user_name": row["user_name"],
-                    "message": row["message"],
-                    "created_at": str(row["created_at"])
-                })
-            else:
-                messages.append({
-                    "id": row[0],
-                    "user_id": row[1],
-                    "user_name": row[2],
-                    "message": row[3],
-                    "created_at": str(row[4])
-                })
+        for row in reversed(rows):
+            messages.append(ChatMessageResponse(
+                id=row[0],
+                user_id=row[1],
+                user_name=row[2] or "Unknown",
+                message=row[3],
+                created_at=row[4].isoformat() if row[4] else ""
+            ))
 
-        return {"messages": messages}
+        return ChatMessagesResponse(
+            messages=messages,
+            total=len(messages)
+        )
+
     except Exception as e:
-        print(f"Error getting messages: {e}")
-        return {"messages": []}
+        logger.error(f"Error getting chat messages: {e}")
+        return ChatMessagesResponse(messages=[], total=0)
 
 
-@router.post("/messages")
-async def send_message(chat_message: ChatMessage, authorization: str = None):
-    """Send a new chat message."""
-    user = await get_current_user(authorization)
+@router.post("/messages", response_model=SendMessageResponse)
+async def send_message(
+    chat_message: ChatMessageCreate,
+    db: Session = Depends(get_db),
+    current_user: UserProxy = Depends(get_current_user)
+):
+    """
+    Send a new chat message to the market dashboard.
 
-    if not chat_message.message.strip():
+    Messages are visible to all team members viewing the market dashboard.
+    """
+    message_text = chat_message.message.strip()
+
+    if not message_text:
         raise HTTPException(status_code=400, detail="Message cannot be empty")
 
     try:
-        conn = get_db_connection()
+        result = db.execute(text("""
+            INSERT INTO market_chat_messages (user_id, user_name, message, created_at)
+            VALUES (:user_id, :user_name, :message, :created_at)
+            RETURNING id
+        """), {
+            "user_id": current_user.id,
+            "user_name": current_user.name,
+            "message": message_text,
+            "created_at": datetime.now(timezone.utc)
+        })
 
-        if "postgresql" in DATABASE_URL:
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO market_chat_messages (user_id, user_name, message)
-                VALUES (%s, %s, %s)
-                RETURNING id
-            """, (user.get("id"), user.get("name", "User"), chat_message.message.strip()))
-            message_id = cursor.fetchone()[0]
-        else:
-            cursor = conn.cursor()
-            cursor.execute("""
-                INSERT INTO market_chat_messages (user_id, user_name, message)
-                VALUES (?, ?, ?)
-            """, (user.get("id"), user.get("name", "User"), chat_message.message.strip()))
-            message_id = cursor.lastrowid
+        message_id = result.fetchone()[0]
+        db.commit()
 
-        conn.commit()
-        conn.close()
+        logger.info(f"Chat message {message_id} sent by user {current_user.id}")
 
-        return {
-            "success": True,
-            "message_id": message_id,
-            "user_name": user.get("name", "User")
-        }
+        return SendMessageResponse(
+            success=True,
+            message_id=message_id,
+            user_name=current_user.name
+        )
+
     except Exception as e:
-        print(f"Error sending message: {e}")
+        logger.error(f"Error sending chat message: {e}")
+        db.rollback()
         raise HTTPException(status_code=500, detail="Failed to send message")
+
+
+@router.delete("/messages/{message_id}")
+async def delete_message(
+    message_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserProxy = Depends(get_current_user)
+):
+    """
+    Delete a chat message.
+
+    Users can only delete their own messages.
+    """
+    try:
+        # Check if message exists and belongs to user
+        result = db.execute(text("""
+            SELECT id, user_id FROM market_chat_messages
+            WHERE id = :message_id
+        """), {"message_id": message_id})
+
+        row = result.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Message not found")
+
+        if row[1] != current_user.id:
+            raise HTTPException(status_code=403, detail="Cannot delete another user's message")
+
+        db.execute(text("""
+            DELETE FROM market_chat_messages WHERE id = :message_id
+        """), {"message_id": message_id})
+        db.commit()
+
+        return {"success": True, "message": "Message deleted"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting message: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to delete message")
+
+
+@router.get("/health")
+async def health_check():
+    """Health check endpoint for market chat service."""
+    return {
+        "status": "healthy",
+        "service": "market-chat",
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }

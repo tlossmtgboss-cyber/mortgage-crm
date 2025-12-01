@@ -1,22 +1,27 @@
 """
 User Creation & Onboarding API Routes
-Handles single user creation and bulk upload workflows
+Perennia AI - IBMA
+
+Handles single user creation and bulk upload workflows for
+the Pipeline 360 platform. Includes user activation, role assignment,
+permission configuration, and KPI scorecard generation.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request
-from sqlalchemy.orm import Session
-from sqlalchemy import or_
-from pydantic import BaseModel, EmailStr, validator
-from typing import List, Optional, Dict, Any
-from datetime import datetime, timedelta, timezone
-import secrets
 import csv
 import io
 import logging
+import secrets
+from datetime import datetime, timedelta, timezone
+from typing import List, Optional, Dict, Any
+
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request, Query
+from pydantic import BaseModel, EmailStr, Field, field_validator
+from sqlalchemy.orm import Session
+from sqlalchemy import or_
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/admin/users", tags=["User Creation & Onboarding"])
+router = APIRouter(prefix="/api/v1/admin/users", tags=["User Management"])
 
 
 # ============================================================================
@@ -24,77 +29,90 @@ router = APIRouter(prefix="/api/v1/admin/users", tags=["User Creation & Onboardi
 # ============================================================================
 
 class BasicInfoRequest(BaseModel):
-    """Request schema for creating a single user - basic info"""
-    first_name: str
-    last_name: str
-    email: EmailStr
-    phone: Optional[str] = None
-    internal_title: Optional[str] = None
-    profile_image_url: Optional[str] = None
+    """Request schema for creating a single user - basic info."""
+    first_name: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="User's first name"
+    )
+    last_name: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="User's last name"
+    )
+    email: EmailStr = Field(..., description="User's email address")
+    phone: Optional[str] = Field(None, max_length=50, description="Phone number")
+    internal_title: Optional[str] = Field(None, max_length=100, description="Job title")
+    profile_image_url: Optional[str] = Field(None, description="Profile image URL")
 
-    @validator('first_name', 'last_name')
-    def validate_names(cls, v):
-        if not v or len(v.strip()) == 0:
-            raise ValueError('Name cannot be empty')
-        if len(v) > 100:
-            raise ValueError('Name cannot exceed 100 characters')
+    @field_validator('first_name', 'last_name')
+    @classmethod
+    def validate_names(cls, v: str) -> str:
         return v.strip()
 
 
 class RoleBuilderRequest(BaseModel):
-    """Request schema for role builder step"""
-    user_id: int
-    onboarding_session_id: int
-    role_id: int
-    category_ids: List[int]
-    responsibility_ids: List[int]
+    """Request schema for role builder step."""
+    user_id: int = Field(..., description="User ID being configured")
+    onboarding_session_id: int = Field(..., description="Onboarding session ID")
+    role_id: int = Field(..., description="Role ID to assign")
+    category_ids: List[int] = Field(default=[], description="Category IDs to assign")
+    responsibility_ids: List[int] = Field(default=[], description="Responsibility IDs to assign")
 
 
 class PermissionsBuilderRequest(BaseModel):
-    """Request schema for permissions builder step"""
-    user_id: int
-    onboarding_session_id: int
-    permission_source: str  # 'template' or 'custom'
-    permission_template_id: Optional[int] = None
-    custom_permissions: Optional[Dict[str, Any]] = None
+    """Request schema for permissions builder step."""
+    user_id: int = Field(..., description="User ID being configured")
+    onboarding_session_id: int = Field(..., description="Onboarding session ID")
+    permission_source: str = Field(
+        ...,
+        description="Source of permissions: 'template' or 'custom'"
+    )
+    permission_template_id: Optional[int] = Field(None, description="Permission template ID")
+    custom_permissions: Optional[Dict[str, Any]] = Field(None, description="Custom permissions JSON")
 
 
 class FinalizeUserRequest(BaseModel):
-    """Request schema for finalizing user creation"""
-    user_id: int
-    onboarding_session_id: int
+    """Request schema for finalizing user creation."""
+    user_id: int = Field(..., description="User ID to finalize")
+    onboarding_session_id: int = Field(..., description="Onboarding session ID")
 
 
 class ColumnMappingRequest(BaseModel):
-    """Request schema for column mapping in bulk upload"""
-    session_id: int
-    column_mapping: Dict[str, str]
+    """Request schema for column mapping in bulk upload."""
+    session_id: int = Field(..., description="Bulk upload session ID")
+    column_mapping: Dict[str, str] = Field(..., description="Column name to field mapping")
 
 
 class BulkRoleBuilderRequest(BaseModel):
-    """Request schema for bulk role builder"""
-    session_id: int
-    apply_to_all: bool = True
-    default_config: Optional[Dict[str, Any]] = None
-    per_user_overrides: Optional[List[Dict[str, Any]]] = None
+    """Request schema for bulk role builder."""
+    session_id: int = Field(..., description="Bulk upload session ID")
+    apply_to_all: bool = Field(True, description="Apply same config to all users")
+    default_config: Optional[Dict[str, Any]] = Field(None, description="Default role config")
+    per_user_overrides: Optional[List[Dict[str, Any]]] = Field(None, description="Per-user overrides")
 
 
 class ResponsibilityFilterRequest(BaseModel):
-    """Request schema for filtering responsibilities"""
-    category_ids: List[int]
-    role_id: Optional[int] = None
+    """Request schema for filtering responsibilities."""
+    category_ids: List[int] = Field(..., description="Category IDs to filter by")
+    role_id: Optional[int] = Field(None, description="Optional role ID filter")
 
 
 class ActivatePasswordRequest(BaseModel):
-    """Request schema for setting password during activation"""
-    activation_token: str
-    password: str
-    password_confirmation: str
+    """Request schema for setting password during activation."""
+    activation_token: str = Field(..., description="Activation token from email")
+    password: str = Field(
+        ...,
+        min_length=8,
+        description="New password (min 8 chars, requires uppercase, lowercase, number, special char)"
+    )
+    password_confirmation: str = Field(..., description="Password confirmation")
 
-    @validator('password')
-    def validate_password(cls, v):
-        if len(v) < 8:
-            raise ValueError('Password must be at least 8 characters')
+    @field_validator('password')
+    @classmethod
+    def validate_password(cls, v: str) -> str:
         if not any(c.isupper() for c in v):
             raise ValueError('Password must contain at least one uppercase letter')
         if not any(c.islower() for c in v):
@@ -105,9 +123,10 @@ class ActivatePasswordRequest(BaseModel):
             raise ValueError('Password must contain at least one special character')
         return v
 
-    @validator('password_confirmation')
-    def passwords_match(cls, v, values):
-        if 'password' in values and v != values['password']:
+    @field_validator('password_confirmation')
+    @classmethod
+    def passwords_match(cls, v: str, info) -> str:
+        if 'password' in info.data and v != info.data['password']:
             raise ValueError('Passwords do not match')
         return v
 
@@ -117,39 +136,43 @@ class ActivatePasswordRequest(BaseModel):
 # ============================================================================
 
 class RoleResponse(BaseModel):
-    id: int
-    name: str
-    description: Optional[str]
+    """Response schema for a role."""
+    id: int = Field(..., description="Role ID")
+    name: str = Field(..., description="Role name")
+    description: Optional[str] = Field(None, description="Role description")
 
     class Config:
         from_attributes = True
 
 
 class CategoryResponse(BaseModel):
-    id: int
-    name: str
-    description: Optional[str]
+    """Response schema for a category."""
+    id: int = Field(..., description="Category ID")
+    name: str = Field(..., description="Category name")
+    description: Optional[str] = Field(None, description="Category description")
 
     class Config:
         from_attributes = True
 
 
 class ResponsibilityResponse(BaseModel):
-    id: int
-    name: str
-    description: Optional[str]
-    category_id: int
-    category_name: Optional[str] = None
+    """Response schema for a responsibility."""
+    id: int = Field(..., description="Responsibility ID")
+    name: str = Field(..., description="Responsibility name")
+    description: Optional[str] = Field(None, description="Responsibility description")
+    category_id: int = Field(..., description="Parent category ID")
+    category_name: Optional[str] = Field(None, description="Parent category name")
 
     class Config:
         from_attributes = True
 
 
 class PermissionTemplateResponse(BaseModel):
-    id: int
-    name: str
-    description: Optional[str]
-    is_system_template: bool
+    """Response schema for a permission template."""
+    id: int = Field(..., description="Template ID")
+    name: str = Field(..., description="Template name")
+    description: Optional[str] = Field(None, description="Template description")
+    is_system_template: bool = Field(..., description="Whether this is a system-defined template")
 
     class Config:
         from_attributes = True
