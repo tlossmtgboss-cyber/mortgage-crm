@@ -373,6 +373,99 @@ async def analyze_file(
         raise HTTPException(status_code=500, detail=f"Error analyzing file: {str(e)}")
 
 
+def normalize_stage_value(stage_value: str, destination: str) -> str:
+    """
+    Normalize stage values to match database enum values.
+    Handles common variations in how stages are written in CSV files.
+    """
+    if not stage_value or not isinstance(stage_value, str):
+        return stage_value
+
+    stage_lower = stage_value.strip().lower()
+
+    if destination == 'leads':
+        # LeadStage enum mappings - normalize to exact enum values
+        lead_stage_map = {
+            # New
+            'new': 'New',
+            'new lead': 'New',
+            # Attempted Contact
+            'attempted contact': 'Attempted Contact',
+            'attempted': 'Attempted Contact',
+            'contact attempted': 'Attempted Contact',
+            # Prospect
+            'prospect': 'Prospect',
+            'qualified': 'Prospect',
+            # Application
+            'application': 'Application',
+            'application started': 'Application',
+            'app started': 'Application',
+            'in application': 'Application',
+            # Pre-Qualified
+            'pre-qualified': 'Pre-Qualified',
+            'pre qualified': 'Pre-Qualified',
+            'prequalified': 'Pre-Qualified',
+            'prequal': 'Pre-Qualified',
+            # Pre-Approved
+            'pre-approved': 'Pre-Approved',
+            'pre approved': 'Pre-Approved',
+            'preapproved': 'Pre-Approved',
+            'preapproval': 'Pre-Approved',
+            # Under Contract
+            'under contract': 'Under Contract',
+            'contract': 'Under Contract',
+            'in contract': 'Under Contract',
+            # Long-Term Nurture
+            'long-term nurture': 'Long-Term Nurture',
+            'long term nurture': 'Long-Term Nurture',
+            'nurture': 'Long-Term Nurture',
+            'long term': 'Long-Term Nurture',
+            # Closed
+            'closed': 'Closed',
+            'funded': 'Closed',
+            'closed won': 'Closed',
+            # AMR
+            'amr': 'AMR',
+            'annual mortgage review': 'AMR',
+            # Referral Source
+            'referral source': 'Referral Source',
+            'referral': 'Referral Source',
+            # Withdrawn
+            'withdrawn': 'Withdrawn',
+            'cancelled': 'Withdrawn',
+            'canceled': 'Withdrawn',
+            # Does Not Qualify
+            'does not qualify': 'Does Not Qualify',
+            'dnq': 'Does Not Qualify',
+            'not qualified': 'Does Not Qualify',
+            'disqualified': 'Does Not Qualify',
+        }
+        return lead_stage_map.get(stage_lower, stage_value)
+
+    elif destination == 'loans':
+        # LoanStage enum mappings
+        loan_stage_map = {
+            'disclosed': 'Disclosed',
+            'processing': 'Processing',
+            'in processing': 'Processing',
+            'submitted': 'Submitted',
+            'uw submitted': 'Submitted',
+            'uw received': 'UW Received',
+            'underwriting': 'UW Received',
+            'approved': 'Approved',
+            'clear to close': 'CTC',
+            'ctc': 'CTC',
+            'suspended': 'Suspended',
+            'docs out': 'Docs Out',
+            'docs': 'Docs Out',
+            'funded': 'Funded',
+            'closed': 'Funded',
+        }
+        return loan_stage_map.get(stage_lower, stage_value)
+
+    return stage_value
+
+
 def transform_columns_for_destination(row_dict: dict, destination: str) -> dict:
     """
     Transform column names based on destination table.
@@ -380,8 +473,13 @@ def transform_columns_for_destination(row_dict: dict, destination: str) -> dict:
     - For loans: use 'borrower_name', 'borrower_email', 'borrower_phone', 'loan_officer_name'
 
     Also combines first_name + last_name into the appropriate name field.
+    Also normalizes stage values to match database enums.
     """
     result = row_dict.copy()
+
+    # Normalize stage value if present
+    if 'stage' in result and result['stage']:
+        result['stage'] = normalize_stage_value(result['stage'], destination)
 
     # First, combine first_name + last_name if they exist
     first_name = result.pop('first_name', None) or ''
