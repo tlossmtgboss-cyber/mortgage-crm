@@ -210,6 +210,10 @@ function DataUpload() {
       { value: 'annual_income', label: 'Annual Income', group: 'Financial Info' },
       { value: 'monthly_debts', label: 'Monthly Debts', group: 'Financial Info' },
       { value: 'debt_to_income', label: 'DTI Ratio', group: 'Financial Info' },
+      { value: 'dti_front', label: 'DTI Front', group: 'Financial Info' },
+      { value: 'dti_back', label: 'DTI Back', group: 'Financial Info' },
+      { value: 'ltv', label: 'LTV', group: 'Financial Info' },
+      { value: 'cltv', label: 'CLTV', group: 'Financial Info' },
       { value: 'employment_status', label: 'Employment Status', group: 'Financial Info' },
       { value: 'first_time_buyer', label: 'First Time Buyer', group: 'Financial Info' },
       // Team & Source
