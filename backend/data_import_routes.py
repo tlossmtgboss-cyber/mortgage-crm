@@ -793,3 +793,74 @@ async def execute_import(
     except Exception as e:
         logger.error(f"Error executing import: {e}")
         raise HTTPException(status_code=500, detail=f"Error importing data: {str(e)}")
+
+
+@router.post("/fix-stages")
+async def fix_lead_stage_values(
+    key: str = "",
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Fix invalid lead stage values in the database.
+    Call with: POST /api/v1/data-import/fix-stages?key=fix-stages-now
+    """
+    if key != "fix-stages-now":
+        raise HTTPException(status_code=403, detail="Invalid key. Use ?key=fix-stages-now")
+
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Map of invalid values to valid LeadStage enum values
+        stage_fixes = {
+            'Credit Only': 'Pre-Qualified',
+            'credit only': 'Pre-Qualified',
+            'Pre Approved': 'Pre-Approved',
+            'Pre Qualified': 'Pre-Qualified',
+            'Long Term Nurture': 'Long-Term Nurture',
+            'Attempted': 'Attempted Contact',
+            'new': 'New',
+            'NEW': 'New',
+        }
+
+        fixed_count = 0
+        for old_value, new_value in stage_fixes.items():
+            try:
+                cursor.execute(
+                    "UPDATE leads SET stage = %s WHERE stage = %s",
+                    (new_value, old_value)
+                )
+                if cursor.rowcount > 0:
+                    logger.info(f"Fixed {cursor.rowcount} leads: '{old_value}' -> '{new_value}'")
+                    fixed_count += cursor.rowcount
+                conn.commit()
+            except Exception as e:
+                logger.warning(f"Could not fix '{old_value}': {e}")
+                conn.rollback()
+
+        # Also set any NULL stages to 'New'
+        try:
+            cursor.execute("UPDATE leads SET stage = 'New' WHERE stage IS NULL")
+            if cursor.rowcount > 0:
+                logger.info(f"Set {cursor.rowcount} NULL stages to 'New'")
+                fixed_count += cursor.rowcount
+            conn.commit()
+        except Exception as e:
+            logger.warning(f"Could not fix NULL stages: {e}")
+            conn.rollback()
+
+        cursor.close()
+        conn.close()
+
+        return {
+            "success": True,
+            "message": f"Fixed {fixed_count} lead stage values",
+            "fixed_count": fixed_count
+        }
+    except Exception as e:
+        logger.error(f"Lead stage fix failed: {e}")
+        return {
+            "success": False,
+            "message": f"Fix failed: {str(e)}",
+            "error": str(e)
+        }
