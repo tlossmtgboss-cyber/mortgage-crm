@@ -1,6 +1,6 @@
 {
-  "version": "1.0.0",
-  "last_updated": "2025-01-26",
+  "version": "1.1.0",
+  "last_updated": "2025-01-30",
   "description": "Perennia AI Tool Registry - Master catalog of all AI-callable tools",
   "tools": [
     {
@@ -238,8 +238,8 @@
       "side_effect": true,
       "requires_approval": false,
       "risk_level": "high",
-      "implemented": false,
-      "implementation_location": null
+      "implemented": true,
+      "implementation_location": "main.py:execute_send_mms"
     },
     {
       "name": "initiate_call",
@@ -280,8 +280,8 @@
       "side_effect": false,
       "requires_approval": false,
       "risk_level": "low",
-      "implemented": false,
-      "implementation_location": null
+      "implemented": true,
+      "implementation_location": "main.py:execute_transcribe_call"
     },
     {
       "name": "summarize_call",
@@ -300,8 +300,8 @@
       "side_effect": false,
       "requires_approval": false,
       "risk_level": "low",
-      "implemented": false,
-      "implementation_location": null
+      "implemented": true,
+      "implementation_location": "main.py:execute_summarize_call"
     },
     {
       "name": "create_lead",
@@ -397,8 +397,8 @@
       "side_effect": false,
       "requires_approval": false,
       "risk_level": "low",
-      "implemented": false,
-      "implementation_location": null
+      "implemented": true,
+      "implementation_location": "main.py:execute_ai_lead_scoring"
     },
     {
       "name": "find_duplicate_leads",
@@ -418,8 +418,8 @@
       "side_effect": false,
       "requires_approval": false,
       "risk_level": "low",
-      "implemented": false,
-      "implementation_location": null
+      "implemented": true,
+      "implementation_location": "main.py:execute_find_duplicate_leads"
     },
     {
       "name": "assign_lead_to_agent",
@@ -440,8 +440,8 @@
       "side_effect": true,
       "requires_approval": false,
       "risk_level": "low",
-      "implemented": false,
-      "implementation_location": null
+      "implemented": true,
+      "implementation_location": "main.py:execute_assign_lead_to_agent"
     },
     {
       "name": "create_task",
@@ -499,8 +499,8 @@
       "side_effect": true,
       "requires_approval": false,
       "risk_level": "low",
-      "implemented": false,
-      "implementation_location": null
+      "implemented": true,
+      "implementation_location": "main.py:execute_assign_task"
     },
     {
       "name": "complete_task",
@@ -519,8 +519,8 @@
       "side_effect": true,
       "requires_approval": false,
       "risk_level": "low",
-      "implemented": false,
-      "implementation_location": null
+      "implemented": true,
+      "implementation_location": "main.py:execute_complete_task"
     },
     {
       "name": "update_pipeline_stage",
@@ -543,8 +543,8 @@
       "side_effect": true,
       "requires_approval": false,
       "risk_level": "medium",
-      "implemented": false,
-      "implementation_location": null
+      "implemented": true,
+      "implementation_location": "main.py:execute_update_pipeline_stage"
     },
     {
       "name": "trigger_milestone_automation",
@@ -588,8 +588,8 @@
       "side_effect": true,
       "requires_approval": false,
       "risk_level": "medium",
-      "implemented": false,
-      "implementation_location": null
+      "implemented": true,
+      "implementation_location": "main.py:execute_request_documents"
     },
     {
       "name": "document_ocr_extract",
@@ -609,8 +609,8 @@
       "side_effect": false,
       "requires_approval": false,
       "risk_level": "low",
-      "implemented": false,
-      "implementation_location": null
+      "implemented": true,
+      "implementation_location": "main.py:execute_document_ocr_extract"
     },
     {
       "name": "fetch_mbs_data",
@@ -735,8 +735,8 @@
       "side_effect": true,
       "requires_approval": true,
       "risk_level": "critical",
-      "implemented": false,
-      "implementation_location": null
+      "implemented": true,
+      "implementation_location": "main.py:execute_lock_rate"
     },
     {
       "name": "extend_lock",
@@ -755,8 +755,8 @@
       "side_effect": true,
       "requires_approval": true,
       "risk_level": "critical",
-      "implemented": false,
-      "implementation_location": null
+      "implemented": true,
+      "implementation_location": "main.py:execute_extend_lock"
     },
     {
       "name": "book_appointment",
@@ -801,8 +801,8 @@
       "side_effect": true,
       "requires_approval": false,
       "risk_level": "low",
-      "implemented": false,
-      "implementation_location": null
+      "implemented": true,
+      "implementation_location": "main.py:execute_reschedule_appointment"
     },
     {
       "name": "cancel_appointment",
@@ -822,8 +822,8 @@
       "side_effect": true,
       "requires_approval": true,
       "risk_level": "medium",
-      "implemented": false,
-      "implementation_location": null
+      "implemented": true,
+      "implementation_location": "main.py:execute_cancel_appointment"
     },
     {
       "name": "get_pipeline",

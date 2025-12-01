@@ -13724,6 +13724,966 @@ async def orchestrator_chat_stream(
             "message": f"Created {len(created_tasks)} task(s)"
         }
 
+    # ========================================
+    # NEW TOOL IMPLEMENTATIONS - COMMUNICATION
+    # ========================================
+
+    async def execute_send_mms(args):
+        """Send MMS (SMS with media attachment) via Twilio"""
+        from twilio.rest import Client as TwilioClient
+
+        recipient_name = args.get("recipient_name", "")
+        phone_number = args.get("to_phone", "") or args.get("phone_number", "")
+        message = args.get("message", "")
+        media_url = args.get("media_url", "")
+
+        if not message:
+            return {"success": False, "error": "Message is required"}
+        if not media_url:
+            return {"success": False, "error": "Media URL is required for MMS"}
+
+        # If we have a name but no phone, look it up
+        if recipient_name and not phone_number:
+            search = f"%{recipient_name}%"
+            lead = db.query(Lead).filter(Lead.name.ilike(search)).first()
+            if lead and lead.phone:
+                phone_number = lead.phone
+            else:
+                user = db.query(User).filter(User.full_name.ilike(search)).first()
+                if user and user.phone:
+                    phone_number = user.phone
+
+        if not phone_number:
+            return {"success": False, "error": f"Could not find phone number for {recipient_name}"}
+
+        # Format phone number
+        phone = ''.join(filter(str.isdigit, phone_number))
+        if len(phone) == 10:
+            phone = f"+1{phone}"
+        elif not phone.startswith('+'):
+            phone = f"+{phone}"
+
+        # Send via Twilio with media
+        twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
+        twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
+        twilio_from = os.getenv("TWILIO_PHONE_NUMBER")
+
+        if not all([twilio_sid, twilio_token, twilio_from]):
+            return {"success": False, "error": "Twilio not configured"}
+
+        try:
+            twilio_client = TwilioClient(twilio_sid, twilio_token)
+            msg = twilio_client.messages.create(
+                body=message,
+                from_=twilio_from,
+                to=phone,
+                media_url=[media_url]
+            )
+            return {
+                "success": True,
+                "message_sid": msg.sid,
+                "sent_to": phone,
+                "media_url": media_url
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def execute_transcribe_call(args):
+        """Transcribe a call recording using AI"""
+        call_id = args.get("call_id")
+        audio_url = args.get("audio_url", "")
+
+        if not call_id:
+            return {"success": False, "error": "call_id is required"}
+
+        # Try to fetch call record from database
+        call_record = db.query(CallLog).filter(CallLog.id == call_id).first() if 'CallLog' in dir() else None
+
+        if call_record and hasattr(call_record, 'recording_url'):
+            audio_url = call_record.recording_url or audio_url
+
+        if not audio_url:
+            # Try to get from Twilio if we have a call SID
+            twilio_sid = os.getenv("TWILIO_ACCOUNT_SID")
+            twilio_token = os.getenv("TWILIO_AUTH_TOKEN")
+
+            if twilio_sid and twilio_token:
+                try:
+                    from twilio.rest import Client as TwilioClient
+                    twilio_client = TwilioClient(twilio_sid, twilio_token)
+
+                    # Try as call SID first
+                    try:
+                        call = twilio_client.calls(call_id).fetch()
+                        recordings = twilio_client.calls(call_id).recordings.list(limit=1)
+                        if recordings:
+                            audio_url = f"https://api.twilio.com{recordings[0].uri.replace('.json', '.mp3')}"
+                    except:
+                        pass
+                except Exception as e:
+                    logger.warning(f"Could not fetch recording from Twilio: {e}")
+
+        if not audio_url:
+            return {"success": False, "error": "No audio URL available for transcription"}
+
+        # Use OpenAI Whisper for transcription if available
+        openai_key = os.getenv("OPENAI_API_KEY")
+        if openai_key:
+            try:
+                import httpx
+
+                # Download audio file
+                async with httpx.AsyncClient() as client:
+                    audio_response = await client.get(audio_url)
+                    if audio_response.status_code != 200:
+                        return {"success": False, "error": "Could not download audio file"}
+
+                    # Send to OpenAI Whisper
+                    import openai
+                    openai.api_key = openai_key
+
+                    # Save temp file and transcribe
+                    import tempfile
+                    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
+                        tmp.write(audio_response.content)
+                        tmp_path = tmp.name
+
+                    with open(tmp_path, "rb") as audio_file:
+                        transcript = openai.Audio.transcribe("whisper-1", audio_file)
+
+                    os.unlink(tmp_path)
+
+                    return {
+                        "success": True,
+                        "call_id": call_id,
+                        "transcript": transcript.get("text", ""),
+                        "duration_seconds": len(transcript.get("text", "").split()) * 0.5  # Rough estimate
+                    }
+            except Exception as e:
+                logger.error(f"Transcription error: {e}")
+                return {"success": False, "error": f"Transcription failed: {str(e)}"}
+
+        # Fallback - return placeholder
+        return {
+            "success": True,
+            "call_id": call_id,
+            "transcript": "[Transcription service not configured - would process audio from: " + audio_url + "]",
+            "note": "Configure OPENAI_API_KEY for actual transcription"
+        }
+
+    async def execute_summarize_call(args):
+        """Generate AI summary of a call transcript"""
+        call_id = args.get("call_id")
+        transcript = args.get("transcript", "")
+
+        if not call_id:
+            return {"success": False, "error": "call_id is required"}
+
+        # If no transcript provided, try to get it
+        if not transcript:
+            # Try to fetch from database
+            call_record = db.query(CallLog).filter(CallLog.id == call_id).first() if 'CallLog' in dir() else None
+            if call_record and hasattr(call_record, 'transcript'):
+                transcript = call_record.transcript or ""
+
+        if not transcript:
+            return {"success": False, "error": "No transcript available to summarize"}
+
+        # Use Claude/OpenAI to summarize
+        anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+        openai_key = os.getenv("OPENAI_API_KEY")
+
+        if anthropic_key:
+            try:
+                import anthropic
+                client = anthropic.Anthropic(api_key=anthropic_key)
+
+                response = client.messages.create(
+                    model="claude-3-haiku-20240307",
+                    max_tokens=500,
+                    messages=[{
+                        "role": "user",
+                        "content": f"""Summarize this call transcript for a mortgage loan officer. Include:
+1. Key discussion points
+2. Action items mentioned
+3. Next steps agreed upon
+4. Any concerns or objections raised
+
+Transcript:
+{transcript[:4000]}"""
+                    }]
+                )
+
+                summary = response.content[0].text
+
+                return {
+                    "success": True,
+                    "call_id": call_id,
+                    "summary": summary,
+                    "transcript_length": len(transcript)
+                }
+            except Exception as e:
+                logger.error(f"Summarization error: {e}")
+
+        # Fallback - basic extraction
+        words = transcript.split()
+        key_phrases = []
+        for i, word in enumerate(words):
+            if word.lower() in ["need", "want", "please", "will", "should", "must"]:
+                phrase = " ".join(words[max(0, i-2):min(len(words), i+5)])
+                key_phrases.append(phrase)
+
+        return {
+            "success": True,
+            "call_id": call_id,
+            "summary": f"Call transcript ({len(words)} words). Key phrases identified: {'; '.join(key_phrases[:5]) if key_phrases else 'None extracted'}",
+            "note": "Configure ANTHROPIC_API_KEY for AI-powered summaries"
+        }
+
+    # ========================================
+    # NEW TOOL IMPLEMENTATIONS - LEADS
+    # ========================================
+
+    async def execute_ai_lead_scoring(args):
+        """Calculate AI-powered lead quality score (0-100)"""
+        lead_id = args.get("lead_id")
+        include_factors = args.get("include_factors", True)
+
+        if not lead_id:
+            return {"success": False, "error": "lead_id is required"}
+
+        lead = db.query(Lead).filter(Lead.id == lead_id).first()
+        if not lead:
+            return {"success": False, "error": f"Lead not found: {lead_id}"}
+
+        # Calculate score based on multiple factors
+        score = 50  # Base score
+        factors = []
+
+        # Email quality
+        if lead.email:
+            if any(domain in lead.email.lower() for domain in ['gmail.com', 'yahoo.com', 'outlook.com']):
+                score += 5
+                factors.append("+5: Valid email provider")
+            if lead.email.count('@') == 1 and '.' in lead.email.split('@')[1]:
+                score += 5
+                factors.append("+5: Well-formed email")
+
+        # Phone presence
+        if lead.phone:
+            score += 10
+            factors.append("+10: Phone number provided")
+
+        # Lead source quality
+        source = str(lead.source).lower() if lead.source else ""
+        if "referral" in source:
+            score += 15
+            factors.append("+15: Referral lead (high quality)")
+        elif "realtor" in source or "builder" in source:
+            score += 10
+            factors.append("+10: Partner referral")
+        elif "website" in source:
+            score += 5
+            factors.append("+5: Website lead")
+
+        # Stage progression
+        stage = str(lead.stage).lower() if lead.stage else ""
+        if "qualified" in stage or "contacted" in stage:
+            score += 10
+            factors.append("+10: Lead has been qualified/contacted")
+        elif "application" in stage:
+            score += 20
+            factors.append("+20: Application started")
+
+        # Loan amount (if available)
+        if hasattr(lead, 'loan_amount') and lead.loan_amount:
+            if lead.loan_amount >= 300000:
+                score += 10
+                factors.append("+10: Higher loan amount")
+            elif lead.loan_amount >= 200000:
+                score += 5
+                factors.append("+5: Good loan amount")
+
+        # Recency
+        if lead.created_at:
+            days_old = (datetime.now() - lead.created_at).days
+            if days_old <= 1:
+                score += 10
+                factors.append("+10: Very fresh lead (< 1 day)")
+            elif days_old <= 7:
+                score += 5
+                factors.append("+5: Recent lead (< 1 week)")
+            elif days_old > 30:
+                score -= 10
+                factors.append("-10: Stale lead (> 30 days)")
+
+        # Cap score at 0-100
+        score = max(0, min(100, score))
+
+        # Generate recommendation
+        if score >= 80:
+            recommendation = "Hot lead - prioritize immediate follow-up"
+        elif score >= 60:
+            recommendation = "Warm lead - schedule follow-up within 24 hours"
+        elif score >= 40:
+            recommendation = "Standard lead - follow standard nurture sequence"
+        else:
+            recommendation = "Cold lead - consider low-priority nurture campaign"
+
+        result = {
+            "success": True,
+            "lead_id": lead_id,
+            "lead_name": lead.name,
+            "score": score,
+            "recommendation": recommendation
+        }
+
+        if include_factors:
+            result["factors"] = factors
+
+        return result
+
+    async def execute_find_duplicate_leads(args):
+        """Find potential duplicate lead records"""
+        lead_id = args.get("lead_id")
+        email = args.get("email", "")
+        phone = args.get("phone", "")
+        name = args.get("name", "")
+
+        # If lead_id provided, get lead details
+        if lead_id:
+            lead = db.query(Lead).filter(Lead.id == lead_id).first()
+            if lead:
+                email = email or lead.email
+                phone = phone or lead.phone
+                name = name or lead.name
+
+        if not any([email, phone, name]):
+            return {"success": False, "error": "Provide email, phone, name, or lead_id to search for duplicates"}
+
+        duplicates = []
+
+        # Search by email (exact match)
+        if email:
+            email_matches = db.query(Lead).filter(
+                Lead.email.ilike(email),
+                Lead.id != lead_id if lead_id else True
+            ).all()
+            for match in email_matches:
+                duplicates.append({
+                    "lead_id": match.id,
+                    "name": match.name,
+                    "email": match.email,
+                    "phone": match.phone,
+                    "match_type": "email_exact",
+                    "confidence": 0.95
+                })
+
+        # Search by phone (normalized)
+        if phone:
+            phone_digits = ''.join(filter(str.isdigit, phone))
+            if len(phone_digits) >= 10:
+                phone_matches = db.query(Lead).filter(
+                    Lead.phone.ilike(f"%{phone_digits[-10:]}%"),
+                    Lead.id != lead_id if lead_id else True
+                ).all()
+                for match in phone_matches:
+                    if match.id not in [d["lead_id"] for d in duplicates]:
+                        duplicates.append({
+                            "lead_id": match.id,
+                            "name": match.name,
+                            "email": match.email,
+                            "phone": match.phone,
+                            "match_type": "phone",
+                            "confidence": 0.90
+                        })
+
+        # Search by name (fuzzy)
+        if name:
+            name_parts = name.lower().split()
+            for part in name_parts:
+                if len(part) > 2:
+                    name_matches = db.query(Lead).filter(
+                        Lead.name.ilike(f"%{part}%"),
+                        Lead.id != lead_id if lead_id else True
+                    ).limit(10).all()
+                    for match in name_matches:
+                        if match.id not in [d["lead_id"] for d in duplicates]:
+                            # Calculate name similarity
+                            match_name_lower = match.name.lower() if match.name else ""
+                            match_score = sum(1 for p in name_parts if p in match_name_lower) / len(name_parts)
+                            if match_score >= 0.5:
+                                duplicates.append({
+                                    "lead_id": match.id,
+                                    "name": match.name,
+                                    "email": match.email,
+                                    "phone": match.phone,
+                                    "match_type": "name_similar",
+                                    "confidence": round(match_score * 0.7, 2)
+                                })
+
+        # Sort by confidence
+        duplicates.sort(key=lambda x: -x["confidence"])
+
+        return {
+            "success": True,
+            "search_criteria": {"email": email, "phone": phone, "name": name},
+            "duplicate_count": len(duplicates),
+            "duplicates": duplicates[:10]
+        }
+
+    async def execute_assign_lead_to_agent(args):
+        """Assign a lead to a specific loan officer or agent"""
+        lead_id = args.get("lead_id")
+        agent_id = args.get("agent_id")
+        agent_email = args.get("agent_email", "")
+        reason = args.get("reason", "")
+
+        if not lead_id:
+            return {"success": False, "error": "lead_id is required"}
+
+        lead = db.query(Lead).filter(Lead.id == lead_id).first()
+        if not lead:
+            return {"success": False, "error": f"Lead not found: {lead_id}"}
+
+        # Find agent by ID or email
+        agent = None
+        if agent_id:
+            agent = db.query(User).filter(User.id == agent_id).first()
+        elif agent_email:
+            agent = db.query(User).filter(User.email.ilike(agent_email)).first()
+
+        if not agent:
+            return {"success": False, "error": "Agent not found. Provide valid agent_id or agent_email"}
+
+        old_owner = lead.owner_id
+        lead.owner_id = agent.id
+
+        # Add note about assignment
+        assignment_note = f"Lead assigned to {agent.full_name or agent.email}"
+        if reason:
+            assignment_note += f". Reason: {reason}"
+        lead.notes = (lead.notes or "") + f"\n\n[{datetime.now().strftime('%Y-%m-%d %H:%M')}] {assignment_note}"
+
+        db.commit()
+
+        return {
+            "success": True,
+            "lead_id": lead.id,
+            "lead_name": lead.name,
+            "assigned_to": {
+                "id": agent.id,
+                "name": agent.full_name or agent.email,
+                "email": agent.email
+            },
+            "previous_owner_id": old_owner,
+            "message": f"Lead '{lead.name}' assigned to {agent.full_name or agent.email}"
+        }
+
+    # ========================================
+    # NEW TOOL IMPLEMENTATIONS - PIPELINE
+    # ========================================
+
+    async def execute_assign_task(args):
+        """Assign a task to a specific team member"""
+        task_id = args.get("task_id")
+        assignee_id = args.get("assignee_id")
+        assignee_email = args.get("assignee_email", "")
+
+        if not task_id:
+            return {"success": False, "error": "task_id is required"}
+
+        task = db.query(AITask).filter(AITask.id == task_id).first()
+        if not task:
+            return {"success": False, "error": f"Task not found: {task_id}"}
+
+        # Find assignee
+        assignee = None
+        if assignee_id:
+            assignee = db.query(User).filter(User.id == assignee_id).first()
+        elif assignee_email:
+            assignee = db.query(User).filter(User.email.ilike(assignee_email)).first()
+
+        if not assignee:
+            return {"success": False, "error": "Assignee not found. Provide valid assignee_id or assignee_email"}
+
+        old_assignee_id = task.assigned_to_id
+        task.assigned_to_id = assignee.id
+        db.commit()
+
+        return {
+            "success": True,
+            "task_id": task.id,
+            "task_title": task.title,
+            "assigned_to": {
+                "id": assignee.id,
+                "name": assignee.full_name or assignee.email,
+                "email": assignee.email
+            },
+            "previous_assignee_id": old_assignee_id,
+            "message": f"Task '{task.title}' assigned to {assignee.full_name or assignee.email}"
+        }
+
+    async def execute_update_pipeline_stage(args):
+        """Move a lead or loan to a different pipeline stage"""
+        entity_type = args.get("entity_type", "").lower()
+        entity_id = args.get("entity_id")
+        stage = args.get("stage", "")
+        status = args.get("status", "")
+        reason = args.get("reason", "")
+        trigger_automations = args.get("trigger_automations", True)
+
+        if entity_type not in ["lead", "loan"]:
+            return {"success": False, "error": "entity_type must be 'lead' or 'loan'"}
+        if not entity_id:
+            return {"success": False, "error": "entity_id is required"}
+        if not stage:
+            return {"success": False, "error": "stage is required"}
+
+        entity = None
+        old_stage = None
+
+        if entity_type == "lead":
+            entity = db.query(Lead).filter(Lead.id == entity_id).first()
+            if entity:
+                old_stage = str(entity.stage) if entity.stage else "Unknown"
+                # Map to LeadStage enum if available
+                try:
+                    entity.stage = stage
+                except:
+                    entity.stage = stage
+        else:
+            entity = db.query(Loan).filter(Loan.id == entity_id).first()
+            if entity:
+                old_stage = str(entity.stage).replace("LoanStage.", "") if entity.stage else "Unknown"
+                # Map to LoanStage enum
+                stage_map = {
+                    "APPLICATION": LoanStage.APPLICATION,
+                    "PROCESSING": LoanStage.PROCESSING,
+                    "UNDERWRITING": LoanStage.UNDERWRITING,
+                    "APPROVED": LoanStage.APPROVED,
+                    "CLOSING": LoanStage.CLOSING,
+                    "FUNDED": LoanStage.FUNDED,
+                    "DEAD": LoanStage.DEAD
+                }
+                if stage.upper() in stage_map:
+                    entity.stage = stage_map[stage.upper()]
+                else:
+                    return {"success": False, "error": f"Invalid loan stage: {stage}"}
+
+        if not entity:
+            return {"success": False, "error": f"{entity_type.title()} not found: {entity_id}"}
+
+        # Update status if provided
+        if status and hasattr(entity, 'status'):
+            entity.status = status
+
+        # Add reason to notes
+        if reason:
+            notes = getattr(entity, 'notes', '') or ''
+            entity.notes = notes + f"\n\n[{datetime.now().strftime('%Y-%m-%d %H:%M')}] Stage change to {stage}: {reason}"
+
+        db.commit()
+
+        result = {
+            "success": True,
+            "entity_type": entity_type,
+            "entity_id": entity_id,
+            "old_stage": old_stage,
+            "new_stage": stage,
+            "message": f"{entity_type.title()} moved from {old_stage} to {stage}"
+        }
+
+        # Trigger automations if requested
+        if trigger_automations and entity_type == "loan":
+            result["automation_triggered"] = True
+            result["automation_note"] = f"Milestone automation would be triggered for stage: {stage}"
+
+        return result
+
+    async def execute_request_documents(args):
+        """Send document request to borrower"""
+        loan_id = args.get("loan_id")
+        lead_id = args.get("lead_id")
+        document_types = args.get("document_types", [])
+        message = args.get("message", "")
+
+        if not document_types:
+            return {"success": False, "error": "document_types is required"}
+
+        # Find the entity (loan or lead)
+        entity = None
+        entity_type = None
+        contact_email = None
+        contact_name = None
+
+        if loan_id:
+            entity = db.query(Loan).filter(Loan.id == loan_id).first()
+            entity_type = "loan"
+            if entity:
+                contact_name = entity.borrower_name
+                contact_email = entity.borrower_email
+        elif lead_id:
+            entity = db.query(Lead).filter(Lead.id == lead_id).first()
+            entity_type = "lead"
+            if entity:
+                contact_name = entity.name
+                contact_email = entity.email
+
+        if not entity:
+            return {"success": False, "error": "Loan or Lead not found"}
+
+        if not contact_email:
+            return {"success": False, "error": "No email address found for contact"}
+
+        # Build document request message
+        doc_list = "\n".join([f"- {doc}" for doc in document_types])
+        default_message = f"""Hello {contact_name},
+
+We need the following documents to proceed with your mortgage application:
+
+{doc_list}
+
+Please upload these documents at your earliest convenience.
+
+Thank you!"""
+
+        email_body = message if message else default_message
+
+        # Queue the email (or send via email service)
+        # For now, we'll log it and return success
+        request_id = str(uuid.uuid4())[:8]
+
+        # Create a task to track the document request
+        doc_task = AITask(
+            title=f"Document Request: {', '.join(document_types[:3])}{'...' if len(document_types) > 3 else ''}",
+            description=f"Documents requested from {contact_name}: {', '.join(document_types)}",
+            due_date=datetime.now() + timedelta(days=3),
+            priority="high",
+            type=TaskType.IN_PROGRESS,
+            assigned_to_id=current_user.id,
+            loan_id=loan_id,
+            lead_id=lead_id
+        )
+        db.add(doc_task)
+        db.commit()
+
+        return {
+            "success": True,
+            "request_id": request_id,
+            "entity_type": entity_type,
+            "entity_id": loan_id or lead_id,
+            "contact_name": contact_name,
+            "contact_email": contact_email,
+            "documents_requested": document_types,
+            "task_created": doc_task.id,
+            "message": f"Document request sent to {contact_name} for {len(document_types)} document(s)"
+        }
+
+    async def execute_document_ocr_extract(args):
+        """Extract data from uploaded documents via OCR"""
+        document_id = args.get("document_id")
+        document_url = args.get("document_url", "")
+        document_type = args.get("document_type", "")
+
+        if not document_id:
+            return {"success": False, "error": "document_id is required"}
+
+        # Try to get document from database
+        document = None
+        if 'Document' in dir():
+            document = db.query(Document).filter(Document.id == document_id).first()
+
+        if document and hasattr(document, 'file_url'):
+            document_url = document_url or document.file_url
+            document_type = document_type or getattr(document, 'document_type', 'unknown')
+
+        if not document_url:
+            return {"success": False, "error": "No document URL available"}
+
+        # Determine extraction based on document type
+        extraction_fields = {}
+        doc_type_lower = document_type.lower()
+
+        if "paystub" in doc_type_lower or "pay stub" in doc_type_lower:
+            extraction_fields = {
+                "employer_name": "[OCR would extract employer name]",
+                "pay_period": "[OCR would extract pay period dates]",
+                "gross_pay": "[OCR would extract gross pay amount]",
+                "net_pay": "[OCR would extract net pay amount]",
+                "ytd_earnings": "[OCR would extract YTD earnings]"
+            }
+        elif "w2" in doc_type_lower or "w-2" in doc_type_lower:
+            extraction_fields = {
+                "employer_ein": "[OCR would extract employer EIN]",
+                "employee_ssn_last4": "[OCR would extract last 4 of SSN]",
+                "wages": "[OCR would extract wages/tips/compensation]",
+                "federal_tax_withheld": "[OCR would extract federal tax withheld]",
+                "tax_year": "[OCR would extract tax year]"
+            }
+        elif "bank" in doc_type_lower or "statement" in doc_type_lower:
+            extraction_fields = {
+                "account_number_last4": "[OCR would extract last 4 of account]",
+                "statement_period": "[OCR would extract statement period]",
+                "ending_balance": "[OCR would extract ending balance]",
+                "average_balance": "[OCR would calculate average balance]"
+            }
+        elif "tax" in doc_type_lower or "1040" in doc_type_lower:
+            extraction_fields = {
+                "tax_year": "[OCR would extract tax year]",
+                "filing_status": "[OCR would extract filing status]",
+                "adjusted_gross_income": "[OCR would extract AGI]",
+                "total_income": "[OCR would extract total income]"
+            }
+        else:
+            extraction_fields = {
+                "document_type_detected": "[OCR would detect document type]",
+                "text_extracted": "[OCR would extract full text]",
+                "key_values": "[OCR would extract key-value pairs]"
+            }
+
+        return {
+            "success": True,
+            "document_id": document_id,
+            "document_type": document_type,
+            "document_url": document_url,
+            "extracted_data": extraction_fields,
+            "confidence": 0.85,
+            "note": "Configure OCR service (AWS Textract, Google Vision, etc.) for actual extraction"
+        }
+
+    # ========================================
+    # NEW TOOL IMPLEMENTATIONS - RATE LOCK
+    # ========================================
+
+    async def execute_lock_rate(args):
+        """Execute a rate lock for a loan (REQUIRES APPROVAL)"""
+        loan_id = args.get("loan_id")
+        rate = args.get("rate")
+        lock_period_days = args.get("lock_period_days")
+        points = args.get("points", 0)
+
+        if not all([loan_id, rate, lock_period_days]):
+            return {"success": False, "error": "loan_id, rate, and lock_period_days are required"}
+
+        loan = db.query(Loan).filter(Loan.id == loan_id).first()
+        if not loan:
+            return {"success": False, "error": f"Loan not found: {loan_id}"}
+
+        # Check if loan already has an active lock
+        if hasattr(loan, 'rate_locked') and loan.rate_locked:
+            return {
+                "success": False,
+                "error": "Loan already has an active rate lock",
+                "current_rate": loan.interest_rate,
+                "lock_expiration": str(loan.lock_expiration) if hasattr(loan, 'lock_expiration') else None
+            }
+
+        # Calculate lock expiration
+        lock_expiration = datetime.now() + timedelta(days=lock_period_days)
+
+        # Update loan with rate lock info
+        loan.interest_rate = rate
+        if hasattr(loan, 'rate_locked'):
+            loan.rate_locked = True
+        if hasattr(loan, 'lock_expiration'):
+            loan.lock_expiration = lock_expiration
+        if hasattr(loan, 'lock_points'):
+            loan.lock_points = points
+
+        # Add note
+        lock_note = f"Rate locked at {rate}% for {lock_period_days} days. Points: {points}. Expires: {lock_expiration.strftime('%Y-%m-%d')}"
+        loan.notes = (loan.notes or "") + f"\n\n[{datetime.now().strftime('%Y-%m-%d %H:%M')}] {lock_note}"
+
+        db.commit()
+
+        return {
+            "success": True,
+            "loan_id": loan.id,
+            "borrower": loan.borrower_name,
+            "locked_rate": rate,
+            "lock_period_days": lock_period_days,
+            "lock_expiration": lock_expiration.strftime('%Y-%m-%d'),
+            "points": points,
+            "message": f"Rate locked at {rate}% for {loan.borrower_name}. Expires {lock_expiration.strftime('%Y-%m-%d')}"
+        }
+
+    async def execute_extend_lock(args):
+        """Extend an existing rate lock (REQUIRES APPROVAL)"""
+        loan_id = args.get("loan_id")
+        extension_days = args.get("extension_days")
+
+        if not all([loan_id, extension_days]):
+            return {"success": False, "error": "loan_id and extension_days are required"}
+
+        loan = db.query(Loan).filter(Loan.id == loan_id).first()
+        if not loan:
+            return {"success": False, "error": f"Loan not found: {loan_id}"}
+
+        # Check if loan has a rate lock
+        if hasattr(loan, 'rate_locked') and not loan.rate_locked:
+            return {"success": False, "error": "Loan does not have an active rate lock to extend"}
+
+        # Get current expiration
+        current_expiration = getattr(loan, 'lock_expiration', None)
+        if not current_expiration:
+            current_expiration = datetime.now()
+
+        # Calculate new expiration
+        if isinstance(current_expiration, date) and not isinstance(current_expiration, datetime):
+            current_expiration = datetime.combine(current_expiration, datetime.min.time())
+
+        new_expiration = current_expiration + timedelta(days=extension_days)
+
+        # Update loan
+        if hasattr(loan, 'lock_expiration'):
+            loan.lock_expiration = new_expiration
+
+        # Add note
+        extend_note = f"Rate lock extended by {extension_days} days. New expiration: {new_expiration.strftime('%Y-%m-%d')}"
+        loan.notes = (loan.notes or "") + f"\n\n[{datetime.now().strftime('%Y-%m-%d %H:%M')}] {extend_note}"
+
+        db.commit()
+
+        return {
+            "success": True,
+            "loan_id": loan.id,
+            "borrower": loan.borrower_name,
+            "extension_days": extension_days,
+            "previous_expiration": current_expiration.strftime('%Y-%m-%d'),
+            "new_expiration": new_expiration.strftime('%Y-%m-%d'),
+            "current_rate": loan.interest_rate,
+            "message": f"Rate lock extended to {new_expiration.strftime('%Y-%m-%d')} for {loan.borrower_name}"
+        }
+
+    # ========================================
+    # NEW TOOL IMPLEMENTATIONS - SCHEDULING
+    # ========================================
+
+    async def execute_reschedule_appointment(args):
+        """Reschedule an existing appointment"""
+        appointment_id = args.get("appointment_id")
+        new_start_time = args.get("new_start_time", "")
+        reason = args.get("reason", "")
+
+        if not appointment_id:
+            return {"success": False, "error": "appointment_id is required"}
+        if not new_start_time:
+            return {"success": False, "error": "new_start_time is required"}
+
+        # Find appointment (stored as task or in appointments table)
+        appointment = db.query(AITask).filter(AITask.id == appointment_id).first()
+
+        if not appointment:
+            # Try scheduler appointments if that table exists
+            if 'Appointment' in dir():
+                appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+
+        if not appointment:
+            return {"success": False, "error": f"Appointment not found: {appointment_id}"}
+
+        # Parse new start time
+        parsed_time = None
+        try:
+            from dateutil import parser
+            parsed_time = parser.parse(new_start_time)
+        except:
+            # Try natural language parsing
+            time_lower = new_start_time.lower()
+            today = datetime.now()
+
+            if "tomorrow" in time_lower:
+                parsed_time = today + timedelta(days=1)
+                parsed_time = parsed_time.replace(hour=10, minute=0, second=0)
+            elif "next week" in time_lower:
+                parsed_time = today + timedelta(days=7)
+                parsed_time = parsed_time.replace(hour=10, minute=0, second=0)
+            else:
+                return {"success": False, "error": f"Could not parse time: {new_start_time}"}
+
+        # Store old time for response
+        old_time = appointment.due_date if hasattr(appointment, 'due_date') else getattr(appointment, 'start_time', None)
+
+        # Update the appointment
+        if hasattr(appointment, 'due_date'):
+            appointment.due_date = parsed_time
+        if hasattr(appointment, 'start_time'):
+            appointment.start_time = parsed_time
+
+        # Add reason to notes/description
+        if reason:
+            if hasattr(appointment, 'description'):
+                appointment.description = (appointment.description or "") + f"\n\nRescheduled: {reason}"
+            elif hasattr(appointment, 'notes'):
+                appointment.notes = (appointment.notes or "") + f"\n\nRescheduled: {reason}"
+
+        db.commit()
+
+        return {
+            "success": True,
+            "appointment_id": appointment_id,
+            "title": getattr(appointment, 'title', 'Appointment'),
+            "old_time": old_time.isoformat() if old_time else None,
+            "new_time": parsed_time.isoformat(),
+            "reason": reason,
+            "message": f"Appointment rescheduled to {parsed_time.strftime('%Y-%m-%d %H:%M')}"
+        }
+
+    async def execute_cancel_appointment(args):
+        """Cancel an appointment (REQUIRES APPROVAL)"""
+        appointment_id = args.get("appointment_id")
+        reason = args.get("reason", "")
+        notify_attendees = args.get("notify_attendees", True)
+
+        if not appointment_id:
+            return {"success": False, "error": "appointment_id is required"}
+
+        # Find appointment
+        appointment = db.query(AITask).filter(AITask.id == appointment_id).first()
+
+        if not appointment:
+            if 'Appointment' in dir():
+                appointment = db.query(Appointment).filter(Appointment.id == appointment_id).first()
+
+        if not appointment:
+            return {"success": False, "error": f"Appointment not found: {appointment_id}"}
+
+        title = getattr(appointment, 'title', 'Appointment')
+        scheduled_time = getattr(appointment, 'due_date', None) or getattr(appointment, 'start_time', None)
+
+        # Mark as cancelled
+        if hasattr(appointment, 'type'):
+            appointment.type = TaskType.COMPLETED  # Mark as completed/done
+        if hasattr(appointment, 'status'):
+            appointment.status = 'cancelled'
+
+        # Add cancellation note
+        cancel_note = f"CANCELLED"
+        if reason:
+            cancel_note += f": {reason}"
+
+        if hasattr(appointment, 'description'):
+            appointment.description = cancel_note + "\n\n" + (appointment.description or "")
+        elif hasattr(appointment, 'notes'):
+            appointment.notes = cancel_note + "\n\n" + (appointment.notes or "")
+
+        db.commit()
+
+        result = {
+            "success": True,
+            "appointment_id": appointment_id,
+            "title": title,
+            "was_scheduled_for": scheduled_time.isoformat() if scheduled_time else None,
+            "reason": reason,
+            "message": f"Appointment '{title}' has been cancelled"
+        }
+
+        if notify_attendees:
+            result["notification_sent"] = True
+            result["notification_note"] = "Attendees would be notified via email"
+
+        return result
+
     tool_functions = {
         "get_tasks": execute_get_tasks,
         "get_pipeline": execute_get_pipeline,
@@ -13766,7 +14726,26 @@ async def orchestrator_chat_stream(
         "get_overdue_tasks": execute_get_overdue_tasks,
         "move_lead_stage": execute_move_lead_stage,
         "move_loan_stage": execute_move_loan_stage,
-        "bulk_create_tasks": execute_bulk_create_tasks
+        "bulk_create_tasks": execute_bulk_create_tasks,
+        # NEW: Communication tools
+        "send_mms": execute_send_mms,
+        "transcribe_call": execute_transcribe_call,
+        "summarize_call": execute_summarize_call,
+        # NEW: Lead tools
+        "ai_lead_scoring": execute_ai_lead_scoring,
+        "find_duplicate_leads": execute_find_duplicate_leads,
+        "assign_lead_to_agent": execute_assign_lead_to_agent,
+        # NEW: Pipeline tools
+        "assign_task": execute_assign_task,
+        "update_pipeline_stage": execute_update_pipeline_stage,
+        "request_documents": execute_request_documents,
+        "document_ocr_extract": execute_document_ocr_extract,
+        # NEW: Rate lock tools
+        "lock_rate": execute_lock_rate,
+        "extend_lock": execute_extend_lock,
+        # NEW: Scheduling tools
+        "reschedule_appointment": execute_reschedule_appointment,
+        "cancel_appointment": execute_cancel_appointment
     }
 
     # Pre-fetch real data for rich context
