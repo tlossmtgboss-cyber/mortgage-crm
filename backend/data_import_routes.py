@@ -402,10 +402,23 @@ async def analyze_file(
 def transform_columns_for_destination(row_dict: dict, destination: str) -> dict:
     """
     Transform column names based on destination table.
-    - For leads: use 'name', 'email', 'phone'
-    - For loans: use 'borrower_name', 'borrower_email', 'borrower_phone'
+    - For leads: use 'name', 'email', 'phone', 'loan_officer'
+    - For loans: use 'borrower_name', 'borrower_email', 'borrower_phone', 'loan_officer_name'
+
+    Also combines first_name + last_name into the appropriate name field.
     """
     result = row_dict.copy()
+
+    # First, combine first_name + last_name if they exist
+    first_name = result.pop('first_name', None) or ''
+    last_name = result.pop('last_name', None) or ''
+
+    if first_name or last_name:
+        combined_name = f"{first_name} {last_name}".strip()
+        if destination == 'leads' and 'name' not in result:
+            result['name'] = combined_name
+        elif destination == 'loans' and 'borrower_name' not in result:
+            result['borrower_name'] = combined_name
 
     if destination == 'leads':
         # Transform loan-style columns to lead-style columns
@@ -413,6 +426,7 @@ def transform_columns_for_destination(row_dict: dict, destination: str) -> dict:
             'borrower_name': 'name',
             'borrower_email': 'email',
             'borrower_phone': 'phone',
+            'loan_officer_name': 'loan_officer',  # leads uses 'loan_officer', not 'loan_officer_name'
         }
         for old_col, new_col in column_transforms.items():
             if old_col in result and new_col not in result:
@@ -427,6 +441,7 @@ def transform_columns_for_destination(row_dict: dict, destination: str) -> dict:
             'name': 'borrower_name',
             'email': 'borrower_email',
             'phone': 'borrower_phone',
+            'loan_officer': 'loan_officer_name',  # loans uses 'loan_officer_name'
         }
         for old_col, new_col in column_transforms.items():
             if old_col in result and new_col not in result:
@@ -528,19 +543,12 @@ async def execute_import(
                         columns = list(row_dict.keys())
                         values = list(row_dict.values())
 
-                        # Generate 'name' from first_name/last_name if not provided
+                        # Ensure 'name' exists (transform_columns_for_destination handles first_name/last_name combo)
                         if 'name' not in columns:
-                            first_name = row_dict.get('first_name', '')
-                            last_name = row_dict.get('last_name', '')
-                            if first_name or last_name:
-                                full_name = f"{first_name} {last_name}".strip()
-                                columns.append('name')
-                                values.append(full_name if full_name else 'Unknown')
-                            else:
-                                # Use email or loan_number as fallback for name
-                                fallback_name = row_dict.get('email') or row_dict.get('loan_number') or 'Unknown Lead'
-                                columns.append('name')
-                                values.append(fallback_name)
+                            # Use email or loan_number as fallback for name
+                            fallback_name = row_dict.get('email') or row_dict.get('loan_number') or 'Unknown Lead'
+                            columns.append('name')
+                            values.append(fallback_name)
 
                         # Add required fields if missing
                         if 'created_at' not in columns:
@@ -568,17 +576,10 @@ async def execute_import(
                         columns = list(row_dict.keys())
                         values = list(row_dict.values())
 
-                        # Generate borrower_name from first_name/last_name if not provided
+                        # Ensure 'borrower_name' exists (transform_columns_for_destination handles first_name/last_name combo)
                         if 'borrower_name' not in columns:
-                            first_name = row_dict.get('first_name', '')
-                            last_name = row_dict.get('last_name', '')
-                            if first_name or last_name:
-                                full_name = f"{first_name} {last_name}".strip()
-                                columns.append('borrower_name')
-                                values.append(full_name if full_name else 'Unknown')
-                            else:
-                                columns.append('borrower_name')
-                                values.append('Unknown Borrower')
+                            columns.append('borrower_name')
+                            values.append('Unknown Borrower')
 
                         # Generate loan_number if not provided
                         if 'loan_number' not in columns:
