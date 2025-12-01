@@ -176,49 +176,131 @@ function DataUpload() {
 
   const targetFields = {
     leads: [
-      { value: 'first_name', label: 'First Name' },
-      { value: 'last_name', label: 'Last Name' },
-      { value: 'email', label: 'Email' },
-      { value: 'phone', label: 'Phone' },
-      { value: 'address', label: 'Address' },
-      { value: 'city', label: 'City' },
-      { value: 'state', label: 'State' },
-      { value: 'zip_code', label: 'Zip Code' },
-      { value: 'property_value', label: 'Property Value' },
-      { value: 'loan_amount', label: 'Loan Amount' },
-      { value: 'down_payment', label: 'Down Payment' },
-      { value: 'employment_status', label: 'Employment Status' },
-      { value: 'annual_income', label: 'Annual Income' },
-      { value: 'credit_score', label: 'Credit Score' },
-      { value: 'notes', label: 'Notes' }
+      // Contact Info
+      { value: 'name', label: 'Full Name', group: 'Contact Info' },
+      { value: 'first_name', label: 'First Name', group: 'Contact Info' },
+      { value: 'last_name', label: 'Last Name', group: 'Contact Info' },
+      { value: 'email', label: 'Email', group: 'Contact Info' },
+      { value: 'phone', label: 'Phone', group: 'Contact Info' },
+      { value: 'co_applicant_name', label: 'Co-Applicant Name', group: 'Contact Info' },
+      { value: 'co_applicant_email', label: 'Co-Applicant Email', group: 'Contact Info' },
+      { value: 'co_applicant_phone', label: 'Co-Applicant Phone', group: 'Contact Info' },
+      { value: 'preferred_communication', label: 'Preferred Communication', group: 'Contact Info' },
+      // Property Info
+      { value: 'address', label: 'Property Address', group: 'Property Info' },
+      { value: 'city', label: 'City', group: 'Property Info' },
+      { value: 'state', label: 'State', group: 'Property Info' },
+      { value: 'zip_code', label: 'Zip Code', group: 'Property Info' },
+      { value: 'property_type', label: 'Property Type', group: 'Property Info' },
+      { value: 'property_value', label: 'Property Value', group: 'Property Info' },
+      // Loan Details
+      { value: 'loan_type', label: 'Loan Type', group: 'Loan Details' },
+      { value: 'loan_amount', label: 'Loan Amount', group: 'Loan Details' },
+      { value: 'down_payment', label: 'Down Payment', group: 'Loan Details' },
+      { value: 'interest_rate', label: 'Interest Rate', group: 'Loan Details' },
+      { value: 'loan_term', label: 'Loan Term', group: 'Loan Details' },
+      { value: 'preapproval_amount', label: 'Preapproval Amount', group: 'Loan Details' },
+      { value: 'lender', label: 'Lender', group: 'Loan Details' },
+      // Financial Info
+      { value: 'credit_score', label: 'Credit Score', group: 'Financial Info' },
+      { value: 'annual_income', label: 'Annual Income', group: 'Financial Info' },
+      { value: 'monthly_debts', label: 'Monthly Debts', group: 'Financial Info' },
+      { value: 'debt_to_income', label: 'DTI Ratio', group: 'Financial Info' },
+      { value: 'employment_status', label: 'Employment Status', group: 'Financial Info' },
+      { value: 'first_time_buyer', label: 'First Time Buyer', group: 'Financial Info' },
+      // Team & Source
+      { value: 'source', label: 'Lead Source', group: 'Team & Source' },
+      { value: 'loan_officer', label: 'Loan Officer', group: 'Team & Source' },
+      { value: 'processor', label: 'Processor', group: 'Team & Source' },
+      // Other
+      { value: 'notes', label: 'Notes', group: 'Other' },
+      { value: 'stage', label: 'Stage', group: 'Other' }
     ],
     loans: [
-      { value: 'loan_number', label: 'Loan Number' },
-      { value: 'borrower_name', label: 'Borrower Name' },
-      { value: 'co_borrower_name', label: 'Co-Borrower Name' },
-      { value: 'property_address', label: 'Property Address' },
-      { value: 'loan_amount', label: 'Loan Amount' },
-      { value: 'interest_rate', label: 'Interest Rate' },
-      { value: 'loan_term', label: 'Loan Term (months)' },
-      { value: 'loan_type', label: 'Loan Type' },
-      { value: 'loan_purpose', label: 'Loan Purpose' },
-      { value: 'closing_date', label: 'Closing Date' },
-      { value: 'lender', label: 'Lender' },
-      { value: 'processor', label: 'Processor' },
-      { value: 'underwriter', label: 'Underwriter' }
+      // Loan Identifiers
+      { value: 'loan_number', label: 'Loan Number', group: 'Loan Identifiers' },
+      { value: 'stage', label: 'Loan Stage', group: 'Loan Identifiers' },
+      // Borrower Info
+      { value: 'borrower_name', label: 'Borrower Name', group: 'Borrower Info' },
+      { value: 'borrower_email', label: 'Borrower Email', group: 'Borrower Info' },
+      { value: 'borrower_phone', label: 'Borrower Phone', group: 'Borrower Info' },
+      { value: 'coborrower_name', label: 'Co-Borrower Name', group: 'Borrower Info' },
+      { value: 'co_borrower_email', label: 'Co-Borrower Email', group: 'Borrower Info' },
+      { value: 'preferred_communication', label: 'Preferred Communication', group: 'Borrower Info' },
+      // Loan Details
+      { value: 'amount', label: 'Loan Amount', group: 'Loan Details' },
+      { value: 'rate', label: 'Interest Rate', group: 'Loan Details' },
+      { value: 'term', label: 'Loan Term (months)', group: 'Loan Details' },
+      { value: 'program', label: 'Loan Program', group: 'Loan Details' },
+      { value: 'loan_type', label: 'Loan Type', group: 'Loan Details' },
+      { value: 'purchase_price', label: 'Purchase Price', group: 'Loan Details' },
+      { value: 'down_payment', label: 'Down Payment', group: 'Loan Details' },
+      { value: 'lender', label: 'Lender/Investor', group: 'Loan Details' },
+      // Property Info
+      { value: 'property_address', label: 'Property Address', group: 'Property Info' },
+      { value: 'property_city', label: 'City', group: 'Property Info' },
+      { value: 'property_state', label: 'State', group: 'Property Info' },
+      { value: 'property_zip', label: 'Zip Code', group: 'Property Info' },
+      { value: 'appraisal_value', label: 'Appraisal Value', group: 'Property Info' },
+      // Team Members
+      { value: 'loan_officer_name', label: 'Loan Officer', group: 'Team Members' },
+      { value: 'loan_officer_email', label: 'LO Email', group: 'Team Members' },
+      { value: 'processor', label: 'Processor', group: 'Team Members' },
+      { value: 'processor_email', label: 'Processor Email', group: 'Team Members' },
+      { value: 'underwriter', label: 'Underwriter', group: 'Team Members' },
+      { value: 'underwriter_email', label: 'UW Email', group: 'Team Members' },
+      { value: 'closer', label: 'Closer', group: 'Team Members' },
+      { value: 'closer_email', label: 'Closer Email', group: 'Team Members' },
+      { value: 'realtor_agent', label: 'Realtor/Agent', group: 'Team Members' },
+      { value: 'title_company', label: 'Title Company', group: 'Team Members' },
+      // Important Dates
+      { value: 'closing_date', label: 'Closing Date', group: 'Important Dates' },
+      { value: 'lock_date', label: 'Lock Date', group: 'Important Dates' },
+      { value: 'lock_expiration_date', label: 'Lock Expiration', group: 'Important Dates' },
+      { value: 'funded_date', label: 'Funded Date', group: 'Important Dates' },
+      { value: 'contract_received_date', label: 'Contract Received', group: 'Important Dates' },
+      { value: 'loan_estimate_sent_date', label: 'LE Sent Date', group: 'Important Dates' },
+      { value: 'initial_disclosures_sent_date', label: 'Initial Disclosures Sent', group: 'Important Dates' },
+      { value: 'initial_disclosures_signed_date', label: 'Initial Disclosures Signed', group: 'Important Dates' },
+      { value: 'cd_received_signed_date', label: 'CD Signed', group: 'Important Dates' },
+      { value: 'conditional_approval_date', label: 'Conditional Approval', group: 'Important Dates' },
+      { value: 'final_closing_package_sent_date', label: 'Final Package Sent', group: 'Important Dates' },
+      // Appraisal
+      { value: 'appraisal_ordered_date', label: 'Appraisal Ordered', group: 'Appraisal' },
+      { value: 'appraisal_scheduled_date', label: 'Appraisal Scheduled', group: 'Appraisal' },
+      { value: 'appraisal_completed_date', label: 'Appraisal Completed', group: 'Appraisal' },
+      // Rate Lock
+      { value: 'lock_term_days', label: 'Lock Term (days)', group: 'Rate Lock' },
+      { value: 'float_down_available', label: 'Float Down Available', group: 'Rate Lock' }
     ],
     portfolio: [
-      { value: 'loan_number', label: 'Loan Number' },
-      { value: 'borrower_name', label: 'Borrower Name' },
-      { value: 'property_address', label: 'Property Address' },
-      { value: 'original_loan_amount', label: 'Original Loan Amount' },
-      { value: 'current_balance', label: 'Current Balance' },
-      { value: 'interest_rate', label: 'Interest Rate' },
-      { value: 'monthly_payment', label: 'Monthly Payment' },
-      { value: 'origination_date', label: 'Origination Date' },
-      { value: 'maturity_date', label: 'Maturity Date' },
-      { value: 'last_payment_date', label: 'Last Payment Date' },
-      { value: 'payment_status', label: 'Payment Status' }
+      // Loan Info
+      { value: 'loan_number', label: 'Loan Number', group: 'Loan Info' },
+      { value: 'borrower_name', label: 'Borrower Name', group: 'Loan Info' },
+      { value: 'borrower_email', label: 'Borrower Email', group: 'Loan Info' },
+      { value: 'borrower_phone', label: 'Borrower Phone', group: 'Loan Info' },
+      // Property
+      { value: 'property_address', label: 'Property Address', group: 'Property' },
+      { value: 'property_city', label: 'City', group: 'Property' },
+      { value: 'property_state', label: 'State', group: 'Property' },
+      { value: 'property_zip', label: 'Zip Code', group: 'Property' },
+      // Loan Details
+      { value: 'original_loan_amount', label: 'Original Loan Amount', group: 'Loan Details' },
+      { value: 'current_balance', label: 'Current Balance', group: 'Loan Details' },
+      { value: 'rate', label: 'Interest Rate', group: 'Loan Details' },
+      { value: 'term', label: 'Loan Term', group: 'Loan Details' },
+      { value: 'monthly_payment', label: 'Monthly Payment', group: 'Loan Details' },
+      { value: 'ltv', label: 'LTV', group: 'Loan Details' },
+      { value: 'apr', label: 'APR', group: 'Loan Details' },
+      // Dates
+      { value: 'origination_date', label: 'Origination Date', group: 'Dates' },
+      { value: 'maturity_date', label: 'Maturity Date', group: 'Dates' },
+      { value: 'last_payment_date', label: 'Last Payment Date', group: 'Dates' },
+      // Status
+      { value: 'payment_status', label: 'Payment Status', group: 'Status' },
+      // Team
+      { value: 'loan_officer_name', label: 'Loan Officer', group: 'Team' },
+      { value: 'processor', label: 'Processor', group: 'Team' }
     ]
   };
 
@@ -423,13 +505,19 @@ function DataUpload() {
                         onChange={(e) => handleColumnMappingChange(header, e.target.value)}
                       >
                         <option value="">Skip this column</option>
-                        <optgroup label="Lead Fields">
-                          {targetFields[getDestination()]?.map(field => (
-                            <option key={field.value} value={field.value}>
-                              {field.label}
-                            </option>
-                          ))}
-                        </optgroup>
+                        {(() => {
+                          const fields = targetFields[getDestination()] || [];
+                          const groups = [...new Set(fields.map(f => f.group))];
+                          return groups.map(group => (
+                            <optgroup key={group} label={group}>
+                              {fields.filter(f => f.group === group).map(field => (
+                                <option key={field.value} value={field.value}>
+                                  {field.label}
+                                </option>
+                              ))}
+                            </optgroup>
+                          ));
+                        })()}
                       </select>
                     </div>
                   </div>
