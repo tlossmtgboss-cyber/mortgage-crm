@@ -25806,6 +25806,69 @@ async def add_loan_milestone_columns(
         }
 
 
+@app.post("/api/v1/migrations/fix-lead-stage-values")
+async def fix_lead_stage_values_migration(
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Fix invalid lead stage values in the database.
+    Converts invalid enum values to valid ones.
+    """
+    try:
+        logger.info("Running migration: fix lead stage values")
+
+        # Map of invalid values to valid LeadStage enum values
+        stage_fixes = {
+            'Credit Only': 'Pre-Qualified',
+            'credit only': 'Pre-Qualified',
+            'Pre Approved': 'Pre-Approved',
+            'Pre Qualified': 'Pre-Qualified',
+            'Long Term Nurture': 'Long-Term Nurture',
+            'Attempted': 'Attempted Contact',
+            'new': 'New',
+            'NEW': 'New',
+        }
+
+        fixed_count = 0
+        for old_value, new_value in stage_fixes.items():
+            try:
+                result = db.execute(text(f"""
+                    UPDATE leads SET stage = :new_value WHERE stage = :old_value
+                """), {"old_value": old_value, "new_value": new_value})
+                if result.rowcount > 0:
+                    logger.info(f"Fixed {result.rowcount} leads: '{old_value}' -> '{new_value}'")
+                    fixed_count += result.rowcount
+            except Exception as e:
+                logger.warning(f"Could not fix '{old_value}': {e}")
+                db.rollback()
+
+        # Also set any NULL stages to 'New'
+        try:
+            result = db.execute(text("UPDATE leads SET stage = 'New' WHERE stage IS NULL"))
+            if result.rowcount > 0:
+                logger.info(f"Set {result.rowcount} NULL stages to 'New'")
+                fixed_count += result.rowcount
+        except Exception as e:
+            logger.warning(f"Could not fix NULL stages: {e}")
+            db.rollback()
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": f"Fixed {fixed_count} lead stage values",
+            "fixed_count": fixed_count
+        }
+    except Exception as e:
+        logger.error(f"Lead stage fix migration failed: {e}")
+        db.rollback()
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e)
+        }
+
+
 @app.post("/api/v1/migrations/add-subscription-system")
 async def add_subscription_system_migration(
     db: Session = Depends(get_db)
