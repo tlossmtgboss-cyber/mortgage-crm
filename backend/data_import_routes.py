@@ -173,105 +173,78 @@ def suggest_column_mappings(headers: list) -> dict:
     """AI-like column mapping suggestions based on header names"""
     mappings = {}
 
-    # Comprehensive column name patterns for all entity types
-    # NOTE: For leads, we use 'name' not 'borrower_name' since that's the actual column name
+    # Column name patterns that map to ACTUAL database columns
+    # These patterns map CSV headers to real columns in leads/loans tables
     patterns = {
-        # === BORROWER/CONTACT INFO ===
-        # 'name' is used for leads table, 'borrower_name' is used for loans table
+        # === BORROWER/CONTACT INFO (leads: name/email/phone, loans: borrower_*) ===
         'name': ['borrower', 'borrower name', 'borrowername', 'client', 'client name', 'name', 'full name', 'borrower_name'],
+        'first_name': ['first name', 'firstname', 'first', 'fname', 'given name', 'bor 1 first name', 'bor first name', 'borrower first name', 'borrower 1 first name'],
+        'last_name': ['last name', 'lastname', 'last', 'lname', 'surname', 'family name', 'bor 1 last name', 'bor last name', 'borrower last name', 'borrower 1 last name'],
         'email': ['borrower email', 'email', 'e-mail', 'email address', 'emailaddress', 'client email', 'borrower_email'],
         'phone': ['borrower phone', 'phone', 'telephone', 'tel', 'mobile', 'cell', 'phone number', 'borrower_phone'],
-        'coborrower_name': ['co-borrower', 'coborrower', 'co borrower', 'co-borrower name', 'coborrower name', 'co-applicant'],
-        'co_borrower_email': ['co-borrower email', 'coborrower email', 'co borrower email'],
+
+        # === CO-APPLICANT (leads table columns) ===
+        'co_applicant_name': ['co-borrower', 'coborrower', 'co borrower', 'co-borrower name', 'coborrower name', 'co-applicant', 'co applicant name'],
+        'co_applicant_email': ['co-borrower email', 'coborrower email', 'co borrower email', 'co-applicant email', 'co applicant email'],
+        'co_applicant_phone': ['co-borrower phone', 'coborrower phone', 'co borrower phone', 'co-applicant phone'],
         'preferred_communication': ['preferred communication', 'contact preference', 'communication preference'],
 
         # === LOAN IDENTIFIERS ===
         'loan_number': ['loan number', 'loannumber', 'loan #', 'loan id', 'loanid', 'file number', 'file #', 'file id', 'file name', 'filename'],
-        'stage': ['stage', 'status', 'loan stage', 'loan status', 'pipeline stage', 'loan status'],
+        'stage': ['stage', 'status', 'loan stage', 'loan status', 'pipeline stage'],
 
         # === LOAN DETAILS ===
-        'amount': ['loan amount', 'loanamount', 'amount', 'principal', 'loan value', 'base loan amount'],
-        'rate': ['rate', 'interest rate', 'interestrate', 'int rate', 'note rate', 'interest'],
-        'term': ['term', 'loan term', 'months', 'term months', 'loan term months'],
+        'loan_amount': ['loan amount', 'loanamount', 'amount', 'principal', 'loan value', 'base loan amount'],
+        'interest_rate': ['rate', 'interest rate', 'interestrate', 'int rate', 'note rate', 'interest'],
+        'loan_term': ['term', 'loan term', 'months', 'term months', 'loan term months'],
         'program': ['program', 'loan program', 'product name'],
         'loan_type': ['loan type', 'loantype', 'type', 'product', 'product type'],
-        'purchase_price': ['purchase price', 'sale price', 'sales price', 'contract price'],
         'down_payment': ['down payment', 'downpayment', 'down', 'cash to close'],
         'lender': ['lender', 'investor', 'bank', 'lending institution'],
+        'preapproval_amount': ['preapproval amount', 'preapproval', 'pre-approval amount'],
 
-        # === PROPERTY INFO ===
-        # Note: For leads, these map to address/city/state/zip_code; for loans, they map to property_* columns
-        'property_address': ['property address', 'address', 'street', 'street address', 'subject property', 'sub prop street', 'subject property street', 'prop street', 'property street'],
-        'property_city': ['property city', 'city', 'town', 'sub prop city', 'subject property city'],
-        'property_state': ['property state', 'state', 'province', 'st', 'sub prop state', 'subject property state', 'prop state'],
-        'property_zip': ['property zip', 'zip', 'zipcode', 'zip code', 'postal', 'postal code', 'sub prop zip', 'subject property zip'],
-        'appraisal_value': ['appraisal value', 'appraised value', 'appraisal', 'property value', 'home value', 'value'],
+        # === PROPERTY INFO (leads uses: address/city/state/zip_code) ===
+        # Note: transform_columns_for_destination will convert property_* to leads columns
+        'address': ['property address', 'address', 'street', 'street address', 'subject property', 'sub prop street', 'subject property street', 'prop street', 'property street'],
+        'city': ['property city', 'city', 'town', 'sub prop city', 'subject property city'],
+        'state': ['property state', 'state', 'province', 'st', 'sub prop state', 'subject property state', 'prop state'],
+        'zip_code': ['property zip', 'zip', 'zipcode', 'zip code', 'postal', 'postal code', 'sub prop zip', 'subject property zip'],
+        'property_type': ['property type', 'prop type', 'dwelling type'],
+        'property_value': ['property value', 'home value', 'estimated value'],
+        'appraisal_value': ['appraisal value', 'appraised value', 'appraisal'],
 
-        # === TEAM MEMBERS ===
-        'loan_officer_name': ['loan officer', 'lo', 'lo name', 'loan officer name', 'originator', 'lo full name', 'loan officer full name'],
-        'loan_officer_email': ['lo email', 'loan officer email'],
+        # === TEAM MEMBERS (leads table columns) ===
+        'loan_officer': ['loan officer', 'lo', 'lo name', 'loan officer name', 'originator', 'lo full name', 'loan officer full name'],
         'processor': ['processor', 'loan processor', 'processor name', 'lp', 'lp name', 'lp full name', 'loan processor full name'],
-        'processor_email': ['processor email', 'lp email'],
         'underwriter': ['underwriter', 'uw', 'underwriter name'],
-        'underwriter_email': ['underwriter email', 'uw email'],
-        'closer': ['closer', 'closing agent', 'closer name'],
-        'closer_email': ['closer email'],
-        'realtor_agent': ['realtor', 'agent', 'real estate agent', 'realtor name', 'buyer agent'],
-        'title_company': ['title company', 'title', 'escrow company', 'settlement company'],
+        # Note: realtor_agent, title_company, closer are NOT in leads table - skip them
 
         # === IMPORTANT DATES ===
         'created_at': ['date created', 'created date', 'creation date', 'created at', 'date added'],
         'status_date': ['status date', 'status changed', 'last status date', 'stage date'],
         'closing_date': ['closing date', 'closingdate', 'close date', 'settlement date', 'closing'],
         'lock_date': ['lock date', 'rate lock date', 'locked date'],
-        'lock_expiration_date': ['lock expiration', 'lock exp', 'lock expiration date', 'rate lock expiration'],
-        'funded_date': ['funded date', 'funding date', 'fund date', 'disbursement date'],
-        'contract_received_date': ['contract date', 'contract received', 'purchase contract date', 'executed contract'],
-        'loan_estimate_sent_date': ['le sent', 'loan estimate sent', 'le date', 'loan estimate date'],
-        'initial_disclosures_sent_date': ['initial disclosures sent', 'disclosures sent', 'initial le sent'],
-        'initial_disclosures_signed_date': ['initial disclosures signed', 'disclosures signed'],
-        'cd_received_signed_date': ['cd signed', 'closing disclosure signed', 'cd received'],
-        'conditional_approval_date': ['conditional approval', 'conditional', 'cond approval date'],
-        'final_closing_package_sent_date': ['final package sent', 'closing package sent', 'docs to title'],
+        'lock_expiration': ['lock expiration', 'lock exp', 'lock expiration date', 'rate lock expiration'],
 
-        # === APPRAISAL DATES ===
-        'appraisal_ordered_date': ['appraisal ordered', 'appraisal order date', 'ordered appraisal'],
-        'appraisal_scheduled_date': ['appraisal scheduled', 'appraisal appointment', 'inspection date'],
-        'appraisal_completed_date': ['appraisal completed', 'appraisal received', 'appraisal done'],
-
-        # === RATE LOCK FIELDS ===
-        'lock_term_days': ['lock term', 'lock days', 'lock period', 'rate lock term'],
-        'float_down_available': ['float down', 'float down available', 'renegotiation'],
-
-        # === LEAD SPECIFIC FIELDS ===
-        'first_name': ['first name', 'firstname', 'first', 'fname', 'given name', 'bor 1 first name', 'bor first name', 'borrower first name', 'borrower 1 first name'],
-        'last_name': ['last name', 'lastname', 'last', 'lname', 'surname', 'family name', 'bor 1 last name', 'bor last name', 'borrower last name', 'borrower 1 last name'],
-        'source': ['source', 'lead source', 'referral source', 'how did you hear'],
+        # === FINANCIAL INFO ===
         'credit_score': ['credit score', 'creditscore', 'fico', 'fico score'],
         'annual_income': ['income', 'annual income', 'yearly income', 'salary', 'gross income'],
         'monthly_debts': ['monthly debts', 'debts', 'monthly obligations'],
         'debt_to_income': ['dti', 'debt to income', 'debt-to-income'],
-        'employment_status': ['employment', 'employment status', 'job status', 'employed'],
-        'property_type': ['property type', 'prop type', 'dwelling type'],
-        'loan_purpose': ['purpose', 'loan purpose', 'transaction type'],
-        'first_time_buyer': ['first time buyer', 'ftb', 'first time homebuyer'],
-        'preapproval_amount': ['preapproval amount', 'preapproval', 'pre-approval amount'],
-        'notes': ['notes', 'comments', 'remarks', 'additional notes'],
-
-        # === ORGANIZATION/BRANCH FIELDS ===
-        'organization_code': ['organization code', 'org code', 'branch code', 'branch', 'branch id'],
-
-        # === PORTFOLIO FIELDS ===
-        'original_loan_amount': ['original amount', 'original loan amount', 'orig amount', 'original balance'],
-        'current_balance': ['current balance', 'balance', 'unpaid balance', 'upb', 'remaining balance'],
-        'monthly_payment': ['monthly payment', 'payment', 'pmt', 'p&i', 'pi payment'],
-        'origination_date': ['origination date', 'orig date', 'start date', 'note date'],
-        'maturity_date': ['maturity date', 'maturity', 'end date', 'payoff date'],
-        'last_payment_date': ['last payment', 'last payment date', 'last pmt', 'most recent payment'],
-        'payment_status': ['payment status', 'loan status', 'current status', 'delinquency status'],
+        'dti': ['dti ratio', 'backend dti'],
         'ltv': ['ltv', 'loan to value', 'loan-to-value'],
+        'cltv': ['cltv', 'combined ltv', 'combined loan to value'],
         'apr': ['apr', 'annual percentage rate'],
         'points': ['points', 'discount points', 'loan points'],
+
+        # === OTHER LEAD FIELDS ===
+        'source': ['source', 'lead source', 'referral source', 'how did you hear'],
+        'employment_status': ['employment', 'employment status', 'job status', 'employed'],
+        'employer_name': ['employer', 'employer name', 'company', 'company name'],
+        'industry': ['industry', 'sector', 'business type'],
+        'first_time_buyer': ['first time buyer', 'ftb', 'first time homebuyer'],
+        'notes': ['notes', 'comments', 'remarks', 'additional notes'],
+        'organization_code': ['organization code', 'org code', 'branch code', 'branch', 'branch id'],
     }
 
     for header in headers:
