@@ -839,7 +839,11 @@ async def fix_lead_stage_values(
         cursor = conn.cursor()
 
         # Map of invalid values to valid LeadStage enum values
+        # The valid enum VALUES are: "New", "Attempted Contact", "Prospect", "Application",
+        # "Pre-Qualified", "Pre-Approved", "Under Contract", "Long-Term Nurture",
+        # "Closed", "AMR", "Referral Source", "Withdrawn", "Does Not Qualify"
         stage_fixes = {
+            # CSV variations
             'Credit Only': 'Pre-Qualified',
             'credit only': 'Pre-Qualified',
             'Pre Approved': 'Pre-Approved',
@@ -848,6 +852,19 @@ async def fix_lead_stage_values(
             'Attempted': 'Attempted Contact',
             'new': 'New',
             'NEW': 'New',
+            # Python enum NAME variants (UPPER_CASE with underscores) -> correct VALUES
+            'APPLICATION': 'Application',
+            'PROSPECT': 'Prospect',
+            'UNDER_CONTRACT': 'Under Contract',
+            'PRE_QUALIFIED': 'Pre-Qualified',
+            'PRE_APPROVED': 'Pre-Approved',
+            'ATTEMPTED_CONTACT': 'Attempted Contact',
+            'LONG_TERM_NURTURE': 'Long-Term Nurture',
+            'CLOSED': 'Closed',
+            'AMR': 'AMR',  # AMR is already correct but include for safety
+            'REFERRAL_SOURCE': 'Referral Source',
+            'WITHDRAWN': 'Withdrawn',
+            'DOES_NOT_QUALIFY': 'Does Not Qualify',
         }
 
         fixed_count = 0
