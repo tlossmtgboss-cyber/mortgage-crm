@@ -25808,12 +25808,17 @@ async def add_loan_milestone_columns(
 
 @app.post("/api/v1/migrations/fix-lead-stage-values")
 async def fix_lead_stage_values_migration(
+    key: str = "",
     db: Session = Depends(get_db)
 ):
     """
     Migration: Fix invalid lead stage values in the database.
     Converts invalid enum values to valid ones.
+    Call with: POST /api/v1/migrations/fix-lead-stage-values?key=fix-stages-now
     """
+    if key != "fix-stages-now":
+        raise HTTPException(status_code=403, detail="Invalid key. Use ?key=fix-stages-now")
+
     try:
         logger.info("Running migration: fix lead stage values")
 
