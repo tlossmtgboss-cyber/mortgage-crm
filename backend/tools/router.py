@@ -470,8 +470,7 @@ async def handle_get_leads_by_status(args: Dict[str, Any], request: Request) -> 
     - Last contact date and notes
     """
     try:
-        from main import SessionLocal
-        from models import Lead, LeadStatus
+        from main import SessionLocal, Lead, LeadStage
         from datetime import datetime
 
         db = SessionLocal()
@@ -485,11 +484,11 @@ async def handle_get_leads_by_status(args: Dict[str, Any], request: Request) -> 
             # Apply status filter if provided
             if status_filter:
                 try:
-                    status_enum = LeadStatus(status_filter)
+                    status_enum = LeadStage(status_filter)
                     query = query.filter(Lead.status == status_enum)
                 except ValueError:
                     # Try matching by name
-                    for s in LeadStatus:
+                    for s in LeadStage:
                         if s.name.lower() == status_filter.lower() or s.value.lower() == status_filter.lower():
                             query = query.filter(Lead.status == s)
                             break

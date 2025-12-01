@@ -10,9 +10,10 @@
 }
 
 .app-main {
-  flex: 1;
+  flex: 1 1 auto;
   background: var(--color-bg-base);
   transition: margin-right 250ms ease;
+  /* Content should scroll naturally - don't restrict overflow */
 }
 
 .app-main.with-assistant {

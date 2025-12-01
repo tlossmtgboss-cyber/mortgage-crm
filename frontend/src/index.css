@@ -91,12 +91,14 @@
   box-sizing: border-box;
 }
 
-html, body {
+html {
   height: 100%;
   margin: 0;
 }
 
 body {
+  min-height: 100%;
+  margin: 0;
   font-family: var(--font-family);
   font-size: var(--font-base);
   line-height: var(--line-normal);
