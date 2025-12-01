@@ -11,7 +11,7 @@ function Leads() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingLead, setEditingLead] = useState(null);
-  const [activeFilter, setActiveFilter] = useState('All');
+  const [activeFilter, setActiveFilter] = useState('New');
   const [activeBorrower, setActiveBorrower] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [viewedLeads, setViewedLeads] = useState(() => {
@@ -59,7 +59,6 @@ function Leads() {
   });
 
   const filters = [
-    'All',
     'New',
     'Attempted Contact',
     'Prospect',
@@ -126,11 +125,9 @@ function Leads() {
   const safeLeads = Array.isArray(leads) ? leads : [];
 
   // Filter by stage
-  let filteredLeads = activeFilter === 'All'
-    ? safeLeads
-    : activeFilter === 'Nurture'
-      ? safeLeads.filter(lead => lead.stage === 'Nurture' || lead.stage === 'Long-Term Nurture')
-      : safeLeads.filter(lead => lead.stage === activeFilter);
+  let filteredLeads = activeFilter === 'Nurture'
+    ? safeLeads.filter(lead => lead.stage === 'Nurture' || lead.stage === 'Long-Term Nurture')
+    : safeLeads.filter(lead => lead.stage === activeFilter);
 
   // Filter by search query
   if (searchQuery.trim()) {
