@@ -21,6 +21,7 @@ function Leads() {
   });
   const [showSMSModal, setShowSMSModal] = useState(false);
   const [selectedLeadForSMS, setSelectedLeadForSMS] = useState(null);
+  const [statusDropdown, setStatusDropdown] = useState({ show: false, leadId: null, position: { top: 0, left: 0 } });
 
   // Borrowers array - each borrower has their own contact info
   const [borrowers, setBorrowers] = useState([
@@ -66,6 +67,18 @@ function Leads() {
     'Pre-Qualified',
     'Pre-Approved',
     'Nurture',
+    'Withdrawn',
+    'Does Not Qualify',
+  ];
+
+  const statusOptions = [
+    'New',
+    'Attempted Contact',
+    'Prospect',
+    'Application',
+    'Pre-Qualified',
+    'Pre-Approved',
+    'Long-Term Nurture',
     'Withdrawn',
     'Does Not Qualify',
   ];
@@ -373,6 +386,42 @@ function Leads() {
     navigate(`/leads/${leadId}`);
   };
 
+  const handleStatusClick = (e, leadId) => {
+    e.stopPropagation(); // Prevent row click
+    const rect = e.target.getBoundingClientRect();
+    setStatusDropdown({
+      show: true,
+      leadId,
+      position: {
+        top: rect.bottom + window.scrollY + 5,
+        left: rect.left + window.scrollX,
+      },
+    });
+  };
+
+  const handleStatusChange = async (newStatus) => {
+    const leadId = statusDropdown.leadId;
+    setStatusDropdown({ show: false, leadId: null, position: { top: 0, left: 0 } });
+
+    try {
+      await leadsAPI.update(leadId, { stage: newStatus });
+      // Update local state
+      setLeads(leads.map(lead =>
+        lead.id === leadId ? { ...lead, stage: newStatus } : lead
+      ));
+      // Clear cache
+      localStorage.removeItem('leads_data');
+      localStorage.removeItem('leads_data_time');
+    } catch (err) {
+      console.error('Failed to update status:', err);
+      alert('Failed to update status');
+    }
+  };
+
+  const closeStatusDropdown = () => {
+    setStatusDropdown({ show: false, leadId: null, position: { top: 0, left: 0 } });
+  };
+
   if (loading) {
     return <div className="loading">Loading leads...</div>;
   }
@@ -454,7 +503,11 @@ function Leads() {
                   />
                 </td>
                 <td>
-                  <span className={`status-badge status-${getStatusColor(lead.stage)}`}>
+                  <span
+                    className={`status-badge status-${getStatusColor(lead.stage)} status-clickable`}
+                    onClick={(e) => handleStatusClick(e, lead.id)}
+                    title="Click to change status"
+                  >
                     {lead.stage}
                   </span>
                 </td>
@@ -830,6 +883,33 @@ function Leads() {
           }}
           lead={selectedLeadForSMS}
         />
+      )}
+
+      {/* Status Dropdown Popup */}
+      {statusDropdown.show && (
+        <>
+          <div className="status-dropdown-overlay" onClick={closeStatusDropdown} />
+          <div
+            className="status-dropdown-popup"
+            style={{
+              top: statusDropdown.position.top,
+              left: statusDropdown.position.left,
+            }}
+          >
+            <div className="status-dropdown-header">Change Status</div>
+            <div className="status-dropdown-options">
+              {statusOptions.map((status) => (
+                <button
+                  key={status}
+                  className={`status-dropdown-option status-${getStatusColor(status)}`}
+                  onClick={() => handleStatusChange(status)}
+                >
+                  {status}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
       )}
     </div>
   );
