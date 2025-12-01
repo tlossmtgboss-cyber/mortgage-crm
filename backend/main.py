@@ -12284,6 +12284,115 @@ async def orchestrator_chat_stream(
                     }
                 }
             }
+        },
+        # Task Management Tools for efficiency
+        {
+            "type": "function",
+            "function": {
+                "name": "complete_task",
+                "description": "Mark a task as completed. Use when user says they finished a task or want to check it off.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "task_id": {"type": "integer", "description": "ID of the task to complete"},
+                        "task_title": {"type": "string", "description": "Title/description of task to find and complete (alternative to task_id)"},
+                        "notes": {"type": "string", "description": "Optional completion notes"}
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "update_task",
+                "description": "Update a task's details like due date, priority, title, or assignee. Use when user wants to reschedule or modify a task.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "task_id": {"type": "integer", "description": "ID of the task to update"},
+                        "task_title": {"type": "string", "description": "Title of task to find and update (alternative to task_id)"},
+                        "new_title": {"type": "string", "description": "New title for the task"},
+                        "new_due_date": {"type": "string", "description": "New due date (e.g., 'tomorrow', 'next Monday', '2024-01-15')"},
+                        "new_priority": {"type": "string", "enum": ["low", "medium", "high", "urgent"], "description": "New priority level"},
+                        "notes": {"type": "string", "description": "Notes to add to task"}
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_overdue_tasks",
+                "description": "Get all tasks that are past their due date. Shows urgent items that need attention.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "include_completed": {"type": "boolean", "description": "Include completed overdue tasks", "default": False}
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "move_lead_stage",
+                "description": "Move a lead to a different stage in the pipeline. Use when lead progresses or regresses.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "lead_id": {"type": "integer", "description": "ID of the lead to move"},
+                        "lead_name": {"type": "string", "description": "Name of lead to find and move (alternative to lead_id)"},
+                        "new_stage": {"type": "string", "enum": ["NEW", "CONTACTED", "QUALIFIED", "NURTURING", "CONVERTED", "LOST"], "description": "New stage for the lead"},
+                        "notes": {"type": "string", "description": "Notes about the stage change"}
+                    },
+                    "required": ["new_stage"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "move_loan_stage",
+                "description": "Move a loan to a different stage in the pipeline. Use when loan progresses through the workflow.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "loan_id": {"type": "integer", "description": "ID of the loan to move"},
+                        "borrower_name": {"type": "string", "description": "Borrower name to find loan (alternative to loan_id)"},
+                        "new_stage": {"type": "string", "enum": ["APPLICATION", "PROCESSING", "UNDERWRITING", "APPROVED", "CLOSING", "FUNDED", "DEAD"], "description": "New stage for the loan"},
+                        "notes": {"type": "string", "description": "Notes about the stage change"}
+                    },
+                    "required": ["new_stage"]
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "bulk_create_tasks",
+                "description": "Create multiple related tasks at once. Great for setting up a sequence of follow-ups or a checklist.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "tasks": {
+                            "type": "array",
+                            "description": "List of tasks to create",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "title": {"type": "string", "description": "Task title"},
+                                    "due_date": {"type": "string", "description": "Due date"},
+                                    "priority": {"type": "string", "enum": ["low", "medium", "high", "urgent"]}
+                                },
+                                "required": ["title"]
+                            }
+                        },
+                        "related_lead_id": {"type": "integer", "description": "Link all tasks to this lead"},
+                        "related_loan_id": {"type": "integer", "description": "Link all tasks to this loan"}
+                    },
+                    "required": ["tasks"]
+                }
+            }
         }
     ]
 
@@ -13314,6 +13423,307 @@ async def orchestrator_chat_stream(
             ]
         }
 
+    # Task Management Tool Execution Functions
+    async def execute_complete_task(args):
+        """Mark a task as completed"""
+        task_id = args.get("task_id")
+        task_title = args.get("task_title", "")
+        notes = args.get("notes", "")
+
+        task = None
+        if task_id:
+            task = db.query(AITask).filter(AITask.id == task_id, AITask.assigned_to_id == current_user.id).first()
+        elif task_title:
+            task = db.query(AITask).filter(
+                AITask.title.ilike(f"%{task_title}%"),
+                AITask.assigned_to_id == current_user.id,
+                AITask.type != TaskType.COMPLETED
+            ).first()
+
+        if not task:
+            return {"success": False, "error": "Task not found"}
+
+        task.type = TaskType.COMPLETED
+        task.completed_at = datetime.now()
+        if notes:
+            task.description = (task.description or "") + f"\n\nCompletion notes: {notes}"
+        db.commit()
+
+        return {
+            "success": True,
+            "task_id": task.id,
+            "title": task.title,
+            "message": f"Task '{task.title}' marked as completed"
+        }
+
+    async def execute_update_task(args):
+        """Update a task's details"""
+        task_id = args.get("task_id")
+        task_title = args.get("task_title", "")
+        new_title = args.get("new_title")
+        new_due_date = args.get("new_due_date")
+        new_priority = args.get("new_priority")
+        notes = args.get("notes")
+
+        task = None
+        if task_id:
+            task = db.query(AITask).filter(AITask.id == task_id, AITask.assigned_to_id == current_user.id).first()
+        elif task_title:
+            task = db.query(AITask).filter(
+                AITask.title.ilike(f"%{task_title}%"),
+                AITask.assigned_to_id == current_user.id
+            ).first()
+
+        if not task:
+            return {"success": False, "error": "Task not found"}
+
+        updates = []
+        if new_title:
+            task.title = new_title
+            updates.append(f"title to '{new_title}'")
+
+        if new_due_date:
+            # Parse due date
+            due_date = None
+            due_lower = new_due_date.lower()
+            today = datetime.now()
+            if "tomorrow" in due_lower:
+                due_date = today + timedelta(days=1)
+            elif "today" in due_lower:
+                due_date = today
+            elif "next week" in due_lower:
+                due_date = today + timedelta(days=7)
+            elif "next monday" in due_lower:
+                days_ahead = (0 - today.weekday()) % 7
+                if days_ahead == 0:
+                    days_ahead = 7
+                due_date = today + timedelta(days=days_ahead)
+            else:
+                try:
+                    from dateutil import parser
+                    due_date = parser.parse(new_due_date)
+                except:
+                    due_date = today + timedelta(days=1)
+            task.due_date = due_date
+            updates.append(f"due date to {due_date.strftime('%Y-%m-%d')}")
+
+        if new_priority:
+            task.priority = new_priority.lower()
+            updates.append(f"priority to {new_priority}")
+
+        if notes:
+            task.description = (task.description or "") + f"\n\nUpdate notes: {notes}"
+            updates.append("added notes")
+
+        db.commit()
+
+        return {
+            "success": True,
+            "task_id": task.id,
+            "title": task.title,
+            "updates": updates,
+            "message": f"Updated task: {', '.join(updates)}"
+        }
+
+    async def execute_get_overdue_tasks(args):
+        """Get all overdue tasks"""
+        include_completed = args.get("include_completed", False)
+        today = datetime.now().date()
+
+        query = db.query(AITask).filter(
+            AITask.assigned_to_id == current_user.id,
+            AITask.due_date < datetime.now()
+        )
+
+        if not include_completed:
+            query = query.filter(AITask.type != TaskType.COMPLETED)
+
+        overdue_tasks = query.order_by(AITask.due_date.asc()).all()
+
+        tasks_data = []
+        for t in overdue_tasks[:20]:  # Limit to 20
+            days_overdue = (today - t.due_date.date()).days if t.due_date else 0
+            tasks_data.append({
+                "id": t.id,
+                "title": t.title,
+                "due_date": t.due_date.isoformat() if t.due_date else None,
+                "days_overdue": days_overdue,
+                "priority": t.priority,
+                "urgency": "critical" if days_overdue > 7 else "high" if days_overdue > 3 else "moderate"
+            })
+
+        return {
+            "success": True,
+            "count": len(overdue_tasks),
+            "tasks": tasks_data,
+            "summary": f"{len(overdue_tasks)} overdue task(s) need attention"
+        }
+
+    async def execute_move_lead_stage(args):
+        """Move a lead to a different stage"""
+        lead_id = args.get("lead_id")
+        lead_name = args.get("lead_name", "")
+        new_stage = args.get("new_stage", "")
+        notes = args.get("notes", "")
+
+        lead = None
+        if lead_id:
+            lead = db.query(Lead).filter(Lead.id == lead_id, Lead.owner_id == current_user.id).first()
+        elif lead_name:
+            lead = db.query(Lead).filter(
+                Lead.name.ilike(f"%{lead_name}%"),
+                Lead.owner_id == current_user.id
+            ).first()
+
+        if not lead:
+            return {"success": False, "error": "Lead not found"}
+
+        old_stage = str(lead.stage) if lead.stage else "Unknown"
+
+        # Map stage string to enum if needed
+        stage_map = {
+            "NEW": LeadStage.NEW,
+            "CONTACTED": LeadStage.CONTACTED,
+            "QUALIFIED": LeadStage.QUALIFIED,
+            "NURTURING": LeadStage.NURTURING,
+            "CONVERTED": LeadStage.CONVERTED,
+            "LOST": LeadStage.LOST
+        }
+
+        if new_stage.upper() in stage_map:
+            lead.stage = stage_map[new_stage.upper()]
+        else:
+            return {"success": False, "error": f"Invalid stage: {new_stage}"}
+
+        if notes:
+            lead.notes = (lead.notes or "") + f"\n\nStage change ({old_stage} -> {new_stage}): {notes}"
+
+        db.commit()
+
+        return {
+            "success": True,
+            "lead_id": lead.id,
+            "lead_name": lead.name,
+            "old_stage": old_stage,
+            "new_stage": new_stage,
+            "message": f"Moved {lead.name} from {old_stage} to {new_stage}"
+        }
+
+    async def execute_move_loan_stage(args):
+        """Move a loan to a different stage"""
+        loan_id = args.get("loan_id")
+        borrower_name = args.get("borrower_name", "")
+        new_stage = args.get("new_stage", "")
+        notes = args.get("notes", "")
+
+        loan = None
+        if loan_id:
+            loan = db.query(Loan).filter(Loan.id == loan_id, Loan.loan_officer_id == current_user.id).first()
+        elif borrower_name:
+            loan = db.query(Loan).filter(
+                Loan.borrower_name.ilike(f"%{borrower_name}%"),
+                Loan.loan_officer_id == current_user.id
+            ).first()
+
+        if not loan:
+            return {"success": False, "error": "Loan not found"}
+
+        old_stage = str(loan.stage).replace("LoanStage.", "") if loan.stage else "Unknown"
+
+        # Map stage string to enum
+        stage_map = {
+            "APPLICATION": LoanStage.APPLICATION,
+            "PROCESSING": LoanStage.PROCESSING,
+            "UNDERWRITING": LoanStage.UNDERWRITING,
+            "APPROVED": LoanStage.APPROVED,
+            "CLOSING": LoanStage.CLOSING,
+            "FUNDED": LoanStage.FUNDED,
+            "DEAD": LoanStage.DEAD
+        }
+
+        if new_stage.upper() in stage_map:
+            loan.stage = stage_map[new_stage.upper()]
+        else:
+            return {"success": False, "error": f"Invalid stage: {new_stage}"}
+
+        if notes:
+            loan.notes = (loan.notes or "") + f"\n\nStage change ({old_stage} -> {new_stage}): {notes}"
+
+        db.commit()
+
+        return {
+            "success": True,
+            "loan_id": loan.id,
+            "borrower_name": loan.borrower_name,
+            "old_stage": old_stage,
+            "new_stage": new_stage,
+            "message": f"Moved {loan.borrower_name}'s loan from {old_stage} to {new_stage}"
+        }
+
+    async def execute_bulk_create_tasks(args):
+        """Create multiple tasks at once"""
+        tasks_data = args.get("tasks", [])
+        related_lead_id = args.get("related_lead_id")
+        related_loan_id = args.get("related_loan_id")
+
+        if not tasks_data:
+            return {"success": False, "error": "No tasks provided"}
+
+        created_tasks = []
+        today = datetime.now()
+
+        for task_info in tasks_data:
+            title = task_info.get("title", "Task")
+            due_date_str = task_info.get("due_date", "")
+            priority = task_info.get("priority", "medium")
+
+            # Parse due date
+            due_date = today + timedelta(days=1)  # Default to tomorrow
+            if due_date_str:
+                due_lower = due_date_str.lower()
+                if "tomorrow" in due_lower:
+                    due_date = today + timedelta(days=1)
+                elif "today" in due_lower:
+                    due_date = today
+                elif "next week" in due_lower:
+                    due_date = today + timedelta(days=7)
+                elif "in 2 days" in due_lower:
+                    due_date = today + timedelta(days=2)
+                elif "in 3 days" in due_lower:
+                    due_date = today + timedelta(days=3)
+                else:
+                    try:
+                        from dateutil import parser
+                        due_date = parser.parse(due_date_str)
+                    except:
+                        pass
+
+            new_task = AITask(
+                title=title,
+                description=f"Bulk-created task: {title}",
+                due_date=due_date,
+                priority=priority.lower() if priority else "medium",
+                type=TaskType.IN_PROGRESS,
+                assigned_to_id=current_user.id,
+                lead_id=related_lead_id,
+                loan_id=related_loan_id
+            )
+            db.add(new_task)
+            created_tasks.append({
+                "title": title,
+                "due_date": due_date.strftime("%Y-%m-%d"),
+                "priority": priority
+            })
+
+        db.commit()
+
+        return {
+            "success": True,
+            "count": len(created_tasks),
+            "tasks": created_tasks,
+            "message": f"Created {len(created_tasks)} task(s)"
+        }
+
     tool_functions = {
         "get_tasks": execute_get_tasks,
         "get_pipeline": execute_get_pipeline,
@@ -13349,7 +13759,14 @@ async def orchestrator_chat_stream(
         "predict_deal_success": execute_predict_deal_success,
         "forecast_revenue": execute_forecast_revenue,
         "get_refinance_candidates": execute_get_refinance_candidates,
-        "analyze_conversion_patterns": execute_analyze_conversion_patterns
+        "analyze_conversion_patterns": execute_analyze_conversion_patterns,
+        # Task Management tools for 38 total
+        "complete_task": execute_complete_task,
+        "update_task": execute_update_task,
+        "get_overdue_tasks": execute_get_overdue_tasks,
+        "move_lead_stage": execute_move_lead_stage,
+        "move_loan_stage": execute_move_loan_stage,
+        "bulk_create_tasks": execute_bulk_create_tasks
     }
 
     # Pre-fetch real data for rich context
