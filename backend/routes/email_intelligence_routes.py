@@ -1561,6 +1561,7 @@ async def import_email_to_queue(
     db.commit()
 
     # Auto-match using full EmailIdentityResolver (only if entity IDs weren't provided)
+    identity_resolution_result = None
     has_entity_match = email_data.get("matched_loan_id") or email_data.get("matched_lead_id") or email_data.get("matched_contact_id")
     if not has_entity_match and email_data.get("from_email"):
         try:
@@ -1568,6 +1569,7 @@ async def import_email_to_queue(
 
             resolver = get_email_identity_resolver(db)
             match_result = resolver.resolve(email_data, user_id)
+            identity_resolution_result = {"attempted": True, "match_result": match_result}
 
             if match_result.get("match_method"):
                 db.execute(text("""
@@ -1595,8 +1597,12 @@ async def import_email_to_queue(
                     "email_id": email_id
                 })
                 db.commit()
+                identity_resolution_result["update_executed"] = True
         except Exception as e:
             logger.error(f"Email identity resolution failed: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            identity_resolution_result = {"attempted": True, "error": str(e)}
 
     # Run AI analysis if requested
     analysis = None
@@ -1626,7 +1632,8 @@ async def import_email_to_queue(
     return {
         "status": "imported",
         "email_id": email_id,
-        "analysis": analysis.dict() if analysis else None
+        "analysis": analysis.dict() if analysis else None,
+        "identity_resolution": identity_resolution_result
     }
 
 
