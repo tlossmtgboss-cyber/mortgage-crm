@@ -13276,28 +13276,30 @@ async def orchestrator_chat_stream(
         """Analyze patterns in successful vs failed deals"""
         period = args.get("period", "180_days")
 
-        # Get closed and funded loans (successes)
-        successful = db.query(Loan).filter(
-            Loan.loan_officer_id == current_user.id,
-            Loan.stage.in_(["FUNDED", "CLOSED", "LoanStage.FUNDED", "LoanStage.CLOSED"])
-        ).count()
+        # Use raw SQL to avoid enum issues - check for both funded/closed patterns
+        successful_result = db.execute(text("""
+            SELECT COUNT(*) FROM loans
+            WHERE loan_officer_id = :user_id
+            AND (CAST(stage AS TEXT) ILIKE '%funded%' OR CAST(stage AS TEXT) ILIKE '%closed%')
+        """), {"user_id": current_user.id}).scalar() or 0
 
         # Get dead/cancelled loans
-        failed = db.query(Loan).filter(
-            Loan.loan_officer_id == current_user.id,
-            Loan.stage.in_(["DEAD", "CANCELLED", "LoanStage.DEAD", "LoanStage.CANCELLED"])
-        ).count()
+        failed_result = db.execute(text("""
+            SELECT COUNT(*) FROM loans
+            WHERE loan_officer_id = :user_id
+            AND (CAST(stage AS TEXT) ILIKE '%dead%' OR CAST(stage AS TEXT) ILIKE '%cancel%')
+        """), {"user_id": current_user.id}).scalar() or 0
 
-        total = successful + failed
-        conversion_rate = (successful / total * 100) if total > 0 else 0
+        total = successful_result + failed_result
+        conversion_rate = (successful_result / total * 100) if total > 0 else 0
 
         return {
             "success": True,
             "period": period,
             "metrics": {
                 "total_deals": total,
-                "successful": successful,
-                "failed": failed,
+                "successful": successful_result,
+                "failed": failed_result,
                 "conversion_rate": round(conversion_rate, 1)
             },
             "winning_patterns": [
