@@ -1807,17 +1807,30 @@ const API_BASE_URL = isProduction
       const data = await response.json();
 
       if (response.ok) {
-        alert(`Sync complete! ${data.emails_synced || 0} emails processed.`);
+        alert(`Sync complete! ${data.processed_count || data.emails_synced || 0} emails processed.`);
         checkMicrosoftStatus();
       } else {
         // Show the actual error from backend
         const errorMsg = data.error || data.detail || 'Sync failed';
         if (errorMsg.includes('not connected')) {
           alert('Microsoft 365 is not connected. Please connect your account first.');
-          checkMicrosoftStatus(); // Refresh status to update UI
-        } else if (errorMsg.includes('token') || errorMsg.includes('expired')) {
-          alert('Your Microsoft session has expired. Please reconnect your account.');
           checkMicrosoftStatus();
+        } else if (errorMsg === 'needs_reauth' || (response.status === 401 && errorMsg.includes('reauth'))) {
+          // Token refresh failed - automatically trigger reconnection
+          const confirmReconnect = window.confirm(
+            'Your Microsoft session has expired. Would you like to reconnect now?'
+          );
+          if (confirmReconnect) {
+            connectMicrosoft();
+          }
+        } else if (errorMsg.includes('token') || errorMsg.includes('expired')) {
+          // Try to reconnect automatically
+          const confirmReconnect = window.confirm(
+            'Your Microsoft session has expired. Would you like to reconnect now?'
+          );
+          if (confirmReconnect) {
+            connectMicrosoft();
+          }
         } else {
           alert(`Sync failed: ${errorMsg}`);
         }
@@ -1850,9 +1863,22 @@ const API_BASE_URL = isProduction
         if (errorMsg.includes('not connected')) {
           alert('Microsoft 365 is not connected. Please connect your account first.');
           checkMicrosoftStatus();
+        } else if (errorMsg === 'needs_reauth' || (response.status === 401 && errorMsg.includes('reauth'))) {
+          // Token refresh failed - automatically trigger reconnection
+          const confirmReconnect = window.confirm(
+            'Your Microsoft session has expired. Would you like to reconnect now?'
+          );
+          if (confirmReconnect) {
+            connectMicrosoft();
+          }
         } else if (errorMsg.includes('token') || errorMsg.includes('expired')) {
-          alert('Your Microsoft session has expired. Please reconnect your account.');
-          checkMicrosoftStatus();
+          // Try to reconnect automatically
+          const confirmReconnect = window.confirm(
+            'Your Microsoft session has expired. Would you like to reconnect now?'
+          );
+          if (confirmReconnect) {
+            connectMicrosoft();
+          }
         } else {
           alert(`Calendar sync failed: ${errorMsg}`);
         }

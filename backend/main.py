@@ -19943,8 +19943,12 @@ def decrypt_token(encrypted_token: str) -> str:
     f = Fernet(get_encryption_key())
     return f.decrypt(encrypted_token.encode()).decode()
 
-async def refresh_microsoft_token(oauth_record: MicrosoftOAuthToken, db: Session) -> bool:
-    """Refresh an expired Microsoft access token"""
+async def refresh_microsoft_token(oauth_record: MicrosoftOAuthToken, db: Session) -> dict:
+    """Refresh an expired Microsoft access token.
+
+    Returns:
+        dict with 'success' (bool) and optionally 'error' (str) and 'needs_reauth' (bool)
+    """
     try:
         refresh_token = decrypt_token(oauth_record.refresh_token)
 
@@ -19957,7 +19961,7 @@ async def refresh_microsoft_token(oauth_record: MicrosoftOAuthToken, db: Session
 
         if not client_id or not client_secret:
             logger.error("Microsoft OAuth credentials not configured")
-            return False
+            return {"success": False, "error": "Microsoft OAuth credentials not configured"}
 
         data = {
             "client_id": client_id,
@@ -19980,14 +19984,26 @@ async def refresh_microsoft_token(oauth_record: MicrosoftOAuthToken, db: Session
 
             db.commit()
             logger.info(f"Refreshed Microsoft token for user {oauth_record.user_id}")
-            return True
+            return {"success": True}
         else:
-            logger.error(f"Failed to refresh Microsoft token: {response.text}")
-            return False
+            error_data = response.json() if response.headers.get('content-type', '').startswith('application/json') else {}
+            error_code = error_data.get("error", "")
+            error_desc = error_data.get("error_description", response.text)
+
+            # Check if refresh token is invalid/expired (requires re-authentication)
+            needs_reauth = error_code in ["invalid_grant", "interaction_required", "consent_required"]
+
+            logger.error(f"Failed to refresh Microsoft token: {error_code} - {error_desc}")
+            return {
+                "success": False,
+                "error": error_desc,
+                "needs_reauth": needs_reauth,
+                "error_code": error_code
+            }
 
     except Exception as e:
         logger.error(f"Error refreshing Microsoft token: {e}")
-        return False
+        return {"success": False, "error": str(e)}
 
 async def fetch_microsoft_emails(oauth_record: MicrosoftOAuthToken, db: Session, limit: int = 50):
     """Fetch emails from Microsoft Graph API"""
@@ -20001,8 +20017,12 @@ async def fetch_microsoft_emails(oauth_record: MicrosoftOAuthToken, db: Session,
 
             if token_expiry < datetime.now(timezone.utc) + timedelta(minutes=5):
                 logger.info("Token expiring soon, refreshing...")
-                if not await refresh_microsoft_token(oauth_record, db):
-                    return {"error": "Failed to refresh token"}
+                refresh_result = await refresh_microsoft_token(oauth_record, db)
+                if not refresh_result.get("success"):
+                    return {
+                        "error": refresh_result.get("error", "Failed to refresh token"),
+                        "needs_reauth": refresh_result.get("needs_reauth", False)
+                    }
 
         access_token = decrypt_token(oauth_record.access_token)
 
@@ -27733,6 +27753,9 @@ async def sync_microsoft_emails_now(
             raise HTTPException(status_code=504, detail="Email fetch timed out - please try again")
 
         if "error" in result:
+            # If token needs reauth, return specific status code so frontend can handle
+            if result.get("needs_reauth"):
+                raise HTTPException(status_code=401, detail="needs_reauth")
             raise HTTPException(status_code=500, detail=result["error"])
 
         # Process each email through DRE with individual error handling
@@ -28240,7 +28263,10 @@ async def sync_microsoft_calendar(
                 token_expiry = token_expiry.replace(tzinfo=timezone.utc)
 
             if token_expiry < datetime.now(timezone.utc) + timedelta(minutes=5):
-                if not await refresh_microsoft_token(oauth_record, db):
+                refresh_result = await refresh_microsoft_token(oauth_record, db)
+                if not refresh_result.get("success"):
+                    if refresh_result.get("needs_reauth"):
+                        raise HTTPException(status_code=401, detail="needs_reauth")
                     raise HTTPException(status_code=401, detail="Failed to refresh token")
                 access_token = decrypt_token(oauth_record.access_token)
 
