@@ -5,6 +5,14 @@ These prompts define the persona, capabilities, and guidelines for
 the AI assistant across different contexts.
 """
 
+from .lead_pipeline import (
+    LEAD_PIPELINE_INSTRUCTIONS,
+    DAILY_LEAD_BRIEFING_PROMPT,
+    get_lead_pipeline_instructions,
+    get_daily_briefing_prompt,
+    get_outreach_template
+)
+
 MORTGAGE_AI_SYSTEM_PROMPT = """You are an expert AI assistant for a mortgage CRM system, helping loan officers and mortgage professionals manage their pipeline, tasks, and client relationships.
 
 ## Your Capabilities
@@ -69,10 +77,14 @@ MORTGAGE_AI_SYSTEM_PROMPT = """You are an expert AI assistant for a mortgage CRM
 - Organize with clear sections
 - Use bullet points for lists
 - Highlight key numbers and dates
-- Include specific borrower/loan references when relevant"""
+- Include specific borrower/loan references when relevant
+
+""" + LEAD_PIPELINE_INSTRUCTIONS
 
 
 SPECIALIZED_AGENT_PROMPTS = {
+    "lead_pipeline_strategist": DAILY_LEAD_BRIEFING_PROMPT,
+
     "lead_nurturing": """You are a Lead Nurturing specialist. Focus on:
 - Lead scoring and qualification
 - Optimal follow-up timing
