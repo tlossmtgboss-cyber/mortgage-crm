@@ -669,7 +669,45 @@ function Tasks() {
     try {
       setLoading(true);
 
-      // Fetch real tasks from unified-tasks endpoint
+      // Fetch workflow tasks from all leads/loans
+      const token = localStorage.getItem('token');
+      const workflowResponse = await fetch('/api/v1/workflow-config/all-workflow-tasks?days_ahead=14', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      let workflowTasks = [];
+      if (workflowResponse.ok) {
+        const workflowData = await workflowResponse.json();
+        workflowTasks = (workflowData.tasks || []).map(task => ({
+          id: task.id,
+          title: task.title,
+          borrower: task.client_name || 'Client',
+          stage: task.stage,
+          urgency: task.urgency || 'medium',
+          ai_action: null,
+          owner: 'Loan Officer',
+          date_created: task.due_date,
+          due_date: task.due_date,
+          preferred_contact_method: task.communication_methods?.includes('phone') ? 'Phone'
+            : task.communication_methods?.includes('text') ? 'Text' : 'Email',
+          ai_message: `${task.description}\n\nWorkflow: ${task.workflow_name}\nDays until due: ${task.days_until_due}`,
+          description: task.description,
+          source: 'Workflow',
+          entity_type: task.client_type,
+          entity_id: task.client_id,
+          lead_id: task.client_type === 'lead' ? task.client_id : null,
+          loan_id: task.client_type === 'loan' ? task.client_id : null,
+          workflow_name: task.workflow_name,
+          workflow_color: task.workflow_color,
+          communication_methods: task.communication_methods || [],
+          days_until_due: task.days_until_due,
+          communication_history: []
+        }));
+      }
+
+      // Also fetch any manual tasks from unified-tasks endpoint
       const response = await tasksAPI.getUnified();
       const unifiedTasks = response?.tasks || [];
 
@@ -699,44 +737,27 @@ function Tasks() {
         communication_history: []
       }));
 
-      // Filter tasks by type:
-      // - ONLY Workflow and Manual tasks go to the Tasks page
-      // - Reconciliation items (AI Engine from email parsing) go ONLY to Reconciliation page
-      // - NO emails should appear on the Tasks page at all
-      // - Call-related tasks go to the Power Dialer page, NOT here
-      const callKeywords = ['call', 'phone', 'contact', 'voicemail', 'dial', 'reach out'];
-      const isCallTask = (title) => {
-        const lowerTitle = (title || '').toLowerCase();
-        return callKeywords.some(keyword => lowerTitle.includes(keyword));
-      };
-
-      const workflowAndManualTasks = transformedTasks.filter(t =>
-        (t.source === 'Workflow' || t.source === 'Manual') &&
-        t.source !== 'AI Engine' &&
+      // Filter manual tasks only (workflow tasks come from the new endpoint)
+      const manualTasks = transformedTasks.filter(t =>
+        t.source === 'Manual' &&
         !t.email_from &&
-        !t.email_subject &&
-        !isCallTask(t.title)  // Exclude call-related tasks - they go to Power Dialer
+        !t.email_subject
       );
 
-      // Deduplicate tasks by title + borrower (keep the most recent one)
-      const seen = new Map();
-      const deduplicatedTasks = workflowAndManualTasks.filter(task => {
-        const key = `${task.title}|${task.borrower}|${task.stage}`;
-        if (seen.has(key)) {
-          // Keep the one with the higher ID (more recent)
-          const existing = seen.get(key);
-          if (task.id > existing.id) {
-            seen.set(key, task);
-            return false; // We'll add the newer one, skip this iteration
-          }
-          return false; // Skip duplicate
+      // Combine workflow tasks with manual tasks
+      const allTasks = [...workflowTasks, ...manualTasks];
+
+      // Deduplicate tasks by id
+      const seen = new Set();
+      const deduplicatedTasks = allTasks.filter(task => {
+        if (seen.has(task.id)) {
+          return false;
         }
-        seen.set(key, task);
+        seen.add(task.id);
         return true;
       });
 
-      // Tasks page shows ONLY workflow and manual tasks (NO reconciliation items, NO emails)
-      // If no real tasks exist, show empty list - NOT mock data with emails
+      // Tasks page shows workflow tasks from all leads/loans + manual tasks
       setPrioritizedTasks(deduplicatedTasks);
       setLoanIssues(mockLoanIssues());
       // AI tasks are EMPTY - reconciliation items handled on Reconciliation page only
