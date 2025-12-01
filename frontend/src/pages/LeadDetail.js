@@ -93,6 +93,23 @@ function LeadDetail() {
   const [callArchive, setCallArchive] = useState([]);
   const [archiveLoading, setArchiveLoading] = useState(false);
 
+  // Status dropdown state
+  const [showStatusDropdown, setShowStatusDropdown] = useState(false);
+  const [statusSaving, setStatusSaving] = useState(false);
+
+  // Status options for leads
+  const statusOptions = [
+    'New',
+    'Attempted Contact',
+    'Prospect',
+    'Application',
+    'Pre-Qualified',
+    'Pre-Approved',
+    'Long-Term Nurture',
+    'Withdrawn',
+    'Does Not Qualify',
+  ];
+
   // Circle of Influence state
   const [circleContacts, setCircleContacts] = useState([]);
   const [showCircleModal, setShowCircleModal] = useState(false);
@@ -280,6 +297,50 @@ function LeadDetail() {
     if (nextLead && nextLead.id) {
       navigate(`/leads/${nextLead.id}`);
     }
+  };
+
+  // Handle status change with auto-save
+  const handleStatusChange = async (newStatus) => {
+    setStatusSaving(true);
+    setShowStatusDropdown(false);
+
+    try {
+      // Update local state immediately
+      setFormData(prev => ({ ...prev, stage: newStatus }));
+      setLead(prev => ({ ...prev, stage: newStatus }));
+
+      // Save to backend
+      await leadsAPI.update(id, { stage: newStatus });
+
+      // Clear leads cache so list view reflects the change
+      localStorage.removeItem('leads_data');
+      localStorage.removeItem('leads_data_time');
+
+      console.log(`Status updated to: ${newStatus}`);
+    } catch (error) {
+      console.error('Error updating status:', error);
+      // Revert on error
+      setFormData(prev => ({ ...prev, stage: lead?.stage }));
+      setLead(prev => ({ ...prev, stage: lead?.stage }));
+    } finally {
+      setStatusSaving(false);
+    }
+  };
+
+  // Get color for status badge
+  const getStatusColor = (status) => {
+    const colors = {
+      'New': '#2196F3',
+      'Attempted Contact': '#FF9800',
+      'Prospect': '#9C27B0',
+      'Application': '#00BCD4',
+      'Pre-Qualified': '#4CAF50',
+      'Pre-Approved': '#8BC34A',
+      'Long-Term Nurture': '#607D8B',
+      'Withdrawn': '#F44336',
+      'Does Not Qualify': '#795548',
+    };
+    return colors[status] || '#999';
   };
 
   const markLeadAsViewed = () => {
@@ -1154,6 +1215,87 @@ function LeadDetail() {
           <button className="btn-next" onClick={handleViewNextLead} disabled={leadsList.length === 0}>
             View Next Lead →
           </button>
+
+          {/* Status Dropdown */}
+          <div className="status-dropdown-container">
+            <button
+              className="btn-status"
+              onClick={() => setShowStatusDropdown(!showStatusDropdown)}
+              disabled={statusSaving}
+              style={{
+                backgroundColor: getStatusColor(formData.stage || lead?.stage || 'New'),
+                color: 'white',
+                border: 'none',
+                padding: '10px 20px',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                fontWeight: '500',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                minWidth: '150px',
+                justifyContent: 'space-between'
+              }}
+            >
+              {statusSaving ? 'Saving...' : (formData.stage || lead?.stage || 'New')}
+              <span style={{ fontSize: '10px' }}>▼</span>
+            </button>
+
+            {showStatusDropdown && (
+              <>
+                <div
+                  className="status-dropdown-overlay"
+                  onClick={() => setShowStatusDropdown(false)}
+                  style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    zIndex: 999
+                  }}
+                />
+                <div
+                  className="status-dropdown-menu"
+                  style={{
+                    position: 'absolute',
+                    top: '100%',
+                    left: 0,
+                    backgroundColor: 'white',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+                    zIndex: 1000,
+                    minWidth: '200px',
+                    marginTop: '4px',
+                    overflow: 'hidden'
+                  }}
+                >
+                  {statusOptions.map((status) => (
+                    <button
+                      key={status}
+                      onClick={() => handleStatusChange(status)}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        padding: '12px 16px',
+                        border: 'none',
+                        background: (formData.stage || lead?.stage) === status ? '#f0f0f0' : 'white',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        fontSize: '14px',
+                        borderLeft: `4px solid ${getStatusColor(status)}`,
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.target.style.background = '#f5f5f5'}
+                      onMouseLeave={(e) => e.target.style.background = (formData.stage || lead?.stage) === status ? '#f0f0f0' : 'white'}
+                    >
+                      {status}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
         </div>
         <div className="header-actions">
           {editing ? (
