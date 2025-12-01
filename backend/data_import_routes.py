@@ -375,90 +375,91 @@ async def analyze_file(
 
 def normalize_stage_value(stage_value: str, destination: str) -> str:
     """
-    Normalize stage values to match database enum values.
+    Normalize stage values to match database enum NAMES (not values).
+    PostgreSQL enum expects names like 'NEW', 'LONG_TERM_NURTURE', not 'New', 'Long-Term Nurture'.
     Handles common variations in how stages are written in CSV files.
-    If stage is not recognized, defaults to 'New' for leads or 'Processing' for loans.
+    If stage is not recognized, defaults to 'NEW' for leads or 'PROCESSING' for loans.
     """
     if not stage_value or not isinstance(stage_value, str):
-        return 'New' if destination == 'leads' else 'Processing'
+        return 'NEW' if destination == 'leads' else 'PROCESSING'
 
     stage_lower = stage_value.strip().lower()
 
     if destination == 'leads':
-        # LeadStage enum mappings - normalize to exact enum values
+        # LeadStage enum mappings - normalize to enum NAMES (uppercase with underscores)
         lead_stage_map = {
             # New
-            'new': 'New',
-            'new lead': 'New',
-            'lead': 'New',
+            'new': 'NEW',
+            'new lead': 'NEW',
+            'lead': 'NEW',
             # Attempted Contact
-            'attempted contact': 'Attempted Contact',
-            'attempted': 'Attempted Contact',
-            'contact attempted': 'Attempted Contact',
+            'attempted contact': 'ATTEMPTED_CONTACT',
+            'attempted': 'ATTEMPTED_CONTACT',
+            'contact attempted': 'ATTEMPTED_CONTACT',
             # Prospect
-            'prospect': 'Prospect',
-            'qualified': 'Prospect',
-            'hot': 'Prospect',
+            'prospect': 'PROSPECT',
+            'qualified': 'PROSPECT',
+            'hot': 'PROSPECT',
             # Application
-            'application': 'Application',
-            'application started': 'Application',
-            'app started': 'Application',
-            'in application': 'Application',
-            'app in progress': 'Application',
+            'application': 'APPLICATION',
+            'application started': 'APPLICATION',
+            'app started': 'APPLICATION',
+            'in application': 'APPLICATION',
+            'app in progress': 'APPLICATION',
             # Pre-Qualified
-            'pre-qualified': 'Pre-Qualified',
-            'pre qualified': 'Pre-Qualified',
-            'prequalified': 'Pre-Qualified',
-            'prequal': 'Pre-Qualified',
-            'credit only': 'Pre-Qualified',  # Credit Only maps to Pre-Qualified
-            'credit': 'Pre-Qualified',
+            'pre-qualified': 'PRE_QUALIFIED',
+            'pre qualified': 'PRE_QUALIFIED',
+            'prequalified': 'PRE_QUALIFIED',
+            'prequal': 'PRE_QUALIFIED',
+            'credit only': 'PRE_QUALIFIED',  # Credit Only maps to Pre-Qualified
+            'credit': 'PRE_QUALIFIED',
             # Pre-Approved
-            'pre-approved': 'Pre-Approved',
-            'pre approved': 'Pre-Approved',
-            'preapproved': 'Pre-Approved',
-            'preapproval': 'Pre-Approved',
-            'approved': 'Pre-Approved',
+            'pre-approved': 'PRE_APPROVED',
+            'pre approved': 'PRE_APPROVED',
+            'preapproved': 'PRE_APPROVED',
+            'preapproval': 'PRE_APPROVED',
+            'approved': 'PRE_APPROVED',
             # Under Contract
-            'under contract': 'Under Contract',
-            'contract': 'Under Contract',
-            'in contract': 'Under Contract',
-            'ratified': 'Under Contract',
+            'under contract': 'UNDER_CONTRACT',
+            'contract': 'UNDER_CONTRACT',
+            'in contract': 'UNDER_CONTRACT',
+            'ratified': 'UNDER_CONTRACT',
             # Long-Term Nurture
-            'long-term nurture': 'Long-Term Nurture',
-            'long term nurture': 'Long-Term Nurture',
-            'nurture': 'Long-Term Nurture',
-            'long term': 'Long-Term Nurture',
-            'future': 'Long-Term Nurture',
-            'not ready': 'Long-Term Nurture',
+            'long-term nurture': 'LONG_TERM_NURTURE',
+            'long term nurture': 'LONG_TERM_NURTURE',
+            'nurture': 'LONG_TERM_NURTURE',
+            'long term': 'LONG_TERM_NURTURE',
+            'future': 'LONG_TERM_NURTURE',
+            'not ready': 'LONG_TERM_NURTURE',
             # Closed
-            'closed': 'Closed',
-            'funded': 'Closed',
-            'closed won': 'Closed',
-            'won': 'Closed',
+            'closed': 'CLOSED',
+            'funded': 'CLOSED',
+            'closed won': 'CLOSED',
+            'won': 'CLOSED',
             # AMR
             'amr': 'AMR',
             'annual mortgage review': 'AMR',
             'past client': 'AMR',
             # Referral Source
-            'referral source': 'Referral Source',
-            'referral': 'Referral Source',
-            'referral partner': 'Referral Source',
+            'referral source': 'REFERRAL_SOURCE',
+            'referral': 'REFERRAL_SOURCE',
+            'referral partner': 'REFERRAL_SOURCE',
             # Withdrawn
-            'withdrawn': 'Withdrawn',
-            'cancelled': 'Withdrawn',
-            'canceled': 'Withdrawn',
-            'dead': 'Withdrawn',
-            'lost': 'Withdrawn',
-            'closed lost': 'Withdrawn',
+            'withdrawn': 'WITHDRAWN',
+            'cancelled': 'WITHDRAWN',
+            'canceled': 'WITHDRAWN',
+            'dead': 'WITHDRAWN',
+            'lost': 'WITHDRAWN',
+            'closed lost': 'WITHDRAWN',
             # Does Not Qualify
-            'does not qualify': 'Does Not Qualify',
-            'dnq': 'Does Not Qualify',
-            'not qualified': 'Does Not Qualify',
-            'disqualified': 'Does Not Qualify',
-            'unqualified': 'Does Not Qualify',
+            'does not qualify': 'DOES_NOT_QUALIFY',
+            'dnq': 'DOES_NOT_QUALIFY',
+            'not qualified': 'DOES_NOT_QUALIFY',
+            'disqualified': 'DOES_NOT_QUALIFY',
+            'unqualified': 'DOES_NOT_QUALIFY',
         }
-        # Return mapped value, or default to 'New' if not found
-        return lead_stage_map.get(stage_lower, 'New')
+        # Return mapped value, or default to 'NEW' if not found
+        return lead_stage_map.get(stage_lower, 'NEW')
 
     elif destination == 'loans':
         # LoanStage enum mappings
@@ -687,7 +688,7 @@ async def execute_import(
                             values.append(datetime.utcnow())
                         if 'stage' not in columns:
                             columns.append('stage')
-                            values.append('New')  # Must match LeadStage enum value exactly
+                            values.append('NEW')  # Must match LeadStage enum NAME (not value)
                         if 'source' not in columns:
                             columns.append('source')
                             values.append('Data Import')
@@ -838,34 +839,32 @@ async def fix_lead_stage_values(
         conn = get_db_connection()
         cursor = conn.cursor()
 
-        # Map of invalid values to valid LeadStage enum values
-        # The valid enum VALUES are: "New", "Attempted Contact", "Prospect", "Application",
-        # "Pre-Qualified", "Pre-Approved", "Under Contract", "Long-Term Nurture",
-        # "Closed", "AMR", "Referral Source", "Withdrawn", "Does Not Qualify"
+        # Map of invalid values to valid LeadStage enum NAMES
+        # PostgreSQL enum expects names like: NEW, ATTEMPTED_CONTACT, PROSPECT, APPLICATION,
+        # PRE_QUALIFIED, PRE_APPROVED, UNDER_CONTRACT, LONG_TERM_NURTURE,
+        # CLOSED, AMR, REFERRAL_SOURCE, WITHDRAWN, DOES_NOT_QUALIFY
         stage_fixes = {
-            # CSV variations
-            'Credit Only': 'Pre-Qualified',
-            'credit only': 'Pre-Qualified',
-            'Pre Approved': 'Pre-Approved',
-            'Pre Qualified': 'Pre-Qualified',
-            'Long Term Nurture': 'Long-Term Nurture',
-            'Attempted': 'Attempted Contact',
-            'new': 'New',
-            'NEW': 'New',  # This can happen from bad default values
-            # Python enum NAME variants (UPPER_CASE with underscores) -> correct VALUES
-            'NEW': 'New',  # Redundant but explicit
-            'APPLICATION': 'Application',
-            'PROSPECT': 'Prospect',
-            'UNDER_CONTRACT': 'Under Contract',
-            'PRE_QUALIFIED': 'Pre-Qualified',
-            'PRE_APPROVED': 'Pre-Approved',
-            'ATTEMPTED_CONTACT': 'Attempted Contact',
-            'LONG_TERM_NURTURE': 'Long-Term Nurture',
-            'CLOSED': 'Closed',
-            'AMR': 'AMR',  # AMR is already correct but include for safety
-            'REFERRAL_SOURCE': 'Referral Source',
-            'WITHDRAWN': 'Withdrawn',
-            'DOES_NOT_QUALIFY': 'Does Not Qualify',
+            # CSV variations (human readable) -> enum NAMES
+            'Credit Only': 'PRE_QUALIFIED',
+            'credit only': 'PRE_QUALIFIED',
+            'Pre Approved': 'PRE_APPROVED',
+            'Pre Qualified': 'PRE_QUALIFIED',
+            'Long Term Nurture': 'LONG_TERM_NURTURE',
+            'Attempted': 'ATTEMPTED_CONTACT',
+            'new': 'NEW',
+            # Human readable enum VALUES (Title Case) -> enum NAMES
+            'New': 'NEW',
+            'Attempted Contact': 'ATTEMPTED_CONTACT',
+            'Prospect': 'PROSPECT',
+            'Application': 'APPLICATION',
+            'Pre-Qualified': 'PRE_QUALIFIED',
+            'Pre-Approved': 'PRE_APPROVED',
+            'Under Contract': 'UNDER_CONTRACT',
+            'Long-Term Nurture': 'LONG_TERM_NURTURE',
+            'Closed': 'CLOSED',
+            'Referral Source': 'REFERRAL_SOURCE',
+            'Withdrawn': 'WITHDRAWN',
+            'Does Not Qualify': 'DOES_NOT_QUALIFY',
         }
 
         fixed_count = 0
@@ -884,9 +883,9 @@ async def fix_lead_stage_values(
                 logger.warning(f"Could not fix '{old_value}': {e}")
                 conn.rollback()
 
-        # Also set any NULL stages to 'New'
+        # Also set any NULL stages to 'NEW' (enum name)
         try:
-            cursor.execute("UPDATE leads SET stage = 'New' WHERE stage IS NULL")
+            cursor.execute("UPDATE leads SET stage = 'NEW' WHERE stage IS NULL")
             if cursor.rowcount > 0:
                 logger.info(f"Set {cursor.rowcount} NULL stages to 'New'")
                 fixed_count += cursor.rowcount
