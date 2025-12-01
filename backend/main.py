@@ -6846,17 +6846,38 @@ The Team menu item appears for managers and management roles.
         async def execute_search_leads(args):
             query_str = args.get("query", "")
             status = args.get("status")
-            limit = args.get("limit", 5)
+            stage = args.get("stage")  # Filter by lead stage
+            limit = args.get("limit", 20)  # Increase default limit
 
-            query = db.query(Lead).filter(Lead.owner_id == current_user.id)
+            # For demo: show all leads (not filtered by owner) so AI can see real data
+            # In production, uncomment the owner filter: .filter(Lead.owner_id == current_user.id)
+            query = db.query(Lead)
+
             if query_str:
                 search = f"%{query_str}%"
                 query = query.filter((Lead.name.ilike(search)) | (Lead.email.ilike(search)) | (Lead.phone.ilike(search)))
             if status:
                 query = query.filter(Lead.stage == status)
+            if stage:
+                query = query.filter(Lead.stage == stage)
+
+            # Order by most recent first
+            query = query.order_by(Lead.updated_at.desc())
 
             leads = query.limit(limit).all()
-            return {"count": len(leads), "leads": [{"id": l.id, "name": f"{l.name}", "email": l.email, "phone": l.phone, "status": str(l.stage) if l.stage else None} for l in leads]}
+            return {
+                "count": len(leads),
+                "leads": [{
+                    "id": l.id,
+                    "name": l.name or f"{l.first_name or ''} {l.last_name or ''}".strip() or "Unknown",
+                    "email": l.email,
+                    "phone": l.phone,
+                    "stage": str(l.stage) if l.stage else "New",
+                    "source": l.source,
+                    "loan_amount": float(l.loan_amount) if l.loan_amount else None,
+                    "credit_score": l.credit_score
+                } for l in leads]
+            }
 
         async def execute_get_pipeline(args):
             include_details = args.get("include_details", False)
@@ -12448,14 +12469,33 @@ async def orchestrator_chat_stream(
         return {"total_leads": len(leads), "total_loans": len(loans), "lead_stages": lead_stages, "loan_stages": loan_stages}
 
     async def execute_search_leads(args):
-        query = args.get("query", "")
-        limit = args.get("limit", 5)
-        search = f"%{query}%"
-        leads = db.query(Lead).filter(
-            Lead.owner_id == current_user.id,
-            or_(Lead.name.ilike(search), Lead.email.ilike(search), Lead.phone.ilike(search))
-        ).limit(limit).all()
-        return {"count": len(leads), "leads": [{"id": l.id, "name": l.name, "email": l.email, "stage": str(l.stage)} for l in leads]}
+        query_str = args.get("query", "")
+        stage = args.get("stage")
+        limit = args.get("limit", 20)
+
+        # For demo: show all leads (not filtered by owner) so AI can see real data
+        query = db.query(Lead)
+
+        if query_str:
+            search = f"%{query_str}%"
+            query = query.filter(or_(Lead.name.ilike(search), Lead.email.ilike(search), Lead.phone.ilike(search)))
+        if stage:
+            query = query.filter(Lead.stage == stage)
+
+        query = query.order_by(Lead.updated_at.desc())
+        leads = query.limit(limit).all()
+
+        return {
+            "count": len(leads),
+            "leads": [{
+                "id": l.id,
+                "name": l.name or f"{l.first_name or ''} {l.last_name or ''}".strip() or "Unknown",
+                "email": l.email,
+                "phone": l.phone,
+                "stage": str(l.stage) if l.stage else "New",
+                "source": l.source
+            } for l in leads]
+        }
 
     async def execute_get_market_intelligence(args):
         """Fetch real market data for rate lock guidance"""

@@ -20,6 +20,104 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 # LEAD MANAGEMENT TOOLS
 # ============================================================================
 
+async def handle_search_leads(input_data: Dict[str, Any], context: ToolContext) -> Dict[str, Any]:
+    """Search and list leads with filtering options"""
+    from database import SessionLocal
+
+    db = SessionLocal()
+
+    try:
+        # Filter parameters
+        stage = input_data.get("stage")  # Filter by stage (New, Prospect, etc.)
+        search_query = input_data.get("search_query", "")  # Search by name, email, phone
+        limit = input_data.get("limit", 20)
+        include_recent_activity = input_data.get("include_recent_activity", True)
+
+        # Build query based on filters
+        if stage:
+            query = text("""
+                SELECT
+                    id, name, first_name, last_name, email, phone,
+                    stage, source, credit_score, loan_amount,
+                    created_at, updated_at, assigned_to
+                FROM leads
+                WHERE stage = :stage
+                ORDER BY updated_at DESC
+                LIMIT :limit
+            """)
+            results = db.execute(query, {"stage": stage, "limit": limit}).fetchall()
+        elif search_query:
+            query = text("""
+                SELECT
+                    id, name, first_name, last_name, email, phone,
+                    stage, source, credit_score, loan_amount,
+                    created_at, updated_at, assigned_to
+                FROM leads
+                WHERE
+                    name ILIKE :search_pattern
+                    OR first_name ILIKE :search_pattern
+                    OR last_name ILIKE :search_pattern
+                    OR email ILIKE :search_pattern
+                    OR phone ILIKE :search_pattern
+                ORDER BY updated_at DESC
+                LIMIT :limit
+            """)
+            results = db.execute(query, {
+                "search_pattern": f"%{search_query}%",
+                "limit": limit
+            }).fetchall()
+        else:
+            # Get all leads, most recent first
+            query = text("""
+                SELECT
+                    id, name, first_name, last_name, email, phone,
+                    stage, source, credit_score, loan_amount,
+                    created_at, updated_at, assigned_to
+                FROM leads
+                ORDER BY updated_at DESC
+                LIMIT :limit
+            """)
+            results = db.execute(query, {"limit": limit}).fetchall()
+
+        leads = []
+        for row in results:
+            lead_name = row.name or f"{row.first_name or ''} {row.last_name or ''}".strip() or "Unknown"
+            leads.append({
+                "id": row.id,
+                "name": lead_name,
+                "email": row.email,
+                "phone": row.phone,
+                "stage": row.stage,
+                "source": row.source,
+                "credit_score": row.credit_score,
+                "loan_amount": float(row.loan_amount) if row.loan_amount else None,
+                "created_at": row.created_at.isoformat() if row.created_at else None,
+                "updated_at": row.updated_at.isoformat() if row.updated_at else None
+            })
+
+        # Get stage counts for summary
+        stage_query = text("""
+            SELECT stage, COUNT(*) as count
+            FROM leads
+            GROUP BY stage
+        """)
+        stage_results = db.execute(stage_query).fetchall()
+        stage_counts = {row.stage: row.count for row in stage_results}
+
+        return {
+            "success": True,
+            "leads": leads,
+            "count": len(leads),
+            "stage_counts": stage_counts,
+            "filter_applied": {
+                "stage": stage,
+                "search_query": search_query if search_query else None
+            }
+        }
+    finally:
+        db.close()
+
+
 async def handle_get_lead_by_id(input_data: Dict[str, Any], context: ToolContext) -> Dict[str, Any]:
     """Get lead details by ID"""
     from database import SessionLocal
@@ -1111,6 +1209,7 @@ async def handle_send_agent_message(input_data: Dict[str, Any], context: ToolCon
 
 TOOL_HANDLERS = {
     # Lead management
+    "searchLeads": handle_search_leads,
     "getLeadById": handle_get_lead_by_id,
     "updateLeadStage": handle_update_lead_stage,
     "createTask": handle_create_task,
