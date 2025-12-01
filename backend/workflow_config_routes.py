@@ -1496,14 +1496,16 @@ async def get_lead_workflow_tasks(
     Get workflow tasks for a specific lead based on their current stage.
     Returns all day configs with their completion status.
     """
+    if _models is None:
+        raise HTTPException(status_code=500, detail="Models not initialized")
+
+    WorkflowConfiguration = _models['WorkflowConfiguration']
+    # Import Lead model from models module
+    from models import Lead
+
     try:
-        # Get lead info
-        lead_result = db.execute(text("""
-            SELECT id, name, email, stage, created_at, stage_changed_at
-            FROM leads
-            WHERE id = :lead_id
-        """), {"lead_id": lead_id})
-        lead = lead_result.fetchone()
+        # Get lead info using ORM
+        lead = db.query(Lead).filter(Lead.id == lead_id).first()
 
         if not lead:
             raise HTTPException(status_code=404, detail="Lead not found")
@@ -1530,13 +1532,11 @@ async def get_lead_workflow_tasks(
 
         workflow_key = stage_to_workflow.get(lead_stage, "prospect")
 
-        # Get workflow config
-        workflow_result = db.execute(text("""
-            SELECT id, workflow_key, workflow_name, color, description
-            FROM workflow_configs
-            WHERE workflow_key = :workflow_key AND is_active = true
-        """), {"workflow_key": workflow_key})
-        workflow = workflow_result.fetchone()
+        # Get workflow config using ORM
+        workflow = db.query(WorkflowConfiguration).filter(
+            WorkflowConfiguration.workflow_key == workflow_key,
+            WorkflowConfiguration.is_active == True
+        ).first()
 
         if not workflow:
             return {
@@ -1550,23 +1550,18 @@ async def get_lead_workflow_tasks(
 
         # Calculate day in workflow
         # Use stage_changed_at if available, otherwise created_at
-        stage_date = lead.stage_changed_at or lead.created_at
+        stage_date = getattr(lead, 'stage_changed_at', None) or lead.created_at
         if stage_date:
-            days_in_stage = (datetime.utcnow() - stage_date.replace(tzinfo=None)).days + 1
+            from datetime import datetime
+            if hasattr(stage_date, 'replace'):
+                days_in_stage = (datetime.utcnow() - stage_date.replace(tzinfo=None)).days + 1
+            else:
+                days_in_stage = 1
         else:
             days_in_stage = 1
 
-        # Get all day configs for this workflow
-        days_result = db.execute(text("""
-            SELECT
-                id, day_label, day_value, day_order,
-                phone_enabled, text_enabled, email_enabled,
-                task_description, is_active
-            FROM workflow_day_configs
-            WHERE workflow_id = :workflow_id AND is_active = true
-            ORDER BY day_order, day_value
-        """), {"workflow_id": workflow.id})
-        days = days_result.fetchall()
+        # Get all day configs for this workflow via relationship
+        days = sorted([d for d in (workflow.days or []) if d.is_active], key=lambda x: (x.day_order or 0, x.day_value))
 
         # Build tasks list
         tasks = []
@@ -1605,7 +1600,7 @@ async def get_lead_workflow_tasks(
             "lead_name": lead.name,
             "lead_stage": lead_stage,
             "days_in_stage": days_in_stage,
-            "stage_changed_at": lead.stage_changed_at.isoformat() if lead.stage_changed_at else None,
+            "stage_changed_at": getattr(lead, 'stage_changed_at', None).isoformat() if getattr(lead, 'stage_changed_at', None) else None,
             "workflow": {
                 "id": workflow.id,
                 "key": workflow.workflow_key,
