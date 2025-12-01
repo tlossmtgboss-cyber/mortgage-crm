@@ -176,6 +176,9 @@ function DataUpload() {
 
   const targetFields = {
     leads: [
+      // Identifiers
+      { value: 'loan_number', label: 'Loan Number / File Name', group: 'Identifiers' },
+      { value: 'organization_code', label: 'Organization Code', group: 'Identifiers' },
       // Contact Info
       { value: 'name', label: 'Full Name', group: 'Contact Info' },
       { value: 'first_name', label: 'First Name', group: 'Contact Info' },
@@ -212,6 +215,9 @@ function DataUpload() {
       { value: 'source', label: 'Lead Source', group: 'Team & Source' },
       { value: 'loan_officer', label: 'Loan Officer', group: 'Team & Source' },
       { value: 'processor', label: 'Processor', group: 'Team & Source' },
+      // Dates
+      { value: 'created_at', label: 'Date Created', group: 'Dates' },
+      { value: 'status_date', label: 'Status Date', group: 'Dates' },
       // Other
       { value: 'notes', label: 'Notes', group: 'Other' },
       { value: 'stage', label: 'Stage', group: 'Other' }
