@@ -548,6 +548,8 @@ class Lead(Base):
     )
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False, index=True)
+    first_name = Column(String)  # For imports with separate first/last name
+    last_name = Column(String)   # For imports with separate first/last name
     email = Column(String, index=True)
     phone = Column(String)
     co_applicant_name = Column(String)
@@ -556,6 +558,7 @@ class Lead(Base):
     preferred_communication = Column(String)  # email, phone, text, voicemail
     stage = Column(SQLEnum(LeadStage), default=LeadStage.NEW)
     source = Column(String)
+    organization_code = Column(String)  # Branch/organization identifier
     referral_partner_id = Column(Integer, ForeignKey("referral_partners.id"))
     ai_score = Column(Integer, default=50)
     sentiment = Column(String, default="neutral")
@@ -596,7 +599,12 @@ class Lead(Base):
     underwriter = Column(String)
     appraisal_value = Column(Float)
     ltv = Column(Float)
+    cltv = Column(Float)  # Combined LTV
     dti = Column(Float)
+    dti_front = Column(Float)  # Front-end DTI ratio
+    dti_back = Column(Float)   # Back-end DTI ratio
+    program = Column(String)   # Loan program (FHA, VA, Conv, etc.)
+    status_date = Column(DateTime)  # Date of last status change
     # Milestone dates for task triggering
     application_started_date = Column(DateTime)
     application_completed_date = Column(DateTime)
@@ -49474,6 +49482,60 @@ async def add_production_indexes_migration(
             "message": f"Migration failed: {str(e)}",
             "error": str(e),
             "traceback": traceback.format_exc()
+        }
+
+
+@app.post("/api/v1/migrations/add-leads-import-columns", response_model=None)
+async def add_leads_import_columns_migration(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Add columns to leads table for LOS data imports.
+
+    Adds: first_name, last_name, organization_code, cltv, dti_front, dti_back, program, status_date
+    """
+    try:
+        columns_added = []
+        columns_skipped = []
+
+        column_definitions = [
+            ("first_name", "VARCHAR"),
+            ("last_name", "VARCHAR"),
+            ("organization_code", "VARCHAR"),
+            ("cltv", "FLOAT"),
+            ("dti_front", "FLOAT"),
+            ("dti_back", "FLOAT"),
+            ("program", "VARCHAR"),
+            ("status_date", "TIMESTAMP"),
+        ]
+
+        for col_name, col_type in column_definitions:
+            try:
+                db.execute(text(f"ALTER TABLE leads ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+                db.commit()
+                columns_added.append(col_name)
+            except Exception as e:
+                if "already exists" in str(e).lower() or "duplicate column" in str(e).lower():
+                    columns_skipped.append(col_name)
+                else:
+                    logger.warning(f"Could not add column {col_name}: {e}")
+                    columns_skipped.append(col_name)
+                db.rollback()
+
+        return {
+            "success": True,
+            "message": "Leads import columns migration completed",
+            "columns_added": columns_added,
+            "columns_skipped": columns_skipped
+        }
+
+    except Exception as e:
+        logger.error(f"Leads import columns migration failed: {e}")
+        db.rollback()
+        return {
+            "success": False,
+            "error": str(e)
         }
 
 

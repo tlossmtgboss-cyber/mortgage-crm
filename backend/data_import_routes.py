@@ -451,19 +451,30 @@ async def execute_import(
                         columns = list(row_dict.keys())
                         values = list(row_dict.values())
 
+                        # Generate 'name' from first_name/last_name if not provided
+                        if 'name' not in columns:
+                            first_name = row_dict.get('first_name', '')
+                            last_name = row_dict.get('last_name', '')
+                            if first_name or last_name:
+                                full_name = f"{first_name} {last_name}".strip()
+                                columns.append('name')
+                                values.append(full_name if full_name else 'Unknown')
+                            else:
+                                # Use email or loan_number as fallback for name
+                                fallback_name = row_dict.get('email') or row_dict.get('loan_number') or 'Unknown Lead'
+                                columns.append('name')
+                                values.append(fallback_name)
+
                         # Add required fields if missing
                         if 'created_at' not in columns:
                             columns.append('created_at')
                             values.append(datetime.utcnow())
-                        if 'user_email' not in columns:
-                            columns.append('user_email')
-                            values.append(current_user.get('email', current_user.get('sub', 'demo@example.com')))
                         if 'stage' not in columns:
                             columns.append('stage')
                             values.append('new')
                         if 'source' not in columns:
                             columns.append('source')
-                            values.append('CSV Import')
+                            values.append('Data Import')
 
                         # Create placeholders
                         placeholders = ', '.join(['%s'] * len(columns))
@@ -480,13 +491,28 @@ async def execute_import(
                         columns = list(row_dict.keys())
                         values = list(row_dict.values())
 
+                        # Generate borrower_name from first_name/last_name if not provided
+                        if 'borrower_name' not in columns:
+                            first_name = row_dict.get('first_name', '')
+                            last_name = row_dict.get('last_name', '')
+                            if first_name or last_name:
+                                full_name = f"{first_name} {last_name}".strip()
+                                columns.append('borrower_name')
+                                values.append(full_name if full_name else 'Unknown')
+                            else:
+                                columns.append('borrower_name')
+                                values.append('Unknown Borrower')
+
+                        # Generate loan_number if not provided
+                        if 'loan_number' not in columns:
+                            import uuid
+                            columns.append('loan_number')
+                            values.append(f"IMP-{uuid.uuid4().hex[:8].upper()}")
+
                         # Add required fields
                         if 'created_at' not in columns:
                             columns.append('created_at')
                             values.append(datetime.utcnow())
-                        if 'user_email' not in columns:
-                            columns.append('user_email')
-                            values.append(current_user.get('email', current_user.get('sub', 'demo@example.com')))
                         if 'stage' not in columns:
                             columns.append('stage')
                             values.append('processing')
@@ -508,9 +534,6 @@ async def execute_import(
                         if 'created_at' not in columns:
                             columns.append('created_at')
                             values.append(datetime.utcnow())
-                        if 'user_email' not in columns:
-                            columns.append('user_email')
-                            values.append(current_user.get('email', current_user.get('sub', 'demo@example.com')))
 
                         placeholders = ', '.join(['%s'] * len(columns))
                         columns_str = ', '.join(columns)
