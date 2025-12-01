@@ -459,6 +459,29 @@ def transform_columns_for_destination(row_dict: dict, destination: str) -> dict:
     return result
 
 
+def get_table_columns(conn, table_name: str) -> set:
+    """Get the set of valid column names for a table"""
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_name = %s
+        """, (table_name,))
+        columns = {row[0] for row in cursor.fetchall()}
+        return columns
+    except Exception as e:
+        logger.warning(f"Error getting columns for {table_name}: {e}")
+        return set()
+    finally:
+        cursor.close()
+
+
+def filter_valid_columns(row_dict: dict, valid_columns: set) -> dict:
+    """Filter row_dict to only include columns that exist in the table"""
+    return {k: v for k, v in row_dict.items() if k in valid_columns}
+
+
 def ensure_import_columns_exist(conn, destination: str):
     """Ensure all import columns exist in the target table"""
     cursor = conn.cursor()
@@ -527,10 +550,16 @@ async def execute_import(
         # Ensure all import columns exist in target table
         ensure_import_columns_exist(conn, destination)
 
+        # Get valid columns for the target table to filter out unmapped columns
+        table_name = destination if destination != 'portfolio' else 'portfolio_loans'
+        valid_columns = get_table_columns(conn, table_name)
+        logger.info(f"Valid columns for {table_name}: {len(valid_columns)} columns found")
+
         cursor = conn.cursor()
 
         imported = 0
         failed = 0
+        skipped_columns = set()  # Track columns that were skipped
         errors = []
 
         try:
@@ -542,6 +571,12 @@ async def execute_import(
 
                     # Transform column names based on destination table
                     row_dict = transform_columns_for_destination(row_dict, destination)
+
+                    # Filter to only valid columns that exist in the target table
+                    invalid_cols = set(row_dict.keys()) - valid_columns
+                    if invalid_cols:
+                        skipped_columns.update(invalid_cols)
+                    row_dict = filter_valid_columns(row_dict, valid_columns)
 
                     if destination == 'leads':
                         # Import as lead
@@ -644,13 +679,18 @@ async def execute_import(
             cursor.close()
             conn.close()
 
+        # Log skipped columns if any
+        if skipped_columns:
+            logger.info(f"Skipped columns not in {table_name} table: {skipped_columns}")
+
         return {
             "success": True,
             "total": len(df_mapped),
             "imported": imported,
             "failed": failed,
             "errors": errors,
-            "destination": destination
+            "destination": destination,
+            "skipped_columns": list(skipped_columns) if skipped_columns else []
         }
 
     except json.JSONDecodeError as e:
