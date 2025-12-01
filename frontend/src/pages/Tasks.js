@@ -665,6 +665,17 @@ function Tasks() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedTaskId]);
 
+  // Force layout recalculation when content loads to fix scroll issues
+  useEffect(() => {
+    if (!loading) {
+      // Small delay to ensure DOM has updated
+      const timer = setTimeout(() => {
+        window.dispatchEvent(new Event('resize'));
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [loading, activeTab, selectedTask]);
+
   const loadTasks = async () => {
     try {
       setLoading(true);

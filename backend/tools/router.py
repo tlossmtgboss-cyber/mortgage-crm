@@ -456,3 +456,92 @@ async def handle_lead_status_insights(args: Dict[str, Any], request: Request) ->
             "success": False,
             "error": str(e)
         }
+
+
+@register_tool_handler("get_leads_by_status")
+async def handle_get_leads_by_status(args: Dict[str, Any], request: Request) -> Dict[str, Any]:
+    """
+    Get detailed lead lists filtered by status for actionable follow-up.
+
+    Returns leads with:
+    - Contact info (name, email, phone)
+    - Days in current status
+    - Loan details (amount, property type, purpose)
+    - Last contact date and notes
+    """
+    try:
+        from main import SessionLocal
+        from models import Lead, LeadStatus
+        from datetime import datetime
+
+        db = SessionLocal()
+        try:
+            status_filter = args.get("status")
+            limit = args.get("limit", 25)
+            sort_by = args.get("sort_by", "days_in_status_desc")
+
+            query = db.query(Lead)
+
+            # Apply status filter if provided
+            if status_filter:
+                try:
+                    status_enum = LeadStatus(status_filter)
+                    query = query.filter(Lead.status == status_enum)
+                except ValueError:
+                    # Try matching by name
+                    for s in LeadStatus:
+                        if s.name.lower() == status_filter.lower() or s.value.lower() == status_filter.lower():
+                            query = query.filter(Lead.status == s)
+                            break
+
+            leads = query.limit(limit).all()
+
+            # Group by status and calculate days_in_status
+            now = datetime.utcnow()
+            result = {}
+
+            for lead in leads:
+                status_key = lead.status.value if hasattr(lead.status, 'value') else str(lead.status)
+                if status_key not in result:
+                    result[status_key] = []
+
+                # Calculate days in current status
+                last_status_change = getattr(lead, 'last_status_change_at', None) or lead.created_at
+                days_in_status = (now - last_status_change).days if last_status_change else 0
+
+                result[status_key].append({
+                    "id": lead.id,
+                    "name": f"{lead.first_name} {lead.last_name}".strip(),
+                    "email": lead.email,
+                    "phone": lead.phone,
+                    "source": lead.source,
+                    "status": status_key,
+                    "days_in_current_status": days_in_status,
+                    "loan_amount": float(lead.loan_amount) if lead.loan_amount else None,
+                    "property_type": lead.property_type,
+                    "loan_purpose": lead.loan_purpose,
+                    "created_at": lead.created_at.isoformat() if lead.created_at else None,
+                    "last_contact_at": lead.last_contact_at.isoformat() if hasattr(lead, 'last_contact_at') and lead.last_contact_at else None,
+                    "notes": lead.notes if hasattr(lead, 'notes') else None
+                })
+
+            # Sort leads within each status by days_in_status descending
+            for status_key in result:
+                result[status_key].sort(key=lambda x: x["days_in_current_status"], reverse=True)
+
+            return {
+                "success": True,
+                "data": {
+                    "total_leads": len(leads),
+                    "leads_by_status": result
+                }
+            }
+        finally:
+            db.close()
+
+    except Exception as e:
+        logger.error(f"Get leads by status error: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }

@@ -9537,6 +9537,93 @@ The Team menu item appears for managers and management roles.
             except Exception as e:
                 return {"success": False, "error": str(e)}
 
+        # Lead Pipeline Intelligence Tools
+        async def execute_lead_status_insights(args: dict):
+            """Get lead pipeline analytics and coaching insights."""
+            try:
+                from services.lead_status_insights_service import get_lead_status_insights
+
+                insights = get_lead_status_insights(
+                    db=db,
+                    assigned_to_user_id=current_user.id,
+                    include_statuses=args.get("include_statuses"),
+                    created_date_from=args.get("created_date_from"),
+                    created_date_to=args.get("created_date_to"),
+                    time_bucket=args.get("time_bucket", "week")
+                )
+                return insights
+            except Exception as e:
+                logger.error(f"lead_status_insights error: {e}")
+                return {"success": False, "error": str(e)}
+
+        async def execute_get_leads_by_status(args: dict):
+            """Get detailed lead lists by status for actionable follow-up."""
+            try:
+                from models import Lead, LeadStatus
+                from datetime import datetime, timedelta
+
+                status_filter = args.get("status")
+                limit = args.get("limit", 25)
+                sort_by = args.get("sort_by", "days_in_status_desc")
+
+                query = db.query(Lead).filter(Lead.owner_id == current_user.id)
+
+                # Apply status filter if provided
+                if status_filter:
+                    try:
+                        status_enum = LeadStatus(status_filter)
+                        query = query.filter(Lead.status == status_enum)
+                    except ValueError:
+                        # Try matching by name
+                        for s in LeadStatus:
+                            if s.name.lower() == status_filter.lower() or s.value.lower() == status_filter.lower():
+                                query = query.filter(Lead.status == s)
+                                break
+
+                leads = query.limit(limit).all()
+
+                # Group by status and calculate days_in_status
+                now = datetime.utcnow()
+                result = {}
+
+                for lead in leads:
+                    status_key = lead.status.value if hasattr(lead.status, 'value') else str(lead.status)
+                    if status_key not in result:
+                        result[status_key] = []
+
+                    # Calculate days in current status
+                    last_status_change = lead.last_status_change_at or lead.created_at
+                    days_in_status = (now - last_status_change).days if last_status_change else 0
+
+                    result[status_key].append({
+                        "id": lead.id,
+                        "name": f"{lead.first_name} {lead.last_name}".strip(),
+                        "email": lead.email,
+                        "phone": lead.phone,
+                        "source": lead.source,
+                        "status": status_key,
+                        "days_in_current_status": days_in_status,
+                        "loan_amount": float(lead.loan_amount) if lead.loan_amount else None,
+                        "property_type": lead.property_type,
+                        "loan_purpose": lead.loan_purpose,
+                        "created_at": lead.created_at.isoformat() if lead.created_at else None,
+                        "last_contact_at": lead.last_contact_at.isoformat() if lead.last_contact_at else None,
+                        "notes": lead.notes
+                    })
+
+                # Sort leads within each status by days_in_status descending
+                for status_key in result:
+                    result[status_key].sort(key=lambda x: x["days_in_current_status"], reverse=True)
+
+                return {
+                    "success": True,
+                    "total_leads": len(leads),
+                    "leads_by_status": result
+                }
+            except Exception as e:
+                logger.error(f"get_leads_by_status error: {e}")
+                return {"success": False, "error": str(e)}
+
         tool_functions = {
             "send_email": execute_send_email,
             "get_tasks": execute_get_tasks,
@@ -9573,7 +9660,10 @@ The Team menu item appears for managers and management roles.
             "predict_deal_success": execute_predict_deal_success,
             "forecast_revenue": execute_forecast_revenue,
             "get_refinance_candidates": execute_get_refinance_candidates,
-            "analyze_conversion_patterns": execute_analyze_conversion_patterns
+            "analyze_conversion_patterns": execute_analyze_conversion_patterns,
+            # Lead Pipeline Intelligence Tools
+            "lead_status_insights": execute_lead_status_insights,
+            "get_leads_by_status": execute_get_leads_by_status
         }
 
         # Pre-fetch real data context for personalized responses

@@ -160,6 +160,17 @@ function ReconciliationCenter() {
     return () => clearInterval(syncInterval);
   }, []);
 
+  // Force layout recalculation when content loads to fix scroll issues
+  useEffect(() => {
+    if (!loading) {
+      // Small delay to ensure DOM has updated
+      const timer = setTimeout(() => {
+        window.dispatchEvent(new Event('resize'));
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [loading, activeTab, selectedItem]);
+
   const fetchReferralPartners = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/referral-partners`, {

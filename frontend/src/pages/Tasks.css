@@ -1,13 +1,12 @@
 .tasks-page {
   padding: var(--space-md) var(--space-xl);
+  padding-bottom: var(--space-3xl);
   max-width: 1600px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  /* Fixed height layout for email-style split view */
-  height: calc(100vh - 60px); /* 60px for navigation */
-  min-height: 0;
-  overflow: hidden; /* Tasks page manages its own internal scrolling */
+  /* Let the page grow naturally with content */
+  min-height: calc(100vh - 60px);
   box-sizing: border-box;
   width: 100%;
 }
@@ -513,10 +512,8 @@
 }
 
 .tab-content {
-  flex: 1 1 auto; /* Grow and shrink to fill available space */
-  min-height: 0; /* Important for flexbox children to scroll */
-  overflow: hidden;
-  /* Use flex to fill remaining space instead of fixed calc */
+  flex: 1 1 auto;
+  min-height: 600px;
   display: flex;
   flex-direction: column;
   width: 100%;
@@ -922,10 +919,10 @@
 .email-layout {
   display: grid;
   grid-template-columns: 350px minmax(0, 1fr);
-  grid-template-rows: 1fr; /* Explicit row sizing */
   gap: 0;
-  flex: 1 1 auto; /* Take all available space in flex parent */
-  min-height: 0; /* Allow shrinking in flex context */
+  flex: 1 1 auto;
+  min-height: 600px;
+  height: calc(100vh - 220px); /* Fixed height to enable internal scrolling */
   background: white;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
@@ -935,11 +932,10 @@
   box-sizing: border-box;
 }
 
-/* Ensure grid children take full height and don't overflow */
+/* Ensure grid children take full height and handle overflow properly */
 .email-layout > * {
   min-height: 0;
   min-width: 0;
-  overflow: hidden;
   max-width: 100%;
 }
 
@@ -1047,10 +1043,9 @@
   display: flex;
   flex-direction: column;
   background: white;
-  overflow: hidden;
   height: 100%;
-  min-height: 0; /* Important for flexbox scrolling */
-  min-width: 0; /* Prevent overflow in grid */
+  overflow: hidden;
+  min-width: 0;
   max-width: 100%;
 }
 

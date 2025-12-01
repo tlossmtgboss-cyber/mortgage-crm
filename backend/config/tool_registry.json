@@ -528,6 +528,48 @@
       "implementation_location": "tools/router.py:handle_lead_status_insights"
     },
     {
+      "name": "get_leads_by_status",
+      "domain": "leads",
+      "description": "Get a detailed list of leads filtered by status. Use this to retrieve specific leads for follow-up, see who to call next, or get actionable lead data. Returns lead name, email, phone, days in status, loan amount, etc.",
+      "endpoint": "/api/tools/leads/get_leads_by_status",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Filter leads by status. Options: new, attempted_contact, prospect, application, pre_qualified, pre_approved, long_term_nurture, withdrawn, does_not_qualify"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum number of leads to return (default: 25)",
+            "default": 25
+          },
+          "sort_by": {
+            "type": "string",
+            "description": "Sort order: days_in_status_desc (default), days_in_status_asc, created_at_desc, created_at_asc",
+            "default": "days_in_status_desc"
+          }
+        }
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean"},
+          "total_leads": {"type": "integer"},
+          "leads_by_status": {
+            "type": "object",
+            "description": "Dictionary with status as key, array of lead objects as value. Each lead has: id, name, email, phone, source, status, days_in_current_status, loan_amount, property_type, loan_purpose, created_at, last_contact_at, notes"
+          }
+        }
+      },
+      "side_effect": false,
+      "requires_approval": false,
+      "risk_level": "low",
+      "implemented": true,
+      "implementation_location": "tools/router.py:handle_get_leads_by_status"
+    },
+    {
       "name": "create_task",
       "domain": "pipeline",
       "description": "Create a new task for follow-up or action item",
