@@ -16260,6 +16260,10 @@ app.include_router(financial_intelligence_router, tags=["Financial Intelligence"
 from email_monitor_routes import router as email_monitor_router
 app.include_router(email_monitor_router, tags=["Email Monitor"])
 
+# Include Data Import routes (CSV/Excel upload)
+from data_import_routes import router as data_import_router
+app.include_router(data_import_router, tags=["Data Import"])
+
 # Include Disposition routes (voice notes + AI summarization)
 from telephony.disposition_router import router as disposition_router, set_dependencies as set_disposition_deps
 set_disposition_deps(get_db, get_current_user)
