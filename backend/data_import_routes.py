@@ -870,8 +870,9 @@ async def fix_lead_stage_values(
         fixed_count = 0
         for old_value, new_value in stage_fixes.items():
             try:
+                # Use CAST to text for comparison since the stored value may not be a valid enum
                 cursor.execute(
-                    "UPDATE leads SET stage = %s WHERE stage = %s",
+                    "UPDATE leads SET stage = %s WHERE stage::text = %s",
                     (new_value, old_value)
                 )
                 if cursor.rowcount > 0:
