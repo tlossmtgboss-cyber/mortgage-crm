@@ -17162,12 +17162,26 @@ except Exception as e:
     logger.warning(f"⚠️ AI Email Conversation routes not loaded: {e}")
 
 # AI Tools Registry & Unified Tool Endpoints
+tools_router_error = None
 try:
     from tools.router import router as tools_router
     app.include_router(tools_router, tags=["AI Tools"])
     logger.info("✅ AI Tools Registry routes loaded")
 except Exception as e:
+    tools_router_error = str(e)
+    import traceback
+    full_error = traceback.format_exc()
     logger.warning(f"⚠️ AI Tools Registry routes not loaded: {e}")
+    logger.warning(f"Full traceback: {full_error}")
+
+# Debug endpoint for tools registry loading
+@app.get("/api/v1/debug/tools-registry-status")
+async def debug_tools_registry_status():
+    """Debug endpoint to check tools registry loading status"""
+    return {
+        "tools_router_loaded": tools_router_error is None,
+        "error": tools_router_error
+    }
 
 # Email Monitor Migration Endpoint
 @app.post("/api/v1/migrations/add-email-monitor")
