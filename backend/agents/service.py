@@ -1240,6 +1240,164 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
 
     tools["get_daily_priorities"] = execute_get_daily_priorities
 
+    # ============ Lead Pipeline Intelligence Tools ============
+
+    async def execute_lead_status_insights(args):
+        """
+        Get lead pipeline intelligence and coaching insights.
+
+        Analyzes leads by status and returns:
+        - Summary metrics (counts, conversion rates)
+        - Per-status breakdowns with SLA tracking
+        - Bottleneck detection
+        - Prioritized focus areas with playbooks
+        - Trend data over time
+
+        Use this for coaching-level answers, not raw lead lists.
+        """
+        try:
+            from services.lead_status_insights_service import get_lead_status_insights
+
+            # Use current user's ID if not specified
+            assigned_to = args.get("assigned_to_user_id")
+            if assigned_to is None:
+                assigned_to = str(current_user.id)
+
+            insights = get_lead_status_insights(
+                db=db,
+                assigned_to_user_id=assigned_to,
+                include_statuses=args.get("include_statuses"),
+                created_date_from=args.get("created_date_from"),
+                created_date_to=args.get("created_date_to"),
+                time_bucket=args.get("time_bucket", "week")
+            )
+
+            return insights
+        except Exception as e:
+            logger.error(f"Error in lead_status_insights: {e}")
+            return {"error": str(e)}
+
+    tools["lead_status_insights"] = execute_lead_status_insights
+
+    async def execute_get_leads_by_status(args):
+        """
+        Get detailed lead list for specific statuses.
+
+        Use this when you need record-level detail to decide who to call, text, or email.
+        For coaching/analytics overview, use lead_status_insights instead.
+        """
+        statuses = args.get("statuses", ["new", "attempted_contact", "prospect"])
+        max_results = args.get("max_results", 100)
+        include_details = args.get("include_details", True)
+
+        try:
+            # Map status keys to enum values
+            status_map = {
+                "new": "New",
+                "attempted_contact": "Attempted Contact",
+                "prospect": "Prospect",
+                "application": "Application",
+                "pre_qualified": "Pre-Qualified",
+                "pre_approved": "Pre-Approved",
+                "nurture": "Long-Term Nurture",
+                "withdrawn": "Withdrawn",
+                "does_not_qualify": "Does Not Qualify"
+            }
+
+            mapped_statuses = []
+            for s in statuses:
+                mapped = status_map.get(s.lower().replace(" ", "_").replace("-", "_"))
+                if mapped:
+                    mapped_statuses.append(mapped)
+
+            if not mapped_statuses:
+                mapped_statuses = ["New", "Attempted Contact", "Prospect"]
+
+            # Build the IN clause safely
+            status_placeholders = ", ".join([f":status_{i}" for i in range(len(mapped_statuses))])
+            params = {"user_id": current_user.id, "limit": max_results}
+            for i, status in enumerate(mapped_statuses):
+                params[f"status_{i}"] = status
+
+            query = text(f"""
+                SELECT id, name, first_name, last_name, email, phone, stage,
+                       source, ai_score, loan_amount, preapproval_amount,
+                       last_contact, created_at, updated_at, notes
+                FROM leads
+                WHERE owner_id = :user_id
+                AND stage::text IN ({status_placeholders})
+                ORDER BY
+                    CASE stage::text
+                        WHEN 'New' THEN 1
+                        WHEN 'Attempted Contact' THEN 2
+                        WHEN 'Prospect' THEN 3
+                        WHEN 'Application' THEN 4
+                        WHEN 'Pre-Qualified' THEN 5
+                        WHEN 'Pre-Approved' THEN 6
+                        ELSE 7
+                    END,
+                    updated_at DESC
+                LIMIT :limit
+            """)
+
+            lead_rows = db.execute(query, params).fetchall()
+
+            leads = []
+            for l in lead_rows:
+                lead_data = {
+                    "id": l.id,
+                    "name": l.name,
+                    "email": l.email,
+                    "phone": l.phone,
+                    "stage": str(l.stage) if l.stage else None
+                }
+
+                if include_details:
+                    lead_data.update({
+                        "first_name": l.first_name,
+                        "last_name": l.last_name,
+                        "source": l.source,
+                        "ai_score": l.ai_score,
+                        "loan_amount": float(l.loan_amount) if l.loan_amount else None,
+                        "preapproval_amount": float(l.preapproval_amount) if l.preapproval_amount else None,
+                        "last_contact": l.last_contact.isoformat() if l.last_contact else None,
+                        "created_at": l.created_at.isoformat() if l.created_at else None,
+                        "updated_at": l.updated_at.isoformat() if l.updated_at else None,
+                        "notes": l.notes[:200] if l.notes else None
+                    })
+
+                    # Calculate days in current status
+                    if l.updated_at:
+                        from datetime import datetime, timezone
+                        now = datetime.now(timezone.utc)
+                        updated = l.updated_at
+                        if updated.tzinfo is None:
+                            updated = updated.replace(tzinfo=timezone.utc)
+                        lead_data["days_in_current_status"] = (now - updated).days
+
+                leads.append(lead_data)
+
+            # Group by status for easy consumption
+            by_status = {}
+            for lead in leads:
+                status = lead.get("stage", "Unknown")
+                if status not in by_status:
+                    by_status[status] = []
+                by_status[status].append(lead)
+
+            return {
+                "total_count": len(leads),
+                "statuses_queried": mapped_statuses,
+                "leads": leads,
+                "by_status": by_status
+            }
+        except Exception as e:
+            logger.error(f"Error in get_leads_by_status: {e}")
+            db.rollback()
+            return {"error": str(e), "leads": []}
+
+    tools["get_leads_by_status"] = execute_get_leads_by_status
+
     return tools
 
 
