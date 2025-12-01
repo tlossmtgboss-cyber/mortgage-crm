@@ -174,11 +174,13 @@ def suggest_column_mappings(headers: list) -> dict:
     mappings = {}
 
     # Comprehensive column name patterns for all entity types
+    # NOTE: For leads, we use 'name' not 'borrower_name' since that's the actual column name
     patterns = {
         # === BORROWER/CONTACT INFO ===
-        'borrower_name': ['borrower', 'borrower name', 'borrowername', 'client', 'client name', 'name', 'full name'],
-        'borrower_email': ['borrower email', 'email', 'e-mail', 'email address', 'emailaddress', 'client email'],
-        'borrower_phone': ['borrower phone', 'phone', 'telephone', 'tel', 'mobile', 'cell', 'phone number'],
+        # 'name' is used for leads table, 'borrower_name' is used for loans table
+        'name': ['borrower', 'borrower name', 'borrowername', 'client', 'client name', 'name', 'full name', 'borrower_name'],
+        'email': ['borrower email', 'email', 'e-mail', 'email address', 'emailaddress', 'client email', 'borrower_email'],
+        'phone': ['borrower phone', 'phone', 'telephone', 'tel', 'mobile', 'cell', 'phone number', 'borrower_phone'],
         'coborrower_name': ['co-borrower', 'coborrower', 'co borrower', 'co-borrower name', 'coborrower name', 'co-applicant'],
         'co_borrower_email': ['co-borrower email', 'coborrower email', 'co borrower email'],
         'preferred_communication': ['preferred communication', 'contact preference', 'communication preference'],
@@ -397,6 +399,45 @@ async def analyze_file(
         raise HTTPException(status_code=500, detail=f"Error analyzing file: {str(e)}")
 
 
+def transform_columns_for_destination(row_dict: dict, destination: str) -> dict:
+    """
+    Transform column names based on destination table.
+    - For leads: use 'name', 'email', 'phone'
+    - For loans: use 'borrower_name', 'borrower_email', 'borrower_phone'
+    """
+    result = row_dict.copy()
+
+    if destination == 'leads':
+        # Transform loan-style columns to lead-style columns
+        column_transforms = {
+            'borrower_name': 'name',
+            'borrower_email': 'email',
+            'borrower_phone': 'phone',
+        }
+        for old_col, new_col in column_transforms.items():
+            if old_col in result and new_col not in result:
+                result[new_col] = result.pop(old_col)
+            elif old_col in result and new_col in result:
+                # Both exist, prefer the transformed one and remove old
+                result.pop(old_col)
+
+    elif destination == 'loans':
+        # Transform lead-style columns to loan-style columns
+        column_transforms = {
+            'name': 'borrower_name',
+            'email': 'borrower_email',
+            'phone': 'borrower_phone',
+        }
+        for old_col, new_col in column_transforms.items():
+            if old_col in result and new_col not in result:
+                result[new_col] = result.pop(old_col)
+            elif old_col in result and new_col in result:
+                # Both exist, prefer the transformed one and remove old
+                result.pop(old_col)
+
+    return result
+
+
 def ensure_import_columns_exist(conn, destination: str):
     """Ensure all import columns exist in the target table"""
     cursor = conn.cursor()
@@ -477,6 +518,9 @@ async def execute_import(
                     row_dict = row.to_dict()
                     # Clean up NaN values
                     row_dict = {k: (None if pd.isna(v) else v) for k, v in row_dict.items()}
+
+                    # Transform column names based on destination table
+                    row_dict = transform_columns_for_destination(row_dict, destination)
 
                     if destination == 'leads':
                         # Import as lead
