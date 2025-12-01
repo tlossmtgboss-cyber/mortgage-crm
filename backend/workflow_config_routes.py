@@ -1478,3 +1478,157 @@ async def test_weekly_task_for_loan(
     except Exception as e:
         logger.error(f"Error testing weekly task: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# =============================================================================
+# Lead Workflow Tasks - Returns workflow tasks for a specific lead
+# =============================================================================
+
+@router.get("/leads/{lead_id}/workflow-tasks")
+async def get_lead_workflow_tasks(
+    lead_id: int,
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    """
+    Get workflow tasks for a specific lead based on their current stage.
+    Returns all day configs with their completion status.
+    """
+    from database import get_db, SessionLocal
+    from datetime import datetime, timedelta
+
+    db = SessionLocal()
+    try:
+        # Get lead info
+        lead_result = db.execute(text("""
+            SELECT id, name, email, stage, created_at, stage_changed_at
+            FROM leads
+            WHERE id = :lead_id
+        """), {"lead_id": lead_id})
+        lead = lead_result.fetchone()
+
+        if not lead:
+            raise HTTPException(status_code=404, detail="Lead not found")
+
+        lead_stage = lead.stage if lead.stage else "New"
+        # Handle enum values
+        if hasattr(lead_stage, 'value'):
+            lead_stage = lead_stage.value
+
+        # Map lead stages to workflow keys
+        stage_to_workflow = {
+            "New": "prospect",
+            "Attempted Contact": "prospect",
+            "Prospect": "prospect",
+            "Application": "prequal",        # Application status uses prequal workflow
+            "Pre-Qualified": "prequal",
+            "Pre-Approved": "pre_approved",
+            "Under Contract": "under_contract",
+            "CTC": "last_mile",
+            "Funded": "post_close",
+            "Does Not Qualify": "credit_repair",
+            "Long-Term Nurture": "nurture",
+        }
+
+        workflow_key = stage_to_workflow.get(lead_stage, "prospect")
+
+        # Get workflow config
+        workflow_result = db.execute(text("""
+            SELECT id, workflow_key, workflow_name, color, description
+            FROM workflow_configs
+            WHERE workflow_key = :workflow_key AND is_active = true
+        """), {"workflow_key": workflow_key})
+        workflow = workflow_result.fetchone()
+
+        if not workflow:
+            return {
+                "lead_id": lead_id,
+                "lead_name": lead.name,
+                "lead_stage": lead_stage,
+                "workflow": None,
+                "tasks": [],
+                "message": f"No active workflow found for stage: {lead_stage}"
+            }
+
+        # Calculate day in workflow
+        # Use stage_changed_at if available, otherwise created_at
+        stage_date = lead.stage_changed_at or lead.created_at
+        if stage_date:
+            days_in_stage = (datetime.utcnow() - stage_date.replace(tzinfo=None)).days + 1
+        else:
+            days_in_stage = 1
+
+        # Get all day configs for this workflow
+        days_result = db.execute(text("""
+            SELECT
+                id, day_label, day_value, day_order,
+                phone_enabled, text_enabled, email_enabled,
+                task_description, is_active
+            FROM workflow_day_configs
+            WHERE workflow_id = :workflow_id AND is_active = true
+            ORDER BY day_order, day_value
+        """), {"workflow_id": workflow.id})
+        days = days_result.fetchall()
+
+        # Build tasks list
+        tasks = []
+        for day in days:
+            # Determine task status based on current day
+            if day.day_value < days_in_stage:
+                status = "completed"  # Past days are assumed completed
+            elif day.day_value == days_in_stage:
+                status = "due_today"
+            elif day.day_value == days_in_stage + 1:
+                status = "due_tomorrow"
+            else:
+                status = "upcoming"
+
+            # Build communication methods list
+            methods = []
+            if day.phone_enabled:
+                methods.append("phone")
+            if day.text_enabled:
+                methods.append("text")
+            if day.email_enabled:
+                methods.append("email")
+
+            tasks.append({
+                "id": day.id,
+                "day_label": day.day_label,
+                "day_value": day.day_value,
+                "task_description": day.task_description,
+                "communication_methods": methods,
+                "status": status,
+                "is_due": status in ["due_today", "due_tomorrow"],
+            })
+
+        return {
+            "lead_id": lead_id,
+            "lead_name": lead.name,
+            "lead_stage": lead_stage,
+            "days_in_stage": days_in_stage,
+            "stage_changed_at": lead.stage_changed_at.isoformat() if lead.stage_changed_at else None,
+            "workflow": {
+                "id": workflow.id,
+                "key": workflow.workflow_key,
+                "name": workflow.workflow_name,
+                "color": workflow.color,
+                "description": workflow.description,
+            },
+            "tasks": tasks,
+            "summary": {
+                "total_tasks": len(tasks),
+                "completed": len([t for t in tasks if t["status"] == "completed"]),
+                "due_today": len([t for t in tasks if t["status"] == "due_today"]),
+                "due_tomorrow": len([t for t in tasks if t["status"] == "due_tomorrow"]),
+                "upcoming": len([t for t in tasks if t["status"] == "upcoming"]),
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting lead workflow tasks: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        db.close()
