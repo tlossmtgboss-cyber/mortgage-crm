@@ -1,7 +1,7 @@
 // VERSION: 2024-11-14-v2 - MOCK DATA FIX
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { leadsAPI, activitiesAPI, circleOfCashflowAPI } from '../services/api';
+import { leadsAPI, activitiesAPI, circleOfCashflowAPI, tasksAPI } from '../services/api';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import SMSModal from '../components/SMSModal';
 import TeamsModal from '../components/TeamsModal';
@@ -86,6 +86,13 @@ function LeadDetail() {
   const [cashflowPartners, setCashflowPartners] = useState([]);
   const [cashflowLoading, setCashflowLoading] = useState(false);
 
+  // Archive state
+  const [archiveSubTab, setArchiveSubTab] = useState('notes'); // 'notes', 'email', 'sms', 'calls'
+  const [emailArchive, setEmailArchive] = useState([]);
+  const [smsArchive, setSmsArchive] = useState([]);
+  const [callArchive, setCallArchive] = useState([]);
+  const [archiveLoading, setArchiveLoading] = useState(false);
+
   // Circle of Influence state
   const [circleContacts, setCircleContacts] = useState([]);
   const [showCircleModal, setShowCircleModal] = useState(false);
@@ -115,6 +122,10 @@ function LeadDetail() {
   const [customFields, setCustomFields] = useState([]);
   const [showAddFieldModal, setShowAddFieldModal] = useState(false);
   const [newFieldName, setNewFieldName] = useState('');
+
+  // Workflow tasks state
+  const [workflowTasks, setWorkflowTasks] = useState([]);
+  const [workflowTasksLoading, setWorkflowTasksLoading] = useState(false);
 
   // Lead navigation state
   const [leadsList, setLeadsList] = useState([]);
@@ -627,6 +638,76 @@ function LeadDetail() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
+
+  // Load workflow tasks when Tasks tab is selected
+  const loadWorkflowTasks = async () => {
+    if (!lead?.stage) return;
+
+    setWorkflowTasksLoading(true);
+    try {
+      // Map lead stage to workflow key
+      const stageToWorkflowMap = {
+        'New': 'lead_intake',
+        'Attempted Contact': 'lead_intake',
+        'Prospect': 'lead_intake',
+        'Pre-Qualified': 'lead_intake',
+        'Application': 'application',
+        'Pre-Approved': 'pre_approval',
+        'Under Contract': 'processing',
+        'Processing': 'processing',
+        'Underwriting': 'underwriting',
+        'Conditional Approval': 'underwriting',
+        'Clear to Close': 'closing',
+        'Closing': 'closing',
+        'Funded': 'post_closing',
+        'Closed': 'post_closing',
+        'Credit Repair': 'credit_repair',
+        'Nurture': 'nurture',
+        'Not Ready': 'nurture'
+      };
+
+      const workflowKey = stageToWorkflowMap[lead.stage] || 'lead_intake';
+
+      // Fetch workflow configuration for this stage
+      const response = await fetch(`/api/v1/workflow-config/workflows/${workflowKey}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        const workflowData = await response.json();
+        // Extract tasks from workflow days
+        const tasks = (workflowData.days || []).map((day, index) => ({
+          id: day.id || index,
+          dayLabel: day.day_label,
+          dayValue: day.day_value,
+          taskDescription: day.task_description || `Day ${day.day_value} tasks`,
+          phoneEnabled: day.phone_enabled,
+          textEnabled: day.text_enabled,
+          emailEnabled: day.email_enabled,
+          referralPartnerEnabled: day.referral_partner_enabled,
+          roleResponsibilities: day.role_responsibilities || {},
+          status: 'pending'
+        }));
+        setWorkflowTasks(tasks);
+      } else {
+        setWorkflowTasks([]);
+      }
+    } catch (error) {
+      console.error('Error loading workflow tasks:', error);
+      setWorkflowTasks([]);
+    } finally {
+      setWorkflowTasksLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'tasks' && lead) {
+      loadWorkflowTasks();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, lead?.stage]);
 
   const handleSave = async () => {
     try {
@@ -1261,10 +1342,10 @@ function LeadDetail() {
           Team Members
         </button>
         <button
-          className={`tab-btn ${activeTab === 'marketing' ? 'active' : ''}`}
-          onClick={() => setActiveTab('marketing')}
+          className={`tab-btn ${activeTab === 'tasks' ? 'active' : ''}`}
+          onClick={() => setActiveTab('tasks')}
         >
-          Marketing
+          Tasks
         </button>
         <button
           className={`tab-btn ${activeTab === 'email' ? 'active' : ''}`}
@@ -1531,40 +1612,96 @@ function LeadDetail() {
           </div>
           )}
 
-          {/* Marketing Tab */}
-          {activeTab === 'marketing' && (
+          {/* Tasks Tab */}
+          {activeTab === 'tasks' && (
           <div className="info-section">
-            <h2>Marketing</h2>
-            <div className="marketing-content">
+            <h2>Tasks</h2>
+            <div className="tasks-content">
               <p className="section-description" style={{ color: '#666', marginBottom: '20px' }}>
-                View and manage marketing campaigns, drip sequences, and promotional content for this lead.
+                Upcoming tasks based on the current lead status: <strong>{lead?.stage || 'Unknown'}</strong>
               </p>
 
-              <div className="marketing-campaigns" style={{ marginBottom: '24px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                  <h3 style={{ margin: 0 }}>Active Campaigns</h3>
-                  <button className="btn-primary" style={{ padding: '8px 16px', fontSize: '14px' }}>
-                    + Add to Campaign
-                  </button>
+              {workflowTasksLoading ? (
+                <div style={{ backgroundColor: '#f8f9fa', borderRadius: '8px', padding: '40px', textAlign: 'center', color: '#666' }}>
+                  Loading workflow tasks...
                 </div>
-                <div style={{ backgroundColor: '#f8f9fa', borderRadius: '8px', padding: '20px', textAlign: 'center', color: '#666' }}>
-                  No active campaigns. Add this lead to a marketing campaign to start automated outreach.
+              ) : workflowTasks.length === 0 ? (
+                <div style={{ backgroundColor: '#f8f9fa', borderRadius: '8px', padding: '40px', textAlign: 'center', color: '#666' }}>
+                  No workflow tasks configured for this stage. Configure workflows in the Workflow Settings page.
                 </div>
-              </div>
-
-              <div className="drip-sequences" style={{ marginBottom: '24px' }}>
-                <h3 style={{ marginBottom: '16px' }}>Drip Sequences</h3>
-                <div style={{ backgroundColor: '#f8f9fa', borderRadius: '8px', padding: '20px', textAlign: 'center', color: '#666' }}>
-                  No drip sequences assigned. Set up automated follow-up sequences in Settings.
+              ) : (
+                <div className="workflow-tasks-list">
+                  {workflowTasks.map((task) => (
+                    <div
+                      key={task.id}
+                      style={{
+                        backgroundColor: '#fff',
+                        border: '1px solid #e0e0e0',
+                        borderRadius: '8px',
+                        padding: '16px',
+                        marginBottom: '12px',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
+                        <div>
+                          <span style={{
+                            backgroundColor: '#e3f2fd',
+                            color: '#1976d2',
+                            padding: '4px 10px',
+                            borderRadius: '12px',
+                            fontSize: '12px',
+                            fontWeight: '600',
+                            marginRight: '8px'
+                          }}>
+                            {task.dayLabel}
+                          </span>
+                          <span style={{ color: '#666', fontSize: '13px' }}>
+                            Day {task.dayValue}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          {task.phoneEnabled && (
+                            <span title="Phone call" style={{ fontSize: '16px' }}>📞</span>
+                          )}
+                          {task.textEnabled && (
+                            <span title="Text message" style={{ fontSize: '16px' }}>💬</span>
+                          )}
+                          {task.emailEnabled && (
+                            <span title="Email" style={{ fontSize: '16px' }}>📧</span>
+                          )}
+                          {task.referralPartnerEnabled && (
+                            <span title="Referral partner" style={{ fontSize: '16px' }}>🤝</span>
+                          )}
+                        </div>
+                      </div>
+                      <p style={{ margin: '0 0 12px 0', fontSize: '14px', color: '#333', lineHeight: '1.5' }}>
+                        {task.taskDescription}
+                      </p>
+                      {Object.keys(task.roleResponsibilities || {}).length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                          {Object.entries(task.roleResponsibilities).map(([role, isResponsible]) =>
+                            isResponsible && (
+                              <span
+                                key={role}
+                                style={{
+                                  backgroundColor: '#f5f5f5',
+                                  color: '#555',
+                                  padding: '3px 8px',
+                                  borderRadius: '4px',
+                                  fontSize: '11px'
+                                }}
+                              >
+                                {role.replace(/_/g, ' ')}
+                              </span>
+                            )
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              </div>
-
-              <div className="marketing-history">
-                <h3 style={{ marginBottom: '16px' }}>Marketing History</h3>
-                <div style={{ backgroundColor: '#f8f9fa', borderRadius: '8px', padding: '20px', textAlign: 'center', color: '#666' }}>
-                  No marketing activities recorded yet.
-                </div>
-              </div>
+              )}
             </div>
           </div>
           )}
@@ -1670,39 +1807,220 @@ function LeadDetail() {
           <div className="info-section">
             <h2>Conversation Log</h2>
 
-            {/* Add Note Form */}
-            <form onSubmit={handleAddNote} className="add-note-form">
-              <textarea
-                value={noteText}
-                onChange={(e) => setNoteText(e.target.value)}
-                placeholder="Add a note to the conversation log..."
-                rows="3"
-                disabled={noteLoading}
-              />
-              <button type="submit" disabled={noteLoading || !noteText.trim()}>
-                {noteLoading ? 'Adding...' : 'Add Note'}
+            {/* Archive Sub-Tabs */}
+            <div className="archive-sub-tabs">
+              <button
+                className={`archive-sub-tab ${archiveSubTab === 'notes' ? 'active' : ''}`}
+                onClick={() => setArchiveSubTab('notes')}
+              >
+                Notes
               </button>
-            </form>
-
-            <div className="conversation-log">
-              {activities.length > 0 ? (
-                activities.map((activity) => (
-                  <div key={activity.id} className="activity-item">
-                    <div className="activity-header">
-                      <span className={`activity-type ${activity.type}`}>
-                        {activity.type}
-                      </span>
-                      <span className="activity-date">
-                        {new Date(activity.created_at).toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="activity-description">{activity.content || activity.description}</div>
-                  </div>
-                ))
-              ) : (
-                <div className="empty-state">No activities yet</div>
-              )}
+              <button
+                className={`archive-sub-tab ${archiveSubTab === 'email' ? 'active' : ''}`}
+                onClick={() => setArchiveSubTab('email')}
+              >
+                Email Archive
+              </button>
+              <button
+                className={`archive-sub-tab ${archiveSubTab === 'sms' ? 'active' : ''}`}
+                onClick={() => setArchiveSubTab('sms')}
+              >
+                SMS Archive
+              </button>
+              <button
+                className={`archive-sub-tab ${archiveSubTab === 'calls' ? 'active' : ''}`}
+                onClick={() => setArchiveSubTab('calls')}
+              >
+                Recorded Calls
+              </button>
             </div>
+
+            {/* Notes Sub-Tab */}
+            {archiveSubTab === 'notes' && (
+              <>
+                {/* Add Note Form */}
+                <form onSubmit={handleAddNote} className="add-note-form">
+                  <textarea
+                    value={noteText}
+                    onChange={(e) => setNoteText(e.target.value)}
+                    placeholder="Add a note to the conversation log..."
+                    rows="3"
+                    disabled={noteLoading}
+                  />
+                  <button type="submit" disabled={noteLoading || !noteText.trim()}>
+                    {noteLoading ? 'Adding...' : 'Add Note'}
+                  </button>
+                </form>
+
+                <div className="conversation-log">
+                  {activities.length > 0 ? (
+                    activities.map((activity) => (
+                      <div key={activity.id} className="activity-item">
+                        <div className="activity-header">
+                          <span className={`activity-type ${activity.type}`}>
+                            {activity.type}
+                          </span>
+                          <span className="activity-date">
+                            {new Date(activity.created_at).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="activity-description">{activity.content || activity.description}</div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="empty-state">No activities yet</div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* Email Archive Sub-Tab */}
+            {archiveSubTab === 'email' && (
+              <div className="archive-content">
+                <div className="archive-header">
+                  <h3>Email History</h3>
+                  <p className="archive-description">All emails sent to and received from this lead</p>
+                </div>
+                {archiveLoading ? (
+                  <div className="loading-state">Loading emails...</div>
+                ) : emailArchive.length > 0 ? (
+                  <div className="archive-list">
+                    {emailArchive.map((email, idx) => (
+                      <div key={email.id || idx} className="archive-item email-item">
+                        <div className="archive-item-header">
+                          <span className={`archive-direction ${email.direction || 'outbound'}`}>
+                            {email.direction === 'inbound' ? '📥 Received' : '📤 Sent'}
+                          </span>
+                          <span className="archive-date">
+                            {new Date(email.sent_at || email.created_at).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="archive-item-subject">
+                          <strong>Subject:</strong> {email.subject || 'No Subject'}
+                        </div>
+                        <div className="archive-item-preview">
+                          {email.body_text?.substring(0, 200) || email.body?.substring(0, 200) || 'No content'}
+                          {(email.body_text?.length > 200 || email.body?.length > 200) && '...'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="empty-state">
+                    <div className="empty-icon">📧</div>
+                    <p>No emails found for this lead</p>
+                    <button
+                      className="compose-btn"
+                      onClick={() => setShowEmailComposer(true)}
+                    >
+                      Compose Email
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* SMS Archive Sub-Tab */}
+            {archiveSubTab === 'sms' && (
+              <div className="archive-content">
+                <div className="archive-header">
+                  <h3>SMS History</h3>
+                  <p className="archive-description">All text messages exchanged with this lead</p>
+                </div>
+                {archiveLoading ? (
+                  <div className="loading-state">Loading messages...</div>
+                ) : smsArchive.length > 0 ? (
+                  <div className="archive-list sms-thread">
+                    {smsArchive.map((sms, idx) => (
+                      <div
+                        key={sms.id || idx}
+                        className={`archive-item sms-item ${sms.direction || 'outbound'}`}
+                      >
+                        <div className="sms-bubble">
+                          <div className="sms-message">{sms.message || sms.body}</div>
+                          <div className="sms-meta">
+                            <span className="sms-status">{sms.status || 'sent'}</span>
+                            <span className="sms-time">
+                              {new Date(sms.sent_at || sms.created_at).toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="empty-state">
+                    <div className="empty-icon">💬</div>
+                    <p>No SMS messages found for this lead</p>
+                    <button
+                      className="compose-btn"
+                      onClick={() => setShowSMSModal(true)}
+                    >
+                      Send SMS
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Recorded Calls Sub-Tab */}
+            {archiveSubTab === 'calls' && (
+              <div className="archive-content">
+                <div className="archive-header">
+                  <h3>Recorded Calls</h3>
+                  <p className="archive-description">All recorded phone calls with this lead</p>
+                </div>
+                {archiveLoading ? (
+                  <div className="loading-state">Loading recordings...</div>
+                ) : callArchive.length > 0 ? (
+                  <div className="archive-list">
+                    {callArchive.map((call, idx) => (
+                      <div key={call.id || idx} className="archive-item call-item">
+                        <div className="archive-item-header">
+                          <span className={`archive-direction ${call.direction || 'outbound'}`}>
+                            {call.direction === 'inbound' ? '📲 Incoming' : '📞 Outgoing'}
+                          </span>
+                          <span className="call-duration">
+                            {call.duration ? `${Math.floor(call.duration / 60)}:${(call.duration % 60).toString().padStart(2, '0')}` : 'N/A'}
+                          </span>
+                          <span className="archive-date">
+                            {new Date(call.call_time || call.created_at).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="call-details">
+                          <span className="call-status">{call.status || 'completed'}</span>
+                          {call.disposition && <span className="call-disposition">{call.disposition}</span>}
+                        </div>
+                        {call.recording_url && (
+                          <div className="call-recording">
+                            <audio controls src={call.recording_url}>
+                              Your browser does not support audio playback.
+                            </audio>
+                          </div>
+                        )}
+                        {call.transcription && (
+                          <div className="call-transcription">
+                            <strong>Transcription:</strong>
+                            <p>{call.transcription.substring(0, 300)}{call.transcription.length > 300 && '...'}</p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="empty-state">
+                    <div className="empty-icon">🎙️</div>
+                    <p>No recorded calls found for this lead</p>
+                    <button
+                      className="compose-btn"
+                      onClick={() => setShowRecordingModal(true)}
+                    >
+                      Start Recording
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           )}
 

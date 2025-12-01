@@ -1940,3 +1940,292 @@ button.borrower-btn.add-borrower-btn:hover {
   transform: translateY(-1px);
 }
 
+/* ============================================
+   Archive Sub-Tabs Styles
+   ============================================ */
+
+.archive-sub-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.archive-sub-tab {
+  padding: 10px 20px;
+  border: 1px solid #218D8D;
+  background: white;
+  color: #218D8D;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.archive-sub-tab:hover {
+  background: #f0f9f9;
+}
+
+.archive-sub-tab.active {
+  background: #218D8D;
+  color: white;
+}
+
+/* Archive Content */
+.archive-content {
+  padding: 16px 0;
+}
+
+.archive-header {
+  margin-bottom: 20px;
+}
+
+.archive-header h3 {
+  margin: 0 0 8px 0;
+  color: #333;
+  font-size: 18px;
+}
+
+.archive-description {
+  color: #666;
+  font-size: 14px;
+  margin: 0;
+}
+
+/* Archive List */
+.archive-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.archive-item {
+  background: #f9f9f9;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 16px;
+  transition: all 0.2s ease;
+}
+
+.archive-item:hover {
+  border-color: #218D8D;
+  box-shadow: 0 2px 8px rgba(33, 141, 141, 0.1);
+}
+
+.archive-item-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.archive-direction {
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.archive-direction.inbound {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.archive-direction.outbound {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+.archive-date {
+  color: #666;
+  font-size: 12px;
+  margin-left: auto;
+}
+
+/* Email Archive Styles */
+.email-item .archive-item-subject {
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.email-item .archive-item-preview {
+  color: #666;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* SMS Archive Styles */
+.sms-thread {
+  max-height: 500px;
+  overflow-y: auto;
+  padding: 16px;
+  background: #f5f5f5;
+  border-radius: 8px;
+}
+
+.sms-item {
+  max-width: 75%;
+  margin-bottom: 12px;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.sms-item.outbound {
+  margin-left: auto;
+}
+
+.sms-item.inbound {
+  margin-right: auto;
+}
+
+.sms-bubble {
+  padding: 12px 16px;
+  border-radius: 18px;
+}
+
+.sms-item.outbound .sms-bubble {
+  background: #218D8D;
+  color: white;
+  border-bottom-right-radius: 4px;
+}
+
+.sms-item.inbound .sms-bubble {
+  background: white;
+  color: #333;
+  border: 1px solid #e0e0e0;
+  border-bottom-left-radius: 4px;
+}
+
+.sms-message {
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.sms-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 6px;
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.sms-item.outbound .sms-meta {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.sms-item.inbound .sms-meta {
+  color: #999;
+}
+
+/* Call Archive Styles */
+.call-item .call-duration {
+  background: #f0f0f0;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #333;
+}
+
+.call-details {
+  display: flex;
+  gap: 12px;
+  margin: 8px 0;
+}
+
+.call-status {
+  font-size: 12px;
+  color: #666;
+  padding: 2px 8px;
+  background: #e0e0e0;
+  border-radius: 4px;
+}
+
+.call-disposition {
+  font-size: 12px;
+  color: #1565c0;
+  padding: 2px 8px;
+  background: #e3f2fd;
+  border-radius: 4px;
+}
+
+.call-recording {
+  margin-top: 12px;
+  padding: 12px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
+}
+
+.call-recording audio {
+  width: 100%;
+  height: 40px;
+}
+
+.call-transcription {
+  margin-top: 12px;
+  padding: 12px;
+  background: #fff9e6;
+  border-radius: 6px;
+  border: 1px solid #f0e6cc;
+}
+
+.call-transcription strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #666;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.call-transcription p {
+  margin: 0;
+  color: #333;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Empty State Styles */
+.archive-content .empty-state {
+  text-align: center;
+  padding: 48px 24px;
+  color: #666;
+}
+
+.archive-content .empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.archive-content .empty-state p {
+  margin: 0 0 24px 0;
+  font-size: 16px;
+}
+
+.compose-btn {
+  padding: 12px 24px;
+  background: #218D8D;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.compose-btn:hover {
+  background: #1a7070;
+}
+
+.loading-state {
+  text-align: center;
+  padding: 32px;
+  color: #666;
+  font-size: 14px;
+}
+
