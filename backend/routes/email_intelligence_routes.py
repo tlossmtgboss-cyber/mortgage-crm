@@ -1433,6 +1433,36 @@ async def get_email_intelligence_stats(
         WHERE user_id = :user_id AND received_date >= :since
     """), {"user_id": user_id, "since": since}).scalar()
 
+    # Identity resolution stats
+    match_method_stats = db.execute(text("""
+        SELECT match_method, COUNT(*) as count
+        FROM email_reconciliation_queue
+        WHERE user_id = :user_id AND match_method IS NOT NULL AND imported_at >= :since
+        GROUP BY match_method
+        ORDER BY count DESC
+    """), {"user_id": user_id, "since": since}).fetchall()
+
+    total_matched = db.execute(text("""
+        SELECT COUNT(*) FROM email_reconciliation_queue
+        WHERE user_id = :user_id AND imported_at >= :since
+        AND (matched_contact_id IS NOT NULL OR matched_loan_id IS NOT NULL OR matched_lead_id IS NOT NULL)
+    """), {"user_id": user_id, "since": since}).scalar() or 0
+
+    total_in_period = db.execute(text("""
+        SELECT COUNT(*) FROM email_reconciliation_queue
+        WHERE user_id = :user_id AND imported_at >= :since
+    """), {"user_id": user_id, "since": since}).scalar() or 0
+
+    priority_count = db.execute(text("""
+        SELECT COUNT(*) FROM email_reconciliation_queue
+        WHERE user_id = :user_id AND is_priority = TRUE AND imported_at >= :since
+    """), {"user_id": user_id, "since": since}).scalar() or 0
+
+    known_clients = db.execute(text("""
+        SELECT COUNT(*) FROM known_client_emails
+        WHERE user_id = :user_id
+    """), {"user_id": user_id}).scalar() or 0
+
     return {
         "period_days": days,
         "queue_by_disposition": {row[0]: row[1] for row in disposition_stats if row[0]},
@@ -1441,7 +1471,16 @@ async def get_email_intelligence_stats(
         "pending_count": pending or 0,
         "conversation_logs_created": logs_created or 0,
         "documents_requested": docs_requested or 0,
-        "documents_received": docs_received or 0
+        "documents_received": docs_received or 0,
+        "identity_resolution": {
+            "total_emails": total_in_period,
+            "matched": total_matched,
+            "unmatched": total_in_period - total_matched,
+            "match_rate": round(total_matched / total_in_period * 100, 1) if total_in_period > 0 else 0,
+            "priority_count": priority_count,
+            "by_method": {row[0]: row[1] for row in match_method_stats},
+            "known_clients_count": known_clients
+        }
     }
 
 
@@ -1800,41 +1839,56 @@ async def queue_email_for_intelligence(
         email_id = result.fetchone()[0]
         db.commit()
 
-        # Auto-match to known clients
+        # Use EmailIdentityResolver for comprehensive matching
         match_info = None
-        if from_email:
-            match_result = db.execute(text("""
-                SELECT contact_id, loan_id, lead_id, client_name
-                FROM known_client_emails
-                WHERE email_address = :email AND user_id = :user_id
-                LIMIT 1
-            """), {"email": from_email.lower(), "user_id": user_id}).fetchone()
+        try:
+            from services.email_identity_resolver import get_email_identity_resolver
 
-            if match_result:
+            resolver = get_email_identity_resolver(db)
+            match_result = resolver.resolve(email_data, user_id)
+
+            if match_result.get("match_method"):
+                # Update the queue record with match info
                 db.execute(text("""
                     UPDATE email_reconciliation_queue
                     SET matched_contact_id = :contact_id,
                         matched_loan_id = :loan_id,
                         matched_lead_id = :lead_id,
-                        match_method = 'known_client_email',
-                        match_confidence = 1.0,
-                        is_priority = TRUE
+                        match_method = :method,
+                        match_confidence = :confidence,
+                        match_evidence = :evidence,
+                        match_client_name = :client_name,
+                        match_loan_number = :loan_number,
+                        is_priority = :is_priority
                     WHERE id = :email_id
                 """), {
-                    "contact_id": match_result[0],
-                    "loan_id": match_result[1],
-                    "lead_id": match_result[2],
+                    "contact_id": match_result.get("matched_contact_id"),
+                    "loan_id": match_result.get("matched_loan_id"),
+                    "lead_id": match_result.get("matched_lead_id"),
+                    "method": match_result.get("match_method"),
+                    "confidence": match_result.get("match_confidence"),
+                    "evidence": match_result.get("match_evidence"),
+                    "client_name": match_result.get("match_client_name"),
+                    "loan_number": match_result.get("match_loan_number"),
+                    "is_priority": match_result.get("is_priority", False),
                     "email_id": email_id
                 })
                 db.commit()
 
                 match_info = {
-                    "contact_id": match_result[0],
-                    "loan_id": match_result[1],
-                    "lead_id": match_result[2],
-                    "client_name": match_result[3],
-                    "method": "known_client_email"
+                    "contact_id": match_result.get("matched_contact_id"),
+                    "loan_id": match_result.get("matched_loan_id"),
+                    "lead_id": match_result.get("matched_lead_id"),
+                    "client_name": match_result.get("match_client_name"),
+                    "loan_number": match_result.get("match_loan_number"),
+                    "method": match_result.get("match_method"),
+                    "confidence": match_result.get("match_confidence"),
+                    "evidence": match_result.get("match_evidence"),
+                    "is_priority": match_result.get("is_priority", False),
+                    "vendor_type": match_result.get("vendor_type")
                 }
+        except Exception as e:
+            logger.warning(f"Email identity resolution failed for email {email_id}: {e}")
 
         # Run AI analysis if requested
         analysis = None
