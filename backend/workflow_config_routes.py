@@ -21,6 +21,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/workflow-config", tags=["Workflow Configuration"])
+security = HTTPBearer(auto_error=False)
 
 
 # =============================================================================
