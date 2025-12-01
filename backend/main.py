@@ -30968,12 +30968,17 @@ async def get_leads(
         # Convert to dict manually to avoid Pydantic validation issues
         result = []
         for lead in leads:
+            # Handle stage value - it might be an enum or a string depending on DB content
+            stage_value = None
+            if lead.stage:
+                stage_value = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage)
+
             lead_dict = {
                 "id": lead.id,
                 "name": lead.name,
                 "email": lead.email,
                 "phone": lead.phone,
-                "stage": lead.stage.value if lead.stage else None,
+                "stage": stage_value,
                 "source": lead.source,
                 "ai_score": lead.ai_score,
                 "sentiment": lead.sentiment,
