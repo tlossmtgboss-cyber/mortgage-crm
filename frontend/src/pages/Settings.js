@@ -1821,7 +1821,7 @@ const API_BASE_URL = isProduction
             'Your Microsoft session has expired. Would you like to reconnect now?'
           );
           if (confirmReconnect) {
-            connectMicrosoft();
+            connectMicrosoft365();
           }
         } else if (errorMsg.includes('token') || errorMsg.includes('expired')) {
           // Try to reconnect automatically
@@ -1829,7 +1829,7 @@ const API_BASE_URL = isProduction
             'Your Microsoft session has expired. Would you like to reconnect now?'
           );
           if (confirmReconnect) {
-            connectMicrosoft();
+            connectMicrosoft365();
           }
         } else {
           alert(`Sync failed: ${errorMsg}`);
@@ -1869,7 +1869,7 @@ const API_BASE_URL = isProduction
             'Your Microsoft session has expired. Would you like to reconnect now?'
           );
           if (confirmReconnect) {
-            connectMicrosoft();
+            connectMicrosoft365();
           }
         } else if (errorMsg.includes('token') || errorMsg.includes('expired')) {
           // Try to reconnect automatically
@@ -1877,7 +1877,7 @@ const API_BASE_URL = isProduction
             'Your Microsoft session has expired. Would you like to reconnect now?'
           );
           if (confirmReconnect) {
-            connectMicrosoft();
+            connectMicrosoft365();
           }
         } else {
           alert(`Calendar sync failed: ${errorMsg}`);
