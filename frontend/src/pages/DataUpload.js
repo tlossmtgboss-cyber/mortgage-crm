@@ -198,6 +198,7 @@ function DataUpload() {
       { value: 'property_value', label: 'Property Value', group: 'Property Info' },
       // Loan Details
       { value: 'loan_type', label: 'Loan Type', group: 'Loan Details' },
+      { value: 'program', label: 'Loan Program', group: 'Loan Details' },
       { value: 'loan_amount', label: 'Loan Amount', group: 'Loan Details' },
       { value: 'down_payment', label: 'Down Payment', group: 'Loan Details' },
       { value: 'interest_rate', label: 'Interest Rate', group: 'Loan Details' },
