@@ -687,7 +687,7 @@ async def execute_import(
                             values.append(datetime.utcnow())
                         if 'stage' not in columns:
                             columns.append('stage')
-                            values.append('new')
+                            values.append('New')  # Must match LeadStage enum value exactly
                         if 'source' not in columns:
                             columns.append('source')
                             values.append('Data Import')
@@ -851,8 +851,9 @@ async def fix_lead_stage_values(
             'Long Term Nurture': 'Long-Term Nurture',
             'Attempted': 'Attempted Contact',
             'new': 'New',
-            'NEW': 'New',
+            'NEW': 'New',  # This can happen from bad default values
             # Python enum NAME variants (UPPER_CASE with underscores) -> correct VALUES
+            'NEW': 'New',  # Redundant but explicit
             'APPLICATION': 'Application',
             'PROSPECT': 'Prospect',
             'UNDER_CONTRACT': 'Under Contract',
