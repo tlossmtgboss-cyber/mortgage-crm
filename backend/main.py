@@ -44106,6 +44106,27 @@ async def startup_event():
                 except Exception as mem_e:
                     logger.warning(f"⚠️ Conversation memory table creation skipped: {mem_e}")
 
+                # Add stage_changed_at column to leads table for workflow day calculations
+                try:
+                    result = db.execute(text("""
+                        SELECT column_name FROM information_schema.columns
+                        WHERE table_name = 'leads' AND column_name = 'stage_changed_at'
+                    """))
+                    if not result.fetchone():
+                        db.execute(text("ALTER TABLE leads ADD COLUMN stage_changed_at TIMESTAMP WITH TIME ZONE"))
+                        # Initialize stage_changed_at to created_at for existing leads
+                        db.execute(text("""
+                            UPDATE leads
+                            SET stage_changed_at = created_at
+                            WHERE stage_changed_at IS NULL
+                        """))
+                        db.commit()
+                        logger.info("✅ Added stage_changed_at column to leads table")
+                    else:
+                        logger.info("✅ stage_changed_at column already exists")
+                except Exception as stage_e:
+                    logger.warning(f"⚠️ stage_changed_at column creation skipped: {stage_e}")
+
             except Exception as e:
                 logger.warning(f"⚠️ Sample data/permission seeding skipped: {e}")
             finally:
