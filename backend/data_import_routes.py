@@ -795,6 +795,33 @@ async def execute_import(
         raise HTTPException(status_code=500, detail=f"Error importing data: {str(e)}")
 
 
+@router.get("/stage-values")
+async def get_all_stage_values(
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Get all unique stage values currently in the leads table.
+    This helps identify invalid stage values that need to be fixed.
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("SELECT stage, COUNT(*) as count FROM leads GROUP BY stage ORDER BY count DESC")
+        results = cursor.fetchall()
+
+        cursor.close()
+        conn.close()
+
+        return {
+            "stage_values": [{"stage": row[0], "count": row[1]} for row in results],
+            "total_unique": len(results)
+        }
+    except Exception as e:
+        logger.error(f"Error getting stage values: {e}")
+        return {"error": str(e)}
+
+
 @router.post("/fix-stages")
 async def fix_lead_stage_values(
     key: str = "",
