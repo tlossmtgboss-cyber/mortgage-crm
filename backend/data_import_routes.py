@@ -200,6 +200,7 @@ def suggest_column_mappings(headers: list) -> dict:
         'lender': ['lender', 'investor', 'bank', 'lending institution'],
 
         # === PROPERTY INFO ===
+        # Note: For leads, these map to address/city/state/zip_code; for loans, they map to property_* columns
         'property_address': ['property address', 'address', 'street', 'street address', 'subject property', 'sub prop street', 'subject property street', 'prop street', 'property street'],
         'property_city': ['property city', 'city', 'town', 'sub prop city', 'subject property city'],
         'property_state': ['property state', 'state', 'province', 'st', 'sub prop state', 'subject property state', 'prop state'],
@@ -422,11 +423,16 @@ def transform_columns_for_destination(row_dict: dict, destination: str) -> dict:
 
     if destination == 'leads':
         # Transform loan-style columns to lead-style columns
+        # Note: leads table uses 'state', 'city', 'address', 'zip_code' - NOT 'property_*' columns
         column_transforms = {
             'borrower_name': 'name',
             'borrower_email': 'email',
             'borrower_phone': 'phone',
             'loan_officer_name': 'loan_officer',  # leads uses 'loan_officer', not 'loan_officer_name'
+            'property_state': 'state',  # leads table uses 'state' not 'property_state'
+            'property_city': 'city',    # leads table uses 'city' not 'property_city'
+            'property_zip': 'zip_code', # leads table uses 'zip_code' not 'property_zip'
+            'property_address': 'address',  # leads table uses 'address' not 'property_address'
         }
         for old_col, new_col in column_transforms.items():
             if old_col in result and new_col not in result:
