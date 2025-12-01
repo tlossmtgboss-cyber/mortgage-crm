@@ -280,6 +280,64 @@ function DataUpload() {
     link.click();
   };
 
+  // CSV template for portfolio loans import
+  const downloadPortfolioTemplate = () => {
+    const headers = [
+      'Loan Number',
+      'Borrower Name',
+      'Borrower Email',
+      'Borrower Phone',
+      'Property Address',
+      'City',
+      'State',
+      'Zip Code',
+      'Original Loan Amount',
+      'Current Balance',
+      'Interest Rate',
+      'Loan Term',
+      'Monthly Payment',
+      'LTV',
+      'APR',
+      'Origination Date',
+      'Maturity Date',
+      'Last Payment Date',
+      'Payment Status',
+      'Loan Officer',
+      'Processor'
+    ];
+
+    const sampleData = [
+      'PF-2023-001',
+      'Robert Johnson',
+      'robert.johnson@email.com',
+      '555-456-7890',
+      '789 Pine Street',
+      'Houston',
+      'TX',
+      '77001',
+      '325000',
+      '298500',
+      '5.875',
+      '360',
+      '1923.45',
+      '78.5',
+      '6.125',
+      '2023-06-15',
+      '2053-06-15',
+      '2024-11-01',
+      'Current',
+      '',
+      ''
+    ];
+
+    const csvContent = headers.join(',') + '\n' + sampleData.join(',');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'portfolio_import_template.csv';
+    link.click();
+  };
+
   const targetFields = {
     leads: [
       // Identifiers
@@ -477,6 +535,14 @@ function DataUpload() {
                   <div>
                     <div className="template-title">Loans Template</div>
                     <div className="template-desc">Import active loan files</div>
+                  </div>
+                  <span className="download-icon">⬇️</span>
+                </button>
+                <button className="btn-template" onClick={downloadPortfolioTemplate}>
+                  <span className="template-icon">💼</span>
+                  <div>
+                    <div className="template-title">Portfolio Template</div>
+                    <div className="template-desc">Import closed/funded loans for servicing</div>
                   </div>
                   <span className="download-icon">⬇️</span>
                 </button>
