@@ -1657,7 +1657,36 @@ function LeadDetail() {
           {/* Tasks Tab */}
           {activeTab === 'tasks' && (
           <div className="info-section">
-            <h2>Tasks</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h2 style={{ margin: 0 }}>Tasks</h2>
+              <button
+                onClick={() => setShowTaskModal(true)}
+                style={{
+                  background: 'linear-gradient(135deg, #218D8D 0%, #10b981 100%)',
+                  color: 'white',
+                  border: 'none',
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  fontSize: '14px',
+                  transition: 'transform 0.2s, box-shadow 0.2s'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(33, 141, 141, 0.3)';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
+              >
+                <span style={{ fontSize: '18px' }}>+</span> Add Task
+              </button>
+            </div>
             <div className="tasks-content">
               <p className="section-description" style={{ color: '#666', marginBottom: '20px' }}>
                 Upcoming tasks for the next 2 weeks based on status: <strong>{lead?.stage || 'Unknown'}</strong>
