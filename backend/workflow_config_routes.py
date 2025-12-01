@@ -1500,8 +1500,8 @@ async def get_lead_workflow_tasks(
         raise HTTPException(status_code=500, detail="Models not initialized")
 
     WorkflowConfiguration = _models['WorkflowConfiguration']
-    # Import Lead model from models module
-    from models import Lead
+    # Import Lead model from main module
+    from main import Lead
 
     try:
         # Get lead info using ORM
