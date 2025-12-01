@@ -444,6 +444,90 @@
       "implementation_location": "main.py:execute_assign_lead_to_agent"
     },
     {
+      "name": "lead_status_insights",
+      "domain": "leads",
+      "description": "Analyze leads by status and return metrics, bottlenecks, and recommended actions for New, Attempted Contact, Prospect, Application, Pre-Qualified, Pre-Approved, Nurture, Withdrawn, and Does Not Qualify. Use this for coaching-level pipeline analysis, not raw lead lists.",
+      "endpoint": "/api/tools/leads/lead_status_insights",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "assigned_to_user_id": {
+            "type": "string",
+            "description": "Optional: limit analysis to a specific LO/user."
+          },
+          "include_statuses": {
+            "type": "array",
+            "description": "Optional: override default statuses to analyze.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "new",
+                "attempted_contact",
+                "prospect",
+                "application",
+                "pre_qualified",
+                "pre_approved",
+                "nurture",
+                "withdrawn",
+                "does_not_qualify"
+              ]
+            }
+          },
+          "created_date_from": {
+            "type": "string",
+            "format": "date",
+            "description": "Optional: analyze leads created on/after this date (YYYY-MM-DD)."
+          },
+          "created_date_to": {
+            "type": "string",
+            "format": "date",
+            "description": "Optional: analyze leads created on/before this date (YYYY-MM-DD)."
+          },
+          "time_bucket": {
+            "type": "string",
+            "description": "Time aggregation bucket for trend metrics.",
+            "enum": ["day", "week", "month"],
+            "default": "week"
+          }
+        }
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "context": {
+            "type": "object",
+            "description": "Filter context used for the analysis"
+          },
+          "summary": {
+            "type": "object",
+            "description": "Overall pipeline summary with total_leads, total_active_leads, contact_rate, application_rate, preapproval_rate, nurture_rate"
+          },
+          "by_status": {
+            "type": "array",
+            "description": "Per-status metrics including count, percentage, days_in_status, conversion_rate, leak_rate, overdue_count"
+          },
+          "bottlenecks": {
+            "type": "array",
+            "description": "Detected issues with severity and recommended_action"
+          },
+          "priority_focus_areas": {
+            "type": "array",
+            "description": "Ranked list of where to focus with suggested_playbook"
+          },
+          "trend_metrics": {
+            "type": "array",
+            "description": "Time-series data for trend analysis"
+          }
+        }
+      },
+      "side_effect": false,
+      "requires_approval": false,
+      "risk_level": "low",
+      "implemented": true,
+      "implementation_location": "tools/router.py:handle_lead_status_insights"
+    },
+    {
       "name": "create_task",
       "domain": "pipeline",
       "description": "Create a new task for follow-up or action item",

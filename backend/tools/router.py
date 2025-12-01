@@ -413,3 +413,46 @@ async def handle_get_rate_lock_recommendation(args: Dict[str, Any], request: Req
             "days_to_close": days_to_close
         }
     }
+
+
+@register_tool_handler("lead_status_insights")
+async def handle_lead_status_insights(args: Dict[str, Any], request: Request) -> Dict[str, Any]:
+    """
+    Get lead pipeline intelligence and coaching insights.
+
+    Analyzes leads by status and returns:
+    - Summary metrics (counts, conversion rates)
+    - Per-status breakdowns with SLA tracking
+    - Bottleneck detection
+    - Prioritized focus areas with playbooks
+    - Trend data over time
+    """
+    try:
+        # Get database session
+        from main import SessionLocal
+        from services.lead_status_insights_service import get_lead_status_insights
+
+        db = SessionLocal()
+        try:
+            insights = get_lead_status_insights(
+                db=db,
+                assigned_to_user_id=args.get('assigned_to_user_id'),
+                include_statuses=args.get('include_statuses'),
+                created_date_from=args.get('created_date_from'),
+                created_date_to=args.get('created_date_to'),
+                time_bucket=args.get('time_bucket', 'week')
+            )
+
+            return {
+                "success": True,
+                "data": insights
+            }
+        finally:
+            db.close()
+
+    except Exception as e:
+        logger.error(f"Lead status insights error: {e}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
