@@ -49,31 +49,28 @@ class EmailSearchTools:
             params = {"days": days, "limit": limit}
 
             if client_email:
-                conditions.append("LOWER(from_address) = LOWER(:email)")
+                conditions.append("LOWER(from_email) = LOWER(:email)")
                 params["email"] = client_email
 
             if client_name:
-                conditions.append("""
-                    (LOWER(from_name) LIKE LOWER(:name_pattern)
-                     OR LOWER(borrower_name) LIKE LOWER(:name_pattern))
-                """)
+                conditions.append("LOWER(from_name) LIKE LOWER(:name_pattern)")
                 params["name_pattern"] = f"%{client_name}%"
 
             if client_id:
-                conditions.append("(lead_id = :client_id OR loan_id = :client_id)")
+                conditions.append("(matched_lead_id = :client_id OR matched_loan_id = :client_id)")
                 params["client_id"] = client_id
 
             query = text(f"""
                 SELECT
-                    id, message_id, from_address, from_name,
-                    subject, received_date, is_priority,
-                    borrower_name, lead_id, loan_id,
+                    id, provider_message_id as message_id, from_email, from_name,
+                    subject, COALESCE(received_date, sent_date) as received_date, is_priority,
+                    matched_lead_id as lead_id, matched_loan_id as loan_id,
                     match_confidence, match_method,
                     LEFT(body_preview, 200) as body_preview
                 FROM email_reconciliation_queue
                 WHERE {' AND '.join(conditions)}
-                AND received_date > NOW() - INTERVAL ':days days'
-                ORDER BY received_date DESC
+                AND COALESCE(received_date, sent_date) > NOW() - INTERVAL '{days} days'
+                ORDER BY COALESCE(received_date, sent_date) DESC
                 LIMIT :limit
             """)
 
@@ -84,7 +81,7 @@ class EmailSearchTools:
             for row in results:
                 email = {
                     "id": row.id,
-                    "from": row.from_address,
+                    "from": row.from_email,
                     "from_name": row.from_name,
                     "subject": row.subject,
                     "date": row.received_date.isoformat() if row.received_date else None,
@@ -138,7 +135,7 @@ class EmailSearchTools:
             # First get the reference email
             if email_id:
                 ref_query = text("""
-                    SELECT thread_id, from_address, subject
+                    SELECT thread_id, from_email, subject
                     FROM email_reconciliation_queue
                     WHERE id = :email_id
                 """)
@@ -156,12 +153,12 @@ class EmailSearchTools:
             # Get all emails in thread
             query = text("""
                 SELECT
-                    id, message_id, from_address, from_name,
-                    subject, received_date, body_preview,
-                    is_priority, lead_id, loan_id
+                    id, provider_message_id as message_id, from_email, from_name,
+                    subject, COALESCE(received_date, sent_date) as received_date, body_preview,
+                    is_priority, matched_lead_id as lead_id, matched_loan_id as loan_id
                 FROM email_reconciliation_queue
                 WHERE thread_id = :thread_id
-                ORDER BY received_date ASC
+                ORDER BY COALESCE(received_date, sent_date) ASC
             """)
 
             results = self.db.execute(query, {"thread_id": thread_id}).fetchall()
@@ -171,13 +168,14 @@ class EmailSearchTools:
             for row in results:
                 emails.append({
                     "id": row.id,
-                    "from": row.from_address,
+                    "from": row.from_email,
                     "from_name": row.from_name,
                     "subject": row.subject,
                     "date": row.received_date.isoformat() if row.received_date else None,
                     "preview": row.body_preview
                 })
-                participants.add(row.from_address)
+                if row.from_email:
+                    participants.add(row.from_email)
 
             return {
                 "success": True,
@@ -214,7 +212,7 @@ class EmailSearchTools:
                 SELECT
                     kce.email, kce.client_name, kce.entity_type, kce.entity_id,
                     kce.is_priority, kce.email_count,
-                    l.id as lead_id, l.first_name as lead_first, l.last_name as lead_last,
+                    l.id as lead_id, l.name as lead_name,
                     lo.id as loan_id, lo.borrower_name
                 FROM known_client_emails kce
                 LEFT JOIN leads l ON kce.entity_type = 'lead' AND kce.entity_id = l.id
@@ -240,7 +238,7 @@ class EmailSearchTools:
                 if result.lead_id:
                     identity["lead_details"] = {
                         "id": result.lead_id,
-                        "name": f"{result.lead_first} {result.lead_last}"
+                        "name": result.lead_name
                     }
                 if result.loan_id:
                     identity["loan_details"] = {
@@ -257,7 +255,7 @@ class EmailSearchTools:
 
             # Check leads by email
             lead_query = text("""
-                SELECT id, first_name, last_name, email, phone, stage
+                SELECT id, name, email, phone, stage
                 FROM leads
                 WHERE LOWER(email) = :email
             """)
@@ -270,18 +268,18 @@ class EmailSearchTools:
                         "matched": True,
                         "match_confidence": 0.95,
                         "email": lead.email,
-                        "client_name": f"{lead.first_name} {lead.last_name}",
+                        "client_name": lead.name,
                         "entity_type": "lead",
                         "entity_id": lead.id,
                         "is_priority": False
                     },
                     "lead_details": {
                         "id": lead.id,
-                        "name": f"{lead.first_name} {lead.last_name}",
+                        "name": lead.name,
                         "phone": lead.phone,
                         "stage": lead.stage
                     },
-                    "ai_summary": f"{lead.first_name} {lead.last_name} - Lead (Stage: {lead.stage})"
+                    "ai_summary": f"{lead.name} - Lead (Stage: {lead.stage})"
                 }
 
             # Check loans by borrower email
@@ -344,21 +342,21 @@ class EmailSearchTools:
             Dict with priority emails and recommended actions
         """
         try:
-            query = text("""
+            query = text(f"""
                 SELECT
-                    id, from_address, from_name, subject,
-                    received_date, body_preview, borrower_name,
-                    lead_id, loan_id, match_confidence,
+                    id, from_email, from_name, subject,
+                    COALESCE(received_date, sent_date) as received_date, body_preview,
+                    matched_lead_id as lead_id, matched_loan_id as loan_id, match_confidence,
                     is_priority, status
                 FROM email_reconciliation_queue
                 WHERE is_priority = TRUE
-                AND received_date > NOW() - INTERVAL ':days days'
+                AND COALESCE(received_date, sent_date) > NOW() - INTERVAL '{days} days'
                 AND status != 'archived'
-                ORDER BY received_date DESC
+                ORDER BY COALESCE(received_date, sent_date) DESC
                 LIMIT :limit
             """)
 
-            results = self.db.execute(query, {"days": days, "limit": limit}).fetchall()
+            results = self.db.execute(query, {"limit": limit}).fetchall()
 
             emails = []
             action_items = []
@@ -366,8 +364,8 @@ class EmailSearchTools:
             for row in results:
                 email = {
                     "id": row.id,
-                    "from": row.from_address,
-                    "from_name": row.from_name or row.borrower_name,
+                    "from": row.from_email,
+                    "from_name": row.from_name,
                     "subject": row.subject,
                     "date": row.received_date.isoformat() if row.received_date else None,
                     "preview": row.body_preview,
@@ -379,8 +377,8 @@ class EmailSearchTools:
 
                 # Generate action recommendation
                 if row.status == 'pending':
-                    client = row.from_name or row.borrower_name or row.from_address
-                    action_items.append(f"Follow up on email from {client}: {row.subject[:50]}")
+                    client = row.from_name or row.from_email
+                    action_items.append(f"Follow up on email from {client}: {row.subject[:50] if row.subject else 'No subject'}")
 
             # Categorize by urgency
             today = datetime.utcnow().date()
@@ -440,26 +438,25 @@ class EmailSearchTools:
             # Split keywords for matching
             terms = keywords.lower().split()
 
-            query = text("""
+            query = text(f"""
                 SELECT
-                    id, from_address, from_name, subject,
-                    received_date, body_preview, borrower_name,
-                    lead_id, loan_id, is_priority
+                    id, from_email, from_name, subject,
+                    COALESCE(received_date, sent_date) as received_date, body_preview,
+                    matched_lead_id as lead_id, matched_loan_id as loan_id, is_priority
                 FROM email_reconciliation_queue
-                WHERE received_date > NOW() - INTERVAL ':days days'
+                WHERE COALESCE(received_date, sent_date) > NOW() - INTERVAL '{days} days'
                 AND (
                     LOWER(subject) LIKE :pattern
                     OR LOWER(body_preview) LIKE :pattern
                 )
                 ORDER BY
                     CASE WHEN is_priority THEN 0 ELSE 1 END,
-                    received_date DESC
+                    COALESCE(received_date, sent_date) DESC
                 LIMIT :limit
             """)
 
             pattern = f"%{keywords.lower()}%"
             results = self.db.execute(query, {
-                "days": days,
                 "limit": limit,
                 "pattern": pattern
             }).fetchall()
@@ -468,8 +465,8 @@ class EmailSearchTools:
             for row in results:
                 emails.append({
                     "id": row.id,
-                    "from": row.from_address,
-                    "from_name": row.from_name or row.borrower_name,
+                    "from": row.from_email,
+                    "from_name": row.from_name,
                     "subject": row.subject,
                     "date": row.received_date.isoformat() if row.received_date else None,
                     "preview": row.body_preview,
@@ -508,9 +505,9 @@ class EmailSearchTools:
             # Get the email
             email_query = text("""
                 SELECT
-                    id, message_id, thread_id, from_address, from_name,
-                    subject, received_date, body_preview,
-                    borrower_name, lead_id, loan_id,
+                    id, provider_message_id as message_id, thread_id, from_email, from_name,
+                    subject, COALESCE(received_date, sent_date) as received_date, body_preview,
+                    matched_lead_id as lead_id, matched_loan_id as loan_id,
                     match_confidence, match_method, is_priority, status
                 FROM email_reconciliation_queue
                 WHERE id = :email_id
@@ -527,7 +524,7 @@ class EmailSearchTools:
             context = {
                 "email": {
                     "id": email.id,
-                    "from": email.from_address,
+                    "from": email.from_email,
                     "from_name": email.from_name,
                     "subject": email.subject,
                     "date": email.received_date.isoformat() if email.received_date else None,
@@ -550,14 +547,14 @@ class EmailSearchTools:
 
             if email.lead_id:
                 lead_query = text("""
-                    SELECT id, first_name, last_name, email, phone, stage, created_at
+                    SELECT id, name, email, phone, stage, created_at
                     FROM leads WHERE id = :lead_id
                 """)
                 lead = self.db.execute(lead_query, {"lead_id": email.lead_id}).fetchone()
                 if lead:
                     crm_context["lead"] = {
                         "id": lead.id,
-                        "name": f"{lead.first_name} {lead.last_name}",
+                        "name": lead.name,
                         "email": lead.email,
                         "phone": lead.phone,
                         "stage": lead.stage
@@ -583,15 +580,15 @@ class EmailSearchTools:
 
             # Get recent emails from same sender
             recent_query = text("""
-                SELECT id, subject, received_date
+                SELECT id, subject, COALESCE(received_date, sent_date) as received_date
                 FROM email_reconciliation_queue
-                WHERE from_address = :from_addr
+                WHERE from_email = :from_addr
                 AND id != :email_id
-                ORDER BY received_date DESC
+                ORDER BY COALESCE(received_date, sent_date) DESC
                 LIMIT 5
             """)
             recent = self.db.execute(recent_query, {
-                "from_addr": email.from_address,
+                "from_addr": email.from_email,
                 "email_id": email_id
             }).fetchall()
 
@@ -621,7 +618,7 @@ class EmailSearchTools:
             context["success"] = True
 
             # Generate summary
-            client = email.from_name or email.borrower_name or email.from_address
+            client = email.from_name or email.from_email
             summary = f"Email from {client}"
             if crm_context.get("loan"):
                 summary += f" (Active loan #{crm_context['loan']['loan_number']})"
