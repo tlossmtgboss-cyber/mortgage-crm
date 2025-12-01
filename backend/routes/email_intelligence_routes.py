@@ -1560,32 +1560,43 @@ async def import_email_to_queue(
     email_id = result.fetchone()[0]
     db.commit()
 
-    # Auto-match to known clients (only if entity IDs weren't provided)
+    # Auto-match using full EmailIdentityResolver (only if entity IDs weren't provided)
     has_entity_match = email_data.get("matched_loan_id") or email_data.get("matched_lead_id") or email_data.get("matched_contact_id")
     if not has_entity_match and email_data.get("from_email"):
-        match_result = db.execute(text("""
-            SELECT contact_id, loan_id, lead_id
-            FROM known_client_emails
-            WHERE email_address = :email AND user_id = :user_id
-            LIMIT 1
-        """), {"email": email_data.get("from_email").lower(), "user_id": user_id}).fetchone()
+        try:
+            from services.email_identity_resolver import get_email_identity_resolver
 
-        if match_result:
-            db.execute(text("""
-                UPDATE email_reconciliation_queue
-                SET matched_contact_id = :contact_id,
-                    matched_loan_id = :loan_id,
-                    matched_lead_id = :lead_id,
-                    match_method = 'known_client_email',
-                    match_confidence = 1.0
-                WHERE id = :email_id
-            """), {
-                "contact_id": match_result[0],
-                "loan_id": match_result[1],
-                "lead_id": match_result[2],
-                "email_id": email_id
-            })
-            db.commit()
+            resolver = get_email_identity_resolver(db)
+            match_result = resolver.resolve(email_data, user_id)
+
+            if match_result.get("match_method"):
+                db.execute(text("""
+                    UPDATE email_reconciliation_queue
+                    SET matched_contact_id = :contact_id,
+                        matched_loan_id = :loan_id,
+                        matched_lead_id = :lead_id,
+                        match_method = :method,
+                        match_confidence = :confidence,
+                        match_evidence = :evidence,
+                        match_client_name = :client_name,
+                        match_loan_number = :loan_number,
+                        is_priority = :is_priority
+                    WHERE id = :email_id
+                """), {
+                    "contact_id": match_result.get("matched_contact_id"),
+                    "loan_id": match_result.get("matched_loan_id"),
+                    "lead_id": match_result.get("matched_lead_id"),
+                    "method": match_result.get("match_method"),
+                    "confidence": match_result.get("match_confidence"),
+                    "evidence": match_result.get("match_evidence"),
+                    "client_name": match_result.get("match_client_name"),
+                    "loan_number": match_result.get("match_loan_number"),
+                    "is_priority": match_result.get("is_priority", False),
+                    "email_id": email_id
+                })
+                db.commit()
+        except Exception as e:
+            logger.error(f"Email identity resolution failed: {e}")
 
     # Run AI analysis if requested
     analysis = None
