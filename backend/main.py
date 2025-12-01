@@ -31150,10 +31150,56 @@ async def delete_lead(lead_id: int, db: Session = Depends(get_db), current_user:
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
-    db.delete(lead)
-    db.commit()
-    logger.info(f"Lead deleted: {lead.name}")
-    return None
+    lead_name = lead.name
+
+    try:
+        # Delete related records first to avoid foreign key constraint errors
+        # Delete in order of dependencies
+
+        # Delete activities
+        db.execute(text("DELETE FROM activities WHERE lead_id = :lead_id"), {"lead_id": lead_id})
+
+        # Delete tasks
+        db.execute(text("DELETE FROM tasks WHERE lead_id = :lead_id"), {"lead_id": lead_id})
+        db.execute(text("DELETE FROM ai_tasks WHERE lead_id = :lead_id"), {"lead_id": lead_id})
+
+        # Delete documents
+        db.execute(text("DELETE FROM documents WHERE lead_id = :lead_id"), {"lead_id": lead_id})
+
+        # Delete notes
+        db.execute(text("DELETE FROM notes WHERE lead_id = :lead_id"), {"lead_id": lead_id})
+
+        # Delete communications
+        db.execute(text("DELETE FROM communications WHERE lead_id = :lead_id"), {"lead_id": lead_id})
+
+        # Delete email queue items
+        db.execute(text("DELETE FROM email_reconciliation_queue WHERE lead_id = :lead_id"), {"lead_id": lead_id})
+
+        # Delete workflow executions
+        db.execute(text("DELETE FROM workflow_executions WHERE lead_id = :lead_id"), {"lead_id": lead_id})
+
+        # Delete lead profiles
+        db.execute(text("DELETE FROM lead_profiles WHERE lead_id = :lead_id"), {"lead_id": lead_id})
+
+        # Delete circle contacts
+        db.execute(text("DELETE FROM circle_contacts WHERE lead_id = :lead_id"), {"lead_id": lead_id})
+
+        # Delete notifications
+        db.execute(text("DELETE FROM notifications WHERE lead_id = :lead_id"), {"lead_id": lead_id})
+
+        # Nullify lead references in loans (don't delete loans)
+        db.execute(text("UPDATE loans SET lead_id = NULL WHERE lead_id = :lead_id"), {"lead_id": lead_id})
+
+        # Now delete the lead
+        db.delete(lead)
+        db.commit()
+        logger.info(f"Lead deleted: {lead_name}")
+        return None
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deleting lead {lead_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete lead: {str(e)}")
 
 @app.post("/api/v1/leads/{lead_id}/calculate-referral-scores")
 async def calculate_lead_referral_scores(lead_id: int, data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
