@@ -397,6 +397,35 @@ async def analyze_file(
         raise HTTPException(status_code=500, detail=f"Error analyzing file: {str(e)}")
 
 
+def ensure_import_columns_exist(conn, destination: str):
+    """Ensure all import columns exist in the target table"""
+    cursor = conn.cursor()
+
+    if destination == 'leads':
+        columns_to_add = [
+            ("first_name", "VARCHAR"),
+            ("last_name", "VARCHAR"),
+            ("organization_code", "VARCHAR"),
+            ("cltv", "FLOAT"),
+            ("dti_front", "FLOAT"),
+            ("dti_back", "FLOAT"),
+            ("program", "VARCHAR"),
+            ("status_date", "TIMESTAMP"),
+        ]
+        table_name = "leads"
+    else:
+        return  # Only leads need this for now
+
+    for col_name, col_type in columns_to_add:
+        try:
+            cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS {col_name} {col_type}")
+            conn.commit()
+        except Exception:
+            conn.rollback()
+
+    cursor.close()
+
+
 @router.post("/execute")
 async def execute_import(
     file: UploadFile = File(...),
@@ -432,6 +461,10 @@ async def execute_import(
 
         # Get database connection
         conn = get_db_connection()
+
+        # Ensure all import columns exist in target table
+        ensure_import_columns_exist(conn, destination)
+
         cursor = conn.cursor()
 
         imported = 0
