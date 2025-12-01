@@ -632,6 +632,7 @@ class Lead(Base):
     workflow_day = Column(Integer, default=0)  # Current day in workflow sequence
     last_workflow_action = Column(DateTime)  # Last automated action
     nurture_month = Column(Integer, default=0)  # Month in long-term nurture cycle
+    stage_changed_at = Column(DateTime)  # Tracks when stage last changed (for workflow day calculation)
     # Metadata
     user_metadata = Column(JSON)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -25759,6 +25760,55 @@ async def add_lead_milestone_columns(
         }
 
 
+@app.post("/api/v1/migrations/add-stage-changed-at")
+async def add_stage_changed_at_column(
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Add stage_changed_at column to leads table for workflow day calculations.
+    This tracks when the lead's stage last changed to properly calculate workflow task timing.
+    """
+    try:
+        logger.info("Running migration: add stage_changed_at column")
+        columns_added = []
+
+        # Check if column exists
+        result = db.execute(text("""
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = 'leads' AND column_name = 'stage_changed_at'
+        """))
+
+        if not result.fetchone():
+            db.execute(text("ALTER TABLE leads ADD COLUMN stage_changed_at TIMESTAMP WITH TIME ZONE"))
+            columns_added.append("stage_changed_at")
+            logger.info("Added column stage_changed_at to leads table")
+
+            # Initialize stage_changed_at to created_at for existing leads
+            db.execute(text("""
+                UPDATE leads
+                SET stage_changed_at = created_at
+                WHERE stage_changed_at IS NULL
+            """))
+            logger.info("Initialized stage_changed_at for existing leads")
+
+        db.commit()
+
+        return {
+            "success": True,
+            "columns_added": columns_added,
+            "message": f"Added {len(columns_added)} columns to leads table" if columns_added else "Column already exists"
+        }
+
+    except Exception as e:
+        logger.error(f"Stage changed at migration failed: {e}")
+        db.rollback()
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e)
+        }
+
+
 @app.post("/api/v1/migrations/add-loan-milestone-columns")
 async def add_loan_milestone_columns(
     db: Session = Depends(get_db)
@@ -31057,6 +31107,7 @@ async def get_lead(lead_id: int, db: Session = Depends(get_db), current_user: Us
         "owner_id": lead.owner_id,
         "created_at": lead.created_at.isoformat() if lead.created_at else None,
         "updated_at": lead.updated_at.isoformat() if lead.updated_at else None,
+        "stage_changed_at": lead.stage_changed_at.isoformat() if lead.stage_changed_at else None,
     }
 
 @app.patch("/api/v1/leads/{lead_id}")
@@ -31085,6 +31136,13 @@ async def update_lead(lead_id: int, lead_update: LeadUpdate, db: Session = Depen
     # Trigger workflow if status changed
     new_status = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage) if lead.stage else None
     if old_status != new_status and new_status:
+        # Track when stage changed for workflow day calculations
+        lead.stage_changed_at = datetime.now(timezone.utc)
+        lead.workflow_day = 0  # Reset workflow day counter
+        db.commit()
+        db.refresh(lead)
+        logger.info(f"Stage changed for lead {lead.id}: {old_status} → {new_status}, stage_changed_at updated")
+
         try:
             # Create status change event
             status_change = LeadStatusChange(

@@ -706,48 +706,80 @@ function LeadDetail() {
 
     setWorkflowTasksLoading(true);
     try {
-      // Map lead stage to workflow key
+      // Map lead stage to workflow key (matches workflow_config_models.py DEFAULT_WORKFLOW_CONFIGS)
       const stageToWorkflowMap = {
-        'New': 'lead_intake',
-        'new': 'lead_intake',
-        'Attempted Contact': 'lead_intake',
-        'attempted_contact': 'lead_intake',
-        'Prospect': 'lead_intake',
-        'prospect': 'lead_intake',
-        'Pre-Qualified': 'lead_intake',
-        'pre_qualified': 'lead_intake',
-        'Application': 'application',
-        'application': 'application',
-        'Pre-Approved': 'pre_approval',
-        'pre_approved': 'pre_approval',
-        'Under Contract': 'processing',
-        'under_contract': 'processing',
-        'Processing': 'processing',
-        'processing': 'processing',
-        'Underwriting': 'underwriting',
-        'underwriting': 'underwriting',
-        'Conditional Approval': 'underwriting',
-        'conditional_approval': 'underwriting',
-        'Clear to Close': 'closing',
-        'clear_to_close': 'closing',
-        'Closing': 'closing',
-        'closing': 'closing',
-        'Funded': 'post_closing',
-        'funded': 'post_closing',
-        'Closed': 'post_closing',
-        'closed': 'post_closing',
+        // Prospect Workflow - Lead engagement and qualification
+        'New': 'prospect',
+        'new': 'prospect',
+        'NEW': 'prospect',
+        'Attempted Contact': 'prospect',
+        'attempted_contact': 'prospect',
+        'ATTEMPTED_CONTACT': 'prospect',
+        'Prospect': 'prospect',
+        'prospect': 'prospect',
+        'PROSPECT': 'prospect',
+        // PreQual Workflow - Application and Pre-qualification
+        'Application': 'prequal',
+        'application': 'prequal',
+        'APPLICATION': 'prequal',
+        'Pre-Qualified': 'prequal',
+        'pre_qualified': 'prequal',
+        'PRE_QUALIFIED': 'prequal',
+        // Pre-Approved Workflow - House hunting support
+        'Pre-Approved': 'pre_approved',
+        'pre_approved': 'pre_approved',
+        'PRE_APPROVED': 'pre_approved',
+        // Under Contract Workflow - Active loan processing
+        'Under Contract': 'under_contract',
+        'under_contract': 'under_contract',
+        'UNDER_CONTRACT': 'under_contract',
+        'Processing': 'under_contract',
+        'processing': 'under_contract',
+        'PROCESSING': 'under_contract',
+        'Underwriting': 'under_contract',
+        'underwriting': 'under_contract',
+        'UNDERWRITING': 'under_contract',
+        'Conditional Approval': 'under_contract',
+        'conditional_approval': 'under_contract',
+        'CONDITIONAL_APPROVAL': 'under_contract',
+        // Last Mile Workflow - Final steps to closing
+        'CTC': 'last_mile',
+        'ctc': 'last_mile',
+        'Clear to Close': 'last_mile',
+        'clear_to_close': 'last_mile',
+        'CLEAR_TO_CLOSE': 'last_mile',
+        'Closing': 'last_mile',
+        'closing': 'last_mile',
+        'CLOSING': 'last_mile',
+        // Post Close Workflow - Post-closing follow-up
+        'Funded': 'post_close',
+        'funded': 'post_close',
+        'FUNDED': 'post_close',
+        'Closed': 'post_close',
+        'closed': 'post_close',
+        'CLOSED': 'post_close',
+        // Credit Repair Workflow
         'Credit Repair': 'credit_repair',
         'credit_repair': 'credit_repair',
+        'Does Not Qualify': 'credit_repair',
+        'does_not_qualify': 'credit_repair',
+        'DOES_NOT_QUALIFY': 'credit_repair',
+        // Nurture Workflow - Long-term relationship maintenance
+        'Long-Term Nurture': 'nurture',
+        'long_term_nurture': 'nurture',
+        'LONG_TERM_NURTURE': 'nurture',
         'Nurture': 'nurture',
         'nurture': 'nurture',
+        'NURTURE': 'nurture',
         'Not Ready': 'nurture',
-        'not_ready': 'nurture'
+        'not_ready': 'nurture',
+        'NOT_READY': 'nurture'
       };
 
-      const workflowKey = stageToWorkflowMap[lead.stage] || 'lead_intake';
+      const workflowKey = stageToWorkflowMap[lead.stage] || 'prospect';
 
       // Calculate days since lead entered current status (or created)
-      const statusDate = lead.status_changed_at || lead.created_at || new Date().toISOString();
+      const statusDate = lead.stage_changed_at || lead.created_at || new Date().toISOString();
       const daysSinceStatus = Math.floor((new Date() - new Date(statusDate)) / (1000 * 60 * 60 * 24));
       const currentWorkflowDay = daysSinceStatus + 1; // Day 1 is the first day
 
