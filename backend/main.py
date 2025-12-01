@@ -25874,6 +25874,79 @@ async def fix_lead_stage_values_migration(
         }
 
 
+@app.post("/api/v1/migrations/convert-lead-stage-to-enum-names")
+async def convert_lead_stage_to_enum_names_migration(
+    key: str = "",
+    db: Session = Depends(get_db)
+):
+    """
+    Migration: Convert lead stage display values to PostgreSQL enum names.
+    The database enum uses uppercase names (NEW, PROSPECT, etc.) but we stored
+    display values (New, Prospect, etc.). This fixes that mismatch.
+    Call with: POST /api/v1/migrations/convert-lead-stage-to-enum-names?key=convert-stages
+    """
+    if key != "convert-stages":
+        raise HTTPException(status_code=403, detail="Invalid key. Use ?key=convert-stages")
+
+    try:
+        logger.info("Running migration: convert lead stage values to enum names")
+
+        # Map display values to PostgreSQL enum names
+        stage_mapping = {
+            'New': 'NEW',
+            'Attempted Contact': 'ATTEMPTED_CONTACT',
+            'Prospect': 'PROSPECT',
+            'Application': 'APPLICATION',
+            'Pre-Qualified': 'PRE_QUALIFIED',
+            'Pre-Approved': 'PRE_APPROVED',
+            'Under Contract': 'UNDER_CONTRACT',
+            'Long-Term Nurture': 'LONG_TERM_NURTURE',
+            'Closed': 'CLOSED',
+            'AMR': 'AMR',
+            'Referral Source': 'REFERRAL_SOURCE',
+            'Withdrawn': 'WITHDRAWN',
+            'Does Not Qualify': 'DOES_NOT_QUALIFY',
+        }
+
+        results = []
+        total_fixed = 0
+
+        for display_value, enum_name in stage_mapping.items():
+            try:
+                # First check how many rows have this value
+                check = db.execute(text(
+                    "SELECT COUNT(*) FROM leads WHERE stage::text = :val"
+                ), {"val": display_value}).scalar()
+
+                if check and check > 0:
+                    # Update to enum name
+                    result = db.execute(text(
+                        "UPDATE leads SET stage = :enum_name::leadstage WHERE stage::text = :display_val"
+                    ), {"enum_name": enum_name, "display_val": display_value})
+                    results.append(f"'{display_value}' -> '{enum_name}': {result.rowcount} rows")
+                    total_fixed += result.rowcount
+            except Exception as e:
+                results.append(f"'{display_value}': Error - {str(e)}")
+                db.rollback()
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": f"Fixed {total_fixed} lead stage values",
+            "details": results,
+            "total_fixed": total_fixed
+        }
+    except Exception as e:
+        logger.error(f"Lead stage conversion migration failed: {e}")
+        db.rollback()
+        return {
+            "success": False,
+            "message": f"Migration failed: {str(e)}",
+            "error": str(e)
+        }
+
+
 @app.post("/api/v1/migrations/add-subscription-system")
 async def add_subscription_system_migration(
     db: Session = Depends(get_db)
