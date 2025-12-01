@@ -31025,7 +31025,7 @@ async def search_leads(
 
     return leads
 
-@app.get("/api/v1/leads/{lead_id}", response_model=LeadResponse)
+@app.get("/api/v1/leads/{lead_id}")
 async def get_lead(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
     # Use the same permission filtering as the list endpoint
     query = db.query(Lead).filter(Lead.id == lead_id)
@@ -31033,9 +31033,33 @@ async def get_lead(lead_id: int, db: Session = Depends(get_db), current_user: Us
     lead = query.first()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
-    return lead
 
-@app.patch("/api/v1/leads/{lead_id}", response_model=LeadResponse)
+    # Handle stage value - it might be an enum or a string depending on DB content
+    stage_value = None
+    if lead.stage:
+        stage_value = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage)
+
+    # Return dict to avoid Pydantic validation issues with enum
+    return {
+        "id": lead.id,
+        "name": lead.name,
+        "email": lead.email,
+        "phone": lead.phone,
+        "stage": stage_value,
+        "source": lead.source,
+        "ai_score": lead.ai_score,
+        "sentiment": lead.sentiment,
+        "next_action": lead.next_action,
+        "preapproval_amount": lead.preapproval_amount,
+        "credit_score": lead.credit_score,
+        "loan_type": lead.loan_type,
+        "notes": lead.notes,
+        "owner_id": lead.owner_id,
+        "created_at": lead.created_at.isoformat() if lead.created_at else None,
+        "updated_at": lead.updated_at.isoformat() if lead.updated_at else None,
+    }
+
+@app.patch("/api/v1/leads/{lead_id}")
 async def update_lead(lead_id: int, lead_update: LeadUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
     # Use the same permission filtering as the list endpoint
     query = db.query(Lead).filter(Lead.id == lead_id)
@@ -31045,7 +31069,7 @@ async def update_lead(lead_id: int, lead_update: LeadUpdate, db: Session = Depen
         raise HTTPException(status_code=404, detail="Lead not found")
 
     # Capture old status for workflow trigger
-    old_status = lead.stage.value if lead.stage else None
+    old_status = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage) if lead.stage else None
 
     for key, value in lead_update.dict(exclude_unset=True).items():
         setattr(lead, key, value)
@@ -31059,7 +31083,7 @@ async def update_lead(lead_id: int, lead_update: LeadUpdate, db: Session = Depen
     logger.info(f"Lead updated: {lead.name}")
 
     # Trigger workflow if status changed
-    new_status = lead.stage.value if lead.stage else None
+    new_status = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage) if lead.stage else None
     if old_status != new_status and new_status:
         try:
             # Create status change event
@@ -31092,7 +31116,30 @@ async def update_lead(lead_id: int, lead_update: LeadUpdate, db: Session = Depen
             logger.error(f"⚠️ Workflow error for lead {lead.id}: {e}")
             # Don't fail the update if workflow fails
 
-    return lead
+    # Handle stage value - it might be an enum or a string depending on DB content
+    stage_value = None
+    if lead.stage:
+        stage_value = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage)
+
+    # Return dict to avoid Pydantic validation issues with enum
+    return {
+        "id": lead.id,
+        "name": lead.name,
+        "email": lead.email,
+        "phone": lead.phone,
+        "stage": stage_value,
+        "source": lead.source,
+        "ai_score": lead.ai_score,
+        "sentiment": lead.sentiment,
+        "next_action": lead.next_action,
+        "preapproval_amount": lead.preapproval_amount,
+        "credit_score": lead.credit_score,
+        "loan_type": lead.loan_type,
+        "notes": lead.notes,
+        "owner_id": lead.owner_id,
+        "created_at": lead.created_at.isoformat() if lead.created_at else None,
+        "updated_at": lead.updated_at.isoformat() if lead.updated_at else None,
+    }
 
 @app.delete("/api/v1/leads/{lead_id}", status_code=204)
 async def delete_lead(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
