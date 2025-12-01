@@ -29,23 +29,139 @@ except ImportError:
         return psycopg2.connect(os.getenv("DATABASE_URL"))
 
 
-def parse_excel_or_csv(file_content: bytes, filename: str) -> pd.DataFrame:
-    """Parse CSV or Excel file into DataFrame"""
+def detect_header_row(file_content: bytes, filename: str) -> int:
+    """
+    Detect the actual header row in an Excel/CSV file.
+    Some files have title/summary rows before the actual headers.
+    Returns the row index (0-based) where headers are located.
+    """
     try:
+        # Read first 10 rows without header assumption
+        if filename.endswith('.csv'):
+            df_preview = pd.read_csv(io.BytesIO(file_content), header=None, nrows=10)
+        else:
+            df_preview = pd.read_excel(io.BytesIO(file_content), header=None, nrows=10)
+
+        # Look for the row that most likely contains headers
+        # Headers typically have: multiple non-empty cells, text values, unique values
+        best_header_row = 0
+        best_score = 0
+
+        for idx, row in df_preview.iterrows():
+            score = 0
+            non_empty = 0
+            unique_values = set()
+
+            for val in row:
+                if pd.notna(val) and str(val).strip():
+                    non_empty += 1
+                    val_str = str(val).strip().lower()
+                    unique_values.add(val_str)
+
+                    # Bonus points for common header keywords
+                    header_keywords = [
+                        'name', 'date', 'email', 'phone', 'address', 'loan', 'number',
+                        'status', 'stage', 'amount', 'rate', 'type', 'code', 'id',
+                        'borrower', 'property', 'city', 'state', 'zip', 'officer',
+                        'processor', 'first', 'last', 'street', 'created', 'full'
+                    ]
+                    if any(kw in val_str for kw in header_keywords):
+                        score += 2
+
+                    # Penalty for very long text (likely a title/description row)
+                    if len(val_str) > 50:
+                        score -= 3
+
+            # Score based on number of non-empty unique values
+            score += non_empty
+            score += len(unique_values) * 0.5
+
+            # Penalty if most cells are empty (sparse row)
+            if non_empty < len(row) * 0.3:
+                score -= 5
+
+            if score > best_score:
+                best_score = score
+                best_header_row = idx
+
+        return best_header_row
+    except Exception as e:
+        logger.warning(f"Error detecting header row: {e}, defaulting to row 0")
+        return 0
+
+
+def clean_column_names(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Clean up column names by:
+    - Replacing 'Unnamed: X' with better names based on position
+    - Stripping whitespace
+    - Handling duplicate column names
+    """
+    new_columns = []
+    seen_names = {}
+
+    for idx, col in enumerate(df.columns):
+        col_str = str(col).strip()
+
+        # Check if this is an unnamed column
+        if col_str.startswith('Unnamed:') or not col_str:
+            # Try to use the first non-empty value in that column as the header
+            for row_idx in range(min(5, len(df))):
+                cell_val = df.iloc[row_idx, idx]
+                if pd.notna(cell_val) and str(cell_val).strip():
+                    col_str = str(cell_val).strip()
+                    break
+            else:
+                col_str = f"Column_{idx + 1}"
+
+        # Handle duplicates
+        if col_str in seen_names:
+            seen_names[col_str] += 1
+            col_str = f"{col_str}_{seen_names[col_str]}"
+        else:
+            seen_names[col_str] = 0
+
+        new_columns.append(col_str)
+
+    df.columns = new_columns
+    return df
+
+
+def parse_excel_or_csv(file_content: bytes, filename: str) -> pd.DataFrame:
+    """Parse CSV or Excel file into DataFrame with smart header detection"""
+    try:
+        # First, detect where the actual header row is
+        header_row = detect_header_row(file_content, filename)
+        logger.info(f"Detected header row at index: {header_row}")
+
         if filename.endswith('.csv'):
             # Try different encodings
             for encoding in ['utf-8', 'latin-1', 'cp1252']:
                 try:
-                    df = pd.read_csv(io.BytesIO(file_content), encoding=encoding)
+                    df = pd.read_csv(
+                        io.BytesIO(file_content),
+                        encoding=encoding,
+                        header=header_row,
+                        skiprows=range(header_row) if header_row > 0 else None
+                    )
                     break
                 except UnicodeDecodeError:
                     continue
             else:
                 raise ValueError("Could not decode CSV file with any common encoding")
         elif filename.endswith('.xlsx') or filename.endswith('.xls'):
-            df = pd.read_excel(io.BytesIO(file_content))
+            df = pd.read_excel(
+                io.BytesIO(file_content),
+                header=header_row
+            )
         else:
             raise ValueError(f"Unsupported file format: {filename}")
+
+        # Clean up column names (handle any remaining 'Unnamed' columns)
+        df = clean_column_names(df)
+
+        # Remove any completely empty rows at the start (remnants of title rows)
+        df = df.dropna(how='all').reset_index(drop=True)
 
         return df
     except Exception as e:
@@ -68,8 +184,8 @@ def suggest_column_mappings(headers: list) -> dict:
         'preferred_communication': ['preferred communication', 'contact preference', 'communication preference'],
 
         # === LOAN IDENTIFIERS ===
-        'loan_number': ['loan number', 'loannumber', 'loan #', 'loan id', 'loanid', 'file number', 'file #', 'file id'],
-        'stage': ['stage', 'status', 'loan stage', 'loan status', 'pipeline stage'],
+        'loan_number': ['loan number', 'loannumber', 'loan #', 'loan id', 'loanid', 'file number', 'file #', 'file id', 'file name', 'filename'],
+        'stage': ['stage', 'status', 'loan stage', 'loan status', 'pipeline stage', 'loan status'],
 
         # === LOAN DETAILS ===
         'amount': ['loan amount', 'loanamount', 'amount', 'principal', 'loan value', 'base loan amount'],
@@ -82,17 +198,17 @@ def suggest_column_mappings(headers: list) -> dict:
         'lender': ['lender', 'investor', 'bank', 'lending institution'],
 
         # === PROPERTY INFO ===
-        'property_address': ['property address', 'address', 'street', 'street address', 'subject property'],
-        'property_city': ['property city', 'city', 'town'],
-        'property_state': ['property state', 'state', 'province', 'st'],
-        'property_zip': ['property zip', 'zip', 'zipcode', 'zip code', 'postal', 'postal code'],
+        'property_address': ['property address', 'address', 'street', 'street address', 'subject property', 'sub prop street', 'subject property street', 'prop street', 'property street'],
+        'property_city': ['property city', 'city', 'town', 'sub prop city', 'subject property city'],
+        'property_state': ['property state', 'state', 'province', 'st', 'sub prop state', 'subject property state', 'prop state'],
+        'property_zip': ['property zip', 'zip', 'zipcode', 'zip code', 'postal', 'postal code', 'sub prop zip', 'subject property zip'],
         'appraisal_value': ['appraisal value', 'appraised value', 'appraisal', 'property value', 'home value', 'value'],
 
         # === TEAM MEMBERS ===
-        'loan_officer_name': ['loan officer', 'lo', 'lo name', 'loan officer name', 'originator'],
+        'loan_officer_name': ['loan officer', 'lo', 'lo name', 'loan officer name', 'originator', 'lo full name', 'loan officer full name'],
         'loan_officer_email': ['lo email', 'loan officer email'],
-        'processor': ['processor', 'loan processor', 'processor name'],
-        'processor_email': ['processor email'],
+        'processor': ['processor', 'loan processor', 'processor name', 'lp', 'lp name', 'lp full name', 'loan processor full name'],
+        'processor_email': ['processor email', 'lp email'],
         'underwriter': ['underwriter', 'uw', 'underwriter name'],
         'underwriter_email': ['underwriter email', 'uw email'],
         'closer': ['closer', 'closing agent', 'closer name'],
@@ -101,6 +217,8 @@ def suggest_column_mappings(headers: list) -> dict:
         'title_company': ['title company', 'title', 'escrow company', 'settlement company'],
 
         # === IMPORTANT DATES ===
+        'created_at': ['date created', 'created date', 'creation date', 'created at', 'date added'],
+        'status_date': ['status date', 'status changed', 'last status date', 'stage date'],
         'closing_date': ['closing date', 'closingdate', 'close date', 'settlement date', 'closing'],
         'lock_date': ['lock date', 'rate lock date', 'locked date'],
         'lock_expiration_date': ['lock expiration', 'lock exp', 'lock expiration date', 'rate lock expiration'],
@@ -123,8 +241,8 @@ def suggest_column_mappings(headers: list) -> dict:
         'float_down_available': ['float down', 'float down available', 'renegotiation'],
 
         # === LEAD SPECIFIC FIELDS ===
-        'first_name': ['first name', 'firstname', 'first', 'fname', 'given name'],
-        'last_name': ['last name', 'lastname', 'last', 'lname', 'surname', 'family name'],
+        'first_name': ['first name', 'firstname', 'first', 'fname', 'given name', 'bor 1 first name', 'bor first name', 'borrower first name', 'borrower 1 first name'],
+        'last_name': ['last name', 'lastname', 'last', 'lname', 'surname', 'family name', 'bor 1 last name', 'bor last name', 'borrower last name', 'borrower 1 last name'],
         'source': ['source', 'lead source', 'referral source', 'how did you hear'],
         'credit_score': ['credit score', 'creditscore', 'fico', 'fico score'],
         'annual_income': ['income', 'annual income', 'yearly income', 'salary', 'gross income'],
@@ -136,6 +254,9 @@ def suggest_column_mappings(headers: list) -> dict:
         'first_time_buyer': ['first time buyer', 'ftb', 'first time homebuyer'],
         'preapproval_amount': ['preapproval amount', 'preapproval', 'pre-approval amount'],
         'notes': ['notes', 'comments', 'remarks', 'additional notes'],
+
+        # === ORGANIZATION/BRANCH FIELDS ===
+        'organization_code': ['organization code', 'org code', 'branch code', 'branch', 'branch id'],
 
         # === PORTFOLIO FIELDS ===
         'original_loan_amount': ['original amount', 'original loan amount', 'orig amount', 'original balance'],
