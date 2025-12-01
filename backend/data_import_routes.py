@@ -377,9 +377,10 @@ def normalize_stage_value(stage_value: str, destination: str) -> str:
     """
     Normalize stage values to match database enum values.
     Handles common variations in how stages are written in CSV files.
+    If stage is not recognized, defaults to 'New' for leads or 'Processing' for loans.
     """
     if not stage_value or not isinstance(stage_value, str):
-        return stage_value
+        return 'New' if destination == 'leads' else 'Processing'
 
     stage_lower = stage_value.strip().lower()
 
@@ -389,6 +390,7 @@ def normalize_stage_value(stage_value: str, destination: str) -> str:
             # New
             'new': 'New',
             'new lead': 'New',
+            'lead': 'New',
             # Attempted Contact
             'attempted contact': 'Attempted Contact',
             'attempted': 'Attempted Contact',
@@ -396,51 +398,67 @@ def normalize_stage_value(stage_value: str, destination: str) -> str:
             # Prospect
             'prospect': 'Prospect',
             'qualified': 'Prospect',
+            'hot': 'Prospect',
             # Application
             'application': 'Application',
             'application started': 'Application',
             'app started': 'Application',
             'in application': 'Application',
+            'app in progress': 'Application',
             # Pre-Qualified
             'pre-qualified': 'Pre-Qualified',
             'pre qualified': 'Pre-Qualified',
             'prequalified': 'Pre-Qualified',
             'prequal': 'Pre-Qualified',
+            'credit only': 'Pre-Qualified',  # Credit Only maps to Pre-Qualified
+            'credit': 'Pre-Qualified',
             # Pre-Approved
             'pre-approved': 'Pre-Approved',
             'pre approved': 'Pre-Approved',
             'preapproved': 'Pre-Approved',
             'preapproval': 'Pre-Approved',
+            'approved': 'Pre-Approved',
             # Under Contract
             'under contract': 'Under Contract',
             'contract': 'Under Contract',
             'in contract': 'Under Contract',
+            'ratified': 'Under Contract',
             # Long-Term Nurture
             'long-term nurture': 'Long-Term Nurture',
             'long term nurture': 'Long-Term Nurture',
             'nurture': 'Long-Term Nurture',
             'long term': 'Long-Term Nurture',
+            'future': 'Long-Term Nurture',
+            'not ready': 'Long-Term Nurture',
             # Closed
             'closed': 'Closed',
             'funded': 'Closed',
             'closed won': 'Closed',
+            'won': 'Closed',
             # AMR
             'amr': 'AMR',
             'annual mortgage review': 'AMR',
+            'past client': 'AMR',
             # Referral Source
             'referral source': 'Referral Source',
             'referral': 'Referral Source',
+            'referral partner': 'Referral Source',
             # Withdrawn
             'withdrawn': 'Withdrawn',
             'cancelled': 'Withdrawn',
             'canceled': 'Withdrawn',
+            'dead': 'Withdrawn',
+            'lost': 'Withdrawn',
+            'closed lost': 'Withdrawn',
             # Does Not Qualify
             'does not qualify': 'Does Not Qualify',
             'dnq': 'Does Not Qualify',
             'not qualified': 'Does Not Qualify',
             'disqualified': 'Does Not Qualify',
+            'unqualified': 'Does Not Qualify',
         }
-        return lead_stage_map.get(stage_lower, stage_value)
+        # Return mapped value, or default to 'New' if not found
+        return lead_stage_map.get(stage_lower, 'New')
 
     elif destination == 'loans':
         # LoanStage enum mappings
@@ -461,7 +479,8 @@ def normalize_stage_value(stage_value: str, destination: str) -> str:
             'funded': 'Funded',
             'closed': 'Funded',
         }
-        return loan_stage_map.get(stage_lower, stage_value)
+        # Return mapped value, or default to 'Processing' if not found
+        return loan_stage_map.get(stage_lower, 'Processing')
 
     return stage_value
 
@@ -734,14 +753,17 @@ async def execute_import(
                         )
                         imported += 1
 
+                    # Commit each successful row immediately to prevent cascade failures
+                    conn.commit()
+
                 except Exception as row_error:
+                    # Rollback just this failed row and continue with the next
+                    conn.rollback()
                     failed += 1
                     errors.append(f"Row {idx + 1}: {str(row_error)}")
                     if len(errors) >= 100:  # Limit error messages
                         errors.append("... (additional errors truncated)")
                         break
-
-            conn.commit()
 
         except Exception as e:
             conn.rollback()
