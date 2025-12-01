@@ -3003,3 +3003,125 @@ async def mark_sla_responded(
     db.commit()
 
     return {"status": "success", "sla_id": sla_id}
+
+
+# ================================================================
+# DEBUG & TESTING ENDPOINTS
+# ================================================================
+
+@router.get("/debug/schema")
+async def debug_email_queue_schema(db: Session = Depends(get_db)):
+    """
+    Debug endpoint to check the email_reconciliation_queue table schema.
+    Shows all columns and their types.
+    """
+    try:
+        result = db.execute(text("""
+            SELECT column_name, data_type, is_nullable, column_default
+            FROM information_schema.columns
+            WHERE table_name = 'email_reconciliation_queue'
+            ORDER BY ordinal_position
+        """)).fetchall()
+
+        columns = [
+            {
+                "name": row[0],
+                "type": row[1],
+                "nullable": row[2],
+                "default": row[3]
+            }
+            for row in result
+        ]
+
+        # Check which identity-related columns exist
+        column_names = [c["name"] for c in columns]
+        identity_columns = {
+            "match_method": "match_method" in column_names,
+            "match_confidence": "match_confidence" in column_names,
+            "match_evidence": "match_evidence" in column_names,
+            "match_client_name": "match_client_name" in column_names,
+            "match_loan_number": "match_loan_number" in column_names,
+            "is_priority": "is_priority" in column_names,
+        }
+
+        return {
+            "table": "email_reconciliation_queue",
+            "column_count": len(columns),
+            "columns": columns,
+            "identity_columns_status": identity_columns,
+            "all_identity_columns_exist": all(identity_columns.values())
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@router.post("/debug/test-identity-resolution")
+async def debug_test_identity_resolution(
+    email_data: Dict[str, Any],
+    db: Session = Depends(get_db)
+):
+    """
+    Debug endpoint to test the EmailIdentityResolver without creating a queue record.
+    Pass email data and see what match result would be returned.
+    """
+    user_id = get_current_user_id(db)
+
+    try:
+        from services.email_identity_resolver import get_email_identity_resolver
+
+        resolver = get_email_identity_resolver(db)
+        match_result = resolver.resolve(email_data, user_id)
+
+        return {
+            "status": "success",
+            "user_id": user_id,
+            "email_data_received": {
+                "from_email": email_data.get("from_email"),
+                "subject": email_data.get("subject"),
+                "thread_id": email_data.get("thread_id")
+            },
+            "match_result": match_result
+        }
+    except Exception as e:
+        import traceback
+        return {
+            "status": "error",
+            "error": str(e),
+            "traceback": traceback.format_exc()
+        }
+
+
+@router.post("/debug/add-missing-columns")
+async def debug_add_missing_columns(db: Session = Depends(get_db)):
+    """
+    Add missing identity resolution columns to email_reconciliation_queue.
+    """
+    try:
+        # Add missing columns if they don't exist
+        columns_to_add = [
+            ("match_method", "VARCHAR(100)"),
+            ("match_evidence", "TEXT"),
+            ("match_client_name", "VARCHAR(255)"),
+            ("match_loan_number", "VARCHAR(100)"),
+        ]
+
+        added = []
+        for col_name, col_type in columns_to_add:
+            try:
+                db.execute(text(f"""
+                    ALTER TABLE email_reconciliation_queue
+                    ADD COLUMN IF NOT EXISTS {col_name} {col_type}
+                """))
+                added.append(col_name)
+            except Exception as e:
+                logger.warning(f"Could not add column {col_name}: {e}")
+
+        db.commit()
+
+        return {
+            "status": "success",
+            "columns_added": added
+        }
+    except Exception as e:
+        db.rollback()
+        return {"status": "error", "error": str(e)}
