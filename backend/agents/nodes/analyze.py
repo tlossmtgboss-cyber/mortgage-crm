@@ -31,6 +31,10 @@ AVAILABLE_TOOLS = [
     "search_leads",          # Search leads by name/email/phone
     "get_pipeline_metrics",  # Pipeline analytics
 
+    # Lead Pipeline Intelligence Tools (NEW)
+    "lead_status_insights",  # Lead pipeline coaching/analytics/bottlenecks
+    "get_leads_by_status",   # Detailed lead lists for specific statuses
+
     # Task Management
     "get_tasks",             # Get tasks by timeframe
     "create_task",           # Create a new task
@@ -53,8 +57,20 @@ ALWAYS select at least one tool in required_tools.
 Available tools:
 {tools}
 
+LEAD PIPELINE TOOLS (IMPORTANT - use these for lead questions):
+- lead_status_insights: Use for COACHING/ANALYTICS questions about leads - pipeline health, bottlenecks, conversion rates, what to focus on
+- get_leads_by_status: Use for LISTS OF LEADS - who to call, specific lead details, leads in a status
+
 TOOL SELECTION GUIDE (be aggressive about selecting tools):
-- "What should I focus on today?" -> intent: task_management, tools: ["get_daily_priorities", "get_tasks", "get_pipeline"]
+- "How is my lead pipeline doing?" -> intent: lead_management, tools: ["lead_status_insights"]
+- "Where am I losing leads?" -> intent: lead_management, tools: ["lead_status_insights"]
+- "What's my lead conversion rate?" -> intent: lead_management, tools: ["lead_status_insights"]
+- "Where are leads getting stuck?" -> intent: lead_management, tools: ["lead_status_insights"]
+- "Give me a daily briefing on leads" -> intent: lead_management, tools: ["lead_status_insights", "get_leads_by_status"]
+- "Show me my New leads" -> intent: lead_management, tools: ["get_leads_by_status"]
+- "Who should I call today?" -> intent: lead_management, tools: ["lead_status_insights", "get_leads_by_status"]
+- "List my prospects" -> intent: lead_management, tools: ["get_leads_by_status"]
+- "What should I focus on today?" -> intent: task_management, tools: ["get_daily_priorities", "get_tasks", "lead_status_insights"]
 - "Show me my pipeline" -> intent: pipeline_status, tools: ["get_pipeline", "get_pipeline_metrics"]
 - "Should I lock rates?" -> intent: market_intelligence, tools: ["get_rate_lock_advisory", "get_pipeline"]
 - "What are my priorities?" -> intent: task_management, tools: ["get_daily_priorities", "get_tasks"]
@@ -63,11 +79,13 @@ TOOL SELECTION GUIDE (be aggressive about selecting tools):
 - "Search for lead John" -> intent: lead_management, tools: ["search_leads"]
 
 Intent mapping:
-- pipeline_status: Pipeline, loans, deals, stages, closing dates
+- lead_management: Lead pipeline, lead conversion, lead bottlenecks, prospects, nurturing, who to call
+- pipeline_status: Active loans, loan pipeline, deals, stages, closing dates
 - task_management: Tasks, focus, priorities, what to do, schedule
 - market_intelligence: Rates, lock/float decisions, market conditions
-- lead_management: Leads, prospects, nurturing
 - action_request: Explicit requests to create, send, or update something
+
+IMPORTANT: For ANY question about leads, lead pipeline, lead conversion, lead bottlenecks, or coaching on leads, use intent: lead_management with lead_status_insights and/or get_leads_by_status.
 
 DEFAULT: If unsure, use task_management intent with ["get_daily_priorities", "get_pipeline"] tools.
 
