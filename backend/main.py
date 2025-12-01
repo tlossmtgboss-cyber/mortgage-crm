@@ -18148,6 +18148,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ AI Email Conversation routes not loaded: {e}")
 
+# AI Email Search Routes (for AI agents to search and analyze emails)
+try:
+    from routes.ai_email_search_routes import router as ai_email_search_router
+    app.include_router(ai_email_search_router, tags=["AI Email Search"])
+    logger.info("✅ AI Email Search routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ AI Email Search routes not loaded: {e}")
+
 # AI Tools Registry & Unified Tool Endpoints
 tools_router_error = None
 try:
