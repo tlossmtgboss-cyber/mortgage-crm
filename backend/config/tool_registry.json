@@ -1,0 +1,1093 @@
+{
+  "version": "1.0.0",
+  "last_updated": "2025-01-26",
+  "description": "Perennia AI Tool Registry - Master catalog of all AI-callable tools",
+  "tools": [
+    {
+      "name": "send_sms",
+      "domain": "communication",
+      "description": "Send an SMS text message to a human recipient",
+      "endpoint": "/api/tools/communication/send_sms",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "to_phone": {
+            "type": "string",
+            "description": "Phone number to send SMS to (E.164 format preferred)"
+          },
+          "recipient_name": {
+            "type": "string",
+            "description": "Name of recipient (AI will look up phone number)"
+          },
+          "message": {
+            "type": "string",
+            "description": "The SMS message content"
+          },
+          "context": {
+            "type": "object",
+            "properties": {
+              "crm_contact_id": {"type": "string"},
+              "loan_id": {"type": "string"},
+              "lead_id": {"type": "string"},
+              "category": {
+                "type": "string",
+                "enum": ["lead_followup", "status_update", "docs_request", "appointment_reminder", "other"]
+              }
+            }
+          }
+        },
+        "required": ["message"]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean"},
+          "data": {
+            "type": "object",
+            "properties": {
+              "sid": {"type": "string"},
+              "status": {"type": "string", "enum": ["queued", "sent", "failed"]},
+              "to_phone": {"type": "string"}
+            }
+          },
+          "error": {"type": "string", "nullable": true},
+          "meta": {
+            "type": "object",
+            "properties": {
+              "tool": {"type": "string"},
+              "request_id": {"type": "string"},
+              "elapsed_ms": {"type": "number"}
+            }
+          }
+        }
+      },
+      "side_effect": true,
+      "requires_approval": false,
+      "risk_level": "high",
+      "implemented": true,
+      "implementation_location": "main.py:execute_send_sms"
+    },
+    {
+      "name": "send_email",
+      "domain": "communication",
+      "description": "Send an email on behalf of the user (typically status updates to self)",
+      "endpoint": "/api/tools/communication/send_email",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "to": {
+            "type": "string",
+            "description": "Email recipient address"
+          },
+          "subject": {
+            "type": "string",
+            "description": "Email subject line"
+          },
+          "body": {
+            "type": "string",
+            "description": "Email body content (HTML or plain text)"
+          },
+          "context": {
+            "type": "object",
+            "properties": {
+              "loan_id": {"type": "string"},
+              "lead_id": {"type": "string"},
+              "category": {"type": "string"}
+            }
+          }
+        },
+        "required": ["to", "subject", "body"]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean"},
+          "data": {
+            "type": "object",
+            "properties": {
+              "message_id": {"type": "string"},
+              "status": {"type": "string"}
+            }
+          },
+          "error": {"type": "string", "nullable": true}
+        }
+      },
+      "side_effect": true,
+      "requires_approval": false,
+      "risk_level": "medium",
+      "implemented": true,
+      "implementation_location": "main.py:execute_send_email"
+    },
+    {
+      "name": "send_email_to_contact",
+      "domain": "communication",
+      "description": "Send email to a specific contact (lead, borrower, partner) - external emails",
+      "endpoint": "/api/tools/communication/send_email_to_contact",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "recipient_name": {
+            "type": "string",
+            "description": "Name of the contact to email"
+          },
+          "recipient_email": {
+            "type": "string",
+            "description": "Direct email address (optional if name provided)"
+          },
+          "subject": {
+            "type": "string",
+            "description": "Email subject line"
+          },
+          "body": {
+            "type": "string",
+            "description": "Email body content"
+          },
+          "lead_id": {"type": "integer"},
+          "loan_id": {"type": "integer"}
+        },
+        "required": ["subject", "body"]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean"},
+          "data": {
+            "type": "object",
+            "properties": {
+              "message_id": {"type": "string"},
+              "recipient": {"type": "string"}
+            }
+          },
+          "error": {"type": "string", "nullable": true}
+        }
+      },
+      "side_effect": true,
+      "requires_approval": true,
+      "risk_level": "high",
+      "implemented": true,
+      "implementation_location": "main.py:execute_send_email_to_contact"
+    },
+    {
+      "name": "drop_voicemail",
+      "domain": "communication",
+      "description": "Send a prerecorded voicemail drop via Vapi",
+      "endpoint": "/api/tools/communication/drop_voicemail",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "recipient_name": {
+            "type": "string",
+            "description": "Name of the person to leave voicemail for"
+          },
+          "phone_number": {
+            "type": "string",
+            "description": "Phone number (optional if name provided)"
+          },
+          "message": {
+            "type": "string",
+            "description": "Voicemail message content"
+          },
+          "lead_id": {"type": "integer"},
+          "loan_id": {"type": "integer"}
+        },
+        "required": ["message"]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean"},
+          "data": {
+            "type": "object",
+            "properties": {
+              "call_id": {"type": "string"},
+              "status": {"type": "string"}
+            }
+          },
+          "error": {"type": "string", "nullable": true}
+        }
+      },
+      "side_effect": true,
+      "requires_approval": false,
+      "risk_level": "high",
+      "implemented": true,
+      "implementation_location": "main.py:execute_drop_voicemail"
+    },
+    {
+      "name": "send_mms",
+      "domain": "communication",
+      "description": "Send SMS with media attachment (image, document)",
+      "endpoint": "/api/tools/communication/send_mms",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "to_phone": {"type": "string"},
+          "recipient_name": {"type": "string"},
+          "message": {"type": "string"},
+          "media_url": {
+            "type": "string",
+            "description": "URL of the media to attach"
+          }
+        },
+        "required": ["message", "media_url"]
+      },
+      "side_effect": true,
+      "requires_approval": false,
+      "risk_level": "high",
+      "implemented": false,
+      "implementation_location": null
+    },
+    {
+      "name": "initiate_call",
+      "domain": "communication",
+      "description": "Trigger an outbound phone call (click-to-dial)",
+      "endpoint": "/api/tools/communication/initiate_call",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "phone_number": {"type": "string"},
+          "contact_name": {"type": "string"},
+          "lead_id": {"type": "integer"},
+          "loan_id": {"type": "integer"}
+        },
+        "required": []
+      },
+      "side_effect": true,
+      "requires_approval": false,
+      "risk_level": "medium",
+      "implemented": true,
+      "implementation_location": "dialer_routes.py:click_to_dial"
+    },
+    {
+      "name": "transcribe_call",
+      "domain": "communication",
+      "description": "Convert call audio to text transcript",
+      "endpoint": "/api/tools/communication/transcribe_call",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "call_id": {"type": "string"},
+          "audio_url": {"type": "string"}
+        },
+        "required": ["call_id"]
+      },
+      "side_effect": false,
+      "requires_approval": false,
+      "risk_level": "low",
+      "implemented": false,
+      "implementation_location": null
+    },
+    {
+      "name": "summarize_call",
+      "domain": "communication",
+      "description": "Generate AI summary of a call transcript",
+      "endpoint": "/api/tools/communication/summarize_call",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "call_id": {"type": "string"},
+          "transcript": {"type": "string"}
+        },
+        "required": ["call_id"]
+      },
+      "side_effect": false,
+      "requires_approval": false,
+      "risk_level": "low",
+      "implemented": false,
+      "implementation_location": null
+    },
+    {
+      "name": "create_lead",
+      "domain": "leads",
+      "description": "Create a new lead record in the CRM",
+      "endpoint": "/api/tools/leads/create_lead",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "full_name": {"type": "string"},
+          "first_name": {"type": "string"},
+          "last_name": {"type": "string"},
+          "email": {"type": "string"},
+          "phone": {"type": "string"},
+          "lead_source": {
+            "type": "string",
+            "enum": ["realtor", "builder", "website", "referral", "database", "other"]
+          },
+          "notes": {"type": "string"}
+        },
+        "required": ["email"]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean"},
+          "data": {
+            "type": "object",
+            "properties": {
+              "lead_id": {"type": "integer"},
+              "created_at": {"type": "string", "format": "date-time"}
+            }
+          }
+        }
+      },
+      "side_effect": true,
+      "requires_approval": false,
+      "risk_level": "low",
+      "implemented": true,
+      "implementation_location": "main.py:POST /api/v1/leads"
+    },
+    {
+      "name": "update_lead_status",
+      "domain": "leads",
+      "description": "Update lead pipeline stage and status",
+      "endpoint": "/api/tools/leads/update_lead_status",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "lead_id": {"type": "integer"},
+          "status": {"type": "string"},
+          "stage": {"type": "string"},
+          "reason": {"type": "string"}
+        },
+        "required": ["lead_id", "status"]
+      },
+      "side_effect": true,
+      "requires_approval": false,
+      "risk_level": "low",
+      "implemented": true,
+      "implementation_location": "ai_command_routes.py:update_lead_status"
+    },
+    {
+      "name": "ai_lead_scoring",
+      "domain": "leads",
+      "description": "Return AI-generated lead quality score (0-100)",
+      "endpoint": "/api/tools/leads/ai_lead_scoring",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "lead_id": {"type": "integer"},
+          "include_factors": {"type": "boolean", "default": true}
+        },
+        "required": ["lead_id"]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean"},
+          "data": {
+            "type": "object",
+            "properties": {
+              "score": {"type": "integer", "minimum": 0, "maximum": 100},
+              "factors": {"type": "array", "items": {"type": "string"}},
+              "recommendation": {"type": "string"}
+            }
+          }
+        }
+      },
+      "side_effect": false,
+      "requires_approval": false,
+      "risk_level": "low",
+      "implemented": false,
+      "implementation_location": null
+    },
+    {
+      "name": "find_duplicate_leads",
+      "domain": "leads",
+      "description": "Find potential duplicate lead records",
+      "endpoint": "/api/tools/leads/find_duplicate_leads",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "lead_id": {"type": "integer"},
+          "email": {"type": "string"},
+          "phone": {"type": "string"},
+          "name": {"type": "string"}
+        }
+      },
+      "side_effect": false,
+      "requires_approval": false,
+      "risk_level": "low",
+      "implemented": false,
+      "implementation_location": null
+    },
+    {
+      "name": "assign_lead_to_agent",
+      "domain": "leads",
+      "description": "Assign a lead to a specific loan officer or agent",
+      "endpoint": "/api/tools/leads/assign_lead_to_agent",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "lead_id": {"type": "integer"},
+          "agent_id": {"type": "integer"},
+          "agent_email": {"type": "string"},
+          "reason": {"type": "string"}
+        },
+        "required": ["lead_id"]
+      },
+      "side_effect": true,
+      "requires_approval": false,
+      "risk_level": "low",
+      "implemented": false,
+      "implementation_location": null
+    },
+    {
+      "name": "create_task",
+      "domain": "pipeline",
+      "description": "Create a new task for follow-up or action item",
+      "endpoint": "/api/tools/pipeline/create_task",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "title": {"type": "string"},
+          "description": {"type": "string"},
+          "due_date": {"type": "string", "format": "date"},
+          "priority": {"type": "string", "enum": ["low", "medium", "high"]},
+          "lead_id": {"type": "integer"},
+          "loan_id": {"type": "integer"},
+          "assigned_to": {"type": "string"}
+        },
+        "required": ["title"]
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean"},
+          "data": {
+            "type": "object",
+            "properties": {
+              "task_id": {"type": "integer"},
+              "created_at": {"type": "string"}
+            }
+          }
+        }
+      },
+      "side_effect": true,
+      "requires_approval": false,
+      "risk_level": "low",
+      "implemented": true,
+      "implementation_location": "agents/service.py:execute_create_task"
+    },
+    {
+      "name": "assign_task",
+      "domain": "pipeline",
+      "description": "Assign a task to a specific team member",
+      "endpoint": "/api/tools/pipeline/assign_task",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "task_id": {"type": "integer"},
+          "assignee_id": {"type": "integer"},
+          "assignee_email": {"type": "string"}
+        },
+        "required": ["task_id"]
+      },
+      "side_effect": true,
+      "requires_approval": false,
+      "risk_level": "low",
+      "implemented": false,
+      "implementation_location": null
+    },
+    {
+      "name": "complete_task",
+      "domain": "pipeline",
+      "description": "Mark a task as completed",
+      "endpoint": "/api/tools/pipeline/complete_task",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "task_id": {"type": "integer"},
+          "completion_notes": {"type": "string"}
+        },
+        "required": ["task_id"]
+      },
+      "side_effect": true,
+      "requires_approval": false,
+      "risk_level": "low",
+      "implemented": false,
+      "implementation_location": null
+    },
+    {
+      "name": "update_pipeline_stage",
+      "domain": "pipeline",
+      "description": "Move a lead or loan to a different pipeline stage",
+      "endpoint": "/api/tools/pipeline/update_pipeline_stage",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "entity_type": {"type": "string", "enum": ["lead", "loan"]},
+          "entity_id": {"type": "integer"},
+          "stage": {"type": "string"},
+          "status": {"type": "string"},
+          "reason": {"type": "string"},
+          "trigger_automations": {"type": "boolean", "default": true}
+        },
+        "required": ["entity_type", "entity_id", "stage"]
+      },
+      "side_effect": true,
+      "requires_approval": false,
+      "risk_level": "medium",
+      "implemented": false,
+      "implementation_location": null
+    },
+    {
+      "name": "trigger_milestone_automation",
+      "domain": "pipeline",
+      "description": "Fire milestone automation for a loan",
+      "endpoint": "/api/tools/pipeline/trigger_milestone_automation",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "loan_id": {"type": "integer"},
+          "milestone": {"type": "string"}
+        },
+        "required": ["loan_id", "milestone"]
+      },
+      "side_effect": true,
+      "requires_approval": false,
+      "risk_level": "medium",
+      "implemented": true,
+      "implementation_location": "workflow_routes.py"
+    },
+    {
+      "name": "request_documents",
+      "domain": "pipeline",
+      "description": "Send document request to borrower",
+      "endpoint": "/api/tools/pipeline/request_documents",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "loan_id": {"type": "integer"},
+          "lead_id": {"type": "integer"},
+          "document_types": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "message": {"type": "string"}
+        },
+        "required": ["document_types"]
+      },
+      "side_effect": true,
+      "requires_approval": false,
+      "risk_level": "medium",
+      "implemented": false,
+      "implementation_location": null
+    },
+    {
+      "name": "document_ocr_extract",
+      "domain": "pipeline",
+      "description": "Extract data from uploaded PDFs and documents via OCR",
+      "endpoint": "/api/tools/pipeline/document_ocr_extract",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "document_id": {"type": "integer"},
+          "document_url": {"type": "string"},
+          "document_type": {"type": "string"}
+        },
+        "required": ["document_id"]
+      },
+      "side_effect": false,
+      "requires_approval": false,
+      "risk_level": "low",
+      "implemented": false,
+      "implementation_location": null
+    },
+    {
+      "name": "fetch_mbs_data",
+      "domain": "rate_lock",
+      "description": "Get current MBS pricing and market data",
+      "endpoint": "/api/tools/rate_lock/fetch_mbs_data",
+      "method": "GET",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "coupon": {"type": "string", "default": "6.0"}
+        }
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean"},
+          "data": {
+            "type": "object",
+            "properties": {
+              "current_price": {"type": "number"},
+              "daily_change": {"type": "number"},
+              "trend": {"type": "string"}
+            }
+          }
+        }
+      },
+      "side_effect": false,
+      "requires_approval": false,
+      "risk_level": "low",
+      "implemented": true,
+      "implementation_location": "main.py:mbs_routes"
+    },
+    {
+      "name": "fetch_treasury_data",
+      "domain": "rate_lock",
+      "description": "Get 10-year Treasury yield and benchmarks",
+      "endpoint": "/api/tools/rate_lock/fetch_treasury_data",
+      "method": "GET",
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      },
+      "side_effect": false,
+      "requires_approval": false,
+      "risk_level": "low",
+      "implemented": true,
+      "implementation_location": "main.py:mbs_routes"
+    },
+    {
+      "name": "calculate_rate_lock_risk_score",
+      "domain": "rate_lock",
+      "description": "Calculate volatility risk score for rate lock decision",
+      "endpoint": "/api/tools/rate_lock/calculate_rate_lock_risk_score",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "loan_id": {"type": "integer"},
+          "days_to_close": {"type": "integer"},
+          "loan_amount": {"type": "number"}
+        }
+      },
+      "side_effect": false,
+      "requires_approval": false,
+      "risk_level": "low",
+      "implemented": true,
+      "implementation_location": "ai_command_routes.py:get_rate_lock_recommendation"
+    },
+    {
+      "name": "get_rate_lock_recommendation",
+      "domain": "rate_lock",
+      "description": "Get AI recommendation on whether to lock or float",
+      "endpoint": "/api/tools/rate_lock/get_rate_lock_recommendation",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "loan_id": {"type": "integer"},
+          "days_to_close": {"type": "integer"},
+          "current_rate": {"type": "number"},
+          "risk_tolerance": {"type": "string", "enum": ["low", "medium", "high"]}
+        }
+      },
+      "output_schema": {
+        "type": "object",
+        "properties": {
+          "success": {"type": "boolean"},
+          "data": {
+            "type": "object",
+            "properties": {
+              "recommendation": {"type": "string", "enum": ["lock", "float", "partial_lock"]},
+              "confidence": {"type": "number"},
+              "reasoning": {"type": "string"},
+              "market_factors": {"type": "array", "items": {"type": "string"}}
+            }
+          }
+        }
+      },
+      "side_effect": false,
+      "requires_approval": false,
+      "risk_level": "low",
+      "implemented": true,
+      "implementation_location": "ai_command_routes.py:get_rate_lock_recommendation"
+    },
+    {
+      "name": "lock_rate",
+      "domain": "rate_lock",
+      "description": "Execute a rate lock for a loan",
+      "endpoint": "/api/tools/rate_lock/lock_rate",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "loan_id": {"type": "integer"},
+          "rate": {"type": "number"},
+          "lock_period_days": {"type": "integer"},
+          "points": {"type": "number"}
+        },
+        "required": ["loan_id", "rate", "lock_period_days"]
+      },
+      "side_effect": true,
+      "requires_approval": true,
+      "risk_level": "critical",
+      "implemented": false,
+      "implementation_location": null
+    },
+    {
+      "name": "extend_lock",
+      "domain": "rate_lock",
+      "description": "Extend an existing rate lock",
+      "endpoint": "/api/tools/rate_lock/extend_lock",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "loan_id": {"type": "integer"},
+          "extension_days": {"type": "integer"}
+        },
+        "required": ["loan_id", "extension_days"]
+      },
+      "side_effect": true,
+      "requires_approval": true,
+      "risk_level": "critical",
+      "implemented": false,
+      "implementation_location": null
+    },
+    {
+      "name": "book_appointment",
+      "domain": "scheduling",
+      "description": "Book a meeting or appointment",
+      "endpoint": "/api/tools/scheduling/book_appointment",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "title": {"type": "string"},
+          "attendee_name": {"type": "string"},
+          "attendee_email": {"type": "string"},
+          "start_time": {"type": "string", "format": "date-time"},
+          "duration_minutes": {"type": "integer", "default": 30},
+          "meeting_type": {"type": "string"},
+          "notes": {"type": "string"}
+        },
+        "required": ["title", "start_time"]
+      },
+      "side_effect": true,
+      "requires_approval": false,
+      "risk_level": "low",
+      "implemented": true,
+      "implementation_location": "scheduler_routes.py"
+    },
+    {
+      "name": "reschedule_appointment",
+      "domain": "scheduling",
+      "description": "Reschedule an existing appointment",
+      "endpoint": "/api/tools/scheduling/reschedule_appointment",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "appointment_id": {"type": "integer"},
+          "new_start_time": {"type": "string", "format": "date-time"},
+          "reason": {"type": "string"}
+        },
+        "required": ["appointment_id", "new_start_time"]
+      },
+      "side_effect": true,
+      "requires_approval": false,
+      "risk_level": "low",
+      "implemented": false,
+      "implementation_location": null
+    },
+    {
+      "name": "cancel_appointment",
+      "domain": "scheduling",
+      "description": "Cancel an appointment",
+      "endpoint": "/api/tools/scheduling/cancel_appointment",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "appointment_id": {"type": "integer"},
+          "reason": {"type": "string"},
+          "notify_attendees": {"type": "boolean", "default": true}
+        },
+        "required": ["appointment_id"]
+      },
+      "side_effect": true,
+      "requires_approval": true,
+      "risk_level": "medium",
+      "implemented": false,
+      "implementation_location": null
+    },
+    {
+      "name": "get_pipeline",
+      "domain": "analytics",
+      "description": "Get current pipeline overview and metrics",
+      "endpoint": "/api/tools/analytics/get_pipeline",
+      "method": "GET",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "user_email": {"type": "string"},
+          "include_details": {"type": "boolean", "default": false}
+        }
+      },
+      "side_effect": false,
+      "requires_approval": false,
+      "risk_level": "low",
+      "implemented": true,
+      "implementation_location": "agents/service.py:execute_get_pipeline"
+    },
+    {
+      "name": "get_tasks",
+      "domain": "analytics",
+      "description": "Get list of tasks for current user",
+      "endpoint": "/api/tools/analytics/get_tasks",
+      "method": "GET",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "status": {"type": "string", "enum": ["all", "pending", "completed", "overdue"]},
+          "limit": {"type": "integer", "default": 20}
+        }
+      },
+      "side_effect": false,
+      "requires_approval": false,
+      "risk_level": "low",
+      "implemented": true,
+      "implementation_location": "agents/service.py:execute_get_tasks"
+    },
+    {
+      "name": "search_leads",
+      "domain": "analytics",
+      "description": "Search leads by name, email, phone, or other criteria",
+      "endpoint": "/api/tools/analytics/search_leads",
+      "method": "GET",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": {"type": "string"},
+          "status": {"type": "string"},
+          "stage": {"type": "string"},
+          "limit": {"type": "integer", "default": 10}
+        }
+      },
+      "side_effect": false,
+      "requires_approval": false,
+      "risk_level": "low",
+      "implemented": true,
+      "implementation_location": "agents/service.py:execute_search_leads"
+    },
+    {
+      "name": "search_loans",
+      "domain": "analytics",
+      "description": "Search loans by borrower name, loan number, or criteria",
+      "endpoint": "/api/tools/analytics/search_loans",
+      "method": "GET",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "query": {"type": "string"},
+          "stage": {"type": "string"},
+          "limit": {"type": "integer", "default": 10}
+        }
+      },
+      "side_effect": false,
+      "requires_approval": false,
+      "risk_level": "low",
+      "implemented": true,
+      "implementation_location": "agents/service.py:execute_search_loans"
+    },
+    {
+      "name": "get_pipeline_metrics",
+      "domain": "analytics",
+      "description": "Get detailed pipeline metrics and KPIs",
+      "endpoint": "/api/tools/analytics/get_pipeline_metrics",
+      "method": "GET",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "period": {"type": "string", "enum": ["today", "week", "month", "quarter", "year"]}
+        }
+      },
+      "side_effect": false,
+      "requires_approval": false,
+      "risk_level": "low",
+      "implemented": true,
+      "implementation_location": "agents/service.py:execute_get_pipeline_metrics"
+    },
+    {
+      "name": "get_daily_priorities",
+      "domain": "analytics",
+      "description": "Get AI-generated daily priorities and focus areas",
+      "endpoint": "/api/tools/analytics/get_daily_priorities",
+      "method": "GET",
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      },
+      "side_effect": false,
+      "requires_approval": false,
+      "risk_level": "low",
+      "implemented": true,
+      "implementation_location": "agents/service.py:execute_get_daily_priorities"
+    },
+    {
+      "name": "get_market_intelligence",
+      "domain": "analytics",
+      "description": "Get current market conditions and rate environment intel",
+      "endpoint": "/api/tools/analytics/get_market_intelligence",
+      "method": "GET",
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      },
+      "side_effect": false,
+      "requires_approval": false,
+      "risk_level": "low",
+      "implemented": true,
+      "implementation_location": "ai_command_routes.py:get_market_intelligence"
+    },
+    {
+      "name": "ai_audit_event_logger",
+      "domain": "orchestration",
+      "description": "Log AI action events for audit trail",
+      "endpoint": "/api/tools/orchestration/ai_audit_event_logger",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "event_type": {"type": "string"},
+          "tool_name": {"type": "string"},
+          "input_data": {"type": "object"},
+          "output_data": {"type": "object"},
+          "success": {"type": "boolean"},
+          "error_message": {"type": "string"}
+        },
+        "required": ["event_type", "tool_name"]
+      },
+      "side_effect": true,
+      "requires_approval": false,
+      "risk_level": "low",
+      "implemented": true,
+      "implementation_location": "main.py:ai_action_logs table"
+    },
+    {
+      "name": "retrieve_memory",
+      "domain": "orchestration",
+      "description": "Retrieve conversation memory and context",
+      "endpoint": "/api/tools/orchestration/retrieve_memory",
+      "method": "GET",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "user_email": {"type": "string"},
+          "context_type": {"type": "string"},
+          "limit": {"type": "integer", "default": 10}
+        }
+      },
+      "side_effect": false,
+      "requires_approval": false,
+      "risk_level": "low",
+      "implemented": true,
+      "implementation_location": "ai_memory_routes.py"
+    },
+    {
+      "name": "store_memory",
+      "domain": "orchestration",
+      "description": "Store conversation memory and learned preferences",
+      "endpoint": "/api/tools/orchestration/store_memory",
+      "method": "POST",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "user_email": {"type": "string"},
+          "memory_type": {"type": "string"},
+          "content": {"type": "string"},
+          "metadata": {"type": "object"}
+        },
+        "required": ["content"]
+      },
+      "side_effect": true,
+      "requires_approval": false,
+      "risk_level": "low",
+      "implemented": true,
+      "implementation_location": "ai_memory_routes.py"
+    }
+  ],
+  "domains": {
+    "communication": {
+      "description": "Human communication automation - SMS, email, voicemail, calls",
+      "prefix": "/api/tools/communication"
+    },
+    "leads": {
+      "description": "Lead management, scoring, and sales pipeline",
+      "prefix": "/api/tools/leads"
+    },
+    "pipeline": {
+      "description": "Loan pipeline, tasks, documents, and operations",
+      "prefix": "/api/tools/pipeline"
+    },
+    "rate_lock": {
+      "description": "Rate lock management, MBS data, market analysis",
+      "prefix": "/api/tools/rate_lock"
+    },
+    "scheduling": {
+      "description": "Appointments, calendar, and scheduling",
+      "prefix": "/api/tools/scheduling"
+    },
+    "analytics": {
+      "description": "Reporting, metrics, and data queries",
+      "prefix": "/api/tools/analytics"
+    },
+    "orchestration": {
+      "description": "AI meta-tools, memory, audit logging",
+      "prefix": "/api/tools/orchestration"
+    },
+    "portfolio": {
+      "description": "Post-closing portfolio management and client retention",
+      "prefix": "/api/tools/portfolio"
+    },
+    "compliance": {
+      "description": "Compliance checks, QC, and regulatory validation",
+      "prefix": "/api/tools/compliance"
+    }
+  },
+  "risk_levels": {
+    "low": {
+      "description": "Read-only or safe write operations",
+      "requires_approval": false,
+      "auto_execute": true
+    },
+    "medium": {
+      "description": "Internal notifications or self-directed actions",
+      "requires_approval": false,
+      "auto_execute": true
+    },
+    "high": {
+      "description": "External communications to contacts",
+      "requires_approval": false,
+      "auto_execute": true
+    },
+    "critical": {
+      "description": "Financial commitments or compliance-sensitive",
+      "requires_approval": true,
+      "auto_execute": false
+    }
+  },
+  "approval_required_tools": [
+    "lock_rate",
+    "extend_lock",
+    "relock",
+    "send_email_to_contact",
+    "cancel_appointment",
+    "trigger_campaign",
+    "send_newsletter"
+  ]
+}

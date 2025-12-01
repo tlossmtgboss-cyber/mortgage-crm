@@ -17161,6 +17161,14 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ AI Email Conversation routes not loaded: {e}")
 
+# AI Tools Registry & Unified Tool Endpoints
+try:
+    from tools.router import router as tools_router
+    app.include_router(tools_router, tags=["AI Tools"])
+    logger.info("✅ AI Tools Registry routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ AI Tools Registry routes not loaded: {e}")
+
 # Email Monitor Migration Endpoint
 @app.post("/api/v1/migrations/add-email-monitor")
 async def add_email_monitor_migration(db: Session = Depends(get_db)):
