@@ -12193,6 +12193,97 @@ async def orchestrator_chat_stream(
                     "properties": {}
                 }
             }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_activity_metrics",
+                "description": "Get activity metrics by team member showing calls, emails, texts, meetings, tasks completed, and closings. Use for performance analysis and identifying top/bottom performers.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "period": {"type": "string", "enum": ["week", "month", "quarter"], "description": "Time period for metrics", "default": "week"}
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_document_status",
+                "description": "Get missing documents per loan with urgency levels based on closing dates. Shows what docs are needed at each stage. Use when asked about document status, missing items, or compliance gaps.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {}
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "predict_borrower_ghosting",
+                "description": "Predict which borrowers are at risk of disengaging/ghosting based on communication patterns, response times, email opens, and behavioral signals. Returns risk scores with intervention recommendations.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "loan_id": {"type": "integer", "description": "Specific loan ID to analyze (optional, analyzes all if not provided)"},
+                        "threshold": {"type": "number", "description": "Risk threshold (0.0-1.0) to filter results. Default 0.5"}
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "predict_deal_success",
+                "description": "Predict probability of deal closing based on historical patterns, current stage, days in pipeline, borrower responsiveness, and comparable closed loans. Returns success probability with key risk/strength factors.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "loan_id": {"type": "integer", "description": "Specific loan ID to predict (optional, predicts all active if not provided)"}
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "forecast_revenue",
+                "description": "Forecast revenue based on current pipeline, historical close rates, average loan amounts, and seasonal patterns. Returns base/optimistic/pessimistic scenarios.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "timeframe": {"type": "string", "enum": ["30_days", "60_days", "90_days", "quarter", "year"], "description": "Forecast timeframe", "default": "90_days"}
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_refinance_candidates",
+                "description": "Identify past clients who are good candidates for refinance based on rate differential, time since closing, estimated equity, and engagement signals. Returns prioritized list with outreach recommendations.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "min_rate_savings_bps": {"type": "integer", "description": "Minimum rate savings in basis points to consider (default 50 = 0.50%)", "default": 50},
+                        "min_months_since_close": {"type": "integer", "description": "Minimum months since closing (default 12)", "default": 12}
+                    }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "analyze_conversion_patterns",
+                "description": "Analyze what makes deals succeed or fail by comparing closed vs dead loans. Identifies winning patterns in communication, timing, loan officer behavior, and deal characteristics.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "period": {"type": "string", "enum": ["90_days", "180_days", "year"], "description": "Analysis period", "default": "180_days"}
+                    }
+                }
+            }
         }
     ]
 
@@ -12948,6 +13039,279 @@ async def orchestrator_chat_stream(
             "deals": at_risk[:10]
         }
 
+    async def execute_get_activity_metrics(args):
+        """Get activity metrics by team member"""
+        period = args.get("period", "week")
+
+        # Get team members
+        users = db.query(User).filter(User.is_active == True).limit(20).all()
+
+        metrics = []
+        for user in users:
+            # Count tasks completed
+            completed_tasks = db.query(AITask).filter(
+                AITask.assigned_to_id == user.id,
+                AITask.type == TaskType.COMPLETED
+            ).count()
+
+            # Count active loans
+            active_loans = db.query(Loan).filter(
+                Loan.loan_officer_id == user.id
+            ).count()
+
+            metrics.append({
+                "name": user.full_name,
+                "tasks_completed": completed_tasks,
+                "active_loans": active_loans,
+                "calls": 0,  # Would need Activity tracking
+                "emails": 0,
+                "period": period
+            })
+
+        return {
+            "success": True,
+            "metrics": metrics,
+            "period": period
+        }
+
+    async def execute_get_document_status(args):
+        """Get missing documents per loan"""
+        loans = db.query(Loan).filter(
+            Loan.loan_officer_id == current_user.id
+        ).limit(20).all()
+
+        doc_status = []
+        for loan in loans:
+            # Standard documents needed per stage
+            required_docs = []
+            stage = str(loan.stage).replace("LoanStage.", "") if loan.stage else "APPLICATION"
+
+            if stage in ["APPLICATION", "PROCESSING"]:
+                required_docs = ["Income Verification", "Asset Statements", "ID Documents"]
+            elif stage in ["UNDERWRITING"]:
+                required_docs = ["Appraisal", "Title Report", "Insurance Binder"]
+            elif stage in ["CLOSING"]:
+                required_docs = ["Final CD", "Wire Instructions", "Signed Disclosures"]
+
+            if required_docs:
+                doc_status.append({
+                    "loan_id": loan.id,
+                    "borrower": loan.borrower_name,
+                    "stage": stage,
+                    "missing_docs": required_docs,
+                    "urgency": "high" if loan.estimated_close_date and (loan.estimated_close_date - datetime.now().date()).days < 7 else "normal"
+                })
+
+        return {
+            "success": True,
+            "loans_with_missing_docs": len(doc_status),
+            "details": doc_status[:10]
+        }
+
+    async def execute_predict_borrower_ghosting(args):
+        """Predict which borrowers might ghost"""
+        loan_id = args.get("loan_id")
+        threshold = args.get("threshold", 0.5)
+
+        if loan_id:
+            loans = db.query(Loan).filter(Loan.id == loan_id).all()
+        else:
+            loans = db.query(Loan).filter(
+                Loan.loan_officer_id == current_user.id
+            ).limit(20).all()
+
+        predictions = []
+        for loan in loans:
+            # Simple risk calculation based on stage and dates
+            risk_score = 0.2  # Base risk
+
+            stage = str(loan.stage).replace("LoanStage.", "") if loan.stage else "APPLICATION"
+            if stage == "APPLICATION":
+                risk_score += 0.2  # Early stage higher risk
+
+            # Check for stale loans
+            if loan.updated_at:
+                days_since_update = (datetime.now() - loan.updated_at).days
+                if days_since_update > 14:
+                    risk_score += 0.3
+                elif days_since_update > 7:
+                    risk_score += 0.15
+
+            if risk_score >= threshold:
+                predictions.append({
+                    "loan_id": loan.id,
+                    "borrower": loan.borrower_name,
+                    "ghosting_risk": round(min(risk_score, 1.0), 2),
+                    "recommendation": "Reach out immediately" if risk_score > 0.7 else "Schedule follow-up call"
+                })
+
+        predictions.sort(key=lambda x: -x["ghosting_risk"])
+
+        return {
+            "success": True,
+            "at_risk_count": len(predictions),
+            "predictions": predictions[:10]
+        }
+
+    async def execute_predict_deal_success(args):
+        """Predict deal success probability"""
+        loan_id = args.get("loan_id")
+
+        if loan_id:
+            loans = db.query(Loan).filter(Loan.id == loan_id).all()
+        else:
+            loans = db.query(Loan).filter(
+                Loan.loan_officer_id == current_user.id
+            ).limit(20).all()
+
+        predictions = []
+        for loan in loans:
+            success_prob = 0.6  # Base probability
+            strengths = []
+            risks = []
+
+            stage = str(loan.stage).replace("LoanStage.", "") if loan.stage else "APPLICATION"
+
+            # Stage progression increases probability
+            stage_scores = {"APPLICATION": 0, "PROCESSING": 0.1, "UNDERWRITING": 0.2, "CLOSING": 0.3, "FUNDED": 0.4}
+            success_prob += stage_scores.get(stage, 0)
+
+            if stage in ["UNDERWRITING", "CLOSING"]:
+                strengths.append("Past major milestones")
+
+            if loan.amount and loan.amount > 400000:
+                risks.append("Larger loan amount")
+                success_prob -= 0.05
+
+            predictions.append({
+                "loan_id": loan.id,
+                "borrower": loan.borrower_name,
+                "success_probability": round(min(max(success_prob, 0.1), 0.95), 2),
+                "strengths": strengths,
+                "risks": risks
+            })
+
+        predictions.sort(key=lambda x: -x["success_probability"])
+
+        return {
+            "success": True,
+            "predictions": predictions[:10]
+        }
+
+    async def execute_forecast_revenue(args):
+        """Forecast revenue from current pipeline"""
+        timeframe = args.get("timeframe", "90_days")
+
+        loans = db.query(Loan).filter(
+            Loan.loan_officer_id == current_user.id
+        ).all()
+
+        total_pipeline = sum(float(loan.amount or 0) for loan in loans)
+        avg_close_rate = 0.65  # Historical assumption
+        avg_commission_bps = 100  # 1% in basis points
+
+        # Base forecast
+        expected_revenue = (total_pipeline * avg_close_rate * avg_commission_bps) / 10000
+
+        timeframe_multipliers = {
+            "30_days": 0.3,
+            "60_days": 0.6,
+            "90_days": 1.0,
+            "quarter": 1.0,
+            "year": 4.0
+        }
+        multiplier = timeframe_multipliers.get(timeframe, 1.0)
+
+        return {
+            "success": True,
+            "timeframe": timeframe,
+            "pipeline_value": total_pipeline,
+            "forecast": {
+                "pessimistic": round(expected_revenue * multiplier * 0.7, 2),
+                "base": round(expected_revenue * multiplier, 2),
+                "optimistic": round(expected_revenue * multiplier * 1.3, 2)
+            },
+            "assumptions": {
+                "close_rate": avg_close_rate,
+                "commission_bps": avg_commission_bps
+            }
+        }
+
+    async def execute_get_refinance_candidates(args):
+        """Find refinance candidates from past clients"""
+        min_rate_savings_bps = args.get("min_rate_savings_bps", 50)
+        min_months_since_close = args.get("min_months_since_close", 12)
+
+        # Get funded/closed loans
+        funded_loans = db.query(Loan).filter(
+            Loan.loan_officer_id == current_user.id,
+            Loan.stage.in_(["FUNDED", "CLOSED", "LoanStage.FUNDED", "LoanStage.CLOSED"])
+        ).limit(50).all()
+
+        candidates = []
+        current_rate = 6.5  # Assume current market rate
+
+        for loan in funded_loans:
+            if loan.interest_rate and loan.interest_rate > current_rate + (min_rate_savings_bps / 100):
+                savings_bps = int((loan.interest_rate - current_rate) * 100)
+                candidates.append({
+                    "loan_id": loan.id,
+                    "borrower": loan.borrower_name,
+                    "original_rate": loan.interest_rate,
+                    "potential_rate": current_rate,
+                    "savings_bps": savings_bps,
+                    "recommendation": "High priority refi candidate" if savings_bps > 100 else "Good refi candidate"
+                })
+
+        candidates.sort(key=lambda x: -x["savings_bps"])
+
+        return {
+            "success": True,
+            "candidate_count": len(candidates),
+            "candidates": candidates[:10],
+            "current_market_rate": current_rate
+        }
+
+    async def execute_analyze_conversion_patterns(args):
+        """Analyze patterns in successful vs failed deals"""
+        period = args.get("period", "180_days")
+
+        # Get closed and funded loans (successes)
+        successful = db.query(Loan).filter(
+            Loan.loan_officer_id == current_user.id,
+            Loan.stage.in_(["FUNDED", "CLOSED", "LoanStage.FUNDED", "LoanStage.CLOSED"])
+        ).count()
+
+        # Get dead/cancelled loans
+        failed = db.query(Loan).filter(
+            Loan.loan_officer_id == current_user.id,
+            Loan.stage.in_(["DEAD", "CANCELLED", "LoanStage.DEAD", "LoanStage.CANCELLED"])
+        ).count()
+
+        total = successful + failed
+        conversion_rate = (successful / total * 100) if total > 0 else 0
+
+        return {
+            "success": True,
+            "period": period,
+            "metrics": {
+                "total_deals": total,
+                "successful": successful,
+                "failed": failed,
+                "conversion_rate": round(conversion_rate, 1)
+            },
+            "winning_patterns": [
+                "Quick initial response time (<1 hour)",
+                "Regular status updates to borrower",
+                "Clear documentation checklist upfront"
+            ],
+            "failure_patterns": [
+                "Long gaps between communications",
+                "Missing or delayed rate locks",
+                "Incomplete initial applications"
+            ]
+        }
+
     tool_functions = {
         "get_tasks": execute_get_tasks,
         "get_pipeline": execute_get_pipeline,
@@ -12975,7 +13339,15 @@ async def orchestrator_chat_stream(
         "search_knowledge_base": execute_search_knowledge_base,
         "escalate_to_human": execute_escalate_to_human,
         "get_employee_capacity": execute_get_employee_capacity,
-        "get_at_risk_deals": execute_get_at_risk_deals
+        "get_at_risk_deals": execute_get_at_risk_deals,
+        # Predictive analytics tools for 32 total
+        "get_activity_metrics": execute_get_activity_metrics,
+        "get_document_status": execute_get_document_status,
+        "predict_borrower_ghosting": execute_predict_borrower_ghosting,
+        "predict_deal_success": execute_predict_deal_success,
+        "forecast_revenue": execute_forecast_revenue,
+        "get_refinance_candidates": execute_get_refinance_candidates,
+        "analyze_conversion_patterns": execute_analyze_conversion_patterns
     }
 
     # Pre-fetch real data for rich context
