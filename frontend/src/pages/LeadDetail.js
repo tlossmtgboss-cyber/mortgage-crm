@@ -702,130 +702,55 @@ function LeadDetail() {
 
   // Load workflow tasks when Tasks tab is selected
   const loadWorkflowTasks = async () => {
-    if (!lead?.stage) return;
+    if (!lead?.id) return;
 
     setWorkflowTasksLoading(true);
     try {
-      // Map lead stage to workflow key (matches workflow_config_models.py DEFAULT_WORKFLOW_CONFIGS)
-      const stageToWorkflowMap = {
-        // Prospect Workflow - Lead engagement and qualification
-        'New': 'prospect',
-        'new': 'prospect',
-        'NEW': 'prospect',
-        'Attempted Contact': 'prospect',
-        'attempted_contact': 'prospect',
-        'ATTEMPTED_CONTACT': 'prospect',
-        'Prospect': 'prospect',
-        'prospect': 'prospect',
-        'PROSPECT': 'prospect',
-        // PreQual Workflow - Application and Pre-qualification
-        'Application': 'prequal',
-        'application': 'prequal',
-        'APPLICATION': 'prequal',
-        'Pre-Qualified': 'prequal',
-        'pre_qualified': 'prequal',
-        'PRE_QUALIFIED': 'prequal',
-        // Pre-Approved Workflow - House hunting support
-        'Pre-Approved': 'pre_approved',
-        'pre_approved': 'pre_approved',
-        'PRE_APPROVED': 'pre_approved',
-        // Under Contract Workflow - Active loan processing
-        'Under Contract': 'under_contract',
-        'under_contract': 'under_contract',
-        'UNDER_CONTRACT': 'under_contract',
-        'Processing': 'under_contract',
-        'processing': 'under_contract',
-        'PROCESSING': 'under_contract',
-        'Underwriting': 'under_contract',
-        'underwriting': 'under_contract',
-        'UNDERWRITING': 'under_contract',
-        'Conditional Approval': 'under_contract',
-        'conditional_approval': 'under_contract',
-        'CONDITIONAL_APPROVAL': 'under_contract',
-        // Last Mile Workflow - Final steps to closing
-        'CTC': 'last_mile',
-        'ctc': 'last_mile',
-        'Clear to Close': 'last_mile',
-        'clear_to_close': 'last_mile',
-        'CLEAR_TO_CLOSE': 'last_mile',
-        'Closing': 'last_mile',
-        'closing': 'last_mile',
-        'CLOSING': 'last_mile',
-        // Post Close Workflow - Post-closing follow-up
-        'Funded': 'post_close',
-        'funded': 'post_close',
-        'FUNDED': 'post_close',
-        'Closed': 'post_close',
-        'closed': 'post_close',
-        'CLOSED': 'post_close',
-        // Credit Repair Workflow
-        'Credit Repair': 'credit_repair',
-        'credit_repair': 'credit_repair',
-        'Does Not Qualify': 'credit_repair',
-        'does_not_qualify': 'credit_repair',
-        'DOES_NOT_QUALIFY': 'credit_repair',
-        // Nurture Workflow - Long-term relationship maintenance
-        'Long-Term Nurture': 'nurture',
-        'long_term_nurture': 'nurture',
-        'LONG_TERM_NURTURE': 'nurture',
-        'Nurture': 'nurture',
-        'nurture': 'nurture',
-        'NURTURE': 'nurture',
-        'Not Ready': 'nurture',
-        'not_ready': 'nurture',
-        'NOT_READY': 'nurture'
-      };
-
-      const workflowKey = stageToWorkflowMap[lead.stage] || 'prospect';
-
-      // Calculate days since lead entered current status (or created)
-      const statusDate = lead.stage_changed_at || lead.created_at || new Date().toISOString();
-      const daysSinceStatus = Math.floor((new Date() - new Date(statusDate)) / (1000 * 60 * 60 * 24));
-      const currentWorkflowDay = daysSinceStatus + 1; // Day 1 is the first day
-
-      // Fetch workflow configuration for this stage
-      const response = await fetch(`/api/v1/workflow-config/workflows/${workflowKey}`, {
+      // Use the new endpoint that handles stage-to-workflow mapping and day calculations
+      const response = await fetch(`/api/v1/workflow-config/leads/${lead.id}/workflow-tasks`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
 
       if (response.ok) {
-        const workflowData = await response.json();
-        const allDays = workflowData.days || [];
+        const data = await response.json();
 
-        // Filter to show tasks for the next 14 days from current workflow position
-        const maxDay = currentWorkflowDay + 14;
-        const upcomingTasks = allDays
-          .filter(day => day.day_value >= currentWorkflowDay && day.day_value <= maxDay)
-          .map((day) => {
-            // Calculate the actual date this task is due
-            const daysFromNow = day.day_value - currentWorkflowDay;
-            const dueDate = new Date();
-            dueDate.setDate(dueDate.getDate() + daysFromNow);
+        if (data.tasks && data.tasks.length > 0) {
+          // Calculate due dates based on days_in_stage from API
+          const daysInStage = data.days_in_stage || 1;
 
-            return {
-              id: day.id,
-              dayLabel: day.day_label,
-              dayValue: day.day_value,
-              dueDate: dueDate.toISOString(),
-              dueDateFormatted: dueDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
-              daysFromNow: daysFromNow,
-              taskDescription: day.task_description || `Day ${day.day_value} tasks`,
-              phoneEnabled: day.phone_enabled,
-              phoneAmEnabled: day.phone_am_enabled,
-              phonePmEnabled: day.phone_pm_enabled,
-              textEnabled: day.text_enabled,
-              textAmEnabled: day.text_am_enabled,
-              textPmEnabled: day.text_pm_enabled,
-              emailEnabled: day.email_enabled,
-              referralPartnerEnabled: day.referral_partner_enabled,
-              roleResponsibilities: day.role_responsibilities || {},
-              status: daysFromNow < 0 ? 'overdue' : daysFromNow === 0 ? 'due_today' : 'upcoming'
-            };
-          });
+          // Filter to show tasks within the next 14 days and transform to match UI expectations
+          const upcomingTasks = data.tasks
+            .filter(task => task.day_value >= daysInStage && task.day_value <= daysInStage + 14)
+            .map((task) => {
+              const daysFromNow = task.day_value - daysInStage;
+              const dueDate = new Date();
+              dueDate.setDate(dueDate.getDate() + daysFromNow);
 
-        setWorkflowTasks(upcomingTasks);
+              return {
+                id: task.id,
+                dayLabel: task.day_label,
+                dayValue: task.day_value,
+                dueDate: dueDate.toISOString(),
+                dueDateFormatted: dueDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+                daysFromNow: daysFromNow,
+                taskDescription: task.task_description || `Day ${task.day_value} tasks`,
+                phoneEnabled: task.communication_methods?.includes('phone') || false,
+                textEnabled: task.communication_methods?.includes('text') || false,
+                emailEnabled: task.communication_methods?.includes('email') || false,
+                status: task.status === 'completed' ? 'completed' :
+                        task.status === 'due_today' ? 'due_today' :
+                        task.status === 'due_tomorrow' ? 'upcoming' : 'upcoming',
+                workflowName: data.workflow?.name,
+                workflowColor: data.workflow?.color
+              };
+            });
+
+          setWorkflowTasks(upcomingTasks);
+        } else {
+          setWorkflowTasks([]);
+        }
       } else {
         setWorkflowTasks([]);
       }
