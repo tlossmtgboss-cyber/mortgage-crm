@@ -1489,16 +1489,13 @@ async def test_weekly_task_for_loan(
 async def get_lead_workflow_tasks(
     lead_id: int,
     request: Request,
-    credentials: HTTPAuthorizationCredentials = Depends(security)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
 ):
     """
     Get workflow tasks for a specific lead based on their current stage.
     Returns all day configs with their completion status.
     """
-    from database import get_db, SessionLocal
-    from datetime import datetime, timedelta
-
-    db = SessionLocal()
     try:
         # Get lead info
         lead_result = db.execute(text("""
@@ -1631,5 +1628,3 @@ async def get_lead_workflow_tasks(
     except Exception as e:
         logger.error(f"Error getting lead workflow tasks: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        db.close()
