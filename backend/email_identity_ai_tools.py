@@ -1,687 +1,1054 @@
 """
-Email Identity AI Tools
-AI-accessible tools for email search and identity resolution.
-Enables AI agents to intelligently search, analyze, and act on emails.
+AI Tool Interface for Email Identity Resolution System
+Perennia AI - IBMA (Intelligent Business Mortgage Assistant)
+
+This module provides AI-accessible tools for the email identity system,
+enabling AI agents to search emails, understand matches, and execute
+context-aware tasks.
 """
 
+from __future__ import annotations
+
 import logging
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Literal
+from dataclasses import dataclass, asdict
+from enum import Enum
+
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+
+# Import from services directory
+from services.email_identity_resolver import EmailIdentityResolver
+from services.email_identity_analytics import EmailIdentityAnalytics
 
 logger = logging.getLogger(__name__)
 
 
+# ================================================================
+# AI TOOL DEFINITIONS
+# ================================================================
+
 class EmailSearchTools:
     """
-    AI-accessible email search tools.
-    Provides 6 core search methods for AI agents.
+    AI-accessible tools for email search and identity resolution.
+
+    These tools are designed to be used by LangGraph agents, OpenAI function
+    calling, or other AI orchestration frameworks.
     """
 
     def __init__(self, db: Session, user_id: int):
         self.db = db
         self.user_id = user_id
+        self.resolver = EmailIdentityResolver(db)
+        self.analytics = EmailIdentityAnalytics(db)
+
+    # ================================================================
+    # TOOL 1: Search Emails by Client
+    # ================================================================
 
     def search_emails_by_client(
         self,
         client_name: Optional[str] = None,
         client_email: Optional[str] = None,
-        client_id: Optional[int] = None,
+        loan_id: Optional[int] = None,
+        lead_id: Optional[int] = None,
         days: int = 30,
+        include_unread_only: bool = False,
         limit: int = 20
     ) -> Dict[str, Any]:
         """
-        Search emails from a specific client.
+        Search for emails related to a specific client.
+
+        AI USE CASE:
+        - "Show me recent emails from John Doe"
+        - "What emails did we receive about loan #123456?"
+        - "Find unread emails from sarah@example.com"
 
         Args:
-            client_name: Client's name (partial match supported)
-            client_email: Client's email address
-            client_id: Lead or loan ID
-            days: Number of days to search back
-            limit: Maximum results to return
+            client_name: Client's name (fuzzy match)
+            client_email: Exact email address
+            loan_id: Specific loan ID
+            lead_id: Specific lead ID
+            days: Days to look back
+            include_unread_only: Only unread/pending emails
+            limit: Max results
 
         Returns:
-            Dict with emails, count, and AI-friendly summary
+            Dictionary with emails and match summary
         """
         try:
-            conditions = ["1=1"]
-            params = {"days": days, "limit": limit}
+            start_date = datetime.now(timezone.utc) - timedelta(days=days)
 
-            if client_email:
-                conditions.append("LOWER(from_email) = LOWER(:email)")
-                params["email"] = client_email
+            # Build WHERE clause dynamically
+            where_conditions = ["e.user_id = :user_id", "e.created_at >= :start_date"]
+            params = {"user_id": self.user_id, "start_date": start_date}
 
             if client_name:
-                conditions.append("LOWER(from_name) LIKE LOWER(:name_pattern)")
-                params["name_pattern"] = f"%{client_name}%"
+                where_conditions.append("e.match_client_name ILIKE :client_name")
+                params["client_name"] = f"%{client_name}%"
 
-            if client_id:
-                conditions.append("(matched_lead_id = :client_id OR matched_loan_id = :client_id)")
-                params["client_id"] = client_id
+            if client_email:
+                where_conditions.append("LOWER(e.from_email) = :client_email")
+                params["client_email"] = client_email.lower()
 
-            query = text(f"""
+            if loan_id:
+                where_conditions.append("e.matched_loan_id = :loan_id")
+                params["loan_id"] = loan_id
+
+            if lead_id:
+                where_conditions.append("e.matched_lead_id = :lead_id")
+                params["lead_id"] = lead_id
+
+            if include_unread_only:
+                where_conditions.append("e.status = 'pending'")
+
+            where_clause = " AND ".join(where_conditions)
+
+            # Execute search
+            results = self.db.execute(text(f"""
                 SELECT
-                    id, provider_message_id as message_id, from_email, from_name,
-                    subject, COALESCE(received_date, sent_date) as received_date, is_priority,
-                    matched_lead_id as lead_id, matched_loan_id as loan_id,
-                    match_confidence, match_method,
-                    LEFT(body_preview, 200) as body_preview
-                FROM email_reconciliation_queue
-                WHERE {' AND '.join(conditions)}
-                AND COALESCE(received_date, sent_date) > NOW() - INTERVAL '{days} days'
-                ORDER BY COALESCE(received_date, sent_date) DESC
+                    e.id,
+                    e.from_email,
+                    e.from_name,
+                    e.subject,
+                    e.body_preview,
+                    COALESCE(e.received_date, e.sent_date) as received_date,
+                    e.match_method,
+                    e.match_confidence,
+                    e.match_client_name,
+                    e.matched_loan_id,
+                    e.matched_lead_id,
+                    e.is_priority,
+                    e.status,
+                    e.has_attachments,
+                    e.disposition
+                FROM email_reconciliation_queue e
+                WHERE {where_clause}
+                ORDER BY COALESCE(e.received_date, e.sent_date) DESC
                 LIMIT :limit
-            """)
+            """), {**params, "limit": limit}).fetchall()
 
-            results = self.db.execute(query, params).fetchall()
-
-            emails = []
-            priority_count = 0
-            for row in results:
-                email = {
-                    "id": row.id,
-                    "from": row.from_email,
-                    "from_name": row.from_name,
-                    "subject": row.subject,
-                    "date": row.received_date.isoformat() if row.received_date else None,
-                    "is_priority": row.is_priority,
-                    "preview": row.body_preview,
-                    "lead_id": row.lead_id,
-                    "loan_id": row.loan_id
+            emails = [
+                {
+                    "email_id": row[0],
+                    "from_email": row[1],
+                    "from_name": row[2],
+                    "subject": row[3],
+                    "preview": row[4],
+                    "received_date": row[5].isoformat() if row[5] else None,
+                    "match_method": row[6],
+                    "match_confidence": float(row[7]) if row[7] else None,
+                    "client_name": row[8],
+                    "loan_id": row[9],
+                    "lead_id": row[10],
+                    "is_priority": row[11],
+                    "status": row[12],
+                    "has_attachments": row[13],
+                    "disposition": row[14]
                 }
-                emails.append(email)
-                if row.is_priority:
-                    priority_count += 1
-
-            # Generate AI summary
-            summary = self._generate_search_summary(emails, client_name or client_email, priority_count)
+                for row in results
+            ]
 
             return {
                 "success": True,
                 "emails": emails,
                 "count": len(emails),
-                "priority_count": priority_count,
-                "ai_summary": summary
+                "search_criteria": {
+                    "client_name": client_name,
+                    "client_email": client_email,
+                    "loan_id": loan_id,
+                    "lead_id": lead_id,
+                    "days": days,
+                    "unread_only": include_unread_only
+                },
+                "ai_summary": self._generate_email_summary(emails)
             }
 
         except Exception as e:
-            logger.error(f"Error searching emails by client: {e}")
-            return {
-                "success": False,
-                "error": str(e),
-                "emails": [],
-                "count": 0
-            }
-
-    def get_email_thread(
-        self,
-        email_id: Optional[int] = None,
-        thread_id: Optional[str] = None,
-        message_id: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """
-        Get complete email conversation thread.
-
-        Args:
-            email_id: Database ID of any email in thread
-            thread_id: Gmail/Outlook thread ID
-            message_id: Specific message ID
-
-        Returns:
-            Dict with thread emails and context
-        """
-        try:
-            # First get the reference email
-            if email_id:
-                ref_query = text("""
-                    SELECT thread_id, from_email, subject
-                    FROM email_reconciliation_queue
-                    WHERE id = :email_id
-                """)
-                ref = self.db.execute(ref_query, {"email_id": email_id}).fetchone()
-                if ref:
-                    thread_id = ref.thread_id
-
-            if not thread_id:
-                return {
-                    "success": False,
-                    "error": "Could not find thread",
-                    "emails": []
-                }
-
-            # Get all emails in thread
-            query = text("""
-                SELECT
-                    id, provider_message_id as message_id, from_email, from_name,
-                    subject, COALESCE(received_date, sent_date) as received_date, body_preview,
-                    is_priority, matched_lead_id as lead_id, matched_loan_id as loan_id
-                FROM email_reconciliation_queue
-                WHERE thread_id = :thread_id
-                ORDER BY COALESCE(received_date, sent_date) ASC
-            """)
-
-            results = self.db.execute(query, {"thread_id": thread_id}).fetchall()
-
-            emails = []
-            participants = set()
-            for row in results:
-                emails.append({
-                    "id": row.id,
-                    "from": row.from_email,
-                    "from_name": row.from_name,
-                    "subject": row.subject,
-                    "date": row.received_date.isoformat() if row.received_date else None,
-                    "preview": row.body_preview
-                })
-                if row.from_email:
-                    participants.add(row.from_email)
-
-            return {
-                "success": True,
-                "thread_id": thread_id,
-                "emails": emails,
-                "email_count": len(emails),
-                "participants": list(participants),
-                "ai_summary": f"Thread with {len(emails)} emails between {len(participants)} participants"
-            }
-
-        except Exception as e:
-            logger.error(f"Error getting email thread: {e}")
+            logger.error(f"Email search failed: {e}")
             return {
                 "success": False,
                 "error": str(e),
                 "emails": []
             }
 
-    def identify_email_sender(self, email_address: str) -> Dict[str, Any]:
+    # ================================================================
+    # TOOL 2: Get Email Thread
+    # ================================================================
+
+    def get_email_thread(
+        self,
+        email_id: Optional[int] = None,
+        thread_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Get complete email thread/conversation.
+
+        AI USE CASE:
+        - "Show me the full conversation with this client"
+        - "What's the context around email #12345?"
+        - "Get the email thread for this discussion"
+
+        Args:
+            email_id: Specific email ID to get thread for
+            thread_id: Thread ID to retrieve
+
+        Returns:
+            Complete thread with all messages in chronological order
+        """
+        try:
+            # Get thread_id if email_id provided
+            if email_id and not thread_id:
+                result = self.db.execute(text("""
+                    SELECT thread_id FROM email_reconciliation_queue
+                    WHERE id = :email_id
+                """), {"email_id": email_id}).fetchone()
+
+                if result and result[0]:
+                    thread_id = result[0]
+
+            if not thread_id:
+                return {
+                    "success": False,
+                    "error": "No thread_id found",
+                    "thread": []
+                }
+
+            # Get all emails in thread
+            results = self.db.execute(text("""
+                SELECT
+                    id,
+                    from_email,
+                    from_name,
+                    to_emails,
+                    subject,
+                    body_preview,
+                    body_full,
+                    COALESCE(received_date, sent_date) as received_date,
+                    direction,
+                    match_client_name,
+                    has_attachments,
+                    attachment_names
+                FROM email_reconciliation_queue
+                WHERE thread_id = :thread_id
+                  AND user_id = :user_id
+                ORDER BY COALESCE(received_date, sent_date) ASC
+            """), {
+                "thread_id": thread_id,
+                "user_id": self.user_id
+            }).fetchall()
+
+            thread_emails = [
+                {
+                    "email_id": row[0],
+                    "from_email": row[1],
+                    "from_name": row[2],
+                    "to_emails": row[3],
+                    "subject": row[4],
+                    "preview": row[5],
+                    "full_body": row[6],
+                    "received_date": row[7].isoformat() if row[7] else None,
+                    "direction": row[8],
+                    "client_name": row[9],
+                    "has_attachments": row[10],
+                    "attachments": row[11]
+                }
+                for row in results
+            ]
+
+            return {
+                "success": True,
+                "thread_id": thread_id,
+                "email_count": len(thread_emails),
+                "thread": thread_emails,
+                "ai_summary": self._generate_thread_summary(thread_emails)
+            }
+
+        except Exception as e:
+            logger.error(f"Thread retrieval failed: {e}")
+            return {
+                "success": False,
+                "error": str(e),
+                "thread": []
+            }
+
+    # ================================================================
+    # TOOL 3: Identify Email Sender
+    # ================================================================
+
+    def identify_email_sender(
+        self,
+        email_address: str
+    ) -> Dict[str, Any]:
         """
         Identify who an email address belongs to in the CRM.
+
+        AI USE CASE:
+        - "Who is john@example.com?"
+        - "Do we know this email address?"
+        - "What client is associated with this email?"
 
         Args:
             email_address: Email address to identify
 
         Returns:
-            Dict with identity information and CRM context
+            Complete identity information from CRM
         """
         try:
-            email_lower = email_address.lower().strip()
+            email_data = {"from_email": email_address}
+            match = self.resolver.resolve(email_data, self.user_id)
 
-            # Check known client emails
-            known_query = text("""
-                SELECT
-                    kce.email_address, kce.client_name, kce.source_type,
-                    kce.lead_id, kce.loan_id, kce.contact_id,
-                    l.name as lead_name, l.stage as lead_stage,
-                    lo.borrower_name, lo.loan_number, lo.stage as loan_stage
-                FROM known_client_emails kce
-                LEFT JOIN leads l ON kce.lead_id = l.id
-                LEFT JOIN loans lo ON kce.loan_id = lo.id
-                WHERE LOWER(kce.email_address) = :email
-                AND kce.user_id = :user_id
-            """)
+            # Enrich with full CRM details
+            crm_details = self._get_full_crm_details(match)
 
-            result = self.db.execute(known_query, {"email": email_lower, "user_id": self.user_id}).fetchone()
-
-            if result:
-                # Determine entity type and id
-                entity_type = "unknown"
-                entity_id = None
-                if result.lead_id:
-                    entity_type = "lead"
-                    entity_id = result.lead_id
-                elif result.loan_id:
-                    entity_type = "loan"
-                    entity_id = result.loan_id
-                elif result.contact_id:
-                    entity_type = "contact"
-                    entity_id = result.contact_id
-
-                identity = {
-                    "matched": True,
-                    "match_confidence": 1.0,
-                    "email": result.email_address,
-                    "client_name": result.client_name,
-                    "entity_type": entity_type,
-                    "entity_id": entity_id,
-                    "source_type": result.source_type
-                }
-
-                # Add CRM details
-                if result.lead_id and result.lead_name:
-                    identity["lead_details"] = {
-                        "id": result.lead_id,
-                        "name": result.lead_name,
-                        "stage": result.lead_stage
-                    }
-                if result.loan_id and result.borrower_name:
-                    identity["loan_details"] = {
-                        "id": result.loan_id,
-                        "borrower": result.borrower_name,
-                        "loan_number": result.loan_number,
-                        "stage": result.loan_stage
-                    }
-
-                return {
-                    "success": True,
-                    "identity": identity,
-                    "ai_summary": f"{result.client_name} identified via known client email (100% confidence)."
-                }
-
-            # Check leads by email
-            lead_query = text("""
-                SELECT id, name, email, phone, stage
-                FROM leads
-                WHERE LOWER(email) = :email
-            """)
-            lead = self.db.execute(lead_query, {"email": email_lower}).fetchone()
-
-            if lead:
-                return {
-                    "success": True,
-                    "identity": {
-                        "matched": True,
-                        "match_confidence": 0.95,
-                        "email": lead.email,
-                        "client_name": lead.name,
-                        "entity_type": "lead",
-                        "entity_id": lead.id,
-                        "is_priority": False
-                    },
-                    "lead_details": {
-                        "id": lead.id,
-                        "name": lead.name,
-                        "phone": lead.phone,
-                        "stage": lead.stage
-                    },
-                    "ai_summary": f"{lead.name} - Lead (Stage: {lead.stage})"
-                }
-
-            # Check loans by borrower email
-            loan_query = text("""
-                SELECT id, loan_number, borrower_name, borrower_email, stage, amount
-                FROM loans
-                WHERE LOWER(borrower_email) = :email
-            """)
-            loan = self.db.execute(loan_query, {"email": email_lower}).fetchone()
-
-            if loan:
-                return {
-                    "success": True,
-                    "identity": {
-                        "matched": True,
-                        "match_confidence": 0.95,
-                        "email": loan.borrower_email,
-                        "client_name": loan.borrower_name,
-                        "entity_type": "loan",
-                        "entity_id": loan.id,
-                        "is_priority": True
-                    },
-                    "loan_details": {
-                        "id": loan.id,
-                        "loan_number": loan.loan_number,
-                        "borrower": loan.borrower_name,
-                        "stage": loan.stage,
-                        "amount": float(loan.amount) if loan.amount else None
-                    },
-                    "ai_summary": f"{loan.borrower_name} - Active loan #{loan.loan_number} (Stage: {loan.stage})"
-                }
-
-            # Unknown sender
             return {
                 "success": True,
+                "email_address": email_address,
+                "matched": match.get("match_method") is not None,
                 "identity": {
-                    "matched": False,
-                    "email": email_address,
-                    "client_name": None
+                    "client_name": match.get("match_client_name"),
+                    "match_method": match.get("match_method"),
+                    "confidence": match.get("match_confidence"),
+                    "loan_id": match.get("matched_loan_id"),
+                    "lead_id": match.get("matched_lead_id"),
+                    "contact_id": match.get("matched_contact_id"),
+                    "is_priority": match.get("is_priority")
                 },
-                "ai_summary": f"Unknown sender: {email_address}. Not found in CRM."
+                "crm_details": crm_details,
+                "ai_summary": self._generate_identity_summary(match, crm_details)
             }
 
         except Exception as e:
-            logger.error(f"Error identifying email sender: {e}")
+            logger.error(f"Identity resolution failed: {e}")
             return {
                 "success": False,
-                "error": str(e)
+                "error": str(e),
+                "email_address": email_address,
+                "matched": False
             }
 
-    def get_priority_emails(self, days: int = 7, limit: int = 20) -> Dict[str, Any]:
+    # ================================================================
+    # TOOL 4: Get Priority Emails
+    # ================================================================
+
+    def get_priority_emails(
+        self,
+        days: int = 7,
+        unread_only: bool = True,
+        limit: int = 20
+    ) -> Dict[str, Any]:
         """
-        Get priority emails that need attention.
+        Get high-priority emails requiring immediate attention.
+
+        AI USE CASE:
+        - "What urgent emails do I have?"
+        - "Show me priority items"
+        - "What needs my attention today?"
 
         Args:
-            days: Number of days to look back
-            limit: Maximum results
+            days: Days to look back
+            unread_only: Only pending/unread emails
+            limit: Max results
 
         Returns:
-            Dict with priority emails and recommended actions
+            Priority emails with context
         """
         try:
-            query = text(f"""
+            start_date = datetime.now(timezone.utc) - timedelta(days=days)
+
+            where_clauses = [
+                "user_id = :user_id",
+                "is_priority = TRUE",
+                "created_at >= :start_date"
+            ]
+
+            if unread_only:
+                where_clauses.append("status = 'pending'")
+
+            where_clause = " AND ".join(where_clauses)
+
+            results = self.db.execute(text(f"""
                 SELECT
-                    id, from_email, from_name, subject,
-                    COALESCE(received_date, sent_date) as received_date, body_preview,
-                    matched_lead_id as lead_id, matched_loan_id as loan_id, match_confidence,
-                    is_priority, status
+                    id,
+                    from_email,
+                    from_name,
+                    subject,
+                    body_preview,
+                    COALESCE(received_date, sent_date) as received_date,
+                    match_client_name,
+                    match_loan_number,
+                    matched_loan_id,
+                    match_confidence,
+                    disposition,
+                    has_attachments
                 FROM email_reconciliation_queue
-                WHERE is_priority = TRUE
-                AND COALESCE(received_date, sent_date) > NOW() - INTERVAL '{days} days'
-                AND status != 'archived'
+                WHERE {where_clause}
                 ORDER BY COALESCE(received_date, sent_date) DESC
                 LIMIT :limit
-            """)
+            """), {
+                "user_id": self.user_id,
+                "start_date": start_date,
+                "limit": limit
+            }).fetchall()
 
-            results = self.db.execute(query, {"limit": limit}).fetchall()
-
-            emails = []
-            action_items = []
-
-            for row in results:
-                email = {
-                    "id": row.id,
-                    "from": row.from_email,
-                    "from_name": row.from_name,
-                    "subject": row.subject,
-                    "date": row.received_date.isoformat() if row.received_date else None,
-                    "preview": row.body_preview,
-                    "lead_id": row.lead_id,
-                    "loan_id": row.loan_id,
-                    "status": row.status
+            priority_emails = [
+                {
+                    "email_id": row[0],
+                    "from_email": row[1],
+                    "from_name": row[2],
+                    "subject": row[3],
+                    "preview": row[4],
+                    "received_date": row[5].isoformat() if row[5] else None,
+                    "client_name": row[6],
+                    "loan_number": row[7],
+                    "loan_id": row[8],
+                    "confidence": float(row[9]) if row[9] else None,
+                    "disposition": row[10],
+                    "has_attachments": row[11]
                 }
-                emails.append(email)
-
-                # Generate action recommendation
-                if row.status == 'pending':
-                    client = row.from_name or row.from_email
-                    action_items.append(f"Follow up on email from {client}: {row.subject[:50] if row.subject else 'No subject'}")
-
-            # Categorize by urgency
-            today = datetime.utcnow().date()
-            urgent = []
-            important = []
-
-            for email in emails:
-                if email["date"]:
-                    email_date = datetime.fromisoformat(email["date"].replace('Z', '+00:00')).date()
-                    days_old = (today - email_date).days
-                    if days_old <= 1:
-                        urgent.append(email)
-                    else:
-                        important.append(email)
-
-            summary = f"You have {len(emails)} priority emails. "
-            if urgent:
-                summary += f"{len(urgent)} are urgent (last 24h). "
-            if action_items:
-                summary += f"Top action: {action_items[0]}"
+                for row in results
+            ]
 
             return {
                 "success": True,
-                "emails": emails,
-                "priority_count": len(emails),
-                "urgent_count": len(urgent),
-                "recommended_actions": action_items[:5],
-                "ai_summary": summary
+                "priority_count": len(priority_emails),
+                "emails": priority_emails,
+                "ai_summary": self._generate_priority_summary(priority_emails),
+                "recommended_actions": self._suggest_actions(priority_emails)
             }
 
         except Exception as e:
-            logger.error(f"Error getting priority emails: {e}")
+            logger.error(f"Priority email retrieval failed: {e}")
             return {
                 "success": False,
                 "error": str(e),
                 "emails": []
             }
 
+    # ================================================================
+    # TOOL 5: Search Emails by Content
+    # ================================================================
+
     def search_emails_by_content(
         self,
-        keywords: str,
+        search_query: Optional[str] = None,
+        keywords: Optional[str] = None,  # Alias for search_query
+        search_in: Literal["subject", "body", "both"] = "both",
         days: int = 30,
         limit: int = 20
     ) -> Dict[str, Any]:
         """
-        Search emails by keywords in subject and body.
+        Search emails by subject or body content.
+
+        AI USE CASE:
+        - "Find emails mentioning 'appraisal'"
+        - "Search for emails about closing dates"
+        - "Show emails containing 'urgent'"
 
         Args:
-            keywords: Search terms
-            days: Days to search back
-            limit: Maximum results
+            search_query: Text to search for
+            keywords: Alias for search_query (for backward compatibility)
+            search_in: Where to search (subject, body, or both)
+            days: Days to look back
+            limit: Max results
 
         Returns:
-            Dict with matching emails
+            Matching emails with relevance scoring
         """
+        # Support both parameter names
+        query = search_query or keywords
+        if not query:
+            return {
+                "success": False,
+                "error": "search_query or keywords required",
+                "emails": []
+            }
+
         try:
-            # Split keywords for matching
-            terms = keywords.lower().split()
+            start_date = datetime.now(timezone.utc) - timedelta(days=days)
 
-            query = text(f"""
+            # Build search condition
+            if search_in == "subject":
+                search_condition = "subject ILIKE :query"
+            elif search_in == "body":
+                search_condition = "(body_preview ILIKE :query OR body_full ILIKE :query)"
+            else:  # both
+                search_condition = """(
+                    subject ILIKE :query OR
+                    body_preview ILIKE :query OR
+                    body_full ILIKE :query
+                )"""
+
+            results = self.db.execute(text(f"""
                 SELECT
-                    id, from_email, from_name, subject,
-                    COALESCE(received_date, sent_date) as received_date, body_preview,
-                    matched_lead_id as lead_id, matched_loan_id as loan_id, is_priority
+                    id,
+                    from_email,
+                    from_name,
+                    subject,
+                    body_preview,
+                    COALESCE(received_date, sent_date) as received_date,
+                    match_client_name,
+                    matched_loan_id,
+                    matched_lead_id,
+                    disposition,
+                    is_priority
                 FROM email_reconciliation_queue
-                WHERE COALESCE(received_date, sent_date) > NOW() - INTERVAL '{days} days'
-                AND (
-                    LOWER(subject) LIKE :pattern
-                    OR LOWER(body_preview) LIKE :pattern
-                )
-                ORDER BY
-                    CASE WHEN is_priority THEN 0 ELSE 1 END,
-                    COALESCE(received_date, sent_date) DESC
+                WHERE user_id = :user_id
+                  AND created_at >= :start_date
+                  AND {search_condition}
+                ORDER BY COALESCE(received_date, sent_date) DESC
                 LIMIT :limit
-            """)
-
-            pattern = f"%{keywords.lower()}%"
-            results = self.db.execute(query, {
-                "limit": limit,
-                "pattern": pattern
+            """), {
+                "user_id": self.user_id,
+                "start_date": start_date,
+                "query": f"%{query}%",
+                "limit": limit
             }).fetchall()
 
-            emails = []
-            for row in results:
-                emails.append({
-                    "id": row.id,
-                    "from": row.from_email,
-                    "from_name": row.from_name,
-                    "subject": row.subject,
-                    "date": row.received_date.isoformat() if row.received_date else None,
-                    "preview": row.body_preview,
-                    "is_priority": row.is_priority,
-                    "lead_id": row.lead_id,
-                    "loan_id": row.loan_id
-                })
+            matching_emails = [
+                {
+                    "email_id": row[0],
+                    "from_email": row[1],
+                    "from_name": row[2],
+                    "subject": row[3],
+                    "preview": row[4],
+                    "received_date": row[5].isoformat() if row[5] else None,
+                    "client_name": row[6],
+                    "loan_id": row[7],
+                    "lead_id": row[8],
+                    "disposition": row[9],
+                    "is_priority": row[10]
+                }
+                for row in results
+            ]
 
             return {
                 "success": True,
-                "emails": emails,
-                "count": len(emails),
-                "search_terms": keywords,
-                "ai_summary": f"Found {len(emails)} emails matching '{keywords}'"
+                "search_query": query,
+                "search_in": search_in,
+                "count": len(matching_emails),
+                "emails": matching_emails,
+                "ai_summary": self._generate_search_summary(query, matching_emails)
             }
 
         except Exception as e:
-            logger.error(f"Error searching emails by content: {e}")
+            logger.error(f"Content search failed: {e}")
             return {
                 "success": False,
                 "error": str(e),
                 "emails": []
             }
 
-    def get_email_context_for_ai(self, email_id: int) -> Dict[str, Any]:
+    # ================================================================
+    # TOOL 6: Get Email Context for AI Decision
+    # ================================================================
+
+    def get_email_context_for_ai(
+        self,
+        email_id: int
+    ) -> Dict[str, Any]:
         """
-        Get complete context for an email to help AI make decisions.
+        Get complete context about an email for AI decision-making.
+
+        AI USE CASE:
+        - "Give me full context on this email"
+        - "What do I need to know about email #12345?"
+        - "Help me understand this client's situation"
 
         Args:
             email_id: Email ID to get context for
 
         Returns:
-            Dict with email, thread, CRM context, and recommendations
+            Complete context including client history, loan status, etc.
         """
         try:
-            # Get the email
-            email_query = text("""
+            # Get base email
+            email_result = self.db.execute(text("""
                 SELECT
-                    id, provider_message_id as message_id, thread_id, from_email, from_name,
-                    subject, COALESCE(received_date, sent_date) as received_date, body_preview,
-                    matched_lead_id as lead_id, matched_loan_id as loan_id,
-                    match_confidence, match_method, is_priority, status
+                    id, from_email, from_name, to_emails, subject,
+                    body_preview, body_full, COALESCE(received_date, sent_date) as received_date, thread_id,
+                    match_client_name, matched_loan_id, matched_lead_id,
+                    matched_contact_id, match_method, match_confidence,
+                    disposition, is_priority, has_attachments, attachment_names
                 FROM email_reconciliation_queue
-                WHERE id = :email_id
-            """)
+                WHERE id = :email_id AND user_id = :user_id
+            """), {
+                "email_id": email_id,
+                "user_id": self.user_id
+            }).fetchone()
 
-            email = self.db.execute(email_query, {"email_id": email_id}).fetchone()
-
-            if not email:
+            if not email_result:
                 return {
                     "success": False,
-                    "error": f"Email {email_id} not found"
+                    "error": "Email not found"
                 }
 
-            context = {
-                "email": {
-                    "id": email.id,
-                    "from": email.from_email,
-                    "from_name": email.from_name,
-                    "subject": email.subject,
-                    "date": email.received_date.isoformat() if email.received_date else None,
-                    "preview": email.body_preview,
-                    "is_priority": email.is_priority,
-                    "status": email.status
-                }
+            # Build email object
+            email = {
+                "email_id": email_result[0],
+                "from_email": email_result[1],
+                "from_name": email_result[2],
+                "to_emails": email_result[3],
+                "subject": email_result[4],
+                "preview": email_result[5],
+                "full_body": email_result[6],
+                "received_date": email_result[7].isoformat() if email_result[7] else None,
+                "thread_id": email_result[8],
+                "client_name": email_result[9],
+                "loan_id": email_result[10],
+                "lead_id": email_result[11],
+                "contact_id": email_result[12],
+                "match_method": email_result[13],
+                "confidence": float(email_result[14]) if email_result[14] else None,
+                "disposition": email_result[15],
+                "is_priority": email_result[16],
+                "has_attachments": email_result[17],
+                "attachments": email_result[18]
             }
 
             # Get thread context
-            if email.thread_id:
-                thread = self.get_email_thread(thread_id=email.thread_id)
-                context["thread_context"] = {
-                    "email_count": thread.get("email_count", 0),
-                    "participants": thread.get("participants", [])
-                }
+            thread_context = None
+            if email["thread_id"]:
+                thread_result = self.get_email_thread(thread_id=email["thread_id"])
+                thread_context = thread_result.get("thread", [])
 
-            # Get CRM context
-            crm_context = {}
+            # Get client/loan context
+            crm_context = self._get_full_crm_details({
+                "matched_loan_id": email["loan_id"],
+                "matched_lead_id": email["lead_id"],
+                "matched_contact_id": email["contact_id"]
+            })
 
-            if email.lead_id:
-                lead_query = text("""
-                    SELECT id, name, email, phone, stage, created_at
-                    FROM leads WHERE id = :lead_id
-                """)
-                lead = self.db.execute(lead_query, {"lead_id": email.lead_id}).fetchone()
-                if lead:
-                    crm_context["lead"] = {
-                        "id": lead.id,
-                        "name": lead.name,
-                        "email": lead.email,
-                        "phone": lead.phone,
-                        "stage": lead.stage
-                    }
+            # Get recent emails from same client
+            recent_emails = []
+            if email["from_email"]:
+                recent_result = self.search_emails_by_client(
+                    client_email=email["from_email"],
+                    days=30,
+                    limit=5
+                )
+                recent_emails = recent_result.get("emails", [])
 
-            if email.loan_id:
-                loan_query = text("""
-                    SELECT id, loan_number, borrower_name, stage, amount, closing_date
-                    FROM loans WHERE id = :loan_id
-                """)
-                loan = self.db.execute(loan_query, {"loan_id": email.loan_id}).fetchone()
-                if loan:
-                    crm_context["loan"] = {
-                        "id": loan.id,
-                        "loan_number": loan.loan_number,
-                        "borrower": loan.borrower_name,
-                        "stage": loan.stage,
-                        "amount": float(loan.amount) if loan.amount else None,
-                        "closing_date": loan.closing_date.isoformat() if loan.closing_date else None
-                    }
-
-            context["crm_context"] = crm_context
-
-            # Get recent emails from same sender
-            recent_query = text("""
-                SELECT id, subject, COALESCE(received_date, sent_date) as received_date
-                FROM email_reconciliation_queue
-                WHERE from_email = :from_addr
-                AND id != :email_id
-                ORDER BY COALESCE(received_date, sent_date) DESC
-                LIMIT 5
-            """)
-            recent = self.db.execute(recent_query, {
-                "from_addr": email.from_email,
-                "email_id": email_id
-            }).fetchall()
-
-            context["recent_client_emails"] = [
-                {"id": r.id, "subject": r.subject, "date": r.received_date.isoformat() if r.received_date else None}
-                for r in recent
-            ]
-
-            # Generate AI recommendations
-            recommendations = []
-
-            if email.is_priority and email.status == 'pending':
-                recommendations.append("This is a priority email - respond within 2 hours")
-
-            if crm_context.get("loan"):
-                loan = crm_context["loan"]
-                if loan.get("closing_date"):
-                    closing = datetime.fromisoformat(loan["closing_date"])
-                    days_to_close = (closing.date() - datetime.utcnow().date()).days
-                    if days_to_close <= 7:
-                        recommendations.append(f"Client closing in {days_to_close} days - high priority")
-
-            if len(context.get("recent_client_emails", [])) >= 3:
-                recommendations.append("Frequent communicator - maintain engagement")
-
-            context["ai_recommendations"] = recommendations
-            context["success"] = True
-
-            # Generate summary
-            client = email.from_name or email.from_email
-            summary = f"Email from {client}"
-            if crm_context.get("loan"):
-                summary += f" (Active loan #{crm_context['loan']['loan_number']})"
-            elif crm_context.get("lead"):
-                summary += f" (Lead - {crm_context['lead']['stage']})"
-            if recommendations:
-                summary += f". {recommendations[0]}"
-
-            context["ai_summary"] = summary
-
-            return context
+            return {
+                "success": True,
+                "email": email,
+                "thread_context": thread_context,
+                "crm_context": crm_context,
+                "recent_client_emails": recent_emails,
+                "ai_recommendations": self._generate_ai_recommendations(
+                    email, crm_context, thread_context
+                )
+            }
 
         except Exception as e:
-            logger.error(f"Error getting email context: {e}")
+            logger.error(f"Email context retrieval failed: {e}")
             return {
                 "success": False,
                 "error": str(e)
             }
 
-    def _generate_search_summary(
-        self,
-        emails: List[Dict],
-        search_term: str,
-        priority_count: int
-    ) -> str:
-        """Generate AI-friendly summary of search results."""
+    # ================================================================
+    # Helper Methods for AI Summaries
+    # ================================================================
+
+    def _generate_email_summary(self, emails: List[Dict]) -> str:
+        """Generate AI-friendly summary of email search results."""
         if not emails:
-            return f"No emails found for '{search_term}'"
+            return "No emails found matching the search criteria."
 
-        summary = f"Found {len(emails)} emails"
-        if search_term:
-            summary += f" for '{search_term}'"
+        priority_count = sum(1 for e in emails if e.get("is_priority"))
+        unread_count = sum(1 for e in emails if e.get("status") == "pending")
 
+        summary = f"Found {len(emails)} emails. "
         if priority_count > 0:
-            summary += f". {priority_count} are high priority"
+            summary += f"{priority_count} are high priority. "
+        if unread_count > 0:
+            summary += f"{unread_count} are unread. "
 
-        if emails:
-            latest = emails[0]
-            summary += f". Most recent: '{latest.get('subject', 'No subject')[:50]}'"
+        # Most recent email
+        if emails[0].get("subject"):
+            summary += f"Most recent: '{emails[0]['subject']}' from {emails[0].get('from_name') or emails[0].get('from_email')}."
 
         return summary
 
+    def _generate_thread_summary(self, thread: List[Dict]) -> str:
+        """Generate AI-friendly summary of email thread."""
+        if not thread:
+            return "No emails in this thread."
 
-# Tool definitions for different AI frameworks
+        return (
+            f"Thread contains {len(thread)} messages. "
+            f"Started {thread[0].get('received_date', 'unknown date')}. "
+            f"Last message from {thread[-1].get('from_name') or thread[-1].get('from_email')}."
+        )
 
-def get_tools_for_langgraph(db: Session, user_id: int) -> Dict[str, callable]:
-    """Get tool functions formatted for LangGraph/LangChain."""
+    def _generate_identity_summary(
+        self,
+        match: Dict,
+        crm_details: Dict
+    ) -> str:
+        """Generate AI-friendly identity summary."""
+        if not match.get("match_method"):
+            return "This email address is not recognized in the CRM."
+
+        name = match.get("match_client_name", "Unknown")
+        method = match.get("match_method", "").replace("_", " ")
+        confidence = (match.get("match_confidence") or 0) * 100
+
+        summary = f"{name} identified via {method} ({confidence:.0f}% confidence). "
+
+        if match.get("matched_loan_id"):
+            summary += "Active loan on file. "
+        elif match.get("matched_lead_id"):
+            summary += "Active lead in pipeline. "
+
+        if match.get("is_priority"):
+            summary += "⚠️ Priority client."
+
+        return summary
+
+    def _generate_priority_summary(self, emails: List[Dict]) -> str:
+        """Generate AI-friendly priority email summary."""
+        if not emails:
+            return "No priority emails requiring attention."
+
+        return (
+            f"You have {len(emails)} priority emails. "
+            f"Most urgent: '{emails[0].get('subject')}' from {emails[0].get('client_name') or emails[0].get('from_email')}."
+        )
+
+    def _generate_search_summary(
+        self,
+        query: str,
+        emails: List[Dict]
+    ) -> str:
+        """Generate AI-friendly search results summary."""
+        if not emails:
+            return f"No emails found containing '{query}'."
+
+        return f"Found {len(emails)} emails mentioning '{query}'."
+
+    def _suggest_actions(self, priority_emails: List[Dict]) -> List[str]:
+        """Suggest actions based on priority emails."""
+        actions = []
+
+        for email in priority_emails[:3]:  # Top 3
+            disposition = email.get("disposition")
+            client = email.get("client_name") or email.get("from_email")
+
+            if disposition == "document_request":
+                actions.append(f"Follow up on document request from {client}")
+            elif disposition == "action_required":
+                actions.append(f"Review action item from {client}")
+            elif disposition == "date_change":
+                actions.append(f"Update calendar for {client}")
+            else:
+                actions.append(f"Respond to {client}")
+
+        return actions
+
+    def _generate_ai_recommendations(
+        self,
+        email: Dict,
+        crm_context: Dict,
+        thread_context: Optional[List[Dict]]
+    ) -> List[str]:
+        """Generate AI recommendations for handling this email."""
+        recommendations = []
+
+        # Priority
+        if email.get("is_priority"):
+            recommendations.append("⚠️ Respond to this email within 2 hours")
+
+        # Disposition-based
+        disposition = email.get("disposition")
+        if disposition == "document_request":
+            recommendations.append("Check if requested documents are available in system")
+        elif disposition == "document_received":
+            recommendations.append("Review and process received documents")
+        elif disposition == "status_update":
+            recommendations.append("Update loan status in CRM")
+
+        # Thread-based
+        if thread_context and len(thread_context) > 5:
+            recommendations.append("Long conversation - consider scheduling a call")
+
+        # CRM-based
+        if crm_context.get("loan"):
+            loan = crm_context["loan"]
+            if loan.get("closing_date"):
+                recommendations.append(f"Loan closing on {loan['closing_date']} - timeline critical")
+
+        return recommendations
+
+    def _get_full_crm_details(self, match: Dict) -> Dict[str, Any]:
+        """Get full CRM details for matched entities."""
+        details = {}
+
+        # Get loan details
+        if match.get("matched_loan_id"):
+            try:
+                loan = self.db.execute(text("""
+                    SELECT
+                        id, loan_number, borrower_name, borrower_email,
+                        loan_amount, property_address, loan_type, stage,
+                        closing_date, lock_expiration
+                    FROM loans
+                    WHERE id = :loan_id
+                """), {"loan_id": match["matched_loan_id"]}).fetchone()
+
+                if loan:
+                    details["loan"] = {
+                        "id": loan[0],
+                        "loan_number": loan[1],
+                        "borrower_name": loan[2],
+                        "borrower_email": loan[3],
+                        "loan_amount": float(loan[4]) if loan[4] else None,
+                        "property_address": loan[5],
+                        "loan_type": loan[6],
+                        "stage": loan[7],
+                        "closing_date": loan[8].isoformat() if loan[8] else None,
+                        "lock_expires": loan[9].isoformat() if loan[9] else None
+                    }
+            except Exception as e:
+                logger.warning(f"Error fetching loan details: {e}")
+
+        # Get lead details
+        if match.get("matched_lead_id"):
+            try:
+                lead = self.db.execute(text("""
+                    SELECT
+                        id, name, email, phone, stage, source,
+                        loan_amount, notes
+                    FROM leads
+                    WHERE id = :lead_id
+                """), {"lead_id": match["matched_lead_id"]}).fetchone()
+
+                if lead:
+                    details["lead"] = {
+                        "id": lead[0],
+                        "name": lead[1],
+                        "email": lead[2],
+                        "phone": lead[3],
+                        "stage": lead[4],
+                        "source": lead[5],
+                        "estimated_amount": float(lead[6]) if lead[6] else None,
+                        "notes": lead[7]
+                    }
+            except Exception as e:
+                logger.warning(f"Error fetching lead details: {e}")
+
+        # Get contact details
+        if match.get("matched_contact_id"):
+            try:
+                contact = self.db.execute(text("""
+                    SELECT
+                        id, first_name, last_name, email, phone,
+                        contact_type, company
+                    FROM contacts
+                    WHERE id = :contact_id
+                """), {"contact_id": match["matched_contact_id"]}).fetchone()
+
+                if contact:
+                    details["contact"] = {
+                        "id": contact[0],
+                        "first_name": contact[1],
+                        "last_name": contact[2],
+                        "email": contact[3],
+                        "phone": contact[4],
+                        "contact_type": contact[5],
+                        "company": contact[6]
+                    }
+            except Exception as e:
+                logger.warning(f"Error fetching contact details: {e}")
+
+        return details
+
+
+# ================================================================
+# AI TOOL REGISTRY FOR LANGGRAPH/OPENAI FUNCTIONS
+# ================================================================
+
+TOOL_DEFINITIONS = {
+    "search_emails_by_client": {
+        "name": "search_emails_by_client",
+        "description": (
+            "Search for emails related to a specific client by name, email address, "
+            "loan ID, or lead ID. Returns recent emails with match information."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "client_name": {
+                    "type": "string",
+                    "description": "Client's name (fuzzy match supported)"
+                },
+                "client_email": {
+                    "type": "string",
+                    "description": "Exact email address to search for"
+                },
+                "loan_id": {
+                    "type": "integer",
+                    "description": "Specific loan ID"
+                },
+                "lead_id": {
+                    "type": "integer",
+                    "description": "Specific lead ID"
+                },
+                "days": {
+                    "type": "integer",
+                    "description": "Number of days to look back (default: 30)",
+                    "default": 30
+                },
+                "include_unread_only": {
+                    "type": "boolean",
+                    "description": "Only include unread/pending emails",
+                    "default": False
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of results (default: 20)",
+                    "default": 20
+                }
+            }
+        }
+    },
+
+    "get_email_thread": {
+        "name": "get_email_thread",
+        "description": (
+            "Get the complete email thread/conversation for a specific email. "
+            "Useful for understanding context and conversation history."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "email_id": {
+                    "type": "integer",
+                    "description": "Specific email ID to get thread for"
+                },
+                "thread_id": {
+                    "type": "string",
+                    "description": "Thread ID to retrieve"
+                }
+            }
+        }
+    },
+
+    "identify_email_sender": {
+        "name": "identify_email_sender",
+        "description": (
+            "Identify who an email address belongs to in the CRM. Returns client "
+            "information, loan/lead details, and confidence level."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "email_address": {
+                    "type": "string",
+                    "description": "Email address to identify"
+                }
+            },
+            "required": ["email_address"]
+        }
+    },
+
+    "get_priority_emails": {
+        "name": "get_priority_emails",
+        "description": (
+            "Get high-priority emails requiring immediate attention. These are "
+            "emails from known clients or flagged as urgent."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "days": {
+                    "type": "integer",
+                    "description": "Days to look back (default: 7)",
+                    "default": 7
+                },
+                "unread_only": {
+                    "type": "boolean",
+                    "description": "Only unread emails (default: True)",
+                    "default": True
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum results (default: 20)",
+                    "default": 20
+                }
+            }
+        }
+    },
+
+    "search_emails_by_content": {
+        "name": "search_emails_by_content",
+        "description": (
+            "Search emails by subject or body content. Useful for finding emails "
+            "about specific topics, keywords, or issues."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "search_query": {
+                    "type": "string",
+                    "description": "Text to search for"
+                },
+                "keywords": {
+                    "type": "string",
+                    "description": "Alias for search_query (backward compatibility)"
+                },
+                "search_in": {
+                    "type": "string",
+                    "enum": ["subject", "body", "both"],
+                    "description": "Where to search (default: both)",
+                    "default": "both"
+                },
+                "days": {
+                    "type": "integer",
+                    "description": "Days to look back (default: 30)",
+                    "default": 30
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum results (default: 20)",
+                    "default": 20
+                }
+            }
+        }
+    },
+
+    "get_email_context_for_ai": {
+        "name": "get_email_context_for_ai",
+        "description": (
+            "Get complete context about an email for AI decision-making. Includes "
+            "email content, thread history, client CRM details, recent interactions, "
+            "and AI-generated recommendations."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "email_id": {
+                    "type": "integer",
+                    "description": "Email ID to get full context for"
+                }
+            },
+            "required": ["email_id"]
+        }
+    }
+}
+
+
+def get_tools_for_langgraph(db: Session, user_id: int) -> Dict[str, Any]:
+    """
+    Get tools configured for LangGraph agent use.
+
+    Returns:
+        Dictionary of tool names to callable functions
+    """
     tools = EmailSearchTools(db, user_id)
+
     return {
         "search_emails_by_client": tools.search_emails_by_client,
         "get_email_thread": tools.get_email_thread,
@@ -692,102 +1059,37 @@ def get_tools_for_langgraph(db: Session, user_id: int) -> Dict[str, callable]:
     }
 
 
-def get_openai_tools_format() -> List[Dict]:
-    """Get tool definitions in OpenAI function calling format."""
+def get_openai_tools_format() -> List[Dict[str, Any]]:
+    """
+    Get tool descriptions formatted for OpenAI function calling.
+
+    Returns:
+        List of tool definitions in OpenAI format
+    """
     return [
         {
             "type": "function",
-            "function": {
-                "name": "search_emails_by_client",
-                "description": "Search emails from a specific client by name, email address, or CRM ID",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "client_name": {"type": "string", "description": "Client's name (partial match)"},
-                        "client_email": {"type": "string", "description": "Client's email address"},
-                        "client_id": {"type": "integer", "description": "Lead or loan ID"},
-                        "days": {"type": "integer", "description": "Days to search back", "default": 30},
-                        "limit": {"type": "integer", "description": "Max results", "default": 20}
-                    }
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "get_email_thread",
-                "description": "Get complete email conversation thread",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "email_id": {"type": "integer", "description": "Email ID in the thread"},
-                        "thread_id": {"type": "string", "description": "Thread ID"}
-                    }
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "identify_email_sender",
-                "description": "Identify who an email address belongs to in the CRM",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "email_address": {"type": "string", "description": "Email address to identify"}
-                    },
-                    "required": ["email_address"]
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "get_priority_emails",
-                "description": "Get priority emails that need attention",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "days": {"type": "integer", "description": "Days to look back", "default": 7},
-                        "limit": {"type": "integer", "description": "Max results", "default": 20}
-                    }
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "search_emails_by_content",
-                "description": "Search emails by keywords in subject and body",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "keywords": {"type": "string", "description": "Search terms"},
-                        "days": {"type": "integer", "description": "Days to search back", "default": 30},
-                        "limit": {"type": "integer", "description": "Max results", "default": 20}
-                    },
-                    "required": ["keywords"]
-                }
-            }
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "get_email_context_for_ai",
-                "description": "Get complete context for an email including CRM data and recommendations",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "email_id": {"type": "integer", "description": "Email ID"}
-                    },
-                    "required": ["email_id"]
-                }
-            }
+            "function": tool_def
         }
+        for tool_def in TOOL_DEFINITIONS.values()
     ]
 
 
-# Morning briefing helper
+def get_tool_descriptions_for_openai() -> List[Dict[str, Any]]:
+    """
+    Get tool descriptions formatted for OpenAI function calling.
+    (Alias for get_openai_tools_format)
+
+    Returns:
+        List of tool definitions in OpenAI format
+    """
+    return get_openai_tools_format()
+
+
+# ================================================================
+# Morning Briefing Helper
+# ================================================================
+
 def get_morning_briefing(db: Session, user_id: int) -> Dict[str, Any]:
     """
     Generate a morning email briefing for the user.
@@ -801,16 +1103,20 @@ def get_morning_briefing(db: Session, user_id: int) -> Dict[str, Any]:
     priority = tools.get_priority_emails(days=1, limit=10)
 
     # Get recent unread count
-    count_query = text("""
-        SELECT COUNT(*) as count
-        FROM email_reconciliation_queue
-        WHERE status = 'pending'
-        AND received_date > NOW() - INTERVAL '24 hours'
-    """)
-    recent_count = db.execute(count_query).scalar() or 0
+    try:
+        count_query = text("""
+            SELECT COUNT(*) as count
+            FROM email_reconciliation_queue
+            WHERE user_id = :user_id
+            AND status = 'pending'
+            AND created_at > NOW() - INTERVAL '24 hours'
+        """)
+        recent_count = db.execute(count_query, {"user_id": user_id}).scalar() or 0
+    except Exception:
+        recent_count = 0
 
     briefing = {
-        "date": datetime.utcnow().strftime("%A, %B %d, %Y"),
+        "date": datetime.now(timezone.utc).strftime("%A, %B %d, %Y"),
         "priority_emails": priority.get("emails", []),
         "priority_count": priority.get("priority_count", 0),
         "recent_email_count": recent_count,
