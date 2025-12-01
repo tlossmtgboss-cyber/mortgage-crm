@@ -210,47 +210,62 @@ class EmailSearchTools:
             # Check known client emails
             known_query = text("""
                 SELECT
-                    kce.email, kce.client_name, kce.entity_type, kce.entity_id,
-                    kce.is_priority, kce.email_count,
-                    l.id as lead_id, l.name as lead_name,
-                    lo.id as loan_id, lo.borrower_name
+                    kce.email_address, kce.client_name, kce.source_type,
+                    kce.lead_id, kce.loan_id, kce.contact_id,
+                    l.name as lead_name, l.stage as lead_stage,
+                    lo.borrower_name, lo.loan_number, lo.stage as loan_stage
                 FROM known_client_emails kce
-                LEFT JOIN leads l ON kce.entity_type = 'lead' AND kce.entity_id = l.id
-                LEFT JOIN loans lo ON kce.entity_type = 'loan' AND kce.entity_id = lo.id
-                WHERE LOWER(kce.email) = :email
+                LEFT JOIN leads l ON kce.lead_id = l.id
+                LEFT JOIN loans lo ON kce.loan_id = lo.id
+                WHERE LOWER(kce.email_address) = :email
+                AND kce.user_id = :user_id
             """)
 
-            result = self.db.execute(known_query, {"email": email_lower}).fetchone()
+            result = self.db.execute(known_query, {"email": email_lower, "user_id": self.user_id}).fetchone()
 
             if result:
+                # Determine entity type and id
+                entity_type = "unknown"
+                entity_id = None
+                if result.lead_id:
+                    entity_type = "lead"
+                    entity_id = result.lead_id
+                elif result.loan_id:
+                    entity_type = "loan"
+                    entity_id = result.loan_id
+                elif result.contact_id:
+                    entity_type = "contact"
+                    entity_id = result.contact_id
+
                 identity = {
                     "matched": True,
                     "match_confidence": 1.0,
-                    "email": result.email,
+                    "email": result.email_address,
                     "client_name": result.client_name,
-                    "entity_type": result.entity_type,
-                    "entity_id": result.entity_id,
-                    "is_priority": result.is_priority,
-                    "email_count": result.email_count
+                    "entity_type": entity_type,
+                    "entity_id": entity_id,
+                    "source_type": result.source_type
                 }
 
                 # Add CRM details
-                if result.lead_id:
+                if result.lead_id and result.lead_name:
                     identity["lead_details"] = {
                         "id": result.lead_id,
-                        "name": result.lead_name
+                        "name": result.lead_name,
+                        "stage": result.lead_stage
                     }
-                if result.loan_id:
+                if result.loan_id and result.borrower_name:
                     identity["loan_details"] = {
                         "id": result.loan_id,
-                        "borrower": result.borrower_name
+                        "borrower": result.borrower_name,
+                        "loan_number": result.loan_number,
+                        "stage": result.loan_stage
                     }
 
-                priority_note = " Priority client." if result.is_priority else ""
                 return {
                     "success": True,
                     "identity": identity,
-                    "ai_summary": f"{result.client_name} identified via known client email (100% confidence).{priority_note}"
+                    "ai_summary": f"{result.client_name} identified via known client email (100% confidence)."
                 }
 
             # Check leads by email
