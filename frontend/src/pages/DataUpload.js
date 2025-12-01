@@ -174,6 +174,112 @@ function DataUpload() {
     setError(null);
   };
 
+  // CSV template for leads import
+  const downloadLeadsTemplate = () => {
+    const headers = [
+      'First Name',
+      'Last Name',
+      'Email',
+      'Phone',
+      'Stage',
+      'Property Address',
+      'City',
+      'State',
+      'Zip Code',
+      'Loan Amount',
+      'Property Value',
+      'Down Payment',
+      'Credit Score',
+      'Annual Income',
+      'Loan Type',
+      'Loan Officer',
+      'Source',
+      'Notes'
+    ];
+
+    const sampleData = [
+      'John',
+      'Smith',
+      'john.smith@email.com',
+      '555-123-4567',
+      'New',
+      '123 Main Street',
+      'Austin',
+      'TX',
+      '78701',
+      '350000',
+      '450000',
+      '90000',
+      '720',
+      '95000',
+      'Conventional',
+      '',
+      'Website',
+      'Interested in buying first home'
+    ];
+
+    const csvContent = headers.join(',') + '\n' + sampleData.join(',');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'leads_import_template.csv';
+    link.click();
+  };
+
+  // CSV template for loans import
+  const downloadLoansTemplate = () => {
+    const headers = [
+      'Loan Number',
+      'Borrower First Name',
+      'Borrower Last Name',
+      'Borrower Email',
+      'Borrower Phone',
+      'Stage',
+      'Property Address',
+      'City',
+      'State',
+      'Zip Code',
+      'Loan Amount',
+      'Interest Rate',
+      'Loan Term',
+      'Loan Type',
+      'Purchase Price',
+      'Down Payment',
+      'Closing Date',
+      'Loan Officer',
+      'Processor'
+    ];
+
+    const sampleData = [
+      'LN-2024-001',
+      'Jane',
+      'Doe',
+      'jane.doe@email.com',
+      '555-987-6543',
+      'Processing',
+      '456 Oak Avenue',
+      'Dallas',
+      'TX',
+      '75201',
+      '280000',
+      '6.5',
+      '360',
+      'FHA',
+      '320000',
+      '40000',
+      '2024-03-15',
+      '',
+      ''
+    ];
+
+    const csvContent = headers.join(',') + '\n' + sampleData.join(',');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'loans_import_template.csv';
+    link.click();
+  };
+
   const targetFields = {
     leads: [
       // Identifiers
@@ -351,6 +457,30 @@ function DataUpload() {
             <div className="step-header">
               <h2>Step 1: Select File</h2>
               <p>Choose a CSV or Excel file to upload</p>
+            </div>
+
+            {/* Template Downloads */}
+            <div className="template-section">
+              <h3>Download Templates</h3>
+              <p>Start with a pre-formatted template to ensure your data imports correctly</p>
+              <div className="template-buttons">
+                <button className="btn-template" onClick={downloadLeadsTemplate}>
+                  <span className="template-icon">📋</span>
+                  <div>
+                    <div className="template-title">Leads Template</div>
+                    <div className="template-desc">Import new prospects and contacts</div>
+                  </div>
+                  <span className="download-icon">⬇️</span>
+                </button>
+                <button className="btn-template" onClick={downloadLoansTemplate}>
+                  <span className="template-icon">📑</span>
+                  <div>
+                    <div className="template-title">Loans Template</div>
+                    <div className="template-desc">Import active loan files</div>
+                  </div>
+                  <span className="download-icon">⬇️</span>
+                </button>
+              </div>
             </div>
 
             <div
