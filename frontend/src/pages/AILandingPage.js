@@ -1364,7 +1364,9 @@ function AILandingPage() {
 
       // Fetch unified tasks from the API (same source as Tasks page)
       try {
-        const unifiedTasks = await tasksAPI.getUnified();
+        const unifiedResponse = await tasksAPI.getUnified();
+        // API returns { total_count, tasks, by_source } - extract the tasks array
+        const unifiedTasks = unifiedResponse?.tasks || unifiedResponse || [];
         if (unifiedTasks && Array.isArray(unifiedTasks)) {
           unifiedTasks.forEach(task => {
             // Convert priority string to uppercase format
