@@ -757,10 +757,13 @@ class MortgagePlannerSubmission(BaseModel):
     financialPhilosophy: str
     hasTaxDeferredRetirement: str
     hasFinancialPlanner: str
+    financialPlannerRating: Optional[str] = None
     hasAccountant: str
+    accountantRating: Optional[str] = None
     hasLifeInsuranceAgent: str
     lifeInsuranceAgentRating: Optional[str] = None
     hasEstatePlanner: str
+    estatePlannerRating: Optional[str] = None
     loan_officer_id: Optional[str] = None
     source: Optional[str] = None
     submitted_at: Optional[str] = None
@@ -776,8 +779,9 @@ async def submit_mortgage_planner_questionnaire(
 
     This endpoint:
     1. Creates or updates a lead with the questionnaire data
-    2. Creates a task for the loan officer to update Circle of Cashflow
-    3. Identifies referral opportunities based on missing professional network
+    2. Creates circle_contacts for trusted professionals the borrower has
+    3. Creates tasks to get introductions to excellent-rated professionals
+    4. Creates tasks to make referrals when borrower needs professionals
     """
     from main import Lead, Task
     from sqlalchemy import text
@@ -837,68 +841,103 @@ FINANCIAL PHILOSOPHY
 
 PROFESSIONAL NETWORK (Circle of Cashflow)
 - Tax-deferred retirement plan: {submission.hasTaxDeferredRetirement}
-- Financial Planner: {submission.hasFinancialPlanner}
-- Accountant: {submission.hasAccountant}
-- Life Insurance Agent: {submission.hasLifeInsuranceAgent}
-  Rating: {submission.lifeInsuranceAgentRating or 'N/A'}
-- Estate Planner: {submission.hasEstatePlanner}
+- Financial Planner: {submission.hasFinancialPlanner} (Rating: {submission.financialPlannerRating or 'N/A'})
+- Accountant: {submission.hasAccountant} (Rating: {submission.accountantRating or 'N/A'})
+- Life Insurance Agent: {submission.hasLifeInsuranceAgent} (Rating: {submission.lifeInsuranceAgentRating or 'N/A'})
+- Estate Planner: {submission.hasEstatePlanner} (Rating: {submission.estatePlannerRating or 'N/A'})
 """
 
-        # Identify referral opportunities based on missing professionals
+        # Track professionals for circle contacts and tasks
         missing_professionals = []
-        if submission.hasFinancialPlanner == 'No':
-            missing_professionals.append('Financial Planner')
-        if submission.hasAccountant == 'No':
-            missing_professionals.append('Accountant')
-        if submission.hasLifeInsuranceAgent == 'No':
-            missing_professionals.append('Life Insurance Agent')
-        if submission.hasEstatePlanner == 'No':
-            missing_professionals.append('Estate Planner')
+        excellent_professionals = []
+        circle_contacts_created = []
 
-        # Create task for loan officer to update Circle of Cashflow
-        task_description = f"""Review {submission.name}'s Mortgage Planner Questionnaire and update their Circle of Cashflow profile.
+        # Professional mapping: (has_field, rating_field, type_name, icon)
+        professionals = [
+            ('hasFinancialPlanner', 'financialPlannerRating', 'Financial Advisor', '💼'),
+            ('hasAccountant', 'accountantRating', 'Accountant', '📊'),
+            ('hasLifeInsuranceAgent', 'lifeInsuranceAgentRating', 'Life Insurance Agent', '🛡️'),
+            ('hasEstatePlanner', 'estatePlannerRating', 'Estate Planner', '📜'),
+        ]
+
+        for has_field, rating_field, type_name, icon in professionals:
+            has_professional = getattr(submission, has_field)
+            rating = getattr(submission, rating_field)
+
+            if has_professional == 'No':
+                # Borrower needs this professional - create referral task
+                missing_professionals.append(type_name)
+            elif has_professional == 'Yes':
+                # Create a circle contact placeholder for this professional
+                try:
+                    db.execute(text("""
+                        INSERT INTO circle_contacts (lead_id, name, type, notes, created_at)
+                        VALUES (:lead_id, :name, :type, :notes, NOW())
+                        ON CONFLICT DO NOTHING
+                    """), {
+                        "lead_id": lead.id,
+                        "name": f"{submission.name}'s {type_name}",
+                        "type": type_name,
+                        "notes": f"Rating: {rating or 'Not rated'}. Added from Mortgage Planner Questionnaire."
+                    })
+                    circle_contacts_created.append(type_name)
+                except Exception as e:
+                    logger.warning(f"Could not create circle contact for {type_name}: {e}")
+
+                # If rated Excellent, create task to get introduction
+                if rating == 'Excellent':
+                    excellent_professionals.append(type_name)
+
+        # Create tasks for excellent-rated professionals (get introductions)
+        for prof_type in excellent_professionals:
+            intro_task = Task(
+                title=f"Get Introduction to {submission.name}'s {prof_type}",
+                description=f"""{submission.name} has rated their {prof_type} as "Excellent" in their Mortgage Planner Questionnaire.
+
+ACTION REQUIRED:
+Ask {submission.name} for an introduction to their {prof_type}. This is a great opportunity to:
+- Build your professional network
+- Potentially receive referrals
+- Create reciprocal referral relationships
 
 CONTACT INFO:
+- Client: {submission.name}
 - Email: {submission.email}
 - Phone: {submission.phone}
 
-KEY PRIORITIES:
-{chr(10).join(['- ' + p for p in submission.mortgageImportance[:3]])}
+Suggested approach: Mention that you work with many clients who need a {prof_type}, and you'd love to connect with professionals your clients trust.
+""",
+                priority="high",
+                status="pending",
+                owner_id=loan_officer_id,
+                lead_id=lead.id,
+                due_date=datetime.utcnow() + timedelta(days=7),
+                related_type="introduction_request",
+                related_contact_name=submission.name
+            )
+            db.add(intro_task)
 
-FINANCIAL PHILOSOPHY: {submission.financialPhilosophy}
-
-"""
-
+        # Create tasks for missing professionals (make referrals)
         if missing_professionals:
-            task_description += f"""REFERRAL OPPORTUNITIES - Missing Professionals:
-{chr(10).join(['- ' + p for p in missing_professionals])}
-
-Consider introducing {submission.name} to trusted partners in your network.
-"""
-
-        # Create the task
-        circle_task = Task(
-            title=f"Update Circle of Cashflow - {submission.name}",
-            description=task_description,
-            priority="high",
-            status="pending",
-            owner_id=loan_officer_id,
-            lead_id=lead.id,
-            due_date=datetime.utcnow() + timedelta(days=1),
-            related_type="questionnaire",
-            related_contact_name=submission.name
-        )
-        db.add(circle_task)
-
-        # If they need multiple professionals, create a follow-up task for referral tracking
-        if len(missing_professionals) >= 2:
             referral_task = Task(
-                title=f"Partner Referral Opportunities - {submission.name}",
-                description=f"""Based on their questionnaire, {submission.name} needs:
+                title=f"Make Referrals for {submission.name}",
+                description=f"""{submission.name} needs the following professionals based on their Mortgage Planner Questionnaire:
+
+PROFESSIONALS NEEDED:
 {chr(10).join(['- ' + p for p in missing_professionals])}
 
-This is a great opportunity to strengthen partner relationships by making quality referrals.
-Track which partners you introduce and follow up on the outcomes.
+ACTION REQUIRED:
+Connect {submission.name} with trusted partners from your network. This builds:
+- Client loyalty and trust
+- Reciprocal referral relationships with partners
+- Complete client service experience
+
+CONTACT INFO:
+- Client: {submission.name}
+- Email: {submission.email}
+- Phone: {submission.phone}
+
+Track which partners you introduce and follow up on the outcomes for your Circle of Cashflow records.
 """,
                 priority="medium",
                 status="pending",
@@ -910,15 +949,49 @@ Track which partners you introduce and follow up on the outcomes.
             )
             db.add(referral_task)
 
+        # Create review task for questionnaire
+        review_task = Task(
+            title=f"Review Questionnaire - {submission.name}",
+            description=f"""Review {submission.name}'s Mortgage Planner Questionnaire responses.
+
+CONTACT INFO:
+- Email: {submission.email}
+- Phone: {submission.phone}
+
+KEY PRIORITIES:
+{chr(10).join(['- ' + p for p in submission.mortgageImportance[:3]])}
+
+FINANCIAL PHILOSOPHY: {submission.financialPhilosophy}
+
+CIRCLE OF CASHFLOW STATUS:
+- Excellent-rated professionals to get introductions: {len(excellent_professionals)}
+- Missing professionals to refer: {len(missing_professionals)}
+- Circle contacts created: {len(circle_contacts_created)}
+""",
+            priority="high",
+            status="pending",
+            owner_id=loan_officer_id,
+            lead_id=lead.id,
+            due_date=datetime.utcnow() + timedelta(days=1),
+            related_type="questionnaire",
+            related_contact_name=submission.name
+        )
+        db.add(review_task)
+
         db.commit()
 
         logger.info(f"Mortgage Planner Questionnaire submitted for {submission.name} (Lead ID: {lead.id})")
+        logger.info(f"  - Circle contacts created: {circle_contacts_created}")
+        logger.info(f"  - Introduction tasks for: {excellent_professionals}")
+        logger.info(f"  - Referral opportunities: {missing_professionals}")
 
         return {
             "success": True,
             "message": "Questionnaire submitted successfully",
             "lead_id": lead.id,
-            "referral_opportunities": missing_professionals if missing_professionals else None
+            "circle_contacts_created": circle_contacts_created,
+            "introduction_opportunities": excellent_professionals,
+            "referral_opportunities": missing_professionals
         }
 
     except Exception as e:

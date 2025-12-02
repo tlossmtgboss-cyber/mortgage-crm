@@ -38,10 +38,13 @@ function MortgagePlannerQuestionnaire() {
     // Professional Network
     hasTaxDeferredRetirement: '',
     hasFinancialPlanner: '',
+    financialPlannerRating: '',
     hasAccountant: '',
+    accountantRating: '',
     hasLifeInsuranceAgent: '',
     lifeInsuranceAgentRating: '',
-    hasEstatePlanner: ''
+    hasEstatePlanner: '',
+    estatePlannerRating: ''
   });
 
   const totalSteps = 5;
@@ -480,6 +483,29 @@ function MortgagePlannerQuestionnaire() {
                 </div>
               </div>
 
+              {formData.hasFinancialPlanner === 'Yes' && (
+                <div className="form-group">
+                  <label>How would you rate your Financial Planner?</label>
+                  <div className="radio-group">
+                    {['Excellent', 'Good', 'Fair', 'Poor', 'N/A'].map((rating) => (
+                      <label
+                        key={rating}
+                        className={`radio-option ${formData.financialPlannerRating === rating ? 'selected' : ''}`}
+                      >
+                        <input
+                          type="radio"
+                          name="financialPlannerRating"
+                          value={rating}
+                          checked={formData.financialPlannerRating === rating}
+                          onChange={(e) => handleInputChange('financialPlannerRating', e.target.value)}
+                        />
+                        <span>{rating}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="form-group">
                 <label>Do you work with a Trusted Accountant? *</label>
                 <div className="radio-group">
@@ -505,6 +531,29 @@ function MortgagePlannerQuestionnaire() {
                   </label>
                 </div>
               </div>
+
+              {formData.hasAccountant === 'Yes' && (
+                <div className="form-group">
+                  <label>How would you rate your Accountant?</label>
+                  <div className="radio-group">
+                    {['Excellent', 'Good', 'Fair', 'Poor', 'N/A'].map((rating) => (
+                      <label
+                        key={rating}
+                        className={`radio-option ${formData.accountantRating === rating ? 'selected' : ''}`}
+                      >
+                        <input
+                          type="radio"
+                          name="accountantRating"
+                          value={rating}
+                          checked={formData.accountantRating === rating}
+                          onChange={(e) => handleInputChange('accountantRating', e.target.value)}
+                        />
+                        <span>{rating}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="form-group">
                 <label>Do you work with a Trusted Life Insurance Agent? *</label>
@@ -580,6 +629,29 @@ function MortgagePlannerQuestionnaire() {
                   </label>
                 </div>
               </div>
+
+              {formData.hasEstatePlanner === 'Yes' && (
+                <div className="form-group">
+                  <label>How would you rate your Estate Planner?</label>
+                  <div className="radio-group">
+                    {['Excellent', 'Good', 'Fair', 'Poor', 'N/A'].map((rating) => (
+                      <label
+                        key={rating}
+                        className={`radio-option ${formData.estatePlannerRating === rating ? 'selected' : ''}`}
+                      >
+                        <input
+                          type="radio"
+                          name="estatePlannerRating"
+                          value={rating}
+                          checked={formData.estatePlannerRating === rating}
+                          onChange={(e) => handleInputChange('estatePlannerRating', e.target.value)}
+                        />
+                        <span>{rating}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="referral-note">
                 <div className="note-icon">💡</div>

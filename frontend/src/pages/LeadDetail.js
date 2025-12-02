@@ -131,7 +131,9 @@ function LeadDetail() {
     { value: 'Attorney', icon: '⚖️' },
     { value: 'Financial Advisor', icon: '💼' },
     { value: 'Insurance Agent', icon: '🛡️' },
+    { value: 'Life Insurance Agent', icon: '🛡️' },
     { value: 'Accountant', icon: '📊' },
+    { value: 'Estate Planner', icon: '📜' },
     { value: 'Other Contact', icon: '🤝' }
   ];
 
