@@ -481,16 +481,16 @@ async def handle_get_leads_by_status(args: Dict[str, Any], request: Request) -> 
 
             query = db.query(Lead)
 
-            # Apply status filter if provided
+            # Apply stage filter if provided
             if status_filter:
                 try:
                     status_enum = LeadStage(status_filter)
-                    query = query.filter(Lead.status == status_enum)
+                    query = query.filter(Lead.stage == status_enum)
                 except ValueError:
                     # Try matching by name
                     for s in LeadStage:
                         if s.name.lower() == status_filter.lower() or s.value.lower() == status_filter.lower():
-                            query = query.filter(Lead.status == s)
+                            query = query.filter(Lead.stage == s)
                             break
 
             leads = query.limit(limit).all()
@@ -500,17 +500,17 @@ async def handle_get_leads_by_status(args: Dict[str, Any], request: Request) -> 
             result = {}
 
             for lead in leads:
-                status_key = lead.status.value if hasattr(lead.status, 'value') else str(lead.status)
+                status_key = lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage)
                 if status_key not in result:
                     result[status_key] = []
 
                 # Calculate days in current status
-                last_status_change = getattr(lead, 'last_status_change_at', None) or lead.created_at
+                last_status_change = getattr(lead, 'status_date', None) or lead.created_at
                 days_in_status = (now - last_status_change).days if last_status_change else 0
 
                 result[status_key].append({
                     "id": lead.id,
-                    "name": f"{lead.first_name} {lead.last_name}".strip(),
+                    "name": f"{lead.first_name or ''} {lead.last_name or ''}".strip() or lead.name,
                     "email": lead.email,
                     "phone": lead.phone,
                     "source": lead.source,
@@ -518,9 +518,9 @@ async def handle_get_leads_by_status(args: Dict[str, Any], request: Request) -> 
                     "days_in_current_status": days_in_status,
                     "loan_amount": float(lead.loan_amount) if lead.loan_amount else None,
                     "property_type": lead.property_type,
-                    "loan_purpose": lead.loan_purpose,
+                    "loan_purpose": getattr(lead, 'loan_type', None),
                     "created_at": lead.created_at.isoformat() if lead.created_at else None,
-                    "last_contact_at": lead.last_contact_at.isoformat() if hasattr(lead, 'last_contact_at') and lead.last_contact_at else None,
+                    "last_contact_at": lead.last_contact.isoformat() if lead.last_contact else None,
                     "notes": lead.notes if hasattr(lead, 'notes') else None
                 })
 
