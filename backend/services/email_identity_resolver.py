@@ -249,6 +249,16 @@ class EmailIdentityResolver:
         if match:
             return match
 
+        # Strategy 5c: Match by borrower name extracted from email (from AI analysis or subject)
+        extracted_data = email_data.get("extracted_data") or email_data.get("ai_analysis", {}).get("extracted_data", {})
+        if extracted_data:
+            first_name = extracted_data.get("borrower_first_name", "")
+            last_name = extracted_data.get("borrower_last_name", "")
+            if first_name and last_name:
+                match = self._match_by_borrower_name(first_name, last_name, user_id)
+                if match:
+                    return match
+
         # Strategy 6: Thread/conversation continuity
         if thread_id:
             match = self._match_by_thread(thread_id, user_id)
@@ -503,6 +513,7 @@ class EmailIdentityResolver:
         - "Loan #123456"
         - "Loan: 123456"
         - "RE: 123456789" (standalone long numbers)
+        - "RCA0000010794" (alphanumeric loan numbers)
         """
         if not subject:
             return None
@@ -511,10 +522,11 @@ class EmailIdentityResolver:
 
         for loan_number in loan_numbers:
             try:
+                # Try exact match first
                 loan = self.db.execute(
                     text(
                         """
-                        SELECT id, borrower_name, loan_amount, property_address
+                        SELECT id, borrower_name, loan_amount, property_address, loan_number
                         FROM loans
                         WHERE loan_number = :loan_number
                         AND loan_officer_id = :user_id
@@ -531,11 +543,147 @@ class EmailIdentityResolver:
                         confidence=0.8,
                         evidence=f"Loan #{loan_number}",
                         client_name=loan[1],
-                        loan_number=loan_number,
+                        loan_number=loan[4],
                     )
+
+                # Try partial/fuzzy match - strip alphanumeric prefix and search
+                # For cases like RCA0000010794 -> search for loans containing the numeric part
+                numeric_part = re.sub(r'^[A-Z]{2,4}[-]?', '', loan_number)
+                if numeric_part and numeric_part != loan_number:
+                    loan = self.db.execute(
+                        text(
+                            """
+                            SELECT id, borrower_name, loan_amount, property_address, loan_number
+                            FROM loans
+                            WHERE (loan_number LIKE :pattern OR loan_number = :numeric)
+                            AND loan_officer_id = :user_id
+                            LIMIT 1
+                            """
+                        ),
+                        {
+                            "pattern": f"%{numeric_part}%",
+                            "numeric": numeric_part,
+                            "user_id": user_id
+                        },
+                    ).fetchone()
+
+                    if loan:
+                        return self._format_match(
+                            loan_id=loan[0],
+                            method="loan_number_subject_partial",
+                            confidence=0.75,
+                            evidence=f"Loan #{loan_number} (matched {loan[4]})",
+                            client_name=loan[1],
+                            loan_number=loan[4],
+                        )
+
+                # Also try searching by loan number containing the extracted number
+                loan = self.db.execute(
+                    text(
+                        """
+                        SELECT id, borrower_name, loan_amount, property_address, loan_number
+                        FROM loans
+                        WHERE loan_number LIKE :pattern
+                        AND loan_officer_id = :user_id
+                        LIMIT 1
+                        """
+                    ),
+                    {"pattern": f"%{loan_number}%", "user_id": user_id},
+                ).fetchone()
+
+                if loan:
+                    return self._format_match(
+                        loan_id=loan[0],
+                        method="loan_number_subject_contains",
+                        confidence=0.7,
+                        evidence=f"Loan containing {loan_number}",
+                        client_name=loan[1],
+                        loan_number=loan[4],
+                    )
+
             except Exception as e:
                 logger.error(f"Error matching loan number {loan_number}: {e}")
                 continue
+
+        return None
+
+    def _match_by_borrower_name(
+        self, first_name: str, last_name: str, user_id: int
+    ) -> Optional[Dict[str, Any]]:
+        """Match by borrower name extracted from email content.
+
+        Returns 0.7 confidence since name matching can have false positives.
+        """
+        if not first_name or not last_name:
+            return None
+
+        try:
+            # Try exact match on borrower_name field
+            full_name = f"{first_name} {last_name}"
+            loan = self.db.execute(
+                text(
+                    """
+                    SELECT id, borrower_name, loan_number, loan_amount, property_address
+                    FROM loans
+                    WHERE (
+                        lower(borrower_name) = :full_name
+                        OR lower(borrower_name) LIKE :name_pattern
+                    )
+                    AND loan_officer_id = :user_id
+                    AND status NOT IN ('cancelled', 'withdrawn')
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                    """
+                ),
+                {
+                    "full_name": full_name.lower(),
+                    "name_pattern": f"%{first_name.lower()}%{last_name.lower()}%",
+                    "user_id": user_id
+                },
+            ).fetchone()
+
+            if loan:
+                return self._format_match(
+                    loan_id=loan[0],
+                    method="borrower_name_match",
+                    confidence=0.7,
+                    evidence=f"Borrower: {full_name}",
+                    client_name=loan[1],
+                    loan_number=loan[2],
+                )
+
+            # Also check leads
+            lead = self.db.execute(
+                text(
+                    """
+                    SELECT id, name, email
+                    FROM leads
+                    WHERE (
+                        lower(name) = :full_name
+                        OR lower(name) LIKE :name_pattern
+                    )
+                    AND status NOT IN ('dead', 'closed_lost')
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                    """
+                ),
+                {
+                    "full_name": full_name.lower(),
+                    "name_pattern": f"%{first_name.lower()}%{last_name.lower()}%",
+                },
+            ).fetchone()
+
+            if lead:
+                return self._format_match(
+                    lead_id=lead[0],
+                    method="borrower_name_lead_match",
+                    confidence=0.65,
+                    evidence=f"Lead: {full_name}",
+                    client_name=lead[1],
+                )
+
+        except Exception as e:
+            logger.error(f"Error matching borrower name {first_name} {last_name}: {e}")
 
         return None
 

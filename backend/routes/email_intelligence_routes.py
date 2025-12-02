@@ -1940,6 +1940,67 @@ async def queue_email_for_intelligence(
                 })
                 db.commit()
 
+                # RE-RUN IDENTITY RESOLUTION with extracted data if no match found initially
+                if not match_info or not (match_info.get("loan_id") or match_info.get("lead_id")):
+                    extracted_data = analysis_dict.get("extracted_data", {})
+                    if extracted_data:
+                        try:
+                            from services.email_identity_resolver import get_email_identity_resolver
+                            resolver = get_email_identity_resolver(db)
+
+                            # Add extracted data to email_data for re-resolution
+                            enhanced_email_data = {
+                                **email_data,
+                                "extracted_data": extracted_data,
+                                "ai_analysis": analysis_dict
+                            }
+
+                            re_match_result = resolver.resolve(enhanced_email_data, user_id)
+
+                            if re_match_result.get("match_method"):
+                                # Update with new match info
+                                db.execute(text("""
+                                    UPDATE email_reconciliation_queue
+                                    SET matched_contact_id = :contact_id,
+                                        matched_loan_id = :loan_id,
+                                        matched_lead_id = :lead_id,
+                                        match_method = :method,
+                                        match_confidence = :confidence,
+                                        match_evidence = :evidence,
+                                        match_client_name = :client_name,
+                                        match_loan_number = :loan_number,
+                                        is_priority = :is_priority
+                                    WHERE id = :email_id
+                                """), {
+                                    "contact_id": re_match_result.get("matched_contact_id"),
+                                    "loan_id": re_match_result.get("matched_loan_id"),
+                                    "lead_id": re_match_result.get("matched_lead_id"),
+                                    "method": re_match_result.get("match_method"),
+                                    "confidence": re_match_result.get("match_confidence"),
+                                    "evidence": re_match_result.get("match_evidence"),
+                                    "client_name": re_match_result.get("match_client_name"),
+                                    "loan_number": re_match_result.get("match_loan_number"),
+                                    "is_priority": re_match_result.get("is_priority", False),
+                                    "email_id": email_id
+                                })
+                                db.commit()
+
+                                # Update match_info for downstream use
+                                match_info = {
+                                    "contact_id": re_match_result.get("matched_contact_id"),
+                                    "loan_id": re_match_result.get("matched_loan_id"),
+                                    "lead_id": re_match_result.get("matched_lead_id"),
+                                    "client_name": re_match_result.get("match_client_name"),
+                                    "loan_number": re_match_result.get("match_loan_number"),
+                                    "method": re_match_result.get("match_method"),
+                                    "confidence": re_match_result.get("match_confidence"),
+                                    "evidence": re_match_result.get("match_evidence"),
+                                    "is_priority": re_match_result.get("is_priority", False),
+                                }
+                                logger.info(f"🔍 Re-matched email {email_id} using AI-extracted data: {match_info.get('method')}")
+                        except Exception as rematch_error:
+                            logger.warning(f"Re-matching with AI data failed: {rematch_error}")
+
                 # AUTO-CREATE TASK for document requests
                 documents_requested = analysis_dict.get("documents_requested", [])
                 action_items = analysis_dict.get("action_items", [])
