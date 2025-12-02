@@ -216,6 +216,7 @@ class EmailIdentityResolver:
         """
         addresses = self._collect_addresses(email_data)
         subject = email_data.get("subject", "") or ""
+        body = email_data.get("body_full") or email_data.get("body_preview") or ""
         thread_id = email_data.get("thread_id")
 
         # Strategy 1: Known client emails (priority)
@@ -238,8 +239,13 @@ class EmailIdentityResolver:
         if match:
             return match
 
-        # Strategy 5: Loan number extraction from subject
+        # Strategy 5: Loan number extraction from subject AND body
         match = self._match_by_loan_number(subject, user_id)
+        if match:
+            return match
+
+        # Strategy 5b: Also check body for loan numbers (lower confidence)
+        match = self._match_by_loan_number_in_body(body, user_id)
         if match:
             return match
 
@@ -624,34 +630,92 @@ class EmailIdentityResolver:
 
         return None
 
+    def _match_by_loan_number_in_body(
+        self, body: str, user_id: int
+    ) -> Optional[Dict[str, Any]]:
+        """Extract loan numbers from body and match.
+
+        Returns 0.75 confidence since body extraction is less reliable than subject.
+        """
+        if not body:
+            return None
+
+        loan_numbers = self._extract_loan_numbers(body)
+
+        for loan_number in loan_numbers:
+            try:
+                loan = self.db.execute(
+                    text(
+                        """
+                        SELECT id, borrower_name, loan_amount, property_address
+                        FROM loans
+                        WHERE loan_number = :loan_number
+                        AND loan_officer_id = :user_id
+                        LIMIT 1
+                        """
+                    ),
+                    {"loan_number": loan_number, "user_id": user_id},
+                ).fetchone()
+
+                if loan:
+                    return self._format_match(
+                        loan_id=loan[0],
+                        method="loan_number_body",
+                        confidence=0.75,
+                        evidence=f"Loan #{loan_number} (found in body)",
+                        client_name=loan[1],
+                        loan_number=loan_number,
+                    )
+            except Exception as e:
+                logger.error(f"Error matching loan number from body {loan_number}: {e}")
+                continue
+
+        return None
+
     def _extract_loan_numbers(self, text_value: str) -> List[str]:
         """Extract potential loan numbers from text.
 
         Looks for:
         - "loan" followed by 4+ digits
         - Standalone 6+ digit numbers
+        - Alphanumeric loan numbers like RCA00000011704
 
         Returns:
-            List of extracted numeric strings
+            List of extracted loan number strings
         """
         if not text_value:
             return []
 
-        # Pattern 1: "loan" prefix with number
-        pattern1 = r"loan[-\s#:]?\s*(\d{4,})"
-        # Pattern 2: Standalone long numbers (likely loan numbers)
-        pattern2 = r"\b(\d{6,})\b"
-
         matches: Set[str] = set()
 
-        # Find all matches
-        for pattern in [pattern1, pattern2]:
-            found = re.findall(pattern, text_value, flags=re.IGNORECASE)
-            for match in found:
-                # Clean up: remove non-digits
-                cleaned = re.sub(r"[^0-9]", "", match)
-                if cleaned and len(cleaned) >= 4:
-                    matches.add(cleaned)
+        # Pattern 1: "loan" prefix with number
+        pattern1 = r"loan[-\s#:]?\s*(\d{4,})"
+        found1 = re.findall(pattern1, text_value, flags=re.IGNORECASE)
+        for match in found1:
+            cleaned = re.sub(r"[^0-9]", "", match)
+            if cleaned and len(cleaned) >= 4:
+                matches.add(cleaned)
+
+        # Pattern 2: Standalone long numbers (likely loan numbers)
+        pattern2 = r"\b(\d{6,})\b"
+        found2 = re.findall(pattern2, text_value, flags=re.IGNORECASE)
+        for match in found2:
+            cleaned = re.sub(r"[^0-9]", "", match)
+            if cleaned and len(cleaned) >= 4:
+                matches.add(cleaned)
+
+        # Pattern 3: Alphanumeric loan numbers like RCA00000011704 or CMG-0157427
+        # Common patterns: RCA + digits, CMG- + digits, letters + long number
+        pattern3 = r"\b([A-Z]{2,4}[-]?\d{6,})\b"
+        found3 = re.findall(pattern3, text_value, flags=re.IGNORECASE)
+        for match in found3:
+            matches.add(match.upper())
+
+        # Pattern 4: Look for loan numbers in URLs (upload?LN=RCA00000011704)
+        pattern4 = r"LN=([A-Z0-9-]+)"
+        found4 = re.findall(pattern4, text_value, flags=re.IGNORECASE)
+        for match in found4:
+            matches.add(match.upper())
 
         return sorted(list(matches), key=len, reverse=True)  # Longest first
 

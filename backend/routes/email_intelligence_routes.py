@@ -1910,6 +1910,7 @@ async def queue_email_for_intelligence(
 
         # Run AI analysis if requested
         analysis = None
+        task_id = None
         if auto_analyze:
             try:
                 engine = EmailIntelligenceEngine(db)
@@ -1917,8 +1918,11 @@ async def queue_email_for_intelligence(
                     "from_email": from_email,
                     "from_name": from_name,
                     "subject": email_data.get("subject", ""),
-                    "body_preview": body_preview
+                    "body_preview": body_preview,
+                    "body_full": body_full
                 })
+
+                analysis_dict = analysis.dict()
 
                 db.execute(text("""
                     UPDATE email_reconciliation_queue
@@ -1928,13 +1932,112 @@ async def queue_email_for_intelligence(
                         direction = :direction
                     WHERE id = :email_id
                 """), {
-                    "analysis": json.dumps(analysis.dict()),
+                    "analysis": json.dumps(analysis_dict),
                     "analyzed_at": datetime.now(timezone.utc),
                     "disposition": analysis.disposition,
                     "direction": analysis.direction,
                     "email_id": email_id
                 })
                 db.commit()
+
+                # AUTO-CREATE TASK for document requests
+                documents_requested = analysis_dict.get("documents_requested", [])
+                action_items = analysis_dict.get("action_items", [])
+                urgency = analysis_dict.get("urgency_level", 3)
+
+                # Create task if there are document requests OR action items with high urgency
+                if documents_requested or (action_items and urgency >= 4):
+                    try:
+                        # Build task title
+                        if documents_requested:
+                            task_title = f"📄 Documents Requested: {email_data.get('subject', 'Email')[:50]}"
+                            task_description = f"Documents requested from {from_email}:\n\n"
+                            task_description += "\n".join([f"• {doc}" for doc in documents_requested])
+                        else:
+                            task_title = f"⚠️ Action Required: {email_data.get('subject', 'Email')[:50]}"
+                            task_description = f"Action items from email by {from_email}:\n\n"
+                            task_description += "\n".join([f"• {item}" for item in action_items])
+
+                        task_description += f"\n\nEmail Subject: {email_data.get('subject')}"
+                        task_description += f"\nFrom: {from_email}"
+
+                        # Get matched entity IDs
+                        loan_id = match_info.get("loan_id") if match_info else None
+                        lead_id = match_info.get("lead_id") if match_info else None
+
+                        # Due date based on urgency
+                        due_days = 1 if urgency >= 4 else 3
+                        due_date = datetime.now(timezone.utc) + timedelta(days=due_days)
+
+                        result = db.execute(text("""
+                            INSERT INTO tasks (
+                                title, description, due_date, priority,
+                                loan_id, lead_id, assigned_to, created_by,
+                                source, source_id, status, created_at
+                            ) VALUES (
+                                :title, :description, :due_date, :priority,
+                                :loan_id, :lead_id, :assigned_to, :created_by,
+                                'email_intelligence', :source_id, 'pending', :created_at
+                            ) RETURNING id
+                        """), {
+                            "title": task_title[:255],
+                            "description": task_description,
+                            "due_date": due_date,
+                            "priority": "high" if urgency >= 4 else "medium",
+                            "loan_id": loan_id,
+                            "lead_id": lead_id,
+                            "assigned_to": user_id,
+                            "created_by": user_id,
+                            "source_id": email_id,
+                            "created_at": datetime.now(timezone.utc)
+                        })
+                        task_id = result.fetchone()[0]
+                        db.commit()
+                        logger.info(f"📋 Auto-created task {task_id} for document request email {email_id}")
+                    except Exception as task_error:
+                        logger.warning(f"Could not auto-create task: {task_error}")
+
+                # AUTO-CREATE CONVERSATION LOG ENTRY
+                try:
+                    loan_id = match_info.get("loan_id") if match_info else None
+                    lead_id = match_info.get("lead_id") if match_info else None
+                    client_name = match_info.get("client_name") if match_info else from_name or from_email
+
+                    if loan_id or lead_id:
+                        db.execute(text("""
+                            INSERT INTO email_conversation_log (
+                                email_queue_id, loan_id, lead_id, client_name,
+                                direction, summary, key_points, action_items,
+                                next_steps, documents_requested, documents_received,
+                                sentiment, urgency_level, created_by, created_at
+                            ) VALUES (
+                                :email_queue_id, :loan_id, :lead_id, :client_name,
+                                :direction, :summary, :key_points, :action_items,
+                                :next_steps, :documents_requested, :documents_received,
+                                :sentiment, :urgency_level, :created_by, :created_at
+                            )
+                        """), {
+                            "email_queue_id": email_id,
+                            "loan_id": loan_id,
+                            "lead_id": lead_id,
+                            "client_name": client_name,
+                            "direction": analysis.direction,
+                            "summary": analysis_dict.get("summary", ""),
+                            "key_points": json.dumps(analysis_dict.get("key_points", [])),
+                            "action_items": json.dumps(analysis_dict.get("action_items", [])),
+                            "next_steps": json.dumps(analysis_dict.get("next_steps", [])),
+                            "documents_requested": json.dumps(documents_requested),
+                            "documents_received": json.dumps(analysis_dict.get("documents_attached", [])),
+                            "sentiment": analysis_dict.get("sentiment", "neutral"),
+                            "urgency_level": urgency,
+                            "created_by": user_id,
+                            "created_at": datetime.now(timezone.utc)
+                        })
+                        db.commit()
+                        logger.info(f"📝 Auto-created conversation log for email {email_id} (loan={loan_id}, lead={lead_id})")
+                except Exception as log_error:
+                    logger.warning(f"Could not auto-create conversation log: {log_error}")
+
             except Exception as e:
                 logger.warning(f"Auto-analysis failed for email {email_id}: {e}")
 
@@ -1942,7 +2045,8 @@ async def queue_email_for_intelligence(
             "status": "queued",
             "email_id": email_id,
             "match": match_info,
-            "analysis": analysis.dict() if analysis else None
+            "analysis": analysis.dict() if analysis else None,
+            "task_id": task_id
         }
 
     except Exception as e:

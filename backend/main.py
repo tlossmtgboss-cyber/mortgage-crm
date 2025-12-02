@@ -20250,7 +20250,7 @@ async def process_microsoft_email_to_dre(email_data: dict, user_id: int, db: Ses
                 db=db,
                 user_id=user_id,
                 email_data=intel_email_data,
-                auto_analyze=False,  # Don't auto-analyze during sync
+                auto_analyze=True,  # Auto-analyze to identify borrower, create tasks, log conversations
                 source="microsoft365"
             )
             logger.debug(f"Queued email {message_id[:20]}... to Email Intelligence")
@@ -27829,6 +27829,45 @@ async def sync_microsoft_emails_now(
 
         if not oauth_record.sync_enabled:
             raise HTTPException(status_code=400, detail="Email sync is disabled")
+
+        # Auto-populate known_client_emails table before sync for better identity resolution
+        try:
+            from sqlalchemy import text as sa_text
+            # Get emails from leads
+            leads = db.execute(sa_text("""
+                SELECT id, email, name FROM leads
+                WHERE email IS NOT NULL AND status NOT IN ('dead', 'closed_lost')
+            """)).fetchall()
+            for lead in leads:
+                if lead[1]:
+                    db.execute(sa_text("""
+                        INSERT INTO known_client_emails (email_address, lead_id, client_name, source_type, user_id)
+                        VALUES (:email, :lead_id, :name, 'lead', :user_id)
+                        ON CONFLICT (email_address, user_id) DO UPDATE SET
+                            lead_id = COALESCE(known_client_emails.lead_id, :lead_id),
+                            updated_at = CURRENT_TIMESTAMP
+                    """), {"email": lead[1].lower(), "lead_id": lead[0], "name": lead[2], "user_id": current_user.id})
+
+            # Get emails from loans
+            loans = db.execute(sa_text("""
+                SELECT id, borrower_email, borrower_name FROM loans
+                WHERE borrower_email IS NOT NULL AND status NOT IN ('cancelled', 'withdrawn')
+            """)).fetchall()
+            for loan in loans:
+                if loan[1]:
+                    db.execute(sa_text("""
+                        INSERT INTO known_client_emails (email_address, loan_id, client_name, source_type, user_id)
+                        VALUES (:email, :loan_id, :name, 'loan', :user_id)
+                        ON CONFLICT (email_address, user_id) DO UPDATE SET
+                            loan_id = COALESCE(known_client_emails.loan_id, :loan_id),
+                            updated_at = CURRENT_TIMESTAMP
+                    """), {"email": loan[1].lower(), "loan_id": loan[0], "name": loan[2], "user_id": current_user.id})
+
+            db.commit()
+            logger.info(f"Auto-synced {len(leads)} leads and {len(loans)} loans to known_client_emails")
+        except Exception as kce_error:
+            logger.warning(f"Could not auto-sync known_client_emails: {kce_error}")
+            db.rollback()
 
         # Fetch emails with timeout
         import asyncio
