@@ -31861,6 +31861,7 @@ async def get_command_center(
             })
     except Exception as e:
         logger.warning(f"Command center - SLA alerts error: {e}")
+        db.rollback()  # Reset transaction state
 
     # 2. LEADS - Pending tasks and follow-ups
     try:
@@ -31895,6 +31896,7 @@ async def get_command_center(
                 action_items["leads"].append(item)
     except Exception as e:
         logger.warning(f"Command center - lead tasks error: {e}")
+        db.rollback()  # Reset transaction state
 
     # Also get leads needing follow-up (no contact in X days based on stage)
     # For demo purposes, show all leads if user has none assigned
@@ -31930,6 +31932,7 @@ async def get_command_center(
     except Exception as e:
         logger.error(f"Command center - stale leads error: {e}", exc_info=True)
         action_items["_debug_leads_error"] = str(e)
+        db.rollback()  # Reset transaction state
 
     # 3. LOANS - Active milestones and tasks
     try:
@@ -31965,6 +31968,7 @@ async def get_command_center(
                 action_items["loans"].append(item)
     except Exception as e:
         logger.warning(f"Command center - loan tasks error: {e}")
+        db.rollback()  # Reset transaction state
 
     # Get loans with upcoming deadlines (closing, lock expiration)
     try:
@@ -32030,6 +32034,7 @@ async def get_command_center(
             })
     except Exception as e:
         logger.warning(f"Command center - loan deadlines error: {e}")
+        db.rollback()
 
     # 4. PORTFOLIO - Touchpoints and refinance opportunities
     try:
@@ -32083,6 +32088,7 @@ async def get_command_center(
             })
     except Exception as e:
         logger.warning(f"Command center - portfolio error: {e}")
+        db.rollback()
 
     # 5. EMAILS - Unanswered/unprocessed emails
     try:
@@ -32120,6 +32126,7 @@ async def get_command_center(
             })
     except Exception as e:
         logger.warning(f"Command center - emails error: {e}")
+        db.rollback()
 
     # 6. SMS - Unanswered inbound messages
     try:
@@ -32160,6 +32167,7 @@ async def get_command_center(
             })
     except Exception as e:
         logger.warning(f"Command center - SMS error: {e}")
+        db.rollback()
 
     # 7. CALLS - Pending voicemail drops and missed calls
     try:
@@ -32195,6 +32203,7 @@ async def get_command_center(
             })
     except Exception as e:
         logger.warning(f"Command center - calls error: {e}")
+        db.rollback()
 
     # 8. RECONCILIATION - Pending data matches
     try:
@@ -32229,6 +32238,7 @@ async def get_command_center(
             })
     except Exception as e:
         logger.warning(f"Command center - reconciliation error: {e}")
+        db.rollback()
 
     # 9. APPROVALS - AI actions pending approval
     try:
@@ -32252,6 +32262,7 @@ async def get_command_center(
             })
     except Exception as e:
         logger.warning(f"Command center - approvals error: {e}")
+        db.rollback()
 
     # Calculate summary counts
     action_items["summary"] = {
