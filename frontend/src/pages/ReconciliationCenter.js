@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
+import { useLayoutFix } from '../hooks/useLayoutFix';
 import './ReconciliationCenter.css';
 
 function ReconciliationCenter() {
   const navigate = useNavigate();
+  const { containerRef, triggerRecalculation } = useLayoutFix([]);
   const [activeTab, setActiveTab] = useState('new'); // 'new', 'autoProcessing', 'pendingReview', or 'completed'
   const [newItems, setNewItems] = useState([]); // Fresh unprocessed messages
   const [autoProcessingItems, setAutoProcessingItems] = useState([]); // AI handles automatically
@@ -315,6 +317,8 @@ function ReconciliationCenter() {
       console.error('Error fetching pending items:', error);
     } finally {
       setLoading(false);
+      // Trigger layout recalculation after data loads
+      setTimeout(() => triggerRecalculation(), 50);
     }
   };
 

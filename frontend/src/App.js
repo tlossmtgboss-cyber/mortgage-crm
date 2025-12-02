@@ -11,6 +11,7 @@ import ImpersonationBanner from './components/ImpersonationBanner';
 import ErrorBoundary from './components/ErrorBoundary';
 import UnifiedTaskSidebar from './components/UnifiedTaskSidebar';
 import EmailDropZone from './components/EmailDropZone';
+import GlobalLayoutFix from './components/GlobalLayoutFix';
 import './App.css';
 
 // Landing/Auth pages (keep these as regular imports for faster initial load)
@@ -246,6 +247,7 @@ function App() {
       <ImpersonationProvider>
         <PermissionProvider>
           <Router>
+            <GlobalLayoutFix />
             <EmailDropZone>
             <ImpersonationBanner />
             <div className="app">

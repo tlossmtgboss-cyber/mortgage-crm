@@ -31573,13 +31573,16 @@ async def get_command_center(
         logger.warning(f"Command center - lead tasks error: {e}")
 
     # Also get leads needing follow-up (no contact in X days based on stage)
+    # For demo purposes, show all leads if user has none assigned
     try:
         stale_leads = db.execute(text("""
             SELECT l.id, l.name, l.stage, l.last_contact, l.email, l.phone,
                    EXTRACT(EPOCH FROM (NOW() - l.last_contact))/86400 as days_since_contact
             FROM leads l
-            WHERE l.assigned_to = :user_id
-              AND l.stage NOT IN ('closed', 'disqualified', 'CLOSED', 'DISQUALIFIED')
+            WHERE (l.assigned_to = :user_id OR l.assigned_to IS NULL OR NOT EXISTS (
+                SELECT 1 FROM leads WHERE assigned_to = :user_id LIMIT 1
+            ))
+              AND l.stage NOT IN ('closed', 'disqualified', 'CLOSED', 'DISQUALIFIED', 'Withdrawn', 'withdrawn')
               AND (l.last_contact IS NULL OR l.last_contact < NOW() - INTERVAL '3 days')
             ORDER BY l.last_contact ASC NULLS FIRST
             LIMIT 15
@@ -31661,25 +31664,43 @@ async def get_command_center(
             LIMIT 15
         """)).fetchall()
 
+        # If no deadline loans, show active loans that need attention
+        if not upcoming_deadlines:
+            upcoming_deadlines = db.execute(text("""
+                SELECT l.id, l.borrower_name, l.loan_number, l.status,
+                       l.closing_date, l.lock_expiration,
+                       'active_loan' as deadline_type
+                FROM loans l
+                WHERE l.status NOT IN ('funded', 'closed', 'cancelled', 'denied', 'Funded')
+                ORDER BY l.created_at DESC
+                LIMIT 10
+            """)).fetchall()
+
         for loan in upcoming_deadlines:
             deadline_date = loan.lock_expiration if loan.deadline_type == 'lock_expiring' else loan.closing_date
             days_until = (deadline_date - now).days if deadline_date else 999
-            priority = "critical" if days_until <= 1 else "high" if days_until <= 3 else "medium"
 
-            title = "Rate Lock Expiring" if loan.deadline_type == 'lock_expiring' else "Closing Coming Up"
+            if loan.deadline_type == 'active_loan':
+                priority = "medium"
+                title = f"Active Loan: {loan.borrower_name}"
+                description = f"Status: {loan.status} - {loan.loan_number or 'N/A'}"
+            else:
+                priority = "critical" if days_until <= 1 else "high" if days_until <= 3 else "medium"
+                title = "Rate Lock Expiring" if loan.deadline_type == 'lock_expiring' else "Closing Coming Up"
+                description = f"In {days_until} days - {loan.loan_number or 'N/A'}"
             action_items["loans"].append({
                 "id": f"deadline_{loan.id}_{loan.deadline_type}",
                 "type": loan.deadline_type,
                 "priority": priority,
-                "title": f"{title}: {loan.borrower_name}",
-                "description": f"In {days_until} days - {loan.loan_number or 'N/A'}",
+                "title": title if loan.deadline_type == 'active_loan' else f"{title}: {loan.borrower_name}",
+                "description": description,
                 "entity_type": "loan",
                 "entity_id": loan.id,
                 "entity_name": loan.borrower_name,
                 "loan_number": loan.loan_number,
                 "due_date": deadline_date.isoformat() if deadline_date else None,
                 "url": f"/loans/{loan.id}",
-                "days_until": days_until
+                "days_until": days_until if loan.deadline_type != 'active_loan' else None
             })
     except Exception as e:
         logger.warning(f"Command center - loan deadlines error: {e}")
@@ -31697,13 +31718,27 @@ async def get_command_center(
             LIMIT 15
         """)).fetchall()
 
+        # If no touchpoints due, show recent portfolio clients for demo
+        if not portfolio_items:
+            portfolio_items = db.execute(text("""
+                SELECT m.id, m.client_name, m.email, m.phone, m.loan_number,
+                       m.next_touchpoint, m.refinance_opportunity, m.estimated_savings,
+                       m.last_contact, m.interest_rate, m.current_loan_amount
+                FROM mum_clients m
+                ORDER BY m.id DESC
+                LIMIT 10
+            """)).fetchall()
+
         for client in portfolio_items:
             is_overdue = client.next_touchpoint < now if client.next_touchpoint else False
             priority = "high" if is_overdue else "medium"
 
-            description = f"Touchpoint due"
             if client.refinance_opportunity and client.estimated_savings:
                 description = f"Refi opportunity - save ${client.estimated_savings:,.0f}/mo"
+            elif client.next_touchpoint:
+                description = "Touchpoint due"
+            else:
+                description = f"Portfolio client - {client.loan_number or 'review needed'}"
 
             action_items["portfolio"].append({
                 "id": f"portfolio_{client.id}",
