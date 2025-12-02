@@ -5993,6 +5993,7 @@ async def import_document_notification_email(
             db.rollback()
 
         # 3. Create task to review documents if requested
+        # Task table uses 'owner_id' not 'assigned_to', and doesn't have 'source' or 'user_id'
         if request.create_task:
             try:
                 # Build task title with sender name
@@ -6012,12 +6013,12 @@ async def import_document_notification_email(
                 task_result = db.execute(text("""
                     INSERT INTO tasks (
                         title, description, due_date, priority,
-                        lead_id, loan_id, assigned_to, status,
-                        source, created_at, user_id
+                        lead_id, loan_id, owner_id, status,
+                        related_contact_name, related_type, created_at
                     ) VALUES (
                         :title, :description, :due_date, 'high',
-                        :lead_id, :loan_id, :assigned_to, 'pending',
-                        'email_document_upload', :created_at, :user_id
+                        :lead_id, :loan_id, :owner_id, 'pending',
+                        :contact_name, 'document_review', :created_at
                     ) RETURNING id
                 """), {
                     "title": task_title[:255],
@@ -6025,9 +6026,9 @@ async def import_document_notification_email(
                     "due_date": due_date,
                     "lead_id": request.lead_id,
                     "loan_id": request.loan_id,
-                    "assigned_to": user_id,
-                    "created_at": now,
-                    "user_id": user_id
+                    "owner_id": user_id,
+                    "contact_name": request.from_name,
+                    "created_at": now
                 })
                 task_id = task_result.fetchone()[0]
                 results["task_created"] = True
