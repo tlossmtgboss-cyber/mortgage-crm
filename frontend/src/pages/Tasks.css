@@ -921,8 +921,9 @@
   grid-template-columns: 350px minmax(0, 1fr);
   gap: 0;
   flex: 1 1 auto;
-  min-height: 600px;
-  height: calc(100vh - 220px); /* Fixed height to enable internal scrolling */
+  min-height: 500px;
+  /* Fallback for browsers without dvh support - use larger offset to account for browser chrome */
+  height: calc(100vh - 320px);
   background: white;
   border: 1px solid #e5e7eb;
   border-radius: 12px;
@@ -930,6 +931,13 @@
   width: 100%;
   max-width: 100%;
   box-sizing: border-box;
+}
+
+/* Use dvh (dynamic viewport height) when supported for more accurate sizing */
+@supports (height: 100dvh) {
+  .email-layout {
+    height: calc(100dvh - 240px);
+  }
 }
 
 /* Ensure grid children take full height and handle overflow properly */
@@ -1145,6 +1153,30 @@
   font-weight: 600;
   text-transform: uppercase;
   width: fit-content;
+}
+
+.due-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.due-badge.due-today {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.due-badge.due-tomorrow {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.due-badge.due-upcoming {
+  background: #dbeafe;
+  color: #2563eb;
 }
 
 .detail-ai-section {
@@ -2028,13 +2060,21 @@
 
 .ai-training-input {
   width: 100%;
+  min-height: 80px;
   padding: 12px;
-  border: 1px solid #fbbf24;
+  border: 2px solid #fbbf24;
   border-radius: 8px;
   font-size: 14px;
   font-family: inherit;
   resize: vertical;
   background: white;
+  position: relative;
+  z-index: 10;
+  cursor: text;
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .ai-training-input:focus {
@@ -2052,6 +2092,58 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  position: relative;
+}
+
+/* AI Conversation Response */
+.ai-conversation-response {
+  background: #fef9e7;
+  border: 1px solid #fbbf24;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+
+.ai-response-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.ai-response-icon {
+  font-size: 18px;
+}
+
+.ai-response-label {
+  font-weight: 600;
+  color: #92400e;
+  flex: 1;
+}
+
+.btn-clear-response {
+  background: none;
+  border: none;
+  color: #92400e;
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 14px;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+
+.btn-clear-response:hover {
+  opacity: 1;
+}
+
+.ai-response-content {
+  font-size: 14px;
+  line-height: 1.5;
+  color: #78350f;
+}
+
+.ai-response-content strong {
+  color: #92400e;
 }
 
 .btn-send-to-ai {
