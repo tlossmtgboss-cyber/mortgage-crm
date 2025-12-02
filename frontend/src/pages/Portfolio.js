@@ -129,11 +129,11 @@ function Portfolio() {
   if (searchQuery.trim()) {
     const query = searchQuery.toLowerCase();
     filteredMumClients = filteredMumClients.filter(client =>
-      client.client_name?.toLowerCase().includes(query) ||
+      (client.client_name || client.name)?.toLowerCase().includes(query) ||
       client.email?.toLowerCase().includes(query) ||
       client.phone?.toLowerCase().includes(query) ||
-      client.current_loan_amount?.toString().includes(query) ||
-      client.servicing_loan_number?.toLowerCase().includes(query)
+      (client.current_loan_amount || client.loan_balance)?.toString().includes(query) ||
+      (client.servicing_loan_number || client.loan_number)?.toLowerCase().includes(query)
     );
   }
 
@@ -517,20 +517,20 @@ function Portfolio() {
                     style={{ cursor: 'pointer' }}
                   >
                     <td>
-                      <strong>{client.client_name}</strong>
+                      <strong>{client.client_name || client.name}</strong>
                     </td>
-                    <td>{client.servicing_loan_number}</td>
+                    <td>{client.servicing_loan_number || client.loan_number}</td>
                     <td>
-                      {new Date(client.closing_date).toLocaleDateString()}
+                      {client.closing_date || client.original_close_date ? new Date(client.closing_date || client.original_close_date).toLocaleDateString() : 'N/A'}
                     </td>
                     <td>
                       <span className={`days-badge ${getDaysSinceFundingColor(client.days_since_funding)}`}>
                         {client.days_since_funding} days
                       </span>
                     </td>
-                    <td>{client.interest_rate ? `${client.interest_rate}%` : 'N/A'}</td>
-                    <td>{client.interest_rate ? `${client.interest_rate}%` : 'N/A'}</td>
-                    <td>${client.current_loan_amount?.toLocaleString() || 0}</td>
+                    <td>{(client.interest_rate || client.current_rate) ? `${client.interest_rate || client.current_rate}%` : 'N/A'}</td>
+                    <td>{(client.interest_rate || client.current_rate) ? `${client.interest_rate || client.current_rate}%` : 'N/A'}</td>
+                    <td>${(client.current_loan_amount || client.loan_balance)?.toLocaleString() || 0}</td>
                     <td>
                       {client.refinance_opportunity ? (
                         <span className="opportunity-yes">Yes</span>
