@@ -2827,6 +2827,69 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
           </div>
         </div>
       )}
+
+      {/* Disposition Dialog Modal */}
+      {showDispositionDialog && dispositionEmail && (
+        <div className="modal-overlay" onClick={() => setShowDispositionDialog(false)}>
+          <div className="modal-content disposition-modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Process Email</h2>
+            <p className="disposition-email-subject">
+              <strong>Subject:</strong> {dispositionEmail.subject || '(No Subject)'}
+            </p>
+            <p className="disposition-email-from">
+              <strong>From:</strong> {dispositionEmail.from_name || dispositionEmail.from_email}
+            </p>
+
+            <div className="disposition-options-grid">
+              {dispositionOptions.map((option) => (
+                <button
+                  key={option.value}
+                  className={`disposition-option ${selectedDisposition === option.value ? 'selected' : ''}`}
+                  onClick={() => setSelectedDisposition(option.value)}
+                >
+                  <span className="disposition-icon">{option.icon}</span>
+                  <span className="disposition-label">{option.label}</span>
+                </button>
+              ))}
+            </div>
+
+            <label className="create-task-checkbox">
+              <input
+                type="checkbox"
+                checked={createTask}
+                onChange={(e) => setCreateTask(e.target.checked)}
+              />
+              <span>Create a follow-up task</span>
+            </label>
+
+            {createTask && (
+              <input
+                type="text"
+                className="task-title-input"
+                placeholder="Task title..."
+                value={taskTitle}
+                onChange={(e) => setTaskTitle(e.target.value)}
+              />
+            )}
+
+            <div className="modal-buttons">
+              <button
+                className="btn-modal-primary"
+                onClick={handleProcessDisposition}
+                disabled={!selectedDisposition || processingEmailId === dispositionEmail.id}
+              >
+                {processingEmailId === dispositionEmail.id ? 'Processing...' : 'Process Email'}
+              </button>
+              <button
+                className="btn-modal-cancel"
+                onClick={() => setShowDispositionDialog(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
