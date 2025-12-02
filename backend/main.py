@@ -23779,9 +23779,21 @@ async def approve_reconciliation(
                 if lead_entity:
                     entity_name = lead_entity.name
 
-            # Delete email from inbox if requested
+            # Delete email from inbox if requested or if user has global setting enabled
             email_deleted = False
-            if approval.delete_from_inbox and approval.email_message_id:
+            should_delete_email = approval.delete_from_inbox
+
+            # Check user's global setting for auto-delete if not explicitly requested
+            if not should_delete_email and approval.email_message_id:
+                user_delete_setting = db.query(UserSettings).filter(
+                    UserSettings.user_id == current_user.id,
+                    UserSettings.setting_key == "delete_from_inbox_after_processing"
+                ).first()
+                if user_delete_setting and user_delete_setting.setting_value == "true":
+                    should_delete_email = True
+                    logger.info(f"User {current_user.id} has auto-delete enabled, will delete email from inbox")
+
+            if should_delete_email and approval.email_message_id:
                 try:
                     # Get user's Microsoft OAuth token
                     oauth_record = db.query(MicrosoftOAuthToken).filter(
@@ -23878,9 +23890,21 @@ async def reject_reconciliation(
 
         logger.info(f"Rejected extracted data {extracted.id} by user {current_user.id}: {rejection.reason}")
 
-        # Delete email from inbox if requested
+        # Delete email from inbox if requested or if user has global setting enabled
         email_deleted = False
-        if rejection.delete_from_inbox and rejection.email_message_id:
+        should_delete_email = rejection.delete_from_inbox
+
+        # Check user's global setting for auto-delete if not explicitly requested
+        if not should_delete_email and rejection.email_message_id:
+            user_delete_setting = db.query(UserSettings).filter(
+                UserSettings.user_id == current_user.id,
+                UserSettings.setting_key == "delete_from_inbox_after_processing"
+            ).first()
+            if user_delete_setting and user_delete_setting.setting_value == "true":
+                should_delete_email = True
+                logger.info(f"User {current_user.id} has auto-delete enabled, will delete email from inbox")
+
+        if should_delete_email and rejection.email_message_id:
             try:
                 # Get user's Microsoft OAuth token
                 oauth_record = db.query(MicrosoftOAuthToken).filter(
@@ -24148,9 +24172,21 @@ async def delete_reconciliation_item(
 
         logger.info(f"Deleted extracted data {extracted_data_id} by user {current_user.id}")
 
-        # Delete email from inbox if requested
+        # Delete email from inbox if requested or if user has global setting enabled
         email_deleted = False
-        if delete_from_inbox and email_message_id:
+        should_delete_email = delete_from_inbox
+
+        # Check user's global setting for auto-delete if not explicitly requested
+        if not should_delete_email and email_message_id:
+            user_delete_setting = db.query(UserSettings).filter(
+                UserSettings.user_id == current_user.id,
+                UserSettings.setting_key == "delete_from_inbox_after_processing"
+            ).first()
+            if user_delete_setting and user_delete_setting.setting_value == "true":
+                should_delete_email = True
+                logger.info(f"User {current_user.id} has auto-delete enabled, will delete email from inbox")
+
+        if should_delete_email and email_message_id:
             try:
                 # Get user's Microsoft OAuth token
                 oauth_record = db.query(MicrosoftOAuthToken).filter(

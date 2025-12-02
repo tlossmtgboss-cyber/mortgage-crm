@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { teamAPI, tasksAPI, reconciliationAPI, aiAPI, leadsAPI, loansAPI } from '../services/api';
+import { teamAPI, tasksAPI, reconciliationAPI, aiAPI, leadsAPI, loansAPI, API_BASE_URL } from '../services/api';
 import MergeCenter from './MergeCenter';
 import { useLayoutFix } from '../hooks/useLayoutFix';
 import './Tasks.css';
+
+const API_BASE = process.env.REACT_APP_API_URL || '';
 
 // Lead status options
 const LEAD_STAGES = [
@@ -651,6 +653,45 @@ function Tasks() {
   const [leadMetrics, setLeadMetrics] = useState({});
   const [messages, setMessages] = useState([]);
 
+  // Reconciliation tab state
+  const [emailQueue, setEmailQueue] = useState([]);
+  const [emailQueueTotal, setEmailQueueTotal] = useState(0);
+  const [reconciliationStats, setReconciliationStats] = useState({});
+  const [selectedEmail, setSelectedEmail] = useState(null);
+  const [showDispositionDialog, setShowDispositionDialog] = useState(false);
+  const [dispositionEmail, setDispositionEmail] = useState(null);
+  const [selectedDisposition, setSelectedDisposition] = useState('');
+  const [createTask, setCreateTask] = useState(false);
+  const [taskTitle, setTaskTitle] = useState('');
+  const [processingEmailId, setProcessingEmailId] = useState(null);
+  const [queueFilters, setQueueFilters] = useState({
+    status: 'pending',
+    disposition: '',
+    hasMatch: ''
+  });
+
+  // Phone tab state (Power Dialer)
+  const [phoneTasks, setPhoneTasks] = useState([]);
+  const [phoneContacts, setPhoneContacts] = useState([]);
+  const [selectedPhoneTask, setSelectedPhoneTask] = useState(null);
+  const [dialerSession, setDialerSession] = useState(null);
+  const [callStatus, setCallStatus] = useState('idle');
+  const [selectedPhoneTaskIds, setSelectedPhoneTaskIds] = useState([]);
+  const [callLogs, setCallLogs] = useState([]);
+  const [dialerSettings, setDialerSettings] = useState(null);
+
+  // Disposition options for reconciliation
+  const dispositionOptions = [
+    { value: 'document_received', label: 'Document Received', icon: '📄' },
+    { value: 'document_request', label: 'Document Request', icon: '📋' },
+    { value: 'action_required', label: 'Action Required', icon: '⚡' },
+    { value: 'general_correspondence', label: 'General Correspondence', icon: '💬' },
+    { value: 'status_update', label: 'Status Update', icon: '📊' },
+    { value: 'rate_lock_request', label: 'Rate Lock Request', icon: '🔒' },
+    { value: 'closing_related', label: 'Closing Related', icon: '🏠' },
+    { value: 'skip', label: 'Skip/Archive', icon: '⏭️' }
+  ];
+
   useEffect(() => {
     loadTasks();
     loadTeamMembers();
@@ -699,6 +740,198 @@ function Tasks() {
       return () => clearTimeout(timer);
     }
   }, [loading, activeTab, selectedTask]);
+
+  // Auth headers helper
+  const getAuthHeaders = useCallback(() => {
+    const token = localStorage.getItem('token');
+    return {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    };
+  }, []);
+
+  // Load reconciliation data when tab is active
+  const loadReconciliationData = useCallback(async () => {
+    try {
+      // Load stats
+      const statsResponse = await fetch(`${API_BASE_URL}/api/v1/email-intelligence/stats`, {
+        headers: getAuthHeaders()
+      });
+      if (statsResponse.ok) {
+        const data = await statsResponse.json();
+        setReconciliationStats(data);
+      }
+
+      // Load email queue
+      let url = `${API_BASE_URL}/api/v1/email-intelligence/queue?limit=50`;
+      if (queueFilters.status) url += `&status=${queueFilters.status}`;
+      if (queueFilters.disposition) url += `&disposition=${queueFilters.disposition}`;
+      if (queueFilters.hasMatch === 'yes') url += `&has_match=true`;
+      if (queueFilters.hasMatch === 'no') url += `&has_match=false`;
+
+      const queueResponse = await fetch(url, { headers: getAuthHeaders() });
+      if (queueResponse.ok) {
+        const data = await queueResponse.json();
+        setEmailQueue(data.emails || []);
+        setEmailQueueTotal(data.total || 0);
+      }
+    } catch (error) {
+      console.error('Error loading reconciliation data:', error);
+    }
+  }, [getAuthHeaders, queueFilters]);
+
+  // Load phone dialer data when tab is active
+  const loadPhoneData = useCallback(async () => {
+    try {
+      // Fetch call tasks
+      const tasksResponse = await fetch(`${API_BASE}/api/v1/dialer/call-tasks`, {
+        headers: getAuthHeaders()
+      });
+      if (tasksResponse.ok) {
+        const data = await tasksResponse.json();
+        setPhoneTasks(data.tasks || []);
+      }
+
+      // Fetch callable contacts
+      const contactsResponse = await fetch(`${API_BASE}/api/v1/dialer/callable-contacts`, {
+        headers: getAuthHeaders()
+      });
+      if (contactsResponse.ok) {
+        const data = await contactsResponse.json();
+        setPhoneContacts(data.contacts || []);
+      }
+
+      // Fetch call logs
+      const logsResponse = await fetch(`${API_BASE}/api/v1/dialer/call-logs?limit=20`, {
+        headers: getAuthHeaders()
+      });
+      if (logsResponse.ok) {
+        const data = await logsResponse.json();
+        setCallLogs(data.call_logs || []);
+      }
+
+      // Fetch dialer settings
+      const settingsResponse = await fetch(`${API_BASE}/api/v1/dialer/settings`, {
+        headers: getAuthHeaders()
+      });
+      if (settingsResponse.ok) {
+        const data = await settingsResponse.json();
+        setDialerSettings(data);
+      }
+    } catch (error) {
+      console.error('Error loading phone data:', error);
+    }
+  }, [getAuthHeaders]);
+
+  // Load tab-specific data when tab changes
+  useEffect(() => {
+    if (activeTab === 'reconciliation') {
+      loadReconciliationData();
+    } else if (activeTab === 'phone') {
+      loadPhoneData();
+    }
+  }, [activeTab, loadReconciliationData, loadPhoneData]);
+
+  // Reconciliation handlers
+  const handleViewEmail = (email) => {
+    setSelectedEmail(email);
+  };
+
+  const handleOpenDisposition = (email) => {
+    setDispositionEmail(email);
+    setSelectedDisposition(email.ai_analysis?.disposition || '');
+    setCreateTask(false);
+    setTaskTitle('');
+    setShowDispositionDialog(true);
+  };
+
+  const handleProcessDisposition = async () => {
+    if (!dispositionEmail || !selectedDisposition) return;
+
+    setProcessingEmailId(dispositionEmail.id);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/email-intelligence/queue/${dispositionEmail.id}/process`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          disposition: selectedDisposition,
+          create_task: createTask,
+          task_title: createTask ? taskTitle : undefined
+        })
+      });
+
+      if (response.ok) {
+        setShowDispositionDialog(false);
+        setDispositionEmail(null);
+        loadReconciliationData();
+      }
+    } catch (error) {
+      console.error('Error processing disposition:', error);
+    } finally {
+      setProcessingEmailId(null);
+    }
+  };
+
+  const formatEmailDate = (dateStr) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffDays = Math.floor((now - date) / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return date.toLocaleDateString([], { weekday: 'short' });
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  };
+
+  const getEmailUrgencyLabel = (level) => {
+    if (level >= 5) return { label: 'Critical', color: '#dc2626' };
+    if (level >= 4) return { label: 'Urgent', color: '#f59e0b' };
+    if (level >= 3) return { label: 'Normal', color: '#3b82f6' };
+    return { label: 'Low', color: '#6b7280' };
+  };
+
+  // Phone dialer handlers
+  const handleClickToDial = async (task) => {
+    if (!task?.contact_phone) return;
+
+    setCallStatus('dialing');
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/dialer/click-to-dial`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          phone_number: task.contact_phone,
+          lead_id: task.lead_id,
+          loan_id: task.loan_id,
+          task_id: task.id
+        })
+      });
+
+      if (response.ok) {
+        setCallStatus('in-progress');
+      } else {
+        setCallStatus('idle');
+      }
+    } catch (error) {
+      console.error('Error initiating call:', error);
+      setCallStatus('idle');
+    }
+  };
+
+  const handleEndCall = async () => {
+    setCallStatus('idle');
+    // Refresh data after call
+    loadPhoneData();
+  };
+
+  const togglePhoneTaskSelection = (taskId) => {
+    setSelectedPhoneTaskIds(prev => {
+      if (prev.includes(taskId)) {
+        return prev.filter(id => id !== taskId);
+      }
+      return [...prev, taskId];
+    });
+  };
 
   const loadTasks = async () => {
     try {
@@ -1966,6 +2199,384 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
     );
   };
 
+  // Reusable Email Layout for Reconciliation
+  const ReconciliationEmailLayout = () => {
+    return (
+      <div className="email-layout">
+        {/* Email List (Left Side) */}
+        <div className="task-inbox">
+          <div className="inbox-header">
+            <div className="inbox-header-left">
+              <h3>📧 Email Queue</h3>
+              <span className="task-count">{emailQueue.length}</span>
+            </div>
+            <div className="inbox-filters">
+              <select
+                value={queueFilters.status}
+                onChange={(e) => setQueueFilters({ ...queueFilters, status: e.target.value })}
+                className="filter-select"
+              >
+                <option value="">All Status</option>
+                <option value="pending">Pending</option>
+                <option value="processed">Processed</option>
+              </select>
+            </div>
+          </div>
+          <div className="inbox-list">
+            {emailQueue.map((email) => (
+              <div
+                key={email.id}
+                className={`inbox-item ${selectedEmail && selectedEmail.id === email.id ? 'selected' : ''}`}
+                onClick={() => setSelectedEmail(email)}
+              >
+                <div className="inbox-item-header">
+                  <span className="source-icon">📧</span>
+                  <span className="task-title-compact">{email.subject || '(No Subject)'}</span>
+                </div>
+                <div className="inbox-item-meta">
+                  <span className="task-client-compact">{email.from_name || email.from_email}</span>
+                  {email.ai_analysis?.urgency_level && (
+                    <span
+                      className="urgency-dot"
+                      style={{ backgroundColor: getEmailUrgencyLabel(email.ai_analysis.urgency_level).color }}
+                      title={getEmailUrgencyLabel(email.ai_analysis.urgency_level).label}
+                    ></span>
+                  )}
+                </div>
+                <div className="task-preview">
+                  {email.matched_loan_id && <span className="match-tag">Loan #{email.matched_loan_id}</span>}
+                  {email.matched_lead_id && <span className="match-tag lead">Lead #{email.matched_lead_id}</span>}
+                  <span className="date-tag">{formatEmailDate(email.sent_date)}</span>
+                </div>
+              </div>
+            ))}
+            {emailQueue.length === 0 && (
+              <div className="empty-inbox">
+                <p>📭 No emails in queue</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Email Detail (Right Side) */}
+        <div className="task-detail-pane">
+          {selectedEmail ? (
+            <>
+              <div className="detail-header">
+                <div className="detail-title-section">
+                  <div className="detail-source">
+                    <span className="source-icon-large">📧</span>
+                    <span className="source-name">Email</span>
+                  </div>
+                  <h2 className="detail-title">{selectedEmail.subject || '(No Subject)'}</h2>
+                </div>
+              </div>
+
+              <div className="detail-body">
+                <div className="detail-info-grid">
+                  <div className="detail-info-item">
+                    <span className="detail-label">From</span>
+                    <span className="detail-value">{selectedEmail.from_name || selectedEmail.from_email}</span>
+                  </div>
+                  <div className="detail-info-item">
+                    <span className="detail-label">Email</span>
+                    <span className="detail-value">{selectedEmail.from_email}</span>
+                  </div>
+                  <div className="detail-info-item">
+                    <span className="detail-label">Date</span>
+                    <span className="detail-value">{new Date(selectedEmail.sent_date).toLocaleString()}</span>
+                  </div>
+                  <div className="detail-info-item">
+                    <span className="detail-label">Status</span>
+                    <span className={`detail-value status-badge ${selectedEmail.status}`}>{selectedEmail.status}</span>
+                  </div>
+                  {selectedEmail.matched_loan_id && (
+                    <div className="detail-info-item">
+                      <span className="detail-label">Matched Loan</span>
+                      <span className="detail-value client-link" onClick={() => navigate(`/loans/${selectedEmail.matched_loan_id}`)}>
+                        Loan #{selectedEmail.matched_loan_id}
+                      </span>
+                    </div>
+                  )}
+                  {selectedEmail.matched_lead_id && (
+                    <div className="detail-info-item">
+                      <span className="detail-label">Matched Lead</span>
+                      <span className="detail-value client-link" onClick={() => navigate(`/leads/${selectedEmail.matched_lead_id}`)}>
+                        Lead #{selectedEmail.matched_lead_id}
+                      </span>
+                    </div>
+                  )}
+                  {selectedEmail.has_attachments && (
+                    <div className="detail-info-item">
+                      <span className="detail-label">Attachments</span>
+                      <span className="detail-value">📎 {selectedEmail.attachment_count} files</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* AI Analysis */}
+                {selectedEmail.ai_analysis && (
+                  <div className="ai-message-section">
+                    <div className="ai-message-header">
+                      <span>🤖 AI Analysis</span>
+                    </div>
+                    <div className="ai-message-content">
+                      <p><strong>Disposition:</strong> {selectedEmail.ai_analysis.disposition || 'Not analyzed'}</p>
+                      {selectedEmail.ai_analysis.summary && (
+                        <p><strong>Summary:</strong> {selectedEmail.ai_analysis.summary}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Email Body */}
+                <div className="ai-message-section">
+                  <div className="ai-message-header">
+                    <span>📄 Email Content</span>
+                  </div>
+                  <div className="ai-message-content">
+                    <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit' }}>
+                      {selectedEmail.body_preview || selectedEmail.body || 'No content'}
+                    </pre>
+                  </div>
+                </div>
+              </div>
+
+              <div className="detail-actions">
+                {selectedEmail.status === 'pending' && (
+                  <button
+                    className="btn-detail-primary"
+                    onClick={() => handleOpenDisposition(selectedEmail)}
+                  >
+                    ⚡ Process Email
+                  </button>
+                )}
+                {selectedEmail.matched_loan_id && (
+                  <button
+                    className="btn-detail-secondary"
+                    onClick={() => navigate(`/loans/${selectedEmail.matched_loan_id}`)}
+                  >
+                    📋 View Loan
+                  </button>
+                )}
+                {selectedEmail.matched_lead_id && (
+                  <button
+                    className="btn-detail-secondary"
+                    onClick={() => navigate(`/leads/${selectedEmail.matched_lead_id}`)}
+                  >
+                    👤 View Lead
+                  </button>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="detail-empty">
+              <p>Select an email to view details</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // Reusable Email Layout for Phone Dialer
+  const PhoneEmailLayout = () => {
+    return (
+      <div className="email-layout">
+        {/* Phone Task List (Left Side) */}
+        <div className="task-inbox">
+          <div className="inbox-header">
+            <div className="inbox-header-left">
+              <h3>📞 Call Tasks</h3>
+              <span className="task-count">{phoneTasks.length}</span>
+            </div>
+          </div>
+          <div className="inbox-list">
+            {phoneTasks.map((task) => (
+              <div
+                key={task.id}
+                className={`inbox-item ${selectedPhoneTask && selectedPhoneTask.id === task.id ? 'selected' : ''}`}
+                onClick={() => setSelectedPhoneTask(task)}
+              >
+                <div className="inbox-item-header">
+                  <input
+                    type="checkbox"
+                    className="task-checkbox"
+                    checked={selectedPhoneTaskIds.includes(task.id)}
+                    onChange={() => togglePhoneTaskSelection(task.id)}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                  <span className="source-icon">{task.task_type === 'workflow' ? '⚡' : '📞'}</span>
+                  <span className="task-title-compact">{task.title}</span>
+                </div>
+                <div className="inbox-item-meta">
+                  <span className="task-client-compact">{task.contact_name}</span>
+                  <span
+                    className="urgency-dot"
+                    style={{ backgroundColor: task.priority === 'high' ? '#f59e0b' : '#6b7280' }}
+                  ></span>
+                </div>
+                <div className="task-preview">
+                  <span className="phone-tag">📱 {task.contact_phone}</span>
+                  {task.entity_type && (
+                    <span className={`match-tag ${task.entity_type}`}>
+                      {task.entity_type === 'lead' ? 'Lead' : 'Loan'}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+            {phoneTasks.length === 0 && (
+              <div className="empty-inbox">
+                <p>📞 No call tasks available</p>
+                <p style={{ fontSize: '12px', color: '#888' }}>Phone tasks from workflows will appear here</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Phone Task Detail (Right Side) */}
+        <div className="task-detail-pane">
+          {selectedPhoneTask ? (
+            <>
+              <div className="detail-header">
+                <div className="detail-title-section">
+                  <div className="detail-source">
+                    <span className="source-icon-large">📞</span>
+                    <span className="source-name">{selectedPhoneTask.task_type === 'workflow' ? 'Workflow' : 'Call Task'}</span>
+                  </div>
+                  <h2 className="detail-title">{selectedPhoneTask.title}</h2>
+                </div>
+              </div>
+
+              <div className="detail-body">
+                <div className="detail-info-grid">
+                  <div className="detail-info-item">
+                    <span className="detail-label">Contact</span>
+                    <span
+                      className="detail-value client-link"
+                      onClick={() => {
+                        if (selectedPhoneTask.lead_id) {
+                          navigate(`/leads/${selectedPhoneTask.lead_id}`);
+                        } else if (selectedPhoneTask.loan_id) {
+                          navigate(`/loans/${selectedPhoneTask.loan_id}`);
+                        }
+                      }}
+                    >
+                      {selectedPhoneTask.contact_name}
+                    </span>
+                  </div>
+                  <div className="detail-info-item">
+                    <span className="detail-label">Phone</span>
+                    <span className="detail-value phone-number">{selectedPhoneTask.contact_phone}</span>
+                  </div>
+                  <div className="detail-info-item">
+                    <span className="detail-label">Type</span>
+                    <span className="detail-value">{selectedPhoneTask.entity_type === 'lead' ? 'Lead' : 'Loan'}</span>
+                  </div>
+                  <div className="detail-info-item">
+                    <span className="detail-label">Priority</span>
+                    <span className={`detail-value priority-badge ${selectedPhoneTask.priority}`}>
+                      {selectedPhoneTask.priority || 'Normal'}
+                    </span>
+                  </div>
+                  {selectedPhoneTask.workflow_name && (
+                    <div className="detail-info-item">
+                      <span className="detail-label">Workflow</span>
+                      <span className="detail-value">{selectedPhoneTask.workflow_name}</span>
+                    </div>
+                  )}
+                  {selectedPhoneTask.due_date && (
+                    <div className="detail-info-item">
+                      <span className="detail-label">Due Date</span>
+                      <span className="detail-value">{new Date(selectedPhoneTask.due_date).toLocaleDateString()}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Task Description */}
+                {selectedPhoneTask.description && (
+                  <div className="ai-message-section">
+                    <div className="ai-message-header">
+                      <span>📝 Task Details</span>
+                    </div>
+                    <div className="ai-message-content">
+                      <p>{selectedPhoneTask.description}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Call Status */}
+                <div className="ai-message-section">
+                  <div className="ai-message-header">
+                    <span>📞 Call Status</span>
+                  </div>
+                  <div className="ai-message-content" style={{ textAlign: 'center', padding: '20px' }}>
+                    {callStatus === 'idle' && (
+                      <p style={{ color: '#6b7280' }}>Ready to dial</p>
+                    )}
+                    {callStatus === 'dialing' && (
+                      <p style={{ color: '#f59e0b' }}>⏳ Dialing...</p>
+                    )}
+                    {callStatus === 'in-progress' && (
+                      <p style={{ color: '#10b981' }}>🔴 Call in progress</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="detail-actions">
+                {callStatus === 'idle' && (
+                  <button
+                    className="btn-detail-primary"
+                    onClick={() => handleClickToDial(selectedPhoneTask)}
+                    style={{ backgroundColor: '#10b981' }}
+                  >
+                    📞 Click to Dial
+                  </button>
+                )}
+                {callStatus === 'in-progress' && (
+                  <button
+                    className="btn-detail-danger"
+                    onClick={handleEndCall}
+                  >
+                    📴 End Call
+                  </button>
+                )}
+                <button
+                  className="btn-detail-secondary"
+                  onClick={() => {
+                    if (selectedPhoneTask.lead_id) {
+                      navigate(`/leads/${selectedPhoneTask.lead_id}`);
+                    } else if (selectedPhoneTask.loan_id) {
+                      navigate(`/loans/${selectedPhoneTask.loan_id}`);
+                    }
+                  }}
+                >
+                  👤 View {selectedPhoneTask.entity_type === 'lead' ? 'Lead' : 'Loan'}
+                </button>
+                <button
+                  className="btn-detail-complete"
+                  onClick={() => {
+                    // Mark task as complete
+                    setPhoneTasks(prev => prev.filter(t => t.id !== selectedPhoneTask.id));
+                    setSelectedPhoneTask(null);
+                  }}
+                >
+                  ✓ Complete Task
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="detail-empty">
+              <p>Select a call task to view details</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="tasks-page" ref={containerRef}>
       <div className="page-header">
@@ -1982,10 +2593,16 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
           Outstanding Tasks ({allTasks.filter(t => !snoozedTasks.has(t.id)).length})
         </button>
         <button
-          className={`tab-button ${activeTab === 'mum' ? 'active' : ''}`}
-          onClick={() => setActiveTab('mum')}
+          className={`tab-button ${activeTab === 'reconciliation' ? 'active' : ''}`}
+          onClick={() => setActiveTab('reconciliation')}
         >
-          ♻️ Client for Life Engine (MUM) ({allTasks.filter(t => t.source === 'Client for Life' && !snoozedTasks.has(t.id)).length})
+          📧 Reconciliation ({reconciliationStats.pending_count || 0})
+        </button>
+        <button
+          className={`tab-button ${activeTab === 'phone' ? 'active' : ''}`}
+          onClick={() => setActiveTab('phone')}
+        >
+          📞 Phone ({phoneTasks.length})
         </button>
         <button
           className={`tab-button ${activeTab === 'completed' ? 'active' : ''}`}
@@ -2002,10 +2619,17 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
         </div>
       )}
 
-      {/* Client for Life Engine (MUM) Tab */}
-      {activeTab === 'mum' && (
+      {/* Reconciliation Tab */}
+      {activeTab === 'reconciliation' && (
         <div className="tab-content">
-          <TaskEmailLayout tasks={tabTasks} emptyMessage="No client retention actions needed" />
+          <ReconciliationEmailLayout />
+        </div>
+      )}
+
+      {/* Phone Tab */}
+      {activeTab === 'phone' && (
+        <div className="tab-content">
+          <PhoneEmailLayout />
         </div>
       )}
 
