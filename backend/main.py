@@ -12933,18 +12933,42 @@ async def orchestrator_chat_stream(
         }
 
     async def execute_get_pipeline(args):
+        include_details = args.get("include_details", True)  # Default to include details
         leads = db.query(Lead).filter(Lead.owner_id == current_user.id).all()
         loans = db.query(Loan).filter(Loan.loan_officer_id == current_user.id).all()
 
         lead_stages = {}
         for lead in leads:
             stage = str(lead.stage).replace("LeadStage.", "") if lead.stage else "NEW"
-            lead_stages[stage] = lead_stages.get(stage, 0) + 1
+            if stage not in lead_stages:
+                lead_stages[stage] = {"count": 0, "items": []}
+            lead_stages[stage]["count"] += 1
+            # Include lead details (name, phone, email) for AI to provide specific info
+            if include_details and lead_stages[stage]["count"] <= 10:  # Limit to 10 per stage
+                lead_stages[stage]["items"].append({
+                    "id": lead.id,
+                    "name": lead.name,
+                    "phone": lead.phone,
+                    "email": lead.email,
+                    "source": lead.source,
+                    "last_contact": lead.last_contact.isoformat() if lead.last_contact else None
+                })
 
         loan_stages = {}
         for loan in loans:
             stage = str(loan.stage).replace("LoanStage.", "") if loan.stage else "NEW"
-            loan_stages[stage] = loan_stages.get(stage, 0) + 1
+            if stage not in loan_stages:
+                loan_stages[stage] = {"count": 0, "items": []}
+            loan_stages[stage]["count"] += 1
+            # Include loan details for AI
+            if include_details and loan_stages[stage]["count"] <= 10:
+                loan_stages[stage]["items"].append({
+                    "id": loan.id,
+                    "borrower_name": loan.borrower_name,
+                    "loan_number": loan.loan_number,
+                    "amount": loan.amount,
+                    "program": loan.program
+                })
 
         return {"total_leads": len(leads), "total_loans": len(loans), "lead_stages": lead_stages, "loan_stages": loan_stages}
 
