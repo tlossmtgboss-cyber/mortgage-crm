@@ -35668,6 +35668,8 @@ def copy_loan_to_mum_client(loan: Loan, db: Session, user_id: int) -> Optional[M
 
     Returns the created MUMClient or None if one already exists.
     """
+    from datetime import timedelta
+
     try:
         # Check if MUM client already exists for this loan
         existing = db.query(MUMClient).filter(MUMClient.loan_number == loan.loan_number).first()
@@ -35724,7 +35726,6 @@ def copy_loan_to_mum_client(loan: Loan, db: Session, user_id: int) -> Optional[M
         logger.info(f"✅ Created MUM client {mum_client.id} from funded loan {loan.loan_number} ({loan.borrower_name})")
 
         # Create post-close welcome task using Task model
-        from datetime import timedelta
         welcome_task = Task(
             title=f"Post-Close Welcome Call - {loan.borrower_name}",
             description=f"""Congratulations! {loan.borrower_name}'s loan has funded!
