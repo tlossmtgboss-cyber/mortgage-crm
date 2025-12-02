@@ -53,6 +53,10 @@ function AILandingPage() {
   const [structuredContent, setStructuredContent] = useState(null);
   const [showRightSidebar, setShowRightSidebar] = useState(false);
 
+  // Task selection state for checkboxes and bulk actions
+  const [selectedTaskIds, setSelectedTaskIds] = useState(new Set());
+  const [bulkProcessing, setBulkProcessing] = useState(false);
+
   // Reconciliation sidebar state
   const [reconciliationItems, setReconciliationItems] = useState([]);
   const [selectedReconciliationItem, setSelectedReconciliationItem] = useState(null);
@@ -2494,12 +2498,72 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
               {/* Left: Task Inbox List */}
               <div className="task-inbox-panel">
                 <div className="inbox-panel-header">
-                  <h3>Tasks</h3>
-                  <span className="task-count-pill">{structuredContent.tasks.length}</span>
+                  <div className="inbox-header-left">
+                    <input
+                      type="checkbox"
+                      className="task-checkbox select-all-checkbox"
+                      checked={structuredContent.tasks.length > 0 && structuredContent.tasks.every(t => selectedTaskIds.has(t.id))}
+                      ref={(el) => {
+                        if (el) el.indeterminate = structuredContent.tasks.some(t => selectedTaskIds.has(t.id)) && !structuredContent.tasks.every(t => selectedTaskIds.has(t.id));
+                      }}
+                      onChange={() => {
+                        const allSelected = structuredContent.tasks.every(t => selectedTaskIds.has(t.id));
+                        if (allSelected) {
+                          setSelectedTaskIds(new Set());
+                        } else {
+                          setSelectedTaskIds(new Set(structuredContent.tasks.map(t => t.id)));
+                        }
+                      }}
+                      title="Select all"
+                    />
+                    <h3>Tasks</h3>
+                    <span className="task-count-pill">{structuredContent.tasks.length}</span>
+                  </div>
+                  {selectedTaskIds.size > 0 && (
+                    <button
+                      className="btn-bulk-delete"
+                      onClick={async () => {
+                        if (selectedTaskIds.size === 0) return;
+                        setBulkProcessing(true);
+                        try {
+                          for (const taskId of selectedTaskIds) {
+                            const task = structuredContent.tasks.find(t => t.id === taskId);
+                            if (task?.backendId) {
+                              if (task.taskType === 'reconciliation') {
+                                await reconciliationAPI.delete(task.backendId);
+                              } else {
+                                await tasksAPI.delete(task.backendId);
+                              }
+                            }
+                          }
+                          // Remove from local state
+                          const newTasks = structuredContent.tasks.filter(t => !selectedTaskIds.has(t.id));
+                          if (newTasks.length > 0) {
+                            setStructuredContent({ ...structuredContent, tasks: newTasks });
+                            setSelectedTask(newTasks[0]);
+                          } else {
+                            setShowRightSidebar(false);
+                            setStructuredContent(null);
+                            setSelectedTask(null);
+                          }
+                          setSelectedTaskIds(new Set());
+                          addMessage(`🗑️ Deleted ${selectedTaskIds.size} task(s)`, 'assistant');
+                        } catch (error) {
+                          console.error('Error bulk deleting tasks:', error);
+                        } finally {
+                          setBulkProcessing(false);
+                        }
+                      }}
+                      disabled={bulkProcessing}
+                    >
+                      {bulkProcessing ? 'Deleting...' : `🗑️ Delete (${selectedTaskIds.size})`}
+                    </button>
+                  )}
                 </div>
                 <div className="inbox-task-list">
                   {structuredContent.tasks.map((task, idx) => {
                     const isSelected = selectedTask?.id === task.id || (!selectedTask && idx === 0);
+                    const isChecked = selectedTaskIds.has(task.id);
                     const getUrgencyColor = (priority) => {
                       const colors = { 'URGENT': '#ef4444', 'HIGH': '#f97316', 'MEDIUM': '#eab308', 'LOW': '#22c55e' };
                       return colors[priority?.toUpperCase()] || '#9ca3af';
@@ -2507,11 +2571,29 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
                     return (
                       <div
                         key={task.id || idx}
-                        className={`inbox-task-item ${isSelected ? 'selected' : ''}`}
+                        className={`inbox-task-item ${isSelected ? 'selected' : ''} ${isChecked ? 'checked' : ''}`}
                         onClick={() => setSelectedTask(task)}
                       >
                         <div className="inbox-task-header">
-                          <span className="task-source-icon">⚡</span>
+                          <input
+                            type="checkbox"
+                            className="task-checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              setSelectedTaskIds(prev => {
+                                const newSet = new Set(prev);
+                                if (newSet.has(task.id)) {
+                                  newSet.delete(task.id);
+                                } else {
+                                  newSet.add(task.id);
+                                }
+                                return newSet;
+                              });
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <span className="task-source-icon">{task.taskType === 'reconciliation' ? '📧' : '⚡'}</span>
                           <span className="inbox-task-title">{task.title}</span>
                         </div>
                         <div className="inbox-task-meta">
