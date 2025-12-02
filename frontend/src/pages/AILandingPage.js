@@ -2839,7 +2839,11 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
                       {selectedReconciliationItem.fields && Object.entries(selectedReconciliationItem.fields).map(([key, value]) => (
                         <div key={key} className="field-item">
                           <span className="field-key">{key}:</span>
-                          <span className="field-value">{String(value)}</span>
+                          <span className="field-value">
+                            {typeof value === 'object' && value !== null
+                              ? (value.value || JSON.stringify(value))
+                              : String(value)}
+                          </span>
                         </div>
                       ))}
                     </div>
