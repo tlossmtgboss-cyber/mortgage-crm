@@ -83,6 +83,8 @@ CACHEABLE_TOOLS = {
     "search_loans": 180,          # 3 minutes - search results
     "search_leads": 180,          # 3 minutes - search results
     "get_tasks": 60,              # 1 minute - tasks change frequently
+    "lead_status_insights": 120,  # 2 minutes - lead pipeline coaching
+    "get_leads_by_status": 60,    # 1 minute - lead lists change frequently
 }
 
 # Tools that should NEVER be cached (write operations)

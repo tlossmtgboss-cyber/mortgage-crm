@@ -44593,6 +44593,94 @@ async def clear_sample_data(
     }
 
 
+@app.post("/api/v1/data/clear-old-leads")
+async def clear_old_leads(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Clear leads created BEFORE today, keeping only today's uploads.
+    Also clears related records (tasks, activities, etc.) for deleted leads.
+    """
+    from sqlalchemy import text
+    from datetime import datetime, timedelta
+
+    # Get start of today (UTC)
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+
+    results = {}
+    errors = []
+
+    try:
+        # First, get count of leads to delete vs keep
+        old_leads_count = db.execute(
+            text("SELECT COUNT(*) FROM leads WHERE created_at < :today"),
+            {"today": today_start}
+        ).scalar()
+
+        new_leads_count = db.execute(
+            text("SELECT COUNT(*) FROM leads WHERE created_at >= :today"),
+            {"today": today_start}
+        ).scalar()
+
+        results["leads_to_delete"] = old_leads_count
+        results["leads_to_keep"] = new_leads_count
+
+        if old_leads_count == 0:
+            return {
+                "success": True,
+                "message": "No old leads to delete",
+                "details": results
+            }
+
+        # Get IDs of old leads
+        old_lead_ids_result = db.execute(
+            text("SELECT id FROM leads WHERE created_at < :today"),
+            {"today": today_start}
+        ).fetchall()
+        old_lead_ids = [row[0] for row in old_lead_ids_result]
+
+        # Delete related records for old leads
+        for lead_id in old_lead_ids:
+            try:
+                db.execute(text("DELETE FROM activities WHERE lead_id = :id"), {"id": lead_id})
+                db.execute(text("DELETE FROM tasks WHERE lead_id = :id"), {"id": lead_id})
+                db.execute(text("DELETE FROM ai_tasks WHERE lead_id = :id"), {"id": lead_id})
+                db.execute(text("DELETE FROM documents WHERE lead_id = :id"), {"id": lead_id})
+                db.execute(text("DELETE FROM notes WHERE lead_id = :id"), {"id": lead_id})
+                db.execute(text("DELETE FROM communications WHERE lead_id = :id"), {"id": lead_id})
+                db.execute(text("DELETE FROM workflow_executions WHERE lead_id = :id"), {"id": lead_id})
+                db.execute(text("DELETE FROM lead_profiles WHERE lead_id = :id"), {"id": lead_id})
+                db.execute(text("DELETE FROM circle_contacts WHERE lead_id = :id"), {"id": lead_id})
+                db.execute(text("DELETE FROM notifications WHERE lead_id = :id"), {"id": lead_id})
+                db.execute(text("UPDATE loans SET lead_id = NULL WHERE lead_id = :id"), {"id": lead_id})
+            except Exception as e:
+                errors.append(f"Lead {lead_id}: {str(e)[:50]}")
+
+        # Delete old leads
+        delete_result = db.execute(
+            text("DELETE FROM leads WHERE created_at < :today"),
+            {"today": today_start}
+        )
+        results["leads_deleted"] = delete_result.rowcount
+
+        db.commit()
+
+        logger.info(f"Cleared {results['leads_deleted']} old leads, kept {new_leads_count} new leads")
+
+        return {
+            "success": True,
+            "message": f"Deleted {results['leads_deleted']} old leads, kept {new_leads_count} leads from today",
+            "details": results,
+            "errors": errors if errors else None
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error clearing old leads: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/v1/admin/seed-demo-people")
 async def seed_demo_people(
     db: Session = Depends(get_db),

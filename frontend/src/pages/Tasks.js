@@ -1435,9 +1435,18 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
                   <span className="detail-value">{taskOwner}</span>
                 </div>
                 <div className="detail-info-item">
-                  <span className="detail-label">Date Created</span>
+                  <span className="detail-label">{selectedTask.source === 'Workflow' ? 'Due Date' : 'Date Created'}</span>
                   <span className="detail-value">
-                    {selectedTask.date_created ? new Date(selectedTask.date_created).toLocaleString() : 'N/A'}
+                    {selectedTask.due_date
+                      ? new Date(selectedTask.due_date).toLocaleDateString()
+                      : selectedTask.date_created
+                        ? new Date(selectedTask.date_created).toLocaleString()
+                        : 'N/A'}
+                    {selectedTask.days_until_due !== undefined && (
+                      <span className={`due-badge ${selectedTask.days_until_due === 0 ? 'due-today' : selectedTask.days_until_due === 1 ? 'due-tomorrow' : 'due-upcoming'}`}>
+                        {selectedTask.days_until_due === 0 ? 'Today' : selectedTask.days_until_due === 1 ? 'Tomorrow' : `In ${selectedTask.days_until_due} days`}
+                      </span>
+                    )}
                   </span>
                 </div>
                 <div className="detail-info-item detail-comm-method-item">
@@ -1500,43 +1509,71 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
                       <span className="training-icon">🎓</span>
                       <span className="training-title">Train AI (Optional)</span>
                     </div>
+
+                    {/* Inline AI Response (shown after sending instruction) */}
+                    {aiAcknowledgment && (
+                      <div className="ai-conversation-response">
+                        <div className="ai-response-header">
+                          <span className="ai-response-icon">🤖</span>
+                          <span className="ai-response-label">AI Response</span>
+                          <button
+                            className="btn-clear-response"
+                            onClick={() => setAiAcknowledgment(null)}
+                          >
+                            ✕
+                          </button>
+                        </div>
+                        <div
+                          className="ai-response-content"
+                          dangerouslySetInnerHTML={{
+                            __html: aiAcknowledgment
+                              .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                              .replace(/\n/g, '<br />')
+                          }}
+                        />
+                      </div>
+                    )}
+
                     <div className="ai-training-input-container">
                       <textarea
                         className="ai-training-input"
-                        placeholder="Type instructions to teach AI how to handle similar tasks in the future... (e.g., 'Always mention our competitive rates when following up on pre-approvals')"
+                        placeholder={aiAcknowledgment
+                          ? "Continue the conversation or provide additional instructions..."
+                          : "Type instructions to teach AI how to handle similar tasks in the future... (e.g., 'Always mention our competitive rates when following up on pre-approvals')"
+                        }
                         value={aiInstructions}
                         onChange={(e) => setAiInstructions(e.target.value)}
                         rows={3}
+                        autoComplete="off"
                       />
-                      {aiInstructions.trim() && (
-                        <button
-                          className="btn-send-to-ai"
-                          disabled={sendingInstruction}
-                          onClick={async () => {
-                            setSendingInstruction(true);
-                            try {
-                              const response = await aiAPI.submitTrainingInstruction(
-                                aiInstructions,
-                                {
-                                  task_type: selectedTask.source || 'general',
-                                  borrower_name: selectedTask.borrower || '',
-                                  task_title: selectedTask.title || '',
-                                  stage: selectedTask.stage || ''
-                                }
-                              );
-                              setAiAcknowledgment(response.acknowledgment);
-                              setAiInstructions('');
-                            } catch (error) {
-                              console.error('Failed to send instruction:', error);
-                              setAiAcknowledgment('Failed to send instruction. Please try again.');
-                            } finally {
-                              setSendingInstruction(false);
-                            }
-                          }}
-                        >
-                          {sendingInstruction ? 'Sending...' : 'Send to AI'}
-                        </button>
-                      )}
+                      <button
+                        className="btn-send-to-ai"
+                        disabled={sendingInstruction || !aiInstructions.trim()}
+                        onClick={async () => {
+                          if (!aiInstructions.trim()) return;
+                          setSendingInstruction(true);
+                          try {
+                            const response = await aiAPI.submitTrainingInstruction(
+                              aiInstructions,
+                              {
+                                task_type: selectedTask.source || 'general',
+                                borrower_name: selectedTask.borrower || '',
+                                task_title: selectedTask.title || '',
+                                stage: selectedTask.stage || ''
+                              }
+                            );
+                            setAiAcknowledgment(response.acknowledgment);
+                            setAiInstructions('');
+                          } catch (error) {
+                            console.error('Failed to send instruction:', error);
+                            setAiAcknowledgment('Failed to send instruction. Please try again.');
+                          } finally {
+                            setSendingInstruction(false);
+                          }
+                        }}
+                      >
+                        {sendingInstruction ? 'Sending...' : aiAcknowledgment ? 'Continue' : 'Send to AI'}
+                      </button>
                     </div>
                   </div>
 

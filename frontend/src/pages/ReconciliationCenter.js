@@ -760,6 +760,40 @@ function ReconciliationCenter() {
     }
   };
 
+  const handleDelete = async (itemId) => {
+    if (!window.confirm('Are you sure you want to permanently delete this item? This cannot be undone.')) {
+      return;
+    }
+
+    try {
+      setProcessingAction(true);
+      const response = await fetch(`${API_BASE_URL}/api/v1/reconciliation/items/${itemId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        // Remove from all lists
+        setNewItems(prev => prev.filter(item => item.id !== itemId));
+        setPendingItems(prev => prev.filter(item => item.id !== itemId));
+        setPendingReviewItems(prev => prev.filter(item => item.id !== itemId));
+        setCompletedItems(prev => prev.filter(item => item.id !== itemId));
+        setSelectedItem(null);
+        setEditedFields({});
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        alert(`Failed to delete item: ${errorData.detail || response.statusText}`);
+      }
+    } catch (error) {
+      console.error('Error deleting item:', error);
+      alert(`Error deleting item: ${error.message}`);
+    } finally {
+      setProcessingAction(false);
+    }
+  };
+
   const handleFieldEdit = (fieldName, newValue) => {
     setEditedFields(prev => ({
       ...prev,
@@ -1867,6 +1901,13 @@ function ReconciliationCenter() {
                       disabled={processingAction}
                     >
                       Reject
+                    </button>
+                    <button
+                      className="btn-delete-recon"
+                      onClick={() => handleDelete(selectedItem.id)}
+                      disabled={processingAction}
+                    >
+                      🗑️ Delete
                     </button>
                   </div>
                 </div>
@@ -3010,6 +3051,13 @@ function ReconciliationCenter() {
                       disabled={processingAction}
                     >
                       REJECT
+                    </button>
+                    <button
+                      className="btn-delete-recon"
+                      onClick={() => handleDelete(selectedItem.id)}
+                      disabled={processingAction}
+                    >
+                      🗑️ DELETE
                     </button>
                   </div>
                 </div>
