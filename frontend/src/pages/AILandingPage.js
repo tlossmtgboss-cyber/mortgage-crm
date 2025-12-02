@@ -62,6 +62,9 @@ function AILandingPage() {
   const [selectedReconciliationItem, setSelectedReconciliationItem] = useState(null);
   const [showReconciliationSidebar, setShowReconciliationSidebar] = useState(false);
   const [reconciliationLoading, setReconciliationLoading] = useState(false);
+  const [reconciliationTab, setReconciliationTab] = useState('new'); // 'new', 'auto', 'pending', 'completed'
+  const [reconciliationCounts, setReconciliationCounts] = useState({ new: 0, auto: 0, pending: 0, completed: 0 });
+  const [autoProcessEnabled, setAutoProcessEnabled] = useState(false);
 
   // Email compose state
   const [emailMode, setEmailMode] = useState(false);
@@ -528,14 +531,26 @@ function AILandingPage() {
   };
 
   // Fetch reconciliation pending items
-  const fetchReconciliationItems = async () => {
+  const fetchReconciliationItems = async (status = null) => {
     setReconciliationLoading(true);
     try {
-      const response = await reconciliationAPI.getPending();
-      setReconciliationItems(response.items || []);
-      if (response.items && response.items.length > 0) {
-        setSelectedReconciliationItem(response.items[0]);
+      // Get items for the current tab
+      const tabStatus = status || reconciliationTab;
+      const response = await reconciliationAPI.getPending(tabStatus === 'new' ? 'pending' : tabStatus);
+      const items = response.items || [];
+      setReconciliationItems(items);
+      if (items.length > 0) {
+        setSelectedReconciliationItem(items[0]);
+      } else {
+        setSelectedReconciliationItem(null);
       }
+
+      // Update counts - we'll estimate from what we have
+      // In production, you'd have a separate counts endpoint
+      setReconciliationCounts(prev => ({
+        ...prev,
+        [tabStatus]: items.length
+      }));
     } catch (error) {
       console.error('Error fetching reconciliation items:', error);
       setReconciliationItems([]);
@@ -2837,11 +2852,11 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
         </div>
       )}
 
-      {/* Reconciliation Sidebar */}
+      {/* Reconciliation Sidebar - Email Intelligence Style */}
       {showReconciliationSidebar && (
-        <div className="task-sidebar reconciliation-sidebar">
-          <div className="sidebar-header">
-            <h2>📧 Email Reconciliation</h2>
+        <div className="email-intelligence-sidebar">
+          <div className="ei-sidebar-header">
+            <h2>Email Reconciliation</h2>
             <button
               className="close-sidebar-btn"
               onClick={() => setShowReconciliationSidebar(false)}
@@ -2850,120 +2865,261 @@ Again, this is Tim at (555) 123-4567. I look forward to speaking with you soon. 
             </button>
           </div>
 
-          {reconciliationLoading ? (
-            <div className="sidebar-loading">
-              <div className="loading-spinner"></div>
-              <p>Loading pending items...</p>
-            </div>
-          ) : reconciliationItems.length === 0 ? (
-            <div className="sidebar-empty">
-              <p>✅ No pending items to reconcile</p>
-              <button
-                className="refresh-btn"
-                onClick={fetchReconciliationItems}
-              >
-                🔄 Refresh
-              </button>
-            </div>
-          ) : (
-            <div className="reconciliation-content">
-              {/* Item List */}
-              <div className="reconciliation-list">
-                <div className="list-header">
-                  <span>{reconciliationItems.length} pending items</span>
-                  <button
-                    className="refresh-btn-small"
-                    onClick={fetchReconciliationItems}
-                  >
-                    🔄
+          {/* Status Tabs */}
+          <div className="ei-tabs">
+            <button
+              className={`ei-tab ${reconciliationTab === 'new' ? 'active' : ''}`}
+              onClick={() => { setReconciliationTab('new'); fetchReconciliationItems('new'); }}
+            >
+              New ({reconciliationCounts.new || reconciliationItems.length})
+            </button>
+            <button
+              className={`ei-tab ${reconciliationTab === 'auto' ? 'active' : ''}`}
+              onClick={() => { setReconciliationTab('auto'); fetchReconciliationItems('auto'); }}
+            >
+              Auto-Processing ({reconciliationCounts.auto || 0})
+            </button>
+            <button
+              className={`ei-tab ${reconciliationTab === 'pending' ? 'active' : ''}`}
+              onClick={() => { setReconciliationTab('pending'); fetchReconciliationItems('pending'); }}
+            >
+              Pending Review ({reconciliationCounts.pending || 0})
+            </button>
+            <button
+              className={`ei-tab ${reconciliationTab === 'completed' ? 'active' : ''}`}
+              onClick={() => { setReconciliationTab('completed'); fetchReconciliationItems('completed'); }}
+            >
+              Completed ({reconciliationCounts.completed || 0})
+            </button>
+          </div>
+
+          <div className="ei-main-content">
+            {/* Left Column - Item List */}
+            <div className="ei-item-list">
+              {reconciliationLoading ? (
+                <div className="ei-loading">
+                  <div className="loading-spinner"></div>
+                  <p>Loading items...</p>
+                </div>
+              ) : reconciliationItems.length === 0 ? (
+                <div className="ei-empty">
+                  <p>No items in this category</p>
+                  <button className="ei-refresh-btn" onClick={() => fetchReconciliationItems()}>
+                    Refresh
                   </button>
                 </div>
-                {reconciliationItems.map((item) => {
-                  // Extract name from fields (handles nested {value, confidence} structure)
+              ) : (
+                reconciliationItems.map((item) => {
+                  // Extract loan number and name from fields
+                  const loanNumber = item.fields?.loan_number?.value || item.fields?.loan_number || '';
                   const firstName = item.fields?.first_name?.value || item.fields?.first_name || '';
                   const lastName = item.fields?.last_name?.value || item.fields?.last_name || '';
-                  const displayName = item.borrower_name || item.match_entity_name ||
-                    (firstName || lastName ? `${firstName} ${lastName}`.trim() : 'Unknown');
+                  const displayName = firstName || lastName
+                    ? `${firstName} ${lastName}`.trim()
+                    : (item.match_entity_name || item.borrower_name || '');
+                  // Use email_subject (API field name) or fallback to nested email.subject
+                  const subject = item.email_subject || item.email?.subject || item.subject || 'Loan Update';
+
+                  // Build display title like "CMG-0154304 [Stewart-RCA00000008590]: Inspection Scheduled"
+                  const displayTitle = loanNumber
+                    ? `${loanNumber}${displayName ? ` [${displayName}]` : ''}: ${subject}`
+                    : (displayName ? `${displayName}: ${subject}` : subject);
+
+                  const isSelected = selectedReconciliationItem?.id === item.id;
+                  const matchType = item.match_entity_type?.toUpperCase() || 'ACTIVE_LOAN';
+                  // Use email_from (API field name) or fallback to nested email.sender
+                  const fromEmail = item.email_from || item.email?.sender || item.from_email || '';
+                  const receivedDate = item.email_received_at || item.email?.received_at || item.created_at;
 
                   return (
                     <div
                       key={item.id}
-                      className={`reconciliation-item ${selectedReconciliationItem?.id === item.id ? 'selected' : ''}`}
+                      className={`ei-item ${isSelected ? 'selected' : ''}`}
                       onClick={() => setSelectedReconciliationItem(item)}
                     >
-                      <div className="item-name">{displayName}</div>
-                      <div className="item-meta">
-                        <span className="item-type">{item.match_entity_type || 'New'}</span>
-                        {item.match_entity_id && (
-                          <span className="item-match">→ ID: {item.match_entity_id}</span>
-                        )}
+                      <div className="ei-item-header">
+                        <span className="ei-item-type">{matchType}</span>
+                        <span className="ei-item-badge new">NEW</span>
                       </div>
-                      <div className="item-source">{item.source || 'Email'}</div>
+                      <div className="ei-item-title">{displayTitle}</div>
+                      <div className="ei-item-from">
+                        <span className="ei-from-label">From:</span> {fromEmail}
+                      </div>
+                      {receivedDate && (
+                        <div className="ei-item-date">
+                          {new Date(receivedDate).toLocaleDateString()}
+                        </div>
+                      )}
+                      <div className="ei-item-warning">
+                        This message originated from outside CML. Please use caution when opening links and attachments.
+                      </div>
                     </div>
                   );
-                })}
-              </div>
+                })
+              )}
+            </div>
 
-              {/* Item Detail */}
-              {selectedReconciliationItem && (
-                <div className="reconciliation-detail">
-                  <h3>{selectedReconciliationItem.borrower_name || 'Unknown Entity'}</h3>
+            {/* Right Column - Detail Panel */}
+            <div className="ei-detail-panel">
+              {selectedReconciliationItem ? (() => {
+                const item = selectedReconciliationItem;
+                const firstName = item.fields?.first_name?.value || item.fields?.first_name || '';
+                const lastName = item.fields?.last_name?.value || item.fields?.last_name || '';
+                const displayName = firstName || lastName
+                  ? `${firstName} ${lastName}`.trim()
+                  : (item.match_entity_name || item.borrower_name || 'Unknown');
+                // Use correct API field names
+                const subject = item.email_subject || item.email?.subject || item.subject || 'Loan Update';
+                const fromEmail = item.email_from || item.email?.sender || item.from_email || '';
+                const receivedDate = item.email_received_at || item.email?.received_at || item.created_at;
+                const emailBody = item.email_body || item.email?.body || '';
 
-                  <div className="detail-section">
-                    <label>Match Type</label>
-                    <span className={`match-badge ${selectedReconciliationItem.match_entity_type ? 'matched' : 'new'}`}>
-                      {selectedReconciliationItem.match_entity_type || 'New Record'}
-                    </span>
-                  </div>
+                // Organize fields into a grid
+                const fieldPairs = item.fields ? Object.entries(item.fields).map(([key, val]) => ({
+                  label: key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                  value: typeof val === 'object' && val !== null ? (val.value || '') : String(val || ''),
+                  confidence: typeof val === 'object' && val?.confidence ? Math.round(val.confidence * 100) : 100
+                })) : [];
 
-                  {selectedReconciliationItem.match_entity_id && (
-                    <div className="detail-section">
-                      <label>Matched To</label>
-                      <span>{selectedReconciliationItem.match_entity_type} #{selectedReconciliationItem.match_entity_id}</span>
+                return (
+                  <>
+                    <div className="ei-detail-header">
+                      <span className="ei-new-message">NEW MESSAGE</span>
+                      <h3 className="ei-detail-title">{subject}</h3>
                     </div>
-                  )}
 
-                  <div className="detail-section">
-                    <label>Extracted Fields</label>
-                    <div className="fields-list">
-                      {selectedReconciliationItem.fields && Object.entries(selectedReconciliationItem.fields).map(([key, value]) => (
-                        <div key={key} className="field-item">
-                          <span className="field-key">{key}:</span>
-                          <span className="field-value">
-                            {typeof value === 'object' && value !== null
-                              ? (value.value || JSON.stringify(value))
-                              : String(value)}
-                          </span>
+                    <div className="ei-detail-meta">
+                      <div className="ei-meta-row">
+                        <span className="ei-meta-label">FROM</span>
+                        <span className="ei-meta-value">{fromEmail}</span>
+                      </div>
+                      <div className="ei-meta-row">
+                        <span className="ei-meta-label">SUBJECT</span>
+                        <span className="ei-meta-value">{subject}</span>
+                      </div>
+                      <div className="ei-meta-row">
+                        <span className="ei-meta-label">RECEIVED</span>
+                        <span className="ei-meta-value">
+                          {receivedDate ? new Date(receivedDate).toLocaleString() : '-'}
+                        </span>
+                      </div>
+                      <div className="ei-meta-row">
+                        <span className="ei-meta-label">STATUS</span>
+                        <span className="ei-meta-value">Awaiting Processing</span>
+                      </div>
+                    </div>
+
+                    {/* Where should this data go? */}
+                    <div className="ei-match-section">
+                      <h4>Where should this data go?</h4>
+                      <div className="ei-match-options">
+                        <div className={`ei-match-option ${item.match_entity_type === 'lead' ? 'selected' : ''}`}>
+                          <span className="ei-match-icon">👤</span>
+                          <span className="ei-match-label">Lead</span>
+                          <span className="ei-match-status">{item.match_entity_type === 'lead' ? `#${item.match_entity_id}` : 'No match found'}</span>
                         </div>
-                      ))}
+                        <div className={`ei-match-option ${item.match_entity_type === 'loan' ? 'selected' : ''}`}>
+                          <span className="ei-match-icon">📋</span>
+                          <span className="ei-match-label">Active Loan</span>
+                          <span className="ei-match-status">{item.match_entity_type === 'loan' ? `#${item.match_entity_id}` : 'No match found'}</span>
+                        </div>
+                        <div className="ei-match-option">
+                          <span className="ei-match-icon">📁</span>
+                          <span className="ei-match-label">Portfolio</span>
+                          <span className="ei-match-status">No match found</span>
+                        </div>
+                        <div className="ei-match-option create-new">
+                          <span className="ei-match-icon">➕</span>
+                          <span className="ei-match-label">Create New Loan</span>
+                          <span className="ei-match-status">{item.fields?.loan_number?.value || ''}</span>
+                        </div>
+                      </div>
                     </div>
-                  </div>
 
-                  {selectedReconciliationItem.ai_suggested_status && (
-                    <div className="detail-section">
-                      <label>AI Suggested Status</label>
-                      <span className="status-badge">{selectedReconciliationItem.ai_suggested_status}</span>
+                    {/* Extracted Fields */}
+                    <div className="ei-fields-section">
+                      <div className="ei-fields-header">
+                        <h4>Extracted Fields</h4>
+                        <button className="ei-add-field-btn">+ Add Field</button>
+                      </div>
+                      <div className="ei-fields-grid">
+                        {fieldPairs.map((field, idx) => (
+                          <div key={idx} className="ei-field-item">
+                            <div className="ei-field-header">
+                              <span className="ei-field-label">{field.label}</span>
+                              <span className={`ei-field-confidence ${field.confidence >= 90 ? 'high' : field.confidence >= 70 ? 'medium' : 'low'}`}>
+                                {field.confidence}%
+                              </span>
+                            </div>
+                            <div className="ei-field-value-row">
+                              <input
+                                type="text"
+                                className="ei-field-input"
+                                value={field.value}
+                                readOnly
+                              />
+                              <button className="ei-field-delete">Delete</button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  )}
 
-                  <div className="reconciliation-actions">
-                    <button
-                      className="action-btn approve"
-                      onClick={() => handleReconciliationApprove(selectedReconciliationItem, selectedReconciliationItem.ai_suggested_status)}
-                    >
-                      ✅ Approve & Apply
-                    </button>
-                    <button
-                      className="action-btn reject"
-                      onClick={() => handleReconciliationReject(selectedReconciliationItem)}
-                    >
-                      ❌ Reject
-                    </button>
-                  </div>
+                    {/* Email Content */}
+                    {emailBody && (
+                      <div className="ei-email-content">
+                        <h4>EMAIL CONTENT</h4>
+                        <div className="ei-email-body">
+                          {emailBody}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Auto-process option */}
+                    <div className="ei-auto-process">
+                      <label className="ei-checkbox-label">
+                        <input
+                          type="checkbox"
+                          checked={autoProcessEnabled}
+                          onChange={(e) => setAutoProcessEnabled(e.target.checked)}
+                        />
+                        Let AI auto-process similar messages
+                      </label>
+                      <p className="ei-auto-hint">
+                        When approved, AI will automatically handle similar "Loan Update" messages in the future without requiring your review.
+                      </p>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="ei-actions">
+                      <button
+                        className="ei-action-btn process"
+                        onClick={() => handleReconciliationApprove(item, item.ai_suggested_status)}
+                      >
+                        Process & Apply
+                      </button>
+                      <button
+                        className="ei-action-btn reject"
+                        onClick={() => handleReconciliationReject(item)}
+                      >
+                        Reject
+                      </button>
+                      <button
+                        className="ei-action-btn delete"
+                        onClick={() => handleReconciliationReject(item, 'Deleted by user')}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </>
+                );
+              })() : (
+                <div className="ei-no-selection">
+                  <p>Select an item from the list to view details</p>
                 </div>
               )}
             </div>
-          )}
+          </div>
         </div>
       )}
 

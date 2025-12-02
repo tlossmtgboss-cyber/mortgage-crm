@@ -1434,9 +1434,10 @@ export const emailDropAPI = {
 
 // Reconciliation API (AI Engine tasks)
 export const reconciliationAPI = {
-  // Get pending reconciliation items
-  getPending: async () => {
-    const response = await api.get('/api/v1/reconciliation/pending');
+  // Get pending reconciliation items (optionally filter by status)
+  getPending: async (status = null) => {
+    const params = status ? { status } : {};
+    const response = await api.get('/api/v1/reconciliation/pending', { params });
     return response.data;
   },
 
