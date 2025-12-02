@@ -973,6 +973,65 @@
   color: #1f2937;
 }
 
+.inbox-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Bulk Delete Button */
+.btn-bulk-delete {
+  padding: 8px 14px;
+  background: #dc2626;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-bulk-delete:hover {
+  background: #b91c1c;
+}
+
+.btn-bulk-delete:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+/* Task Checkboxes */
+.task-checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #218D8D;
+  flex-shrink: 0;
+}
+
+.task-checkbox:focus {
+  outline: 2px solid #218D8D;
+  outline-offset: 2px;
+}
+
+.select-all-checkbox {
+  width: 18px;
+  height: 18px;
+}
+
+/* Checked task item styling */
+.inbox-item.checked {
+  background: #f0fdf4;
+}
+
+.inbox-item.checked.selected {
+  background: #dcfce7;
+}
+
 .inbox-list {
   flex: 1;
   overflow-y: auto;

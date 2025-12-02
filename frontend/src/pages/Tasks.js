@@ -613,6 +613,8 @@ function Tasks() {
   const [teamMembers, setTeamMembers] = useState([]);
   const [aiAcknowledgment, setAiAcknowledgment] = useState(null);
   const [sendingInstruction, setSendingInstruction] = useState(false);
+  const [selectedTaskIds, setSelectedTaskIds] = useState(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   // Save completed tasks to localStorage whenever it changes
   useEffect(() => {
@@ -858,6 +860,94 @@ function Tasks() {
     } catch (error) {
       console.error('Error deleting task:', error);
       alert('Failed to delete task. Please try again.');
+    }
+  };
+
+  // Bulk delete selected tasks
+  const handleBulkDelete = async () => {
+    if (selectedTaskIds.size === 0) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ${selectedTaskIds.size} selected tasks? This cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    setBulkDeleting(true);
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const taskId of selectedTaskIds) {
+      try {
+        const mockIdPatterns = ['priority-', 'issue-', 'ai-pending-', 'ai-waiting-', 'mum-', 'lead-', 'message-'];
+        const isMockTask = typeof taskId === 'string' && mockIdPatterns.some(pattern => taskId.startsWith(pattern));
+
+        if (!isMockTask && typeof taskId === 'string') {
+          if (taskId.startsWith('reconciliation-')) {
+            const numericId = taskId.replace('reconciliation-', '');
+            await reconciliationAPI.delete(numericId);
+          } else if (taskId.startsWith('task-')) {
+            const numericId = taskId.replace('task-', '');
+            await tasksAPI.delete(numericId);
+          } else if (taskId.startsWith('workflow-')) {
+            // Workflow tasks - just mark as completed in UI
+            console.log('Workflow task dismissed:', taskId);
+          } else {
+            await tasksAPI.delete(taskId);
+          }
+        } else if (!isMockTask && typeof taskId === 'number') {
+          await tasksAPI.delete(taskId);
+        }
+
+        // Mark as completed locally
+        setCompletedTasks(prev => new Set([...prev, taskId]));
+        successCount++;
+      } catch (error) {
+        console.error(`Failed to delete task ${taskId}:`, error);
+        failCount++;
+      }
+    }
+
+    // Clear selection
+    setSelectedTaskIds(new Set());
+    setSelectedTask(null);
+    setBulkDeleting(false);
+
+    if (failCount > 0) {
+      alert(`Deleted ${successCount} tasks. ${failCount} failed.`);
+    }
+  };
+
+  // Toggle task selection
+  const toggleTaskSelection = (taskId, e) => {
+    e.stopPropagation();
+    setSelectedTaskIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(taskId)) {
+        newSet.delete(taskId);
+      } else {
+        newSet.add(taskId);
+      }
+      return newSet;
+    });
+  };
+
+  // Select all visible tasks
+  const handleSelectAll = (tasks) => {
+    const allSelected = tasks.every(t => selectedTaskIds.has(t.id));
+    if (allSelected) {
+      // Deselect all
+      setSelectedTaskIds(prev => {
+        const newSet = new Set(prev);
+        tasks.forEach(t => newSet.delete(t.id));
+        return newSet;
+      });
+    } else {
+      // Select all
+      setSelectedTaskIds(prev => {
+        const newSet = new Set(prev);
+        tasks.forEach(t => newSet.add(t.id));
+        return newSet;
+      });
     }
   };
 
@@ -1300,22 +1390,54 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
   const tabTasks = getTasksForTab();
 
   // Reusable Email Layout Component
-  const TaskEmailLayout = ({ tasks, emptyMessage = "No tasks" }) => (
+  const TaskEmailLayout = ({ tasks, emptyMessage = "No tasks" }) => {
+    const allSelected = tasks.length > 0 && tasks.every(t => selectedTaskIds.has(t.id));
+    const someSelected = tasks.some(t => selectedTaskIds.has(t.id));
+
+    return (
     <div className="email-layout">
       {/* Task List (Left Side) */}
       <div className="task-inbox">
         <div className="inbox-header">
-          <h3>Tasks</h3>
-          <span className="task-count">{tasks.length}</span>
+          <div className="inbox-header-left">
+            <input
+              type="checkbox"
+              className="task-checkbox select-all-checkbox"
+              checked={allSelected}
+              ref={(el) => {
+                if (el) el.indeterminate = someSelected && !allSelected;
+              }}
+              onChange={() => handleSelectAll(tasks)}
+              title="Select all"
+            />
+            <h3>Tasks</h3>
+            <span className="task-count">{tasks.length}</span>
+          </div>
+          {selectedTaskIds.size > 0 && (
+            <button
+              className="btn-bulk-delete"
+              onClick={handleBulkDelete}
+              disabled={bulkDeleting}
+            >
+              {bulkDeleting ? 'Deleting...' : `🗑️ Delete (${selectedTaskIds.size})`}
+            </button>
+          )}
         </div>
         <div className="inbox-list">
           {tasks.map((task) => (
             <div
               key={task.id}
-              className={`inbox-item ${selectedTask && selectedTask.id === task.id ? 'selected' : ''}`}
+              className={`inbox-item ${selectedTask && selectedTask.id === task.id ? 'selected' : ''} ${selectedTaskIds.has(task.id) ? 'checked' : ''}`}
               onClick={() => setSelectedTask(task)}
             >
               <div className="inbox-item-header">
+                <input
+                  type="checkbox"
+                  className="task-checkbox"
+                  checked={selectedTaskIds.has(task.id)}
+                  onChange={(e) => toggleTaskSelection(task.id, e)}
+                  onClick={(e) => e.stopPropagation()}
+                />
                 <span className="source-icon">{task.sourceIcon}</span>
                 <span className="task-title-compact">{task.title}</span>
               </div>
@@ -1714,7 +1836,8 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
         )}
       </div>
     </div>
-  );
+    );
+  };
 
   return (
     <div className="tasks-page">
