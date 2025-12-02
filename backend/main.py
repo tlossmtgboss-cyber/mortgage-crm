@@ -19000,8 +19000,8 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
                         logger.info(f"Phone match found: Lead {lead.id} - {lead.name}")
 
     # Try to match by borrower name - NOW SEARCH ALL LEADS GLOBALLY
+    borrower_last_name = get_last_name(borrower_name) if borrower_name else ""
     if borrower_name:
-        borrower_last_name = get_last_name(borrower_name)
         logger.info(f"Attempting to match borrower name: '{borrower_name}' (last name: '{borrower_last_name}')")
 
         # Search ALL leads by name (not just user-owned)
@@ -19029,13 +19029,16 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
                         })
                         logger.info(f"Name match found: Lead {lead.id} - {lead.name} (conf: {final_conf:.2f})")
 
-        # ========== LOAN MATCHING ==========
-        # Try loans - check borrower_name AND coborrower_name
+    # ========== LOAN MATCHING (Name, Email, Phone) ==========
+    # Run loan matching if we have ANY of: borrower_name, extracted_email, or extracted_phone
+    if borrower_name or extracted_email or extracted_phone:
+        # Try loans - check borrower_name, coborrower_name, borrower_email, borrower_phone
         # Use raw SQL to avoid enum deserialization issues with the stage column
         try:
             loan_results = db.execute(
                 text("""
-                    SELECT id, borrower_name, coborrower_name, loan_officer_id
+                    SELECT id, borrower_name, coborrower_name, loan_officer_id,
+                           borrower_email, borrower_phone, co_borrower_email, loan_number
                     FROM loans
                     WHERE loan_officer_id = :user_id
                 """),
@@ -19047,32 +19050,103 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
             loan_results = []
 
         for loan_row in loan_results:
-            loan_id, loan_borrower_name, loan_coborrower_name, loan_officer_id = loan_row
-            # Match against primary borrower
-            if loan_borrower_name:
+            loan_id, loan_borrower_name, loan_coborrower_name, loan_officer_id, loan_borrower_email, loan_borrower_phone, loan_coborrower_email, loan_loan_number = loan_row
+
+            # ===== EMAIL MATCHING (highest confidence for loans) =====
+            if extracted_email and loan_borrower_email:
+                if normalize_email(extracted_email) == normalize_email(loan_borrower_email):
+                    existing = next((c for c in match_results["candidates"]
+                                   if c["type"] == "loan" and c["id"] == loan_id), None)
+                    if existing:
+                        existing["confidence"] = min(0.99, existing["confidence"] + 0.15)
+                        existing["match_type"] += "+email"
+                    else:
+                        match_results["candidates"].append({
+                            "type": "loan",
+                            "id": loan_id,
+                            "name": loan_borrower_name,
+                            "loan_number": loan_loan_number,
+                            "confidence": 0.96,  # Very high - email is unique
+                            "match_type": "borrower_email"
+                        })
+                        logger.info(f"Loan email match: {loan_id} - {loan_borrower_name} (email: {loan_borrower_email})")
+
+            # Check co-borrower email too
+            if extracted_email and loan_coborrower_email:
+                if normalize_email(extracted_email) == normalize_email(loan_coborrower_email):
+                    existing = next((c for c in match_results["candidates"]
+                                   if c["type"] == "loan" and c["id"] == loan_id), None)
+                    if existing:
+                        existing["confidence"] = min(0.99, existing["confidence"] + 0.12)
+                        existing["match_type"] += "+coborrower_email"
+                    else:
+                        match_results["candidates"].append({
+                            "type": "loan",
+                            "id": loan_id,
+                            "name": f"{loan_borrower_name} (co-borrower email match)",
+                            "loan_number": loan_loan_number,
+                            "confidence": 0.92,
+                            "match_type": "coborrower_email"
+                        })
+
+            # ===== PHONE MATCHING =====
+            if extracted_phone and loan_borrower_phone:
+                if normalize_phone(extracted_phone) == normalize_phone(loan_borrower_phone):
+                    existing = next((c for c in match_results["candidates"]
+                                   if c["type"] == "loan" and c["id"] == loan_id), None)
+                    if existing:
+                        existing["confidence"] = min(0.99, existing["confidence"] + 0.12)
+                        existing["match_type"] += "+phone"
+                    else:
+                        match_results["candidates"].append({
+                            "type": "loan",
+                            "id": loan_id,
+                            "name": loan_borrower_name,
+                            "loan_number": loan_loan_number,
+                            "confidence": 0.93,
+                            "match_type": "borrower_phone"
+                        })
+                        logger.info(f"Loan phone match: {loan_id} - {loan_borrower_name}")
+
+            # ===== NAME MATCHING =====
+            # Match against primary borrower (only if we have a borrower_name to match)
+            if borrower_name and loan_borrower_name:
                 is_match, conf = names_match(borrower_name, loan_borrower_name)
                 if is_match:
-                    match_results["candidates"].append({
-                        "type": "loan",
-                        "id": loan_id,
-                        "name": loan_borrower_name,
-                        "confidence": conf,
-                        "match_type": "borrower_name"
-                    })
-                    logger.info(f"Loan borrower match: {loan_id} - {loan_borrower_name} (conf: {conf:.2f})")
+                    existing = next((c for c in match_results["candidates"]
+                                   if c["type"] == "loan" and c["id"] == loan_id), None)
+                    if existing:
+                        existing["confidence"] = min(0.99, existing["confidence"] + 0.10)
+                        existing["match_type"] += "+name"
+                    else:
+                        match_results["candidates"].append({
+                            "type": "loan",
+                            "id": loan_id,
+                            "name": loan_borrower_name,
+                            "loan_number": loan_loan_number,
+                            "confidence": conf,
+                            "match_type": "borrower_name"
+                        })
+                        logger.info(f"Loan borrower match: {loan_id} - {loan_borrower_name} (conf: {conf:.2f})")
 
-            # Match against co-borrower (spouse)
-            if loan_coborrower_name:
+            # Match against co-borrower (spouse) - only if we have a borrower_name to match
+            if borrower_name and loan_coborrower_name:
                 is_match, conf = names_match(borrower_name, loan_coborrower_name)
                 if is_match:
-                    # Co-borrower match - still high confidence
-                    match_results["candidates"].append({
-                        "type": "loan",
-                        "id": loan_id,
-                        "name": f"{loan_borrower_name} (co-borrower: {loan_coborrower_name})",
-                        "confidence": conf * 0.95,  # Slightly lower for co-borrower
-                        "match_type": "coborrower_name"
-                    })
+                    existing = next((c for c in match_results["candidates"]
+                                   if c["type"] == "loan" and c["id"] == loan_id), None)
+                    if existing:
+                        existing["confidence"] = min(0.99, existing["confidence"] + 0.08)
+                        existing["match_type"] += "+coborrower_name"
+                    else:
+                        match_results["candidates"].append({
+                            "type": "loan",
+                            "id": loan_id,
+                            "name": f"{loan_borrower_name} (co-borrower: {loan_coborrower_name})",
+                            "loan_number": loan_loan_number,
+                            "confidence": conf * 0.95,  # Slightly lower for co-borrower
+                            "match_type": "coborrower_name"
+                        })
 
             # Last name match - check if email name shares last name with borrower/coborrower
             if borrower_last_name:
@@ -19088,6 +19162,7 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
                             "type": "loan",
                             "id": loan_id,
                             "name": loan_borrower_name,
+                            "loan_number": loan_loan_number,
                             "confidence": 0.75,  # Last name only match
                             "match_type": "last_name_family"
                         })
@@ -19098,7 +19173,8 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
             try:
                 all_loan_results = db.execute(
                     text("""
-                        SELECT id, borrower_name, coborrower_name, loan_officer_id
+                        SELECT id, borrower_name, coborrower_name, loan_officer_id,
+                               borrower_email, borrower_phone, co_borrower_email, loan_number
                         FROM loans
                     """)
                 ).fetchall()
@@ -19108,7 +19184,36 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
                 all_loan_results = []
 
             for loan_row in all_loan_results:
-                loan_id, loan_borrower_name, loan_coborrower_name, loan_officer_id = loan_row
+                loan_id, loan_borrower_name, loan_coborrower_name, loan_officer_id, loan_borrower_email, loan_borrower_phone, loan_coborrower_email, loan_loan_number = loan_row
+
+                # Global email match (very high confidence even for non-owned)
+                if extracted_email and loan_borrower_email:
+                    if normalize_email(extracted_email) == normalize_email(loan_borrower_email):
+                        match_results["candidates"].append({
+                            "type": "loan",
+                            "id": loan_id,
+                            "name": loan_borrower_name,
+                            "loan_number": loan_loan_number,
+                            "confidence": 0.94,  # High even for non-owned (email is unique)
+                            "match_type": "borrower_email_global"
+                        })
+                        logger.info(f"Global loan email match: {loan_id} - {loan_borrower_name}")
+                        continue  # Email match is definitive
+
+                # Global phone match
+                if extracted_phone and loan_borrower_phone:
+                    if normalize_phone(extracted_phone) == normalize_phone(loan_borrower_phone):
+                        match_results["candidates"].append({
+                            "type": "loan",
+                            "id": loan_id,
+                            "name": loan_borrower_name,
+                            "loan_number": loan_loan_number,
+                            "confidence": 0.90,
+                            "match_type": "borrower_phone_global"
+                        })
+                        logger.info(f"Global loan phone match: {loan_id} - {loan_borrower_name}")
+                        continue
+
                 # Check borrower name
                 if loan_borrower_name:
                     is_match, conf = names_match(borrower_name, loan_borrower_name)
@@ -19117,6 +19222,7 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
                             "type": "loan",
                             "id": loan_id,
                             "name": loan_borrower_name,
+                            "loan_number": loan_loan_number,
                             "confidence": conf * 0.85,  # Lower for non-owned loan
                             "match_type": "borrower_name_global"
                         })
@@ -19130,6 +19236,7 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
                             "type": "loan",
                             "id": loan_id,
                             "name": f"{loan_borrower_name} (co-borrower: {loan_coborrower_name})",
+                            "loan_number": loan_loan_number,
                             "confidence": conf * 0.80,
                             "match_type": "coborrower_name_global"
                         })
@@ -19225,8 +19332,8 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int) -> Dict[str,
         except Exception as e:
             logger.warning(f"Portfolio matching failed (table may not exist): {e}")
 
-    # Note: Loan model doesn't have borrower_email/phone fields,
-    # so loan matching is done via loan_number and borrower_name only (handled above)
+    # Loan matching now includes: loan_number, borrower_name, coborrower_name,
+    # borrower_email, borrower_phone, and co_borrower_email (handled above)
 
     # Return best candidate if found
     if match_results["candidates"]:
@@ -22482,6 +22589,81 @@ async def extract_email_data(
 
         # NOTE: Auto-apply disabled - users must manually approve all items
         # Future: AI learning system will enable auto-execution based on user approval patterns
+
+        # ========== CREATE TASK FOR LOAN NUMBER UPDATES ==========
+        # If a loan number was extracted but the matched loan doesn't have it,
+        # create a task to remind the user to update the loan record
+        extracted_loan_number = fields.get("loan_number", {}).get("value")
+        if extracted_loan_number and entity_match["entity_type"] == "loan" and entity_match["entity_id"]:
+            try:
+                matched_loan = db.query(Loan).filter(Loan.id == entity_match["entity_id"]).first()
+                if matched_loan and (not matched_loan.loan_number or matched_loan.loan_number != extracted_loan_number):
+                    # Create a task to update the loan number
+                    borrower_name = matched_loan.borrower_name or "Unknown Borrower"
+                    task_title = f"Update loan number for {borrower_name}"
+                    task_description = f"""AI extracted loan number '{extracted_loan_number}' from email but the loan record has a different or missing loan number.
+
+Current loan number: {matched_loan.loan_number or 'Not set'}
+Extracted loan number: {extracted_loan_number}
+Borrower: {borrower_name}
+Email subject: {subject}
+
+Please review and update the loan record if needed."""
+
+                    new_task = Task(
+                        title=task_title,
+                        description=task_description,
+                        status="pending",
+                        priority="high",
+                        source="AI Extraction",
+                        entity_type="loan",
+                        entity_id=matched_loan.id,
+                        owner_id=current_user.id,
+                        created_by_id=current_user.id
+                    )
+                    db.add(new_task)
+                    db.commit()
+                    logger.info(f"📋 Created task to update loan number for loan {matched_loan.id}: {extracted_loan_number}")
+            except Exception as task_error:
+                logger.warning(f"Failed to create loan number update task: {task_error}")
+                # Don't fail the extraction if task creation fails
+
+        # If loan number extracted but NO loan match found, create a task to apply data to existing borrower
+        elif extracted_loan_number and entity_match["entity_type"] != "loan" and entity_match["entity_id"]:
+            try:
+                borrower_name = fields.get("borrower_name", {}).get("value") or fields.get("first_name", {}).get("value", "") + " " + fields.get("last_name", {}).get("value", "")
+                borrower_name = borrower_name.strip() if borrower_name else "Unknown"
+
+                task_title = f"Add loan number {extracted_loan_number} to borrower record"
+                task_description = f"""AI extracted loan number '{extracted_loan_number}' from email but matched to a {entity_match['entity_type']} instead of a loan.
+
+This may indicate the borrower has converted from lead to active loan.
+
+Extracted loan number: {extracted_loan_number}
+Matched entity: {entity_match['entity_type']} (ID: {entity_match['entity_id']})
+Borrower name from email: {borrower_name}
+Email subject: {subject}
+
+Please:
+1. Convert the lead to an active loan if applicable
+2. Update the loan record with the extracted loan number"""
+
+                new_task = Task(
+                    title=task_title,
+                    description=task_description,
+                    status="pending",
+                    priority="high",
+                    source="AI Extraction",
+                    entity_type=entity_match["entity_type"],
+                    entity_id=entity_match["entity_id"],
+                    owner_id=current_user.id,
+                    created_by_id=current_user.id
+                )
+                db.add(new_task)
+                db.commit()
+                logger.info(f"📋 Created task to add loan number {extracted_loan_number} to {entity_match['entity_type']} {entity_match['entity_id']}")
+            except Exception as task_error:
+                logger.warning(f"Failed to create loan number task: {task_error}")
 
         logger.info(f"Extracted data from event {event_id}, status: {extracted.status}")
 
