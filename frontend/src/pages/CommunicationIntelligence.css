@@ -210,6 +210,51 @@
   border-bottom: 1px solid #e8eaed;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: space-between;
+}
+
+.filters-left {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.filters-right {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.select-all-checkbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #2a7458;
+}
+
+.bulk-delete-btn {
+  padding: 10px 16px;
+  background: #dc2626;
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bulk-delete-btn:hover {
+  background: #b91c1c;
+}
+
+.bulk-delete-btn:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
 }
 
 .filters-row select,
@@ -1095,11 +1140,44 @@
   width: 18px;
   height: 18px;
   cursor: pointer;
+  accent-color: #2a7458;
 }
 
 .queue-item-content {
   flex: 1;
   min-width: 0;
+}
+
+/* Delete button in queue item */
+.queue-item-delete-btn {
+  background: transparent;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 8px;
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  border-radius: 6px;
+}
+
+.queue-item:hover .queue-item-delete-btn {
+  opacity: 0.6;
+}
+
+.queue-item-delete-btn:hover {
+  opacity: 1 !important;
+  background: #fee2e2;
+  transform: scale(1.1);
+}
+
+/* Checked state for queue items */
+.queue-item.checked {
+  background: #f0fdf4;
+  border-left: 3px solid #2a7458;
+}
+
+.queue-item.checked.selected {
+  background: #dcfce7;
 }
 
 .queue-item-header {

@@ -55,6 +55,11 @@ function CommunicationIntelligence() {
   const [createTask, setCreateTask] = useState(false);
   const [taskTitle, setTaskTitle] = useState('');
 
+  // ================== BULK DELETE STATE ==================
+  const [selectedEmailIds, setSelectedEmailIds] = useState(new Set());
+  const [selectedSmsIds, setSelectedSmsIds] = useState(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
   const emailDispositionOptions = [
     { value: 'document_received', label: 'Document Received' },
     { value: 'document_request', label: 'Document Request' },
@@ -441,6 +446,153 @@ function CommunicationIntelligence() {
       }
     } catch (error) {
       console.error('Error marking SLA responded:', error);
+    }
+  };
+
+  // ================== DELETE HANDLERS ==================
+  const handleDeleteEmail = async (emailId) => {
+    if (!window.confirm('Are you sure you want to delete this email?')) return;
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/email-intelligence/queue/${emailId}`,
+        { method: 'DELETE', headers: getAuthHeaders() }
+      );
+      if (response.ok) {
+        if (selectedEmail?.id === emailId) setSelectedEmail(null);
+        loadData();
+        loadStats();
+      } else {
+        alert('Failed to delete email');
+      }
+    } catch (error) {
+      console.error('Error deleting email:', error);
+      alert('Failed to delete email');
+    }
+  };
+
+  const handleDeleteSms = async (smsId) => {
+    if (!window.confirm('Are you sure you want to delete this SMS?')) return;
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/sms-intelligence/queue/${smsId}`,
+        { method: 'DELETE', headers: getAuthHeaders() }
+      );
+      if (response.ok) {
+        if (selectedSms?.id === smsId) setSelectedSms(null);
+        loadData();
+        loadStats();
+      } else {
+        alert('Failed to delete SMS');
+      }
+    } catch (error) {
+      console.error('Error deleting SMS:', error);
+      alert('Failed to delete SMS');
+    }
+  };
+
+  const toggleEmailSelection = (emailId, e) => {
+    e.stopPropagation();
+    setSelectedEmailIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(emailId)) {
+        newSet.delete(emailId);
+      } else {
+        newSet.add(emailId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleSmsSelection = (smsId, e) => {
+    e.stopPropagation();
+    setSelectedSmsIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(smsId)) {
+        newSet.delete(smsId);
+      } else {
+        newSet.add(smsId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAllEmails = () => {
+    const allSelected = emailQueue.every(e => selectedEmailIds.has(e.id));
+    if (allSelected) {
+      setSelectedEmailIds(new Set());
+    } else {
+      setSelectedEmailIds(new Set(emailQueue.map(e => e.id)));
+    }
+  };
+
+  const handleSelectAllSms = () => {
+    const allSelected = smsQueue.every(s => selectedSmsIds.has(s.id));
+    if (allSelected) {
+      setSelectedSmsIds(new Set());
+    } else {
+      setSelectedSmsIds(new Set(smsQueue.map(s => s.id)));
+    }
+  };
+
+  const handleBulkDeleteEmails = async () => {
+    if (selectedEmailIds.size === 0) return;
+    if (!window.confirm(`Are you sure you want to delete ${selectedEmailIds.size} emails? This cannot be undone.`)) return;
+
+    setBulkDeleting(true);
+    let successCount = 0;
+
+    for (const emailId of selectedEmailIds) {
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/api/v1/email-intelligence/queue/${emailId}`,
+          { method: 'DELETE', headers: getAuthHeaders() }
+        );
+        if (response.ok) successCount++;
+      } catch (error) {
+        console.error(`Failed to delete email ${emailId}:`, error);
+      }
+    }
+
+    setSelectedEmailIds(new Set());
+    setSelectedEmail(null);
+    setBulkDeleting(false);
+    loadData();
+    loadStats();
+
+    if (successCount < selectedEmailIds.size) {
+      alert(`Deleted ${successCount} emails. Some failed.`);
+    }
+  };
+
+  const handleBulkDeleteSms = async () => {
+    if (selectedSmsIds.size === 0) return;
+    if (!window.confirm(`Are you sure you want to delete ${selectedSmsIds.size} SMS messages? This cannot be undone.`)) return;
+
+    setBulkDeleting(true);
+    let successCount = 0;
+
+    for (const smsId of selectedSmsIds) {
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/api/v1/sms-intelligence/queue/${smsId}`,
+          { method: 'DELETE', headers: getAuthHeaders() }
+        );
+        if (response.ok) successCount++;
+      } catch (error) {
+        console.error(`Failed to delete SMS ${smsId}:`, error);
+      }
+    }
+
+    setSelectedSmsIds(new Set());
+    setSelectedSms(null);
+    setBulkDeleting(false);
+    loadData();
+    loadStats();
+
+    if (successCount < selectedSmsIds.size) {
+      alert(`Deleted ${successCount} SMS messages. Some failed.`);
     }
   };
 
@@ -1060,47 +1212,69 @@ function CommunicationIntelligence() {
           {/* Left Panel - List */}
           <div className="list-panel">
             <div className="filters-row">
-              {commMode === 'email' ? (
-                <>
-                  <select value={emailFilters.status} onChange={(e) => setEmailFilters({ ...emailFilters, status: e.target.value })}>
-                    <option value="">All Status</option>
-                    <option value="pending">Pending</option>
-                    <option value="processed">Processed</option>
-                  </select>
-                  <select value={emailFilters.disposition} onChange={(e) => setEmailFilters({ ...emailFilters, disposition: e.target.value })}>
-                    <option value="">All Dispositions</option>
-                    {emailDispositionOptions.map(opt => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
-                  <select value={emailFilters.hasMatch} onChange={(e) => setEmailFilters({ ...emailFilters, hasMatch: e.target.value })}>
-                    <option value="">Match Status</option>
-                    <option value="yes">Has Match</option>
-                    <option value="no">No Match</option>
-                  </select>
-                </>
-              ) : (
-                <>
-                  <select value={smsFilters.status} onChange={(e) => setSmsFilters({ ...smsFilters, status: e.target.value })}>
-                    <option value="">All Status</option>
-                    <option value="pending">Pending</option>
-                    <option value="analyzed">Analyzed</option>
-                    <option value="completed">Completed</option>
-                  </select>
-                  <select value={smsFilters.direction} onChange={(e) => setSmsFilters({ ...smsFilters, direction: e.target.value })}>
-                    <option value="">All Directions</option>
-                    <option value="inbound">Inbound</option>
-                    <option value="outbound">Outbound</option>
-                  </select>
-                  <select value={smsFilters.disposition} onChange={(e) => setSmsFilters({ ...smsFilters, disposition: e.target.value })}>
-                    <option value="">All Dispositions</option>
-                    {smsDispositionOptions.map(opt => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
-                </>
-              )}
-              <button className="refresh-btn" onClick={loadData}>Refresh</button>
+              <div className="filters-left">
+                <input
+                  type="checkbox"
+                  className="select-all-checkbox"
+                  checked={commMode === 'email'
+                    ? emailQueue.length > 0 && emailQueue.every(e => selectedEmailIds.has(e.id))
+                    : smsQueue.length > 0 && smsQueue.every(s => selectedSmsIds.has(s.id))}
+                  onChange={commMode === 'email' ? handleSelectAllEmails : handleSelectAllSms}
+                  title="Select all"
+                />
+                {commMode === 'email' ? (
+                  <>
+                    <select value={emailFilters.status} onChange={(e) => setEmailFilters({ ...emailFilters, status: e.target.value })}>
+                      <option value="">All Status</option>
+                      <option value="pending">Pending</option>
+                      <option value="processed">Processed</option>
+                    </select>
+                    <select value={emailFilters.disposition} onChange={(e) => setEmailFilters({ ...emailFilters, disposition: e.target.value })}>
+                      <option value="">All Dispositions</option>
+                      {emailDispositionOptions.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                    <select value={emailFilters.hasMatch} onChange={(e) => setEmailFilters({ ...emailFilters, hasMatch: e.target.value })}>
+                      <option value="">Match Status</option>
+                      <option value="yes">Has Match</option>
+                      <option value="no">No Match</option>
+                    </select>
+                  </>
+                ) : (
+                  <>
+                    <select value={smsFilters.status} onChange={(e) => setSmsFilters({ ...smsFilters, status: e.target.value })}>
+                      <option value="">All Status</option>
+                      <option value="pending">Pending</option>
+                      <option value="analyzed">Analyzed</option>
+                      <option value="completed">Completed</option>
+                    </select>
+                    <select value={smsFilters.direction} onChange={(e) => setSmsFilters({ ...smsFilters, direction: e.target.value })}>
+                      <option value="">All Directions</option>
+                      <option value="inbound">Inbound</option>
+                      <option value="outbound">Outbound</option>
+                    </select>
+                    <select value={smsFilters.disposition} onChange={(e) => setSmsFilters({ ...smsFilters, disposition: e.target.value })}>
+                      <option value="">All Dispositions</option>
+                      {smsDispositionOptions.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </>
+                )}
+              </div>
+              <div className="filters-right">
+                {(commMode === 'email' ? selectedEmailIds.size : selectedSmsIds.size) > 0 && (
+                  <button
+                    className="bulk-delete-btn"
+                    onClick={commMode === 'email' ? handleBulkDeleteEmails : handleBulkDeleteSms}
+                    disabled={bulkDeleting}
+                  >
+                    {bulkDeleting ? 'Deleting...' : `🗑️ Delete (${commMode === 'email' ? selectedEmailIds.size : selectedSmsIds.size})`}
+                  </button>
+                )}
+                <button className="refresh-btn" onClick={loadData}>Refresh</button>
+              </div>
             </div>
 
             {loading ? (
@@ -1116,11 +1290,16 @@ function CommunicationIntelligence() {
                   {emailQueue.map(email => (
                     <div
                       key={email.id}
-                      className={`queue-item ${selectedEmail?.id === email.id ? 'selected' : ''} ${email.status}`}
+                      className={`queue-item ${selectedEmail?.id === email.id ? 'selected' : ''} ${email.status} ${selectedEmailIds.has(email.id) ? 'checked' : ''}`}
                       onClick={() => handleSelectEmail(email)}
                     >
                       <div className="queue-item-checkbox">
-                        <input type="checkbox" onClick={(e) => e.stopPropagation()} />
+                        <input
+                          type="checkbox"
+                          checked={selectedEmailIds.has(email.id)}
+                          onChange={(e) => toggleEmailSelection(email.id, e)}
+                          onClick={(e) => e.stopPropagation()}
+                        />
                       </div>
                       <div className="queue-item-content">
                         <div className="queue-item-header">
@@ -1139,6 +1318,13 @@ function CommunicationIntelligence() {
                           <span className="reason-label">Reason:</span> {email.ai_analysis?.summary?.substring(0, 60) || 'Pending analysis'}...
                         </div>
                       </div>
+                      <button
+                        className="queue-item-delete-btn"
+                        onClick={(e) => { e.stopPropagation(); handleDeleteEmail(email.id); }}
+                        title="Delete email"
+                      >
+                        🗑️
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -1154,11 +1340,16 @@ function CommunicationIntelligence() {
                   {smsQueue.map(sms => (
                     <div
                       key={sms.id}
-                      className={`queue-item ${selectedSms?.id === sms.id ? 'selected' : ''} ${sms.status}`}
+                      className={`queue-item ${selectedSms?.id === sms.id ? 'selected' : ''} ${sms.status} ${selectedSmsIds.has(sms.id) ? 'checked' : ''}`}
                       onClick={() => handleSelectSms(sms)}
                     >
                       <div className="queue-item-checkbox">
-                        <input type="checkbox" onClick={(e) => e.stopPropagation()} />
+                        <input
+                          type="checkbox"
+                          checked={selectedSmsIds.has(sms.id)}
+                          onChange={(e) => toggleSmsSelection(sms.id, e)}
+                          onClick={(e) => e.stopPropagation()}
+                        />
                       </div>
                       <div className="queue-item-content">
                         <div className="queue-item-header">
@@ -1177,6 +1368,13 @@ function CommunicationIntelligence() {
                           <span className="reason-label">Reason:</span> {sms.requires_response ? 'Requires response' : 'Pending review'}
                         </div>
                       </div>
+                      <button
+                        className="queue-item-delete-btn"
+                        onClick={(e) => { e.stopPropagation(); handleDeleteSms(sms.id); }}
+                        title="Delete SMS"
+                      >
+                        🗑️
+                      </button>
                     </div>
                   ))}
                 </div>

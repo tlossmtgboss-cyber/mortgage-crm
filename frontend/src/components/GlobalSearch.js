@@ -132,6 +132,7 @@ function GlobalSearch() {
       case 'loan': return '🏠';
       case 'contact': return '📇';
       case 'partner': return '🤝';
+      case 'portfolio': return '📊';
       default: return '📄';
     }
   };
@@ -142,6 +143,7 @@ function GlobalSearch() {
       case 'loan': return 'Loan';
       case 'contact': return 'Contact';
       case 'partner': return 'Partner';
+      case 'portfolio': return 'Portfolio';
       default: return type;
     }
   };

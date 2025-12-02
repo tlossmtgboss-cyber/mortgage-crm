@@ -907,6 +907,33 @@ async def get_sms_detail(sms_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.delete("/queue/{sms_id}")
+async def delete_sms_from_queue(sms_id: int, db: Session = Depends(get_db)):
+    """Delete an SMS from the queue"""
+    try:
+        # Check if SMS exists
+        result = db.execute(text("""
+            SELECT id FROM sms_intelligence_queue WHERE id = :sms_id
+        """), {"sms_id": sms_id}).fetchone()
+
+        if not result:
+            raise HTTPException(status_code=404, detail="SMS not found")
+
+        # Delete the SMS
+        db.execute(text("""
+            DELETE FROM sms_intelligence_queue WHERE id = :sms_id
+        """), {"sms_id": sms_id})
+        db.commit()
+
+        return {"status": "success", "message": f"SMS {sms_id} deleted"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting SMS: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/queue/{sms_id}/analyze")
 async def analyze_sms(sms_id: int, db: Session = Depends(get_db)):
     """Run AI analysis on an SMS message"""

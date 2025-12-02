@@ -983,6 +983,33 @@ async def get_email_detail(
     }
 
 
+@router.delete("/queue/{email_id}")
+async def delete_email_from_queue(
+    email_id: int,
+    db: Session = Depends(get_db)
+):
+    """Delete an email from the queue"""
+    user_id = get_current_user_id(db)
+
+    # Check if email exists and belongs to user
+    result = db.execute(text("""
+        SELECT id FROM email_reconciliation_queue
+        WHERE id = :email_id AND user_id = :user_id
+    """), {"email_id": email_id, "user_id": user_id}).fetchone()
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Email not found")
+
+    # Delete the email
+    db.execute(text("""
+        DELETE FROM email_reconciliation_queue
+        WHERE id = :email_id AND user_id = :user_id
+    """), {"email_id": email_id, "user_id": user_id})
+    db.commit()
+
+    return {"status": "success", "message": f"Email {email_id} deleted"}
+
+
 @router.post("/queue/{email_id}/analyze")
 async def analyze_email(
     email_id: int,

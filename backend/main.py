@@ -31388,39 +31388,38 @@ async def global_search(
     except Exception as e:
         logger.warning(f"Global search - loans error: {e}")
 
-    # Search Contacts
+    # Search Loan Team Members (contacts on loan transactions)
     try:
-        contacts_query = db.query(Contact).filter(
+        team_members_query = db.query(LoanTeamMember).filter(
             or_(
-                func.lower(Contact.first_name).contains(search_term),
-                func.lower(Contact.last_name).contains(search_term),
-                func.lower(Contact.email).contains(search_term),
-                func.lower(Contact.company).contains(search_term)
+                func.lower(LoanTeamMember.name).contains(search_term),
+                func.lower(LoanTeamMember.email).contains(search_term),
+                func.lower(LoanTeamMember.company).contains(search_term)
             )
         ).limit(limit)
 
-        for contact in contacts_query.all():
-            full_name = f"{contact.first_name or ''} {contact.last_name or ''}".strip()
+        for member in team_members_query.all():
             results.append({
-                "id": contact.id,
+                "id": member.id,
                 "type": "contact",
-                "name": full_name or contact.email,
-                "email": contact.email,
-                "phone": contact.phone,
-                "company": contact.company,
-                "contact_type": contact.contact_type,
-                "url": f"/contacts/{contact.id}"
+                "name": member.name,
+                "email": member.email,
+                "phone": member.phone,
+                "company": member.company,
+                "role": member.role,
+                "url": f"/loans/{member.loan_id}"  # Navigate to the associated loan
             })
     except Exception as e:
-        logger.warning(f"Global search - contacts error: {e}")
+        logger.warning(f"Global search - team members error: {e}")
 
-    # Search Partners
+    # Search Referral Partners
     try:
-        partners_query = db.query(Partner).filter(
+        partners_query = db.query(ReferralPartner).filter(
             or_(
-                func.lower(Partner.name).contains(search_term),
-                func.lower(Partner.email).contains(search_term),
-                func.lower(Partner.company).contains(search_term)
+                func.lower(ReferralPartner.name).contains(search_term),
+                func.lower(ReferralPartner.email).contains(search_term),
+                func.lower(ReferralPartner.company).contains(search_term),
+                func.lower(ReferralPartner.contact_name).contains(search_term)
             )
         ).limit(limit)
 
@@ -31428,15 +31427,40 @@ async def global_search(
             results.append({
                 "id": partner.id,
                 "type": "partner",
-                "name": partner.name,
+                "name": partner.name or partner.contact_name,
                 "email": partner.email,
                 "phone": partner.phone,
-                "company": partner.company,
-                "partner_type": partner.partner_type,
-                "url": f"/partners/{partner.id}"
+                "company": partner.company or partner.business_name,
+                "partner_type": partner.type or partner.category,
+                "url": f"/referral-partners/{partner.id}"
             })
     except Exception as e:
         logger.warning(f"Global search - partners error: {e}")
+
+    # Search Portfolio Clients (MUMClients - past funded loans)
+    try:
+        portfolio_query = db.query(MUMClient).filter(
+            or_(
+                func.lower(MUMClient.client_name).contains(search_term),
+                func.lower(MUMClient.email).contains(search_term),
+                func.lower(MUMClient.phone).contains(search_term),
+                func.lower(MUMClient.loan_number).contains(search_term)
+            )
+        ).limit(limit)
+
+        for client in portfolio_query.all():
+            results.append({
+                "id": client.id,
+                "type": "portfolio",
+                "name": client.client_name,
+                "email": client.email,
+                "phone": client.phone,
+                "loan_number": client.loan_number,
+                "status": client.status,
+                "url": f"/portfolio/{client.id}"
+            })
+    except Exception as e:
+        logger.warning(f"Global search - portfolio error: {e}")
 
     # Sort results by relevance (exact name match first)
     def relevance_score(item):
