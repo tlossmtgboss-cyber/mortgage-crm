@@ -106,8 +106,6 @@ const ClipLibrary = () => {
 
   // Handle delete
   const handleDelete = async (clipId) => {
-    if (!window.confirm('Are you sure you want to delete this clip?')) return;
-
     try {
       await axios.delete(`/api/v1/clips/${clipId}`);
       setClips(prev => prev.filter(c => c.id !== clipId));

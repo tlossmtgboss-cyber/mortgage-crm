@@ -114,10 +114,6 @@ const AccessAuditTab = ({ userId }) => {
     const reason = prompt('Reason for revoking ALL sessions (required):');
     if (!reason) return;
 
-    if (!window.confirm(`Are you sure you want to revoke ALL active sessions for this user?\n\nReason: ${reason}`)) {
-      return;
-    }
-
     try {
       await auditAPI.revokeAllSessions(userId, reason);
       alert('All sessions revoked successfully');
@@ -133,19 +129,6 @@ const AccessAuditTab = ({ userId }) => {
   const handleEmergencyRevoke = async () => {
     if (!emergencyForm.details.trim()) {
       alert('Please provide details for the emergency revocation');
-      return;
-    }
-
-    if (!window.confirm(
-      `⚠️ EMERGENCY ACCESS REVOCATION\n\n` +
-      `This will immediately:\n` +
-      `- Terminate all active sessions\n` +
-      `- Revoke all permissions\n` +
-      `- Notify selected parties\n\n` +
-      `Reason: ${emergencyForm.reason}\n` +
-      `Details: ${emergencyForm.details}\n\n` +
-      `Are you absolutely sure?`
-    )) {
       return;
     }
 

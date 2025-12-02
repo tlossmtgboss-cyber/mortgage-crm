@@ -191,10 +191,6 @@ function MergeCenter() {
   };
 
   const dismissPair = async () => {
-    if (!window.confirm('Mark these contacts as NOT duplicates?')) {
-      return;
-    }
-
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/merge/dismiss`, {
         method: 'POST',

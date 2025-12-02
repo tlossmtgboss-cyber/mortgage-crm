@@ -157,12 +157,6 @@ function ReferralPartnerDetail() {
       disqualified: 'Does Not Qualify'
     };
 
-    const confirmed = window.confirm(
-      `Add ${lead.name} to ${partner.name}'s ${categoryNames[searchCategory]}?`
-    );
-
-    if (!confirmed) return;
-
     try {
       // Update the lead with the referral partner ID AND stage
       await leadsAPI.update(lead.id, {

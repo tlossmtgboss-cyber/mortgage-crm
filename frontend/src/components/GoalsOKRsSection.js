@@ -62,8 +62,6 @@ const GoalsOKRsSection = ({ userId, isManager = true }) => {
   };
 
   const handleDelete = async (goalId) => {
-    if (!window.confirm('Delete this goal? This cannot be undone.')) return;
-
     try {
       await goalsApi.deleteGoal(userId, goalId);
       await loadGoals();

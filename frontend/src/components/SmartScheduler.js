@@ -213,8 +213,6 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
 
   // Cancel appointment
   const handleCancelAppointment = async (appointmentId, reason = '') => {
-    if (!window.confirm('Are you sure you want to cancel this appointment?')) return;
-
     try {
       const response = await fetch(`${API_BASE}/api/v1/scheduler/appointments/${appointmentId}/cancel?reason=${encodeURIComponent(reason)}`, {
         method: 'POST',
@@ -283,8 +281,6 @@ const SmartScheduler = ({ onClose, leadId, loanId, contactId, preselectedType })
 
   // Delete appointment type
   const handleDeleteAppointmentType = async (typeId) => {
-    if (!window.confirm('Are you sure you want to delete this appointment type?')) return;
-
     try {
       const response = await fetch(`${API_BASE}/api/v1/scheduler/appointment-types/${typeId}`, {
         method: 'DELETE',

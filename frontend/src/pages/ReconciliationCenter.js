@@ -963,10 +963,6 @@ function ReconciliationCenter() {
       return;
     }
 
-    if (!window.confirm(`Approve ${selectedItems.size} loan updates?`)) {
-      return;
-    }
-
     setBulkProcessing(true);
     let successCount = 0;
 
@@ -1014,10 +1010,6 @@ function ReconciliationCenter() {
 
     const reason = prompt('Enter reason for rejection:');
     if (!reason) return;
-
-    if (!window.confirm(`Reject ${selectedItems.size} loan updates?`)) {
-      return;
-    }
 
     setBulkProcessing(true);
     let successCount = 0;

@@ -145,8 +145,6 @@ function ExperimentsDashboard() {
   };
 
   const startExperiment = async (experimentId) => {
-    if (!window.confirm('Start this experiment? It will begin collecting data.')) return;
-
     try {
       const response = await fetch(
         `${API_BASE_URL}/api/v1/experiments/${experimentId}/start`,
@@ -171,12 +169,6 @@ function ExperimentsDashboard() {
   };
 
   const stopExperiment = async (experimentId, declareWinner = false) => {
-    const message = declareWinner
-      ? 'Stop this experiment and declare a winner based on statistical analysis?'
-      : 'Stop this experiment? You can resume it later.';
-
-    if (!window.confirm(message)) return;
-
     try {
       const response = await fetch(
         `${API_BASE_URL}/api/v1/experiments/${experimentId}/stop?declare_winner=${declareWinner}`,
@@ -201,8 +193,6 @@ function ExperimentsDashboard() {
   };
 
   const deleteExperiment = async (experimentId) => {
-    if (!window.confirm('Delete this experiment? This cannot be undone.')) return;
-
     try {
       const response = await fetch(
         `${API_BASE_URL}/api/v1/experiments/${experimentId}`,

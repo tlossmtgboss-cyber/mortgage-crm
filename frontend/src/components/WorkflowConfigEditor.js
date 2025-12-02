@@ -407,8 +407,6 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
 
   // Delete a day
   const handleDeleteDay = async (dayId) => {
-    if (!window.confirm('Are you sure you want to delete this day?')) return;
-
     try {
       setSaving(true);
       const token = localStorage.getItem('token');

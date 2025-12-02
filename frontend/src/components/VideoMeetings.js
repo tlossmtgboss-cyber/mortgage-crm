@@ -211,8 +211,6 @@ const VideoMeetings = ({ onClose, leadId, loanId, contactId }) => {
   };
 
   const cancelMeeting = async (meetingId) => {
-    if (!window.confirm('Are you sure you want to cancel this meeting?')) return;
-
     try {
       const response = await fetch(`${API_BASE}/api/v1/meetings/rooms/${meetingId}`, {
         method: 'DELETE',

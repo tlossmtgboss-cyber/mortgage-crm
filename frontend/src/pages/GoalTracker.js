@@ -211,10 +211,8 @@ function GoalTracker() {
   };
 
   const clearHistory = () => {
-    if (window.confirm('Are you sure you want to clear all historical data?')) {
-      setHistory([]);
-      localStorage.removeItem('goalTrackerHistory');
-    }
+    setHistory([]);
+    localStorage.removeItem('goalTrackerHistory');
   };
 
   const exportToExcel = () => {

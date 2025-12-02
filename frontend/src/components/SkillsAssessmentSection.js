@@ -64,8 +64,6 @@ const SkillsAssessmentSection = ({ userId, isManager = true }) => {
   };
 
   const handleRemove = async (skillId) => {
-    if (!window.confirm('Remove this skill from the assessment matrix?')) return;
-
     try {
       await responsibilitiesApi.removeUserSkill(userId, skillId);
       await loadSkills();

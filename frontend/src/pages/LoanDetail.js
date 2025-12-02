@@ -561,10 +561,6 @@ function LoanDetail() {
   };
 
   const handleDeleteTeamMember = async (memberId) => {
-    if (!window.confirm('Are you sure you want to remove this team member?')) {
-      return;
-    }
-
     try {
       const token = localStorage.getItem('token');
       const apiUrl = process.env.REACT_APP_API_URL || 'https://mortgage-crm-production-7a9a.up.railway.app';

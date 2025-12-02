@@ -267,7 +267,7 @@ function Loans() {
   };
 
   const removeBorrower = (index) => {
-    if (borrowers.length > 1 && window.confirm('Remove this borrower?')) {
+    if (borrowers.length > 1) {
       const newBorrowers = borrowers.filter((_, i) => i !== index);
       setBorrowers(newBorrowers);
       setActiveBorrower(Math.max(0, index - 1));

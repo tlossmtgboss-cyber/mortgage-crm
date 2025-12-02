@@ -1335,12 +1335,10 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
                             <button
                               className="btn-delete-task"
                               onClick={() => {
-                                if (window.confirm('Delete this task?')) {
-                                  setFormData(prev => ({
-                                    ...prev,
-                                    extractedTasks: prev.extractedTasks.filter((_, i) => i !== tIndex)
-                                  }));
-                                }
+                                setFormData(prev => ({
+                                  ...prev,
+                                  extractedTasks: prev.extractedTasks.filter((_, i) => i !== tIndex)
+                                }));
                               }}
                             >
                               Delete

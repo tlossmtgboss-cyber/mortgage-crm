@@ -45,8 +45,6 @@ const InviteManagementTable = ({ onInviteNew }) => {
   };
 
   const handleRevoke = async (inviteId) => {
-    if (!window.confirm('Are you sure you want to revoke this invite?')) return;
-
     setActionLoading(inviteId);
     try {
       const response = await fetch(`${API_BASE}/admin/invites/${inviteId}/revoke`, {

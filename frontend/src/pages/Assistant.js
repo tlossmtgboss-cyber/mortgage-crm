@@ -138,10 +138,8 @@ function Assistant() {
   };
 
   const clearConversation = () => {
-    if (window.confirm('Clear all conversation history?')) {
-      setMessages([]);
-      setContext(null);
-    }
+    setMessages([]);
+    setContext(null);
   };
 
   const handleVoiceInput = () => {

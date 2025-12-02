@@ -355,8 +355,6 @@ const PowerDialer = () => {
   const stopSession = async () => {
     if (!session) return;
 
-    if (!window.confirm('Are you sure you want to stop this session?')) return;
-
     try {
       stopCallTimer();
       const response = await fetch(
