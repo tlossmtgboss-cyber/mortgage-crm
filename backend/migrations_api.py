@@ -378,6 +378,30 @@ async def run_circle_of_cashflow_migration(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/add-circle-contacts-table")
+async def run_circle_contacts_migration(
+    admin: Any = Depends(get_admin_user)
+):
+    """
+    Run the Circle Contacts table migration
+    Creates circle_contacts table for storing borrower's trusted professionals
+    """
+    try:
+        from migrations.add_circle_contacts_table import run_migration
+
+        logger.info("Starting Circle Contacts table migration...")
+        run_migration()
+
+        return {
+            "status": "success",
+            "message": "Circle contacts table created successfully"
+        }
+
+    except Exception as e:
+        logger.error(f"Migration error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/add-ai-task-automation-tables")
 async def run_ai_task_automation_migration(
     admin: Any = Depends(get_admin_user)
