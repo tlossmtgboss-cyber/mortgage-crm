@@ -3150,16 +3150,36 @@ class LeadResponse(BaseModel):
 class LoanCreate(BaseModel):
     loan_number: str
     borrower_name: str
+    borrower_email: Optional[str] = None
+    borrower_phone: Optional[str] = None
+    preferred_communication: Optional[str] = None
+    coborrower_name: Optional[str] = None
+    co_borrower_email: Optional[str] = None
     amount: float
     program: Optional[str] = None
     rate: Optional[float] = None
     closing_date: Optional[datetime] = None
+    property_address: Optional[str] = None
+    property_city: Optional[str] = None
+    property_state: Optional[str] = None
+    property_zip: Optional[str] = None
+    stage: Optional[str] = None
 
 class LoanUpdate(BaseModel):
     stage: Optional[LoanStage] = None
     rate: Optional[float] = None
     closing_date: Optional[datetime] = None
     processor: Optional[str] = None
+    borrower_email: Optional[str] = None
+    borrower_phone: Optional[str] = None
+    preferred_communication: Optional[str] = None
+    coborrower_name: Optional[str] = None
+    co_borrower_email: Optional[str] = None
+    property_address: Optional[str] = None
+    property_city: Optional[str] = None
+    property_state: Optional[str] = None
+    property_zip: Optional[str] = None
+    loan_number: Optional[str] = None
 
 class LoanResponse(BaseModel):
     id: int
