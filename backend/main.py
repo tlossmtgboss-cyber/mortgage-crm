@@ -32907,8 +32907,22 @@ async def update_loan(loan_id: int, loan_update: LoanUpdate, db: Session = Depen
     if not loan:
         raise HTTPException(status_code=404, detail="Loan not found")
 
+    # Track if stage is changing to FUNDED
+    old_stage = loan.stage
+    new_stage = loan_update.stage if loan_update.stage else old_stage
+
     for key, value in loan_update.dict(exclude_unset=True).items():
         setattr(loan, key, value)
+
+    # If stage changed to FUNDED, set funded_date and copy to MUM portfolio
+    if new_stage == LoanStage.FUNDED and old_stage != LoanStage.FUNDED:
+        if not loan.funded_date:
+            loan.funded_date = datetime.now(timezone.utc)
+        logger.info(f"🎉 Loan {loan.loan_number} is now FUNDED! Creating MUM client...")
+        # Copy to MUM portfolio and create post-close tasks
+        mum_client = copy_loan_to_mum_client(loan, db, current_user.id)
+        if mum_client:
+            logger.info(f"✅ MUM client {mum_client.id} created for {loan.borrower_name}")
 
     loan.ai_insights = generate_ai_insights(loan)
     loan.updated_at = datetime.now(timezone.utc)
@@ -35461,6 +35475,173 @@ async def mark_team_member_viewed(
     except Exception as e:
         logger.error(f"Error marking team member viewed: {e}")
         return {"success": False}
+
+
+# ============================================================================
+# FUNDED LOAN → MUM CLIENT CONVERSION
+# ============================================================================
+
+def copy_loan_to_mum_client(loan: Loan, db: Session, user_id: int) -> Optional[MUMClient]:
+    """
+    When a loan reaches FUNDED status, copy it to the MUM (Mortgages Under Management)
+    portfolio as a new client. This kicks off the post-close retention process.
+
+    Returns the created MUMClient or None if one already exists.
+    """
+    try:
+        # Check if MUM client already exists for this loan
+        existing = db.query(MUMClient).filter(MUMClient.loan_number == loan.loan_number).first()
+        if existing:
+            logger.info(f"MUM client already exists for loan {loan.loan_number}")
+            return existing
+
+        # Calculate days since funding
+        funded_date = loan.funded_date or loan.closing_date or datetime.now(timezone.utc)
+        if not funded_date.tzinfo:
+            funded_date = funded_date.replace(tzinfo=timezone.utc)
+        days_since = (datetime.now(timezone.utc) - funded_date).days
+
+        # Estimate property value (assume 80% LTV if not available)
+        estimated_property_value = loan.appraisal_value or (loan.amount * 1.25)
+
+        # Create MUM client from loan data
+        mum_client = MUMClient(
+            client_name=loan.borrower_name,
+            email=loan.borrower_email,
+            phone=loan.borrower_phone,
+            loan_number=loan.loan_number,
+            original_close_date=funded_date,
+            closing_date=funded_date,
+            first_payment_date=funded_date + timedelta(days=45),  # Estimate first payment ~45 days after close
+            days_since_funding=days_since,
+            original_rate=loan.rate,
+            current_rate=loan.rate,
+            interest_rate=loan.rate or 0.0,
+            original_loan_amount=loan.amount,
+            current_loan_amount=loan.amount,
+            appraisal_value_at_closing=estimated_property_value,
+            current_property_value=estimated_property_value,
+            loan_balance=loan.amount,
+            refinance_opportunity=False,
+            engagement_score=100,  # Start with high engagement for new funded loans
+            status="Active",
+            notes=f"Auto-created from funded loan on {datetime.now(timezone.utc).strftime('%Y-%m-%d')}. Program: {loan.program or 'N/A'}",
+            # Copy team members
+            loan_officer=loan.loan_officer_name,
+            loan_officer_email=loan.loan_officer_email,
+            processor=loan.processor,
+            processor_email=loan.processor_email,
+            underwriter=loan.underwriter,
+            underwriter_email=loan.underwriter_email,
+            closer=loan.closer,
+            closer_email=loan.closer_email,
+            user_id=user_id
+        )
+
+        db.add(mum_client)
+        db.flush()  # Get the ID without committing
+
+        logger.info(f"✅ Created MUM client {mum_client.id} from funded loan {loan.loan_number} ({loan.borrower_name})")
+
+        # Create post-close welcome task
+        from datetime import timedelta
+        welcome_task = AITask(
+            title=f"Post-Close Welcome Call - {loan.borrower_name}",
+            description=f"""Congratulations! {loan.borrower_name}'s loan has funded!
+
+Action items:
+1. Make welcome call to congratulate and thank them
+2. Set up annual mortgage review (AMR) reminder
+3. Request Google/Zillow review
+4. Ask for referrals
+5. Add to retention marketing campaigns
+
+Loan Details:
+- Loan #: {loan.loan_number}
+- Program: {loan.program or 'N/A'}
+- Amount: ${loan.amount:,.2f}
+- Rate: {loan.rate}%
+- Close Date: {funded_date.strftime('%Y-%m-%d')}""",
+            type=TaskType.CALL,
+            priority="high",
+            loan_id=loan.id,
+            mum_client_id=mum_client.id,
+            user_id=user_id,
+            due_date=datetime.now(timezone.utc) + timedelta(days=1),  # Due tomorrow
+            status="pending"
+        )
+        db.add(welcome_task)
+
+        # Create AMR reminder task for 11 months from now
+        amr_task = AITask(
+            title=f"Annual Mortgage Review Due - {loan.borrower_name}",
+            description=f"""Annual Mortgage Review (AMR) is coming up for {loan.borrower_name}.
+
+Review items:
+1. Check current market rates vs their rate ({loan.rate}%)
+2. Evaluate refinance opportunities
+3. Review home value appreciation
+4. Discuss any life changes affecting mortgage needs
+5. Explore HELOC/cash-out options if applicable
+
+Original Loan:
+- Loan #: {loan.loan_number}
+- Original Amount: ${loan.amount:,.2f}
+- Rate: {loan.rate}%""",
+            type=TaskType.CALL,
+            priority="medium",
+            loan_id=loan.id,
+            mum_client_id=mum_client.id,
+            user_id=user_id,
+            due_date=datetime.now(timezone.utc) + timedelta(days=335),  # ~11 months
+            status="pending"
+        )
+        db.add(amr_task)
+
+        logger.info(f"Created post-close tasks for MUM client {mum_client.id}")
+
+        return mum_client
+
+    except Exception as e:
+        logger.error(f"Error creating MUM client from loan {loan.loan_number}: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return None
+
+
+@app.post("/api/v1/loans/{loan_id}/convert-to-mum")
+async def convert_loan_to_mum_client(
+    loan_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Manually convert a funded loan to MUM client.
+    Use this for existing funded loans that weren't auto-converted.
+    """
+    loan = db.query(Loan).filter(Loan.id == loan_id).first()
+    if not loan:
+        raise HTTPException(status_code=404, detail="Loan not found")
+
+    # Check if already funded or mark as funded
+    if loan.stage != LoanStage.FUNDED:
+        loan.stage = LoanStage.FUNDED
+        loan.funded_date = datetime.now(timezone.utc)
+        logger.info(f"Marking loan {loan.loan_number} as FUNDED")
+
+    mum_client = copy_loan_to_mum_client(loan, db, current_user.id)
+    if not mum_client:
+        raise HTTPException(status_code=500, detail="Failed to create MUM client")
+
+    db.commit()
+
+    return {
+        "status": "success",
+        "message": f"Loan {loan.loan_number} converted to MUM client",
+        "loan_id": loan.id,
+        "mum_client_id": mum_client.id,
+        "borrower_name": loan.borrower_name
+    }
 
 
 # ============================================================================
