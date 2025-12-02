@@ -31911,8 +31911,6 @@ async def get_command_center(
             LIMIT 15
         """)).fetchall()
 
-        logger.info(f"Command center - found {len(stale_leads)} stale leads")
-
         for lead in stale_leads:
             days = int(lead.days_since_contact) if lead.days_since_contact else 999
             priority = "critical" if days > 7 else "high" if days > 5 else "medium"
@@ -31930,8 +31928,7 @@ async def get_command_center(
                 "days_stale": days
             })
     except Exception as e:
-        logger.error(f"Command center - stale leads error: {e}", exc_info=True)
-        action_items["_debug_leads_error"] = str(e)
+        logger.warning(f"Command center - stale leads error: {e}")
         db.rollback()  # Reset transaction state
 
     # 3. LOANS - Active milestones and tasks
@@ -31993,7 +31990,6 @@ async def get_command_center(
         """)).fetchall()
 
         # If no deadline loans, show active loans that need attention
-        logger.info(f"Command center - upcoming deadlines query returned {len(upcoming_deadlines)} loans")
         if not upcoming_deadlines:
             upcoming_deadlines = db.execute(text("""
                 SELECT l.id, l.borrower_name, l.loan_number, l.stage::text as status,
@@ -32004,7 +32000,6 @@ async def get_command_center(
                 ORDER BY l.created_at DESC
                 LIMIT 10
             """)).fetchall()
-            logger.info(f"Command center - fallback loans query returned {len(upcoming_deadlines)} loans")
 
         for loan in upcoming_deadlines:
             deadline_date = loan.lock_expiration if loan.deadline_type == 'lock_expiring' else loan.closing_date
