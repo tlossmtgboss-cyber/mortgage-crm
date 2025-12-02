@@ -6112,6 +6112,7 @@ The Team menu item appears for managers and management roles.
         tool_risk_levels = {
             # LOW RISK - Auto-execute without confirmation
             "get_tasks": "low",
+            "get_calendar_events": "low",   # Read-only calendar data
             "search_leads": "low",
             "get_pipeline": "low",
             "get_metrics": "low",
@@ -6146,12 +6147,26 @@ The Team menu item appears for managers and management roles.
                 "type": "function",
                 "function": {
                     "name": "get_tasks",
-                    "description": "Get user's tasks for a specific timeframe",
+                    "description": "Get user's tasks for a specific timeframe. ALWAYS call this tool when asked about tasks, to-dos, or what needs to be done today.",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "timeframe": {"type": "string", "enum": ["today", "tomorrow", "this_week", "overdue"], "description": "Timeframe to get tasks for"},
                             "status": {"type": "string", "enum": ["pending", "in_progress", "completed", "all"], "description": "Task status filter"}
+                        },
+                        "required": ["timeframe"]
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "get_calendar_events",
+                    "description": "Get user's calendar events and appointments for a specific timeframe. ALWAYS call this tool when asked about appointments, meetings, calendar, or schedule.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "timeframe": {"type": "string", "enum": ["today", "tomorrow", "this_week", "next_week"], "description": "Timeframe to get calendar events for"}
                         },
                         "required": ["timeframe"]
                     }
@@ -6862,6 +6877,65 @@ The Team menu item appears for managers and management roles.
                     "loan_id": r[10],
                     "lead_id": r[11]
                 } for r in filtered_tasks[:15]]
+            }
+
+        async def execute_get_calendar_events(args):
+            timeframe = args.get("timeframe", "today")
+            today = datetime.now().date()
+
+            # Calculate date range based on timeframe
+            if timeframe == "today":
+                start_date = today
+                end_date = today + timedelta(days=1)
+            elif timeframe == "tomorrow":
+                start_date = today + timedelta(days=1)
+                end_date = today + timedelta(days=2)
+            elif timeframe == "this_week":
+                start_date = today
+                end_date = today + timedelta(days=7)
+            elif timeframe == "next_week":
+                start_date = today + timedelta(days=7)
+                end_date = today + timedelta(days=14)
+            else:
+                start_date = today
+                end_date = today + timedelta(days=7)
+
+            # Query calendar_events table
+            events_query = text("""
+                SELECT id, title, description, start_time, end_time, location, event_type,
+                       lead_id, loan_id, attendees
+                FROM calendar_events
+                WHERE user_id = :user_id
+                AND DATE(start_time) >= :start_date
+                AND DATE(start_time) < :end_date
+                ORDER BY start_time ASC
+            """)
+            result = db.execute(events_query, {
+                "user_id": current_user.id,
+                "start_date": start_date,
+                "end_date": end_date
+            })
+            events = result.fetchall()
+
+            return {
+                "count": len(events),
+                "timeframe": timeframe,
+                "date_range": {
+                    "start": start_date.isoformat(),
+                    "end": end_date.isoformat()
+                },
+                "events": [{
+                    "id": r[0],
+                    "title": r[1],
+                    "description": r[2][:100] if r[2] else None,
+                    "start_time": r[3].isoformat() if r[3] else None,
+                    "end_time": r[4].isoformat() if r[4] else None,
+                    "location": r[5],
+                    "event_type": r[6],
+                    "lead_id": r[7],
+                    "loan_id": r[8],
+                    "attendees": r[9] if r[9] else []
+                } for r in events[:20]]
             }
 
         async def execute_create_task(args):
@@ -9670,6 +9744,7 @@ The Team menu item appears for managers and management roles.
         tool_functions = {
             "send_email": execute_send_email,
             "get_tasks": execute_get_tasks,
+            "get_calendar_events": execute_get_calendar_events,
             "create_task": execute_create_task,
             "search_leads": execute_search_leads,
             "get_pipeline": execute_get_pipeline,
@@ -11987,12 +12062,26 @@ async def orchestrator_chat_stream(
             "type": "function",
             "function": {
                 "name": "get_tasks",
-                "description": "Get user's tasks with optional filtering",
+                "description": "Get user's tasks with optional filtering. ALWAYS call this when asked about tasks or what to do today.",
                 "parameters": {
                     "type": "object",
                     "properties": {
                         "filter": {"type": "string", "enum": ["today", "tomorrow", "this_week", "overdue", "all"], "description": "Time filter for tasks"}
                     }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "get_calendar_events",
+                "description": "Get user's calendar events and appointments. ALWAYS call this when asked about appointments, meetings, calendar, or schedule.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "timeframe": {"type": "string", "enum": ["today", "tomorrow", "this_week", "next_week"], "description": "Timeframe to get calendar events for"}
+                    },
+                    "required": ["timeframe"]
                 }
             }
         },
@@ -12585,6 +12674,58 @@ async def orchestrator_chat_stream(
         return {
             "count": len(tasks),
             "tasks": [{"id": t.id, "title": t.title, "priority": t.priority, "due_date": t.due_date.isoformat() if t.due_date else None} for t in tasks[:10]]
+        }
+
+    async def execute_get_calendar_events(args):
+        timeframe = args.get("timeframe", "today")
+        today = datetime.now().date()
+
+        # Calculate date range based on timeframe
+        if timeframe == "today":
+            start_date = today
+            end_date = today + timedelta(days=1)
+        elif timeframe == "tomorrow":
+            start_date = today + timedelta(days=1)
+            end_date = today + timedelta(days=2)
+        elif timeframe == "this_week":
+            start_date = today
+            end_date = today + timedelta(days=7)
+        elif timeframe == "next_week":
+            start_date = today + timedelta(days=7)
+            end_date = today + timedelta(days=14)
+        else:
+            start_date = today
+            end_date = today + timedelta(days=7)
+
+        # Query calendar_events table
+        events_query = text("""
+            SELECT id, title, description, start_time, end_time, location, event_type,
+                   lead_id, loan_id, attendees
+            FROM calendar_events
+            WHERE user_id = :user_id
+            AND DATE(start_time) >= :start_date
+            AND DATE(start_time) < :end_date
+            ORDER BY start_time ASC
+        """)
+        result = db.execute(events_query, {
+            "user_id": current_user.id,
+            "start_date": start_date,
+            "end_date": end_date
+        })
+        events = result.fetchall()
+
+        return {
+            "count": len(events),
+            "timeframe": timeframe,
+            "events": [{
+                "id": r[0],
+                "title": r[1],
+                "description": r[2][:100] if r[2] else None,
+                "start_time": r[3].isoformat() if r[3] else None,
+                "end_time": r[4].isoformat() if r[4] else None,
+                "location": r[5],
+                "event_type": r[6]
+            } for r in events[:20]]
         }
 
     async def execute_get_pipeline(args):
@@ -14870,6 +15011,7 @@ Thank you!"""
 
     tool_functions = {
         "get_tasks": execute_get_tasks,
+        "get_calendar_events": execute_get_calendar_events,
         "get_pipeline": execute_get_pipeline,
         "search_leads": execute_search_leads,
         "get_market_intelligence": execute_get_market_intelligence,
@@ -31585,6 +31727,8 @@ async def get_command_center(
             LIMIT 15
         """)).fetchall()
 
+        logger.info(f"Command center - found {len(stale_leads)} stale leads")
+
         for lead in stale_leads:
             days = int(lead.days_since_contact) if lead.days_since_contact else 999
             priority = "critical" if days > 7 else "high" if days > 5 else "medium"
@@ -31602,7 +31746,8 @@ async def get_command_center(
                 "days_stale": days
             })
     except Exception as e:
-        logger.warning(f"Command center - stale leads error: {e}")
+        logger.error(f"Command center - stale leads error: {e}", exc_info=True)
+        action_items["_debug_leads_error"] = str(e)
 
     # 3. LOANS - Active milestones and tasks
     try:
@@ -31662,6 +31807,7 @@ async def get_command_center(
         """)).fetchall()
 
         # If no deadline loans, show active loans that need attention
+        logger.info(f"Command center - upcoming deadlines query returned {len(upcoming_deadlines)} loans")
         if not upcoming_deadlines:
             upcoming_deadlines = db.execute(text("""
                 SELECT l.id, l.borrower_name, l.loan_number, l.stage::text as status,
@@ -31672,6 +31818,7 @@ async def get_command_center(
                 ORDER BY l.created_at DESC
                 LIMIT 10
             """)).fetchall()
+            logger.info(f"Command center - fallback loans query returned {len(upcoming_deadlines)} loans")
 
         for loan in upcoming_deadlines:
             deadline_date = loan.lock_expiration if loan.deadline_type == 'lock_expiring' else loan.closing_date
