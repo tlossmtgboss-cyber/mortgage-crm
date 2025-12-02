@@ -796,14 +796,14 @@ async def submit_mortgage_planner_questionnaire(
             lead.phone = submission.phone
         else:
             # Create new lead
+            from main import LeadStage
             lead = Lead(
                 name=submission.name,
                 email=submission.email,
                 phone=submission.phone,
                 owner_id=loan_officer_id,
                 source="Mortgage Planner Questionnaire",
-                stage="NEW",
-                status="new"
+                stage=LeadStage.NEW
             )
             db.add(lead)
             db.flush()  # Get the lead ID
