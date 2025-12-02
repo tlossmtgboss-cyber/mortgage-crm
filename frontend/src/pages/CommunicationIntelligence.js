@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
 import PowerDialer from './PowerDialer';
+import { useLayoutFix } from '../hooks/useLayoutFix';
 import './CommunicationIntelligence.css';
 
 function CommunicationIntelligence() {
@@ -15,22 +16,15 @@ function CommunicationIntelligence() {
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState(null);
 
-  // ================== EMAIL STATE ==================
-  const [emailQueue, setEmailQueue] = useState([]);
-  const [emailQueueTotal, setEmailQueueTotal] = useState(0);
+  // ================== EMAIL/AI CONVERSATIONS STATE ==================
+  const [aiConversations, setAiConversations] = useState([]);
+  const [aiConversationsTotal, setAiConversationsTotal] = useState(0);
   const [emailFilters, setEmailFilters] = useState({
-    status: 'pending',
-    disposition: '',
-    hasMatch: ''
+    status: '',  // all, active, closed
   });
-  const [emailConversations, setEmailConversations] = useState([]);
-  const [emailDocuments, setEmailDocuments] = useState([]);
-  const [emailAllDocuments, setEmailAllDocuments] = useState([]);
-  const [emailSlaItems, setEmailSlaItems] = useState([]);
+  const [selectedConversation, setSelectedConversation] = useState(null);
+  const [conversationMessages, setConversationMessages] = useState([]);
   const [emailStats, setEmailStats] = useState({});
-  const [selectedEmail, setSelectedEmail] = useState(null);
-  const [selectedLoanId, setSelectedLoanId] = useState('');
-  const [docLoanId, setDocLoanId] = useState('');
 
   // ================== SMS STATE ==================
   const [smsQueue, setSmsQueue] = useState([]);
@@ -56,9 +50,12 @@ function CommunicationIntelligence() {
   const [taskTitle, setTaskTitle] = useState('');
 
   // ================== BULK DELETE STATE ==================
-  const [selectedEmailIds, setSelectedEmailIds] = useState(new Set());
+  const [selectedConversationIds, setSelectedConversationIds] = useState(new Set());
   const [selectedSmsIds, setSelectedSmsIds] = useState(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  // ================== LAYOUT FIX ==================
+  const { containerRef, triggerRecalculation } = useLayoutFix([loading, aiConversations, smsQueue]);
 
   const emailDispositionOptions = [
     { value: 'document_received', label: 'Document Received' },
@@ -93,7 +90,8 @@ function CommunicationIntelligence() {
   // Reset tab when switching modes
   useEffect(() => {
     setActiveTab('queue');
-    setSelectedEmail(null);
+    setSelectedConversation(null);
+    setConversationMessages([]);
     setSelectedSms(null);
   }, [commMode]);
 
@@ -101,30 +99,44 @@ function CommunicationIntelligence() {
   useEffect(() => {
     loadData();
     loadStats();
-  }, [commMode, activeTab, emailFilters, smsFilters, selectedLoanId, docLoanId]);
+  }, [commMode, activeTab, emailFilters, smsFilters]);
+
+  // Load conversation messages when conversation is selected
+  useEffect(() => {
+    if (selectedConversation) {
+      loadConversationMessages(selectedConversation.conversation_id);
+    } else {
+      setConversationMessages([]);
+    }
+  }, [selectedConversation]);
 
   // Update disposition when selection changes
   useEffect(() => {
-    if (selectedEmail) {
-      setSelectedDisposition(selectedEmail.ai_analysis?.disposition || 'general_correspondence');
-      setTaskTitle(`Follow up: ${selectedEmail.subject || 'Email'}`);
+    if (selectedConversation) {
+      setSelectedDisposition(selectedConversation.conversation_type || 'general');
+      setTaskTitle(`Follow up: Conversation with ${selectedConversation.recipient_name || selectedConversation.recipient_email}`);
     } else if (selectedSms) {
       setSelectedDisposition(selectedSms.ai_analysis?.disposition || selectedSms.disposition || 'general_correspondence');
       setTaskTitle(`Follow up: SMS from ${selectedSms.from_phone}`);
     }
     setCreateTask(false);
-  }, [selectedEmail, selectedSms]);
+  }, [selectedConversation, selectedSms]);
 
   const loadStats = async () => {
     try {
       if (commMode === 'email') {
-        const response = await fetch(`${API_BASE_URL}/api/v1/email-intelligence/stats`, {
-          headers: getAuthHeaders()
+        // Count AI conversations for stats
+        const [activeRes, closedRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/api/v1/ai-email/conversations?status=active`, { headers: getAuthHeaders() }),
+          fetch(`${API_BASE_URL}/api/v1/ai-email/conversations?status=closed`, { headers: getAuthHeaders() })
+        ]);
+        const activeData = activeRes.ok ? await activeRes.json() : [];
+        const closedData = closedRes.ok ? await closedRes.json() : [];
+        setEmailStats({
+          active_conversations: activeData.length || 0,
+          closed_conversations: closedData.length || 0,
+          total_conversations: (activeData.length || 0) + (closedData.length || 0)
         });
-        if (response.ok) {
-          const data = await response.json();
-          setEmailStats(data);
-        }
       } else {
         const response = await fetch(`${API_BASE_URL}/api/v1/sms-intelligence/stats`, {
           headers: getAuthHeaders()
@@ -143,13 +155,8 @@ function CommunicationIntelligence() {
     setLoading(true);
     try {
       if (commMode === 'email') {
-        switch (activeTab) {
-          case 'queue': await loadEmailQueue(); break;
-          case 'conversations': await loadEmailConversations(); break;
-          case 'documents': await loadEmailDocuments(); break;
-          case 'all-documents': await loadAllEmailDocuments(); break;
-          case 'sla': await loadEmailSlaItems(); break;
-        }
+        // Email mode now only shows AI conversations
+        await loadAiConversations();
       } else {
         switch (activeTab) {
           case 'queue': await loadSmsQueue(); break;
@@ -167,96 +174,40 @@ function CommunicationIntelligence() {
     }
   };
 
-  // ================== EMAIL LOADERS ==================
-  const loadEmailQueue = async () => {
+  // ================== AI CONVERSATION LOADERS ==================
+  const loadAiConversations = async () => {
     try {
-      let url = `${API_BASE_URL}/api/v1/email-intelligence/queue?limit=50`;
+      let url = `${API_BASE_URL}/api/v1/ai-email/conversations?limit=50`;
       if (emailFilters.status) url += `&status=${emailFilters.status}`;
-      if (emailFilters.disposition) url += `&disposition=${emailFilters.disposition}`;
-      if (emailFilters.hasMatch === 'yes') url += `&has_match=true`;
-      if (emailFilters.hasMatch === 'no') url += `&has_match=false`;
 
       const response = await fetch(url, { headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
-        const emails = data.emails || [];
-        setEmailQueue(emails);
-        setEmailQueueTotal(data.total || 0);
+        const conversations = data || [];
+        setAiConversations(conversations);
+        setAiConversationsTotal(conversations.length);
         // Auto-select first item if none selected and items exist
-        if (emails.length > 0 && !selectedEmail) {
-          setSelectedEmail(emails[0]);
+        if (conversations.length > 0 && !selectedConversation) {
+          setSelectedConversation(conversations[0]);
         }
       }
     } catch (error) {
-      console.error('Error loading email queue:', error);
+      console.error('Error loading AI conversations:', error);
     }
   };
 
-  const loadEmailConversations = async () => {
-    if (!selectedLoanId) {
-      setEmailConversations([]);
-      return;
-    }
+  const loadConversationMessages = async (conversationId) => {
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/v1/email-intelligence/conversation-log/loan/${selectedLoanId}?limit=50`,
+        `${API_BASE_URL}/api/v1/ai-email/conversations/${conversationId}/messages`,
         { headers: getAuthHeaders() }
       );
       if (response.ok) {
         const data = await response.json();
-        setEmailConversations(data.entries || []);
+        setConversationMessages(data || []);
       }
     } catch (error) {
-      console.error('Error loading conversations:', error);
-    }
-  };
-
-  const loadEmailDocuments = async () => {
-    if (!docLoanId) {
-      setEmailDocuments([]);
-      return;
-    }
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/v1/email-intelligence/document-tracking/loan/${docLoanId}`,
-        { headers: getAuthHeaders() }
-      );
-      if (response.ok) {
-        const data = await response.json();
-        setEmailDocuments(data.documents || []);
-      }
-    } catch (error) {
-      console.error('Error loading documents:', error);
-    }
-  };
-
-  const loadAllEmailDocuments = async () => {
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/v1/email-intelligence/document-tracking/all?limit=100`,
-        { headers: getAuthHeaders() }
-      );
-      if (response.ok) {
-        const data = await response.json();
-        setEmailAllDocuments(data.documents || []);
-      }
-    } catch (error) {
-      console.error('Error loading all documents:', error);
-    }
-  };
-
-  const loadEmailSlaItems = async () => {
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/v1/email-intelligence/sla-tracking`,
-        { headers: getAuthHeaders() }
-      );
-      if (response.ok) {
-        const data = await response.json();
-        setEmailSlaItems(data.slas || []);
-      }
-    } catch (error) {
-      console.error('Error loading SLA items:', error);
+      console.error('Error loading conversation messages:', error);
     }
   };
 
@@ -365,37 +316,35 @@ function CommunicationIntelligence() {
   };
 
   // ================== HANDLERS ==================
-  const handleSelectEmail = (email) => {
-    setSelectedEmail(email);
+  const handleSelectConversation = (conversation) => {
+    setSelectedConversation(conversation);
     setSelectedSms(null);
   };
 
   const handleSelectSms = (sms) => {
     setSelectedSms(sms);
-    setSelectedEmail(null);
+    setSelectedConversation(null);
   };
 
-  const handleProcessEmail = async () => {
-    if (!selectedEmail || !selectedDisposition) return;
+  const handleCloseConversation = async () => {
+    if (!selectedConversation) return;
 
-    setProcessingId(selectedEmail.id);
+    setProcessingId(selectedConversation.id);
     try {
-      let url = `${API_BASE_URL}/api/v1/email-intelligence/queue/${selectedEmail.id}/process-with-intelligence?disposition=${selectedDisposition}`;
-      if (createTask) {
-        url += `&create_task=true&task_title=${encodeURIComponent(taskTitle)}`;
-      }
-      const response = await fetch(url, { method: 'POST', headers: getAuthHeaders() });
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/ai-email/conversations/${selectedConversation.conversation_id}/close`,
+        { method: 'PATCH', headers: getAuthHeaders() }
+      );
       if (response.ok) {
-        setSelectedEmail(null);
         loadData();
         loadStats();
       } else {
         const error = await response.json();
-        alert(`Error: ${error.detail || error.error || 'Failed to process'}`);
+        alert(`Error: ${error.detail || error.error || 'Failed to close conversation'}`);
       }
     } catch (error) {
-      console.error('Error processing:', error);
-      alert('Failed to process');
+      console.error('Error closing conversation:', error);
+      alert('Failed to close conversation');
     } finally {
       setProcessingId(null);
     }
@@ -450,24 +399,27 @@ function CommunicationIntelligence() {
   };
 
   // ================== DELETE HANDLERS ==================
-  const handleDeleteEmail = async (emailId) => {
-    if (!window.confirm('Are you sure you want to delete this email?')) return;
+  const handleDeleteConversation = async (conversationId) => {
+    if (!window.confirm('Are you sure you want to delete this conversation and all its messages?')) return;
 
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/v1/email-intelligence/queue/${emailId}`,
+        `${API_BASE_URL}/api/v1/ai-email/conversations/${conversationId}`,
         { method: 'DELETE', headers: getAuthHeaders() }
       );
       if (response.ok) {
-        if (selectedEmail?.id === emailId) setSelectedEmail(null);
+        if (selectedConversation?.conversation_id === conversationId) {
+          setSelectedConversation(null);
+          setConversationMessages([]);
+        }
         loadData();
         loadStats();
       } else {
-        alert('Failed to delete email');
+        alert('Failed to delete conversation');
       }
     } catch (error) {
-      console.error('Error deleting email:', error);
-      alert('Failed to delete email');
+      console.error('Error deleting conversation:', error);
+      alert('Failed to delete conversation');
     }
   };
 
@@ -492,14 +444,14 @@ function CommunicationIntelligence() {
     }
   };
 
-  const toggleEmailSelection = (emailId, e) => {
+  const toggleConversationSelection = (conversationId, e) => {
     e.stopPropagation();
-    setSelectedEmailIds(prev => {
+    setSelectedConversationIds(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(emailId)) {
-        newSet.delete(emailId);
+      if (newSet.has(conversationId)) {
+        newSet.delete(conversationId);
       } else {
-        newSet.add(emailId);
+        newSet.add(conversationId);
       }
       return newSet;
     });
@@ -518,12 +470,12 @@ function CommunicationIntelligence() {
     });
   };
 
-  const handleSelectAllEmails = () => {
-    const allSelected = emailQueue.every(e => selectedEmailIds.has(e.id));
+  const handleSelectAllConversations = () => {
+    const allSelected = aiConversations.every(c => selectedConversationIds.has(c.conversation_id));
     if (allSelected) {
-      setSelectedEmailIds(new Set());
+      setSelectedConversationIds(new Set());
     } else {
-      setSelectedEmailIds(new Set(emailQueue.map(e => e.id)));
+      setSelectedConversationIds(new Set(aiConversations.map(c => c.conversation_id)));
     }
   };
 
@@ -536,33 +488,34 @@ function CommunicationIntelligence() {
     }
   };
 
-  const handleBulkDeleteEmails = async () => {
-    if (selectedEmailIds.size === 0) return;
-    if (!window.confirm(`Are you sure you want to delete ${selectedEmailIds.size} emails? This cannot be undone.`)) return;
+  const handleBulkDeleteConversations = async () => {
+    if (selectedConversationIds.size === 0) return;
+    if (!window.confirm(`Are you sure you want to delete ${selectedConversationIds.size} conversations? This cannot be undone.`)) return;
 
     setBulkDeleting(true);
     let successCount = 0;
 
-    for (const emailId of selectedEmailIds) {
+    for (const conversationId of selectedConversationIds) {
       try {
         const response = await fetch(
-          `${API_BASE_URL}/api/v1/email-intelligence/queue/${emailId}`,
+          `${API_BASE_URL}/api/v1/ai-email/conversations/${conversationId}`,
           { method: 'DELETE', headers: getAuthHeaders() }
         );
         if (response.ok) successCount++;
       } catch (error) {
-        console.error(`Failed to delete email ${emailId}:`, error);
+        console.error(`Failed to delete conversation ${conversationId}:`, error);
       }
     }
 
-    setSelectedEmailIds(new Set());
-    setSelectedEmail(null);
+    setSelectedConversationIds(new Set());
+    setSelectedConversation(null);
+    setConversationMessages([]);
     setBulkDeleting(false);
     loadData();
     loadStats();
 
-    if (successCount < selectedEmailIds.size) {
-      alert(`Deleted ${successCount} emails. Some failed.`);
+    if (successCount < selectedConversationIds.size) {
+      alert(`Deleted ${successCount} conversations. Some failed.`);
     }
   };
 
@@ -658,211 +611,111 @@ function CommunicationIntelligence() {
   };
 
   // ================== RENDER DETAIL PANEL ==================
-  const renderEmailDetailPanel = () => {
-    if (!selectedEmail) return null;
-
-    const matchConfidence = getMatchConfidence(selectedEmail);
-    const hasLowConfidence = matchConfidence < 70;
+  const renderConversationDetailPanel = () => {
+    if (!selectedConversation) return null;
 
     return (
       <div className="detail-panel">
         <div className="detail-panel-header">
-          <div className="detail-source-badge">
-            {selectedEmail.ai_analysis?.disposition?.toUpperCase().replace(/_/g, ' ') || 'EMAIL'}
+          <div className={`detail-source-badge ${selectedConversation.status}`}>
+            {selectedConversation.status?.toUpperCase() || 'ACTIVE'}
           </div>
-          <button className="detail-close-btn" onClick={() => setSelectedEmail(null)}>×</button>
+          <button className="detail-close-btn" onClick={() => { setSelectedConversation(null); setConversationMessages([]); }}>×</button>
         </div>
 
-        <h2 className="detail-title">{selectedEmail.ai_analysis?.disposition?.replace(/_/g, ' ') || 'Email'}</h2>
+        <h2 className="detail-title">
+          Conversation with {selectedConversation.recipient_name || selectedConversation.recipient_email}
+        </h2>
 
         <div className="detail-info-grid">
           <div className="detail-info-item">
-            <span className="detail-info-label">FROM</span>
-            <span className="detail-info-value">{selectedEmail.from_name || selectedEmail.from_email}</span>
+            <span className="detail-info-label">RECIPIENT</span>
+            <span className="detail-info-value">{selectedConversation.recipient_name || '-'}</span>
           </div>
           <div className="detail-info-item">
-            <span className="detail-info-label">SUBJECT</span>
-            <span className="detail-info-value">{selectedEmail.subject || '(No Subject)'}</span>
+            <span className="detail-info-label">EMAIL</span>
+            <span className="detail-info-value">{selectedConversation.recipient_email}</span>
           </div>
           <div className="detail-info-item">
-            <span className="detail-info-label">PRIORITY</span>
-            <span className={`priority-badge ${getUrgencyLabel(selectedEmail.ai_analysis?.urgency_level || 2).label.toLowerCase()}`}>
-              {getUrgencyLabel(selectedEmail.ai_analysis?.urgency_level || 2).label.toUpperCase()}
+            <span className="detail-info-label">TYPE</span>
+            <span className="detail-info-value">{selectedConversation.conversation_type?.replace(/_/g, ' ') || 'General'}</span>
+          </div>
+          <div className="detail-info-item">
+            <span className="detail-info-label">MESSAGES</span>
+            <span className="detail-info-value">{selectedConversation.message_count || 0}</span>
+          </div>
+          <div className="detail-info-item">
+            <span className="detail-info-label">STATUS</span>
+            <span className={`status-badge ${selectedConversation.status}`}>
+              {selectedConversation.status?.toUpperCase() || 'ACTIVE'}
             </span>
           </div>
           <div className="detail-info-item">
-            <span className="detail-info-label">SOURCE</span>
-            <span className="detail-info-value">Email Intelligence</span>
+            <span className="detail-info-label">STARTED</span>
+            <span className="detail-info-value">{formatFullDate(selectedConversation.created_at)}</span>
           </div>
-          <div className="detail-info-item">
-            <span className="detail-info-label">OWNER</span>
-            <span className="detail-info-value">Loan Officer</span>
-          </div>
-          <div className="detail-info-item">
-            <span className="detail-info-label">DATE RECEIVED</span>
-            <span className="detail-info-value">{formatFullDate(selectedEmail.sent_date)}</span>
-          </div>
+          {selectedConversation.last_message_at && (
+            <div className="detail-info-item">
+              <span className="detail-info-label">LAST MESSAGE</span>
+              <span className="detail-info-value">{formatFullDate(selectedConversation.last_message_at)}</span>
+            </div>
+          )}
+          {selectedConversation.loan_id && (
+            <div className="detail-info-item">
+              <span className="detail-info-label">LINKED LOAN</span>
+              <span className="detail-info-value">Loan #{selectedConversation.loan_id}</span>
+            </div>
+          )}
+          {selectedConversation.lead_id && (
+            <div className="detail-info-item">
+              <span className="detail-info-label">LINKED LEAD</span>
+              <span className="detail-info-value">Lead #{selectedConversation.lead_id}</span>
+            </div>
+          )}
         </div>
 
-        {/* Flagged for Review Banner */}
-        {hasLowConfidence && (
-          <div className="flagged-banner">
-            <span className="flag-icon">⚠</span>
-            <div className="flag-content">
-              <span className="flag-title">Flagged for Review:</span>
-              <span className="flag-reason">Low match confidence</span>
-            </div>
-            <span className="flag-confidence">Match Confidence: {matchConfidence}%</span>
-          </div>
-        )}
-
-        {/* Where should this data go? */}
-        <div className="entity-routing-section">
-          <h4>Where should this data go?</h4>
-          <div className="entity-options">
-            <div className={`entity-option ${selectedEmail.matched_loan_id ? 'has-match' : ''}`}>
-              <span className="entity-icon">📁</span>
-              <span className="entity-label">Active Loan</span>
-              <span className="entity-status">
-                {selectedEmail.matched_loan_id ? `Loan #${selectedEmail.matched_loan_id}` : 'No match found'}
-              </span>
-            </div>
-            <div className={`entity-option ${selectedEmail.matched_lead_id ? 'has-match' : ''}`}>
-              <span className="entity-icon">👤</span>
-              <span className="entity-label">Lead</span>
-              <span className="entity-status">
-                {selectedEmail.matched_lead_id ? `Lead #${selectedEmail.matched_lead_id}` : 'No match found'}
-              </span>
-            </div>
-            <div className="entity-option create-new">
-              <span className="entity-icon">+</span>
-              <span className="entity-label">Create New Loan</span>
-              <span className="entity-status">{selectedEmail.from_name || selectedEmail.from_email}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Matched Entity */}
-        <div className="matched-entity-section">
-          <h4>Matched Entity</h4>
-          <div className="confidence-indicator">
-            <span className={`confidence-bar ${matchConfidence >= 70 ? 'high' : matchConfidence >= 40 ? 'medium' : 'low'}`}>
-              <span className="confidence-fill" style={{ width: `${matchConfidence}%` }}></span>
-            </span>
-            <span className="confidence-text">Match Confidence: {matchConfidence}%</span>
-          </div>
-        </div>
-
-        {/* Extracted Fields */}
-        <div className="extracted-fields-section">
-          <h4>EXTRACTED FIELDS</h4>
-          <div className="extracted-fields-grid">
-            <div className="extracted-field">
-              <span className="field-label">FROM NAME</span>
-              <span className="field-confidence">95%</span>
-              <span className="field-value">{selectedEmail.from_name || '-'}</span>
-            </div>
-            <div className="extracted-field">
-              <span className="field-label">FROM EMAIL</span>
-              <span className="field-confidence">100%</span>
-              <span className="field-value">{selectedEmail.from_email || '-'}</span>
-            </div>
-            <div className="extracted-field">
-              <span className="field-label">SUBJECT</span>
-              <span className="field-confidence">100%</span>
-              <span className="field-value">{selectedEmail.subject || '-'}</span>
-            </div>
-            {selectedEmail.has_attachments && (
-              <div className="extracted-field">
-                <span className="field-label">ATTACHMENTS</span>
-                <span className="field-confidence">100%</span>
-                <span className="field-value">{selectedEmail.attachment_count} file(s)</span>
-              </div>
+        {/* Conversation Messages */}
+        <div className="conversation-messages-section">
+          <h4>CONVERSATION THREAD</h4>
+          <div className="conversation-messages">
+            {conversationMessages.length === 0 ? (
+              <div className="no-messages">Loading messages...</div>
+            ) : (
+              conversationMessages.map((msg, idx) => (
+                <div key={msg.id || idx} className={`conversation-message ${msg.direction}`}>
+                  <div className="message-header">
+                    <span className="message-sender">
+                      {msg.direction === 'outbound' ? 'AI Assistant' : selectedConversation.recipient_name || 'Recipient'}
+                    </span>
+                    <span className="message-time">{formatFullDate(msg.created_at)}</span>
+                    {msg.ai_generated && <span className="ai-badge">AI</span>}
+                  </div>
+                  <div className="message-subject">{msg.subject}</div>
+                  <div className="message-body">{msg.body_text || 'No content'}</div>
+                </div>
+              ))
             )}
           </div>
         </div>
 
-        {/* AI Analysis */}
-        {selectedEmail.ai_analysis && (
-          <div className="ai-analysis-section">
-            <h4>AI ANALYSIS</h4>
-            <div className="analysis-grid">
-              <div className="analysis-item">
-                <span className="analysis-label">Summary</span>
-                <span className="analysis-value">{selectedEmail.ai_analysis.summary || '-'}</span>
-              </div>
-              <div className="analysis-item">
-                <span className="analysis-label">Disposition</span>
-                <span className="analysis-value">{selectedEmail.ai_analysis.disposition?.replace(/_/g, ' ') || '-'}</span>
-              </div>
-              <div className="analysis-item">
-                <span className="analysis-label">Sentiment</span>
-                <span className="analysis-value sentiment" style={{ color: getSentimentColor(selectedEmail.ai_analysis.sentiment) }}>
-                  {selectedEmail.ai_analysis.sentiment || '-'}
-                </span>
-              </div>
-              <div className="analysis-item">
-                <span className="analysis-label">Urgency</span>
-                <span className="analysis-value">{selectedEmail.ai_analysis.urgency_level || 0}/5</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Message Preview */}
-        <div className="message-preview-section">
-          <h4>MESSAGE PREVIEW</h4>
-          <div className="message-content">
-            {selectedEmail.body_preview || selectedEmail.body_full || 'No content'}
-          </div>
+        {/* Actions */}
+        <div className="detail-actions">
+          {selectedConversation.status === 'active' && (
+            <button
+              className="process-btn warning"
+              onClick={handleCloseConversation}
+              disabled={processingId === selectedConversation.id}
+            >
+              {processingId === selectedConversation.id ? 'Closing...' : 'Close Conversation'}
+            </button>
+          )}
+          <button
+            className="delete-btn"
+            onClick={() => handleDeleteConversation(selectedConversation.conversation_id)}
+          >
+            Delete Conversation
+          </button>
         </div>
-
-        {/* Disposition Selection */}
-        {selectedEmail.status === 'pending' && (
-          <div className="disposition-section">
-            <h4>SET DISPOSITION</h4>
-            <div className="disposition-grid">
-              {emailDispositionOptions.map(opt => (
-                <button
-                  key={opt.value}
-                  className={`disposition-option ${selectedDisposition === opt.value ? 'selected' : ''}`}
-                  onClick={() => setSelectedDisposition(opt.value)}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-
-            <div className="task-option">
-              <label>
-                <input type="checkbox" checked={createTask} onChange={(e) => setCreateTask(e.target.checked)} />
-                Create follow-up task
-              </label>
-              {createTask && (
-                <input
-                  type="text"
-                  value={taskTitle}
-                  onChange={(e) => setTaskTitle(e.target.value)}
-                  placeholder="Task title"
-                  className="task-title-input"
-                />
-              )}
-            </div>
-
-            <div className="detail-actions">
-              <button
-                className="process-btn"
-                onClick={handleProcessEmail}
-                disabled={!selectedDisposition || processingId === selectedEmail.id}
-              >
-                {processingId === selectedEmail.id ? 'Processing...' : 'Process Email'}
-              </button>
-              <button className="skip-btn" onClick={() => setSelectedEmail(null)}>
-                Skip
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     );
   };
@@ -1072,10 +925,10 @@ function CommunicationIntelligence() {
 
   // ================== RENDER ==================
   const currentStats = commMode === 'email' ? emailStats : smsStats;
-  const hasDetailPanel = selectedEmail || selectedSms;
+  const hasDetailPanel = selectedConversation || selectedSms;
 
   return (
-    <div className="communication-intelligence-page">
+    <div className="communication-intelligence-page" ref={containerRef}>
       {/* Page Header */}
       <div className="page-header">
         <h1>Communication Intelligence</h1>
@@ -1120,21 +973,17 @@ function CommunicationIntelligence() {
       <div className="stats-grid">
         {commMode === 'email' ? (
           <>
-            <div className="stat-card clickable" onClick={() => { setEmailFilters({ ...emailFilters, status: 'pending' }); setActiveTab('queue'); }}>
-              <div className="stat-value">{emailStats.pending_count || 0}</div>
-              <div className="stat-label">PENDING</div>
+            <div className="stat-card clickable" onClick={() => { setEmailFilters({ ...emailFilters, status: '' }); }}>
+              <div className="stat-value">{emailStats.total_conversations || 0}</div>
+              <div className="stat-label">TOTAL</div>
             </div>
-            <div className="stat-card clickable" onClick={() => { setEmailFilters({ ...emailFilters, status: 'processed' }); setActiveTab('queue'); }}>
-              <div className="stat-value">{emailStats.processed_count || 0}</div>
-              <div className="stat-label">PROCESSED</div>
+            <div className="stat-card clickable" onClick={() => { setEmailFilters({ ...emailFilters, status: 'active' }); }}>
+              <div className="stat-value">{emailStats.active_conversations || 0}</div>
+              <div className="stat-label">ACTIVE</div>
             </div>
-            <div className="stat-card clickable" onClick={() => setActiveTab('conversations')}>
-              <div className="stat-value">{emailStats.conversation_logs_created || 0}</div>
-              <div className="stat-label">CONVERSATIONS</div>
-            </div>
-            <div className="stat-card clickable" onClick={() => setActiveTab('all-documents')}>
-              <div className="stat-value">{emailStats.documents_received || 0}</div>
-              <div className="stat-label">DOCS RECEIVED</div>
+            <div className="stat-card clickable" onClick={() => { setEmailFilters({ ...emailFilters, status: 'closed' }); }}>
+              <div className="stat-value">{emailStats.closed_conversations || 0}</div>
+              <div className="stat-label">CLOSED</div>
             </div>
           </>
         ) : (
@@ -1160,28 +1009,10 @@ function CommunicationIntelligence() {
       </div>
       )}
 
-      {/* Tabs - only show for email/sms modes */}
-      {commMode !== 'dialer' && (
+      {/* Tabs - only show for sms mode (email mode doesn't need tabs, just shows conversations) */}
+      {commMode === 'sms' && (
       <div className="tabs-container">
-        {commMode === 'email' ? (
-          <>
-            <button className={`tab-button ${activeTab === 'queue' ? 'active' : ''}`} onClick={() => setActiveTab('queue')}>
-              Queue ({emailStats.pending_count || 0})
-            </button>
-            <button className={`tab-button ${activeTab === 'conversations' ? 'active' : ''}`} onClick={() => setActiveTab('conversations')}>
-              Conversations
-            </button>
-            <button className={`tab-button ${activeTab === 'documents' ? 'active' : ''}`} onClick={() => setActiveTab('documents')}>
-              Documents
-            </button>
-            <button className={`tab-button ${activeTab === 'sla' ? 'active' : ''}`} onClick={() => setActiveTab('sla')}>
-              SLA Tracking
-            </button>
-            <button className={`tab-button ${activeTab === 'all-documents' ? 'active' : ''}`} onClick={() => setActiveTab('all-documents')}>
-              All Docs ({emailStats.documents_received || 0})
-            </button>
-          </>
-        ) : (
+        {commMode === 'sms' && (
           <>
             <button className={`tab-button ${activeTab === 'queue' ? 'active' : ''}`} onClick={() => setActiveTab('queue')}>
               Queue ({smsStats.totals?.pending || 0})

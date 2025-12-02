@@ -1266,7 +1266,7 @@ function ReconciliationCenter() {
   }
 
   return (
-    <div className="reconciliation-page">
+    <div className="reconciliation-page" ref={containerRef}>
       <div className="reconciliation-container">
         <div className="reconciliation-header">
           <div className="header-content">

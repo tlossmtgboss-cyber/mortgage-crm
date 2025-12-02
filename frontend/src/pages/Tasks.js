@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { teamAPI, tasksAPI, reconciliationAPI, aiAPI } from '../services/api';
 import MergeCenter from './MergeCenter';
+import { useLayoutFix } from '../hooks/useLayoutFix';
 import './Tasks.css';
 
 // Mock data functions
@@ -615,6 +616,9 @@ function Tasks() {
   const [sendingInstruction, setSendingInstruction] = useState(false);
   const [selectedTaskIds, setSelectedTaskIds] = useState(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  // Layout fix hook
+  const { containerRef, triggerRecalculation } = useLayoutFix([loading]);
 
   // Save completed tasks to localStorage whenever it changes
   useEffect(() => {
@@ -1840,7 +1844,7 @@ Client seemed very engaged and interested in moving forward with the pre-qualifi
   };
 
   return (
-    <div className="tasks-page">
+    <div className="tasks-page" ref={containerRef}>
       <div className="page-header">
         <h1>Tasks</h1>
         <p>{allTasks.length} total tasks</p>

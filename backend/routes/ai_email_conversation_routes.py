@@ -524,6 +524,47 @@ async def close_conversation(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.delete("/conversations/{conversation_id}", response_model=dict)
+async def delete_conversation(
+    conversation_id: str,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user_dep())
+):
+    """Delete an AI conversation and all its messages"""
+    try:
+        # Verify user owns conversation
+        conv = db.execute(text("""
+            SELECT id FROM ai_email_conversations
+            WHERE conversation_id = :conv_id AND user_id = :user_id
+        """), {"conv_id": conversation_id, "user_id": current_user.id}).fetchone()
+
+        if not conv:
+            raise HTTPException(status_code=404, detail="Conversation not found")
+
+        # Delete all messages first
+        db.execute(text("""
+            DELETE FROM ai_email_messages
+            WHERE conversation_id = :conv_id
+        """), {"conv_id": conversation_id})
+
+        # Delete the conversation
+        db.execute(text("""
+            DELETE FROM ai_email_conversations
+            WHERE conversation_id = :conv_id AND user_id = :user_id
+        """), {"conv_id": conversation_id, "user_id": current_user.id})
+
+        db.commit()
+        logger.info(f"Deleted AI conversation {conversation_id}")
+        return {"success": True, "message": "Conversation deleted"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting conversation: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # =============================================================================
 # Helper Functions
 # =============================================================================
