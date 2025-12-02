@@ -25463,31 +25463,43 @@ async def submit_mortgage_planner_questionnaire(
         }
 
         # Determine if first time buyer based on questionnaire
-        first_time_buyer = data.hasOwnedHomeBefore == 'No' if data.hasOwnedHomeBefore else None
+        first_time_buyer = None
+        if data.hasOwnedHomeBefore:
+            first_time_buyer = data.hasOwnedHomeBefore.lower() == 'no'
 
         # Parse target payment
         target_payment = None
         if data.comfortablePayment:
             try:
-                target_payment = float(data.comfortablePayment.replace(',', '').replace('$', ''))
+                # Remove any non-numeric characters except decimal
+                payment_str = ''.join(c for c in data.comfortablePayment if c.isdigit() or c == '.')
+                if payment_str:
+                    target_payment = float(payment_str)
             except (ValueError, TypeError):
                 pass
 
-        # Create the lead
-        new_lead = Lead(
-            name=data.name,
-            first_name=first_name,
-            last_name=last_name,
-            email=data.email,
-            phone=data.phone,
-            stage=LeadStage.NEW,
-            source=data.source or "Mortgage Planner Questionnaire",
-            owner_id=owner_id,
-            first_time_buyer=first_time_buyer,
-            target_payment=target_payment,
-            user_metadata=questionnaire_data,
-            notes=f"Submitted Mortgage Planning Questionnaire on {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')}"
-        )
+        # Create the lead - only set fields that have values
+        lead_data = {
+            "name": data.name,
+            "first_name": first_name,
+            "last_name": last_name,
+            "email": data.email,
+            "phone": data.phone,
+            "stage": LeadStage.NEW,
+            "source": data.source or "Mortgage Planner Questionnaire",
+            "user_metadata": questionnaire_data,
+            "notes": f"Submitted Mortgage Planning Questionnaire on {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')}"
+        }
+
+        # Only add optional fields if they have values
+        if owner_id:
+            lead_data["owner_id"] = owner_id
+        if first_time_buyer is not None:
+            lead_data["first_time_buyer"] = first_time_buyer
+        if target_payment:
+            lead_data["target_payment"] = target_payment
+
+        new_lead = Lead(**lead_data)
 
         db.add(new_lead)
         db.commit()
