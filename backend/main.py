@@ -5951,7 +5951,11 @@ async def import_document_notification_email(
             logger.info(f"Created activity {activity_id} for document email")
         except Exception as e:
             logger.error(f"Failed to create activity: {e}")
-            db.rollback()
+            results["activity_error"] = str(e)
+            try:
+                db.rollback()
+            except:
+                pass
 
         # 2. Create conversation log entry for email intelligence
         try:
