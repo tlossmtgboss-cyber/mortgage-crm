@@ -5867,6 +5867,184 @@ async def send_generic_email(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ============================================================================
+# DOCUMENT UPLOAD EMAIL IMPORT ENDPOINT
+# ============================================================================
+
+class DocumentEmailImportRequest(BaseModel):
+    """Request model for importing document upload notification emails"""
+    lead_id: Optional[int] = None
+    loan_id: Optional[int] = None
+    from_email: str
+    from_name: str
+    subject: str
+    body: str
+    received_date: Optional[str] = None
+    has_attachments: bool = True
+    attachment_names: Optional[List[str]] = None
+    create_task: bool = True
+
+
+@app.post("/api/v1/email/import-document-notification")
+async def import_document_notification_email(
+    request: DocumentEmailImportRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Import a document upload notification email and optionally create a review task.
+
+    This endpoint:
+    1. Creates an activity record for the email (displayed in profile email history)
+    2. Creates a conversation log entry (for email intelligence tracking)
+    3. Optionally creates a task to review the uploaded documents
+    """
+    try:
+        user_id = current_user.id if current_user else 1
+        now = datetime.now(timezone.utc)
+
+        # Parse received_date if provided
+        received_at = now
+        if request.received_date:
+            try:
+                received_at = datetime.fromisoformat(request.received_date.replace('Z', '+00:00'))
+            except:
+                received_at = now
+
+        results = {
+            "success": True,
+            "activity_created": False,
+            "conversation_log_created": False,
+            "task_created": False,
+            "activity_id": None,
+            "task_id": None,
+            "lead_id": request.lead_id,
+            "loan_id": request.loan_id
+        }
+
+        # 1. Create Activity record (this is what shows in email history on profile page)
+        activity_description = f"From: {request.from_name} <{request.from_email}>\nSubject: {request.subject}\n\n{request.body}"
+        if request.attachment_names:
+            activity_description += f"\n\nAttachments: {', '.join(request.attachment_names)}"
+
+        try:
+            activity_result = db.execute(text("""
+                INSERT INTO activities (
+                    lead_id, loan_id, type, description,
+                    created_at, user_id
+                ) VALUES (
+                    :lead_id, :loan_id, 'email', :description,
+                    :created_at, :user_id
+                ) RETURNING id
+            """), {
+                "lead_id": request.lead_id,
+                "loan_id": request.loan_id,
+                "description": activity_description,
+                "created_at": received_at,
+                "user_id": user_id
+            })
+            activity_id = activity_result.fetchone()[0]
+            results["activity_created"] = True
+            results["activity_id"] = activity_id
+            db.commit()
+            logger.info(f"Created activity {activity_id} for document email")
+        except Exception as e:
+            logger.error(f"Failed to create activity: {e}")
+            db.rollback()
+
+        # 2. Create conversation log entry for email intelligence
+        try:
+            # First check if the table exists
+            table_check = db.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'email_conversation_log'
+                )
+            """)).scalar()
+
+            if table_check:
+                conv_result = db.execute(text("""
+                    INSERT INTO email_conversation_log (
+                        lead_id, loan_id, email_subject, email_date, direction,
+                        summary, documents_received, sentiment, urgency_level,
+                        user_id, created_at
+                    ) VALUES (
+                        :lead_id, :loan_id, :subject, :email_date, 'inbound',
+                        :summary, :docs_received, 'neutral', 3,
+                        :user_id, :created_at
+                    ) RETURNING id
+                """), {
+                    "lead_id": request.lead_id,
+                    "loan_id": request.loan_id,
+                    "subject": request.subject,
+                    "email_date": received_at,
+                    "summary": f"Document upload notification from {request.from_name}: {request.subject}",
+                    "docs_received": json.dumps(request.attachment_names or []),
+                    "user_id": user_id,
+                    "created_at": now
+                })
+                conv_log_id = conv_result.fetchone()[0]
+                results["conversation_log_created"] = True
+                results["conversation_log_id"] = conv_log_id
+                db.commit()
+        except Exception as e:
+            logger.warning(f"Could not create conversation log (table may not exist): {e}")
+            db.rollback()
+
+        # 3. Create task to review documents if requested
+        if request.create_task:
+            try:
+                # Build task title with sender name
+                task_title = f"Review documents from {request.from_name}"
+                if request.attachment_names:
+                    task_title = f"Review {len(request.attachment_names)} document(s) from {request.from_name}"
+
+                # Build task description
+                task_description = f"Documents uploaded via email\n\nFrom: {request.from_name} <{request.from_email}>\nSubject: {request.subject}"
+                if request.attachment_names:
+                    task_description += f"\n\nDocuments to review:\n" + "\n".join([f"• {name}" for name in request.attachment_names])
+                task_description += f"\n\nOriginal email:\n{request.body[:500]}..."
+
+                # Due date: 1 business day from now
+                due_date = now + timedelta(days=1)
+
+                task_result = db.execute(text("""
+                    INSERT INTO tasks (
+                        title, description, due_date, priority,
+                        lead_id, loan_id, assigned_to, status,
+                        source, created_at, user_id
+                    ) VALUES (
+                        :title, :description, :due_date, 'high',
+                        :lead_id, :loan_id, :assigned_to, 'pending',
+                        'email_document_upload', :created_at, :user_id
+                    ) RETURNING id
+                """), {
+                    "title": task_title[:255],
+                    "description": task_description,
+                    "due_date": due_date,
+                    "lead_id": request.lead_id,
+                    "loan_id": request.loan_id,
+                    "assigned_to": user_id,
+                    "created_at": now,
+                    "user_id": user_id
+                })
+                task_id = task_result.fetchone()[0]
+                results["task_created"] = True
+                results["task_id"] = task_id
+                db.commit()
+                logger.info(f"Created task {task_id} to review documents from {request.from_name}")
+            except Exception as e:
+                logger.error(f"Failed to create task: {e}")
+                db.rollback()
+
+        return results
+
+    except Exception as e:
+        logger.error(f"Error importing document notification email: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/v1/ai/orchestrator-chat")
 async def orchestrator_chat(
     request: Request,
@@ -35543,9 +35721,9 @@ def copy_loan_to_mum_client(loan: Loan, db: Session, user_id: int) -> Optional[M
 
         logger.info(f"✅ Created MUM client {mum_client.id} from funded loan {loan.loan_number} ({loan.borrower_name})")
 
-        # Create post-close welcome task
+        # Create post-close welcome task using Task model
         from datetime import timedelta
-        welcome_task = AITask(
+        welcome_task = Task(
             title=f"Post-Close Welcome Call - {loan.borrower_name}",
             description=f"""Congratulations! {loan.borrower_name}'s loan has funded!
 
@@ -35560,25 +35738,25 @@ Loan Details:
 - Loan #: {loan.loan_number}
 - Program: {loan.program or 'N/A'}
 - Amount: ${loan.amount:,.2f}
-- Rate: {loan.rate}%
+- Rate: {loan.rate or 0}%
 - Close Date: {funded_date.strftime('%Y-%m-%d')}""",
-            type=TaskType.CALL,
             priority="high",
             loan_id=loan.id,
-            mum_client_id=mum_client.id,
-            user_id=user_id,
+            owner_id=user_id,
+            related_contact_name=loan.borrower_name,
+            related_type="post_close",
             due_date=datetime.now(timezone.utc) + timedelta(days=1),  # Due tomorrow
             status="pending"
         )
         db.add(welcome_task)
 
         # Create AMR reminder task for 11 months from now
-        amr_task = AITask(
+        amr_task = Task(
             title=f"Annual Mortgage Review Due - {loan.borrower_name}",
             description=f"""Annual Mortgage Review (AMR) is coming up for {loan.borrower_name}.
 
 Review items:
-1. Check current market rates vs their rate ({loan.rate}%)
+1. Check current market rates vs their rate ({loan.rate or 0}%)
 2. Evaluate refinance opportunities
 3. Review home value appreciation
 4. Discuss any life changes affecting mortgage needs
@@ -35587,12 +35765,12 @@ Review items:
 Original Loan:
 - Loan #: {loan.loan_number}
 - Original Amount: ${loan.amount:,.2f}
-- Rate: {loan.rate}%""",
-            type=TaskType.CALL,
+- Rate: {loan.rate or 0}%""",
             priority="medium",
             loan_id=loan.id,
-            mum_client_id=mum_client.id,
-            user_id=user_id,
+            owner_id=user_id,
+            related_contact_name=loan.borrower_name,
+            related_type="amr",
             due_date=datetime.now(timezone.utc) + timedelta(days=335),  # ~11 months
             status="pending"
         )
