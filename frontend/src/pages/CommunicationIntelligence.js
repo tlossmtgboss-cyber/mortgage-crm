@@ -932,7 +932,7 @@ function CommunicationIntelligence() {
       {/* Page Header */}
       <div className="page-header">
         <h1>Communication Intelligence</h1>
-        <p className="subtitle">AI-powered email & SMS analysis, conversation tracking, and document management</p>
+        <p className="subtitle">AI-powered two-way conversations with borrowers and clients</p>
       </div>
 
       {/* Mode Selector */}
@@ -942,8 +942,8 @@ function CommunicationIntelligence() {
           onClick={() => setCommMode('email')}
         >
           <span className="mode-label">Email</span>
-          {emailStats.pending_count > 0 && (
-            <span className="mode-badge">{emailStats.pending_count}</span>
+          {emailStats.active_conversations > 0 && (
+            <span className="mode-badge">{emailStats.active_conversations}</span>
           )}
         </button>
         <button
@@ -1037,71 +1037,34 @@ function CommunicationIntelligence() {
       </div>
       )}
 
-      {/* Split Panel Layout for Queue - only show for email/sms modes */}
-      {commMode !== 'dialer' && activeTab === 'queue' && (
+      {/* Split Panel Layout - for email AI conversations and SMS queue */}
+      {commMode === 'email' && (
         <div className={`split-panel-layout ${hasDetailPanel ? 'has-detail' : ''}`}>
-          {/* Left Panel - List */}
+          {/* Left Panel - AI Conversations List */}
           <div className="list-panel">
             <div className="filters-row">
               <div className="filters-left">
                 <input
                   type="checkbox"
                   className="select-all-checkbox"
-                  checked={commMode === 'email'
-                    ? emailQueue.length > 0 && emailQueue.every(e => selectedEmailIds.has(e.id))
-                    : smsQueue.length > 0 && smsQueue.every(s => selectedSmsIds.has(s.id))}
-                  onChange={commMode === 'email' ? handleSelectAllEmails : handleSelectAllSms}
+                  checked={aiConversations.length > 0 && aiConversations.every(c => selectedConversationIds.has(c.conversation_id))}
+                  onChange={handleSelectAllConversations}
                   title="Select all"
                 />
-                {commMode === 'email' ? (
-                  <>
-                    <select value={emailFilters.status} onChange={(e) => setEmailFilters({ ...emailFilters, status: e.target.value })}>
-                      <option value="">All Status</option>
-                      <option value="pending">Pending</option>
-                      <option value="processed">Processed</option>
-                    </select>
-                    <select value={emailFilters.disposition} onChange={(e) => setEmailFilters({ ...emailFilters, disposition: e.target.value })}>
-                      <option value="">All Dispositions</option>
-                      {emailDispositionOptions.map(opt => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                    <select value={emailFilters.hasMatch} onChange={(e) => setEmailFilters({ ...emailFilters, hasMatch: e.target.value })}>
-                      <option value="">Match Status</option>
-                      <option value="yes">Has Match</option>
-                      <option value="no">No Match</option>
-                    </select>
-                  </>
-                ) : (
-                  <>
-                    <select value={smsFilters.status} onChange={(e) => setSmsFilters({ ...smsFilters, status: e.target.value })}>
-                      <option value="">All Status</option>
-                      <option value="pending">Pending</option>
-                      <option value="analyzed">Analyzed</option>
-                      <option value="completed">Completed</option>
-                    </select>
-                    <select value={smsFilters.direction} onChange={(e) => setSmsFilters({ ...smsFilters, direction: e.target.value })}>
-                      <option value="">All Directions</option>
-                      <option value="inbound">Inbound</option>
-                      <option value="outbound">Outbound</option>
-                    </select>
-                    <select value={smsFilters.disposition} onChange={(e) => setSmsFilters({ ...smsFilters, disposition: e.target.value })}>
-                      <option value="">All Dispositions</option>
-                      {smsDispositionOptions.map(opt => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                    </select>
-                  </>
-                )}
+                <select value={emailFilters.status} onChange={(e) => setEmailFilters({ ...emailFilters, status: e.target.value })}>
+                  <option value="">All Status</option>
+                  <option value="active">Active</option>
+                  <option value="closed">Closed</option>
+                </select>
               </div>
               <div className="filters-right">
-                {(commMode === 'email' ? selectedEmailIds.size : selectedSmsIds.size) > 0 && (
+                {selectedConversationIds.size > 0 && (
                   <button
                     className="bulk-delete-btn"
-                    onClick={commMode === 'email' ? handleBulkDeleteEmails : handleBulkDeleteSms}
+                    onClick={handleBulkDeleteConversations}
                     disabled={bulkDeleting}
                   >
-                    {bulkDeleting ? 'Deleting...' : `🗑️ Delete (${commMode === 'email' ? selectedEmailIds.size : selectedSmsIds.size})`}
+                    {bulkDeleting ? 'Deleting...' : `Delete (${selectedConversationIds.size})`}
                   </button>
                 )}
                 <button className="refresh-btn" onClick={loadData}>Refresh</button>
@@ -1110,263 +1073,175 @@ function CommunicationIntelligence() {
 
             {loading ? (
               <div className="loading-spinner">Loading...</div>
-            ) : commMode === 'email' ? (
-              emailQueue.length === 0 ? (
-                <div className="empty-state">
-                  <h3>No emails in queue</h3>
-                  <p>Sync your email to import messages for processing</p>
-                </div>
-              ) : (
-                <div className="queue-list">
-                  {emailQueue.map(email => (
-                    <div
-                      key={email.id}
-                      className={`queue-item ${selectedEmail?.id === email.id ? 'selected' : ''} ${email.status} ${selectedEmailIds.has(email.id) ? 'checked' : ''}`}
-                      onClick={() => handleSelectEmail(email)}
-                    >
-                      <div className="queue-item-checkbox">
-                        <input
-                          type="checkbox"
-                          checked={selectedEmailIds.has(email.id)}
-                          onChange={(e) => toggleEmailSelection(email.id, e)}
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      </div>
-                      <div className="queue-item-content">
-                        <div className="queue-item-header">
-                          <span className={`queue-item-type ${email.ai_analysis?.disposition || 'general'}`}>
-                            {email.ai_analysis?.disposition?.replace(/_/g, ' ') || 'General'}
-                          </span>
-                          {(!email.matched_loan_id && !email.matched_lead_id) && (
-                            <span className="needs-review-badge">NEEDS REVIEW</span>
-                          )}
-                        </div>
-                        <div className="queue-item-subject">{email.subject || '(No Subject)'}</div>
-                        <div className="queue-item-preview">
-                          {email.body_preview?.substring(0, 100)}...
-                        </div>
-                        <div className="queue-item-reason">
-                          <span className="reason-label">Reason:</span> {email.ai_analysis?.summary?.substring(0, 60) || 'Pending analysis'}...
-                        </div>
-                      </div>
-                      <button
-                        className="queue-item-delete-btn"
-                        onClick={(e) => { e.stopPropagation(); handleDeleteEmail(email.id); }}
-                        title="Delete email"
-                      >
-                        🗑️
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )
+            ) : aiConversations.length === 0 ? (
+              <div className="empty-state">
+                <h3>No AI conversations</h3>
+                <p>Start a two-way AI conversation from a loan or lead to see it here</p>
+              </div>
             ) : (
-              smsQueue.length === 0 ? (
-                <div className="empty-state">
-                  <h3>No SMS messages in queue</h3>
-                  <p>Messages will appear here when received via Twilio webhook</p>
-                </div>
-              ) : (
-                <div className="queue-list">
-                  {smsQueue.map(sms => (
-                    <div
-                      key={sms.id}
-                      className={`queue-item ${selectedSms?.id === sms.id ? 'selected' : ''} ${sms.status} ${selectedSmsIds.has(sms.id) ? 'checked' : ''}`}
-                      onClick={() => handleSelectSms(sms)}
-                    >
-                      <div className="queue-item-checkbox">
-                        <input
-                          type="checkbox"
-                          checked={selectedSmsIds.has(sms.id)}
-                          onChange={(e) => toggleSmsSelection(sms.id, e)}
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                      </div>
-                      <div className="queue-item-content">
-                        <div className="queue-item-header">
-                          <span className={`queue-item-type ${sms.ai_analysis?.disposition || sms.disposition || 'general'}`}>
-                            {(sms.ai_analysis?.disposition || sms.disposition || 'General').replace(/_/g, ' ')}
-                          </span>
-                          {(!sms.matched_loan_id && !sms.matched_lead_id) && (
-                            <span className="needs-review-badge">NEEDS REVIEW</span>
-                          )}
-                        </div>
-                        <div className="queue-item-subject">{formatPhone(sms.from_phone)} ({sms.direction})</div>
-                        <div className="queue-item-preview">
-                          {sms.message_body?.substring(0, 100)}...
-                        </div>
-                        <div className="queue-item-reason">
-                          <span className="reason-label">Reason:</span> {sms.requires_response ? 'Requires response' : 'Pending review'}
-                        </div>
-                      </div>
-                      <button
-                        className="queue-item-delete-btn"
-                        onClick={(e) => { e.stopPropagation(); handleDeleteSms(sms.id); }}
-                        title="Delete SMS"
-                      >
-                        🗑️
-                      </button>
+              <div className="queue-list">
+                {aiConversations.map(conv => (
+                  <div
+                    key={conv.conversation_id}
+                    className={`queue-item ${selectedConversation?.conversation_id === conv.conversation_id ? 'selected' : ''} ${conv.status} ${selectedConversationIds.has(conv.conversation_id) ? 'checked' : ''}`}
+                    onClick={() => handleSelectConversation(conv)}
+                  >
+                    <div className="queue-item-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={selectedConversationIds.has(conv.conversation_id)}
+                        onChange={(e) => toggleConversationSelection(conv.conversation_id, e)}
+                        onClick={(e) => e.stopPropagation()}
+                      />
                     </div>
-                  ))}
-                </div>
-              )
+                    <div className="queue-item-content">
+                      <div className="queue-item-header">
+                        <span className={`queue-item-type ${conv.conversation_type || 'general'}`}>
+                          {conv.conversation_type?.replace(/_/g, ' ') || 'General'}
+                        </span>
+                        <span className={`status-badge ${conv.status}`}>
+                          {conv.status?.toUpperCase() || 'ACTIVE'}
+                        </span>
+                      </div>
+                      <div className="queue-item-subject">{conv.recipient_name || conv.recipient_email}</div>
+                      <div className="queue-item-preview">
+                        {conv.message_count || 0} messages
+                        {conv.last_message_at && ` • Last: ${formatDate(conv.last_message_at)}`}
+                      </div>
+                    </div>
+                    <button
+                      className="queue-item-delete-btn"
+                      onClick={(e) => { e.stopPropagation(); handleDeleteConversation(conv.conversation_id); }}
+                      title="Delete conversation"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
           {/* Right Panel - Detail */}
           {hasDetailPanel && (
             <div className="detail-panel-container">
-              {selectedEmail && renderEmailDetailPanel()}
+              {selectedConversation && renderConversationDetailPanel()}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Split Panel Layout for SMS Queue */}
+      {commMode === 'sms' && activeTab === 'queue' && (
+        <div className={`split-panel-layout ${hasDetailPanel ? 'has-detail' : ''}`}>
+          {/* Left Panel - List */}
+          <div className="list-panel">
+            <div className="filters-row">
+              <div className="filters-left">
+                <input
+                  type="checkbox"
+                  className="select-all-checkbox"
+                  checked={smsQueue.length > 0 && smsQueue.every(s => selectedSmsIds.has(s.id))}
+                  onChange={handleSelectAllSms}
+                  title="Select all"
+                />
+                <select value={smsFilters.status} onChange={(e) => setSmsFilters({ ...smsFilters, status: e.target.value })}>
+                  <option value="">All Status</option>
+                  <option value="pending">Pending</option>
+                  <option value="analyzed">Analyzed</option>
+                  <option value="completed">Completed</option>
+                </select>
+                <select value={smsFilters.direction} onChange={(e) => setSmsFilters({ ...smsFilters, direction: e.target.value })}>
+                  <option value="">All Directions</option>
+                  <option value="inbound">Inbound</option>
+                  <option value="outbound">Outbound</option>
+                </select>
+                <select value={smsFilters.disposition} onChange={(e) => setSmsFilters({ ...smsFilters, disposition: e.target.value })}>
+                  <option value="">All Dispositions</option>
+                  {smsDispositionOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="filters-right">
+                {selectedSmsIds.size > 0 && (
+                  <button
+                    className="bulk-delete-btn"
+                    onClick={handleBulkDeleteSms}
+                    disabled={bulkDeleting}
+                  >
+                    {bulkDeleting ? 'Deleting...' : `Delete (${selectedSmsIds.size})`}
+                  </button>
+                )}
+                <button className="refresh-btn" onClick={loadData}>Refresh</button>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="loading-spinner">Loading...</div>
+            ) : smsQueue.length === 0 ? (
+              <div className="empty-state">
+                <h3>No SMS messages in queue</h3>
+                <p>Messages will appear here when received via Twilio webhook</p>
+              </div>
+            ) : (
+              <div className="queue-list">
+                {smsQueue.map(sms => (
+                  <div
+                    key={sms.id}
+                    className={`queue-item ${selectedSms?.id === sms.id ? 'selected' : ''} ${sms.status} ${selectedSmsIds.has(sms.id) ? 'checked' : ''}`}
+                    onClick={() => handleSelectSms(sms)}
+                  >
+                    <div className="queue-item-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={selectedSmsIds.has(sms.id)}
+                        onChange={(e) => toggleSmsSelection(sms.id, e)}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                    <div className="queue-item-content">
+                      <div className="queue-item-header">
+                        <span className={`queue-item-type ${sms.ai_analysis?.disposition || sms.disposition || 'general'}`}>
+                          {(sms.ai_analysis?.disposition || sms.disposition || 'General').replace(/_/g, ' ')}
+                        </span>
+                        {(!sms.matched_loan_id && !sms.matched_lead_id) && (
+                          <span className="needs-review-badge">NEEDS REVIEW</span>
+                        )}
+                      </div>
+                      <div className="queue-item-subject">{formatPhone(sms.from_phone)} ({sms.direction})</div>
+                      <div className="queue-item-preview">
+                        {sms.message_body?.substring(0, 100)}...
+                      </div>
+                      <div className="queue-item-reason">
+                        <span className="reason-label">Reason:</span> {sms.requires_response ? 'Requires response' : 'Pending review'}
+                      </div>
+                    </div>
+                    <button
+                      className="queue-item-delete-btn"
+                      onClick={(e) => { e.stopPropagation(); handleDeleteSms(sms.id); }}
+                      title="Delete SMS"
+                    >
+                      🗑️
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Right Panel - Detail */}
+          {hasDetailPanel && (
+            <div className="detail-panel-container">
               {selectedSms && renderSmsDetailPanel()}
             </div>
           )}
         </div>
       )}
 
-      {/* Non-queue tabs content - only show for email/sms modes */}
-      {commMode !== 'dialer' && activeTab !== 'queue' && (
+      {/* Non-queue tabs content - only show for sms mode */}
+      {commMode === 'sms' && activeTab !== 'queue' && (
         <div className="tab-content">
-          {/* Email Conversations */}
-          {commMode === 'email' && activeTab === 'conversations' && (
-            <div className="conversations-section">
-              <div className="filters-row">
-                <input
-                  type="number"
-                  placeholder="Enter Loan ID to view conversation log"
-                  value={selectedLoanId}
-                  onChange={(e) => setSelectedLoanId(e.target.value)}
-                  className="loan-id-input"
-                />
-                <button className="refresh-btn" onClick={loadEmailConversations}>Load Conversations</button>
-              </div>
-              {!selectedLoanId ? (
-                <div className="empty-state">
-                  <h3>Enter a Loan ID</h3>
-                  <p>View the AI-generated conversation log for any loan</p>
-                </div>
-              ) : loading ? (
-                <div className="loading-spinner">Loading...</div>
-              ) : emailConversations.length === 0 ? (
-                <div className="empty-state">
-                  <h3>No conversations found</h3>
-                  <p>No conversation logs for Loan #{selectedLoanId}</p>
-                </div>
-              ) : (
-                <div className="conversation-list">
-                  {emailConversations.map(conv => (
-                    <div key={conv.id} className="conversation-card">
-                      <div className="conv-header">
-                        <span className="conv-direction">{conv.direction}</span>
-                        <span className="conv-date">{formatDate(conv.email_date)}</span>
-                      </div>
-                      <div className="conv-subject">{conv.email_subject || '(No Subject)'}</div>
-                      <div className="conv-summary">{conv.summary}</div>
-                      <div className="conv-meta">
-                        <span className="sentiment-badge" style={{ backgroundColor: getSentimentColor(conv.sentiment) }}>{conv.sentiment}</span>
-                        <span className="urgency-badge">Urgency: {conv.urgency_level}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Email Documents */}
-          {commMode === 'email' && activeTab === 'documents' && (
-            <div className="documents-section">
-              <div className="filters-row">
-                <input type="number" placeholder="Enter Loan ID" value={docLoanId} onChange={(e) => setDocLoanId(e.target.value)} className="loan-id-input" />
-                <button className="refresh-btn" onClick={loadEmailDocuments}>Load Documents</button>
-              </div>
-              {!docLoanId ? (
-                <div className="empty-state"><h3>Enter a Loan ID</h3></div>
-              ) : loading ? (
-                <div className="loading-spinner">Loading...</div>
-              ) : emailDocuments.length === 0 ? (
-                <div className="empty-state"><h3>No documents tracked</h3></div>
-              ) : (
-                <div className="document-list">
-                  <table className="doc-table">
-                    <thead><tr><th>Document</th><th>Type</th><th>Status</th><th>Requested</th><th>Received</th></tr></thead>
-                    <tbody>
-                      {emailDocuments.map(doc => (
-                        <tr key={doc.id} className={`doc-row ${doc.status}`}>
-                          <td>{doc.document_name}</td>
-                          <td>{doc.document_type}</td>
-                          <td><span className={`status-badge ${doc.status}`}>{doc.status}</span></td>
-                          <td>{formatDate(doc.requested_date)}</td>
-                          <td>{formatDate(doc.received_date)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* All Email Documents */}
-          {commMode === 'email' && activeTab === 'all-documents' && (
-            <div className="all-documents-section">
-              <div className="section-header">
-                <h3>All Received Documents</h3>
-                <button className="refresh-btn" onClick={loadAllEmailDocuments}>Refresh</button>
-              </div>
-              {loading ? (
-                <div className="loading-spinner">Loading...</div>
-              ) : emailAllDocuments.length === 0 ? (
-                <div className="empty-state"><h3>No documents tracked</h3></div>
-              ) : (
-                <div className="document-list">
-                  <table className="doc-table">
-                    <thead><tr><th>Document</th><th>Type</th><th>Loan</th><th>Status</th><th>Received</th></tr></thead>
-                    <tbody>
-                      {emailAllDocuments.map(doc => (
-                        <tr key={doc.id} className={`doc-row ${doc.status}`}>
-                          <td>{doc.document_name}</td>
-                          <td>{doc.document_type}</td>
-                          <td>{doc.loan_id ? <span className="loan-link" onClick={() => navigate(`/loans/${doc.loan_id}`)}>#{doc.loan_id}</span> : '-'}</td>
-                          <td><span className={`status-badge ${doc.status}`}>{doc.status}</span></td>
-                          <td>{formatDate(doc.received_date || doc.created_at)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Email SLA */}
-          {commMode === 'email' && activeTab === 'sla' && (
-            <div className="sla-section">
-              {loading ? (
-                <div className="loading-spinner">Loading...</div>
-              ) : emailSlaItems.length === 0 ? (
-                <div className="empty-state"><h3>All caught up!</h3><p>No pending SLA items</p></div>
-              ) : (
-                <div className="sla-list">
-                  {emailSlaItems.map(sla => (
-                    <div key={sla.id} className={`sla-card ${sla.is_overdue ? 'overdue' : ''}`}>
-                      <div className="sla-header">
-                        <span className={`sla-type ${sla.sla_type}`}>{sla.sla_type}</span>
-                        <span className={`sla-status ${sla.status}`}>{sla.status}</span>
-                      </div>
-                      <div className="sla-details">
-                        <div><strong>Due:</strong> {formatDate(sla.response_due_at)}</div>
-                        <div><strong>Received:</strong> {formatDate(sla.email_received_at)}</div>
-                      </div>
-                      {sla.status === 'pending' && (
-                        <button className="sla-respond-btn" onClick={() => handleMarkSlaResponded(sla.id, 'email')}>Mark Responded</button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
           {/* SMS Conversations */}
           {commMode === 'sms' && activeTab === 'conversations' && (
             <div className="conversations-section">

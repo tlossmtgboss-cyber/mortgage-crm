@@ -31575,18 +31575,15 @@ async def get_command_center(
     # Also get leads needing follow-up (no contact in X days based on stage)
     # For demo purposes, show all leads if user has none assigned
     try:
+        # Simplified query - just get leads that need follow-up
         stale_leads = db.execute(text("""
-            SELECT l.id, l.name, l.stage, l.last_contact, l.email, l.phone,
-                   EXTRACT(EPOCH FROM (NOW() - l.last_contact))/86400 as days_since_contact
+            SELECT l.id, l.name, l.stage::text as stage, l.last_contact, l.email, l.phone,
+                   EXTRACT(EPOCH FROM (NOW() - COALESCE(l.last_contact, l.created_at)))/86400 as days_since_contact
             FROM leads l
-            WHERE (l.owner_id = :user_id OR l.owner_id IS NULL OR NOT EXISTS (
-                SELECT 1 FROM leads WHERE owner_id = :user_id LIMIT 1
-            ))
-              AND l.stage NOT IN ('closed', 'disqualified', 'CLOSED', 'DISQUALIFIED', 'Withdrawn', 'withdrawn', 'Does Not Qualify')
-              AND (l.last_contact IS NULL OR l.last_contact < NOW() - INTERVAL '3 days')
-            ORDER BY l.last_contact ASC NULLS FIRST
+            WHERE l.stage::text NOT IN ('Closed', 'Withdrawn', 'Does Not Qualify')
+            ORDER BY l.last_contact ASC NULLS FIRST, l.created_at DESC
             LIMIT 15
-        """), {"user_id": user_id}).fetchall()
+        """)).fetchall()
 
         for lead in stale_leads:
             days = int(lead.days_since_contact) if lead.days_since_contact else 999
@@ -31645,7 +31642,7 @@ async def get_command_center(
     # Get loans with upcoming deadlines (closing, lock expiration)
     try:
         upcoming_deadlines = db.execute(text("""
-            SELECT l.id, l.borrower_name, l.loan_number, l.stage as status,
+            SELECT l.id, l.borrower_name, l.loan_number, l.stage::text as status,
                    l.closing_date, l.lock_expiration_date as lock_expiration,
                    CASE
                        WHEN l.lock_expiration_date IS NOT NULL AND l.lock_expiration_date < NOW() + INTERVAL '3 days'
@@ -31655,7 +31652,7 @@ async def get_command_center(
                        ELSE 'deadline'
                    END as deadline_type
             FROM loans l
-            WHERE l.stage NOT IN ('Funded', 'funded', 'closed', 'cancelled', 'denied')
+            WHERE l.stage::text NOT IN ('Funded')
               AND (
                   (l.lock_expiration_date IS NOT NULL AND l.lock_expiration_date < NOW() + INTERVAL '5 days')
                   OR (l.closing_date IS NOT NULL AND l.closing_date < NOW() + INTERVAL '7 days')
@@ -31667,11 +31664,11 @@ async def get_command_center(
         # If no deadline loans, show active loans that need attention
         if not upcoming_deadlines:
             upcoming_deadlines = db.execute(text("""
-                SELECT l.id, l.borrower_name, l.loan_number, l.stage as status,
+                SELECT l.id, l.borrower_name, l.loan_number, l.stage::text as status,
                        l.closing_date, l.lock_expiration_date as lock_expiration,
                        'active_loan' as deadline_type
                 FROM loans l
-                WHERE l.stage NOT IN ('Funded', 'funded', 'closed', 'cancelled', 'denied')
+                WHERE l.stage::text NOT IN ('Funded')
                 ORDER BY l.created_at DESC
                 LIMIT 10
             """)).fetchall()
