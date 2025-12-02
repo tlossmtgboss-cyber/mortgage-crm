@@ -31315,6 +31315,147 @@ async def search_leads(
 
     return leads
 
+
+# ================================================================
+# GLOBAL SEARCH - Search across all entities
+# ================================================================
+
+@app.get("/api/v1/search/global")
+async def global_search(
+    q: str,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_flexible)
+):
+    """
+    Global search across leads, loans, contacts, and partners.
+    Returns categorized results from all entity types.
+    """
+    if not q or len(q.strip()) < 2:
+        return {"results": [], "total": 0}
+
+    search_term = q.strip().lower()
+    results = []
+
+    # Search Leads
+    try:
+        leads_query = db.query(Lead)
+        leads_query = filter_leads_by_permissions(leads_query, current_user, db)
+        leads_query = leads_query.filter(
+            or_(
+                func.lower(Lead.name).contains(search_term),
+                func.lower(Lead.email).contains(search_term),
+                func.lower(Lead.phone).contains(search_term)
+            )
+        ).limit(limit)
+
+        for lead in leads_query.all():
+            results.append({
+                "id": lead.id,
+                "type": "lead",
+                "name": lead.name,
+                "email": lead.email,
+                "phone": lead.phone,
+                "status": lead.status if hasattr(lead, 'status') else lead.stage.value if lead.stage else None,
+                "url": f"/leads/{lead.id}"
+            })
+    except Exception as e:
+        logger.warning(f"Global search - leads error: {e}")
+
+    # Search Loans
+    try:
+        loans_query = db.query(Loan).filter(
+            or_(
+                func.lower(Loan.borrower_name).contains(search_term),
+                func.lower(Loan.borrower_email).contains(search_term),
+                func.lower(Loan.loan_number).contains(search_term),
+                func.lower(Loan.property_address).contains(search_term)
+            )
+        ).limit(limit)
+
+        for loan in loans_query.all():
+            results.append({
+                "id": loan.id,
+                "type": "loan",
+                "name": loan.borrower_name,
+                "email": loan.borrower_email,
+                "phone": None,
+                "status": loan.status,
+                "loan_number": loan.loan_number,
+                "property_address": loan.property_address,
+                "url": f"/loans/{loan.id}"
+            })
+    except Exception as e:
+        logger.warning(f"Global search - loans error: {e}")
+
+    # Search Contacts
+    try:
+        contacts_query = db.query(Contact).filter(
+            or_(
+                func.lower(Contact.first_name).contains(search_term),
+                func.lower(Contact.last_name).contains(search_term),
+                func.lower(Contact.email).contains(search_term),
+                func.lower(Contact.company).contains(search_term)
+            )
+        ).limit(limit)
+
+        for contact in contacts_query.all():
+            full_name = f"{contact.first_name or ''} {contact.last_name or ''}".strip()
+            results.append({
+                "id": contact.id,
+                "type": "contact",
+                "name": full_name or contact.email,
+                "email": contact.email,
+                "phone": contact.phone,
+                "company": contact.company,
+                "contact_type": contact.contact_type,
+                "url": f"/contacts/{contact.id}"
+            })
+    except Exception as e:
+        logger.warning(f"Global search - contacts error: {e}")
+
+    # Search Partners
+    try:
+        partners_query = db.query(Partner).filter(
+            or_(
+                func.lower(Partner.name).contains(search_term),
+                func.lower(Partner.email).contains(search_term),
+                func.lower(Partner.company).contains(search_term)
+            )
+        ).limit(limit)
+
+        for partner in partners_query.all():
+            results.append({
+                "id": partner.id,
+                "type": "partner",
+                "name": partner.name,
+                "email": partner.email,
+                "phone": partner.phone,
+                "company": partner.company,
+                "partner_type": partner.partner_type,
+                "url": f"/partners/{partner.id}"
+            })
+    except Exception as e:
+        logger.warning(f"Global search - partners error: {e}")
+
+    # Sort results by relevance (exact name match first)
+    def relevance_score(item):
+        name = (item.get("name") or "").lower()
+        if name == search_term:
+            return 0  # Exact match
+        if name.startswith(search_term):
+            return 1  # Starts with
+        return 2  # Contains
+
+    results.sort(key=relevance_score)
+
+    return {
+        "results": results[:limit],
+        "total": len(results),
+        "query": q
+    }
+
+
 @app.get("/api/v1/leads/{lead_id}")
 async def get_lead(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
     # Use the same permission filtering as the list endpoint
