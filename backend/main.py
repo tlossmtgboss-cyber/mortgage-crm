@@ -3185,6 +3185,10 @@ class LoanResponse(BaseModel):
     id: int
     loan_number: str
     borrower_name: str
+    borrower_email: Optional[str] = None
+    borrower_phone: Optional[str] = None
+    coborrower_name: Optional[str] = None
+    co_borrower_email: Optional[str] = None
     stage: LoanStage
     program: Optional[str]
     amount: float
